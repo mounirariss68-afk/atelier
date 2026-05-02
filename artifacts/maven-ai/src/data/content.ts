@@ -914,7 +914,6 @@ export const stats = [
   { value: "4", label: "GCC offices" },
   { value: "$50M+", label: "AI programs advised" },
   { value: "90 days", label: "MVP delivery commitment" },
-  { value: "6", label: "Anchor accounts in Year 1" },
 ];
 
 export const operatingModel = {
