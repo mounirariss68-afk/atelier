@@ -117,10 +117,28 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
   const [status, setStatus] = useState<"idle" | "streaming" | "error">("idle");
   const abortRef = useRef<AbortController | null>(null);
   const lastUserMessageRef = useRef<string | null>(null);
+  const lastLanguageRef = useRef<"en" | "ar">(language);
 
   // Persist transcript to sessionStorage on every change so a refresh keeps
   // the conversation visible (per-tab, cleared when the tab closes).
+  // When the user switches language mid-session, we reset the in-memory
+  // transcript so an EN conversation isn't re-saved (or shown) under "ar"
+  // (and vice versa). The sessionStorage layer already discards transcripts
+  // saved under a different language on load — this enforces the same
+  // isolation while the widget is mounted.
   useEffect(() => {
+    if (lastLanguageRef.current !== language) {
+      lastLanguageRef.current = language;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      lastUserMessageRef.current = null;
+      setMessages([]);
+      setStatus("idle");
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(TRANSCRIPT_KEY);
+      }
+      return;
+    }
     saveTranscript(language, messages);
   }, [language, messages]);
 

@@ -16,18 +16,13 @@ export type {
   ChatMutationError,
 } from "./generated/api";
 
-import { useChat as _useChat } from "./generated/api";
-
-/**
- * @deprecated `POST /chat` is a Server-Sent Events stream, but orval
- * generates this mutation as a one-shot JSON POST returning a string.
- * Calling this hook will swallow the token stream and almost always
- * return an empty/garbled value. Use `useChatStream` (in
- * `artifacts/maven-ai/src/hooks/useChatStream.ts`) or write your own
- * SSE-aware fetch instead. Re-exported only so types stay co-located
- * with the rest of the generated client.
- */
-export const useChat = _useChat;
+// NOTE: the auto-generated `useChat` mutation is intentionally NOT
+// re-exported. `POST /chat` is a Server-Sent Events stream, but orval
+// emits a one-shot JSON-POST mutation that swallows the token stream.
+// Use `useChatStream` (in `artifacts/maven-ai/src/hooks/useChatStream.ts`)
+// or write your own SSE-aware fetch. Importing `useChat` directly from
+// `@workspace/api-client-react/src/generated/api` is possible but
+// strongly discouraged — it almost always returns empty/garbled output.
 
 export * from "./generated/api.schemas";
 export { setBaseUrl, setAuthTokenGetter } from "./custom-fetch";
