@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Brain, Code2, Database, Rocket, ArrowRight } from "lucide-react";
 import { services } from "@/data/content";
 
-const serviceIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const serviceIcons: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
   Brain, Code2, Database, Rocket,
 };
 

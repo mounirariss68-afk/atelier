@@ -5,10 +5,10 @@ import { stats, services, insights, founders } from "@/data/content";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
-  visible: (i = 0) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.6, ease: "easeOut" } }),
+  visible: (i = 0) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] } }),
 };
 
-const serviceIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const serviceIcons: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
   Brain, Code2, Database, Rocket,
 };
 
@@ -379,8 +379,39 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── CLIENT LOGOS ── */}
+      <section className="py-14 bg-[#F8F9FA] border-y border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-10">
+            Illustrative client organizations we've worked with
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
+            {[
+              "Ministry of Interior",
+              "Saudi Telecom Company",
+              "Abu Dhabi Investment Authority",
+              "Qatar National Bank",
+              "Emirates NBD",
+              "Zain Group",
+              "Saudi Aramco",
+              "Etisalat / e&",
+            ].map((name) => (
+              <div
+                key={name}
+                className="px-6 py-3 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-500 hover:text-[#156082] hover:border-[#156082]/30 transition-colors"
+              >
+                {name}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 text-center mt-6 italic">
+            Representative client types — actual client names held in confidence
+          </p>
+        </div>
+      </section>
+
       {/* ── MAVEN INSIGHTS BANNER ── */}
-      <section className="py-16 bg-[#F8F9FA] border-y border-gray-100">
+      <section className="py-16 bg-white border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">A sister company</p>
           <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4">

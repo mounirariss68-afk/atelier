@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { ArrowRight, Building2, Wifi, TrendingUp, CheckCircle } from "lucide-react";
 import { industries } from "@/data/content";
 
-const industryIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const industryIcons: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
   Building2, Wifi, TrendingUp,
 };
 
