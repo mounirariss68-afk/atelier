@@ -63,8 +63,25 @@ const SubmitSchema = z.object({
   teamRole: z.string().max(120).optional(),
 });
 
+const LEGACY_INDUSTRY_MAP: Record<string, string> = {
+  energy: "energy-commodities",
+  retail: "retail-consumer",
+};
+
+function normalizeLegacyIndustry(body: unknown): unknown {
+  if (!body || typeof body !== "object") return body;
+  const profile = (body as { profile?: { industry?: unknown } }).profile;
+  if (profile && typeof profile.industry === "string" && LEGACY_INDUSTRY_MAP[profile.industry]) {
+    return {
+      ...body,
+      profile: { ...profile, industry: LEGACY_INDUSTRY_MAP[profile.industry] },
+    };
+  }
+  return body;
+}
+
 router.post("/submit", async (req, res) => {
-  const parsed = SubmitSchema.safeParse(req.body);
+  const parsed = SubmitSchema.safeParse(normalizeLegacyIndustry(req.body));
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid submission", details: parsed.error.format() });
     return;
