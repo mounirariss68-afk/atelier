@@ -17,9 +17,11 @@ const INDUSTRY_OFFSET: Record<Industry, number> = {
   "public-sector": -0.2,
   telecommunications: 0.4,
   "financial-services": 0.5,
-  energy: 0.1,
+  "energy-commodities": 0.1,
+  "retail-consumer": -0.05,
+  "travel-hospitality": -0.15,
+  automotive: -0.1,
   healthcare: -0.1,
-  retail: -0.05,
   manufacturing: 0.0,
   other: 0,
 };

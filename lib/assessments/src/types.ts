@@ -6,9 +6,11 @@ export type Industry =
   | "public-sector"
   | "telecommunications"
   | "financial-services"
-  | "energy"
+  | "energy-commodities"
+  | "retail-consumer"
+  | "travel-hospitality"
+  | "automotive"
   | "healthcare"
-  | "retail"
   | "manufacturing"
   | "other";
 

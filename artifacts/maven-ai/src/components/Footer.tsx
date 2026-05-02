@@ -106,6 +106,10 @@ export default function Footer() {
                 { href: "/industries#public-sector", label: "Public Sector" },
                 { href: "/industries#telecom", label: "Telecommunications" },
                 { href: "/industries#financial-services", label: "Financial Services" },
+                { href: "/industries#energy-commodities", label: "Energy & Commodities" },
+                { href: "/industries#retail-consumer", label: "Retail & Consumer" },
+                { href: "/industries#travel-hospitality", label: "Travel & Hospitality" },
+                { href: "/industries#automotive", label: "Automotive" },
               ].map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className="text-gray-400 text-sm hover:text-white transition-colors">

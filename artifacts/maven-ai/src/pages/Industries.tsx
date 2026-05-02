@@ -1,10 +1,10 @@
 import { motion } from "framer-motion";
 import { Link } from "wouter";
-import { ArrowRight, Building2, Wifi, TrendingUp, CheckCircle } from "lucide-react";
+import { ArrowRight, Building2, Wifi, TrendingUp, CheckCircle, Zap, ShoppingBag, Plane, Car } from "lucide-react";
 import { industries } from "@/data/content";
 
 const industryIcons: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
-  Building2, Wifi, TrendingUp,
+  Building2, Wifi, TrendingUp, Zap, ShoppingBag, Plane, Car,
 };
 
 export default function Industries() {
@@ -18,7 +18,7 @@ export default function Industries() {
             Deep domain expertise in the sectors that matter most.
           </h1>
           <p className="text-xl text-gray-300 max-w-2xl">
-            Maven AI works where AI transformation is most consequential and most complex — GCC public sector, telecommunications, and financial services.
+            Maven AI works where AI transformation is most consequential and most complex — across the GCC's flagship sectors, from sovereign public services to global hospitality.
           </p>
         </div>
       </section>

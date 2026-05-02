@@ -372,11 +372,15 @@ export default function Home() {
             <h2 className="text-4xl font-extrabold text-[#0E2841] mb-4">Where we work</h2>
             <p className="text-lg text-gray-600 max-w-xl">Deep domain knowledge in the sectors that matter most in the GCC.</p>
           </motion.div>
-          <div className="grid md:grid-cols-3 gap-7">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { title: "Public Sector", stat: "$33B", desc: "projected GCC government AI spend through 2030. From national safety platforms to smart city AI.", href: "/industries#public-sector", color: "#156082" },
+              { title: "Public Sector", stat: "$33B", desc: "Projected GCC government AI spend through 2030. National safety platforms, smart-city AI, and sovereign cloud delivery.", href: "/industries#public-sector", color: "#156082" },
               { title: "Telecommunications", stat: "$7.3B", desc: "GCC telecom AI investment. Legacy modernization, 5G operations, and customer AI at national scale.", href: "/industries#telecom", color: "#F5A623" },
               { title: "Financial Services", stat: "$11.7B", desc: "GCC FS AI investment. SAMA-compliant governance, capital markets AI, and data foundations for banks.", href: "/industries#financial-services", color: "#F5A623" },
+              { title: "Energy & Commodities", stat: "$9.4B", desc: "GCC energy AI investment. Refinery reliability, upstream optimization, and sovereign on-prem delivery for national champions.", href: "/industries#energy-commodities", color: "#156082" },
+              { title: "Retail & Consumer", stat: "$5.1B", desc: "GCC retail AI trajectory. Arabic-first personalization, demand sensing, and legacy ERP modernization for established groups.", href: "/industries#retail-consumer", color: "#F5A623" },
+              { title: "Travel & Hospitality", stat: "$6.8B", desc: "GCC tourism AI investment. Megaproject guest platforms, multi-lingual conversational AI, and revenue management for global brands.", href: "/industries#travel-hospitality", color: "#0F9ED5" },
+              { title: "Automotive", stat: "$4.2B", desc: "GCC automotive AI investment. Connected fleets, EV battery and grid AI, and DMS modernization for dealer groups.", href: "/industries#automotive", color: "#E97132" },
             ].map((ind, i) => (
               <motion.div
                 key={i}
