@@ -132,7 +132,7 @@ export default function ChatWidget() {
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.2 }}
             onClick={() => setOpen(true)}
-            className={`fixed bottom-6 ${dir === "rtl" ? "left-6" : "right-6"} z-50 inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#e69a1f] text-[#0E2841] font-bold px-5 py-3.5 rounded-full shadow-2xl shadow-amber-500/20 transition-colors`}
+            className={`fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#e69a1f] text-[#0E2841] font-bold px-5 py-3.5 rounded-full shadow-2xl shadow-amber-500/20 transition-colors`}
             aria-label={t(T.open)}
             data-testid="button-open-chat"
           >
@@ -153,7 +153,7 @@ export default function ChatWidget() {
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ duration: 0.2 }}
             className={`fixed z-50 bg-white shadow-2xl border border-gray-200 flex flex-col
-              inset-0 sm:inset-auto sm:bottom-6 ${dir === "rtl" ? "sm:left-6" : "sm:right-6"}
+              inset-0 sm:inset-auto sm:bottom-6 sm:right-6
               sm:w-[400px] sm:max-w-[calc(100vw-3rem)] sm:h-[600px] sm:max-h-[calc(100vh-3rem)]
               sm:rounded-2xl overflow-hidden`}
             data-testid="chat-panel"
