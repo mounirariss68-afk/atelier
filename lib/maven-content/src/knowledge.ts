@@ -157,40 +157,27 @@ export const insights: InsightEntry[] = [
   },
 ];
 
-export const assessments: AssessmentEntry[] = [
-  {
-    slug: "ari",
-    code: "ARI",
-    name: "Agentic Readiness Index",
-    summary:
-      "Diagnoses how ready your organisation is to move agentic AI from pilot to production. 8 dimensions, ~12 minutes.",
-    estMinutes: 12,
-  },
-  {
-    slug: "mvi",
-    code: "MVI",
-    name: "Modernization Velocity Index",
-    summary:
-      "Rates the velocity at which your legacy estate can be modernised with AI-driven SDLC and spec-from-legacy. ~10 minutes.",
-    estMinutes: 10,
-  },
-  {
-    slug: "dafi",
-    code: "DAFI",
-    name: "Data & AI Foundations Index",
-    summary:
-      "Scores the data readiness, lineage, mastering, and governance posture beneath your AI ambition. ~14 minutes.",
-    estMinutes: 14,
-  },
-  {
-    slug: "uvr",
-    code: "UVR",
-    name: "Use-Case Value Rating",
-    summary:
-      "A short rating of any single AI use case — value, feasibility, governance fit. ~6 minutes.",
-    estMinutes: 6,
-  },
-];
+// Source assessment metadata from the canonical @workspace/assessments
+// definitions so slug/code/name/estMinutes can never drift between the
+// scoring engine and the chat knowledge base. The one-line `summary` copy
+// is the only thing local to this file (the assessments lib doesn't carry
+// chat-tuned summaries).
+import { assessmentsList } from "@workspace/assessments";
+
+const ASSESSMENT_SUMMARIES: Record<string, string> = {
+  ari: "Diagnoses how ready your organisation is to move agentic AI from pilot to production. 8 dimensions, ~12 minutes.",
+  mvi: "Rates the velocity at which your legacy estate can be modernised with AI-driven SDLC and spec-from-legacy. ~10 minutes.",
+  dafi: "Scores the data readiness, lineage, mastering, and governance posture beneath your AI ambition. ~14 minutes.",
+  uvr: "A short rating of any single AI use case — value, feasibility, governance fit. ~6 minutes.",
+};
+
+export const assessments: AssessmentEntry[] = assessmentsList.map((a) => ({
+  slug: a.slug,
+  code: a.code,
+  name: a.title.en,
+  summary: ASSESSMENT_SUMMARIES[a.slug] ?? a.description.en,
+  estMinutes: a.estMinutes,
+}));
 
 export const founders: FounderEntry[] = [
   {

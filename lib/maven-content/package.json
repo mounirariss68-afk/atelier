@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@workspace/assessments": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "catalog:"
   }

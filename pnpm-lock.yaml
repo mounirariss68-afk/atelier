@@ -670,6 +670,10 @@ importers:
         version: 0.31.9
 
   lib/maven-content:
+    dependencies:
+      '@workspace/assessments':
+        specifier: workspace:*
+        version: link:../assessments
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

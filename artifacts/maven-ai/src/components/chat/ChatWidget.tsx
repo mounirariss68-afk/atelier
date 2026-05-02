@@ -225,7 +225,8 @@ export default function ChatWidget() {
                           key={s}
                           type="button"
                           onClick={() => void send(s)}
-                          className="text-left text-sm bg-white border border-gray-200 hover:border-[#156082] hover:text-[#156082] text-gray-700 rounded-lg px-3 py-2.5 transition-colors"
+                          disabled={status === "streaming"}
+                          className="text-left text-sm bg-white border border-gray-200 hover:border-[#156082] hover:text-[#156082] text-gray-700 rounded-lg px-3 py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-700"
                           data-testid="button-chat-starter"
                         >
                           {s}

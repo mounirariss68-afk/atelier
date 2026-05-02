@@ -1,14 +1,34 @@
-export * from "./generated/api";
+export {
+  getHealthCheckUrl,
+  healthCheck,
+  getHealthCheckQueryKey,
+  getHealthCheckQueryOptions,
+  useHealthCheck,
+  getChatUrl,
+  chat,
+  getChatMutationOptions,
+} from "./generated/api";
+export type {
+  HealthCheckQueryResult,
+  HealthCheckQueryError,
+  ChatMutationResult,
+  ChatMutationBody,
+  ChatMutationError,
+} from "./generated/api";
+
+import { useChat as _useChat } from "./generated/api";
+
+/**
+ * @deprecated `POST /chat` is a Server-Sent Events stream, but orval
+ * generates this mutation as a one-shot JSON POST returning a string.
+ * Calling this hook will swallow the token stream and almost always
+ * return an empty/garbled value. Use `useChatStream` (in
+ * `artifacts/maven-ai/src/hooks/useChatStream.ts`) or write your own
+ * SSE-aware fetch instead. Re-exported only so types stay co-located
+ * with the rest of the generated client.
+ */
+export const useChat = _useChat;
+
 export * from "./generated/api.schemas";
 export { setBaseUrl, setAuthTokenGetter } from "./custom-fetch";
 export type { AuthTokenGetter } from "./custom-fetch";
-
-/**
- * NOTE: the auto-generated `useChat` mutation in `./generated/api` models
- * `POST /chat` as a one-shot JSON request returning a string. The real
- * endpoint is a streaming SSE response. Do NOT call `useChat` for chat
- * UI — use `useChatStream` from `artifacts/maven-ai/src/hooks/useChatStream`
- * (or write an equivalent SSE-aware hook) so token-by-token rendering
- * works. The generated mutation only exists because orval emits one per
- * operation; it is retained for type sharing but should not drive UI.
- */
