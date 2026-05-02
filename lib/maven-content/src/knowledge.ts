@@ -1,3 +1,5 @@
+import type { AgentCast } from "./agentCasts";
+
 /**
  * Maven AI knowledge base — used by:
  *  - the chat assistant on the server (system-prompt grounding)
@@ -115,6 +117,13 @@ export interface MarketplaceToolEntry {
    * the shared knowledge module.
    */
   samplePortfolio?: ValueRealizationInitiative[];
+  /**
+   * Named cast of agents (and human checkpoints) that delivers this tool.
+   * Powers the "How does this work?" explainer modal and the in-demo
+   * AgentTrace panel. Attached at module load from `./agentCasts.ts` so the
+   * tool entry itself is the single source of truth for cast metadata.
+   */
+  agentCast: AgentCast;
 }
 
 export type ValueInitiativeType = "cost-out" | "revenue" | "risk" | "experience";
@@ -433,7 +442,11 @@ export const marketplaceHorizontals: MarketplaceHorizontalMeta[] = [
   { id: "fpa", title: { en: "FP&A", ar: "التخطيط والتحليل المالي" } },
 ];
 
-export const marketplaceTools: MarketplaceToolEntry[] = [
+// Raw catalogue without `agentCast` — we attach the cast at module load
+// from `./agentCasts.ts` so the tool entry itself owns the cast metadata
+// (the schema contract) without bloating this file. See
+// `marketplaceTools` below for the consumer-facing array.
+const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
   {
     id: "value-realization",
     slug: "value-realization",
@@ -1483,6 +1496,24 @@ export const marketplaceTools: MarketplaceToolEntry[] = [
     relatedService: "data-governance-foundations",
   },
 ];
+
+// Attach the agent cast for each tool so the consumer-facing
+// `marketplaceTools` array is the single source of truth for cast metadata.
+// `agentCasts.ts` only `import type`s from this file, so importing it here
+// does not create a runtime cycle.
+import { marketplaceAgentCasts } from "./agentCasts";
+
+export const marketplaceTools: MarketplaceToolEntry[] = marketplaceToolsBase.map(
+  (t) => {
+    const cast = marketplaceAgentCasts[t.slug];
+    if (!cast) {
+      throw new Error(
+        `[knowledge.ts] Marketplace tool "${t.slug}" has no agentCast in agentCasts.ts. Every tool must declare its named agent cast.`,
+      );
+    }
+    return { ...t, agentCast: cast };
+  },
+);
 
 export const firmFacts = {
   positioning:

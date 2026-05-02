@@ -24,26 +24,12 @@ export {
   sharedAgentCasts as marketplaceAgentCasts,
 };
 
-// Slugs of tools that ship a real interactive demo component. Kept here so
-// the validator below can prove every "live" tool resolves to a registered
-// React component in `MarketplaceDetail`'s dispatch map. Update this set in
-// lockstep with the DEMOS map in `pages/MarketplaceDetail.tsx`.
-const REGISTERED_DEMO_SLUGS = new Set<string>([
-  "value-realization",
-  "programme-health-copilot",
-  "citizen-services-agent",
-  "procurement-intelligence",
-  "network-ops-agent",
-  "sama-compliance-agent",
-  "energy-trading-copilot",
-  "retail-demand-forecaster",
-  "hospitality-revenue-optimizer",
-  "ev-battery-health-agent",
-  "fpa-rolling-forecast",
-  "customer-care-multi-agent",
-  "sovereign-data-workbench",
-  "knowledge-memory-agent",
-]);
+// Single source of truth for which slugs ship a real interactive demo
+// component. Imported here AND by `pages/MarketplaceDetail.tsx`, where the
+// DEMOS dispatch map asserts at module load that its keys exactly match this
+// list — so adding to one without the other fails fast at startup rather
+// than silently 404ing the route.
+import { REGISTERED_DEMO_SLUG_SET as REGISTERED_DEMO_SLUGS } from "./registeredDemoSlugs";
 
 function assertSharedAlignment(
   kind: string,

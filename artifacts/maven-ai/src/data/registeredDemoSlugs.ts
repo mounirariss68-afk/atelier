@@ -1,0 +1,33 @@
+// Single source of truth for which marketplace tools have a real interactive
+// demo component mounted at /marketplace/:slug. Imported by:
+//
+//   - `pages/MarketplaceDetail.tsx` — asserts at module load that its DEMOS
+//     dispatch map's keys exactly match this list, so adding a component to
+//     DEMOS without registering its slug here (or vice versa) fails fast.
+//   - `data/content.ts` — the catalogue validator uses this list to enforce
+//     that every "live" marketplace tool has a registered demo and that no
+//     orphan slug exists in the registry.
+//
+// Pure string constants so it can be safely imported from both sides without
+// pulling in React or causing circular module evaluation.
+
+export const REGISTERED_DEMO_SLUGS: readonly string[] = [
+  "value-realization",
+  "programme-health-copilot",
+  "citizen-services-agent",
+  "procurement-intelligence",
+  "network-ops-agent",
+  "sama-compliance-agent",
+  "energy-trading-copilot",
+  "retail-demand-forecaster",
+  "hospitality-revenue-optimizer",
+  "ev-battery-health-agent",
+  "fpa-rolling-forecast",
+  "customer-care-multi-agent",
+  "sovereign-data-workbench",
+  "knowledge-memory-agent",
+] as const;
+
+export const REGISTERED_DEMO_SLUG_SET: ReadonlySet<string> = new Set(
+  REGISTERED_DEMO_SLUGS,
+);

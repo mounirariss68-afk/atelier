@@ -44,6 +44,10 @@ import FpaRollingForecastDemo from "@/components/marketplace/FpaRollingForecastD
 import CustomerCareDemo from "@/components/marketplace/CustomerCareDemo";
 import SovereignDataWorkbenchDemo from "@/components/marketplace/SovereignDataWorkbenchDemo";
 import KnowledgeMemoryDemo from "@/components/marketplace/KnowledgeMemoryDemo";
+import AgentExplainer from "@/components/marketplace/AgentExplainer";
+import { useState } from "react";
+import { Network } from "lucide-react";
+import { REGISTERED_DEMO_SLUGS } from "@/data/registeredDemoSlugs";
 
 const DEMOS: Record<string, React.ComponentType> = {
   "value-realization": ValueRealizationDemo,
@@ -61,6 +65,24 @@ const DEMOS: Record<string, React.ComponentType> = {
   "sovereign-data-workbench": SovereignDataWorkbenchDemo,
   "knowledge-memory-agent": KnowledgeMemoryDemo,
 };
+
+// Drift guard: enforce that the DEMOS dispatch map's keys exactly match the
+// canonical REGISTERED_DEMO_SLUGS list. If they ever diverge (a component is
+// added to one without the other), the app fails fast at module load.
+{
+  const dispatchKeys = Object.keys(DEMOS).sort();
+  const registered = [...REGISTERED_DEMO_SLUGS].sort();
+  const same =
+    dispatchKeys.length === registered.length &&
+    dispatchKeys.every((k, i) => k === registered[i]);
+  if (!same) {
+    throw new Error(
+      `[MarketplaceDetail] DEMOS dispatch map keys do not match REGISTERED_DEMO_SLUGS.\n` +
+        `  DEMOS: ${dispatchKeys.join(", ")}\n` +
+        `  REGISTERED: ${registered.join(", ")}`,
+    );
+  }
+}
 
 const ICONS: Record<string, LucideIcon> = {
   TrendingUp,
@@ -139,6 +161,7 @@ export default function MarketplaceDetail() {
     ? assessmentsIndex.find((a) => a.slug === tool.relatedAssessment)
     : undefined;
   const isLive = tool.status === "live";
+  const [explainerOpen, setExplainerOpen] = useState(false);
 
   return (
     <div className="pt-20" dir={dir}>
@@ -185,6 +208,15 @@ export default function MarketplaceDetail() {
           </div>
 
           <p className="text-lg text-gray-200 max-w-3xl leading-relaxed">{tStr(tool.pitch, lang)}</p>
+
+          <button
+            type="button"
+            onClick={() => setExplainerOpen(true)}
+            className="mt-5 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full bg-[#F5A623]/15 text-[#F5A623] hover:bg-[#F5A623]/25 transition-colors"
+          >
+            <Network size={14} />
+            {tStr({ en: "How does this work?", ar: "كيف يعمل؟" }, lang)}
+          </button>
 
           <div className="grid sm:grid-cols-3 gap-4 mt-8 pt-8 border-t border-white/10">
             <div>
@@ -390,6 +422,12 @@ export default function MarketplaceDetail() {
           )}
         </div>
       </section>
+
+      <AgentExplainer
+        slug={tool.slug}
+        open={explainerOpen}
+        onClose={() => setExplainerOpen(false)}
+      />
     </div>
   );
 }
