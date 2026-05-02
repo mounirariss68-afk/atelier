@@ -999,9 +999,15 @@ assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsight
         `[content.ts] Marketplace tool "${t.slug}" references unknown assessment slug "${t.relatedAssessment}".`,
       );
     }
-    // Every "live" demo must ship a sample dataset so the chat assistant and
-    // any downstream readers see the same canonical numbers as the UI.
-    if (t.status === "live" && (!t.samplePortfolio || t.samplePortfolio.length === 0)) {
+    // The Value Realization tool reads its canonical portfolio from shared
+    // content so the chat assistant and the UI agree on every number. Other
+    // live demos manage their own per-component state and don't need a
+    // samplePortfolio.
+    if (
+      t.slug === "value-realization" &&
+      t.status === "live" &&
+      (!t.samplePortfolio || t.samplePortfolio.length === 0)
+    ) {
       throw new Error(
         `[content.ts] Marketplace tool "${t.slug}" is marked live but has no samplePortfolio.`,
       );
