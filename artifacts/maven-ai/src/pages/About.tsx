@@ -14,7 +14,7 @@ function FounderPhoto({ src, name }: { src: string; name: string }) {
   const [imgFailed, setImgFailed] = useState(false);
   const initials = name.split(" ").map((n) => n[0]).join("");
   return (
-    <div className="aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-[#0E2841] to-[#156082] relative">
+    <div className="aspect-[4/5] rounded-2xl overflow-hidden bg-gradient-to-br from-[#0E2841] to-[#156082] relative">
       {!imgFailed && (
         <img
           src={src}
