@@ -374,19 +374,21 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-function templateFallback(language: "en" | "ar", lastUserText: string): string {
-  const en = `Thanks for the question. Our assistant is briefly unavailable, but here's the short version: Maven AI is a boutique GCC AI advisory and engineering firm focused on closing the gap between AI ambition and production. Based on what you asked ("${lastUserText.slice(0, 80)}"), the most useful next step is probably to look at our services and assessments, or book a 30-minute partner readout.\n<<<SUGGESTIONS>>>${JSON.stringify({
+function templateFallback(language: "en" | "ar", _lastUserText: string): string {
+  // Both AI providers are unavailable. Be explicit that the assistant is
+  // offline rather than pretending to answer the question.
+  const en = `The Maven AI assistant is offline right now, so I can't generate a tailored answer. You can still browse our services and insights, run a 12-minute diagnostic, or reach a partner directly through the Contact page.\n<<<SUGGESTIONS>>>${JSON.stringify({
     items: [
       { kind: "page", href: "/services", label: "Our services" },
       { kind: "page", href: "/assessments", label: "Run a diagnostic" },
-      { kind: "page", href: "/contact", label: "Book a 30-minute readout" },
+      { kind: "page", href: "/contact", label: "Reach a partner" },
     ],
   })}<<<END>>>`;
-  const ar = `شكراً على سؤالكم. المساعد غير متاح لحظياً، لكن باختصار: Maven AI شركة استشارات وهندسة ذكاء اصطناعي بوتيك في الخليج، تركز على سدّ الفجوة بين طموح الذكاء الاصطناعي والإنتاج الفعلي. بناءً على ما سألتم عنه، الخطوة الأفضل هي الاطلاع على خدماتنا أو حجز قراءة شراكة لمدة 30 دقيقة.\n<<<SUGGESTIONS>>>${JSON.stringify({
+  const ar = `مساعد Maven AI غير متاح حالياً، ولا يمكنني توليد إجابة مخصصة. يمكنك تصفح خدماتنا ورؤانا، أو إجراء تشخيص لمدة 12 دقيقة، أو التواصل مع أحد الشركاء مباشرة عبر صفحة الاتصال.\n<<<SUGGESTIONS>>>${JSON.stringify({
     items: [
       { kind: "page", href: "/services", label: "خدماتنا" },
       { kind: "page", href: "/assessments", label: "تشخيص" },
-      { kind: "page", href: "/contact", label: "احجز قراءة 30 دقيقة" },
+      { kind: "page", href: "/contact", label: "تواصل مع شريك" },
     ],
   })}<<<END>>>`;
   return language === "ar" ? ar : en;

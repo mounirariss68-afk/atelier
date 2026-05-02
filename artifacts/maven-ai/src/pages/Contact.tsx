@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Phone, Mail, Send, CheckCircle, Clock, Users, ArrowRight } from "lucide-react";
 import { services as sharedServices } from "@workspace/maven-content";
@@ -22,18 +22,18 @@ export default function Contact() {
   const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", interest: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const formRef = useRef<HTMLElement>(null);
+  const search = useSearch();
 
-  // If the page is visited via /contact?topic=<service-slug>, prefill the
-  // interest dropdown and scroll the form into view.
+  // Prefill interest + scroll to form whenever ?topic= changes (covers both
+  // first mount and in-app navigation between /contact?topic=A and ?topic=B).
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(search);
     const topic = params.get("topic");
     if (topic && TOPIC_TO_INTEREST[topic]) {
       setForm((prev) => ({ ...prev, interest: TOPIC_TO_INTEREST[topic] }));
       setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
     }
-  }, []);
+  }, [search]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
