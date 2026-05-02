@@ -142,26 +142,40 @@ async function streamFromAnthropic(
   systemPrompt: string,
   messages: { role: "user" | "assistant"; content: string }[],
   onToken: (token: string) => void,
+  signal: AbortSignal,
 ): Promise<{ fullText: string } | null> {
   const baseURL = process.env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"];
   const apiKey = process.env["AI_INTEGRATIONS_ANTHROPIC_API_KEY"];
   if (!baseURL || !apiKey) return null;
 
   const anth = new Anthropic({ baseURL, apiKey });
-  const stream = anth.messages.stream({
-    model: "claude-sonnet-4-5",
-    max_tokens: 1200,
-    system: systemPrompt,
-    messages,
-  });
+  // Passing the signal as a per-request option lets the SDK cancel the
+  // underlying fetch as soon as the client disconnects, which stops billed
+  // token generation upstream rather than just discarding tokens locally.
+  const stream = anth.messages.stream(
+    {
+      model: "claude-sonnet-4-5",
+      max_tokens: 1200,
+      system: systemPrompt,
+      messages,
+    },
+    { signal },
+  );
 
   let fullText = "";
-  for await (const event of stream) {
-    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-      const t = event.delta.text;
-      fullText += t;
-      onToken(t);
+  try {
+    for await (const event of stream) {
+      if (signal.aborted) break;
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        const t = event.delta.text;
+        fullText += t;
+        onToken(t);
+      }
     }
+  } catch (err) {
+    // AbortError from the SDK is expected when the client disconnects.
+    if (signal.aborted) return { fullText };
+    throw err;
   }
   return { fullText };
 }
@@ -170,28 +184,38 @@ async function streamFromOpenAI(
   systemPrompt: string,
   messages: { role: "user" | "assistant"; content: string }[],
   onToken: (token: string) => void,
+  signal: AbortSignal,
 ): Promise<{ fullText: string } | null> {
   const baseURL = process.env["AI_INTEGRATIONS_OPENAI_BASE_URL"];
   const apiKey = process.env["AI_INTEGRATIONS_OPENAI_API_KEY"];
   if (!baseURL || !apiKey) return null;
 
   const oa = new OpenAI({ baseURL, apiKey });
-  const stream = await oa.chat.completions.create({
-    model: "gpt-5",
-    stream: true,
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
-  });
+  const stream = await oa.chat.completions.create(
+    {
+      model: "gpt-5",
+      stream: true,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ],
+    },
+    { signal },
+  );
 
   let fullText = "";
-  for await (const chunk of stream) {
-    const t = chunk.choices?.[0]?.delta?.content;
-    if (typeof t === "string" && t.length > 0) {
-      fullText += t;
-      onToken(t);
+  try {
+    for await (const chunk of stream) {
+      if (signal.aborted) break;
+      const t = chunk.choices?.[0]?.delta?.content;
+      if (typeof t === "string" && t.length > 0) {
+        fullText += t;
+        onToken(t);
+      }
     }
+  } catch (err) {
+    if (signal.aborted) return { fullText };
+    throw err;
   }
   return { fullText };
 }
@@ -278,12 +302,17 @@ router.post("/", async (req: Request, res: Response) => {
   }, 15_000);
   heartbeat.unref?.();
 
-  // Stop streaming work if the client disconnects mid-flight. Use `res` for
-  // detection — `res.on("close")` fires on socket close and only matters as
-  // an abort signal while we're still streaming (i.e. before res.end()).
+  // Stop streaming work if the client disconnects mid-flight. The
+  // AbortController is forwarded into the provider SDKs (Anthropic / OpenAI)
+  // so we cancel the upstream fetch — and therefore stop billed token
+  // generation — instead of merely discarding tokens locally.
   let clientAborted = false;
+  const upstreamAbort = new AbortController();
   res.on("close", () => {
-    if (!res.writableEnded) clientAborted = true;
+    if (!res.writableEnded) {
+      clientAborted = true;
+      upstreamAbort.abort();
+    }
   });
 
   const systemPrompt = buildSystemPrompt(language);
@@ -301,22 +330,35 @@ router.post("/", async (req: Request, res: Response) => {
       if (!clientAborted) filter.push(t);
     };
 
-    const anthResult = await streamFromAnthropic(systemPrompt, messages, onTok).catch((err) => {
+    const anthResult = await streamFromAnthropic(
+      systemPrompt,
+      messages,
+      onTok,
+      upstreamAbort.signal,
+    ).catch((err) => {
       logger.warn({ err }, "Chat: Anthropic stream failed; falling back");
       return null;
     });
 
     if (anthResult) {
       fullText = anthResult.fullText;
+    } else if (clientAborted) {
+      // No point trying the fallback provider if the client is gone.
+      provider = "anthropic";
     } else {
       provider = "openai";
-      const oaResult = await streamFromOpenAI(systemPrompt, messages, onTok).catch((err) => {
+      const oaResult = await streamFromOpenAI(
+        systemPrompt,
+        messages,
+        onTok,
+        upstreamAbort.signal,
+      ).catch((err) => {
         logger.warn({ err }, "Chat: OpenAI stream failed");
         return null;
       });
       if (oaResult) {
         fullText = oaResult.fullText;
-      } else {
+      } else if (!clientAborted) {
         provider = "fallback";
         fullText = templateFallback(language, messages[messages.length - 1]?.content ?? "");
         onTok(fullText);
