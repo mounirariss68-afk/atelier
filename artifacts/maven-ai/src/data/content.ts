@@ -1,9 +1,6 @@
-// Single source of truth for structural identifiers (slugs, ids, canonical
-// titles) lives in `@workspace/maven-content`. This file holds the long-form
-// marketing copy that the public site renders; the assertions below catch
-// any drift between the two at module-load time so a single typo in a slug
-// breaks the build instead of silently breaking deep links from the chat
-// widget's allow-list.
+// Long-form marketing copy. Structural identifiers (slugs, ids, titles)
+// live in `@workspace/maven-content`; the assertions at the bottom of
+// this file catch drift at module load.
 import {
   services as sharedServices,
   industries as sharedIndustries,
@@ -949,9 +946,6 @@ export const operatingModel = {
   ],
 };
 
-// Run all alignment checks at module load. If any drift exists, the app
-// will fail loudly on first import instead of silently emitting broken
-// chat suggestions.
 assertSharedAlignment("service slug", services.map((s) => s.slug), sharedServices.map((s) => s.slug));
 assertSharedAlignment("industry id", industries.map((i) => i.id), sharedIndustries.map((i) => i.id));
 assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsights.map((i) => i.slug));

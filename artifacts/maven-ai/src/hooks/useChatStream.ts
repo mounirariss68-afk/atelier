@@ -136,7 +136,25 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
     if (abortRef.current) {
       abortRef.current.abort();
       abortRef.current = null;
-      setStatus("idle");
+      // If the assistant placeholder is still empty (or only had partial
+      // tokens), mark it as a retryable error so the user doesn't reopen
+      // the widget to a perpetual blank "thinking" bubble.
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        if (last.role !== "assistant" || last.error) return prev;
+        const next = [...prev];
+        const partial = last.content.trim();
+        next[next.length - 1] = {
+          role: "assistant",
+          content: partial.length > 0
+            ? `${last.content}\n\n(Stopped before the answer was complete. Try again?)`
+            : "Stopped before the assistant could reply. Try again?",
+          error: true,
+        };
+        return next;
+      });
+      setStatus("error");
     }
   }, []);
 
@@ -156,10 +174,8 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
       setStatus("streaming");
       const controller = new AbortController();
       abortRef.current = controller;
-      // Track whether we ever received a terminal `done` event from the
-      // server. If the connection closes cleanly without one (network drop,
-      // proxy timeout, etc.), we surface that as an error so the user gets
-      // the retry button instead of a half-rendered "complete" answer.
+      // Track terminal events so a silent close (network drop, timeout)
+      // is reported as an error instead of a "complete" answer.
       let receivedDone = false;
       let receivedError = false;
 
@@ -238,9 +254,7 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
         // Flush any final bytes from the decoder.
         feed(decoder.decode());
 
-        // If the stream closed without a terminal `done` or `error` event
-        // (network drop, proxy timeout, server crash mid-stream), treat the
-        // current assistant turn as failed so the user can retry.
+        // Stream closed without `done`/`error`: mark the turn as failed.
         if (!receivedDone && !receivedError) {
           setMessages((prev) => {
             const next = [...prev];

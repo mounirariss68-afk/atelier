@@ -330,19 +330,9 @@ router.post("/", async (req: Request, res: Response) => {
       sseWrite(res, { type: "done", suggestions });
       res.end();
     }
-    // Privacy-aware structured logging. We deliberately log NO raw user
-    // text. Instead we emit:
-    //  - the resolved deep-link hrefs the assistant surfaced
-    //    (`suggestionHrefs`) — these come from a server-side allow-list,
-    //    not from user input, so they are safe.
-    //  - a coarse length bucket for the last user turn (so we can graph
-    //    "how long are users' questions" without storing the questions
-    //    themselves).
-    //  - an irreversible SHA-256-truncated hash of the normalized last
-    //    user turn (`questionHash`), purely so repeated identical
-    //    questions can be grouped in log analytics. The full hash is
-    //    truncated to 16 hex chars; the original text cannot be
-    //    recovered.
+    // No raw user text logged. We emit suggestion hrefs (allow-listed),
+    // a coarse length bucket, and a truncated sha256 of the question for
+    // grouping repeats in analytics.
     const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
     const normalized = lastUser.replace(/\s+/g, " ").trim().toLowerCase();
     const questionLengthBucket =

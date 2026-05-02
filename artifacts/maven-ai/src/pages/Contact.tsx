@@ -11,13 +11,9 @@ const offices = [
   { city: "Doha", country: "Qatar", address: "Office 241-3, Floor 2\nRegus, No. 67", phone: "+974 442 31111", primary: false },
 ];
 
-// Service interest areas are derived from the shared knowledge base so the
-// dropdown labels and the topic-prefill mapping cannot drift apart.
 const SERVICE_INTERESTS = sharedServices.map((s) => s.title);
 const interestAreas = [...SERVICE_INTERESTS, "General Inquiry", "Partnership"];
 
-// Map service slugs → interest dropdown label. When the chat widget links to
-// /contact?topic=<slug>, we pre-fill the matching interest.
 const TOPIC_TO_INTEREST: Record<string, string> = Object.fromEntries(
   sharedServices.map((s) => [s.slug, s.title]),
 );
