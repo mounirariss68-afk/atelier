@@ -107,7 +107,7 @@ export default function Footer() {
                 { href: "/industries#telecom", label: "Telecommunications" },
                 { href: "/industries#financial-services", label: "Financial Services" },
                 { href: "/industries#energy-commodities", label: "Energy & Commodities" },
-                { href: "/industries#retail-consumer", label: "Retail & Consumer" },
+                { href: "/industries#retail-consumer", label: "Retail & Consumer Products" },
                 { href: "/industries#travel-hospitality", label: "Travel & Hospitality" },
                 { href: "/industries#automotive", label: "Automotive" },
               ].map((link) => (

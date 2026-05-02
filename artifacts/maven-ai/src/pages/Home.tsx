@@ -378,7 +378,7 @@ export default function Home() {
               { title: "Telecommunications", stat: "$7.3B", desc: "GCC telecom AI investment. Legacy modernization, 5G operations, and customer AI at national scale.", href: "/industries#telecom", color: "#F5A623" },
               { title: "Financial Services", stat: "$11.7B", desc: "GCC FS AI investment. SAMA-compliant governance, capital markets AI, and data foundations for banks.", href: "/industries#financial-services", color: "#F5A623" },
               { title: "Energy & Commodities", stat: "$9.4B", desc: "GCC energy AI investment. Refinery reliability, upstream optimization, and sovereign on-prem delivery for national champions.", href: "/industries#energy-commodities", color: "#156082" },
-              { title: "Retail & Consumer", stat: "$5.1B", desc: "GCC retail AI trajectory. Arabic-first personalization, demand sensing, and legacy ERP modernization for established groups.", href: "/industries#retail-consumer", color: "#F5A623" },
+              { title: "Retail & Consumer Products", stat: "$5.1B", desc: "GCC retail AI trajectory. Arabic-first personalization, demand sensing, and legacy ERP modernization for established groups.", href: "/industries#retail-consumer", color: "#F5A623" },
               { title: "Travel & Hospitality", stat: "$6.8B", desc: "GCC tourism AI investment. Megaproject guest platforms, multi-lingual conversational AI, and revenue management for global brands.", href: "/industries#travel-hospitality", color: "#0F9ED5" },
               { title: "Automotive", stat: "$4.2B", desc: "GCC automotive AI investment. Connected fleets, EV battery and grid AI, and DMS modernization for dealer groups.", href: "/industries#automotive", color: "#E97132" },
             ].map((ind, i) => (
