@@ -2,7 +2,7 @@ export const founders = [
   {
     id: "mounir-aris",
     name: "Mounir Aris",
-    title: "CEO & Co-Founder",
+    title: "Senior Partner",
     location: "Dubai, UAE",
     image: "/images/founder-mounir.png",
     bio: "Mounir Aris brings over 20 years of strategy and digital transformation experience across GCC and MENA. Previously a Partner at a Big-4 advisory firm, he led national AI strategy engagements for sovereign wealth funds, government ministries, and major financial institutions. A trusted C-suite advisor, Mounir has shaped enterprise AI roadmaps for some of the region's largest organizations — from public safety infrastructure to national financial platforms. He founded Maven AI to solve the problem he witnessed throughout his career: world-class AI ambitions collapsing at the point of execution.",
@@ -14,7 +14,7 @@ export const founders = [
   {
     id: "gokhan-guney",
     name: "Gokhan Guney",
-    title: "Founding Partner",
+    title: "Senior Partner",
     location: "Riyadh, KSA",
     image: "/images/founder-gokhan.png",
     bio: "Gokhan Guney is a technology architect and delivery leader with 15+ years building enterprise AI systems across the MENA region and Europe. His expertise spans agentic AI platforms, LLM orchestration, and cloud-native engineering for large-scale government and enterprise clients. Previously, he led engineering delivery at a global technology consultancy, where he was responsible for some of the most complex AI implementations in GCC's public sector. Gokhan joined Maven AI to build the engineering practice he always wished existed: one that values senior technical judgment, sovereign-capable delivery, and production outcomes over slide decks.",
@@ -26,7 +26,7 @@ export const founders = [
   {
     id: "alper-kulak",
     name: "Alper Kulak",
-    title: "Founding Partner",
+    title: "Senior Partner",
     location: "Dubai, UAE",
     image: "/images/founder-alper.png",
     bio: "Alper Kulak is one of the GCC's foremost experts in data platform modernization, AI governance, and data mesh architectures. Over 15 years, he has built data foundations for telecoms, banks, and government entities across the Gulf and Europe — the unglamorous but essential infrastructure that makes AI trustworthy. As former Head of Data Practice at a global systems integrator, Alper has seen firsthand how AI ambition is defeated by unmastered data, broken lineage, and governance gaps. At Maven AI, he leads the Data & Governance practice, ensuring every agent the firm builds stands on solid data foundations.",
@@ -38,7 +38,7 @@ export const founders = [
   {
     id: "khalid-al-khudairi",
     name: "Khalid Al Khudairi",
-    title: "Founding Partner",
+    title: "Senior Partner",
     location: "Riyadh, KSA",
     image: "/images/founder-khalid.png",
     bio: "Khalid Al Khudairi is a Saudi national with deep relationships across the Kingdom's government, sovereign fund, and private sector ecosystem. With 12+ years advising on Vision 2030 programs, he has been at the center of Saudi Arabia's most consequential digital transformation initiatives — from national health platforms to smart city infrastructure. Khalid's specialization in change management, AI adoption, and organizational transformation fills the gap that most technology firms ignore: the human and institutional change required to make AI actually work inside large organizations. He brings to Maven AI the relationships and regional credibility that open doors, and the change expertise that keeps clients.",
