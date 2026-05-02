@@ -254,7 +254,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               </div>
               <button
                 onClick={() => setStep("profile")}
-                className="mt-10 inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-7 py-3.5 rounded-xl text-base shadow-lg transition"
+                className="mt-10 inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-7 py-3.5 rounded-xl text-base shadow-lg transition"
                 data-testid="button-start-assessment"
               >
                 {tStr(ui.common.intro, lang)} <ArrowRight size={18} />
@@ -519,7 +519,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     </button>
                     <button
                       onClick={submit}
-                      className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-6 py-3 rounded-xl shadow-lg"
+                      className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-6 py-3 rounded-xl shadow-lg"
                       data-testid="button-submit-assessment"
                     >
                       <Sparkles size={16} /> {tStr(ui.common.submit, lang)}
@@ -529,7 +529,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   <button
                     disabled={!activeAnswers[currentQ.q.id]}
                     onClick={submit}
-                    className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] disabled:opacity-50 text-white font-bold px-6 py-3 rounded-xl shadow-lg"
+                    className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] disabled:opacity-50 text-white font-bold px-6 py-3 rounded-xl shadow-lg"
                     data-testid="button-submit-assessment"
                   >
                     <Sparkles size={16} /> {tStr(ui.common.submit, lang)}

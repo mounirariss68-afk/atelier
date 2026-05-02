@@ -212,7 +212,7 @@ export default function AssessmentResults() {
               </button>
               <button
                 onClick={() => setShowBooking(true)}
-                className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-5 py-3 rounded-xl transition shadow-lg"
+                className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-5 py-3 rounded-xl transition shadow-lg"
                 data-testid="button-book-call"
               >
                 <Calendar size={16} /> {t(ui.results.bookCall)}
@@ -224,8 +224,8 @@ export default function AssessmentResults() {
         {/* Memo */}
         <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
           <div className="flex items-center gap-3 mb-2">
-            <Sparkles className="text-[#E97132]" size={20} />
-            <h2 className="text-xs font-bold uppercase tracking-widest text-[#E97132]">
+            <Sparkles className="text-[#F5A623]" size={20} />
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#F5A623]">
               {t(ui.results.memoTitle)}
             </h2>
           </div>
@@ -369,7 +369,7 @@ export default function AssessmentResults() {
 
         {/* Cost of inaction */}
         <section className="mt-8 bg-gradient-to-br from-[#0E2841] to-[#156082] rounded-3xl text-white p-8 sm:p-12">
-          <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#F5A623] mb-2">
             {t(ui.results.costOfInactionTitle)}
           </p>
           <h2 className="text-2xl sm:text-3xl font-extrabold mb-6">
@@ -377,7 +377,7 @@ export default function AssessmentResults() {
           </h2>
           <div className="grid sm:grid-cols-3 gap-6">
             <CoIBlock label={t({ en: "EBIT lift forfeited", ar: "أرباح ضائعة" })} value={`$${(result.costOfInaction.ebitDeltaUsd / 1_000_000).toFixed(1)}M`} accent="#0F9ED5" />
-            <CoIBlock label={t({ en: "Avoidable cost", ar: "كلفة قابلة للتجنب" })} value={`$${(result.costOfInaction.costDeltaUsd / 1_000_000).toFixed(1)}M`} accent="#E97132" />
+            <CoIBlock label={t({ en: "Avoidable cost", ar: "كلفة قابلة للتجنب" })} value={`$${(result.costOfInaction.costDeltaUsd / 1_000_000).toFixed(1)}M`} accent="#F5A623" />
             <CoIBlock label={t({ en: "Productivity recovered", ar: "إنتاجية مسترجعة" })} value={`${productivityFte.toFixed(1)} FTE`} accent="#FFFFFF" />
           </div>
           <p className="text-xs text-gray-300 mt-4 italic">
@@ -635,7 +635,7 @@ function BookingModal({
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={onClose} className="px-4 py-2 text-gray-600 font-semibold">{t({ en: "Cancel", ar: "إلغاء" })}</button>
-              <button onClick={submit} disabled={submitting} className="bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-5 py-2.5 rounded-lg inline-flex items-center gap-2">
+              <button onClick={submit} disabled={submitting} className="bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-5 py-2.5 rounded-lg inline-flex items-center gap-2">
                 {submitting && <Loader2 className="animate-spin" size={14} />}
                 {t({ en: "Request the call", ar: "اطلب المكالمة" })}
               </button>

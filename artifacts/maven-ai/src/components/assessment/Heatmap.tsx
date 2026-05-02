@@ -16,7 +16,7 @@ const cellColor = (v: number) => {
   if (v >= 4.5) return "bg-emerald-600 text-white";
   if (v >= 3.8) return "bg-emerald-400 text-white";
   if (v >= 3.0) return "bg-amber-300 text-gray-800";
-  if (v >= 2.0) return "bg-orange-400 text-white";
+  if (v >= 2.0) return "bg-[#F5A623] text-white";
   return "bg-red-500 text-white";
 };
 

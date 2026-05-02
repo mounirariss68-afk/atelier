@@ -38,7 +38,7 @@ interface PDFArgs {
 const colors = {
   navy: "#0E2841",
   teal: "#156082",
-  orange: "#E97132",
+  orange: "#F5A623",
   cyan: "#0F9ED5",
   green: "#196B24",
   light: "#F8FAFC",

@@ -11,7 +11,7 @@ export default function AssessmentsIndex() {
     <div dir={dir} className="pt-20 bg-gradient-to-b from-white via-slate-50 to-white">
       <section className="bg-[#0E2841] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
-          <span className="inline-flex items-center gap-2 bg-[#E97132]/20 border border-[#E97132]/30 text-[#E97132] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-6">
+          <span className="inline-flex items-center gap-2 bg-[#F5A623]/20 border border-[#F5A623]/30 text-[#F5A623] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-6">
             {t({ en: "Diagnostic Suite", ar: "حزمة التشخيص" })}
           </span>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight max-w-4xl">
@@ -93,7 +93,7 @@ export default function AssessmentsIndex() {
         <div className="mt-16 bg-gradient-to-br from-[#0E2841] to-[#156082] rounded-3xl p-8 sm:p-12 text-white">
           <div className="grid md:grid-cols-[2fr,1fr] gap-8 items-center">
             <div>
-              <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#E97132] mb-3">
+              <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#F5A623] mb-3">
                 {t({ en: "Reinvention Index", ar: "مؤشر إعادة الابتكار" })}
               </span>
               <h3 className="text-2xl sm:text-3xl font-extrabold mb-3">
@@ -111,7 +111,7 @@ export default function AssessmentsIndex() {
             </div>
             <Link
               href="/assessments/ari"
-              className="bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-6 py-4 rounded-xl text-center transition"
+              className="bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-6 py-4 rounded-xl text-center transition"
             >
               {t({ en: "Start with ARI →", ar: "ابدأ بـ ARI →" })}
             </Link>
