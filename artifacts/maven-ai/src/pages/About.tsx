@@ -19,7 +19,7 @@ function FounderPhoto({ src, name }: { src: string; name: string }) {
         <img
           src={src}
           alt={name}
-          className="w-full h-full object-cover absolute inset-0"
+          className="w-full h-full object-cover absolute inset-0 scale-[1.35] origin-center"
           onError={() => setImgFailed(true)}
         />
       )}
