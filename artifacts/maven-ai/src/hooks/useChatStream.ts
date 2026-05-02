@@ -65,6 +65,40 @@ type ServerEvent =
   | { type: "done"; suggestions: ChatSuggestion[] }
   | { type: "error"; message?: string };
 
+// Arabic copy is sourced from the product translations so error/retry text
+// matches the rest of the widget when the user has chosen Arabic. Keep the
+// strings here short and consistent with ChatWidget's tone.
+const COPY = {
+  stoppedPartial: {
+    en: "(Stopped before the answer was complete. Try again?)",
+    ar: "(تم الإيقاف قبل اكتمال الإجابة. حاول مرة أخرى؟)",
+  },
+  stoppedEmpty: {
+    en: "Stopped before the assistant could reply. Try again?",
+    ar: "تم الإيقاف قبل أن يتمكن المساعد من الرد. حاول مرة أخرى؟",
+  },
+  droppedPartial: {
+    en: "(The connection dropped before the answer was complete. Try again?)",
+    ar: "(انقطع الاتصال قبل اكتمال الإجابة. حاول مرة أخرى؟)",
+  },
+  droppedEmpty: {
+    en: "The connection dropped before the assistant could reply. Try again?",
+    ar: "انقطع الاتصال قبل أن يتمكن المساعد من الرد. حاول مرة أخرى؟",
+  },
+  serverError: {
+    en: "The assistant ran into an error.",
+    ar: "واجه المساعد خطأ.",
+  },
+  unavailable: {
+    en: "The assistant is unavailable right now. Please try again in a moment.",
+    ar: "المساعد غير متاح حالياً. يرجى المحاولة مرة أخرى بعد لحظات.",
+  },
+  noStreaming: {
+    en: "Streaming not supported in this browser.",
+    ar: "البث غير مدعوم في هذا المتصفح.",
+  },
+} as const;
+
 /**
  * Spec-compliant SSE parser. Handles:
  *   - LF and CRLF line endings
@@ -166,15 +200,15 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
         next[next.length - 1] = {
           role: "assistant",
           content: partial.length > 0
-            ? `${last.content}\n\n(Stopped before the answer was complete. Try again?)`
-            : "Stopped before the assistant could reply. Try again?",
+            ? `${last.content}\n\n${COPY.stoppedPartial[language]}`
+            : COPY.stoppedEmpty[language],
           error: true,
         };
         return next;
       });
       setStatus("error");
     }
-  }, []);
+  }, [language]);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
@@ -223,7 +257,7 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
         }
 
         if (!response.body) {
-          throw new Error("Streaming not supported in this browser.");
+          throw new Error(COPY.noStreaming[language]);
         }
 
         const handleEvent = (event: ServerEvent) => {
@@ -252,7 +286,7 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
               const next = [...prev];
               next[next.length - 1] = {
                 role: "assistant",
-                content: event.message || "The assistant ran into an error.",
+                content: event.message || COPY.serverError[language],
                 error: true,
               };
               return next;
@@ -280,8 +314,8 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
             const partial = last && last.role === "assistant" ? last.content : "";
             const note =
               partial.length > 0
-                ? `${partial}\n\n(The connection dropped before the answer was complete. Try again?)`
-                : "The connection dropped before the assistant could reply. Try again?";
+                ? `${partial}\n\n${COPY.droppedPartial[language]}`
+                : COPY.droppedEmpty[language];
             next[next.length - 1] = { role: "assistant", content: note, error: true };
             return next;
           });
@@ -300,7 +334,7 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
           if (last && last.role === "assistant") {
             next[next.length - 1] = {
               role: "assistant",
-              content: "The assistant is unavailable right now. Please try again in a moment.",
+              content: COPY.unavailable[language],
               error: true,
             };
           }
