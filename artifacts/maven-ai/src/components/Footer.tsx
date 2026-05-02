@@ -46,16 +46,22 @@ export default function Footer() {
             <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">Company</h3>
             <ul className="space-y-3">
               {[
-                { href: "/about", label: "About Maven AI" },
-                { href: "/about#founders", label: "Our Founders" },
-                { href: "/about#operating-model", label: "How We Work" },
-                { href: "/contact", label: "Contact Us" },
-                { href: "https://www.maveninsights.com", label: "Maven Insights ↗" },
+                { href: "/about", label: "About Maven AI", external: false },
+                { href: "/about#founders", label: "Our Founders", external: false },
+                { href: "/about#operating-model", label: "How We Work", external: false },
+                { href: "/contact", label: "Contact Us", external: false },
+                { href: "https://www.maveninsights.com", label: "Maven Insights ↗", external: true },
               ].map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="text-gray-400 text-sm hover:text-white transition-colors">
-                    {link.label}
-                  </Link>
+                  {link.external ? (
+                    <a href={link.href} target="_blank" rel="noreferrer" className="text-gray-400 text-sm hover:text-white transition-colors">
+                      {link.label}
+                    </a>
+                  ) : (
+                    <Link href={link.href} className="text-gray-400 text-sm hover:text-white transition-colors">
+                      {link.label}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>

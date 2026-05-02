@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowRight, Linkedin, MapPin, Quote } from "lucide-react";
 import { founders, operatingModel, stats } from "@/data/content";
@@ -7,6 +8,28 @@ const fadeUp = {
   hidden: { opacity: 0, y: 30 },
   visible: (i = 0) => ({ opacity: 1, y: 0, transition: { delay: i * 0.1, duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] } }),
 };
+
+function FounderPhoto({ src, name }: { src: string; name: string }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const initials = name.split(" ").map((n) => n[0]).join("");
+  return (
+    <div className="aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-[#0E2841] to-[#156082] relative">
+      {!imgFailed && (
+        <img
+          src={src}
+          alt={name}
+          className="w-full h-full object-cover absolute inset-0"
+          onError={() => setImgFailed(true)}
+        />
+      )}
+      {imgFailed && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-white font-black text-6xl opacity-30">{initials}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function About() {
   return (
@@ -145,21 +168,7 @@ export default function About() {
               >
                 {/* Photo */}
                 <div className="lg:col-span-3">
-                  <div className="aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-[#0E2841] to-[#156082] relative">
-                    <img
-                      src={founder.image}
-                      alt={founder.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0E2841] to-[#156082]">
-                      <span className="text-white font-black text-6xl opacity-30">
-                        {founder.name.split(" ").map((n) => n[0]).join("")}
-                      </span>
-                    </div>
-                  </div>
+                  <FounderPhoto src={founder.image} name={founder.name} />
                 </div>
 
                 {/* Bio */}
