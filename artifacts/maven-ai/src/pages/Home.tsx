@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote } from "lucide-react";
 import { stats, services, insights, founders } from "@/data/content";
+import PartnerLogos from "@/components/PartnerLogos";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -242,6 +243,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ── PLATFORM PARTNERS ── */}
+      <PartnerLogos variant="light" />
 
       {/* ── FEATURED INSIGHTS ── */}
       <section className="py-24 bg-[#F8F9FA]">

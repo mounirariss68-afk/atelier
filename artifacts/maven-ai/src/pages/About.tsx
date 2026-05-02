@@ -2,7 +2,8 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowRight, Linkedin, MapPin, Quote } from "lucide-react";
-import { founders, operatingModel, stats } from "@/data/content";
+import { founders, stats } from "@/data/content";
+import OperatingModelDiagram from "@/components/OperatingModelDiagram";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -213,23 +214,7 @@ export default function About() {
             <h2 className="text-3xl font-extrabold text-white mb-4">Our operating model</h2>
             <p className="text-gray-400 max-w-xl mx-auto">A small core leveraging four rings of capability — lean by design. Every dollar of revenue requires a fraction of the headcount of a Tier-1.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {operatingModel.rings.map((ring, i) => (
-              <motion.div
-                key={ring.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1, duration: 0.5 }}
-                className="rounded-xl p-7 border border-white/10"
-                style={{ backgroundColor: ring.color + "33" }}
-              >
-                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: "#F5A623" }}>{ring.name}</div>
-                <p className="text-white text-sm leading-relaxed mb-4">{ring.description}</p>
-                <div className="text-xs font-semibold text-[#F5A623]">{ring.headcount}</div>
-              </motion.div>
-            ))}
-          </div>
+          <OperatingModelDiagram />
         </div>
       </section>
 
