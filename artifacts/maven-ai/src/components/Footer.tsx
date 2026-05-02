@@ -81,6 +81,25 @@ export default function Footer() {
           </div>
 
           <div className="lg:col-span-2">
+            <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">Diagnostics</h3>
+            <ul className="space-y-3">
+              {[
+                { href: "/assessments/ari", label: "Agentic Readiness (ARI)" },
+                { href: "/assessments/mvi", label: "Model & Value (MVI)" },
+                { href: "/assessments/dafi", label: "Data & AI Foundations (DAFI)" },
+                { href: "/assessments/uvr", label: "Use Case Value (UVR)" },
+                { href: "/assessments", label: "All free assessments →" },
+              ].map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="text-gray-400 text-sm hover:text-white transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="lg:col-span-2">
             <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">Industries</h3>
             <ul className="space-y-3">
               {[
@@ -98,7 +117,7 @@ export default function Footer() {
           </div>
 
           {/* Contact */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 lg:col-start-11">
             <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">Contact</h3>
             <div className="space-y-4">
               <div className="flex items-start gap-2">

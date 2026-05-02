@@ -154,6 +154,22 @@ export default function ServiceDetail() {
         </div>
       </section>
 
+      {/* Diagnostic CTA */}
+      <section className="py-12 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="bg-white border-2 border-[#0F9ED5]/30 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-[#0F9ED5] mb-1">Free diagnostic · ~12 min</p>
+              <h3 className="text-xl font-extrabold text-[#0E2841]">Benchmark your {service.title.toLowerCase()} maturity</h3>
+              <p className="text-sm text-gray-600 mt-1">Get a sovereign-aware score, anti-pattern flags, GCC peer benchmark and a branded executive memo.</p>
+            </div>
+            <Link href="/assessments" className="flex-shrink-0 bg-[#0F9ED5] hover:bg-[#0E8BB8] text-white font-bold px-6 py-3 rounded-xl whitespace-nowrap inline-flex items-center gap-2">
+              Take the diagnostic <ArrowRight size={16} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-20" style={{ backgroundColor: service.color }}>
         <div className="max-w-3xl mx-auto px-4 text-center">

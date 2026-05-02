@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Phone, Mail, Send, CheckCircle, Clock, Users, ArrowRight } from "lucide-react";
 
@@ -42,6 +43,18 @@ export default function Contact() {
           <p className="text-xl text-gray-300 max-w-xl">
             Three days to scope. Three weeks to prototype. 90 days to MVP. It starts with a conversation.
           </p>
+          <div className="mt-8 inline-flex items-center gap-3 bg-white/5 border border-white/15 rounded-2xl px-5 py-4">
+            <div className="w-10 h-10 rounded-lg bg-[#0F9ED5]/20 flex items-center justify-center flex-shrink-0">
+              <ArrowRight size={18} className="text-[#0F9ED5]" />
+            </div>
+            <div className="text-sm text-white/85">
+              <p className="font-semibold text-white">Not ready for a call yet?</p>
+              <p>Take a free 12-minute diagnostic and we will respond with your scored memo.</p>
+            </div>
+            <Link href="/assessments" className="ml-2 bg-[#0F9ED5] hover:bg-[#0E8BB8] text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">
+              Start a diagnostic
+            </Link>
+          </div>
         </div>
       </section>
 

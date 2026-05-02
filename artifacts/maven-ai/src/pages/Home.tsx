@@ -76,16 +76,16 @@ export default function Home() {
               className="flex flex-col sm:flex-row items-start sm:items-center gap-4"
             >
               <Link
-                href="/contact"
+                href="/assessments"
                 className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
               >
-                Start the conversation <ArrowRight size={18} />
+                Take a free 12-min diagnostic <ArrowRight size={18} />
               </Link>
               <Link
-                href="/about"
+                href="/contact"
                 className="inline-flex items-center gap-2 border border-white/30 hover:border-white/60 text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors"
               >
-                Our approach <ChevronRight size={18} />
+                Start the conversation <ChevronRight size={18} />
               </Link>
             </motion.div>
           </div>
@@ -93,6 +93,21 @@ export default function Home() {
 
         {/* Bottom fade */}
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent" />
+      </section>
+
+      {/* ── DIAGNOSTIC SUITE BANNER ── */}
+      <section className="bg-gradient-to-r from-[#0F9ED5] via-[#156082] to-[#0E2841] text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">Maven AI Diagnostic Suite · Free · ~12 min</p>
+            <p className="text-2xl font-extrabold leading-tight">Where does your AI program actually stand against the GCC peer band?</p>
+            <p className="text-sm text-white/80 mt-2">Four diagnostics — Agentic Readiness, Model & Value, Data & Governance, Use Case Value — produce a sovereign-aware score, an executive memo, and a branded board pack.</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0">
+            <Link href="/assessments/ari" className="bg-white text-[#0E2841] font-bold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-gray-100">Start ARI →</Link>
+            <Link href="/assessments" className="border border-white/40 text-white font-semibold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-white/10">See all 4 diagnostics</Link>
+          </div>
+        </div>
       </section>
 
       {/* ── STATS BAR ── */}

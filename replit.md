@@ -1,7 +1,15 @@
-# Maven AI — Marketing Website
+# Maven AI — Marketing Website + Diagnostic Suite
 
 ## Project Overview
-A comprehensive, world-class marketing website for **Maven AI** — a boutique AI advisory and engineering services firm, sister company to Maven Insights. Built as a React + Vite single-page application with full routing.
+A comprehensive, world-class marketing website for **Maven AI** — a boutique AI advisory and engineering services firm, sister company to Maven Insights. Built as a React + Vite single-page application with full routing. Now includes the **Maven AI Diagnostic Assessment Suite** — four free bilingual (EN/AR) wizards (ARI, MVI, DAFI, UVR) backed by an Express API, Postgres persistence, AI executive memos and branded PDF reports.
+
+## Diagnostic Suite Architecture
+- **Shared lib**: `lib/assessments` — pure-TS scoring engine, sovereign sub-score, anti-patterns, peer benchmarks, cost-of-inaction, recommendations, i18n strings, all 4 framework definitions.
+- **Schema**: `lib/db/src/schema/assessments.ts` (`assessment_submissions`, `call_requests`, `team_invitations`).
+- **API**: `artifacts/api-server/src/routes/assessments.ts` — submit, fetch, memo, email, book-call, team-links, heatmap, reinvention-index. AI memo via Anthropic (claude-sonnet-4-5) → OpenAI (gpt-5) → deterministic template fallback. Email via Resend with log-only fallback.
+- **UI**: `artifacts/maven-ai/src/pages/assessments/*` and `src/components/assessment/*` — wizard engine, results screen with gauge/radar/heatmap/UVR portfolio, react-pdf branded report, EN/AR with RTL toggle.
+- **Routes**: `/assessments`, `/assessments/:slug`, `/assessments/:slug/results/:publicId`, `/assessments/team/:token`.
+- **Entry points**: Navbar (Diagnostics + Free Assessment), Footer (Diagnostics column), Home (hero CTA + suite banner), ServiceDetail (diagnostic CTA), Contact (hero CTA).
 
 ## Architecture
 - **Stack**: React + Vite + TypeScript + Tailwind CSS v4 + Framer Motion + Wouter routing
