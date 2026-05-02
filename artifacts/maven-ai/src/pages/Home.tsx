@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote, ExternalLink } from "lucide-react";
-import { stats, services, insights, founders } from "@/data/content";
+import { stats, services, insights, industries, SITE_SOURCES } from "@/data/content";
 import PartnerLogos from "@/components/PartnerLogos";
 
 const fadeUp = {
@@ -163,7 +163,19 @@ export default function Home() {
             <div className="section-divider mx-auto" />
             <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5">The gap we exist to close</h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Across GCC enterprises, the average organization runs 14 concurrent AI pilots. Fewer than 2 reach production within 12 months. We fix that.
+              MIT's 2025 <em>State of AI in Business</em> report found that <span className="font-semibold text-[#0E2841]">95% of enterprise GenAI pilots delivered no measurable P&amp;L impact</span> — only 5% of integrated systems generated meaningful value. We exist to put GCC enterprises in the 5%.
+            </p>
+            <p className="text-xs text-gray-500 mt-4">
+              Source:{" "}
+              <a
+                href="https://nanda.media.mit.edu/ai_report_2025.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+              >
+                MIT NANDA — The GenAI Divide: State of AI in Business (2025)
+                <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
+              </a>
             </p>
           </motion.div>
 
@@ -171,9 +183,9 @@ export default function Home() {
             <div className="space-y-5">
               {[
                 { num: "01", title: "Pilot purgatory", desc: "Dozens of POCs, no production path. The fix is governance plus orchestration plus change leadership — work the Tier-1 margin model rejects." },
-                { num: "02", title: "Technical debt trap", desc: "70% of IT spend trapped in maintenance. AI-driven SDLC is the path out — almost no one delivers it on-prem for sovereign clients." },
+                { num: "02", title: "Technical debt trap", desc: "Industry research puts 60–80% of IT budgets into maintaining existing systems (with telcos at the higher end). AI-driven SDLC is the path out — almost no one delivers it on-prem for sovereign clients.", source: SITE_SOURCES.eyTelcoLegacy },
                 { num: "03", title: "Data & governance vacuum", desc: "AI exposes data debt instantly. Big-4 sells strategy, hyperscalers sell tools. No one delivers the operating activation that makes agents trustworthy." },
-                { num: "04", title: "Pricing mismatch", desc: "Tier-1 rate cards assume 1:8 senior-to-junior pyramids. Clients now know the seniors aren't on the work. The premium is no longer matched." },
+                { num: "04", title: "Adoption gap", desc: "BCG finds only 26% of companies have moved past AI pilots to generate any value at scale — and just 4% sit at the elite frontier. The bottleneck is delivery, not models.", source: SITE_SOURCES.bcgValueAI },
               ].map((item, i) => (
                 <motion.div
                   key={i}
@@ -187,6 +199,20 @@ export default function Home() {
                   <div>
                     <h3 className="font-bold text-[#0E2841] mb-1">{item.title}</h3>
                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
+                    {item.source && (
+                      <p className="text-[11px] text-gray-400 mt-1.5">
+                        Source:{" "}
+                        <a
+                          href={item.source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+                        >
+                          {item.source.name} ({item.source.year})
+                          <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
+                        </a>
+                      </p>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -390,63 +416,37 @@ export default function Home() {
             <p className="text-lg text-gray-600 max-w-xl">Deep domain knowledge in the sectors that matter most in the GCC.</p>
           </motion.div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { title: "Public Sector", stat: "$33B", desc: "Projected GCC government AI spend through 2030. National safety platforms, smart-city AI, and sovereign cloud delivery.", href: "/industries#public-sector", color: "#156082" },
-              { title: "Telecommunications", stat: "$7.3B", desc: "GCC telecom AI investment. Legacy modernization, 5G operations, and customer AI at national scale.", href: "/industries#telecom", color: "#F5A623" },
-              { title: "Financial Services", stat: "$11.7B", desc: "GCC FS AI investment. SAMA-compliant governance, capital markets AI, and data foundations for banks.", href: "/industries#financial-services", color: "#F5A623" },
-              { title: "Energy & Commodities", stat: "$9.4B", desc: "GCC energy AI investment. Refinery reliability, upstream optimization, and sovereign on-prem delivery for national champions.", href: "/industries#energy-commodities", color: "#156082" },
-              { title: "Retail & Consumer Products", stat: "$5.1B", desc: "GCC retail AI trajectory. Arabic-first personalization, demand sensing, and legacy ERP modernization for established groups.", href: "/industries#retail-consumer", color: "#F5A623" },
-              { title: "Travel & Hospitality", stat: "$6.8B", desc: "GCC tourism AI investment. Megaproject guest platforms, multi-lingual conversational AI, and revenue management for global brands.", href: "/industries#travel-hospitality", color: "#0F9ED5" },
-              { title: "Automotive", stat: "$4.2B", desc: "GCC automotive AI investment. Connected fleets, EV battery and grid AI, and DMS modernization for dealer groups.", href: "/industries#automotive", color: "#E97132" },
-            ].map((ind, i) => (
+            {industries.map((ind, i) => (
               <motion.div
-                key={i}
+                key={ind.id}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1, duration: 0.5 }}
-                className="report-card group p-8 border border-gray-100 rounded-2xl hover:border-transparent hover:shadow-xl"
+                className="report-card group p-8 border border-gray-100 rounded-2xl hover:border-transparent hover:shadow-xl flex flex-col"
               >
-                <div className="text-5xl font-extrabold mb-2" style={{ color: ind.color }}>{ind.stat}</div>
+                <div className="text-5xl font-extrabold mb-2 leading-none" style={{ color: ind.color }}>{ind.heroStat}</div>
+                <p className="text-[11px] text-gray-500 leading-snug mb-4">
+                  {ind.heroStatLabel}
+                  <br />
+                  <a
+                    href={ind.heroStatSource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+                  >
+                    {ind.heroStatSource.name} ({ind.heroStatSource.year})
+                    <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
+                  </a>
+                </p>
                 <h3 className="text-xl font-bold text-[#0E2841] mb-3">{ind.title}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed mb-6">{ind.desc}</p>
-                <Link href={ind.href} className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors">
+                <p className="text-sm text-gray-600 leading-relaxed mb-6 flex-1">{ind.subtitle}</p>
+                <Link href={`/industries#${ind.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors">
                   Explore <ArrowRight size={14} />
                 </Link>
               </motion.div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ── CLIENT LOGOS ── */}
-      <section className="py-14 bg-[#F8F9FA] border-y border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-10">
-            Illustrative client organizations we've worked with
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
-            {[
-              "Ministry of Interior",
-              "Saudi Telecom Company",
-              "Abu Dhabi Investment Authority",
-              "Qatar National Bank",
-              "Emirates NBD",
-              "Zain Group",
-              "Saudi Aramco",
-              "Etisalat / e&",
-            ].map((name) => (
-              <div
-                key={name}
-                className="px-6 py-3 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-500 hover:text-[#156082] hover:border-[#156082]/30 transition-colors"
-              >
-                {name}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-gray-400 text-center mt-6 italic">
-            Representative client types — actual client names held in confidence
-          </p>
         </div>
       </section>
 

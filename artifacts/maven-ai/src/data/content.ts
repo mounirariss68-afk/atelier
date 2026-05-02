@@ -115,7 +115,7 @@ export const services = [
     ],
     relatedReport: "the-agentic-enterprise",
     stats: [
-      { value: "80%", label: "of enterprise AI pilots never reach production" },
+      { value: "95%", label: "of enterprise GenAI pilots deliver no measurable P&L impact (MIT NANDA, 2025)" },
       { value: "3 weeks", label: "from scope to working prototype" },
       { value: "90 days", label: "from kickoff to production MVP" },
     ],
@@ -128,7 +128,7 @@ export const services = [
     icon: "Code2",
     color: "#F5A623",
     buyer: "CIO, CTO",
-    description: "70% of enterprise IT spend is trapped in legacy maintenance. We use AI-driven engineering to spec legacy systems, accelerate modernization, and reduce technical debt — with on-prem capability for sovereign data clients.",
+    description: "Industry research puts 60–80% of IT budgets into maintaining existing systems. We use AI-driven engineering to spec legacy systems, accelerate modernization, and reduce technical debt — with on-prem capability for sovereign data clients.",
     longDescription: "Most organizations know their legacy systems are slowing them down. What they don't have is a safe, fast path out. Maven AI's spec-from-legacy methodology uses AI to extract, document, and re-engineer legacy codebases — dramatically accelerating modernization timelines while preserving institutional logic. For sovereign clients who cannot move workloads to public cloud, we deliver on-prem at scale.",
     useCases: [
       "Siebel CRM migration: AI-driven specification extraction and on-prem re-engineering for telecoms",
@@ -144,7 +144,7 @@ export const services = [
     ],
     relatedReport: "legacy-modernization-playbook",
     stats: [
-      { value: "70%", label: "of enterprise IT spend trapped in legacy maintenance" },
+      { value: "60–80%", label: "of IT budgets globally trapped maintaining existing systems (EY, 2024)" },
       { value: "40–60%", label: "reduction in SDLC cycle times with AI engineering" },
       { value: "On-prem", label: "capable for sovereign data environments" },
     ],
@@ -220,7 +220,7 @@ export const insights = [
     readTime: "24 min read",
     author: "Maven AI Research",
     coverImage: "/images/report-1.png",
-    summary: "Why 80% of enterprise AI pilots never reach production — and the four-layer architecture that closes the gap. A definitive GCC implementation roadmap.",
+    summary: "MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact. We examine the four-layer architecture that closes the gap — and the GCC implementation roadmap to ship into production.",
     featured: true,
     tags: ["Agentic AI", "Enterprise", "GCC", "Production"],
     content: `
@@ -688,7 +688,19 @@ const SOURCES = {
     year: 2024,
     url: "https://www.arabnews.com/node/2455031/business-economy",
   },
+  mitNanda: {
+    name: "MIT NANDA — The GenAI Divide: State of AI in Business 2025",
+    year: 2025,
+    url: "https://nanda.media.mit.edu/ai_report_2025.pdf",
+  },
+  bcgValueAI: {
+    name: "BCG — Where's the Value in AI?",
+    year: 2024,
+    url: "https://www.bcg.com/publications/2024/wheres-value-in-ai",
+  },
 } satisfies Record<string, IndustrySource>;
+
+export const SITE_SOURCES = SOURCES;
 
 export const industries = [
   {

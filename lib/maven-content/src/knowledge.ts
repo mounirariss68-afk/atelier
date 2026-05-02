@@ -97,7 +97,7 @@ export const insights: InsightEntry[] = [
     category: "Agentic AI",
     type: "Report",
     summary:
-      "Why 80% of enterprise AI pilots never reach production — and the four-layer architecture (Value Case, Data & AI Foundations, Agentic AI, Change Management) that closes the gap.",
+      "MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact. We examine the four-layer architecture (Value Case, Data & AI Foundations, Agentic AI, Change Management) that closes the gap.",
   },
   {
     slug: "ai-governance-gulf",
