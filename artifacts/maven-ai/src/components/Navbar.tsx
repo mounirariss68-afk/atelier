@@ -130,7 +130,7 @@ export default function Navbar() {
             <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
               Industries
             </Link>
-            <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
               Diagnostics
             </Link>
           </nav>

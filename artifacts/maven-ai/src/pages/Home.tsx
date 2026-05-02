@@ -99,7 +99,7 @@ export default function Home() {
       <section className="bg-gradient-to-r from-[#0F9ED5] via-[#156082] to-[#0E2841] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-[#F5A623] mb-2">Maven AI Diagnostic Suite · Free · ~12 min</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">Maven AI Diagnostic Suite · Free · ~12 min</p>
             <p className="text-2xl font-extrabold leading-tight">Where does your AI program actually stand against the GCC peer band?</p>
             <p className="text-sm text-white/80 mt-2">Four diagnostics — Agentic Readiness, Model & Value, Data & Governance, Use Case Value — produce a sovereign-aware score, an executive memo, and a branded board pack.</p>
           </div>
