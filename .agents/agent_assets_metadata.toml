@@ -6,3 +6,51 @@ id = "zTyLZ6eSWywU6HZqSOOQa"
 uri = "file://attached_assets/generated_images/generated_image.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "Vxj7nI-e6ib-vvtOFxWCC"
+uri = "file://artifacts/maven-ai/public/images/report-1.png"
+type = "image"
+title = "Agentic enterprise pilot to production"
+
+[[generated]]
+id = "RYNz0VoIKauGG1k6X6TI6"
+uri = "file://artifacts/maven-ai/public/images/report-2.png"
+type = "image"
+title = "AI governance Gulf trust at scale"
+
+[[generated]]
+id = "jPbLgRymN8d6WhQFC9_Jx"
+uri = "file://artifacts/maven-ai/public/images/report-3.png"
+type = "image"
+title = "Legacy modernization spec methodology"
+
+[[generated]]
+id = "XbXGxPD3scUyHSb2kIaYn"
+uri = "file://artifacts/maven-ai/public/images/report-4.png"
+type = "image"
+title = "GCC AI spending outlook research"
+
+[[generated]]
+id = "0WRiKjdAbGYR-ZNlLpcPA"
+uri = "file://artifacts/maven-ai/public/images/report-5.png"
+type = "image"
+title = "Agentic workforce public sector"
+
+[[generated]]
+id = "pyqVh1MTs1DC9ohPvGkv1"
+uri = "file://artifacts/maven-ai/public/images/report-6.png"
+type = "image"
+title = "CDO to CAO executive transformation"
+
+[[generated]]
+id = "gvP92ZgPkcZyVv0zygLnJ"
+uri = "file://artifacts/maven-ai/public/images/report-7.png"
+type = "image"
+title = "Sovereign AI on-prem agentic"
+
+[[generated]]
+id = "eSLWKhP1yQ8TTF5mXBOuv"
+uri = "file://artifacts/maven-ai/public/images/report-8.png"
+type = "image"
+title = "90 day MVP boutique speed"
