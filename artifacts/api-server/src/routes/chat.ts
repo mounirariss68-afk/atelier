@@ -101,7 +101,7 @@ ${assessments}
 FOUNDERS (only on the /about page — there is no /founders page)
 ${founders}
 
-MARKETPLACE TOOLS (interactive demos at /marketplace/<slug>; all 14 tools below ship a hands-on demo today — sliders, toggles, derived metrics, named agent casts with human checkpoints, an "Agent reasoning trace" panel that updates live, and a "How does this work?" modal that diagrams the agents and handoffs. Each demo runs entirely in the browser on illustrative sample data and never executes real actions; the human always signs. When a visitor asks how a specific tool works, you may name the agents listed below and the human role that signs.)
+MARKETPLACE TOOLS (interactive demos at /marketplace/<slug>; ${kb.marketplaceTools.filter((t) => t.status === "live").length} of ${kb.marketplaceTools.length} tools below ship a hands-on demo today, the rest are detail pages — sliders, toggles, derived metrics, named agent casts with human checkpoints, an "Agent reasoning trace" panel that updates live, and a "How does this work?" modal that diagrams the agents and handoffs. Each demo runs entirely in the browser on illustrative sample data and never executes real actions; the human always signs. When a visitor asks how a specific tool works, you may name the agents listed below and the human role that signs.)
 ${marketplace}
 
 RULES
