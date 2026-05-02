@@ -136,8 +136,24 @@ export default function ChatWidget() {
             aria-label={t(T.open)}
             data-testid="button-open-chat"
           >
-            <MessageCircle size={20} strokeWidth={2.5} />
-            <span className="hidden sm:inline text-sm">{t(T.open)}</span>
+            {/* Subtle amber pulse ring that signals "live, ready" without
+                being distracting. Pure CSS via Framer's animate prop. */}
+            <motion.span
+              aria-hidden
+              className="absolute inset-0 rounded-full bg-[#F5A623]"
+              animate={{ scale: [1, 1.35, 1], opacity: [0.5, 0, 0.5] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut" }}
+            />
+            {/* Maven mark: navy "M" monogram on amber, brand-faithful and
+                instantly recognizable as a Maven AI surface (vs. a generic
+                chat-bubble icon). */}
+            <span
+              aria-hidden
+              className="relative inline-flex items-center justify-center w-5 h-5 font-black text-[15px] leading-none tracking-tight"
+            >
+              M
+            </span>
+            <span className="relative hidden sm:inline text-sm">{t(T.open)}</span>
           </motion.button>
         )}
       </AnimatePresence>
@@ -296,7 +312,12 @@ export default function ChatWidget() {
                 <textarea
                   ref={inputRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value.slice(0, MAX_INPUT_CHARS))}
+                  // Allow temporary overflow so the user sees the over-limit
+                  // warning + disabled Send button, instead of the input
+                  // silently capping at 1000 chars (which would make the
+                  // over-limit copy unreachable). Soft cap a bit above the
+                  // limit so we still protect against runaway pastes.
+                  onChange={(e) => setInput(e.target.value.slice(0, MAX_INPUT_CHARS + 200))}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -304,7 +325,6 @@ export default function ChatWidget() {
                     }
                   }}
                   rows={1}
-                  maxLength={MAX_INPUT_CHARS}
                   placeholder={t(T.placeholder)}
                   disabled={status === "streaming"}
                   aria-invalid={inputOverLimit || undefined}
