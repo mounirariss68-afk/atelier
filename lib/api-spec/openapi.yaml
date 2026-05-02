@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: chat
+    description: Site-wide AI chat assistant
 paths:
   /healthz:
     get:
@@ -24,6 +26,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /chat:
+    post:
+      operationId: chat
+      tags: [chat]
+      summary: Stream a reply from the Maven AI assistant
+      description: |
+        Streams an assistant reply as Server-Sent Events. Each `data:` payload is a
+        `ChatStreamEvent` JSON object. The stream ends with an event of type `done`
+        whose `suggestions` field contains optional follow-up links.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: SSE stream of ChatStreamEvent JSON payloads
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatError"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +69,70 @@ components:
           type: string
       required:
         - status
-
+    ChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+        - role
+        - content
+    ChatRequest:
+      type: object
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 24
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        language:
+          type: string
+          enum: [en, ar]
+          default: en
+      required:
+        - messages
+    ChatSuggestion:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [service, insight, assessment, industry, page]
+        href:
+          type: string
+        label:
+          type: string
+      required:
+        - kind
+        - href
+        - label
+    ChatStreamEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [token, done, error]
+        token:
+          type: string
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatSuggestion"
+        message:
+          type: string
+      required:
+        - type
+    ChatError:
+      type: object
+      properties:
+        error:
+          type: string
+        retryAfterSeconds:
+          type: number
+      required:
+        - error

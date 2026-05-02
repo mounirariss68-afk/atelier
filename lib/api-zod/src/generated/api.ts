@@ -14,3 +14,29 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Streams an assistant reply as Server-Sent Events. Each `data:` payload is a
+`ChatStreamEvent` JSON object. The stream ends with an event of type `done`
+whose `suggestions` field contains optional follow-up links.
+
+ * @summary Stream a reply from the Maven AI assistant
+ */
+export const chatBodyMessagesItemContentMax = 4000;
+
+export const chatBodyMessagesMax = 24;
+
+export const chatBodyLanguageDefault = `en`;
+
+export const ChatBody = zod.object({
+  messages: zod
+    .array(
+      zod.object({
+        role: zod.enum(["user", "assistant"]),
+        content: zod.string().min(1).max(chatBodyMessagesItemContentMax),
+      }),
+    )
+    .min(1)
+    .max(chatBodyMessagesMax),
+  language: zod.enum(["en", "ar"]).default(chatBodyLanguageDefault),
+});

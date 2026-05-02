@@ -178,6 +178,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/maven-content':
+        specifier: workspace:*
+        version: link:../../lib/maven-content
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -236,6 +239,9 @@ importers:
       '@workspace/assessments':
         specifier: workspace:*
         version: link:../../lib/assessments
+      '@workspace/maven-content':
+        specifier: workspace:*
+        version: link:../../lib/maven-content
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -662,6 +668,12 @@ importers:
       drizzle-kit:
         specifier: ^0.31.9
         version: 0.31.9
+
+  lib/maven-content:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.3.5
 
   scripts:
     devDependencies:

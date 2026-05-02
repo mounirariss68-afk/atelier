@@ -8,3 +8,75 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type ChatMessageRole =
+  (typeof ChatMessageRole)[keyof typeof ChatMessageRole];
+
+export const ChatMessageRole = {
+  user: "user",
+  assistant: "assistant",
+} as const;
+
+export interface ChatMessage {
+  role: ChatMessageRole;
+  /**
+   * @minLength 1
+   * @maxLength 4000
+   */
+  content: string;
+}
+
+export type ChatRequestLanguage =
+  (typeof ChatRequestLanguage)[keyof typeof ChatRequestLanguage];
+
+export const ChatRequestLanguage = {
+  en: "en",
+  ar: "ar",
+} as const;
+
+export interface ChatRequest {
+  /**
+   * @minItems 1
+   * @maxItems 24
+   */
+  messages: ChatMessage[];
+  language?: ChatRequestLanguage;
+}
+
+export type ChatSuggestionKind =
+  (typeof ChatSuggestionKind)[keyof typeof ChatSuggestionKind];
+
+export const ChatSuggestionKind = {
+  service: "service",
+  insight: "insight",
+  assessment: "assessment",
+  industry: "industry",
+  page: "page",
+} as const;
+
+export interface ChatSuggestion {
+  kind: ChatSuggestionKind;
+  href: string;
+  label: string;
+}
+
+export type ChatStreamEventType =
+  (typeof ChatStreamEventType)[keyof typeof ChatStreamEventType];
+
+export const ChatStreamEventType = {
+  token: "token",
+  done: "done",
+  error: "error",
+} as const;
+
+export interface ChatStreamEvent {
+  type: ChatStreamEventType;
+  token?: string;
+  suggestions?: ChatSuggestion[];
+  message?: string;
+}
+
+export interface ChatError {
+  error: string;
+  retryAfterSeconds?: number;
+}
