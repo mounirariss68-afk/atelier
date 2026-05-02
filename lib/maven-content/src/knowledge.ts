@@ -210,6 +210,48 @@ export const founders: FounderEntry[] = [
   },
 ];
 
+export interface HomepageStat {
+  value: string;
+  label: string;
+  source: { name: string; year: number; url: string };
+}
+
+/**
+ * Canonical homepage hero stats. Each is a real, sourced figure from the
+ * published GCC AI research that Maven Insights tracks — the same body of
+ * evidence cited across the industries pages — so the home page carries the
+ * same evidentiary weight as the rest of the site.
+ */
+export const homepageStats: HomepageStat[] = [
+  {
+    value: "$320B",
+    label: "projected economic gains from AI across the Middle East by 2030",
+    source: {
+      name: "PwC Middle East — The potential impact of AI in the Middle East",
+      year: 2018,
+      url: "https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html",
+    },
+  },
+  {
+    value: "$23.5B",
+    label: "annual GenAI economic impact projected across the GCC by 2030",
+    source: {
+      name: "Strategy& — Reshaping the Middle East: A CEO's playbook to win the $23.5B GenAI opportunity",
+      year: 2023,
+      url: "https://www.strategyand.pwc.com/m1/en/strategic-foresight/sector-strategies/technology/reshaping.html",
+    },
+  },
+  {
+    value: "$22.4B",
+    label: "projected total GCC AI market size by 2033",
+    source: {
+      name: "IMARC Group — GCC Artificial Intelligence Market 2025–2033",
+      year: 2024,
+      url: "https://www.imarcgroup.com/gcc-artificial-intelligence-market",
+    },
+  },
+];
+
 export const firmFacts = {
   positioning:
     "Maven AI is a boutique GCC AI advisory and engineering firm — sister firm to Maven Insights (~200 consultant bench). We exist to close the gap between enterprise AI ambition and production outcomes.",
@@ -225,6 +267,7 @@ export const firmFacts = {
 /** Single object exposed for prompt-building convenience. */
 export const knowledgeBase = {
   firmFacts,
+  homepageStats,
   services,
   industries,
   insights,

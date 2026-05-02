@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowRight, Linkedin, MapPin, Quote } from "lucide-react";
-import { founders, stats } from "@/data/content";
+import { founders } from "@/data/content";
 import OperatingModelDiagram from "@/components/OperatingModelDiagram";
 
 const fadeUp = {

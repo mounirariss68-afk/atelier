@@ -6,6 +6,7 @@ import {
   industries as sharedIndustries,
   insights as sharedInsights,
   assessments as sharedAssessments,
+  homepageStats,
 } from "@workspace/maven-content";
 
 export {
@@ -909,12 +910,10 @@ export const industries = [
   },
 ];
 
-export const stats = [
-  { value: "200+", label: "Consultants via Maven Insights bench" },
-  { value: "4", label: "GCC offices" },
-  { value: "$50M+", label: "AI programs advised" },
-  { value: "90 days", label: "MVP delivery commitment" },
-];
+// Canonical, source-cited homepage hero stats — drawn from the same body of
+// published GCC AI research the industries pages cite. The numbers live in
+// `@workspace/maven-content` so the chat assistant can reference them too.
+export const stats = homepageStats;
 
 export const operatingModel = {
   rings: [

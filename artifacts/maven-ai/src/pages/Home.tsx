@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote } from "lucide-react";
+import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote, ExternalLink } from "lucide-react";
 import { stats, services, insights, founders } from "@/data/content";
 import PartnerLogos from "@/components/PartnerLogos";
 
@@ -112,8 +112,11 @@ export default function Home() {
 
       {/* ── STATS BAR ── */}
       <section className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-8">
+            The Middle East AI opportunity — by the published numbers
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
             {stats.map((stat, i) => (
               <motion.div
                 key={i}
@@ -121,12 +124,26 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08, duration: 0.5 }}
-                className="text-center"
+                className="text-center md:text-left md:px-2"
               >
-                <div className="text-3xl font-extrabold text-[#0E2841] mb-1">
+                <div className="text-5xl font-extrabold text-[#0E2841] mb-2 leading-none">
                   <AnimatedCounter value={stat.value} />
                 </div>
-                <div className="text-xs text-gray-500 font-medium leading-tight">{stat.label}</div>
+                <div className="text-sm text-gray-700 font-medium leading-snug mb-2">
+                  {stat.label}
+                </div>
+                <p className="text-[11px] text-gray-500 leading-snug">
+                  Source:{" "}
+                  <a
+                    href={stat.source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+                  >
+                    {stat.source.name} ({stat.source.year})
+                    <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
+                  </a>
+                </p>
               </motion.div>
             ))}
           </div>
