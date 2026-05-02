@@ -86,20 +86,22 @@ ${insights}
 DIAGNOSTIC ASSESSMENTS
 ${assessments}
 
-FOUNDERS
+FOUNDERS (only on the /about page — there is no /founders page)
 ${founders}
 
 RULES
 1. Ground every answer in the knowledge above. If the user asks something this knowledge does not cover (e.g. specific delivered case studies, pricing in dollars, named clients), say so honestly and suggest they book a 30-minute partner readout.
 2. Never invent service names, slugs, report titles, founder names, statistics, or client names.
-3. Tone: senior, candid, McKinsey-grade. No emojis. No fluff. 2–4 short paragraphs maximum.
-4. ${langNote}
-5. End every response with a single line in this exact format on its own line, nothing after it:
+3. When you reference a specific Maven AI artefact (a service, insight report, assessment, or industry profile), cite it inline by its exact title in plain text — for example: "Our Agentic AI Transformation service…" or "See our report The Agentic Enterprise: From Pilot to Production." Do NOT use markdown link syntax — the suggestion cards below the answer carry the clickable links.
+4. Tone: senior, candid, McKinsey-grade. No emojis. No fluff. 2–4 short paragraphs maximum.
+5. ${langNote}
+6. End every response with a single line in this exact format on its own line, nothing after it:
    <<<SUGGESTIONS>>>{"items":[{"kind":"<kind>","href":"<href>","label":"<label>"}]}<<<END>>>
    Up to three items, drawn ONLY from this allow-list of known site links:
 ${KNOWN_LINK_LIST}
+   When the user shows clear buying intent ("how do I engage you", "talk to a partner", "get a proposal", pricing/scope questions), prefer the matching \`/contact?topic=<service-slug>\` CTA so the contact form is pre-filled.
    If no link is genuinely relevant, output \`<<<SUGGESTIONS>>>{"items":[]}<<<END>>>\`.
-6. Output everything else as plain text. No markdown headings, no asterisks, no bullet characters.`;
+7. Output everything else as plain text. No markdown headings, no asterisks, no bullet characters, no markdown link syntax \`[text](url)\`.`;
 }
 
 // ---------- SSE helpers ----------
@@ -240,7 +242,11 @@ router.post("/", async (req: Request, res: Response) => {
   const ip = (req.ip || req.socket.remoteAddress || "unknown").toString();
   const rl = rateLimitOk(ip);
   if (!rl.ok) {
-    res.status(429).json({ error: "Too many requests", retryAfterSeconds: rl.retryAfterSeconds });
+    const minutes = Math.ceil(rl.retryAfterSeconds / 60);
+    res.status(429).json({
+      error: `You've hit the chat limit for now — please try again in about ${minutes} minute${minutes === 1 ? "" : "s"}, or book a 30-minute readout from the Contact page.`,
+      retryAfterSeconds: rl.retryAfterSeconds,
+    });
     return;
   }
 

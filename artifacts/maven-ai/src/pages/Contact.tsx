@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Phone, Mail, Send, CheckCircle, Clock, Users, ArrowRight } from "lucide-react";
@@ -19,9 +19,31 @@ const interestAreas = [
   "Partnership",
 ];
 
+// Map known service slugs to the matching label from interestAreas. Used when
+// the chat widget (or any other surface) deep-links to /contact?topic=<slug>.
+const TOPIC_TO_INTEREST: Record<string, string> = {
+  "agentic-ai-transformation": "Agentic AI Transformation",
+  "ai-driven-sdlc": "AI-Driven SDLC & Legacy Modernization",
+  "data-governance-foundations": "Data & Governance Foundations",
+  "ai-product-studio": "AI Product Studio",
+};
+
 export default function Contact() {
   const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", interest: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
+  const formRef = useRef<HTMLElement>(null);
+
+  // If the page is visited via /contact?topic=<service-slug>, prefill the
+  // interest dropdown and scroll the form into view.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const topic = params.get("topic");
+    if (topic && TOPIC_TO_INTEREST[topic]) {
+      setForm((prev) => ({ ...prev, interest: TOPIC_TO_INTEREST[topic] }));
+      setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +107,7 @@ export default function Contact() {
       </section>
 
       {/* Form + Info */}
-      <section className="py-20 bg-[#F8F9FA]">
+      <section ref={formRef} className="py-20 bg-[#F8F9FA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-12 gap-12">
             {/* Form */}

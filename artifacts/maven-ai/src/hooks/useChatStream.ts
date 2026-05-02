@@ -15,9 +15,50 @@ export interface UseChatStreamResult {
   reset: () => void;
   /** Abort any in-flight request without clearing message history. */
   abort: () => void;
+  /** Re-send the last user message after an interrupted/failed stream. */
+  retry: () => Promise<void>;
+  /** True when the last assistant turn is in an error state and can be retried. */
+  canRetry: boolean;
 }
 
 const MAX_HISTORY = 24;
+const TRANSCRIPT_KEY = "maven-ai-chat-transcript";
+const TRANSCRIPT_VERSION = 1;
+
+interface PersistedTranscript {
+  v: number;
+  lang: "en" | "ar";
+  messages: ChatStreamMessage[];
+}
+
+function loadTranscript(language: "en" | "ar"): ChatStreamMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.sessionStorage.getItem(TRANSCRIPT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PersistedTranscript;
+    if (parsed.v !== TRANSCRIPT_VERSION) return [];
+    if (parsed.lang !== language) return []; // Discard if user switched language.
+    if (!Array.isArray(parsed.messages)) return [];
+    return parsed.messages;
+  } catch {
+    return [];
+  }
+}
+
+function saveTranscript(language: "en" | "ar", messages: ChatStreamMessage[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (messages.length === 0) {
+      window.sessionStorage.removeItem(TRANSCRIPT_KEY);
+      return;
+    }
+    const payload: PersistedTranscript = { v: TRANSCRIPT_VERSION, lang: language, messages };
+    window.sessionStorage.setItem(TRANSCRIPT_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore quota / serialization errors
+  }
+}
 
 type ServerEvent =
   | { type: "token"; token: string }
@@ -72,9 +113,16 @@ function makeSSEParser(onEvent: (e: ServerEvent) => void): (chunk: string) => vo
 }
 
 export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
-  const [messages, setMessages] = useState<ChatStreamMessage[]>([]);
+  const [messages, setMessages] = useState<ChatStreamMessage[]>(() => loadTranscript(language));
   const [status, setStatus] = useState<"idle" | "streaming" | "error">("idle");
   const abortRef = useRef<AbortController | null>(null);
+  const lastUserMessageRef = useRef<string | null>(null);
+
+  // Persist transcript to sessionStorage on every change so a refresh keeps
+  // the conversation visible (per-tab, cleared when the tab closes).
+  useEffect(() => {
+    saveTranscript(language, messages);
+  }, [language, messages]);
 
   // Abort any in-flight request when the component unmounts.
   useEffect(() => {
@@ -95,30 +143,17 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
   const reset = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    lastUserMessageRef.current = null;
     setMessages([]);
     setStatus("idle");
   }, []);
 
-  const send = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || status === "streaming") return;
-
-      // Build the outgoing message list (history + new user turn), capped
-      // at MAX_HISTORY most recent turns to match the server-side zod limit.
-      const history: ChatMessage[] = messages
-        .filter((m) => !m.error)
-        .map((m) => ({ role: m.role, content: m.content }));
-      const outgoingFull: ChatMessage[] = [...history, { role: "user", content: trimmed }];
-      const outgoing = outgoingFull.slice(-MAX_HISTORY);
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: trimmed },
-        { role: "assistant", content: "" },
-      ]);
+  // Shared streaming helper. Receives the EXACT outgoing message array sent
+  // to the server and assumes the local `messages` state already ends with
+  // a placeholder assistant turn that will be filled in by streaming tokens.
+  const stream = useCallback(
+    async (outgoing: ChatMessage[]) => {
       setStatus("streaming");
-
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -218,8 +253,76 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
         abortRef.current = null;
       }
     },
-    [language, messages, status],
+    [language],
   );
 
-  return { messages, status, send, reset, abort };
+  const send = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || status === "streaming") return;
+
+      // Build the outgoing message list (history + new user turn), capped at
+      // MAX_HISTORY most recent turns to match the server-side zod limit.
+      // Errored assistant turns are excluded from the history we send up.
+      const history: ChatMessage[] = messages
+        .filter((m) => !m.error)
+        .map((m) => ({ role: m.role, content: m.content }));
+      const outgoing = [...history, { role: "user" as const, content: trimmed }].slice(-MAX_HISTORY);
+
+      lastUserMessageRef.current = trimmed;
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: trimmed },
+        { role: "assistant", content: "" },
+      ]);
+      await stream(outgoing);
+    },
+    [language, messages, status, stream],
+  );
+
+  // Retry the last user turn after an interrupted/errored stream. We replace
+  // the failed assistant with a fresh placeholder and re-stream — the user
+  // turn itself is never duplicated.
+  const retry = useCallback(async () => {
+    const last = lastUserMessageRef.current;
+    if (!last || status === "streaming") return;
+
+    // Compute the outgoing payload from current messages, then clear the
+    // trailing failed assistant locally before re-streaming.
+    const cleanHistory: ChatMessage[] = [];
+    let trimmedTrailingError = false;
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      const isLast = i === messages.length - 1;
+      if (isLast && m.role === "assistant" && m.error) {
+        trimmedTrailingError = true;
+        continue;
+      }
+      if (!m.error) cleanHistory.push({ role: m.role, content: m.content });
+    }
+    if (!trimmedTrailingError) return; // nothing to retry
+    const outgoing = cleanHistory.slice(-MAX_HISTORY);
+
+    setMessages((prev) => {
+      const next = [...prev];
+      // Replace the trailing error assistant with a fresh placeholder.
+      if (next.length > 0 && next[next.length - 1].role === "assistant") {
+        next[next.length - 1] = { role: "assistant", content: "" };
+      } else {
+        next.push({ role: "assistant", content: "" });
+      }
+      return next;
+    });
+    await stream(outgoing);
+  }, [messages, status, stream]);
+
+  const lastMsg = messages[messages.length - 1];
+  const canRetry =
+    status !== "streaming" &&
+    lastUserMessageRef.current !== null &&
+    !!lastMsg &&
+    lastMsg.role === "assistant" &&
+    !!lastMsg.error;
+
+  return { messages, status, send, reset, abort, retry, canRetry };
 }

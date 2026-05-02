@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { MessageCircle, Send, X, RotateCcw, Sparkles } from "lucide-react";
+import { MessageCircle, Send, X, RotateCcw, RefreshCw, Sparkles } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import { useChatStream } from "@/hooks/useChatStream";
+
+const MAX_INPUT_CHARS = 1000;
 
 /**
  * Minimal inline formatter — turns **bold** into <strong>. Keeps everything
@@ -44,6 +46,15 @@ const T = {
     en: "AI assistant — answers grounded in Maven AI's published material. For specifics, book a 30-minute readout.",
     ar: "مساعد ذكاء اصطناعي — إجاباته مستندة إلى محتوى Maven AI المنشور. للتفاصيل احجز قراءة 30 دقيقة.",
   },
+  retry: { en: "Try again", ar: "حاول مرة أخرى" },
+  charLimitHint: {
+    en: `Please keep messages under ${MAX_INPUT_CHARS} characters.`,
+    ar: `يرجى إبقاء الرسالة أقل من ${MAX_INPUT_CHARS} حرفًا.`,
+  },
+  charLimitNear: {
+    en: "Approaching the message length limit.",
+    ar: "اقتربت من حد طول الرسالة.",
+  },
 } as const;
 
 const STARTERS_EN = [
@@ -64,7 +75,7 @@ const SESSION_KEY = "maven-ai-chat-open";
 export default function ChatWidget() {
   const { lang, dir } = useLang();
   const t = (s: { en: string; ar: string }) => tStr(s, lang);
-  const { messages, status, send, reset, abort } = useChatStream(lang);
+  const { messages, status, send, reset, abort, retry, canRetry } = useChatStream(lang);
   const [open, setOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem(SESSION_KEY) === "1";
@@ -98,10 +109,14 @@ export default function ChatWidget() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || status === "streaming") return;
+    if (input.length > MAX_INPUT_CHARS) return;
     const text = input;
     setInput("");
     void send(text);
   };
+
+  const inputOverLimit = input.length > MAX_INPUT_CHARS;
+  const inputNearLimit = !inputOverLimit && input.length >= Math.floor(MAX_INPUT_CHARS * 0.9);
 
   const starters = lang === "ar" ? STARTERS_AR : STARTERS_EN;
 
@@ -210,7 +225,9 @@ export default function ChatWidget() {
                 </div>
               )}
 
-              {messages.map((m, i) => (
+              {messages.map((m, i) => {
+                const isLast = i === messages.length - 1;
+                return (
                 <div key={i} className="mb-4">
                   {m.role === "user" ? (
                     <div className={`flex ${dir === "rtl" ? "justify-start" : "justify-end"}`}>
@@ -252,11 +269,25 @@ export default function ChatWidget() {
                             ))}
                           </div>
                         )}
+                        {isLast && m.error && canRetry && (
+                          <div className="mt-2.5">
+                            <button
+                              type="button"
+                              onClick={() => void retry()}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold bg-[#0E2841] hover:bg-[#156082] text-white px-3 py-1.5 rounded-full transition-colors"
+                              data-testid="button-chat-retry"
+                            >
+                              <RefreshCw size={12} />
+                              {t(T.retry)}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Input */}
@@ -265,7 +296,7 @@ export default function ChatWidget() {
                 <textarea
                   ref={inputRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => setInput(e.target.value.slice(0, MAX_INPUT_CHARS))}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -273,14 +304,20 @@ export default function ChatWidget() {
                     }
                   }}
                   rows={1}
+                  maxLength={MAX_INPUT_CHARS}
                   placeholder={t(T.placeholder)}
                   disabled={status === "streaming"}
-                  className="flex-1 resize-none text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:border-[#156082] focus:ring-1 focus:ring-[#156082] disabled:bg-gray-50 disabled:text-gray-400 max-h-32"
+                  aria-invalid={inputOverLimit || undefined}
+                  className={`flex-1 resize-none text-sm border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 disabled:bg-gray-50 disabled:text-gray-400 max-h-32 ${
+                    inputOverLimit
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-300"
+                      : "border-gray-200 focus:border-[#156082] focus:ring-[#156082]"
+                  }`}
                   data-testid="input-chat"
                 />
                 <button
                   type="submit"
-                  disabled={!input.trim() || status === "streaming"}
+                  disabled={!input.trim() || status === "streaming" || inputOverLimit}
                   className="flex-shrink-0 w-10 h-10 inline-flex items-center justify-center bg-[#0E2841] hover:bg-[#156082] disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-lg transition-colors"
                   aria-label={t(T.send)}
                   data-testid="button-send-chat"
@@ -288,6 +325,12 @@ export default function ChatWidget() {
                   <Send size={16} />
                 </button>
               </div>
+              {(inputNearLimit || inputOverLimit) && (
+                <div className={`mt-1.5 flex items-center justify-between text-[10px] ${inputOverLimit ? "text-red-600" : "text-gray-500"}`}>
+                  <span>{inputOverLimit ? t(T.charLimitHint) : t(T.charLimitNear)}</span>
+                  <span data-testid="text-chat-char-count">{input.length}/{MAX_INPUT_CHARS}</span>
+                </div>
+              )}
               <p className="text-[10px] text-gray-400 mt-2 leading-snug">{t(T.disclaimer)}</p>
             </form>
           </motion.div>

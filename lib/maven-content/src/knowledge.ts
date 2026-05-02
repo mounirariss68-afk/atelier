@@ -256,17 +256,31 @@ export interface KnownLink {
   label: string;
 }
 
-/** Allow-list every link the chat widget is permitted to surface. */
+/** Allow-list every link the chat widget is permitted to surface.
+ * Important: every href here MUST resolve to a real route in the maven-ai app.
+ *  - Industries use in-page anchors (`/industries#<id>`), not subroutes.
+ *  - High-intent contact CTAs use `?topic=<slug>` to prefill the form.
+ *  - There is no `/founders` page; founders live on `/about`.
+ */
 export function buildKnownLinks(): KnownLink[] {
   const out: KnownLink[] = [];
-  for (const s of services) out.push({ kind: "service", href: `/services/${s.slug}`, label: s.title });
+  for (const s of services) {
+    out.push({ kind: "service", href: `/services/${s.slug}`, label: s.title });
+    // High-intent CTA — pre-fills the contact form's "interest" field.
+    out.push({
+      kind: "page",
+      href: `/contact?topic=${s.slug}`,
+      label: `Talk to a partner about ${s.title}`,
+    });
+  }
   for (const i of insights) out.push({ kind: "insight", href: `/insights/${i.slug}`, label: i.title });
   for (const a of assessments) out.push({ kind: "assessment", href: `/assessments/${a.slug}`, label: `${a.code} — ${a.name}` });
-  for (const ind of industries) out.push({ kind: "industry", href: `/industries/${ind.id}`, label: ind.title });
-  out.push({ kind: "page", href: "/about", label: "About Maven AI" });
-  out.push({ kind: "page", href: "/founders", label: "The founders" });
+  for (const ind of industries) out.push({ kind: "industry", href: `/industries#${ind.id}`, label: ind.title });
+  out.push({ kind: "page", href: "/about", label: "About Maven AI (founders, story, operating model)" });
   out.push({ kind: "page", href: "/contact", label: "Contact / book a 30-minute readout" });
   out.push({ kind: "page", href: "/insights", label: "All insights" });
-  out.push({ kind: "page", href: "/assessments", label: "All assessments" });
+  out.push({ kind: "page", href: "/assessments", label: "All diagnostic assessments" });
+  out.push({ kind: "page", href: "/services", label: "All services" });
+  out.push({ kind: "page", href: "/industries", label: "All industries we serve" });
   return out;
 }
