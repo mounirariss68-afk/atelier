@@ -1,6 +1,30 @@
-import { Document, Page, Text, View, StyleSheet, Svg, Path, Polygon, Line, Circle } from "@react-pdf/renderer";
+/** @jsxRuntime automatic */
+/** @jsxImportSource react */
+import { Document, Page, Text, View, StyleSheet, Svg, Path, Polygon, Line, Circle, Font } from "@react-pdf/renderer";
 import type { AssessmentDefinition, ScoreResult } from "@workspace/assessments";
 import { tStr } from "@/lib/lang";
+
+const ARABIC_FONT = "Tajawal";
+const isBrowser = typeof window !== "undefined";
+const baseUrl: string = isBrowser ? (import.meta.env.BASE_URL ?? "/") : "/";
+const arabicRegularSrc = isBrowser
+  ? `${baseUrl}fonts/Tajawal-Regular.ttf`.replace(/\/+/g, "/")
+  : new URL("../../../public/fonts/Tajawal-Regular.ttf", import.meta.url).pathname;
+const arabicBoldSrc = isBrowser
+  ? `${baseUrl}fonts/Tajawal-Bold.ttf`.replace(/\/+/g, "/")
+  : new URL("../../../public/fonts/Tajawal-Bold.ttf", import.meta.url).pathname;
+let arabicFontRegistered = false;
+function ensureArabicFont() {
+  if (arabicFontRegistered) return;
+  Font.register({
+    family: ARABIC_FONT,
+    fonts: [
+      { src: arabicRegularSrc, fontWeight: 400 },
+      { src: arabicBoldSrc, fontWeight: 700 },
+    ],
+  });
+  arabicFontRegistered = true;
+}
 
 interface PDFArgs {
   def: AssessmentDefinition;
@@ -107,14 +131,16 @@ function PDFRadar({ def, result }: { def: AssessmentDefinition; result: ScoreRes
 
 export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PDFArgs) {
   const isAr = lang === "ar";
+  if (isAr) ensureArabicFont();
   const t = (s: { en: string; ar: string }) => tStr(s, lang);
   const dirStyle = isAr ? { textAlign: "right" as const, direction: "rtl" as const } : {};
   const tierBg = tierColor[result.tier] ?? colors.teal;
+  const pageStyle = isAr ? [styles.page, { fontFamily: ARABIC_FONT }] : styles.page;
 
   return (
     <Document>
       {/* COVER */}
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
           <View>
             <Text style={styles.brand}>MAVEN AI</Text>
@@ -141,7 +167,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       </Page>
 
       {/* MATURITY AT A GLANCE */}
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
           <Text style={styles.brand}>MAVEN AI</Text>
           <Text style={styles.pageTag}>{def.code} · {t({ en: "Maturity at a glance", ar: "النضج بنظرة" })}</Text>
@@ -208,7 +234,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       </Page>
 
       {/* EXEC MEMO */}
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
           <Text style={styles.brand}>MAVEN AI</Text>
           <Text style={styles.pageTag}>{t({ en: "Executive memo", ar: "مذكرة تنفيذية" })}</Text>
@@ -225,7 +251,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       </Page>
 
       {/* ANTI-PATTERNS + COST OF INACTION */}
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
           <Text style={styles.brand}>MAVEN AI</Text>
           <Text style={styles.pageTag}>{t({ en: "Risks · Cost of inaction", ar: "المخاطر · كلفة التقاعس" })}</Text>
@@ -269,7 +295,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       </Page>
 
       {/* RECOMMENDATIONS + ANTI-VENDOR + FOUNDERS */}
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
           <Text style={styles.brand}>MAVEN AI</Text>
           <Text style={styles.pageTag}>{t({ en: "Plan · Honesty · Partners", ar: "الخطة · الصراحة · الشركاء" })}</Text>
