@@ -46,7 +46,6 @@ export default function PartnerLogos({ variant = "light", showHeading = true }: 
   const eyebrowColor = isDark ? "text-[#F5A623]" : "text-[#F5A623]";
   const logoColor = isDark ? "text-gray-300" : "text-gray-500";
   const logoHover = isDark ? "hover:text-white" : "hover:text-[#0E2841]";
-  const tileBorder = isDark ? "border-white/10" : "border-gray-100";
   const tileBg = isDark ? "bg-white/5" : "bg-gray-50/60";
 
   return (
