@@ -32,10 +32,10 @@ export default function Contact() {
       {/* Hero */}
       <section className="bg-[#0E2841] py-20 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #0F9ED5 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <span className="text-[#E97132] font-semibold text-sm uppercase tracking-widest">Contact</span>
+          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">Contact</span>
           <h1 className="text-5xl font-extrabold text-white mt-3 mb-5 max-w-2xl leading-tight">
             Let's talk about what AI can do for your organization.
           </h1>
@@ -51,8 +51,8 @@ export default function Contact() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {[
               { icon: Clock, color: "#156082", title: "3-day scoping", desc: "We scope the opportunity and propose a plan — before you commit to anything" },
-              { icon: Users, color: "#E97132", title: "Senior-led from day one", desc: "You'll speak to a Partner in your first call — not a business development team" },
-              { icon: ArrowRight, color: "#0F9ED5", title: "Production focus", desc: "Every conversation starts with the outcome you need — not the solution we want to sell" },
+              { icon: Users, color: "#F5A623", title: "Senior-led from day one", desc: "You'll speak to a Partner in your first call — not a business development team" },
+              { icon: ArrowRight, color: "#F5A623", title: "Production focus", desc: "Every conversation starts with the outcome you need — not the solution we want to sell" },
             ].map((item, i) => {
               const Icon = item.icon;
               return (
@@ -167,7 +167,7 @@ export default function Contact() {
                     </div>
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold py-3.5 rounded-xl transition-colors"
+                      className="w-full flex items-center justify-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold py-3.5 rounded-xl transition-colors"
                     >
                       Send message <Send size={16} />
                     </button>
@@ -193,7 +193,7 @@ export default function Contact() {
                   className={`p-5 rounded-xl border ${office.primary ? "border-[#156082]/30 bg-[#156082]/5" : "border-gray-100 bg-white"}`}
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <MapPin size={15} className="text-[#E97132]" />
+                    <MapPin size={15} className="text-[#F5A623]" />
                     <span className="font-bold text-[#0E2841]">{office.city}, {office.country}</span>
                     {office.primary && <span className="text-xs font-semibold text-[#156082] bg-[#156082]/10 px-2 py-0.5 rounded-full">Main office</span>}
                   </div>
@@ -208,10 +208,10 @@ export default function Contact() {
               {/* Email */}
               <div className="p-5 rounded-xl bg-[#0E2841] text-white">
                 <div className="flex items-center gap-2 mb-2">
-                  <Mail size={15} className="text-[#0F9ED5]" />
+                  <Mail size={15} className="text-[#F5A623]" />
                   <span className="font-bold">Email us directly</span>
                 </div>
-                <a href="mailto:info@maven-ai.com" className="text-[#0F9ED5] hover:text-white transition-colors text-sm">info@maven-ai.com</a>
+                <a href="mailto:info@maven-ai.com" className="text-[#F5A623] hover:text-white transition-colors text-sm">info@maven-ai.com</a>
               </div>
             </div>
           </div>

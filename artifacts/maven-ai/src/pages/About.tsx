@@ -37,11 +37,11 @@ export default function About() {
       {/* Hero */}
       <section className="bg-[#0E2841] py-24 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #0F9ED5 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial="hidden" animate="visible" variants={fadeUp}>
-            <span className="text-[#E97132] font-semibold text-sm uppercase tracking-widest">About Maven AI</span>
+            <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">About Maven AI</span>
           </motion.div>
           <motion.h1
             initial="hidden"
@@ -101,7 +101,7 @@ export default function About() {
                   transition={{ delay: i * 0.1, duration: 0.5 }}
                   className="flex gap-5 p-5 border border-gray-100 rounded-xl"
                 >
-                  <div className="text-[#E97132] font-black text-2xl leading-none w-16 flex-shrink-0 mt-0.5">{item.num}</div>
+                  <div className="text-[#F5A623] font-black text-2xl leading-none w-16 flex-shrink-0 mt-0.5">{item.num}</div>
                   <div>
                     <h3 className="font-bold text-[#0E2841] mb-1">{item.title}</h3>
                     <p className="text-sm text-gray-600">{item.desc}</p>
@@ -124,8 +124,8 @@ export default function About() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-5">
             {[
               { num: "01", title: "Production-led", color: "#156082", desc: "We deliver AI in production, not AI in PowerPoint. Measured outcomes, not advisory decks. Every engagement is anchored to a quantified business case." },
-              { num: "02", title: "Boutique by design", color: "#E97132", desc: "Senior partners and principals on every engagement. The people you meet in the proposal are the people who will do your work." },
-              { num: "03", title: "Agentic-native", color: "#0F9ED5", desc: "Built around agentic AI as the operating fabric. Not retrofitted onto a legacy professional services model from the BI or RPA era." },
+              { num: "02", title: "Boutique by design", color: "#F5A623", desc: "Senior partners and principals on every engagement. The people you meet in the proposal are the people who will do your work." },
+              { num: "03", title: "Agentic-native", color: "#F5A623", desc: "Built around agentic AI as the operating fabric. Not retrofitted onto a legacy professional services model from the BI or RPA era." },
               { num: "04", title: "Lean economics", color: "#196B24", desc: "Boutique structure plus partner leverage delivers senior-led work at rates the Tier-1 cost base structurally cannot match." },
               { num: "05", title: "Platform-agnostic", color: "#0E2841", desc: "Clients pick the right stack. Our economics aren't tied to any vendor, and our advice isn't either. Right tool, every time." },
             ].map((item, i) => (
@@ -195,7 +195,7 @@ export default function About() {
                     ))}
                   </div>
 
-                  <blockquote className="border-l-4 border-[#E97132] pl-5 py-2">
+                  <blockquote className="border-l-4 border-[#F5A623] pl-5 py-2">
                     <p className="text-gray-700 italic leading-relaxed">"{founder.quote}"</p>
                   </blockquote>
                 </div>
@@ -224,9 +224,9 @@ export default function About() {
                 className="rounded-xl p-7 border border-white/10"
                 style={{ backgroundColor: ring.color + "33" }}
               >
-                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: "#E97132" }}>{ring.name}</div>
+                <div className="text-xs font-black uppercase tracking-widest mb-2" style={{ color: "#F5A623" }}>{ring.name}</div>
                 <p className="text-white text-sm leading-relaxed mb-4">{ring.description}</p>
-                <div className="text-xs font-semibold text-[#0F9ED5]">{ring.headcount}</div>
+                <div className="text-xs font-semibold text-[#F5A623]">{ring.headcount}</div>
               </motion.div>
             ))}
           </div>

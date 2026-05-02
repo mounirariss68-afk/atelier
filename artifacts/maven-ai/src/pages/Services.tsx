@@ -12,7 +12,7 @@ export default function Services() {
     <div className="pt-20">
       <section className="bg-[#0E2841] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[#E97132] font-semibold text-sm uppercase tracking-widest">
+          <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">
             Our Services
           </motion.span>
           <motion.h1
@@ -84,7 +84,7 @@ export default function Services() {
         <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4">Not sure where to start?</h2>
           <p className="text-gray-600 mb-8">Most of our engagements begin with a three-day scoping sprint. We map your AI landscape, identify the highest-value opportunities, and propose a sequenced plan — before you commit to anything.</p>
-          <Link href="/contact" className="inline-flex items-center gap-2 bg-[#E97132] text-white font-bold px-8 py-4 rounded-xl hover:bg-[#d4622a] transition-colors">
+          <Link href="/contact" className="inline-flex items-center gap-2 bg-[#F5A623] text-white font-bold px-8 py-4 rounded-xl hover:bg-[#d4622a] transition-colors">
             Schedule a discovery call <ArrowRight size={18} />
           </Link>
         </div>

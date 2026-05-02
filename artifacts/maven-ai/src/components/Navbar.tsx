@@ -52,10 +52,10 @@ export default function Navbar() {
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-8">
-            <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
               Home
             </Link>
-            <Link href="/about" className={`nav-link text-sm font-medium transition-colors ${isActive("/about") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/about" className={`nav-link text-sm font-medium transition-colors ${isActive("/about") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
               About
             </Link>
 
@@ -65,7 +65,7 @@ export default function Navbar() {
               onMouseEnter={() => setServicesOpen(true)}
               onMouseLeave={() => setServicesOpen(false)}
             >
-              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/services") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
+              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/services") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
                 Services <ChevronDown size={14} className={`transition-transform ${servicesOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
@@ -100,7 +100,7 @@ export default function Navbar() {
               onMouseEnter={() => setInsightsOpen(true)}
               onMouseLeave={() => setInsightsOpen(false)}
             >
-              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/insights") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
+              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/insights") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
                 Insights <ChevronDown size={14} className={`transition-transform ${insightsOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
@@ -127,14 +127,14 @@ export default function Navbar() {
               </AnimatePresence>
             </div>
 
-            <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
               Industries
             </Link>
           </nav>
 
           {/* CTA */}
           <div className="hidden lg:flex items-center gap-4">
-            <Link href="/contact" className="bg-[#E97132] hover:bg-[#d4622a] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+            <Link href="/contact" className="bg-[#F5A623] hover:bg-[#d4622a] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
               Talk to Us
             </Link>
           </div>
@@ -174,7 +174,7 @@ export default function Navbar() {
               </div>
               <Link href="/industries" className="block py-3 text-white font-medium border-b border-white/10">Industries</Link>
               <div className="pt-3">
-                <Link href="/contact" className="block text-center bg-[#E97132] text-white font-semibold py-3 rounded-lg">
+                <Link href="/contact" className="block text-center bg-[#F5A623] text-white font-semibold py-3 rounded-lg">
                   Talk to Us
                 </Link>
               </div>

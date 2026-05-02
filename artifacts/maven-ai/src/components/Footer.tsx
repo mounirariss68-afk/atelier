@@ -102,13 +102,13 @@ export default function Footer() {
             <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">Contact</h3>
             <div className="space-y-4">
               <div className="flex items-start gap-2">
-                <Mail size={14} className="text-[#0F9ED5] mt-0.5 flex-shrink-0" />
+                <Mail size={14} className="text-[#F5A623] mt-0.5 flex-shrink-0" />
                 <a href="mailto:info@maven-ai.com" className="text-gray-400 text-sm hover:text-white transition-colors">
                   info@maven-ai.com
                 </a>
               </div>
               <div className="flex items-start gap-2">
-                <MapPin size={14} className="text-[#E97132] mt-0.5 flex-shrink-0" />
+                <MapPin size={14} className="text-[#F5A623] mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-gray-400 text-sm">Dubai · Riyadh</p>
                   <p className="text-gray-400 text-sm">Abu Dhabi · Doha</p>
@@ -125,7 +125,7 @@ export default function Footer() {
             {offices.map((office) => (
               <div key={office.city}>
                 <div className="flex items-center gap-2 mb-2">
-                  <MapPin size={12} className="text-[#E97132]" />
+                  <MapPin size={12} className="text-[#F5A623]" />
                   <span className="text-white font-semibold text-sm">{office.city}, {office.country}</span>
                 </div>
                 <p className="text-gray-500 text-xs leading-relaxed whitespace-pre-line">{office.address}</p>

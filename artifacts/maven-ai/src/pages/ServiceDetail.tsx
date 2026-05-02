@@ -30,7 +30,7 @@ export default function ServiceDetail() {
       {/* Hero */}
       <section className="bg-[#0E2841] py-24 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #0F9ED5 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link href="/services" className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm mb-8 transition-colors">
@@ -137,13 +137,13 @@ export default function ServiceDetail() {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0E2841]/80 to-transparent" />
                     <div className="absolute bottom-3 left-4">
-                      <span className="text-xs font-bold text-white bg-[#E97132] px-2 py-0.5 rounded">Related Report</span>
+                      <span className="text-xs font-bold text-white bg-[#F5A623] px-2 py-0.5 rounded">Related Report</span>
                     </div>
                   </div>
                   <div className="p-5">
                     <h4 className="font-bold text-[#0E2841] mb-2 text-sm leading-snug">{relatedInsight.title}</h4>
                     <p className="text-xs text-gray-500 mb-3">{relatedInsight.readTime} · {relatedInsight.date}</p>
-                    <Link href={`/insights/${relatedInsight.slug}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#156082] hover:text-[#E97132] transition-colors">
+                    <Link href={`/insights/${relatedInsight.slug}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#156082] hover:text-[#F5A623] transition-colors">
                       Read report <ArrowRight size={13} />
                     </Link>
                   </div>

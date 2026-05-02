@@ -35,12 +35,12 @@ export default function Home() {
         </div>
         {/* Radial glow */}
         <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-[#156082]/30 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-[#E97132]/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-[#F5A623]/20 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="max-w-4xl">
             <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={0}>
-              <span className="inline-flex items-center gap-2 bg-[#E97132]/20 border border-[#E97132]/30 text-[#E97132] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-8">
+              <span className="inline-flex items-center gap-2 bg-[#F5A623]/20 border border-[#F5A623]/30 text-[#F5A623] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-8">
                 A Maven Insights Company
               </span>
             </motion.div>
@@ -54,7 +54,7 @@ export default function Home() {
             >
               From AI ambition
               <br />
-              <span className="text-[#0F9ED5]">to AI in production.</span>
+              <span className="text-[#F5A623]">to AI in production.</span>
             </motion.h1>
 
             <motion.p
@@ -76,7 +76,7 @@ export default function Home() {
             >
               <Link
                 href="/contact"
-                className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
+                className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
               >
                 Start the conversation <ArrowRight size={18} />
               </Link>
@@ -150,7 +150,7 @@ export default function Home() {
                   transition={{ delay: i * 0.1, duration: 0.5 }}
                   className="flex gap-4 p-5 bg-white rounded-xl border border-gray-100 shadow-sm"
                 >
-                  <span className="text-[#E97132] font-black text-xl leading-none mt-0.5 w-8 flex-shrink-0">{item.num}</span>
+                  <span className="text-[#F5A623] font-black text-xl leading-none mt-0.5 w-8 flex-shrink-0">{item.num}</span>
                   <div>
                     <h3 className="font-bold text-[#0E2841] mb-1">{item.title}</h3>
                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
@@ -176,7 +176,7 @@ export default function Home() {
                   { label: "Platform-agnostic", desc: "Clients pick the right stack. Our economics aren't tied to any vendor." },
                 ].map((item, i) => (
                   <div key={i} className="flex gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#E97132] mt-2 flex-shrink-0" />
+                    <div className="w-2 h-2 rounded-full bg-[#F5A623] mt-2 flex-shrink-0" />
                     <div>
                       <span className="font-bold text-white">{item.label} — </span>
                       <span className="text-gray-300 text-sm">{item.desc}</span>
@@ -184,7 +184,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <Link href="/about" className="mt-8 inline-flex items-center gap-2 text-[#0F9ED5] font-semibold text-sm hover:text-white transition-colors">
+              <Link href="/about" className="mt-8 inline-flex items-center gap-2 text-[#F5A623] font-semibold text-sm hover:text-white transition-colors">
                 Learn more about our approach <ArrowRight size={16} />
               </Link>
             </motion.div>
@@ -232,7 +232,7 @@ export default function Home() {
                   <p className="text-sm text-gray-600 leading-relaxed mb-5">{service.description}</p>
                   <Link
                     href={`/services/${service.slug}`}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#E97132] transition-colors"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors"
                   >
                     Learn more <ArrowRight size={14} />
                   </Link>
@@ -252,7 +252,7 @@ export default function Home() {
               <h2 className="text-4xl font-extrabold text-[#0E2841] mb-2">Featured insights</h2>
               <p className="text-gray-600">Research, perspectives, and analysis from the Maven AI team.</p>
             </div>
-            <Link href="/insights" className="hidden sm:inline-flex items-center gap-2 text-[#156082] font-semibold text-sm hover:text-[#E97132] transition-colors">
+            <Link href="/insights" className="hidden sm:inline-flex items-center gap-2 text-[#156082] font-semibold text-sm hover:text-[#F5A623] transition-colors">
               All insights <ArrowRight size={14} />
             </Link>
           </div>
@@ -284,8 +284,8 @@ export default function Home() {
                         style={{
                           backgroundColor:
                             insight.category === "Agentic AI" ? "#156082" :
-                            insight.category === "Data & Governance" ? "#0F9ED5" :
-                            insight.category === "Industry Trends" ? "#E97132" : "#196B24",
+                            insight.category === "Data & Governance" ? "#F5A623" :
+                            insight.category === "Industry Trends" ? "#F5A623" : "#196B24",
                           color: "white",
                         }}
                       >
@@ -305,7 +305,7 @@ export default function Home() {
                     <p className="text-sm text-gray-600 leading-relaxed mb-4">{insight.summary}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-400">{insight.readTime}</span>
-                      <span className="text-sm font-semibold text-[#156082] group-hover:text-[#E97132] transition-colors flex items-center gap-1">
+                      <span className="text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
                         Read <ArrowRight size={13} />
                       </span>
                     </div>
@@ -320,15 +320,15 @@ export default function Home() {
       {/* ── FOUNDER QUOTE ── */}
       <section className="py-24 bg-[#0E2841] relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #0F9ED5 1px, transparent 1px)`, backgroundSize: "40px 40px" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "40px 40px" }} />
         </div>
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <Quote size={48} className="text-[#E97132] mx-auto mb-8 opacity-60" />
+          <Quote size={48} className="text-[#F5A623] mx-auto mb-8 opacity-60" />
           <blockquote className="text-2xl sm:text-3xl font-semibold text-white leading-relaxed mb-10">
             "The organizations that will win the next decade are not the ones that started AI first — they are the ones that moved AI from the slide deck to production. That is the only gap we exist to close."
           </blockquote>
           <div className="flex items-center justify-center gap-4">
-            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#156082] border-2 border-[#E97132] flex items-center justify-center text-white font-bold text-lg">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#156082] border-2 border-[#F5A623] flex items-center justify-center text-white font-bold text-lg">
               MA
             </div>
             <div className="text-left">
@@ -356,8 +356,8 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-7">
             {[
               { title: "Public Sector", stat: "$33B", desc: "projected GCC government AI spend through 2030. From national safety platforms to smart city AI.", href: "/industries#public-sector", color: "#156082" },
-              { title: "Telecommunications", stat: "$7.3B", desc: "GCC telecom AI investment. Legacy modernization, 5G operations, and customer AI at national scale.", href: "/industries#telecom", color: "#E97132" },
-              { title: "Financial Services", stat: "$11.7B", desc: "GCC FS AI investment. SAMA-compliant governance, capital markets AI, and data foundations for banks.", href: "/industries#financial-services", color: "#0F9ED5" },
+              { title: "Telecommunications", stat: "$7.3B", desc: "GCC telecom AI investment. Legacy modernization, 5G operations, and customer AI at national scale.", href: "/industries#telecom", color: "#F5A623" },
+              { title: "Financial Services", stat: "$11.7B", desc: "GCC FS AI investment. SAMA-compliant governance, capital markets AI, and data foundations for banks.", href: "/industries#financial-services", color: "#F5A623" },
             ].map((ind, i) => (
               <motion.div
                 key={i}
@@ -370,7 +370,7 @@ export default function Home() {
                 <div className="text-5xl font-extrabold mb-2" style={{ color: ind.color }}>{ind.stat}</div>
                 <h3 className="text-xl font-bold text-[#0E2841] mb-3">{ind.title}</h3>
                 <p className="text-sm text-gray-600 leading-relaxed mb-6">{ind.desc}</p>
-                <Link href={ind.href} className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#E97132] transition-colors">
+                <Link href={ind.href} className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors">
                   Explore <ArrowRight size={14} />
                 </Link>
               </motion.div>
@@ -447,7 +447,7 @@ export default function Home() {
               Three-day scope. Three-week prototype. 90-day MVP. Let's talk about where to start.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/contact" className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg">
+              <Link href="/contact" className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg">
                 Start the conversation <ArrowRight size={18} />
               </Link>
               <Link href="/insights" className="inline-flex items-center gap-2 border border-white/30 hover:border-white text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors">

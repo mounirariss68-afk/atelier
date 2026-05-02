@@ -59,8 +59,8 @@
   --color-navy: #0E2841;
   --color-navy-light: #1a3a5c;
   --color-teal: #156082;
-  --color-orange: #E97132;
-  --color-blue-accent: #0F9ED5;
+  --color-orange: #F5A623;
+  --color-blue-accent: #F5A623;
   --color-green: #196B24;
   --color-light-gray: #E8E8E8;
 }
@@ -146,16 +146,16 @@
 .bg-navy { background-color: #0E2841; }
 .bg-navy-light { background-color: #1a3a5c; }
 .bg-teal { background-color: #156082; }
-.bg-orange { background-color: #E97132; }
-.bg-blue-accent { background-color: #0F9ED5; }
+.bg-orange { background-color: #F5A623; }
+.bg-blue-accent { background-color: #F5A623; }
 .bg-green-accent { background-color: #196B24; }
 .text-navy { color: #0E2841; }
 .text-teal { color: #156082; }
-.text-orange { color: #E97132; }
-.text-blue-accent { color: #0F9ED5; }
+.text-orange { color: #F5A623; }
+.text-blue-accent { color: #F5A623; }
 .border-navy { border-color: #0E2841; }
 .border-teal { border-color: #156082; }
-.border-orange { border-color: #E97132; }
+.border-orange { border-color: #F5A623; }
 
 .gradient-navy { background: linear-gradient(135deg, #0E2841 0%, #156082 100%); }
 .gradient-hero { background: linear-gradient(135deg, #0E2841 0%, #0d2035 40%, #1a3550 100%); }
@@ -171,7 +171,7 @@
   left: 0;
   width: 0;
   height: 2px;
-  background-color: #E97132;
+  background-color: #F5A623;
   transition: width 0.3s ease;
 }
 .nav-link:hover::after { width: 100%; }
@@ -180,7 +180,7 @@
 .section-divider {
   width: 48px;
   height: 3px;
-  background-color: #E97132;
+  background-color: #F5A623;
   margin-bottom: 1.5rem;
 }
 
@@ -199,4 +199,4 @@
 .article-content p { margin-bottom: 1rem; line-height: 1.75; color: #374151; }
 .article-content ul { margin-bottom: 1rem; padding-left: 1.5rem; }
 .article-content ul li { margin-bottom: 0.5rem; color: #374151; }
-.article-content blockquote { border-left: 4px solid #E97132; padding-left: 1.5rem; margin: 2rem 0; font-style: italic; color: #0E2841; font-size: 1.1rem; font-weight: 500; }
+.article-content blockquote { border-left: 4px solid #F5A623; padding-left: 1.5rem; margin: 2rem 0; font-style: italic; color: #0E2841; font-size: 1.1rem; font-weight: 500; }

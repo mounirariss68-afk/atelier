@@ -5,8 +5,8 @@ import { insights } from "@/data/content";
 
 const categoryColors: Record<string, string> = {
   "Agentic AI": "#156082",
-  "Data & Governance": "#0F9ED5",
-  "Legacy Modernization": "#E97132",
+  "Data & Governance": "#F5A623",
+  "Legacy Modernization": "#F5A623",
   "Industry Trends": "#196B24",
 };
 
@@ -108,7 +108,7 @@ export default function InsightDetail() {
 
               {/* Key takeaways */}
               <div className="bg-[#0E2841] rounded-xl p-6 text-white">
-                <h3 className="font-bold mb-4 text-sm uppercase tracking-wider text-[#0F9ED5]">Key takeaways</h3>
+                <h3 className="font-bold mb-4 text-sm uppercase tracking-wider text-[#F5A623]">Key takeaways</h3>
                 <ul className="space-y-3">
                   {[
                     "Senior-led delivery closes the pilot-to-production gap",
@@ -117,7 +117,7 @@ export default function InsightDetail() {
                     "Platform-agnostic advice produces better outcomes",
                   ].slice(0, 3).map((point, i) => (
                     <li key={i} className="flex gap-2 text-sm text-gray-300">
-                      <span className="text-[#E97132] font-bold mt-0.5">→</span>
+                      <span className="text-[#F5A623] font-bold mt-0.5">→</span>
                       {point}
                     </li>
                   ))}
@@ -128,7 +128,7 @@ export default function InsightDetail() {
               <div className="border border-gray-200 rounded-xl p-6">
                 <h3 className="font-bold text-[#0E2841] mb-2 text-sm">Talk to our team</h3>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">Want to discuss how these insights apply to your organization?</p>
-                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#E97132] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#d4622a] transition-colors">
+                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#F5A623] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#d4622a] transition-colors">
                   Schedule a call <ArrowRight size={13} />
                 </Link>
               </div>

@@ -13,7 +13,7 @@ export default function Industries() {
       {/* Hero */}
       <section className="bg-[#0E2841] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <span className="text-[#E97132] font-semibold text-sm uppercase tracking-widest">Industries</span>
+          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">Industries</span>
           <h1 className="text-5xl font-extrabold text-white mt-3 mb-5 max-w-3xl leading-tight">
             Deep domain expertise in the sectors that matter most.
           </h1>
@@ -96,7 +96,7 @@ export default function Industries() {
 
                   {/* Our approach */}
                   <div className="p-7 bg-[#0E2841] rounded-2xl text-white">
-                    <h3 className="font-bold text-[#0F9ED5] text-sm uppercase tracking-wider mb-3">Our approach</h3>
+                    <h3 className="font-bold text-[#F5A623] text-sm uppercase tracking-wider mb-3">Our approach</h3>
                     <p className="text-gray-300 leading-relaxed">{industry.approach}</p>
                   </div>
                 </div>
@@ -153,7 +153,7 @@ export default function Industries() {
         <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-extrabold text-white mb-5">Don't see your sector?</h2>
           <p className="text-gray-300 mb-8 text-lg">Maven AI works with organizations across the GCC economy. Our agentic AI and data capabilities apply across industries — from healthcare to logistics to energy.</p>
-          <Link href="/contact" className="inline-flex items-center gap-2 bg-[#E97132] text-white font-bold px-8 py-4 rounded-xl hover:bg-[#d4622a] transition-colors">
+          <Link href="/contact" className="inline-flex items-center gap-2 bg-[#F5A623] text-white font-bold px-8 py-4 rounded-xl hover:bg-[#d4622a] transition-colors">
             Discuss your industry <ArrowRight size={18} />
           </Link>
         </div>

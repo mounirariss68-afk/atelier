@@ -29,8 +29,8 @@ export default function Insights() {
 
   const categoryColors: Record<string, string> = {
     "Agentic AI": "#156082",
-    "Data & Governance": "#0F9ED5",
-    "Legacy Modernization": "#E97132",
+    "Data & Governance": "#F5A623",
+    "Legacy Modernization": "#F5A623",
     "Industry Trends": "#196B24",
   };
 
@@ -39,7 +39,7 @@ export default function Insights() {
       {/* Hero */}
       <section className="bg-[#0E2841] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <span className="text-[#E97132] font-semibold text-sm uppercase tracking-widest">Insights</span>
+          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">Insights</span>
           <h1 className="text-5xl font-extrabold text-white mt-3 mb-4 max-w-3xl leading-tight">
             Research, perspectives, and analysis.
           </h1>
@@ -53,7 +53,7 @@ export default function Insights() {
       {featured && (
         <section className="py-12 bg-white border-b border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-xs font-bold text-[#E97132] uppercase tracking-widest mb-5">Featured</p>
+            <p className="text-xs font-bold text-[#F5A623] uppercase tracking-widest mb-5">Featured</p>
             <Link href={`/insights/${featured.slug}`}>
               <div className="group grid lg:grid-cols-5 gap-8 items-center report-card border border-gray-100 rounded-2xl overflow-hidden cursor-pointer hover:shadow-xl hover:border-transparent transition-all">
                 <div className="lg:col-span-2 h-72 lg:h-full bg-[#0E2841] relative overflow-hidden">
@@ -79,7 +79,7 @@ export default function Insights() {
                       <p className="text-sm text-gray-500">{featured.author}</p>
                       <p className="text-xs text-gray-400">{featured.readTime}</p>
                     </div>
-                    <span className="inline-flex items-center gap-2 bg-[#0E2841] group-hover:bg-[#E97132] text-white font-bold px-5 py-2.5 rounded-lg transition-colors text-sm">
+                    <span className="inline-flex items-center gap-2 bg-[#0E2841] group-hover:bg-[#F5A623] text-white font-bold px-5 py-2.5 rounded-lg transition-colors text-sm">
                       Read now <ArrowRight size={14} />
                     </span>
                   </div>
@@ -182,7 +182,7 @@ export default function Insights() {
                       <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-2">{insight.summary}</p>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">{insight.readTime}</span>
-                        <span className="text-xs font-semibold text-[#156082] group-hover:text-[#E97132] transition-colors flex items-center gap-1">
+                        <span className="text-xs font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
                           Read <ArrowRight size={12} />
                         </span>
                       </div>

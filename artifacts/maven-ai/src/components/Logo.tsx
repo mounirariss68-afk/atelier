@@ -27,7 +27,7 @@ export default function Logo({ size = "md", className = "" }: LogoProps) {
           }}
           aria-hidden="true"
         >
-          <polygon points="12,0 24,20 0,20" fill="#E97132" />
+          <polygon points="12,0 24,20 0,20" fill="#F5A623" />
         </svg>
         <span
           className="block text-white"
