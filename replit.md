@@ -1,27 +1,64 @@
-# Workspace
+# Maven AI — Marketing Website
 
-## Overview
+## Project Overview
+A comprehensive, world-class marketing website for **Maven AI** — a boutique AI advisory and engineering services firm, sister company to Maven Insights. Built as a React + Vite single-page application with full routing.
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+## Architecture
+- **Stack**: React + Vite + TypeScript + Tailwind CSS v4 + Framer Motion + Wouter routing
+- **Monorepo**: pnpm workspace at `/artifacts/maven-ai`
+- **Port**: 22132 (via `$PORT` env variable)
+- **Preview path**: `/`
 
-## Stack
+## Brand Identity
+- **Navy**: `#0E2841` (primary background)
+- **Teal**: `#156082` (secondary/accent)
+- **Orange**: `#E97132` (CTA/accent)
+- **Blue**: `#0F9ED5` (light accent)
+- **Green**: `#196B24`
+- **Font**: Plus Jakarta Sans (Google Fonts)
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+## Pages
+| Route | Component | Description |
+|-------|-----------|-------------|
+| `/` | `Home.tsx` | Hero, stats, services, insights, industries CTA |
+| `/about` | `About.tsx` | Company story, 4 founders, operating model, Maven Insights |
+| `/services` | `Services.tsx` | All 4 service cards overview |
+| `/services/:slug` | `ServiceDetail.tsx` | Individual service detail with engagement model |
+| `/insights` | `Insights.tsx` | Filterable library of 8 research reports |
+| `/insights/:slug` | `InsightDetail.tsx` | Full article with related content sidebar |
+| `/industries` | `Industries.tsx` | Public Sector, Telecom, Financial Services |
+| `/contact` | `Contact.tsx` | Contact form + 4 GCC office locations |
 
-## Key Commands
+## Content Data
+All content lives in `src/data/content.ts`:
+- 4 founders: Mounir Aris (CEO), Gokhan Guney, Alper Kulak, Khalid Al Khudairi
+- 4 services: Agentic AI Transformation, AI-Driven SDLC, Data & Governance, AI Product Studio
+- 8 insight articles with full content
+- 3 industry profiles with case vignettes and stats
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+## Components
+- `Navbar.tsx` — Responsive nav with dropdown menus for Services/Insights
+- `Footer.tsx` — 4-column footer with GCC office grid
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## Images
+Located in `public/images/`:
+- `logo-mark.png` — AI-generated Maven AI logo
+- `report-1.png` through `report-8.png` — AI-generated report covers
+- `founder-mounir.png`, `founder-gokhan.png`, `founder-alper.png`, `founder-khalid.png` — Founder portraits
+
+## Key Features
+- McKinsey/Accenture-quality design language
+- Navy/teal/orange brand system throughout
+- Full-content articles (800-2000 words each)
+- Filterable insights library with search
+- Animated sections with Framer Motion
+- Mobile-responsive navigation with hamburger menu
+- Contact form with success state
+- Service detail pages with engagement model timelines
+- Industry pages with case vignettes and metrics
+
+## GCC Offices
+- Dubai: JLT Swiss Tower 3402
+- Riyadh: 4288 Anas Bin Malik, Al Malqa
+- Abu Dhabi: Musaffah M40
+- Doha: Regus No. 67
