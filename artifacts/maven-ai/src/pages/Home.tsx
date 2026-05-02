@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote, ExternalLink } from "lucide-react";
 import { stats, services, insights, industries, SITE_SOURCES } from "@/data/content";
 import PartnerLogos from "@/components/PartnerLogos";
+import mounirHeadshot from "@/assets/mounir-aris.png";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -390,12 +391,16 @@ export default function Home() {
             "The organizations that will win the next decade are not the ones that started AI first — they are the ones that moved AI from the slide deck to production. That is the only gap we exist to close."
           </blockquote>
           <div className="flex items-center justify-center gap-4">
-            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#156082] border-2 border-[#F5A623] flex items-center justify-center text-white font-bold text-lg">
-              MA
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#156082] border-2 border-[#F5A623]">
+              <img
+                src={mounirHeadshot}
+                alt="Mounir Aris"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div className="text-left">
               <div className="text-white font-bold">Mounir Aris</div>
-              <div className="text-gray-400 text-sm">CEO & Co-Founder, Maven AI</div>
+              <div className="text-gray-400 text-sm">Senior Partner</div>
             </div>
           </div>
         </div>
