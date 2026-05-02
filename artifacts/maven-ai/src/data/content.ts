@@ -6,6 +6,9 @@ import {
   industries as sharedIndustries,
   insights as sharedInsights,
   assessments as sharedAssessments,
+  marketplaceTools as sharedMarketplaceTools,
+  marketplaceClasses as sharedMarketplaceClasses,
+  marketplaceHorizontals as sharedMarketplaceHorizontals,
   homepageStats,
 } from "@workspace/maven-content";
 
@@ -14,6 +17,9 @@ export {
   sharedIndustries as industriesIndex,
   sharedInsights as insightsIndex,
   sharedAssessments as assessmentsIndex,
+  sharedMarketplaceTools as marketplaceTools,
+  sharedMarketplaceClasses as marketplaceClasses,
+  sharedMarketplaceHorizontals as marketplaceHorizontals,
 };
 
 function assertSharedAlignment(
@@ -959,6 +965,49 @@ export const operatingModel = {
 assertSharedAlignment("service slug", services.map((s) => s.slug), sharedServices.map((s) => s.slug));
 assertSharedAlignment("industry id", industries.map((i) => i.id), sharedIndustries.map((i) => i.id));
 assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsights.map((i) => i.slug));
+
+// Marketplace tools live entirely in @workspace/maven-content. The checks
+// below verify the catalogue stays internally consistent against the OTHER
+// shared collections (services, assessments, industries) so a typo in
+// knowledge.ts can never break a Marketplace cross-link silently.
+{
+  const serviceSlugs = new Set(sharedServices.map((s) => s.slug));
+  const assessmentSlugs = new Set(sharedAssessments.map((a) => a.slug));
+  const industryIds = new Set(sharedIndustries.map((i) => i.id));
+  const seenSlugs = new Set<string>();
+
+  for (const t of sharedMarketplaceTools) {
+    if (seenSlugs.has(t.slug)) {
+      throw new Error(`[content.ts] Marketplace duplicate slug "${t.slug}".`);
+    }
+    seenSlugs.add(t.slug);
+
+    for (const ind of t.industries) {
+      if (!industryIds.has(ind)) {
+        throw new Error(
+          `[content.ts] Marketplace tool "${t.slug}" references unknown industry id "${ind}".`,
+        );
+      }
+    }
+    if (t.relatedService && !serviceSlugs.has(t.relatedService)) {
+      throw new Error(
+        `[content.ts] Marketplace tool "${t.slug}" references unknown service slug "${t.relatedService}".`,
+      );
+    }
+    if (t.relatedAssessment && !assessmentSlugs.has(t.relatedAssessment)) {
+      throw new Error(
+        `[content.ts] Marketplace tool "${t.slug}" references unknown assessment slug "${t.relatedAssessment}".`,
+      );
+    }
+    // Every "live" demo must ship a sample dataset so the chat assistant and
+    // any downstream readers see the same canonical numbers as the UI.
+    if (t.status === "live" && (!t.samplePortfolio || t.samplePortfolio.length === 0)) {
+      throw new Error(
+        `[content.ts] Marketplace tool "${t.slug}" is marked live but has no samplePortfolio.`,
+      );
+    }
+  }
+}
 
 export const platformPartners = [
   "Microsoft Copilot Studio", "Google Vertex AI", "LangGraph / LangChain", "Anthropic Claude",

@@ -130,6 +130,9 @@ export default function Navbar() {
             <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
               Industries
             </Link>
+            <Link href="/marketplace" className={`nav-link text-sm font-medium transition-colors ${isActive("/marketplace") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+              Marketplace
+            </Link>
             <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
               Diagnostics
             </Link>
@@ -179,6 +182,7 @@ export default function Navbar() {
                 <Link href="/insights" className="block py-2 pl-3 text-gray-300 text-sm hover:text-white">All Insights</Link>
               </div>
               <Link href="/industries" className="block py-3 text-white font-medium border-b border-white/10">Industries</Link>
+              <Link href="/marketplace" className="block py-3 text-white font-medium border-b border-white/10">Marketplace</Link>
               <Link href="/assessments" className="block py-3 text-white font-medium border-b border-white/10">Diagnostics</Link>
               <div className="pt-3 space-y-2">
                 <Link href="/assessments" className="block text-center border border-[#0F9ED5] text-[#0F9ED5] font-semibold py-3 rounded-lg">

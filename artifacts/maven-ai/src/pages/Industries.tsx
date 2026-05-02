@@ -169,6 +169,14 @@ export default function Industries() {
                   <Link href="/contact" className="block w-full text-center font-bold py-3.5 rounded-xl text-white transition-colors" style={{ backgroundColor: industry.color }}>
                     Talk to our {industry.title} team <ArrowRight size={14} className="inline ml-1" />
                   </Link>
+
+                  <Link
+                    href={`/marketplace?industry=${industry.id}`}
+                    className="block w-full text-center font-semibold py-3 rounded-xl border-2 transition-colors hover:bg-gray-50"
+                    style={{ borderColor: industry.color, color: industry.color }}
+                  >
+                    Related tools in the Marketplace <ArrowRight size={14} className="inline ml-1" />
+                  </Link>
                 </div>
               </div>
             </div>

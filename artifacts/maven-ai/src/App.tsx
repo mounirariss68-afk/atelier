@@ -14,6 +14,8 @@ import ServiceDetail from "@/pages/ServiceDetail";
 import Insights from "@/pages/Insights";
 import InsightDetail from "@/pages/InsightDetail";
 import Industries from "@/pages/Industries";
+import Marketplace from "@/pages/Marketplace";
+import MarketplaceDetail from "@/pages/MarketplaceDetail";
 import Contact from "@/pages/Contact";
 import AssessmentsIndex from "@/pages/assessments/AssessmentsIndex";
 import AssessmentDetail from "@/pages/assessments/AssessmentDetail";
@@ -37,6 +39,8 @@ function Router() {
           <Route path="/insights" component={Insights} />
           <Route path="/insights/:slug" component={InsightDetail} />
           <Route path="/industries" component={Industries} />
+          <Route path="/marketplace" component={Marketplace} />
+          <Route path="/marketplace/:slug" component={MarketplaceDetail} />
           <Route path="/contact" component={Contact} />
           <Route path="/assessments" component={AssessmentsIndex} />
           <Route path="/assessments/team/:token" component={TeamAssessment} />

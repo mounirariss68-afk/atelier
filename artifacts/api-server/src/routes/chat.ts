@@ -60,6 +60,12 @@ function buildSystemPrompt(language: "en" | "ar"): string {
     .map((a) => `* ${a.code} — ${a.name} (slug: ${a.slug}, ~${a.estMinutes} min) — ${a.summary}`)
     .join("\n");
   const founders = kb.founders.map((f) => `* ${f.name}, ${f.title} (${f.location}) — ${f.summary}`).join("\n");
+  const marketplace = kb.marketplaceTools
+    .map((t) => {
+      const status = t.status === "live" ? "LIVE interactive demo" : "coming-soon detail page";
+      return `* ${t.title.en} (slug: ${t.slug}, ${status}) — buyer: ${t.buyer.en}. ${t.pitch.en}`;
+    })
+    .join("\n");
 
   const langNote =
     language === "ar"
@@ -89,6 +95,9 @@ ${assessments}
 
 FOUNDERS (only on the /about page — there is no /founders page)
 ${founders}
+
+MARKETPLACE TOOLS (live or coming-soon demos at /marketplace/<slug>; only "Value Realization Tool" is interactive today, the others are detail pages with screens and data models — never claim a coming-soon demo is interactive)
+${marketplace}
 
 RULES
 1. Ground every answer in the knowledge above. If the user asks something this knowledge does not cover (e.g. specific delivered case studies, pricing in dollars, named clients), say so honestly and suggest they book a 30-minute partner readout.

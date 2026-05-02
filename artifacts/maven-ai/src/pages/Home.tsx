@@ -450,6 +450,86 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── MARKETPLACE TEASER ── */}
+      <section className="py-20 bg-[#F8F9FA] border-y border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-12 gap-10 items-center">
+            <div className="lg:col-span-7">
+              <div className="section-divider" />
+              <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white bg-[#0F9ED5] mb-4">
+                New · Marketplace
+              </span>
+              <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5 max-w-2xl leading-tight">
+                What good looks like — interactive demos, not slides.
+              </h2>
+              <p className="text-lg text-gray-600 max-w-2xl leading-relaxed mb-6">
+                MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact. Our Marketplace is the answer: a working CFO scoreboard for AI initiatives, plus detail pages for fourteen demos across the seven industries we know best.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href="/marketplace/value-realization"
+                  className="inline-flex items-center gap-2 bg-[#0E2841] hover:bg-[#156082] text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
+                >
+                  Open the Value Realization Tool <ArrowRight size={16} />
+                </Link>
+                <Link
+                  href="/marketplace"
+                  className="inline-flex items-center gap-2 border border-[#0E2841] text-[#0E2841] hover:bg-[#0E2841] hover:text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
+                >
+                  Browse the Marketplace
+                </Link>
+              </div>
+            </div>
+            <div className="lg:col-span-5">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#0F9ED5]">
+                    Value Realization · sample
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    AED · annual
+                  </span>
+                </div>
+                {[
+                  { label: "Citizen-services agent", expected: 4.2, realized: 3.35, color: "#196B24" },
+                  { label: "Network-ops copilot", expected: 6.8, realized: 4.6, color: "#196B24" },
+                  { label: "Procurement intelligence", expected: 9.5, realized: 5.2, color: "#F5A623" },
+                  { label: "Demand forecaster", expected: 3.1, realized: 1.4, color: "#0F9ED5" },
+                  { label: "Hospitality revenue", expected: 5.4, realized: 0.0, color: "#B91C1C" },
+                ].map((row) => {
+                  const max = 9.5;
+                  const expW = (row.expected / max) * 100;
+                  const realW = (row.realized / max) * 100;
+                  return (
+                    <div key={row.label} className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-gray-600">
+                        <span className="font-semibold">{row.label}</span>
+                        <span className="text-gray-400">
+                          AED {row.realized.toFixed(1)}M / {row.expected.toFixed(1)}M
+                        </span>
+                      </div>
+                      <div className="relative h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 start-0 rounded-full"
+                          style={{ width: `${expW}%`, background: "#0E284122" }}
+                        />
+                        <div
+                          className="absolute inset-y-0 start-0 rounded-full"
+                          style={{ width: `${realW}%`, background: row.color }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                <p className="text-[11px] text-gray-500 leading-relaxed pt-2 border-t border-gray-100">
+                  Realization rate <span className="font-bold text-[#0E2841]">49%</span> · Value at risk <span className="font-bold text-[#B91C1C]">AED 9.7M</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── MAVEN INSIGHTS BANNER ── */}
       <section className="py-16 bg-white border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">

@@ -81,6 +81,25 @@ export default function Footer() {
           </div>
 
           <div className="lg:col-span-2">
+            <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">Marketplace</h3>
+            <ul className="space-y-3">
+              {[
+                { href: "/marketplace/value-realization", label: "Value Realization Tool" },
+                { href: "/marketplace/programme-health-copilot", label: "Programme Health Copilot" },
+                { href: "/marketplace/citizen-services-agent", label: "Citizen-Services Agent" },
+                { href: "/marketplace/sama-compliance-agent", label: "SAMA Compliance Agent" },
+                { href: "/marketplace", label: "All marketplace tools →" },
+              ].map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="text-gray-400 text-sm hover:text-white transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="lg:col-span-2">
             <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">Diagnostics</h3>
             <ul className="space-y-3">
               {[

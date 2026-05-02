@@ -3,6 +3,15 @@
 ## Project Overview
 A comprehensive, world-class marketing website for **Maven AI** — a boutique AI advisory and engineering services firm, sister company to Maven Insights. Built as a React + Vite single-page application with full routing. Now includes the **Maven AI Diagnostic Assessment Suite** — four free bilingual (EN/AR) wizards (ARI, MVI, DAFI, UVR) backed by an Express API, Postgres persistence, AI executive memos and branded PDF reports.
 
+## Marketplace (Task #21)
+- **Catalog**: 8 demo classes, 3 horizontals, 14 specific tools — bilingual EN/AR title/pitch/long-description/screens/data-model — all in `lib/maven-content/src/knowledge.ts` (`marketplaceClasses`, `marketplaceHorizontals`, `marketplaceTools`).
+- **Re-export**: `artifacts/maven-ai/src/data/content.ts` re-exports the three collections plus runs `assertSharedAlignment` and a self-consistency check (every `industries[]` id on a tool must exist in `industriesIndex`).
+- **Pages**: `Marketplace.tsx` (index with class card grid + filter chips, query-string deep link), `MarketplaceDetail.tsx` (coming-soon detail with screens & data-model 3-column), `components/marketplace/ValueRealizationDemo.tsx` (live flagship — sample portfolio, editable drawer, gauge for realization rate, expected-vs-realized bars, value-at-risk callout, leakage grouping, print summary, reset to sample).
+- **Chat**: `ChatSuggestionKind` includes `"marketplace"`; `buildKnownLinks()` emits `/marketplace` + `/marketplace/<slug>` per tool; `chat.ts` system prompt surfaces a MARKETPLACE TOOLS section flagging `value-realization` as the only LIVE demo.
+- **Cross-links**: Navbar (between Industries and Diagnostics — desktop + mobile), Footer (new Marketplace column), Home (teaser section before the Maven Insights banner with a mini realized-vs-expected bar chart), Industries (per-industry "Related tools in the Marketplace" CTA with `?industry=<id>` deep link).
+- **Brief**: `artifacts/maven-ai/docs/marketplace-catalog.md`.
+- **Build gotcha**: `lib/maven-content` is a `composite: true` TS project with a `dist/` output. After adding new exports, the `tsconfig.tsbuildinfo` may keep dist stale and downstream `tsc` will complain about missing exports. The post-merge script clears the buildinfo and rebuilds the package; for local dev, run `rm -f lib/maven-content/tsconfig.tsbuildinfo && pnpm --filter @workspace/maven-content exec tsc -p tsconfig.json`.
+
 ## Diagnostic Suite Architecture
 - **Shared lib**: `lib/assessments` — pure-TS scoring engine, sovereign sub-score, anti-patterns, peer benchmarks, cost-of-inaction, recommendations, i18n strings, all 4 framework definitions.
 - **Schema**: `lib/db/src/schema/assessments.ts` (`assessment_submissions`, `call_requests`, `team_invitations`).
@@ -45,6 +54,8 @@ A comprehensive, world-class marketing website for **Maven AI** — a boutique A
 | `/insights` | `Insights.tsx` | Filterable library of 8 research reports |
 | `/insights/:slug` | `InsightDetail.tsx` | Full article with related content sidebar |
 | `/industries` | `Industries.tsx` | Public Sector, Telecom, Financial Services |
+| `/marketplace` | `Marketplace.tsx` | Filterable index of 14 demo tools (class / industry / horizontal chips, deep-link via `?industry=&class=&horizontal=`) |
+| `/marketplace/:slug` | `MarketplaceDetail.tsx` | Detail page per tool (screens + data model). Dispatches `/marketplace/value-realization` to the live `ValueRealizationDemo` component |
 | `/contact` | `Contact.tsx` | Contact form + 4 GCC office locations |
 
 ## Content Data
