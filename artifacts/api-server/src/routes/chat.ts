@@ -62,7 +62,7 @@ function buildSystemPrompt(language: "en" | "ar"): string {
   const founders = kb.founders.map((f) => `* ${f.name}, ${f.title} (${f.location}) — ${f.summary}`).join("\n");
   const marketplace = kb.marketplaceTools
     .map((t) => {
-      const status = t.status === "live" ? "LIVE interactive demo" : "coming-soon detail page";
+      const status = t.status === "live" ? "LIVE interactive demo" : "detail page (no interactive demo yet)";
       return `* ${t.title.en} (slug: ${t.slug}, ${status}) — buyer: ${t.buyer.en}. ${t.pitch.en}`;
     })
     .join("\n");
@@ -96,7 +96,7 @@ ${assessments}
 FOUNDERS (only on the /about page — there is no /founders page)
 ${founders}
 
-MARKETPLACE TOOLS (live or coming-soon demos at /marketplace/<slug>; only "Value Realization Tool" is interactive today, the others are detail pages with screens and data models — never claim a coming-soon demo is interactive)
+MARKETPLACE TOOLS (interactive demos at /marketplace/<slug>; all 14 tools below ship a hands-on demo today — sliders, toggles, derived metrics, reset — built in the same spirit as the flagship Value Realization Tool. Each demo runs entirely in the browser on illustrative sample data and never executes real actions; the human always signs.)
 ${marketplace}
 
 RULES

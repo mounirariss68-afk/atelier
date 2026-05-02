@@ -1,3 +1,4 @@
+import type React from "react";
 import { Link, useParams } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -30,6 +31,36 @@ import {
 import { useLang, tStr } from "@/lib/lang";
 import NotFound from "./not-found";
 import ValueRealizationDemo from "@/components/marketplace/ValueRealizationDemo";
+import ProgrammeHealthDemo from "@/components/marketplace/ProgrammeHealthDemo";
+import CitizenServicesDemo from "@/components/marketplace/CitizenServicesDemo";
+import ProcurementIntelligenceDemo from "@/components/marketplace/ProcurementIntelligenceDemo";
+import NetworkOpsDemo from "@/components/marketplace/NetworkOpsDemo";
+import SamaComplianceDemo from "@/components/marketplace/SamaComplianceDemo";
+import EnergyTradingDemo from "@/components/marketplace/EnergyTradingDemo";
+import RetailDemandDemo from "@/components/marketplace/RetailDemandDemo";
+import HospitalityRevenueDemo from "@/components/marketplace/HospitalityRevenueDemo";
+import EvBatteryHealthDemo from "@/components/marketplace/EvBatteryHealthDemo";
+import FpaRollingForecastDemo from "@/components/marketplace/FpaRollingForecastDemo";
+import CustomerCareDemo from "@/components/marketplace/CustomerCareDemo";
+import SovereignDataWorkbenchDemo from "@/components/marketplace/SovereignDataWorkbenchDemo";
+import KnowledgeMemoryDemo from "@/components/marketplace/KnowledgeMemoryDemo";
+
+const DEMOS: Record<string, React.ComponentType> = {
+  "value-realization": ValueRealizationDemo,
+  "programme-health-copilot": ProgrammeHealthDemo,
+  "citizen-services-agent": CitizenServicesDemo,
+  "procurement-intelligence": ProcurementIntelligenceDemo,
+  "network-ops-agent": NetworkOpsDemo,
+  "sama-compliance-agent": SamaComplianceDemo,
+  "energy-trading-copilot": EnergyTradingDemo,
+  "retail-demand-forecaster": RetailDemandDemo,
+  "hospitality-revenue-optimizer": HospitalityRevenueDemo,
+  "ev-battery-health-agent": EvBatteryHealthDemo,
+  "fpa-rolling-forecast": FpaRollingForecastDemo,
+  "customer-care-multi-agent": CustomerCareDemo,
+  "sovereign-data-workbench": SovereignDataWorkbenchDemo,
+  "knowledge-memory-agent": KnowledgeMemoryDemo,
+};
 
 const ICONS: Record<string, LucideIcon> = {
   TrendingUp,
@@ -88,8 +119,9 @@ export default function MarketplaceDetail() {
 
   if (!tool) return <NotFound />;
 
-  if (tool.slug === "value-realization") {
-    return <ValueRealizationDemo />;
+  const Demo = DEMOS[tool.slug];
+  if (Demo) {
+    return <Demo />;
   }
 
   const Icon = ICONS[tool.icon] ?? Sparkles;
