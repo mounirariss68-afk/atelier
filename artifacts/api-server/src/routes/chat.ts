@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { ChatBody } from "@workspace/api-zod";
@@ -329,14 +330,32 @@ router.post("/", async (req: Request, res: Response) => {
       sseWrite(res, { type: "done", suggestions });
       res.end();
     }
-    // Privacy-aware structured logging. We log:
-    //  - a redacted question signal (length + first 120 chars of the last
-    //    user turn, truncated) so we can audit what topics users ask about
-    //  - the resolved suggestion slugs the assistant surfaced
-    // We do NOT log the full conversation transcript or any PII the user
-    // may have typed.
+    // Privacy-aware structured logging. We deliberately log NO raw user
+    // text. Instead we emit:
+    //  - the resolved deep-link hrefs the assistant surfaced
+    //    (`suggestionHrefs`) — these come from a server-side allow-list,
+    //    not from user input, so they are safe.
+    //  - a coarse length bucket for the last user turn (so we can graph
+    //    "how long are users' questions" without storing the questions
+    //    themselves).
+    //  - an irreversible SHA-256-truncated hash of the normalized last
+    //    user turn (`questionHash`), purely so repeated identical
+    //    questions can be grouped in log analytics. The full hash is
+    //    truncated to 16 hex chars; the original text cannot be
+    //    recovered.
     const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-    const questionPreview = lastUser.replace(/\s+/g, " ").trim().slice(0, 120);
+    const normalized = lastUser.replace(/\s+/g, " ").trim().toLowerCase();
+    const questionLengthBucket =
+      normalized.length === 0 ? "empty"
+      : normalized.length < 40 ? "xs"
+      : normalized.length < 120 ? "s"
+      : normalized.length < 400 ? "m"
+      : normalized.length < 800 ? "l"
+      : "xl";
+    const questionHash =
+      normalized.length > 0
+        ? createHash("sha256").update(normalized).digest("hex").slice(0, 16)
+        : null;
     logger.info(
       {
         provider,
@@ -345,8 +364,8 @@ router.post("/", async (req: Request, res: Response) => {
         replyChars: fullText.length,
         suggestionCount: suggestions.length,
         suggestionHrefs: suggestions.map((s) => s.href),
-        questionLength: lastUser.length,
-        questionPreview,
+        questionLengthBucket,
+        questionHash,
         lang: language,
         clientAborted,
       },
