@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Linkedin, Twitter, Mail, MapPin, Phone } from "lucide-react";
+import Logo from "./Logo";
 
 const offices = [
   { city: "Dubai", country: "UAE", address: "Jumeirah Lakes Towers, Cluster Y\nSwiss Tower 3402, 34th Floor", phone: "+971 4 561 3707" },
@@ -16,14 +17,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           {/* Brand */}
           <div className="lg:col-span-4">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
-                <img src="/images/logo-mark.png" alt="Maven AI" className="w-8 h-8 object-contain" />
-              </div>
-              <div>
-                <div className="text-white font-bold text-xl tracking-wide">MAVEN AI</div>
-                <div className="text-[#0F9ED5] text-xs font-medium tracking-widest uppercase">A Maven Insights Company</div>
-              </div>
+            <div className="mb-5">
+              <Logo size="md" />
             </div>
             <p className="text-gray-400 text-sm leading-relaxed mb-6 max-w-sm">
               A boutique AI advisory and engineering services firm. We take clients from AI ambition to AI in production — with senior delivery, lean economics, and an agentic-native practice.

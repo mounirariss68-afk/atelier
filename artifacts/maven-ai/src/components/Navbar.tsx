@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import Logo from "./Logo";
 
 const serviceLinks = [
   { href: "/services/agentic-ai-transformation", label: "Agentic AI Transformation" },
@@ -45,14 +46,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
-              <img src="/images/logo-mark.png" alt="Maven AI" className="w-8 h-8 object-contain" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white font-bold text-xl leading-tight tracking-wide">MAVEN AI</span>
-              <span className="text-[#0F9ED5] text-xs font-medium tracking-widest uppercase">A Sister Company of Maven Insights</span>
-            </div>
+          <Link href="/" className="flex items-center group" aria-label="Maven AI">
+            <Logo size="md" />
           </Link>
 
           {/* Desktop Nav */}
