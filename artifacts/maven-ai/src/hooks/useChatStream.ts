@@ -156,6 +156,12 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
       setStatus("streaming");
       const controller = new AbortController();
       abortRef.current = controller;
+      // Track whether we ever received a terminal `done` event from the
+      // server. If the connection closes cleanly without one (network drop,
+      // proxy timeout, etc.), we surface that as an error so the user gets
+      // the retry button instead of a half-rendered "complete" answer.
+      let receivedDone = false;
+      let receivedError = false;
 
       try {
         const response = await fetch("/api/chat", {
@@ -197,6 +203,7 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
               return next;
             });
           } else if (event.type === "done") {
+            receivedDone = true;
             setMessages((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
@@ -206,6 +213,7 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
               return next;
             });
           } else if (event.type === "error") {
+            receivedError = true;
             setMessages((prev) => {
               const next = [...prev];
               next[next.length - 1] = {
@@ -230,7 +238,25 @@ export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
         // Flush any final bytes from the decoder.
         feed(decoder.decode());
 
-        setStatus("idle");
+        // If the stream closed without a terminal `done` or `error` event
+        // (network drop, proxy timeout, server crash mid-stream), treat the
+        // current assistant turn as failed so the user can retry.
+        if (!receivedDone && !receivedError) {
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            const partial = last && last.role === "assistant" ? last.content : "";
+            const note =
+              partial.length > 0
+                ? `${partial}\n\n(The connection dropped before the answer was complete. Try again?)`
+                : "The connection dropped before the assistant could reply. Try again?";
+            next[next.length - 1] = { role: "assistant", content: note, error: true };
+            return next;
+          });
+          setStatus("error");
+        } else {
+          setStatus("idle");
+        }
       } catch (err) {
         if ((err as { name?: string })?.name === "AbortError") {
           setStatus("idle");

@@ -1,3 +1,46 @@
+// Single source of truth for structural identifiers (slugs, ids, canonical
+// titles) lives in `@workspace/maven-content`. This file holds the long-form
+// marketing copy that the public site renders; the assertions below catch
+// any drift between the two at module-load time so a single typo in a slug
+// breaks the build instead of silently breaking deep links from the chat
+// widget's allow-list.
+import {
+  services as sharedServices,
+  industries as sharedIndustries,
+  insights as sharedInsights,
+  assessments as sharedAssessments,
+} from "@workspace/maven-content";
+
+export {
+  sharedServices as servicesIndex,
+  sharedIndustries as industriesIndex,
+  sharedInsights as insightsIndex,
+  sharedAssessments as assessmentsIndex,
+};
+
+function assertSharedAlignment(
+  kind: string,
+  localKeys: string[],
+  sharedKeys: string[],
+): void {
+  const local = new Set(localKeys);
+  const shared = new Set(sharedKeys);
+  for (const k of shared) {
+    if (!local.has(k)) {
+      throw new Error(
+        `[content.ts] ${kind} "${k}" exists in @workspace/maven-content but not in the local marketing copy. Update one or the other so the chat allow-list stays in sync.`,
+      );
+    }
+  }
+  for (const k of local) {
+    if (!shared.has(k)) {
+      throw new Error(
+        `[content.ts] ${kind} "${k}" exists locally but not in @workspace/maven-content. Add it to lib/maven-content/src/knowledge.ts so the chat assistant can link to it.`,
+      );
+    }
+  }
+}
+
 export const founders = [
   {
     id: "mounir-aris",
@@ -905,6 +948,13 @@ export const operatingModel = {
     },
   ],
 };
+
+// Run all alignment checks at module load. If any drift exists, the app
+// will fail loudly on first import instead of silently emitting broken
+// chat suggestions.
+assertSharedAlignment("service slug", services.map((s) => s.slug), sharedServices.map((s) => s.slug));
+assertSharedAlignment("industry id", industries.map((i) => i.id), sharedIndustries.map((i) => i.id));
+assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsights.map((i) => i.slug));
 
 export const platformPartners = [
   "Microsoft Copilot Studio", "Google Vertex AI", "LangGraph / LangChain", "Anthropic Claude",

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Phone, Mail, Send, CheckCircle, Clock, Users, ArrowRight } from "lucide-react";
+import { services as sharedServices } from "@workspace/maven-content";
 
 const offices = [
   { city: "Dubai", country: "UAE", address: "Jumeirah Lakes Towers, Cluster Y\nSwiss Tower 3402, 34th Floor", phone: "+971 4 561 3707", primary: true },
@@ -10,23 +11,16 @@ const offices = [
   { city: "Doha", country: "Qatar", address: "Office 241-3, Floor 2\nRegus, No. 67", phone: "+974 442 31111", primary: false },
 ];
 
-const interestAreas = [
-  "Agentic AI Transformation",
-  "AI-Driven SDLC & Legacy Modernization",
-  "Data & Governance Foundations",
-  "AI Product Studio",
-  "General Inquiry",
-  "Partnership",
-];
+// Service interest areas are derived from the shared knowledge base so the
+// dropdown labels and the topic-prefill mapping cannot drift apart.
+const SERVICE_INTERESTS = sharedServices.map((s) => s.title);
+const interestAreas = [...SERVICE_INTERESTS, "General Inquiry", "Partnership"];
 
-// Map known service slugs to the matching label from interestAreas. Used when
-// the chat widget (or any other surface) deep-links to /contact?topic=<slug>.
-const TOPIC_TO_INTEREST: Record<string, string> = {
-  "agentic-ai-transformation": "Agentic AI Transformation",
-  "ai-driven-sdlc": "AI-Driven SDLC & Legacy Modernization",
-  "data-governance-foundations": "Data & Governance Foundations",
-  "ai-product-studio": "AI Product Studio",
-};
+// Map service slugs → interest dropdown label. When the chat widget links to
+// /contact?topic=<slug>, we pre-fill the matching interest.
+const TOPIC_TO_INTEREST: Record<string, string> = Object.fromEntries(
+  sharedServices.map((s) => [s.slug, s.title]),
+);
 
 export default function Contact() {
   const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", interest: "", message: "" });

@@ -329,6 +329,14 @@ router.post("/", async (req: Request, res: Response) => {
       sseWrite(res, { type: "done", suggestions });
       res.end();
     }
+    // Privacy-aware structured logging. We log:
+    //  - a redacted question signal (length + first 120 chars of the last
+    //    user turn, truncated) so we can audit what topics users ask about
+    //  - the resolved suggestion slugs the assistant surfaced
+    // We do NOT log the full conversation transcript or any PII the user
+    // may have typed.
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const questionPreview = lastUser.replace(/\s+/g, " ").trim().slice(0, 120);
     logger.info(
       {
         provider,
@@ -336,6 +344,9 @@ router.post("/", async (req: Request, res: Response) => {
         msgCount: messages.length,
         replyChars: fullText.length,
         suggestionCount: suggestions.length,
+        suggestionHrefs: suggestions.map((s) => s.href),
+        questionLength: lastUser.length,
+        questionPreview,
         lang: language,
         clientAborted,
       },
