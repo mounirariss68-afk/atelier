@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Users, RotateCcw, ShieldCheck, FileText, ArrowRight } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Reply {
   agent: string;
@@ -168,6 +169,17 @@ export default function CitizenServicesDemo() {
   const toggleEscalate = (id: string) =>
     setScenarios((prev) => prev.map((s) => (s.id === id ? { ...s, escalate: !s.escalate } : s)));
 
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const dialects = new Set(scenarios.map((s) => s.dialect)).size;
+    return [
+      { agentId: "dialect-tagger", line: lang === "ar" ? `رصد ${dialects} لهجة عبر ${scenarios.length} محادثة نشطة.` : `Detected ${dialects} dialect(s) across ${scenarios.length} active conversations.` },
+      { agentId: "policy-retriever", line: lang === "ar" ? "سحب الاستشهاد بالسياسة لكل نية." : "Pulled the policy citation for each intent." },
+      { agentId: "response-drafter", line: lang === "ar" ? `صاغ ردوداً ثنائية اللغة لـ${scenarios.length} مواطن.` : `Drafted bilingual replies for ${scenarios.length} citizens.` },
+      { agentId: "confidence-scorer", line: lang === "ar" ? `متوسط الثقة ${summary.avg}%؛ ${summary.escalated} دون عتبة الـ75%.` : `Avg confidence ${summary.avg}%; ${summary.escalated} below the 75% threshold.` },
+      { agentId: "audit-packetizer", line: lang === "ar" ? `أُغلقت ${scenarios.length} حزمة تدقيق جاهزة لأي طلب رقابي.` : `Sealed ${scenarios.length} audit packets ready for regulator subpoena.` },
+    ];
+  }, [scenarios, summary, lang]);
+
   return (
     <DemoShell
       slug="citizen-services-agent"
@@ -332,6 +344,11 @@ export default function CitizenServicesDemo() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="citizen-services-agent" log={trace} accent="#0F9ED5" />
         </div>
       </section>
     </DemoShell>

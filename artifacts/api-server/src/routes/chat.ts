@@ -6,6 +6,7 @@ import { ChatBody } from "@workspace/api-zod";
 import {
   knowledgeBase,
   buildKnownLinks,
+  getAgentCast,
   type KnownLink,
 } from "@workspace/maven-content";
 import { logger } from "../lib/logger";
@@ -63,7 +64,11 @@ function buildSystemPrompt(language: "en" | "ar"): string {
   const marketplace = kb.marketplaceTools
     .map((t) => {
       const status = t.status === "live" ? "LIVE interactive demo" : "detail page (no interactive demo yet)";
-      return `* ${t.title.en} (slug: ${t.slug}, ${status}) — buyer: ${t.buyer.en}. ${t.pitch.en}`;
+      const cast = getAgentCast(t.slug);
+      const agentLine = cast
+        ? ` Agents: ${cast.agents.map((a) => a.name.en).join(", ")}. Human checkpoints: ${cast.humanCheckpoints.map((h) => h.name.en).join(", ")}.`
+        : "";
+      return `* ${t.title.en} (slug: ${t.slug}, ${status}) — buyer: ${t.buyer.en}. ${t.pitch.en}${agentLine}`;
     })
     .join("\n");
 
@@ -96,7 +101,7 @@ ${assessments}
 FOUNDERS (only on the /about page — there is no /founders page)
 ${founders}
 
-MARKETPLACE TOOLS (interactive demos at /marketplace/<slug>; all 14 tools below ship a hands-on demo today — sliders, toggles, derived metrics, reset — built in the same spirit as the flagship Value Realization Tool. Each demo runs entirely in the browser on illustrative sample data and never executes real actions; the human always signs.)
+MARKETPLACE TOOLS (interactive demos at /marketplace/<slug>; all 14 tools below ship a hands-on demo today — sliders, toggles, derived metrics, named agent casts with human checkpoints, an "Agent reasoning trace" panel that updates live, and a "How does this work?" modal that diagrams the agents and handoffs. Each demo runs entirely in the browser on illustrative sample data and never executes real actions; the human always signs. When a visitor asks how a specific tool works, you may name the agents listed below and the human role that signs.)
 ${marketplace}
 
 RULES

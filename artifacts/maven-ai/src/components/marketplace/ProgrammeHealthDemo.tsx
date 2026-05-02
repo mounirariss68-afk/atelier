@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 type Rag = "red" | "amber" | "green";
 type Trend = "up" | "down" | "flat";
@@ -173,6 +174,16 @@ export default function ProgrammeHealthDemo() {
   }, [items]);
 
   const reset = () => setItems(SAMPLE.map((s) => ({ ...s })));
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    return [
+      { agentId: "programme-watcher", line: lang === "ar" ? `يراقب ${items.length} مسار عمل، الحالة العامة ${overall.programmeRag.toUpperCase()}.` : `Watching ${items.length} workstreams; overall programme RAG ${overall.programmeRag.toUpperCase()}.` },
+      { agentId: "raid-classifier", line: lang === "ar" ? `صنّف ${overall.newRisks} مخاطر جديدة و${overall.closed} مُغلقة هذا الأسبوع.` : `Classified ${overall.newRisks} new RAID items and ${overall.closed} closed this week.` },
+      { agentId: "etc-recompiler", line: lang === "ar" ? `إجمالي انجراف التقدير ${overall.drift > 0 ? "+" : ""}${overall.drift} أسابيع.` : `Total estimate-to-complete drift: ${overall.drift > 0 ? "+" : ""}${overall.drift} weeks.` },
+      { agentId: "steering-drafter", line: lang === "ar" ? "أعاد توليد عبوة التوجيه على المتغيّرات." : "Regenerated the steering pack on the latest deltas." },
+      { agentId: "ask-extractor", line: lang === "ar" ? `استخرج أعلى ${topAsks.length} طلبات للتصعيد.` : `Extracted the top ${topAsks.length} asks for steering.` },
+    ];
+  }, [items, overall, topAsks, lang]);
 
   return (
     <DemoShell
@@ -359,6 +370,11 @@ export default function ProgrammeHealthDemo() {
               )}
             </p>
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="programme-health-copilot" log={trace} accent="#156082" />
         </div>
       </section>
     </DemoShell>

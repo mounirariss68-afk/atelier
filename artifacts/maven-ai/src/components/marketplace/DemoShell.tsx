@@ -1,13 +1,15 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, ArrowRight, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, Network, type LucideIcon } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import type { BiText } from "@workspace/maven-content";
+import { getAgentCast } from "@workspace/maven-content";
 import {
   marketplaceTools,
   servicesIndex,
   assessmentsIndex,
 } from "@/data/content";
+import AgentExplainer from "./AgentExplainer";
 
 const COPY = {
   back: { en: "Back to Marketplace", ar: "العودة إلى السوق" },
@@ -25,6 +27,7 @@ const COPY = {
   exploreServices: { en: "Explore Maven AI services", ar: "استعرض خدمات Maven AI" },
   servicesEyebrow: { en: "Services", ar: "الخدمات" },
   engageEyebrow: { en: "Engage", ar: "ابدأ" },
+  howItWorks: { en: "How does this work?", ar: "كيف يعمل؟" },
 };
 
 interface DemoShellProps {
@@ -53,6 +56,8 @@ export default function DemoShell({
 }: DemoShellProps) {
   const { lang, dir } = useLang();
   const tool = marketplaceTools.find((t) => t.slug === slug);
+  const hasCast = !!getAgentCast(slug);
+  const [explainerOpen, setExplainerOpen] = useState(false);
   const relatedService = tool?.relatedService
     ? servicesIndex.find((s) => s.slug === tool.relatedService)
     : undefined;
@@ -107,22 +112,34 @@ export default function DemoShell({
         </div>
       </section>
 
-      {/* Action bar */}
-      {(note || toolbar) && (
-        <section className="bg-white border-b border-gray-100 py-4 print:hidden">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center gap-3 justify-between">
-            {note ? (
-              <p className="text-xs text-gray-500 max-w-xl leading-relaxed">
-                {tStr(note, lang)}
-              </p>
-            ) : (
-              <span />
+      {/* Action bar — always rendered so the explainer button is always visible */}
+      <section className="bg-white border-b border-gray-100 py-4 print:hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center gap-3 justify-between">
+          {note ? (
+            <p className="text-xs text-gray-500 max-w-xl leading-relaxed">
+              {tStr(note, lang)}
+            </p>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2 ms-auto flex-wrap">
+            {hasCast && (
+              <button
+                type="button"
+                onClick={() => setExplainerOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0E2841] hover:bg-[#142d4d] text-white text-xs font-bold transition-colors"
+              >
+                <Network size={13} />
+                {tStr(COPY.howItWorks, lang)}
+              </button>
             )}
-            {toolbar && (
-              <div className="flex items-center gap-2 ms-auto flex-wrap">{toolbar}</div>
-            )}
+            {toolbar}
           </div>
-        </section>
+        </div>
+      </section>
+
+      {hasCast && (
+        <AgentExplainer slug={slug} open={explainerOpen} onClose={() => setExplainerOpen(false)} />
       )}
 
       {/* Demo body */}

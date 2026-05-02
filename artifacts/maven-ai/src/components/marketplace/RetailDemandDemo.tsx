@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BarChart3, RotateCcw } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Sku {
   id: string;
@@ -141,6 +142,21 @@ export default function RetailDemandDemo() {
     }
     return { totalForecast, totalBase, lift: totalBase > 0 ? (totalForecast - totalBase) / totalBase : 0 };
   }, [overlay]);
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const tags: string[] = [];
+    if (overlay.ramadan) tags.push(lang === "ar" ? "رمضان" : "Ramadan");
+    if (overlay.schools) tags.push(lang === "ar" ? "عودة المدارس" : "School return");
+    if (overlay.summer) tags.push(lang === "ar" ? "نزوح الصيف" : "Summer exodus");
+    const tagStr = tags.length > 0 ? tags.join(", ") : (lang === "ar" ? "لا طبقات" : "no overlays");
+    return [
+      { agentId: "season-tagger", line: lang === "ar" ? `الطبقات النشطة: ${tagStr}.` : `Active overlays: ${tagStr}.` },
+      { agentId: "base-forecaster", line: lang === "ar" ? `أنشأ خط الأساس لـ${SKUS.length} صنفاً عبر 26 أسبوعاً.` : `Built the 26-week base demand for ${SKUS.length} SKUs.` },
+      { agentId: "seasonality-overlay", line: lang === "ar" ? `الرفع فوق الأساس: ${(summary.lift * 100).toFixed(1)}%.` : `Lift over baseline: ${(summary.lift * 100).toFixed(1)}%.` },
+      { agentId: "allocator", line: lang === "ar" ? `وزّع التنبؤ على ${CLUSTERS.length} تجمّعات خليجية.` : `Allocated forecast across ${CLUSTERS.length} GCC clusters.` },
+      { agentId: "promo-simulator", line: lang === "ar" ? `حدّة العروض: ${Math.round(overlay.promo * 100)}%.` : `Promo aggressiveness: ${Math.round(overlay.promo * 100)}%.` },
+    ];
+  }, [overlay, summary, lang]);
 
   return (
     <DemoShell
@@ -285,6 +301,11 @@ export default function RetailDemandDemo() {
               </div>
             );
           })}
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="retail-demand-forecaster" log={trace} accent="#196B24" />
         </div>
       </section>
     </DemoShell>

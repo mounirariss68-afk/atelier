@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Database, RotateCcw, ShieldCheck, ArrowRight } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Source {
   id: string;
@@ -142,6 +143,18 @@ export default function SovereignDataWorkbenchDemo() {
   const sinks = useMemo(() => SINKS_DEF(transforms), [transforms]);
   const selected = sources.filter((s) => s.selected);
   const allowedCount = sinks.filter((k) => !k.blocked).length;
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const activeT = transforms.filter((t) => t.enabled).length;
+    const blocked = sinks.length - allowedCount;
+    return [
+      { agentId: "schema-explorer", line: lang === "ar" ? `استكشف ${SOURCES.length} مصدراً، ${selected.length} مختار.` : `Explored ${SOURCES.length} sources; ${selected.length} selected.` },
+      { agentId: "arabic-ner", line: lang === "ar" ? "وسم حقول البيانات الشخصية العربية حيثما وُجدت." : "Tagged Arabic PII fields where present in the schema." },
+      { agentId: "pipeline-drafter", line: lang === "ar" ? `صاغ خط بيانات بـ${activeT} تحويلاً مفعّلاً.` : `Drafted pipeline with ${activeT} transform(s) enabled.` },
+      { agentId: "lineage-compiler", line: lang === "ar" ? `جمّع رسم النسب لـ${sinks.length} وجهات.` : `Compiled lineage to ${sinks.length} destinations.` },
+      { agentId: "quality-contract-drafter", line: lang === "ar" ? `${allowedCount} وجهة مسموح بها، ${blocked} محظورة بالتزام.` : `${allowedCount} sinks allowed; ${blocked} blocked by an obligation.` },
+    ];
+  }, [transforms, sinks, selected, allowedCount, lang]);
 
   return (
     <DemoShell
@@ -308,6 +321,11 @@ export default function SovereignDataWorkbenchDemo() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="sovereign-data-workbench" log={trace} accent="#0E2841" />
         </div>
       </section>
     </DemoShell>

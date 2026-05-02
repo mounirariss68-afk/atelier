@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BookOpen, RotateCcw, Lock, FileText, ShieldCheck } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 type Permission = "public" | "employee" | "manager" | "executive";
 type Persona = "executive" | "manager" | "employee";
@@ -178,6 +179,16 @@ export default function KnowledgeMemoryDemo() {
     employee: { en: "Employee", ar: "موظف" },
   };
 
+  const trace: AgentLogEntry[] = useMemo(() => {
+    return [
+      { agentId: "ingestor", line: lang === "ar" ? `فهرس ${SOURCES.length} مصدر معرفي.` : `Indexed ${SOURCES.length} knowledge sources.` },
+      { agentId: "permission-filter", line: lang === "ar" ? `${visibleSources.length} مصدر مرئي لـ${tStr(personaLabel[persona], lang)}.` : `${visibleSources.length} sources visible to the ${tStr(personaLabel[persona], lang)} persona.` },
+      { agentId: "semantic-retriever", line: lang === "ar" ? "استرجع المصادر المتوقّعة لهذا السؤال." : "Retrieved the expected sources for this question." },
+      { agentId: "grounded-drafter", line: visibleExpected.length > 0 ? (lang === "ar" ? `صاغ إجابة بالاستشهادات من ${visibleExpected.length} مصدر مرئي.` : `Composed a cited answer from ${visibleExpected.length} visible source(s).`) : (lang === "ar" ? "رفض الإجابة — لا مصادر مرئية تجيب على السؤال." : "Refused the answer — no visible source covers this question.") },
+      { agentId: "coverage-monitor", line: hiddenExpected.length > 0 ? (lang === "ar" ? `${hiddenExpected.length} مصدر متعلّق مخفي بسبب الصلاحية.` : `${hiddenExpected.length} relevant source(s) hidden by the permission lens.`) : (lang === "ar" ? "تغطية كاملة عند هذا المستوى." : "Full source coverage at this permission level.") },
+    ];
+  }, [persona, visibleSources, visibleExpected, hiddenExpected, lang]);
+
   return (
     <DemoShell
       slug="knowledge-memory-agent"
@@ -344,6 +355,11 @@ export default function KnowledgeMemoryDemo() {
               );
             })}
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="knowledge-memory-agent" log={trace} accent="#156082" />
         </div>
       </section>
     </DemoShell>

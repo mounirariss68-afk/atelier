@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { LineChart, RotateCcw, FileText } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Driver {
   id: string;
@@ -146,6 +147,15 @@ export default function FpaRollingForecastDemo() {
     }
     return out;
   }, [view]);
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    return [
+      { agentId: "actuals-ingestor", line: lang === "ar" ? "سحب أحدث الفعليات مقابل الخطة السنوية." : "Pulled the latest actuals against AOP." },
+      { agentId: "driver-recompiler", line: lang === "ar" ? `أعاد حساب التنبؤ على ${drivers.length} محرّكات.` : `Recomputed the forecast across ${drivers.length} driver assumptions.` },
+      { agentId: "variance-analyst", line: lang === "ar" ? `الإيرادات Δ ${view.revVar.toFixed(1)}%، EBITDA Δ ${view.ebitdaVar.toFixed(1)}%.` : `Revenue Δ ${view.revVar.toFixed(1)}%; EBITDA Δ ${view.ebitdaVar.toFixed(1)}%.` },
+      { agentId: "board-flagger", line: flags.length > 0 ? (lang === "ar" ? `رفع ${flags.length} علم(اً) لعبوة المجلس.` : `Raised ${flags.length} flag(s) for the board pack.`) : (lang === "ar" ? "لا أعلام مرفوعة عند هذه الإعدادات." : "No board-pack flags raised at these settings.") },
+    ];
+  }, [drivers, view, flags, lang]);
 
   const baselineCone = useMemo(() => {
     const out: number[] = [];
@@ -322,6 +332,11 @@ export default function FpaRollingForecastDemo() {
               </div>
             )}
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="fpa-rolling-forecast" log={trace} accent="#156082" />
         </div>
       </section>
     </DemoShell>

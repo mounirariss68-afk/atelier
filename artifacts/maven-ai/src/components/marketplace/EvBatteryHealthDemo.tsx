@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Battery, RotateCcw, BatteryWarning, AlertTriangle } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Vehicle {
   id: string;
@@ -98,6 +99,16 @@ export default function EvBatteryHealthDemo() {
   }, [fleet]);
 
   const workOrders = fleet.filter((v) => v.soh < 85).sort((a, b) => a.soh - b.soh);
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    return [
+      { agentId: "telemetry-ingestor", line: lang === "ar" ? `استقبل بيانات دورة وشحن وتبريد لـ${FLEETS.length} مركبة.` : `Ingested duty-cycle, fast-charge and thermal telemetry for ${FLEETS.length} vehicles.` },
+      { agentId: "soh-predictor", line: lang === "ar" ? `متوسط صحة البطارية: ${summary.avg.toFixed(1)}%.` : `Average fleet State-of-Health: ${summary.avg.toFixed(1)}%.` },
+      { agentId: "intervention-window-planner", line: lang === "ar" ? `${summary.atRiskCount} مركبة تحت 85% — جدول صيانة مقترح.` : `${summary.atRiskCount} vehicle(s) below 85% — intervention windows proposed.` },
+      { agentId: "customer-graph-resolver", line: lang === "ar" ? "حلّ شبكة جهات اتصال مديري الأساطيل." : "Resolved the fleet manager contact graph." },
+      { agentId: "outreach-drafter", line: workOrders.length > 0 ? (lang === "ar" ? `صاغ ${workOrders.length} أمر عمل بانتظار توقيع المسؤول.` : `Drafted ${workOrders.length} work order(s) awaiting service-advisor signature.`) : (lang === "ar" ? "لا أوامر عمل مطلوبة عند الإعدادات الحالية." : "No work orders needed at current settings.") },
+    ];
+  }, [summary, workOrders, lang]);
 
   return (
     <DemoShell
@@ -289,6 +300,11 @@ export default function EvBatteryHealthDemo() {
               ))}
             </div>
           )}
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="ev-battery-health-agent" log={trace} accent="#196B24" />
         </div>
       </section>
     </DemoShell>

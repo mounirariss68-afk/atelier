@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Hotel, RotateCcw } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface RoomType {
   id: string;
@@ -132,6 +133,17 @@ export default function HospitalityRevenueDemo() {
 
   const mixTotal = mix.ota + mix.direct + mix.corporate;
   const mixOk = Math.abs(mixTotal - 100) < 0.5;
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const activeEvents = events.filter((e) => e.active).length;
+    return [
+      { agentId: "event-tagger", line: lang === "ar" ? `${activeEvents} حدث نشط، مضاعف الأحداث ×${eventMultiplier.toFixed(2)}.` : `${activeEvents} active event(s); event multiplier ×${eventMultiplier.toFixed(2)}.` },
+      { agentId: "demand-modeller", line: lang === "ar" ? `حدّث توقّع الإقبال لكل من ${ROOMS.length} أنواع غرف.` : `Updated pickup forecast for all ${ROOMS.length} room types.` },
+      { agentId: "competitor-rate-watcher", line: lang === "ar" ? `معيار المنافس: ${comp} درهم.` : `Comp benchmark anchored at AED ${comp}.` },
+      { agentId: "rate-recommender", line: lang === "ar" ? `سعّر الغرف بزيادة إجمالية ${(totals.uplift * 100).toFixed(1)}% فوق الأساس.` : `Re-priced rooms with ${(totals.uplift * 100).toFixed(1)}% total uplift vs baseline.` },
+      { agentId: "channel-mix-tuner", line: mixOk ? (lang === "ar" ? `مزيج القنوات متوازن (هامش مزجي ${(totals.blendedMargin * 100).toFixed(0)}%).` : `Channel mix balanced (blended margin ${(totals.blendedMargin * 100).toFixed(0)}%).`) : (lang === "ar" ? `مزيج القنوات غير صحيح (${mixTotal}%).` : `Channel mix off-target at ${mixTotal}% — flagged.`) },
+    ];
+  }, [events, eventMultiplier, comp, totals, mixOk, mixTotal, lang]);
 
   return (
     <DemoShell
@@ -294,6 +306,11 @@ export default function HospitalityRevenueDemo() {
               );
             })}
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="hospitality-revenue-optimizer" log={trace} accent="#F5A623" />
         </div>
       </section>
     </DemoShell>

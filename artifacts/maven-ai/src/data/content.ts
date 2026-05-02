@@ -9,6 +9,7 @@ import {
   marketplaceTools as sharedMarketplaceTools,
   marketplaceClasses as sharedMarketplaceClasses,
   marketplaceHorizontals as sharedMarketplaceHorizontals,
+  marketplaceAgentCasts as sharedAgentCasts,
   homepageStats,
 } from "@workspace/maven-content";
 
@@ -20,7 +21,29 @@ export {
   sharedMarketplaceTools as marketplaceTools,
   sharedMarketplaceClasses as marketplaceClasses,
   sharedMarketplaceHorizontals as marketplaceHorizontals,
+  sharedAgentCasts as marketplaceAgentCasts,
 };
+
+// Slugs of tools that ship a real interactive demo component. Kept here so
+// the validator below can prove every "live" tool resolves to a registered
+// React component in `MarketplaceDetail`'s dispatch map. Update this set in
+// lockstep with the DEMOS map in `pages/MarketplaceDetail.tsx`.
+const REGISTERED_DEMO_SLUGS = new Set<string>([
+  "value-realization",
+  "programme-health-copilot",
+  "citizen-services-agent",
+  "procurement-intelligence",
+  "network-ops-agent",
+  "sama-compliance-agent",
+  "energy-trading-copilot",
+  "retail-demand-forecaster",
+  "hospitality-revenue-optimizer",
+  "ev-battery-health-agent",
+  "fpa-rolling-forecast",
+  "customer-care-multi-agent",
+  "sovereign-data-workbench",
+  "knowledge-memory-agent",
+]);
 
 function assertSharedAlignment(
   kind: string,
@@ -1010,6 +1033,49 @@ assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsight
     ) {
       throw new Error(
         `[content.ts] Marketplace tool "${t.slug}" is marked live but has no samplePortfolio.`,
+      );
+    }
+
+    // Every tool — live or coming-soon — must ship an agent cast so the
+    // "How does this work?" explainer is never empty.
+    const cast = sharedAgentCasts[t.slug];
+    if (!cast) {
+      throw new Error(
+        `[content.ts] Marketplace tool "${t.slug}" has no agentCast in lib/maven-content/src/agentCasts.ts. Every tool needs one so the explainer modal renders.`,
+      );
+    }
+    if (cast.agents.length < 3) {
+      throw new Error(
+        `[content.ts] Marketplace tool "${t.slug}" has only ${cast.agents.length} agents — every cast needs at least 3 named agents to read as agentic-native.`,
+      );
+    }
+    if (cast.humanCheckpoints.length < 1) {
+      throw new Error(
+        `[content.ts] Marketplace tool "${t.slug}" has zero human-in-the-loop checkpoints. Every cast must name at least one human signoff to honour Maven's "human always signs" promise.`,
+      );
+    }
+    const agentIds = new Set(cast.agents.map((a) => a.id));
+    const humanIds = new Set(cast.humanCheckpoints.map((h) => h.id));
+    for (const e of cast.edges) {
+      if (!agentIds.has(e.from) || !agentIds.has(e.to)) {
+        throw new Error(
+          `[content.ts] Marketplace tool "${t.slug}" agent edge ${e.from} → ${e.to} references an unknown agent id.`,
+        );
+      }
+    }
+    for (const step of cast.flowOrder) {
+      const ok = step.kind === "agent" ? agentIds.has(step.id) : humanIds.has(step.id);
+      if (!ok) {
+        throw new Error(
+          `[content.ts] Marketplace tool "${t.slug}" flowOrder step ${step.kind}:${step.id} does not match any agent or human checkpoint id.`,
+        );
+      }
+    }
+
+    // Every live tool must have a registered demo component.
+    if (t.status === "live" && !REGISTERED_DEMO_SLUGS.has(t.slug)) {
+      throw new Error(
+        `[content.ts] Marketplace tool "${t.slug}" is marked live but has no entry in REGISTERED_DEMO_SLUGS. Add the demo component to pages/MarketplaceDetail.tsx and update this set.`,
       );
     }
   }

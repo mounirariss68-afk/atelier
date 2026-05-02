@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Activity, RotateCcw, AlertTriangle, ShieldAlert, Radio } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 type Severity = "p1" | "p2" | "p3";
 
@@ -159,6 +160,16 @@ export default function NetworkOpsDemo() {
   const ack = (id: string) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, acknowledged: !i.acknowledged } : i)));
 
+  const trace: AgentLogEntry[] = useMemo(() => {
+    return [
+      { agentId: "alarm-collector", line: lang === "ar" ? `يتابع ${items.length} حادثة، ${totals.openCount} مفتوحة.` : `Tracking ${items.length} incidents; ${totals.openCount} still open.` },
+      { agentId: "customer-impact-scorer", line: lang === "ar" ? `${totals.totalAffected.toLocaleString()} عميل متأثر في النافذة المتجدّدة.` : `${totals.totalAffected.toLocaleString()} customers impacted in the rolling window.` },
+      { agentId: "change-correlator", line: lang === "ar" ? "ربط التغييرات الحديثة بالحوادث المفتوحة." : "Correlated recent changes against the open incidents." },
+      { agentId: "triage-recommender", line: lang === "ar" ? "أعاد ترتيب الطابور بحسب الخطورة والأثر." : "Re-ranked the queue by severity and customer impact." },
+      { agentId: "regulator-flagger", line: totals.notifiable ? (lang === "ar" ? "حادثة تتجاوز عتبة 50,000 — تستوجب إشعار المنظّم." : "An incident crosses the 50,000-customer line — regulator notification flagged.") : (lang === "ar" ? "أقل من عتبة الإشعار — لا تصعيد للمنظّم." : "Below the regulator notification threshold.") },
+    ];
+  }, [items, totals, lang]);
+
   const sorted = [...items].sort((a, b) => {
     if (a.acknowledged !== b.acknowledged) return Number(a.acknowledged) - Number(b.acknowledged);
     if (a.severity !== b.severity) return a.severity.localeCompare(b.severity);
@@ -293,6 +304,11 @@ export default function NetworkOpsDemo() {
               </div>
             );
           })}
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="network-ops-agent" log={trace} accent="#156082" />
         </div>
       </section>
     </DemoShell>

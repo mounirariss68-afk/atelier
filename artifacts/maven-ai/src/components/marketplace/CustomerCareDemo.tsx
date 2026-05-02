@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Headphones, RotateCcw, MessageSquare, AlertTriangle } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Channel {
   id: string;
@@ -139,6 +140,16 @@ export default function CustomerCareDemo() {
   }, [channels]);
 
   const selected = CONVS.find((c) => c.id === picked) ?? CONVS[0];
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const failed = CONVS.filter((c) => !c.qa.passed).length;
+    return [
+      { agentId: "intent-router", line: lang === "ar" ? `وجّه ${Math.round(totals.total).toLocaleString()} اتصالاً أسبوعياً عبر 4 قنوات.` : `Routed ${Math.round(totals.total).toLocaleString()} weekly contacts across 4 channels.` },
+      { agentId: "resolution-agent", line: lang === "ar" ? `احتوى ${Math.round(totals.contained).toLocaleString()} وحوّل ${Math.round(totals.toHuman).toLocaleString()} لإنسان.` : `Contained ${Math.round(totals.contained).toLocaleString()}; handed ${Math.round(totals.toHuman).toLocaleString()} to humans.` },
+      { agentId: "qa-critic", line: lang === "ar" ? `راجع المحادثات؛ ${failed} فشلت في ضمان الجودة.` : `Reviewed conversations; ${failed} failed QA.` },
+      { agentId: "cost-telemetry", line: lang === "ar" ? `الإنفاق الأسبوعي المقدّر: ${Math.round(totals.spend).toLocaleString()} درهم.` : `Estimated weekly spend: AED ${Math.round(totals.spend).toLocaleString()}.` },
+    ];
+  }, [totals, lang]);
 
   return (
     <DemoShell
@@ -313,6 +324,11 @@ export default function CustomerCareDemo() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="customer-care-multi-agent" log={trace} accent="#0F9ED5" />
         </div>
       </section>
     </DemoShell>

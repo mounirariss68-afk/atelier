@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ShoppingCart, RotateCcw, AlertTriangle, ShieldCheck } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Category {
   id: string;
@@ -117,6 +118,16 @@ export default function ProcurementIntelligenceDemo() {
     setCats((prev) => prev.map((c) => (c.id === id ? { ...c, [key]: value } : c)));
 
   const supplier = picked ? SUPPLIERS.find((s) => s.id === picked) ?? null : null;
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const high = SUPPLIERS.filter((s) => riskScore(s) < 55).length;
+    return [
+      { agentId: "spend-normaliser", line: lang === "ar" ? `طبّع إنفاق ${fmtAed(totals.spend, lang)} عبر ${cats.length} فئة.` : `Normalised ${fmtAed(totals.spend, lang)} of spend across ${cats.length} categories.` },
+      { agentId: "savings-modeller", line: lang === "ar" ? `نمذج ${totals.savingPct.toFixed(1)}% وفورات ممكنة (${fmtAed(totals.saving, lang)}).` : `Modelled ${totals.savingPct.toFixed(1)}% realisable savings (${fmtAed(totals.saving, lang)}).` },
+      { agentId: "supplier-risk-analyst", line: lang === "ar" ? `قيّم ${SUPPLIERS.length} مورد، ${high} منهم بمخاطر مرتفعة.` : `Scored ${SUPPLIERS.length} suppliers; ${high} flagged high-risk.` },
+      { agentId: "negotiation-drafter", line: supplier ? (lang === "ar" ? `صاغ مسوّدة ملخّص تفاوض لـ${supplier.name}.` : `Drafted negotiation pre-read for ${supplier.name}.`) : (lang === "ar" ? "بانتظار اختيار مورد لصياغة الملخّص." : "Awaiting supplier pick before drafting the pre-read.") },
+    ];
+  }, [cats, totals, supplier, lang]);
 
   return (
     <DemoShell
@@ -266,6 +277,12 @@ export default function ProcurementIntelligenceDemo() {
           ) : (
             <PreRead supplier={supplier} lang={lang} />
           )}
+        </div>
+      </section>
+
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="procurement-intelligence" log={trace} accent="#196B24" />
         </div>
       </section>
     </DemoShell>

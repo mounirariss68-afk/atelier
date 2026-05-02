@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { TrendingUp, RotateCcw, ArrowUpRight, ArrowDownRight, FileText } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 interface Idea {
   id: string;
@@ -142,6 +143,18 @@ export default function EnergyTradingDemo() {
     setIdeas((prev) => prev.map((i) => (i.id === id ? { ...i, selected: !i.selected } : i)));
 
   const signed = ideas.filter((i) => i.selected);
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const low = ideas.filter((i) => i.riskBand === "low").length;
+    const med = ideas.filter((i) => i.riskBand === "medium").length;
+    const high = ideas.filter((i) => i.riskBand === "high").length;
+    return [
+      { agentId: "feed-aggregator", line: lang === "ar" ? `جمّع التدفّقات الليلية لـ${ideas.length} فكرة تداول.` : `Aggregated overnight feeds across ${ideas.length} trade ideas.` },
+      { agentId: "event-correlator", line: lang === "ar" ? "ربط المحفّزات بالأفكار المتأثرة." : "Correlated catalysts to the affected ideas." },
+      { agentId: "risk-bander", line: lang === "ar" ? `حزمة المخاطر: ${low} منخفضة، ${med} متوسطة، ${high} مرتفعة.` : `Risk bands: ${low} low, ${med} medium, ${high} high.` },
+      { agentId: "memo-drafter", line: signed.length > 0 ? (lang === "ar" ? `يصوغ مذكّرة تداول لـ${signed.length} فكرة موقّعة.` : `Drafting trade memo on ${signed.length} signed idea(s).`) : (lang === "ar" ? "بانتظار توقيع المتداول قبل صياغة المذكّرة." : "Awaiting trader signature before drafting the memo.") },
+    ];
+  }, [ideas, signed, lang]);
 
   return (
     <DemoShell
@@ -308,6 +321,11 @@ export default function EnergyTradingDemo() {
               ))}
             </div>
           )}
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="energy-trading-copilot" log={trace} accent="#E97132" />
         </div>
       </section>
     </DemoShell>

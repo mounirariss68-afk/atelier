@@ -20,9 +20,12 @@ import {
   HeartHandshake,
   PiggyBank,
   Sparkles,
+  Network,
 } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import Gauge from "@/components/assessment/Gauge";
+import AgentExplainer from "./AgentExplainer";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 import { marketplaceTools } from "@/data/content";
 import type {
   ValueRealizationInitiative,
@@ -371,6 +374,18 @@ export default function ValueRealizationDemo() {
 
   const editing = items.find((i) => i.id === editingId) ?? null;
 
+  const [explainerOpen, setExplainerOpen] = useState(false);
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const live = items.filter((i) => i.status === "in-production" || i.status === "scaling").length;
+    return [
+      { agentId: "portfolio-watcher", line: lang === "ar" ? `يراقب ${items.length} مبادرة، ${live} منها في الإنتاج أو قيد التوسّع.` : `Watching ${items.length} initiatives; ${live} in production or scaling.` },
+      { agentId: "uvr-scorer", line: lang === "ar" ? `معدّل تحقّق القيمة: ${totals.realizationRate.toFixed(0)}% (${(totals.realized / 1_000_000).toFixed(1)}م درهم محقّقة من ${(totals.expected / 1_000_000).toFixed(1)}م).` : `Unit value-realisation: ${totals.realizationRate.toFixed(0)}% (AED ${(totals.realized / 1_000_000).toFixed(1)}M realised vs AED ${(totals.expected / 1_000_000).toFixed(1)}M expected).` },
+      { agentId: "leakage-detective", line: lang === "ar" ? `قيمة معرّضة (تسرّب): ${(totals.atRisk / 1_000_000).toFixed(1)}م درهم.` : `Value at risk (leakage): AED ${(totals.atRisk / 1_000_000).toFixed(1)}M across pre-production initiatives.` },
+      { agentId: "cfo-narrator", line: lang === "ar" ? `صاغ السرد: عائد الاستثمار ${totals.roi >= 0 ? "+" : ""}${totals.roi.toFixed(0)}% بانتظار توقيع المدير المالي.` : `Drafted CFO narrative: ROI ${totals.roi >= 0 ? "+" : ""}${totals.roi.toFixed(0)}% — awaiting CFO sign-off.` },
+    ];
+  }, [items, totals, lang]);
+
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
@@ -408,6 +423,12 @@ export default function ValueRealizationDemo() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center gap-2 justify-between">
           <p className="text-xs text-gray-500 max-w-xl leading-relaxed">{tStr(COPY.note, lang)}</p>
           <div className="flex items-center gap-2 ms-auto">
+            <button
+              onClick={() => setExplainerOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-3 py-2 rounded-lg border border-gray-200 text-gray-600 hover:border-[#0E2841] hover:text-[#0E2841] transition-colors"
+            >
+              <Network size={14} /> {tStr({ en: "How does this work?", ar: "كيف يعمل هذا؟" }, lang)}
+            </button>
             <button
               onClick={addNew}
               className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-3 py-2 rounded-lg border border-[#0E2841] text-[#0E2841] hover:bg-[#0E2841] hover:text-white transition-colors"
@@ -946,6 +967,18 @@ export default function ValueRealizationDemo() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <section className="py-12 bg-white border-t border-gray-100 print:hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="value-realization" log={trace} accent={ACCENT} />
+        </div>
+      </section>
+
+      <AgentExplainer
+        slug="value-realization"
+        open={explainerOpen}
+        onClose={() => setExplainerOpen(false)}
+      />
     </div>
   );
 }

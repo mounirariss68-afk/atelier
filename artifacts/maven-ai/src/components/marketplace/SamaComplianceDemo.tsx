@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ShieldCheck, RotateCcw, FileText, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 import DemoShell from "./DemoShell";
+import AgentTrace, { type AgentLogEntry } from "./AgentTrace";
 
 type Status = "met" | "partial" | "gap";
 
@@ -157,6 +158,20 @@ export default function SamaComplianceDemo() {
 
   const cycle = (id: string) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, status: cycleStatus(i.status) } : i)));
+
+  const trace: AgentLogEntry[] = useMemo(() => {
+    const met = items.filter((i) => i.status === "met").length;
+    const partial = items.filter((i) => i.status === "partial").length;
+    const gap = items.filter((i) => i.status === "gap").length;
+    const stale = items.filter((i) => i.evidenceFresh > 60).length;
+    return [
+      { agentId: "obligation-mapper", line: lang === "ar" ? `خرّط ${items.length} التزاماً عبر ساما، PDPL، وميثاق الإمارات.` : `Mapped ${items.length} obligations across SAMA, PDPL, and the UAE AI Charter.` },
+      { agentId: "control-monitor", line: lang === "ar" ? `الحالة: ${met} مستوفى، ${partial} جزئي، ${gap} فجوة.` : `Control status: ${met} met, ${partial} partial, ${gap} gap.` },
+      { agentId: "evidence-curator", line: lang === "ar" ? "حدّث سلسلة الأدلة لكل ضابط." : "Refreshed the evidence trail for every control." },
+      { agentId: "degradation-detective", line: stale > 0 ? (lang === "ar" ? `${stale} ضابط بأدلّة أقدم من 60 يوماً.` : `${stale} control(s) carry evidence older than 60 days.`) : (lang === "ar" ? "لا يوجد ضوابط بأدلّة قديمة." : "No controls flagged for stale evidence.") },
+      { agentId: "pack-compiler", line: filter === "all" ? (lang === "ar" ? "جمّع حزمة تفتيش لكل المنظّمين." : "Compiled an inspection pack for all regulators.") : (lang === "ar" ? `قصر الحزمة على ${filter}.` : `Scoped the inspection pack to ${filter}.`) },
+    ];
+  }, [items, filter, lang]);
 
   return (
     <DemoShell
@@ -363,6 +378,11 @@ export default function SamaComplianceDemo() {
               )}
             </p>
           </div>
+        </div>
+      </section>
+      <section className="py-12 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <AgentTrace slug="sama-compliance-agent" log={trace} accent="#0E2841" />
         </div>
       </section>
     </DemoShell>
