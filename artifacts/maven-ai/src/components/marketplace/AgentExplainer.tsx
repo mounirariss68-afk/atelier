@@ -11,7 +11,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
-import { getAgentCast, type AgentKind } from "@workspace/maven-content";
+import { getAgentCast, type AgentKind, type AgentCast } from "@workspace/maven-content";
 
 const KIND_LABEL: Record<AgentKind, { en: string; ar: string }> = {
   planner: { en: "Planner", ar: "مخطّط" },
@@ -175,10 +175,18 @@ export default function AgentExplainer({ slug, open, onClose }: AgentExplainerPr
                   </div>
                 </section>
 
-                {/* Topology diagram (vertical flow) */}
+                {/* Topology diagram — inline SVG graph */}
                 <section>
                   <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-4">
                     {tStr(COPY.topology, lang)}
+                  </p>
+                  <TopologySvg cast={cast} lang={lang} dir={dir} />
+                </section>
+
+                {/* Topology diagram (vertical flow with handoff labels) */}
+                <section>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-4">
+                    {tStr({ en: "Step-by-step handoffs", ar: "التسلّم خطوة بخطوة" }, lang)}
                   </p>
                   <div className="flex flex-col items-stretch gap-1">
                     {cast.flowOrder.map((step, i) => {
@@ -291,5 +299,199 @@ export default function AgentExplainer({ slug, open, onClose }: AgentExplainerPr
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline SVG topology diagram. Renders agent nodes as teal rounded rects and
+// human checkpoints as amber rounded rects, connected with directed arrows
+// that follow `cast.flowOrder` plus any extra `cast.edges` that aren't
+// represented in the linear flow. Mirrors horizontally in RTL so arrows still
+// read "earlier → later" with the eye direction.
+// ---------------------------------------------------------------------------
+function TopologySvg({
+  cast,
+  lang,
+  dir,
+}: {
+  cast: AgentCast;
+  lang: "en" | "ar";
+  dir: "ltr" | "rtl";
+}) {
+  const NODE_W = 150;
+  const NODE_H = 44;
+  const GAP_X = 24;
+  const ROW_H = 90;
+  const PAD_X = 16;
+  const PAD_Y = 18;
+
+  // Lay out flow nodes left-to-right in two rows: agents on the top row,
+  // human checkpoints sit just under the agent that hands off to them.
+  type Node = {
+    key: string;
+    label: string;
+    sub: string;
+    kind: "agent" | "human";
+    x: number;
+    y: number;
+  };
+  const nodes: Node[] = [];
+  const indexByKey = new Map<string, number>();
+
+  let col = 0;
+  for (const step of cast.flowOrder) {
+    if (step.kind === "agent") {
+      const a = cast.agents.find((x) => x.id === step.id);
+      if (!a) continue;
+      const key = `agent:${step.id}`;
+      const x = PAD_X + col * (NODE_W + GAP_X);
+      nodes.push({ key, label: tStr(a.name, lang), sub: tStr(KIND_LABEL[a.kind], lang), kind: "agent", x, y: PAD_Y });
+      indexByKey.set(key, nodes.length - 1);
+      col += 1;
+    } else {
+      const h = cast.humanCheckpoints.find((x) => x.id === step.id);
+      if (!h) continue;
+      const key = `human:${step.id}`;
+      // Hang the human checkpoint under the previous column.
+      const anchor = Math.max(0, col - 1);
+      const x = PAD_X + anchor * (NODE_W + GAP_X) + (NODE_W + GAP_X) / 2 - NODE_W / 2;
+      nodes.push({ key, label: tStr(h.name, lang), sub: tStr({ en: "Human signs", ar: "البشري يوقّع" }, lang), kind: "human", x, y: PAD_Y + ROW_H });
+      indexByKey.set(key, nodes.length - 1);
+    }
+  }
+
+  const totalCols = col;
+  const width = Math.max(NODE_W + PAD_X * 2, PAD_X + totalCols * (NODE_W + GAP_X) - GAP_X + PAD_X);
+  const height = PAD_Y + ROW_H + NODE_H + PAD_Y;
+
+  // Build edges. Sequential flow already encodes the agent chain, so add
+  // arrows between consecutive flow steps plus any explicit cast.edges.
+  type Edge = { from: number; to: number };
+  const edges: Edge[] = [];
+  for (let i = 0; i < nodes.length - 1; i++) edges.push({ from: i, to: i + 1 });
+  for (const e of cast.edges) {
+    const fromIdx = indexByKey.get(`agent:${e.from}`);
+    const toIdx = indexByKey.get(`agent:${e.to}`);
+    if (fromIdx === undefined || toIdx === undefined) continue;
+    if (Math.abs(fromIdx - toIdx) === 1) continue;
+    edges.push({ from: fromIdx, to: toIdx });
+  }
+
+  // RTL: mirror horizontally so the visual handoff still flows with the eye.
+  const flip = dir === "rtl";
+  const mx = (x: number) => (flip ? width - x - NODE_W : x);
+
+  const NAVY = "#0E2841";
+  const TEAL = "#156082";
+  const TEAL_BG = "#E6EEF3";
+  const AMBER = "#F5A623";
+  const AMBER_BG = "#FEF3DC";
+  const GRAY = "#94A3B8";
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg
+        role="img"
+        aria-label={tStr(
+          { en: "Agent topology diagram", ar: "مخطّط طوبولوجيا الوكلاء" },
+          lang,
+        )}
+        viewBox={`0 0 ${width} ${height}`}
+        width="100%"
+        style={{ minWidth: width, height }}
+      >
+        <defs>
+          <marker
+            id="arr-agent"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M0,0 L10,5 L0,10 z" fill={TEAL} />
+          </marker>
+          <marker
+            id="arr-human"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M0,0 L10,5 L0,10 z" fill={AMBER} />
+          </marker>
+        </defs>
+
+        {/* edges */}
+        {edges.map((e, i) => {
+          const a = nodes[e.from];
+          const b = nodes[e.to];
+          if (!a || !b) return null;
+          const isHuman = a.kind === "human" || b.kind === "human";
+          const stroke = isHuman ? AMBER : TEAL;
+          const ax = mx(a.x) + NODE_W / 2;
+          const ay = a.y + NODE_H / 2;
+          const bx = mx(b.x) + NODE_W / 2;
+          const by = b.y + NODE_H / 2;
+          // straightish curve
+          const midY = (ay + by) / 2 + (a.kind !== b.kind ? 16 : 0);
+          const d = `M ${ax} ${ay} C ${ax} ${midY} ${bx} ${midY} ${bx} ${by}`;
+          return (
+            <path
+              key={`e-${i}`}
+              d={d}
+              stroke={stroke}
+              strokeWidth={1.5}
+              fill="none"
+              markerEnd={isHuman ? "url(#arr-human)" : "url(#arr-agent)"}
+              opacity={0.85}
+            />
+          );
+        })}
+
+        {/* nodes */}
+        {nodes.map((n) => {
+          const fill = n.kind === "agent" ? TEAL_BG : AMBER_BG;
+          const stroke = n.kind === "agent" ? TEAL : AMBER;
+          return (
+            <g key={n.key} transform={`translate(${mx(n.x)} ${n.y})`}>
+              <rect
+                width={NODE_W}
+                height={NODE_H}
+                rx={10}
+                ry={10}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={1.5}
+              />
+              <text
+                x={NODE_W / 2}
+                y={18}
+                textAnchor="middle"
+                fontSize={11}
+                fontWeight={700}
+                fill={NAVY}
+                style={{ direction: dir }}
+              >
+                {n.label.length > 22 ? n.label.slice(0, 21) + "…" : n.label}
+              </text>
+              <text
+                x={NODE_W / 2}
+                y={33}
+                textAnchor="middle"
+                fontSize={9}
+                fill={GRAY}
+                style={{ direction: dir, textTransform: "uppercase", letterSpacing: 1 }}
+              >
+                {n.sub}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }

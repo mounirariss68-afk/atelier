@@ -1079,6 +1079,26 @@ assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsight
       );
     }
   }
+
+  // Reverse parity: agentCasts.ts must not contain any slug that does not
+  // resolve to a published marketplace tool. Stops orphan casts drifting
+  // away from the catalogue.
+  const toolSlugSet = new Set(sharedMarketplaceTools.map((t) => t.slug));
+  for (const castSlug of Object.keys(sharedAgentCasts)) {
+    if (!toolSlugSet.has(castSlug)) {
+      throw new Error(
+        `[content.ts] Agent cast slug "${castSlug}" in lib/maven-content/src/agentCasts.ts has no matching marketplace tool. Either add the tool or remove the cast.`,
+      );
+    }
+  }
+  // Live demos in REGISTERED_DEMO_SLUGS must each map to an existing tool.
+  for (const liveSlug of REGISTERED_DEMO_SLUGS) {
+    if (!toolSlugSet.has(liveSlug)) {
+      throw new Error(
+        `[content.ts] REGISTERED_DEMO_SLUGS contains "${liveSlug}" but no marketplace tool with that slug exists.`,
+      );
+    }
+  }
 }
 
 export const platformPartners = [

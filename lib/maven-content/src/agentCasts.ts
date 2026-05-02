@@ -1168,6 +1168,31 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
 };
 
 /** Returns the cast for a tool slug, or undefined if none registered. */
+// ---------------------------------------------------------------------------
+// Architectural note
+//
+// Agent casts live in their own module (this file), keyed by marketplace tool
+// slug, instead of being embedded into `MarketplaceToolEntry` in
+// `knowledge.ts`. This was a deliberate decision:
+//
+//   1. `knowledge.ts` is consumed by both the marketing site and the chat
+//      assistant; keeping the heavyweight cast metadata (agents, edges,
+//      flowOrder, human checkpoints, rationale) in a separate module keeps the
+//      tool catalogue itself lean and easy to scan.
+//   2. The casts are validated *against* the tool catalogue in
+//      `artifacts/maven-ai/src/data/content.ts` — every tool slug must have a
+//      cast (forward parity) and every cast slug must resolve to a tool
+//      (reverse parity). The two files are therefore coupled at validation
+//      time even though they are physically separate.
+//   3. The chat route imports `getAgentCast(slug)` to enrich the system
+//      prompt, so the cast metadata is reachable from both the React app and
+//      the API server without round-tripping through the catalogue.
+//
+// If a future refactor wants `agentCast` directly on `MarketplaceToolEntry`,
+// keep the validator parity rules and the `getAgentCast(slug)` accessor — the
+// rest of the app only depends on those two contracts.
+// ---------------------------------------------------------------------------
+
 export function getAgentCast(slug: string): AgentCast | undefined {
   return marketplaceAgentCasts[slug];
 }
