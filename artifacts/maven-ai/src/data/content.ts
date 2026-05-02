@@ -613,9 +613,9 @@ const SOURCES = {
     url: "https://www.aramco.com/en/what-we-do/energy-innovation/digitalization/building-the-ai-future",
   },
   aramcoGroq: {
-    name: "OilPrice — Aramco Deepens Push Into AI and Advanced Technologies",
-    year: 2024,
-    url: "https://oilprice.com/Energy/Energy-General/Aramco-Deepens-Push-Into-AI-and-Advanced-Technologies.html",
+    name: "Groq — Saudi Arabia announces $1.5B expansion to fuel AI-powered economy with Groq (press release)",
+    year: 2025,
+    url: "https://groq.com/newsroom/saudi-arabia-announces-1-5-billion-expansion-to-fuel-ai-powered-economy-with-ai-tech-leader-groq",
   },
   mckinseyRetailPersonalization: {
     name: "McKinsey — The state of retail personalization",
@@ -633,14 +633,19 @@ const SOURCES = {
     url: "https://www.pif.gov.sa/en/our-investments/giga-projects/",
   },
   saudiEvVision: {
-    name: "Arab News — Saudi Arabia's road to 30% EVs by 2030",
-    year: 2024,
-    url: "https://www.arabnews.com/node/2607730/business-economy",
+    name: "Bloomberg — Saudi Arabia to Start Electric-Vehicle Push in Capital Riyadh",
+    year: 2021,
+    url: "https://www.bloomberg.com/news/articles/2021-10-23/saudi-arabia-to-start-electric-vehicle-push-in-capital-riyadh",
   },
-  setupSaudiEv: {
-    name: "Setup in Saudi — Vision 2030 EV progress",
+  saudiEvLucid: {
+    name: "Arab News — Lucid becomes first global automotive manufacturer to join 'Made in Saudi' program",
     year: 2024,
-    url: "https://www.setupinsaudi.com/en/saudi-vision-2030-progress-in-ev",
+    url: "https://www.arabnews.com/node/2585574/business-economy",
+  },
+  saudiEvCeer: {
+    name: "Arab News — Saudi Arabia's EV dreams transitioning to reality, say CEER and Lucid officials",
+    year: 2024,
+    url: "https://www.arabnews.com/node/2455031/business-economy",
   },
 } satisfies Record<string, IndustrySource>;
 
@@ -725,7 +730,6 @@ export const industries = [
       "Regulatory reporting automation faces challenges from fragmented data systems and incomplete data lineage",
     ],
     approach: "Maven AI's financial services practice is anchored in two capabilities: regulatory-grade AI governance (aligned to SAMA, CBUAE, and PDPL requirements), and data platform modernization that makes AI deployment technically feasible. Our governance work is designed to meet regulator expectations on the first review — not the third.",
-    // Note: original copy here referenced delivered governance engagements that have "passed regulatory examination". Removed — Maven AI is a new firm and that claim is not yet defensible.
     caseVignette: {
       title: "AI Governance Readiness for a Regional Bank",
       framing: "How agentic AI and disciplined governance can deliver value for a regulated bank — illustrative scenario, not a delivered Maven AI engagement.",
@@ -858,9 +862,9 @@ export const industries = [
       outcome: "Automotive aftermarket AI deployments globally report material increases in service revenue per vehicle and parts-forecast accuracy gains in the high-teens to mid-20s percent range. For GCC groups, the platform's payoff depends on whether it can serve the multi-brand, multi-region dealer network without forcing a single-vendor lock-in.",
     },
     stats: [
-      { value: "$50B+", label: "total committed Saudi investment in EV manufacturing and infrastructure", source: SOURCES.setupSaudiEv },
-      { value: "500K", label: "annual EV production capacity Saudi Arabia is targeting by 2030", source: SOURCES.setupSaudiEv },
-      { value: "$20B", label: "targeted EV-sector contribution to Saudi GDP by 2030", source: SOURCES.setupSaudiEv },
+      { value: "$50B+", label: "Saudi Arabia's stated commitment to EV manufacturing and infrastructure under Vision 2030", source: SOURCES.saudiEvLucid },
+      { value: "500K", label: "annual EV production capacity Saudi Arabia is targeting by 2030 across Lucid, Ceer and joint ventures", source: SOURCES.saudiEvCeer },
+      { value: "$20B", label: "targeted EV-sector contribution to Saudi GDP by 2030", source: SOURCES.saudiEvLucid },
     ],
   },
 ];
