@@ -19,7 +19,7 @@ export default function Logo({ size = "md", className = "" }: LogoProps) {
       src={logoSrc}
       alt="Maven AI"
       height={h}
-      style={{ height: h, width: "auto" }}
+      style={{ height: h, width: "auto", mixBlendMode: "screen" }}
       className={`select-none ${className}`}
       draggable={false}
     />
