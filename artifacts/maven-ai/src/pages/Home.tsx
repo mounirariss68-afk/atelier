@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote, ExternalLink } from "lucide-react";
 import { stats, services, insights, industries, SITE_SOURCES } from "@/data/content";
 import PartnerLogos from "@/components/PartnerLogos";
-import mounirHeadshot from "@/assets/mounir-aris.png";
+
+const mounirHeadshot = "/images/founder-mounir.png";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
