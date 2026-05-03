@@ -89,10 +89,8 @@ export default function About() {
             </div>
             <div className="space-y-5">
               {[
-                { num: "2025", title: "Founded", desc: "Maven AI incorporated as a dedicated AI delivery practice, sister company to Maven Insights." },
                 { num: "200+", title: "Consultants available", desc: "Immediate access to Maven Insights' bench of advisory, PMO, change management, and domain specialists." },
                 { num: "4", title: "GCC offices", desc: "Day-one presence in Dubai, Riyadh, Abu Dhabi, and Doha — the markets where GCC AI is being built." },
-                { num: "4", title: "Founding partners", desc: "Combined 60+ years of consulting, engineering, and AI delivery in GCC and globally." },
               ].map((item, i) => (
                 <motion.div
                   key={i}
