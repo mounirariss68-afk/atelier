@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useRoute } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +16,7 @@ import InsightDetail from "@/pages/InsightDetail";
 import Industries from "@/pages/Industries";
 import Marketplace from "@/pages/Marketplace";
 import MarketplaceDetail from "@/pages/MarketplaceDetail";
+import Demo from "@/pages/Demo";
 import Contact from "@/pages/Contact";
 import AssessmentsIndex from "@/pages/assessments/AssessmentsIndex";
 import AssessmentDetail from "@/pages/assessments/AssessmentDetail";
@@ -25,7 +26,25 @@ import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
+/**
+ * The /demo/:slug route is mounted as a full-screen, chrome-free
+ * experience: no Navbar, Footer, or ChatWidget. Everything else
+ * renders inside the standard marketing chrome.
+ */
 function Router() {
+  const [isDemo] = useRoute("/demo/:slug");
+
+  if (isDemo) {
+    return (
+      <>
+        <ScrollToTop />
+        <Switch>
+          <Route path="/demo/:slug" component={Demo} />
+        </Switch>
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <ScrollToTop />

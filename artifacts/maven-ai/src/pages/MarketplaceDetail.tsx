@@ -1,4 +1,3 @@
-import type React from "react";
 import { Link, useParams } from "wouter";
 import { motion } from "framer-motion";
 import {
@@ -18,6 +17,8 @@ import {
   Headphones,
   Database,
   BookOpen,
+  Play,
+  Network,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -27,62 +28,12 @@ import {
   industriesIndex,
   servicesIndex,
   assessmentsIndex,
+  marketplaceAgentCasts,
 } from "@/data/content";
 import { useLang, tStr } from "@/lib/lang";
 import NotFound from "./not-found";
-import ValueRealizationDemo from "@/components/marketplace/ValueRealizationDemo";
-import ProgrammeHealthDemo from "@/components/marketplace/ProgrammeHealthDemo";
-import CitizenServicesDemo from "@/components/marketplace/CitizenServicesDemo";
-import ProcurementIntelligenceDemo from "@/components/marketplace/ProcurementIntelligenceDemo";
-import NetworkOpsDemo from "@/components/marketplace/NetworkOpsDemo";
-import SamaComplianceDemo from "@/components/marketplace/SamaComplianceDemo";
-import EnergyTradingDemo from "@/components/marketplace/EnergyTradingDemo";
-import RetailDemandDemo from "@/components/marketplace/RetailDemandDemo";
-import HospitalityRevenueDemo from "@/components/marketplace/HospitalityRevenueDemo";
-import EvBatteryHealthDemo from "@/components/marketplace/EvBatteryHealthDemo";
-import FpaRollingForecastDemo from "@/components/marketplace/FpaRollingForecastDemo";
-import CustomerCareDemo from "@/components/marketplace/CustomerCareDemo";
-import SovereignDataWorkbenchDemo from "@/components/marketplace/SovereignDataWorkbenchDemo";
-import KnowledgeMemoryDemo from "@/components/marketplace/KnowledgeMemoryDemo";
-import AgentExplainer from "@/components/marketplace/AgentExplainer";
-import { useState } from "react";
-import { Network } from "lucide-react";
-import { REGISTERED_DEMO_SLUGS } from "@/data/registeredDemoSlugs";
-
-const DEMOS: Record<string, React.ComponentType> = {
-  "value-realization": ValueRealizationDemo,
-  "programme-health-copilot": ProgrammeHealthDemo,
-  "citizen-services-agent": CitizenServicesDemo,
-  "procurement-intelligence": ProcurementIntelligenceDemo,
-  "network-ops-agent": NetworkOpsDemo,
-  "sama-compliance-agent": SamaComplianceDemo,
-  "energy-trading-copilot": EnergyTradingDemo,
-  "retail-demand-forecaster": RetailDemandDemo,
-  "hospitality-revenue-optimizer": HospitalityRevenueDemo,
-  "ev-battery-health-agent": EvBatteryHealthDemo,
-  "fpa-rolling-forecast": FpaRollingForecastDemo,
-  "customer-care-multi-agent": CustomerCareDemo,
-  "sovereign-data-workbench": SovereignDataWorkbenchDemo,
-  "knowledge-memory-agent": KnowledgeMemoryDemo,
-};
-
-// Drift guard: enforce that the DEMOS dispatch map's keys exactly match the
-// canonical REGISTERED_DEMO_SLUGS list. If they ever diverge (a component is
-// added to one without the other), the app fails fast at module load.
-{
-  const dispatchKeys = Object.keys(DEMOS).sort();
-  const registered = [...REGISTERED_DEMO_SLUGS].sort();
-  const same =
-    dispatchKeys.length === registered.length &&
-    dispatchKeys.every((k, i) => k === registered[i]);
-  if (!same) {
-    throw new Error(
-      `[MarketplaceDetail] DEMOS dispatch map keys do not match REGISTERED_DEMO_SLUGS.\n` +
-        `  DEMOS: ${dispatchKeys.join(", ")}\n` +
-        `  REGISTERED: ${registered.join(", ")}`,
-    );
-  }
-}
+import AgentTopologyDiagram from "@/components/marketplace/AgentTopologyDiagram";
+import { getScenario } from "@/lib/sim/scenarios";
 
 const ICONS: Record<string, LucideIcon> = {
   TrendingUp,
@@ -108,28 +59,29 @@ const COPY = {
   classLabel: { en: "Class", ar: "الفئة" },
   industriesLabel: { en: "Industries", ar: "القطاعات" },
   horizontalsLabel: { en: "Horizontals", ar: "الأفقي" },
-  pitch: { en: "The pitch", ar: "الفكرة" },
   what: { en: "What it owns and how it works", ar: "ما يملكه وكيف يعمل" },
+  topologyTitle: { en: "Agent topology", ar: "طوبولوجيا الوكلاء" },
+  topologyKicker: {
+    en: "An orchestrator coordinates a small cast of specialists. Human checkpoints gate every irreversible action.",
+    ar: "منسّق يقود فريقاً صغيراً من المتخصّصين. تتحكّم نقاط الموافقة البشرية في كل إجراء لا رجعة فيه.",
+  },
   screensTitle: { en: "Demo screens", ar: "شاشات العرض" },
   dataTitle: { en: "Data model", ar: "نموذج البيانات" },
   inputs: { en: "Inputs", ar: "المدخلات" },
   internal: { en: "Internal IP", ar: "الملكية الفكرية الداخلية" },
   outputs: { en: "Outputs", ar: "المخرجات" },
-  ctaPartner: {
-    en: "Talk to a partner about this tool",
-    ar: "تحدّث مع شريك حول هذه الأداة",
+  launchTitle: { en: "Launch the interactive demo", ar: "ابدأ العرض التفاعلي" },
+  launchBody: {
+    en: "Watch the orchestrator and its specialist agents run a deterministic scenario end-to-end — including the human checkpoint, the audit log, and the live KPIs. The demo opens in its own dedicated workspace so the marketing chrome stays out of the way.",
+    ar: "شاهد المنسّق ومعاوِنيه يشغّلون سيناريو حتمياً من البداية للنهاية — بما في ذلك نقطة الموافقة البشرية وسجل التدقيق ومؤشرات الأداء المباشرة. يفتح العرض في مساحته المخصّصة بعيداً عن واجهة التسويق.",
   },
-  ctaService: {
-    en: "Related Maven AI service",
-    ar: "خدمة Maven AI المرتبطة",
-  },
-  ctaAssessment: {
-    en: "Run the related diagnostic",
-    ar: "شغّل التشخيص المرتبط",
-  },
+  launchCta: { en: "Launch demo", ar: "ابدأ العرض" },
+  ctaPartner: { en: "Talk to a partner about this tool", ar: "تحدّث مع شريك حول هذه الأداة" },
+  ctaService: { en: "Related Maven AI service", ar: "خدمة Maven AI المرتبطة" },
+  ctaAssessment: { en: "Run the related diagnostic", ar: "شغّل التشخيص المرتبط" },
   comingSoonNote: {
-    en: "This tool's interactive demo is in development. The detail below is the same brief our delivery teams use when scoping it inside an engagement — the screens are described in plain English so you can pressure-test the design before we build it for you.",
-    ar: "العرض التفاعلي لهذه الأداة قيد التطوير. التفاصيل أدناه هي الموجز نفسه الذي تستخدمه فرق التسليم عند تحديد نطاقها داخل الارتباط — تُوصف الشاشات بلغة واضحة لتختبر التصميم قبل أن نبنيه لك.",
+    en: "An interactive scenario for this tool is being scripted as part of the agentic marketplace redesign. The detail below — agent topology, data model, screens — is the canonical brief our delivery teams use when scoping it.",
+    ar: "يجري الآن إعداد سيناريو تفاعلي لهذه الأداة ضمن إعادة تصميم السوق الوكيلي. التفاصيل أدناه — طوبولوجيا الوكلاء ونموذج البيانات والشاشات — هي الموجز الرسمي الذي تستخدمه فرق التسليم عند تحديد النطاق.",
   },
 };
 
@@ -140,11 +92,6 @@ export default function MarketplaceDetail() {
   const { lang, dir } = useLang();
 
   if (!tool) return <NotFound />;
-
-  const Demo = DEMOS[tool.slug];
-  if (Demo) {
-    return <Demo />;
-  }
 
   const Icon = ICONS[tool.icon] ?? Sparkles;
   const cls = marketplaceClasses.find((c) => c.id === tool.class);
@@ -161,7 +108,8 @@ export default function MarketplaceDetail() {
     ? assessmentsIndex.find((a) => a.slug === tool.relatedAssessment)
     : undefined;
   const isLive = tool.status === "live";
-  const [explainerOpen, setExplainerOpen] = useState(false);
+  const cast = marketplaceAgentCasts[tool.slug];
+  const hasScenario = !!getScenario(tool.slug);
 
   return (
     <div className="pt-20" dir={dir}>
@@ -207,16 +155,19 @@ export default function MarketplaceDetail() {
             </div>
           </div>
 
-          <p className="text-lg text-gray-200 max-w-3xl leading-relaxed">{tStr(tool.pitch, lang)}</p>
+          <p className="text-lg text-gray-200 max-w-3xl leading-relaxed">
+            {tStr(tool.pitch, lang)}
+          </p>
 
-          <button
-            type="button"
-            onClick={() => setExplainerOpen(true)}
-            className="mt-5 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full bg-[#F5A623]/15 text-[#F5A623] hover:bg-[#F5A623]/25 transition-colors"
-          >
-            <Network size={14} />
-            {tStr({ en: "How does this work?", ar: "كيف يعمل؟" }, lang)}
-          </button>
+          {hasScenario && (
+            <Link
+              href={`/demo/${tool.slug}`}
+              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-sm hover:bg-[#FFC15E] transition-colors"
+            >
+              <Play size={14} fill="currentColor" />
+              {tStr(COPY.launchCta, lang)}
+            </Link>
+          )}
 
           <div className="grid sm:grid-cols-3 gap-4 mt-8 pt-8 border-t border-white/10">
             <div>
@@ -247,8 +198,8 @@ export default function MarketplaceDetail() {
         </div>
       </section>
 
-      {/* Coming soon banner */}
-      {!isLive && (
+      {/* Coming-soon notice (no scenario yet) */}
+      {!hasScenario && (
         <section className="bg-[#FFFAF0] border-b border-amber-100 py-5">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <p className="text-sm text-amber-900 leading-relaxed max-w-4xl">
@@ -261,7 +212,7 @@ export default function MarketplaceDetail() {
         </section>
       )}
 
-      {/* Long description */}
+      {/* Long description / problem & solution */}
       <section className="py-14 bg-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
@@ -276,6 +227,28 @@ export default function MarketplaceDetail() {
           </div>
         </div>
       </section>
+
+      {/* Agent topology */}
+      {cast && (
+        <section className="py-14 bg-[#091828]">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-start gap-3 mb-5">
+              <div className="w-9 h-9 rounded-lg bg-[#F5A623]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Network size={16} className="text-[#F5A623]" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+                  {tStr(COPY.topologyTitle, lang)}
+                </p>
+                <p className="text-base text-gray-200 leading-relaxed max-w-3xl">
+                  {tStr(COPY.topologyKicker, lang)}
+                </p>
+              </div>
+            </div>
+            <AgentTopologyDiagram cast={cast} accent={tool.accent} />
+          </div>
+        </section>
+      )}
 
       {/* Demo screens */}
       <section className="py-14 bg-[#F8F9FA] border-y border-gray-100">
@@ -358,18 +331,42 @@ export default function MarketplaceDetail() {
         </div>
       </section>
 
-      {/* CTAs */}
-      <section className="py-16 bg-gradient-to-br from-[#0E2841] to-[#156082]">
+      {/* Launch CTA */}
+      {hasScenario && (
+        <section className="py-16 bg-gradient-to-br from-[#0E2841] to-[#156082]">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-3">
+              {tStr({ en: "Try it now", ar: "جرّبها الآن" }, lang)}
+            </p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-4">
+              {tStr(COPY.launchTitle, lang)}
+            </h2>
+            <p className="text-base text-gray-200 leading-relaxed max-w-2xl mx-auto mb-6">
+              {tStr(COPY.launchBody, lang)}
+            </p>
+            <Link
+              href={`/demo/${tool.slug}`}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-base hover:bg-[#FFC15E] transition-colors"
+            >
+              <Play size={16} fill="currentColor" />
+              {tStr(COPY.launchCta, lang)}
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {/* Service / assessment CTAs */}
+      <section className="py-16 bg-white border-t border-gray-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-2 gap-5">
           <Link
             href={`/contact?topic=${tool.slug}`}
-            className="group p-6 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-colors flex flex-col gap-2"
+            className="group p-6 bg-[#F8F9FA] hover:bg-[#EAEEF1] border border-gray-200 rounded-2xl transition-colors flex flex-col gap-2"
           >
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
               {tStr({ en: "Engage", ar: "ابدأ" }, lang)}
             </span>
-            <span className="text-lg font-bold text-white">{tStr(COPY.ctaPartner, lang)}</span>
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#F5A623] mt-2">
+            <span className="text-lg font-bold text-[#0E2841]">{tStr(COPY.ctaPartner, lang)}</span>
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#156082] mt-2">
               {tStr({ en: "Open contact form", ar: "افتح نموذج التواصل" }, lang)}
               <ArrowRight size={14} className="rtl:rotate-180" />
             </span>
@@ -378,13 +375,13 @@ export default function MarketplaceDetail() {
           {relatedService ? (
             <Link
               href={`/services/${relatedService.slug}`}
-              className="group p-6 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-colors flex flex-col gap-2"
+              className="group p-6 bg-[#F8F9FA] hover:bg-[#EAEEF1] border border-gray-200 rounded-2xl transition-colors flex flex-col gap-2"
             >
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
                 {tStr(COPY.ctaService, lang)}
               </span>
-              <span className="text-lg font-bold text-white">{relatedService.title}</span>
-              <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#F5A623] mt-2">
+              <span className="text-lg font-bold text-[#0E2841]">{relatedService.title}</span>
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#156082] mt-2">
                 {tStr({ en: "Read service brief", ar: "اقرأ موجز الخدمة" }, lang)}
                 <ArrowRight size={14} className="rtl:rotate-180" />
               </span>
@@ -392,12 +389,12 @@ export default function MarketplaceDetail() {
           ) : (
             <Link
               href="/services"
-              className="group p-6 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-colors flex flex-col gap-2"
+              className="group p-6 bg-[#F8F9FA] hover:bg-[#EAEEF1] border border-gray-200 rounded-2xl transition-colors flex flex-col gap-2"
             >
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
                 {tStr({ en: "Services", ar: "الخدمات" }, lang)}
               </span>
-              <span className="text-lg font-bold text-white">
+              <span className="text-lg font-bold text-[#0E2841]">
                 {tStr({ en: "Explore Maven AI services", ar: "استعرض خدمات Maven AI" }, lang)}
               </span>
             </Link>
@@ -406,7 +403,7 @@ export default function MarketplaceDetail() {
           {relatedAssessment && (
             <Link
               href={`/assessments/${relatedAssessment.slug}`}
-              className="group p-6 bg-[#F5A623] hover:bg-[#d4622a] rounded-2xl transition-colors flex flex-col gap-2 sm:col-span-2"
+              className="group p-6 bg-[#F5A623] hover:bg-[#FFC15E] rounded-2xl transition-colors flex flex-col gap-2 sm:col-span-2"
             >
               <span className="text-[10px] font-bold uppercase tracking-widest text-white/80">
                 {tStr(COPY.ctaAssessment, lang)}
@@ -422,12 +419,6 @@ export default function MarketplaceDetail() {
           )}
         </div>
       </section>
-
-      <AgentExplainer
-        slug={tool.slug}
-        open={explainerOpen}
-        onClose={() => setExplainerOpen(false)}
-      />
     </div>
   );
 }
