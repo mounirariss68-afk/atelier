@@ -1,5 +1,6 @@
-import { Brain, Wrench, GitBranch, ArrowRight, UserCheck, CheckCircle2, Sparkles } from "lucide-react";
+import { Brain, Wrench, GitBranch, ArrowRight, UserCheck, CheckCircle2, Sparkles, Download } from "lucide-react";
 import type { Scenario, SimEvent, SimState } from "@/lib/sim/types";
+import type { EngineApi } from "@/lib/sim/engine";
 import { useLang, tStr } from "@/lib/lang";
 
 const ICON_FOR = {
@@ -18,15 +19,44 @@ const ICON_FOR = {
 export default function AuditLogTab({
   scenario,
   state,
+  engine,
 }: {
   scenario: Scenario;
   state: SimState;
+  engine?: EngineApi;
 }) {
   const { lang } = useLang();
+
+  function downloadAudit() {
+    if (!engine) return;
+    const json = engine.exportAudit();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${scenario.slug}-audit-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  const downloadButton = engine ? (
+    <button
+      type="button"
+      onClick={downloadAudit}
+      disabled={state.trace.length === 0}
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0E2841] text-white text-xs font-bold hover:bg-[#156082] disabled:opacity-40"
+    >
+      <Download size={12} />
+      {tStr({ en: "Download audit trail (JSON)", ar: "تحميل سجل التدقيق (JSON)" }, lang)}
+    </button>
+  ) : null;
+
   if (state.trace.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-500">
-        <p className="text-sm">
+        <p className="text-sm mb-4">
           {tStr(
             {
               en: "Audit log is empty. Press Play — every agent action gets a timestamped, citation-ready entry here.",
@@ -35,6 +65,7 @@ export default function AuditLogTab({
             lang,
           )}
         </p>
+        {downloadButton}
       </div>
     );
   }
@@ -45,6 +76,15 @@ export default function AuditLogTab({
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
+        <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+          {tStr(
+            { en: `${state.trace.length} entries`, ar: `${state.trace.length} إدخالاً` },
+            lang,
+          )}
+        </p>
+        {downloadButton}
+      </div>
       <div className="max-h-[640px] overflow-y-auto divide-y divide-gray-100">
         {state.trace.map((ev, i) => (
           <Row

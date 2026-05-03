@@ -19,6 +19,8 @@ import {
   BookOpen,
   Play,
   Network,
+  Zap,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -83,6 +85,20 @@ const COPY = {
     en: "An interactive scenario for this tool is being scripted as part of the agentic marketplace redesign. The detail below — agent topology, data model, screens — is the canonical brief our delivery teams use when scoping it.",
     ar: "يجري الآن إعداد سيناريو تفاعلي لهذه الأداة ضمن إعادة تصميم السوق الوكيلي. التفاصيل أدناه — طوبولوجيا الوكلاء ونموذج البيانات والشاشات — هي الموجز الرسمي الذي تستخدمه فرق التسليم عند تحديد النطاق.",
   },
+  workflowsTitle: { en: "Autonomous workflows", ar: "سير العمل المستقل" },
+  workflowsKicker: {
+    en: "Each workflow is a scripted run the orchestrator can launch end-to-end. The cast of agents, the trigger, and the human checkpoint are spelled out so the buyer knows exactly what they are approving.",
+    ar: "كل سير عمل هو تشغيل مكتوب يمكن للمنسّق إطلاقه من البداية إلى النهاية. فريق الوكلاء والمحفّز ونقطة الموافقة البشرية موضّحون كي يعرف المشتري بالضبط ما يوافق عليه.",
+  },
+  workflowTrigger: { en: "Trigger", ar: "المحفّز" },
+  workflowSteps: { en: "Steps", ar: "الخطوات" },
+  kpisTitle: { en: "KPI impact", ar: "أثر مؤشرات الأداء" },
+  kpisKicker: {
+    en: "Baseline metrics the demo's seeded scenario moves. Sources are cited so the CFO can trace every number.",
+    ar: "المؤشرات الأساسية التي يحرّكها سيناريو العرض. المصادر موثّقة كي يستطيع المدير المالي تتبّع كل رقم.",
+  },
+  kpiBaseline: { en: "Baseline", ar: "خط الأساس" },
+  kpiSource: { en: "Source", ar: "المصدر" },
 };
 
 export default function MarketplaceDetail() {
@@ -109,7 +125,10 @@ export default function MarketplaceDetail() {
     : undefined;
   const isLive = tool.status === "live";
   const cast = marketplaceAgentCasts[tool.slug];
-  const hasScenario = !!getScenario(tool.slug);
+  const scenario = getScenario(tool.slug);
+  const hasScenario = !!scenario;
+  const agentNameById = (id: string) =>
+    scenario?.agents.find((a) => a.id === id)?.name ?? { en: id, ar: id };
 
   return (
     <div className="pt-20" dir={dir}>
@@ -290,6 +309,137 @@ export default function MarketplaceDetail() {
           </div>
         </div>
       </section>
+
+      {/* Autonomous workflows */}
+      {scenario && scenario.workflows.length > 0 && (
+        <section className="py-14 bg-white border-t border-gray-100">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-start gap-3 mb-8">
+              <div className="w-9 h-9 rounded-lg bg-[#156082]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Zap size={16} className="text-[#156082]" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#156082] mb-1">
+                  {tStr(COPY.workflowsTitle, lang)}
+                </p>
+                <p className="text-base text-gray-700 leading-relaxed max-w-3xl">
+                  {tStr(COPY.workflowsKicker, lang)}
+                </p>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-5">
+              {scenario.workflows.map((wf) => (
+                <div
+                  key={wf.id}
+                  className="border border-gray-200 rounded-2xl p-6 bg-[#FBFCFD] flex flex-col gap-4"
+                >
+                  <div>
+                    <h3 className="text-lg font-bold text-[#0E2841] mb-1">
+                      {tStr(wf.name, lang)}
+                    </h3>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      {tStr(wf.description, lang)}
+                    </p>
+                  </div>
+                  <div className="text-xs text-gray-700 bg-white border border-gray-100 rounded-lg px-3 py-2">
+                    <span className="font-bold uppercase tracking-widest text-[10px] text-[#F5A623] me-2">
+                      {tStr(COPY.workflowTrigger, lang)}:
+                    </span>
+                    {tStr(wf.trigger, lang)}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                      {tStr(COPY.workflowSteps, lang)}
+                    </p>
+                    <ol className="space-y-2">
+                      {wf.steps.map((s, i) => (
+                        <li key={i} className="flex gap-3 items-start">
+                          <span
+                            className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5"
+                            style={{ background: tool.accent }}
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="text-sm text-gray-800 leading-snug">
+                            <span className="font-bold text-[#0E2841]">
+                              {tStr(agentNameById(s.agentId), lang)}
+                            </span>{" "}
+                            — {tStr(s.label, lang)}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* KPI impact */}
+      {scenario && scenario.kpis.length > 0 && (
+        <section className="py-14 bg-[#F8F9FA] border-y border-gray-100">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-start gap-3 mb-8">
+              <div className="w-9 h-9 rounded-lg bg-[#196B24]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Target size={16} className="text-[#196B24]" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#196B24] mb-1">
+                  {tStr(COPY.kpisTitle, lang)}
+                </p>
+                <p className="text-base text-gray-700 leading-relaxed max-w-3xl">
+                  {tStr(COPY.kpisKicker, lang)}
+                </p>
+              </div>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-[#0E2841] text-white">
+                  <tr>
+                    <th className="text-start rtl:text-right px-5 py-3 font-bold text-xs uppercase tracking-widest">
+                      {tStr({ en: "Metric", ar: "المؤشر" }, lang)}
+                    </th>
+                    <th className="text-start rtl:text-right px-5 py-3 font-bold text-xs uppercase tracking-widest">
+                      {tStr(COPY.kpiBaseline, lang)}
+                    </th>
+                    <th className="text-start rtl:text-right px-5 py-3 font-bold text-xs uppercase tracking-widest">
+                      {tStr(COPY.kpiSource, lang)}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scenario.kpis.map((k, i) => (
+                    <tr
+                      key={k.id}
+                      className={i % 2 === 0 ? "bg-white" : "bg-[#FBFCFD]"}
+                    >
+                      <td className="px-5 py-4 font-semibold text-[#0E2841] align-top">
+                        {tStr(k.label, lang)}
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        <span
+                          className="inline-block px-2.5 py-1 rounded-md font-bold text-sm"
+                          style={{
+                            backgroundColor: tool.accent + "1A",
+                            color: tool.accent,
+                          }}
+                        >
+                          {k.initial}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-xs text-gray-600 italic align-top">
+                        {k.source ? tStr(k.source, lang) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Data model */}
       <section className="py-14 bg-white">

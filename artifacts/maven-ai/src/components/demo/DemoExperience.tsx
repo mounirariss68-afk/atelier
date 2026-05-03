@@ -15,6 +15,7 @@ import {
   Target,
   ScrollText,
   Gauge,
+  Radio,
 } from "lucide-react";
 import { useScenarioEngine } from "@/lib/sim/engine";
 import { useLang, tStr } from "@/lib/lang";
@@ -194,7 +195,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
               {tab === "workflows" && <WorkflowsTab scenario={scenario} />}
               {tab === "workspace" && <WorkspaceTab state={state} />}
               {tab === "kpis" && <KpisTab state={state} />}
-              {tab === "audit" && <AuditLogTab scenario={scenario} state={state} />}
+              {tab === "audit" && <AuditLogTab scenario={scenario} state={state} engine={engine} />}
             </div>
           </div>
         </div>
@@ -241,6 +242,38 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
         >
           <RotateCcw size={14} />
           {tStr({ en: "Rewind", ar: "تراجع" }, lang)}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const orchestrator =
+              scenario.agents.find((a) => a.kind === "orchestrator") ?? scenario.agents[0];
+            engine.injectEvent({
+              id: `inject-${state.trace.length + 1}`,
+              kind: "think",
+              agentId: orchestrator?.id,
+              label: {
+                en: "Inbound signal — re-evaluating priorities",
+                ar: "إشارة واردة — إعادة تقييم الأولويات",
+              },
+              detail: {
+                en: "User injected a live event. The orchestrator absorbs it into its working context without restarting the run.",
+                ar: "أدخل المستخدم حدثاً مباشراً. يستوعبه المنسّق ضمن السياق العامل دون إعادة التشغيل.",
+              },
+            });
+          }}
+          disabled={!!state.pendingCheckpoint || state.status === "complete"}
+          className="px-3 py-2 rounded-lg border border-[#F5A623]/50 text-[#5A3000] bg-[#F5A623]/10 hover:bg-[#F5A623]/20 text-sm inline-flex items-center gap-2 disabled:opacity-40"
+          title={tStr(
+            {
+              en: "Inject a live event into the running cockpit",
+              ar: "أدخل حدثاً مباشراً إلى قمرة التشغيل",
+            },
+            lang,
+          )}
+        >
+          <Radio size={14} />
+          {tStr({ en: "Inject event", ar: "أدخل حدثاً" }, lang)}
         </button>
         <div className="flex-1" />
         <p className="text-xs text-gray-500">

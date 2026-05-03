@@ -103,6 +103,14 @@ export interface EngineApi {
   rewindOne: () => void;
   setSpeed: (ms: number) => void;
   resolveCheckpoint: (optionId: string) => void;
+  /** Inject an ad-hoc event into the running trace (e.g. an inbound
+   * inbox item or a "what if" think step). The event is applied
+   * immediately like any scripted event. Use to demonstrate that the
+   * orchestrator reacts to live signals, not just pre-baked timelines. */
+  injectEvent: (ev: SimEvent) => void;
+  /** Serialize the current trace + decisions as a downloadable JSON
+   * audit trail. Returns a stable, citation-ready snapshot. */
+  exportAudit: () => string;
 }
 
 export function useScenarioEngine(scenario: Scenario): EngineApi {
@@ -179,6 +187,33 @@ export function useScenarioEngine(scenario: Scenario): EngineApi {
     setState((s) => ({ ...s, speedMs: Math.max(200, Math.min(5000, ms)) }));
   }, []);
 
+  const injectEvent = useCallback((ev: SimEvent) => {
+    setState((prev) => {
+      if (prev.pendingCheckpoint) return prev;
+      const after = applyEvent(prev, scenario, ev);
+      // Injected events do not advance the scripted cursor — they sit
+      // alongside the timeline so Play resumes scripted playback from
+      // wherever it left off.
+      return after;
+    });
+  }, [scenario]);
+
+  const exportAudit = useCallback((): string => {
+    const snapshot = {
+      scenario: {
+        slug: scenario.slug,
+        toolTitle: scenario.toolTitle,
+      },
+      generatedAt: new Date().toISOString(),
+      status: stateRef.current.status,
+      cursor: stateRef.current.cursor,
+      decisions: stateRef.current.decisions,
+      trace: stateRef.current.trace,
+      kpis: stateRef.current.kpis,
+    };
+    return JSON.stringify(snapshot, null, 2);
+  }, [scenario]);
+
   const resolveCheckpoint = useCallback((optionId: string) => {
     setState((prev) => {
       const cp = prev.pendingCheckpoint;
@@ -217,7 +252,9 @@ export function useScenarioEngine(scenario: Scenario): EngineApi {
       rewindOne,
       setSpeed,
       resolveCheckpoint,
+      injectEvent,
+      exportAudit,
     }),
-    [state, scenario, play, pause, step, reset, rewindOne, setSpeed, resolveCheckpoint],
+    [state, scenario, play, pause, step, reset, rewindOne, setSpeed, resolveCheckpoint, injectEvent, exportAudit],
   );
 }
