@@ -155,7 +155,7 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
   },
 
   // ─── 2. Programme Health Copilot ────────────────────────────────────────
-  "programme-health-copilot": {
+  "programme-war-room": {
     agents: [
       {
         id: "programme-watcher",
@@ -223,8 +223,126 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
     },
   },
 
-  // ─── 3. Sovereign Citizen Services Agent ────────────────────────────────
-  "citizen-services-agent": {
+  // ─── 3. Tender Response Studio ───────────────────────────────────────
+    "tender-response-studio": {
+      agents: [
+        {
+          id: "bid-conductor",
+          name: { en: "Bid Conductor", ar: "منسّق العطاء" },
+          role: { en: "Plans the response, sequences the specialists, gates every checkpoint.", ar: "يخطّط الاستجابة، يرتّب الأخصائيين، ويراقب كل نقطة موافقة." },
+          kind: "planner",
+          reads: [{ en: "RFP / ITT, addenda, prior-bid library", ar: "كرّاسة الشروط، الملاحق، مكتبة العطاءات السابقة" }],
+          writes: [{ en: "Bid plan, section assignments, checkpoint schedule", ar: "خطة العطاء، توزيع الأقسام، جدول الموافقات" }],
+        },
+        {
+          id: "rfp-ingestor",
+          name: { en: "RFP Ingestor", ar: "محلّل كرّاسة الشروط" },
+          role: { en: "Parses the RFP into mandatory requirements, evaluation weights, and submission rules.", ar: "يحلّل كرّاسة الشروط إلى متطلبات إلزامية ومعايير تقييم وقواعد تقديم." },
+          kind: "retriever",
+          reads: [{ en: "RFP document set, addenda, Q&A logs", ar: "وثائق كرّاسة الشروط، الملاحق، سجلات الأسئلة والأجوبة" }],
+          writes: [{ en: "Structured requirement matrix", ar: "مصفوفة متطلبات مهيكلة" }],
+        },
+        {
+          id: "qualifier",
+          name: { en: "Qualifier", ar: "المُقيّم" },
+          role: { en: "Scores fit-to-win and capacity-to-deliver — recommends bid or no-bid with rationale.", ar: "يقيس ملاءمة الفوز والقدرة على التسليم — ويوصي بالتقديم أو الانسحاب مع التبرير." },
+          kind: "scorer",
+          writes: [{ en: "Bid/no-bid memo with score breakdown", ar: "مذكّرة قرار التقديم مع تفصيل الدرجات" }],
+        },
+        {
+          id: "section-drafter",
+          name: { en: "Section Drafters", ar: "كتّاب الأقسام" },
+          role: { en: "Parallel lanes that draft technical, commercial, and governance sections to the bidder's house style.", ar: "مسارات متوازية تصوغ الأقسام التقنية والتجارية والحوكمة بأسلوب مقدّم العطاء." },
+          kind: "drafter",
+          writes: [{ en: "Per-section draft with citation trail", ar: "مسوّدة لكل قسم مع سلسلة مراجع" }],
+        },
+        {
+          id: "pricing-modeller",
+          name: { en: "Pricing Modeller", ar: "محاكي التسعير" },
+          role: { en: "Builds the scenario range — base, aggressive, defensive — with margin and partner cost-share.", ar: "يبني نطاق سيناريوهات التسعير — أساسي، طموح، دفاعي — مع الهامش وتقاسم تكلفة الشريك." },
+          kind: "scorer",
+          writes: [{ en: "Pricing scenario pack", ar: "حزمة سيناريوهات التسعير" }],
+        },
+        {
+          id: "partner-outreach",
+          name: { en: "Partner Outreach", ar: "تواصل الشركاء" },
+          role: { en: "Drafts LOI and cost-card requests to subcontractors and consortium partners.", ar: "يصوغ خطابات النوايا وطلبات بطاقات التكلفة للمقاولين من الباطن وشركاء التحالف." },
+          kind: "compiler",
+          writes: [{ en: "Outbound partner asks, captured responses", ar: "طلبات صادرة للشركاء، ردود مُلتقطة" }],
+        },
+        {
+          id: "legal-reviewer",
+          name: { en: "Legal Reviewer", ar: "المراجع القانوني" },
+          role: { en: "Red-teams every drafted section and the pricing pack against the legal clause library.", ar: "يراجع جميع الأقسام المسوّدة وحزمة التسعير مقابل مكتبة البنود القانونية." },
+          kind: "critic",
+          writes: [{ en: "Legal flags and required edits", ar: "ملاحظات قانونية وتعديلات مطلوبة" }],
+        },
+        {
+          id: "packet-compiler",
+          name: { en: "Packet Compiler", ar: "مُجمّع الحزمة" },
+          role: { en: "Stitches cover letter, sections, pricing, legal annexes, and partner LOIs into the final submission packet.", ar: "يجمع خطاب التغطية والأقسام والتسعير والملاحق القانونية ورسائل النوايا في حزمة التقديم النهائية." },
+          kind: "compiler",
+          writes: [{ en: "Final submission packet (PDF + appendices)", ar: "حزمة التقديم النهائية (PDF + ملاحق)" }],
+        },
+      ],
+      edges: [
+        { from: "bid-conductor", to: "rfp-ingestor" },
+        { from: "rfp-ingestor", to: "qualifier" },
+        { from: "qualifier", to: "section-drafter" },
+        { from: "qualifier", to: "pricing-modeller" },
+        { from: "qualifier", to: "partner-outreach" },
+        { from: "section-drafter", to: "legal-reviewer" },
+        { from: "pricing-modeller", to: "legal-reviewer" },
+        { from: "partner-outreach", to: "legal-reviewer" },
+        { from: "legal-reviewer", to: "packet-compiler" },
+      ],
+      humanCheckpoints: [
+        {
+          id: "bid-no-bid",
+          name: { en: "Bid Director", ar: "مدير العطاءات" },
+          decision: {
+            en: "Reads the Qualifier's bid/no-bid memo and decides whether to commit the team to a full response.",
+            ar: "يقرأ مذكّرة التقييم ويقرّر ما إذا كان الفريق سيلتزم بصياغة استجابة كاملة.",
+          },
+        },
+        {
+          id: "pricing-signoff",
+          name: { en: "CFO", ar: "المدير المالي" },
+          decision: {
+            en: "Selects the pricing scenario and signs off on margin before the price enters the packet.",
+            ar: "يختار سيناريو التسعير ويوقّع على الهامش قبل دخول السعر إلى الحزمة.",
+          },
+        },
+        {
+          id: "legal-release",
+          name: { en: "General Counsel", ar: "المستشار العام" },
+          decision: {
+            en: "Clears the final packet for submission after reviewing the Legal Reviewer's flags.",
+            ar: "يجيز الحزمة النهائية للتقديم بعد مراجعة ملاحظات المراجع القانوني.",
+          },
+        },
+      ],
+      flowOrder: [
+        { kind: "agent", id: "bid-conductor" },
+        { kind: "agent", id: "rfp-ingestor" },
+        { kind: "agent", id: "qualifier" },
+        { kind: "human", id: "bid-no-bid" },
+        { kind: "agent", id: "section-drafter" },
+        { kind: "agent", id: "pricing-modeller" },
+        { kind: "human", id: "pricing-signoff" },
+        { kind: "agent", id: "partner-outreach" },
+        { kind: "agent", id: "legal-reviewer" },
+        { kind: "human", id: "legal-release" },
+        { kind: "agent", id: "packet-compiler" },
+      ],
+      rationale: {
+        en: "A mega-tender response cannot be one prompt. Parsing the RFP, qualifying the opportunity, drafting parallel sections, modelling pricing, courting partners, and red-teaming legal are six different skills with three different signers. Splitting the work makes every output auditable, lets specialist agents run in parallel, and keeps human authority exactly where the bidder needs it — at bid/no-bid, pricing, and legal release.",
+        ar: "لا يمكن أن تكون الاستجابة لمناقصة كبرى مطالبة واحدة. تحليل كرّاسة الشروط، وتأهيل الفرصة، وصياغة أقسام متوازية، ونمذجة التسعير، وتجنيد الشركاء، ومراجعة الجوانب القانونية ست مهارات مختلفة بثلاث جهات تواقيع. تقسيم العمل يجعل كل مخرج قابلاً للتدقيق، ويتيح للوكلاء المتخصّصين العمل بالتوازي، ويحفظ السلطة البشرية حيث يحتاجها مقدّم العطاء — عند قرار التقديم والتسعير والإفراج القانوني.",
+      },
+    },
+
+    // ─── 3. Sovereign Citizen Services Agent ────────────────────────────────
+  "citizen-services-concierge": {
     agents: [
       {
         id: "dialect-tagger",
@@ -295,7 +413,7 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
   },
 
   // ─── 4. Procurement Intelligence Agent ──────────────────────────────────
-  "procurement-intelligence": {
+  "procurement-negotiation-agent": {
     agents: [
       {
         id: "spend-normaliser",
@@ -371,7 +489,7 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
   },
 
   // ─── 5. Telecom Network Ops Agent ───────────────────────────────────────
-  "network-ops-agent": {
+  "network-ops-war-room": {
     agents: [
       {
         id: "alarm-collector",
@@ -453,7 +571,7 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
   },
 
   // ─── 6. SAMA Compliance Agent ───────────────────────────────────────────
-  "sama-compliance-agent": {
+  "sama-compliance-sentinel": {
     agents: [
       {
         id: "obligation-mapper",
@@ -535,400 +653,8 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
     },
   },
 
-  // ─── 7. Energy Trading Copilot ──────────────────────────────────────────
-  "energy-trading-copilot": {
-    agents: [
-      {
-        id: "feed-aggregator",
-        name: { en: "Feed Aggregator", ar: "مُجمّع التدفقات" },
-        role: { en: "Normalises price, weather, vessel-position and macro feeds into one event stream.", ar: "يوحّد تدفقات الأسعار والطقس ومواقع الناقلات والاقتصاد الكلي في مجرى أحداث واحد." },
-        kind: "retriever",
-        reads: [
-          { en: "Brent/WTI/Dubai/Murban prices, OPEC and JODI commentary", ar: "أسعار برنت/WTI/دبي/مربان، تعليقات أوبك وJODI" },
-          { en: "Vessel positions, weather, refinery telemetry", ar: "مواقع الناقلات، الطقس، قياسات المصافي" },
-        ],
-        writes: [{ en: "Normalised event stream", ar: "مجرى أحداث موحّد" }],
-      },
-      {
-        id: "event-correlator",
-        name: { en: "Event Correlator", ar: "رابط الأحداث" },
-        role: { en: "Spots correlated events that hint at a tradable hypothesis.", ar: "يكتشف الأحداث المترابطة التي تشير إلى فرضية تداول." },
-        kind: "critic",
-        writes: [{ en: "Candidate idea hypotheses", ar: "فرضيات أفكار مرشّحة" }],
-      },
-      {
-        id: "risk-bander",
-        name: { en: "Risk Bander", ar: "مصنّف نطاق المخاطر" },
-        role: { en: "Assigns conviction and risk band to each idea before it ever reaches the floor.", ar: "يسند الاقتناع ونطاق المخاطر لكل فكرة قبل وصولها إلى القاعة." },
-        kind: "scorer",
-        writes: [{ en: "Conviction + risk band per idea", ar: "اقتناع + نطاق مخاطر لكل فكرة" }],
-      },
-      {
-        id: "memo-drafter",
-        name: { en: "Memo Drafter", ar: "كاتب المذكّرة" },
-        role: { en: "Drafts the trade-idea memo with assumption stack and exit triggers.", ar: "يصوغ مذكّرة فكرة التداول مع حزمة الافتراضات ومحفّزات الخروج." },
-        kind: "drafter",
-        writes: [{ en: "Trade-idea memo (PDF draft)", ar: "مسوّدة مذكّرة فكرة التداول" }],
-      },
-    ],
-    edges: [
-      { from: "feed-aggregator", to: "event-correlator" },
-      { from: "event-correlator", to: "risk-bander" },
-      { from: "risk-bander", to: "memo-drafter" },
-    ],
-    humanCheckpoints: [
-      {
-        id: "trader-signs-memo",
-        name: { en: "Trader", ar: "المتداول" },
-        decision: {
-          en: "Signs the memo. Only the trader can act — the agent never touches an order.",
-          ar: "يوقّع المذكّرة. المتداول وحده من يمكنه التصرّف — لا يلمس الوكيل أمراً أبداً.",
-        },
-      },
-      {
-        id: "compliance-clears-floor",
-        name: { en: "Compliance Officer", ar: "مسؤول الامتثال" },
-        decision: {
-          en: "Clears any new memo template against the trading floor's regulatory ringfence.",
-          ar: "يجيز أي قالب مذكّرة جديد مقابل الحاجز التنظيمي لقاعة التداول.",
-        },
-      },
-    ],
-    flowOrder: linearFlow(
-      ["feed-aggregator", "event-correlator", "risk-bander", "memo-drafter"],
-      [
-        { id: "compliance-clears-floor", afterAgent: "memo-drafter" },
-        { id: "trader-signs-memo", afterAgent: "memo-drafter" },
-      ],
-    ),
-    rationale: {
-      en: "Separating feed normalisation from idea generation from risk banding from drafting is what makes the copilot deployable inside a hard regulatory ringfence — no single model is ever both researching the market and writing to the trading floor.",
-      ar: "فصل توحيد التدفقات عن توليد الأفكار عن تصنيف المخاطر عن الصياغة هو ما يجعل المساعد قابلاً للنشر داخل حاجز تنظيمي صارم — لا يجمع نموذج واحد بين البحث في السوق والكتابة إلى القاعة.",
-    },
-  },
-
-  // ─── 8. Retail Demand Forecaster ────────────────────────────────────────
-  "retail-demand-forecaster": {
-    agents: [
-      {
-        id: "season-tagger",
-        name: { en: "Season Tagger", ar: "موسوم الموسم" },
-        role: { en: "Tags every week with Hijri events, school terms and public holidays per emirate.", ar: "يضع وسماً لكل أسبوع بأحداث التقويم الهجري وفصول المدارس والإجازات لكل إمارة." },
-        kind: "classifier",
-        reads: [
-          { en: "Hijri calendar, school terms by emirate, public holidays", ar: "التقويم الهجري، فصول المدارس حسب الإمارة، الإجازات الرسمية" },
-        ],
-        writes: [{ en: "Seasonality overlay per SKU/store/week", ar: "طبقة الموسمية لكل منتج/متجر/أسبوع" }],
-      },
-      {
-        id: "base-forecaster",
-        name: { en: "Base Forecaster", ar: "متنبّئ الأساس" },
-        role: { en: "Generates the base SKU × store × week forecast from POS history and inventory.", ar: "يولّد التنبؤ الأساسي للمنتج × المتجر × الأسبوع من تاريخ نقاط البيع والمخزون." },
-        kind: "scorer",
-        reads: [
-          { en: "POS sales history, on-hand and in-transit inventory, store master", ar: "تاريخ مبيعات نقاط البيع، المخزون والشحنات قيد النقل، البيانات الرئيسية للمتاجر" },
-        ],
-        writes: [{ en: "Base SKU×store×week forecast", ar: "تنبؤ أساسي" }],
-      },
-      {
-        id: "seasonality-overlay",
-        name: { en: "Seasonality Overlay", ar: "طبقة الموسمية" },
-        role: { en: "Applies Ramadan, school-return and summer-exodus shifts to the base forecast.", ar: "يطبّق إزاحات رمضان وعودة المدارس ونزوح الصيف على التنبؤ الأساسي." },
-        kind: "compiler",
-        writes: [{ en: "Region-tuned forecast", ar: "تنبؤ مضبوط للمنطقة" }],
-      },
-      {
-        id: "allocator",
-        name: { en: "Allocator", ar: "مُخصِّص" },
-        role: { en: "Suggests per-store allocation against current on-hand and in-transit.", ar: "يقترح التخصيص لكل متجر مقابل المخزون والشحنات." },
-        kind: "drafter",
-        writes: [{ en: "Per-store allocation suggestion", ar: "اقتراح تخصيص لكل متجر" }],
-      },
-      {
-        id: "promo-simulator",
-        name: { en: "Promo Simulator", ar: "محاكي العروض" },
-        role: { en: "Simulates promo cadence and depth, projecting lift and margin impact.", ar: "يحاكي إيقاع العروض وعمقها ويتنبّأ بالرفع وأثر الهامش." },
-        kind: "scorer",
-        writes: [{ en: "Lift and margin simulation", ar: "محاكاة الرفع والهامش" }],
-      },
-    ],
-    edges: [
-      { from: "season-tagger", to: "seasonality-overlay" },
-      { from: "base-forecaster", to: "seasonality-overlay" },
-      { from: "seasonality-overlay", to: "allocator" },
-      { from: "seasonality-overlay", to: "promo-simulator" },
-    ],
-    humanCheckpoints: [
-      {
-        id: "merchandiser-approves-allocation",
-        name: { en: "Merchandiser", ar: "رئيس البضائع" },
-        decision: {
-          en: "Approves or overrides each store allocation before it hits the planning system.",
-          ar: "يوافق أو يتجاوز كل تخصيص للمتجر قبل دخوله نظام التخطيط.",
-        },
-      },
-      {
-        id: "revenue-signs-promo",
-        name: { en: "Revenue Manager", ar: "مدير الإيرادات" },
-        decision: {
-          en: "Signs the promo cadence before commit.",
-          ar: "يوقّع إيقاع العروض قبل الإلزام.",
-        },
-      },
-    ],
-    flowOrder: [
-      { kind: "agent", id: "season-tagger" },
-      { kind: "agent", id: "base-forecaster" },
-      { kind: "agent", id: "seasonality-overlay" },
-      { kind: "agent", id: "allocator" },
-      { kind: "human", id: "merchandiser-approves-allocation" },
-      { kind: "agent", id: "promo-simulator" },
-      { kind: "human", id: "revenue-signs-promo" },
-    ],
-    rationale: {
-      en: "GCC seasonality, base demand and promo lift each demand specialist models. Splitting them lets the merchandiser tune one — say the seasonality overlay around a moving Eid date — without retraining the others.",
-      ar: "الموسمية الخليجية، والطلب الأساسي، ورفع العروض، يحتاج كلٌّ منها نموذجاً متخصّصاً. تقسيمها يتيح لرئيس البضائع ضبط أحدها — مثل طبقة الموسمية حول موعد عيد متغيّر — دون إعادة تدريب الباقي.",
-    },
-  },
-
-  // ─── 9. Hospitality Revenue Optimizer ───────────────────────────────────
-  "hospitality-revenue-optimizer": {
-    agents: [
-      {
-        id: "event-tagger",
-        name: { en: "Event Tagger", ar: "موسوم الأحداث" },
-        role: { en: "Tags every day with Riyadh Season, F1, EXPO-class and Hajj-cohort overlays.", ar: "يضع وسماً لكل يوم بطبقات موسم الرياض وF1 وفعاليات بحجم إكسبو وحجاج العمرة." },
-        kind: "classifier",
-        reads: [{ en: "Event calendar, brand calendar", ar: "تقويم الأحداث، تقويم العلامة" }],
-        writes: [{ en: "Demand-event overlay per day", ar: "طبقة أحداث الطلب لكل يوم" }],
-      },
-      {
-        id: "demand-modeller",
-        name: { en: "Demand Modeller", ar: "نمذجة الطلب" },
-        role: { en: "Models demand pressure per room-type per day from PMS history and event overlay.", ar: "يصمّم ضغط الطلب لكل نوع غرفة لكل يوم من تاريخ PMS وطبقة الأحداث." },
-        kind: "scorer",
-        reads: [{ en: "PMS data (Opera, Mews, Cloudbeds)", ar: "بيانات PMS (Opera وMews وCloudbeds)" }],
-        writes: [{ en: "Demand pressure per day per room-type", ar: "ضغط الطلب لكل يوم لكل نوع غرفة" }],
-      },
-      {
-        id: "competitor-rate-watcher",
-        name: { en: "Competitor Rate Watcher", ar: "مراقب أسعار المنافسين" },
-        role: { en: "Scrapes competitor rates and surfaces the day's benchmark.", ar: "يستخرج أسعار المنافسين ويعرض المعيار اليومي." },
-        kind: "retriever",
-        reads: [{ en: "Competitor rate scrape", ar: "استخراج أسعار المنافسين" }],
-        writes: [{ en: "Competitor benchmark", ar: "معيار المنافسين" }],
-      },
-      {
-        id: "rate-recommender",
-        name: { en: "Rate Recommender", ar: "موصي الأسعار" },
-        role: { en: "Recommends rate, length-of-stay and channel mix per room-type per day.", ar: "يوصي بالسعر وقيود طول الإقامة ومزيج القنوات لكل نوع غرفة لكل يوم." },
-        kind: "drafter",
-        writes: [{ en: "Rate / LOS / channel-mix recommendation", ar: "توصية السعر/طول الإقامة/مزيج القنوات" }],
-      },
-      {
-        id: "channel-mix-tuner",
-        name: { en: "Channel-Mix Tuner", ar: "موالف مزيج القنوات" },
-        role: { en: "Tunes the OTA / direct / corporate mix and projects margin impact.", ar: "يضبط مزيج OTA والمباشر والشركات ويتنبّأ بأثر الهامش." },
-        kind: "scorer",
-        writes: [{ en: "Channel-mix simulation", ar: "محاكاة مزيج القنوات" }],
-      },
-    ],
-    edges: [
-      { from: "event-tagger", to: "demand-modeller" },
-      { from: "competitor-rate-watcher", to: "rate-recommender" },
-      { from: "demand-modeller", to: "rate-recommender" },
-      { from: "rate-recommender", to: "channel-mix-tuner" },
-    ],
-    humanCheckpoints: [
-      {
-        id: "revenue-manager-signs-rates",
-        name: { en: "Revenue Manager", ar: "مدير الإيرادات" },
-        decision: {
-          en: "Signs each rate update before publish to channels.",
-          ar: "يوقّع كل تحديث للسعر قبل النشر على القنوات.",
-        },
-      },
-      {
-        id: "cco-clears-event-overlay",
-        name: { en: "CCO", ar: "كبير المسؤولين التجاريين" },
-        decision: {
-          en: "Clears any new event overlay before it influences pricing.",
-          ar: "يُجيز أي طبقة أحداث جديدة قبل أن تؤثّر على التسعير.",
-        },
-      },
-    ],
-    flowOrder: [
-      { kind: "agent", id: "event-tagger" },
-      { kind: "human", id: "cco-clears-event-overlay" },
-      { kind: "agent", id: "demand-modeller" },
-      { kind: "agent", id: "competitor-rate-watcher" },
-      { kind: "agent", id: "rate-recommender" },
-      { kind: "human", id: "revenue-manager-signs-rates" },
-      { kind: "agent", id: "channel-mix-tuner" },
-    ],
-    rationale: {
-      en: "Event tagging, demand modelling, competitor scrape and channel-mix tuning each operate on different feeds. Splitting them lets the revenue manager intervene at the precise step that matters that day, without breaking the rest of the pipeline.",
-      ar: "وسم الأحداث، ونمذجة الطلب، واستخراج المنافسين، وضبط مزيج القنوات يعتمد كلٌّ منها على تدفقات مختلفة. تقسيمها يتيح لمدير الإيرادات التدخّل في الخطوة الدقيقة التي تهمّ ذلك اليوم دون كسر بقية المسار.",
-    },
-  },
-
-  // ─── 10. EV Battery Health Agent ────────────────────────────────────────
-  "ev-battery-health-agent": {
-    agents: [
-      {
-        id: "telemetry-ingestor",
-        name: { en: "Telemetry Ingestor", ar: "مستوعب القياسات" },
-        role: { en: "Ingests connected-vehicle telemetry from each OEM API.", ar: "يستوعب قياسات المركبات المتصلة من واجهات البرمجة لكل صانع." },
-        kind: "retriever",
-        reads: [{ en: "OEM connected-vehicle APIs", ar: "واجهات OEM للمركبات المتصلة" }],
-        writes: [{ en: "Normalised telemetry stream", ar: "مجرى قياسات موحّد" }],
-      },
-      {
-        id: "soh-predictor",
-        name: { en: "SOH Predictor", ar: "متنبّئ صحة البطارية" },
-        role: { en: "Predicts the state-of-health curve months ahead of the warning lights.", ar: "يتنبّأ بمنحنى صحة البطارية قبل أشهر من إنذارات اللوحة." },
-        kind: "scorer",
-        writes: [{ en: "Predicted SOH curve per VIN", ar: "منحنى صحة متنبَّأ لكل مركبة" }],
-      },
-      {
-        id: "intervention-window-planner",
-        name: { en: "Intervention Window Planner", ar: "مُخطّط نافذة التدخّل" },
-        role: { en: "Plans the intervention window per VIN against parts availability and bay capacity.", ar: "يخطّط نافذة التدخّل لكل مركبة مقابل توفّر القطع وسعة ورش الخدمة." },
-        kind: "drafter",
-        reads: [{ en: "Service history, parts availability", ar: "تاريخ الخدمة، توفّر القطع" }],
-        writes: [{ en: "Intervention window per VIN", ar: "نافذة التدخّل لكل مركبة" }],
-      },
-      {
-        id: "customer-graph-resolver",
-        name: { en: "Customer Graph Resolver", ar: "محلّل رسم العميل" },
-        role: { en: "Builds a household-level multi-brand customer profile from DMS and CRM.", ar: "يبني ملف عميل متعدّد العلامات على مستوى المنزل من DMS وCRM." },
-        kind: "compiler",
-        reads: [{ en: "DMS, CRM, multi-brand customer master", ar: "DMS وCRM وبيانات العميل متعدّدة العلامات" }],
-        writes: [{ en: "Household-level customer profile", ar: "ملف عميل على مستوى المنزل" }],
-      },
-      {
-        id: "outreach-drafter",
-        name: { en: "Outreach Drafter", ar: "كاتب التواصل" },
-        role: { en: "Drafts SMS / WhatsApp / call-script outreach for the service advisor to send.", ar: "يصوغ الرسائل القصيرة وواتساب ونصوص الاتصال لمستشار الخدمة." },
-        kind: "drafter",
-        writes: [{ en: "Drafted SMS/WhatsApp/call script", ar: "مسوّدة الرسائل ونص الاتصال" }],
-      },
-    ],
-    edges: [
-      { from: "telemetry-ingestor", to: "soh-predictor" },
-      { from: "soh-predictor", to: "intervention-window-planner" },
-      { from: "customer-graph-resolver", to: "outreach-drafter" },
-      { from: "intervention-window-planner", to: "outreach-drafter" },
-    ],
-    humanCheckpoints: [
-      {
-        id: "service-advisor-sends",
-        name: { en: "Service Advisor", ar: "مستشار الخدمة" },
-        decision: {
-          en: "Reviews and sends every outreach. Outreach is never auto-sent.",
-          ar: "يراجع ويرسل كل تواصل. لا يُرسل التواصل تلقائياً أبداً.",
-        },
-      },
-      {
-        id: "aftermarket-head-approves-template",
-        name: { en: "Head of Aftermarket", ar: "رئيس ما بعد البيع" },
-        decision: {
-          en: "Approves new outreach templates before they go live in the dealer network.",
-          ar: "يوافق على قوالب التواصل الجديدة قبل تفعيلها في شبكة الوكلاء.",
-        },
-      },
-    ],
-    flowOrder: [
-      { kind: "agent", id: "telemetry-ingestor" },
-      { kind: "agent", id: "soh-predictor" },
-      { kind: "agent", id: "intervention-window-planner" },
-      { kind: "agent", id: "customer-graph-resolver" },
-      { kind: "agent", id: "outreach-drafter" },
-      { kind: "human", id: "service-advisor-sends" },
-      { kind: "human", id: "aftermarket-head-approves-template" },
-    ],
-    rationale: {
-      en: "Telemetry ingestion, SOH prediction and outreach drafting are completely different skills — and the multi-brand customer graph is its own data problem. Chaining specialist agents lets each ship on its own cadence and lets the dealer swap any one of them.",
-      ar: "استيعاب القياسات، والتنبؤ بصحة البطارية، وصياغة التواصل، مهارات مختلفة تماماً — ورسم العميل متعدّد العلامات مشكلة بيانات قائمة بذاتها. تسلسل وكلاء متخصّصين يتيح لكلٍّ منهم الإطلاق بوتيرته ويتيح للوكيل استبدال أيٍّ منهم.",
-    },
-  },
-
-  // ─── 11. FP&A Rolling Forecast Agent ────────────────────────────────────
-  "fpa-rolling-forecast": {
-    agents: [
-      {
-        id: "actuals-ingestor",
-        name: { en: "Actuals Ingestor", ar: "مستوعب الفعلي" },
-        role: { en: "Ingests period actuals from ERP, revenue subledgers and the prior planning model.", ar: "يستوعب الفعلي من ERP ودفاتر الإيرادات الفرعية ونموذج التخطيط السابق." },
-        kind: "retriever",
-        reads: [
-          { en: "ERP, revenue subledgers, prior planning model", ar: "ERP، دفاتر الإيرادات الفرعية، نموذج التخطيط السابق" },
-        ],
-        writes: [{ en: "Normalised actuals snapshot", ar: "لقطة فعلي موحّدة" }],
-      },
-      {
-        id: "driver-recompiler",
-        name: { en: "Driver Recompiler", ar: "مُعيد بناء المحركات" },
-        role: { en: "Regenerates the forecast cone using the existing driver tree and actuals.", ar: "يعيد توليد مخروط التنبؤ باستخدام شجرة المحركات الحالية والفعلي." },
-        kind: "scorer",
-        writes: [
-          { en: "Forecast cone with driver decomposition", ar: "مخروط تنبؤ مع تفكيك المحركات" },
-        ],
-      },
-      {
-        id: "variance-analyst",
-        name: { en: "Variance Analyst", ar: "محلّل الانحرافات" },
-        role: { en: "Drafts the variance commentary in the CFO's house style with citations to figures.", ar: "يصوغ تعليق الانحرافات بأسلوب المدير المالي مع مراجع للأرقام." },
-        kind: "drafter",
-        writes: [{ en: "Variance commentary draft", ar: "مسوّدة تعليق الانحرافات" }],
-      },
-      {
-        id: "board-flagger",
-        name: { en: "Board Flagger", ar: "رافع علم المجلس" },
-        role: { en: "Picks the three things the board must see, with rationale and evidence.", ar: "يختار البنود الثلاثة التي يجب أن يراها المجلس مع التبرير والأدلّة." },
-        kind: "router",
-        writes: [{ en: "Top-three board flags", ar: "أهم ثلاثة بنود للمجلس" }],
-      },
-    ],
-    edges: [
-      { from: "actuals-ingestor", to: "driver-recompiler" },
-      { from: "driver-recompiler", to: "variance-analyst" },
-      { from: "variance-analyst", to: "board-flagger" },
-    ],
-    humanCheckpoints: [
-      {
-        id: "cfo-signs-commentary",
-        name: { en: "CFO", ar: "المدير المالي" },
-        decision: {
-          en: "Retains the pen — edits the variance commentary and signs.",
-          ar: "يحتفظ بالقلم — يحرّر تعليق الانحرافات ويوقّع.",
-        },
-      },
-      {
-        id: "fpa-lead-clears-flags",
-        name: { en: "FP&A Lead", ar: "قائد التخطيط المالي" },
-        decision: {
-          en: "Reviews and clears the top-three flags before the board pack.",
-          ar: "يراجع البنود الثلاثة ويُجيزها قبل حزمة المجلس.",
-        },
-      },
-    ],
-    flowOrder: [
-      { kind: "agent", id: "actuals-ingestor" },
-      { kind: "agent", id: "driver-recompiler" },
-      { kind: "agent", id: "variance-analyst" },
-      { kind: "human", id: "cfo-signs-commentary" },
-      { kind: "agent", id: "board-flagger" },
-      { kind: "human", id: "fpa-lead-clears-flags" },
-    ],
-    rationale: {
-      en: "Ingestion, driver math, narrative drafting and materiality routing are four different crafts. Keeping them as separate agents matches how a CFO actually splits work across an FP&A team — and means each one can be challenged on its own.",
-      ar: "الاستيعاب، وحسابات المحركات، وصياغة الرواية، وتوجيه الجوهرية، أربع حِرف مختلفة. إبقاؤها وكلاء منفصلين يطابق توزيع المدير المالي للعمل في فريق التخطيط المالي — ويعني أن كل واحد منهم قابل للتحدّي على حدة.",
-    },
-  },
-
   // ─── 12. Customer Care Multi-Agent ──────────────────────────────────────
-  "customer-care-multi-agent": {
+  "customer-care-hive": {
     agents: [
       {
         id: "intent-router",
@@ -1003,7 +729,7 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
   },
 
   // ─── 13. Sovereign Data Workbench ───────────────────────────────────────
-  "sovereign-data-workbench": {
+  "sovereign-data-steward": {
     agents: [
       {
         id: "schema-explorer",
@@ -1085,7 +811,7 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
   },
 
   // ─── 14. Knowledge Memory Agent ─────────────────────────────────────────
-  "knowledge-memory-agent": {
+  "enterprise-knowledge-concierge": {
     agents: [
       {
         id: "ingestor",

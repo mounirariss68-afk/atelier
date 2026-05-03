@@ -12,8 +12,8 @@ import valueRealization from "./value-realization";
 import { skeletonScenario } from "./_skeleton";
 
 const programmeHealth = skeletonScenario({
-  slug: "programme-health-copilot",
-  toolTitle: { en: "Programme Health Copilot", ar: "مساعد صحة البرنامج" },
+  slug: "programme-war-room",
+  toolTitle: { en: "Programme War Room", ar: "غرفة عمليات البرنامج" },
   accent: "#156082",
   description: {
     en: "An EPMO orchestrator coordinates a Watcher (Jira/Project), a RAID Classifier, an ETC Re-baseliner, and a Steering Drafter to produce a defensible weekly steering pack — without committing the steering committee in writing.",
@@ -54,8 +54,8 @@ const programmeHealth = skeletonScenario({
 });
 
 const citizenServices = skeletonScenario({
-  slug: "citizen-services-agent",
-  toolTitle: { en: "Sovereign Citizen Services Agent", ar: "وكيل خدمات المواطنين السيادي" },
+  slug: "citizen-services-concierge",
+  toolTitle: { en: "Citizen Services Concierge", ar: "كونسيرج خدمات المواطنين" },
   accent: "#5BA98A",
   description: {
     en: "A bilingual orchestrator for ministry call-centres routes the citizen through Arabic NLU, calls policy retrieval, and either resolves end-to-end or escalates to a human with full context already assembled.",
@@ -90,7 +90,7 @@ const citizenServices = skeletonScenario({
 });
 
 const procurementNegotiation = skeletonScenario({
-  slug: "procurement-intelligence",
+  slug: "procurement-negotiation-agent",
   toolTitle: { en: "Procurement Negotiation Agent", ar: "وكيل التفاوض على المشتريات" },
   accent: "#D9534F",
   description: {
@@ -129,7 +129,7 @@ const procurementNegotiation = skeletonScenario({
 });
 
 const networkOps = skeletonScenario({
-  slug: "network-ops-agent",
+  slug: "network-ops-war-room",
   toolTitle: { en: "Network Ops War Room", ar: "غرفة عمليات الشبكة" },
   accent: "#156082",
   description: {
@@ -168,7 +168,7 @@ const networkOps = skeletonScenario({
 });
 
 const samaCompliance = skeletonScenario({
-  slug: "sama-compliance-agent",
+  slug: "sama-compliance-sentinel",
   toolTitle: { en: "SAMA Compliance Sentinel", ar: "حارس الامتثال لمؤسسة النقد" },
   accent: "#F5A623",
   description: {
@@ -207,7 +207,7 @@ const samaCompliance = skeletonScenario({
 });
 
 const customerCare = skeletonScenario({
-  slug: "customer-care-multi-agent",
+  slug: "customer-care-hive",
   toolTitle: { en: "Customer Care Hive", ar: "خلية رعاية العملاء" },
   accent: "#5BA98A",
   description: {
@@ -246,7 +246,7 @@ const customerCare = skeletonScenario({
 });
 
 const sovereignData = skeletonScenario({
-  slug: "sovereign-data-workbench",
+  slug: "sovereign-data-steward",
   toolTitle: { en: "Sovereign Data Steward", ar: "حارس البيانات السيادي" },
   accent: "#0E2841",
   description: {
@@ -285,7 +285,7 @@ const sovereignData = skeletonScenario({
 });
 
 const knowledgeMemory = skeletonScenario({
-  slug: "knowledge-memory-agent",
+  slug: "enterprise-knowledge-concierge",
   toolTitle: { en: "Enterprise Knowledge Concierge", ar: "كونسيرج المعرفة المؤسسية" },
   accent: "#5C8CA8",
   description: {
@@ -323,74 +323,61 @@ const knowledgeMemory = skeletonScenario({
   ],
 });
 
-// Tools that are part of the legacy catalogue but are being de-emphasised in
-// the redesign — keep stub scenarios so old links don't 404 while we phase
-// them out.
-const legacyStub = (slug: string, title: { en: string; ar: string }, accent: string) =>
-  skeletonScenario({
-    slug,
-    toolTitle: title,
-    accent,
+
+  const tenderResponseStudio = skeletonScenario({
+    slug: "tender-response-studio",
+    toolTitle: { en: "Tender Response Studio", ar: "استوديو الاستجابة للمناقصات" },
+    accent: "#196B24",
     description: {
-      en: "This demo is being rebuilt as part of the agentic marketplace redesign. The page below shows the orchestrator + specialist topology that will drive the new run.",
-      ar: "يجري إعادة بناء هذا العرض ضمن إعادة تصميم السوق الوكيلي. توضّح الصفحة أدناه طوبولوجيا المنسّق والمتخصّصين التي ستدير الجولة الجديدة.",
+      en: "A bid-conductor orchestrates RFP intake, qualifier, parallel section drafters, pricing modeller, partner outreach, legal reviewer and packet compiler — pausing at three human checkpoints (bid/no-bid, pricing sign-off, legal release).",
+      ar: "منسّق العطاء يدير استلام كرّاسة الشروط والمُقيّم وكتّاب الأقسام بالتوازي ومحاكي التسعير وتواصل الشركاء والمراجع القانوني ومُجمّع الحزمة — مع ثلاث نقاط موافقة بشرية (قرار التقديم، اعتماد التسعير، الإفراج القانوني).",
     },
-    buyer: { en: "TBC", ar: "قيد التحديد" },
-    trigger: { en: "TBC", ar: "قيد التحديد" },
+    buyer: { en: "Head of Bid Management", ar: "رئيس إدارة العطاءات" },
+    trigger: { en: "GCC mega-tender lands in the inbox 21 days before the submission deadline.", ar: "وصول مناقصة خليجية كبرى إلى البريد قبل 21 يوماً من الموعد." },
     agents: [
-      { id: "orch", name: { en: "Orchestrator", ar: "المنسّق" }, role: { en: "Plans the run.", ar: "يخطّط الجولة." }, kind: "orchestrator", color: accent },
-      { id: "spec", name: { en: "Specialist", ar: "متخصّص" }, role: { en: "Executes the work.", ar: "ينفّذ العمل." }, kind: "specialist", color: "#156082" },
+      { id: "orch", name: { en: "Bid Conductor", ar: "منسّق العطاء" }, role: { en: "Plans the response and gates every checkpoint.", ar: "يخطّط الاستجابة ويراقب كل نقطة موافقة." }, kind: "orchestrator", color: "#196B24" },
+      { id: "ingest", name: { en: "RFP Ingestor", ar: "محلّل كرّاسة الشروط" }, role: { en: "Parses the RFP into a requirement matrix.", ar: "يحلّل كرّاسة الشروط إلى مصفوفة متطلبات." }, kind: "retriever", color: "#156082" },
+      { id: "qualifier", name: { en: "Qualifier", ar: "المُقيّم" }, role: { en: "Recommends bid or no-bid with rationale.", ar: "يوصي بقرار التقديم مع التبرير." }, kind: "scorer", color: "#F5A623" },
+      { id: "drafter", name: { en: "Section Drafters", ar: "كتّاب الأقسام" }, role: { en: "Parallel lanes draft technical, commercial, governance.", ar: "مسارات متوازية تصوغ الأقسام التقنية والتجارية والحوكمة." }, kind: "drafter", color: "#5BA98A" },
+      { id: "pricing", name: { en: "Pricing Modeller", ar: "محاكي التسعير" }, role: { en: "Builds the scenario range with margin sensitivity.", ar: "يبني نطاق سيناريوهات التسعير مع حساسية الهامش." }, kind: "scorer", color: "#5C8CA8" },
+      { id: "legal", name: { en: "Legal Reviewer", ar: "المراجع القانوني" }, role: { en: "Red-teams every section against the clause library.", ar: "يراجع كل قسم مقابل مكتبة البنود." }, kind: "critic", color: "#D9534F" },
+      { id: "compiler", name: { en: "Packet Compiler", ar: "مُجمّع الحزمة" }, role: { en: "Stitches the final submission packet.", ar: "يجمع حزمة التقديم النهائية." }, kind: "compiler", color: "#0E2841" },
     ],
     workflows: [
       {
-        id: "tbc",
-        name: { en: "Coming soon", ar: "قريباً" },
-        description: { en: "Full scenario lands in the next release.", ar: "السيناريو الكامل في الإصدار القادم." },
-        trigger: { en: "TBC", ar: "قيد التحديد" },
+        id: "tender-response",
+        name: { en: "Mega-tender response", ar: "استجابة مناقصة كبرى" },
+        description: { en: "Intake → qualify → bid/no-bid → parallel drafting → pricing sign-off → legal release → packet compile.", ar: "استلام → تأهيل → قرار التقديم → صياغة بالتوازي → اعتماد التسعير → الإفراج القانوني → تجميع الحزمة." },
+        trigger: { en: "RFP arrives in inbox", ar: "وصول كرّاسة الشروط" },
         steps: [
-          { agentId: "orch", label: { en: "Plan", ar: "التخطيط" } },
-          { agentId: "spec", label: { en: "Execute", ar: "التنفيذ" } },
+          { agentId: "ingest", label: { en: "Parse RFP", ar: "تحليل كرّاسة الشروط" } },
+          { agentId: "qualifier", label: { en: "Score fit-to-win", ar: "تقييم الفوز" } },
+          { agentId: "drafter", label: { en: "Draft sections", ar: "صياغة الأقسام" } },
+          { agentId: "pricing", label: { en: "Model pricing", ar: "نمذجة التسعير" } },
+          { agentId: "legal", label: { en: "Legal red-team", ar: "مراجعة قانونية" } },
+          { agentId: "compiler", label: { en: "Compile packet", ar: "تجميع الحزمة" } },
+          { agentId: "orch", label: { en: "Three human checkpoints", ar: "ثلاث نقاط موافقة بشرية" } },
         ],
       },
     ],
-    kpis: [{ id: "tbc", label: { en: "KPIs in development", ar: "المؤشرات قيد التطوير" }, initial: "—" }],
+    kpis: [
+      { id: "win-rate", label: { en: "Bid win rate", ar: "معدّل الفوز" }, initial: "—" },
+      { id: "cycle", label: { en: "RFP-to-submit cycle", ar: "زمن من الاستلام إلى التقديم" }, initial: "—" },
+      { id: "no-bid", label: { en: "Defensible no-bid rate", ar: "معدّل الانسحاب المبرّر" }, initial: "—" },
+    ],
   });
 
 const SCENARIOS: Record<string, Scenario> = {
   "value-realization": valueRealization,
-  "programme-health-copilot": programmeHealth,
-  "citizen-services-agent": citizenServices,
-  "procurement-intelligence": procurementNegotiation,
-  "network-ops-agent": networkOps,
-  "sama-compliance-agent": samaCompliance,
-  "customer-care-multi-agent": customerCare,
-  "sovereign-data-workbench": sovereignData,
-  "knowledge-memory-agent": knowledgeMemory,
-  "energy-trading-copilot": legacyStub(
-    "energy-trading-copilot",
-    { en: "Energy Trading Copilot", ar: "مساعد تداول الطاقة" },
-    "#F5A623",
-  ),
-  "retail-demand-forecaster": legacyStub(
-    "retail-demand-forecaster",
-    { en: "Retail Demand Forecaster", ar: "متنبّئ الطلب للتجزئة" },
-    "#196B24",
-  ),
-  "hospitality-revenue-optimizer": legacyStub(
-    "hospitality-revenue-optimizer",
-    { en: "Hospitality Revenue Optimizer", ar: "محسّن إيرادات الضيافة" },
-    "#D9534F",
-  ),
-  "ev-battery-health-agent": legacyStub(
-    "ev-battery-health-agent",
-    { en: "EV Battery Health Agent", ar: "وكيل صحة بطارية المركبات" },
-    "#5BA98A",
-  ),
-  "fpa-rolling-forecast": legacyStub(
-    "fpa-rolling-forecast",
-    { en: "FP&A Rolling Forecast", ar: "تنبؤ مالي متجدّد" },
-    "#5C8CA8",
-  ),
+  "programme-war-room": programmeHealth,
+  "tender-response-studio": tenderResponseStudio,
+  "procurement-negotiation-agent": procurementNegotiation,
+  "network-ops-war-room": networkOps,
+  "sama-compliance-sentinel": samaCompliance,
+  "citizen-services-concierge": citizenServices,
+  "customer-care-hive": customerCare,
+  "sovereign-data-steward": sovereignData,
+  "enterprise-knowledge-concierge": knowledgeMemory,
 };
 
 export function getScenario(slug: string): Scenario | undefined {

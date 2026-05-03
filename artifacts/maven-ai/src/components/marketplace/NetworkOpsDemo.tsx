@@ -178,7 +178,7 @@ export default function NetworkOpsDemo() {
 
   return (
     <DemoShell
-      slug="network-ops-agent"
+      slug="network-ops-war-room"
       eyebrow={COPY.eyebrow}
       title={COPY.title}
       intro={COPY.intro}
@@ -308,7 +308,7 @@ export default function NetworkOpsDemo() {
       </section>
       <section className="py-12 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AgentTrace slug="network-ops-agent" log={trace} accent="#156082" />
+          <AgentTrace slug="network-ops-war-room" log={trace} accent="#156082" />
         </div>
       </section>
     </DemoShell>

@@ -85,9 +85,10 @@ export default function Footer() {
             <ul className="space-y-3">
               {[
                 { href: "/marketplace/value-realization", label: "Value Realization Tool" },
-                { href: "/marketplace/programme-health-copilot", label: "Programme Health Copilot" },
-                { href: "/marketplace/citizen-services-agent", label: "Citizen-Services Agent" },
-                { href: "/marketplace/sama-compliance-agent", label: "SAMA Compliance Agent" },
+                { href: "/marketplace/programme-war-room", label: "Programme War Room" },
+                { href: "/marketplace/tender-response-studio", label: "Tender Response Studio" },
+                { href: "/marketplace/citizen-services-concierge", label: "Citizen Services Concierge" },
+                { href: "/marketplace/sama-compliance-sentinel", label: "SAMA Compliance Sentinel" },
                 { href: "/marketplace", label: "All marketplace tools →" },
               ].map((link) => (
                 <li key={link.href}>

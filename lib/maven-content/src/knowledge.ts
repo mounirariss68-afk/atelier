@@ -50,12 +50,12 @@ export interface FounderEntry {
 export type MarketplaceClass =
   | "value-realization"
   | "pmo-delivery-copilot"
+  | "tender-response-studio"
   | "supply-chain-agent"
-  | "fpa-forecaster"
   | "customer-ops-agent"
   | "knowledge-decision-copilot"
   | "risk-compliance-agent"
-  | "sovereign-data-workbench";
+  | "sovereign-data-steward";
 
 export type MarketplaceHorizontal = "pmo" | "supply-chain" | "fpa";
 
@@ -387,19 +387,19 @@ export const marketplaceClasses: MarketplaceClassMeta[] = [
     },
   },
   {
+    id: "tender-response-studio",
+    title: { en: "Tender Response Studio", ar: "استوديو الاستجابة للمناقصات" },
+    description: {
+      en: "End-to-end orchestration of mega-tender responses: parse RFP, qualify bid/no-bid, draft sections in parallel, model pricing, run legal red-team, compile submission packet.",
+      ar: "تنسيق شامل للاستجابة للمناقصات الكبرى: تحليل كرّاسة الشروط، تقييم قرار التقديم، صياغة الأقسام بالتوازي، نمذجة التسعير، مراجعة قانونية، وإصدار حزمة التقديم النهائية.",
+    },
+  },
+  {
     id: "supply-chain-agent",
     title: { en: "Supply Chain Agent", ar: "وكيل سلسلة التوريد" },
     description: {
       en: "Demand sensing, supplier-risk scoring, and expediting agents for procurement and supply chain leaders.",
       ar: "استشعار الطلب وتصنيف مخاطر الموردين ووكلاء التسريع لقادة المشتريات وسلاسل التوريد.",
-    },
-  },
-  {
-    id: "fpa-forecaster",
-    title: { en: "FP&A Forecaster", ar: "متنبئ التخطيط والتحليل المالي" },
-    description: {
-      en: "Driver-based rolling forecasts, variance commentary, and scenario flexing for finance teams.",
-      ar: "تنبؤات متجددة قائمة على المحركات وتعليقات الانحرافات وتمرين السيناريوهات لفِرق المالية.",
     },
   },
   {
@@ -427,8 +427,8 @@ export const marketplaceClasses: MarketplaceClassMeta[] = [
     },
   },
   {
-    id: "sovereign-data-workbench",
-    title: { en: "Sovereign Data Workbench", ar: "منصة البيانات السيادية" },
+    id: "sovereign-data-steward",
+    title: { en: "Sovereign Data Steward", ar: "حارس البيانات السيادي" },
     description: {
       en: "Air-gapped agentic data engineering, lineage, and mastering for sovereign and on-prem environments.",
       ar: "هندسة بيانات وكيلية معزولة وتتبع نسب البيانات وضبطها للبيئات السيادية والداخلية.",
@@ -615,9 +615,9 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     ],
   },
   {
-    id: "programme-health-copilot",
-    slug: "programme-health-copilot",
-    title: { en: "Programme Health Copilot", ar: "مساعد صحة البرنامج" },
+    id: "programme-war-room",
+    slug: "programme-war-room",
+    title: { en: "Programme War Room", ar: "غرفة عمليات البرنامج" },
     class: "pmo-delivery-copilot",
     industries: [
       "public-sector",
@@ -690,77 +690,82 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     relatedService: "agentic-ai-transformation",
   },
   {
-    id: "citizen-services-agent",
-    slug: "citizen-services-agent",
-    title: { en: "Sovereign Citizen Services Agent", ar: "وكيل خدمات المواطنين السيادي" },
-    class: "customer-ops-agent",
-    industries: ["public-sector"],
+    id: "tender-response-studio",
+    slug: "tender-response-studio",
+    title: { en: "Tender Response Studio", ar: "استوديو الاستجابة للمناقصات" },
+    class: "tender-response-studio",
+    industries: ["public-sector", "telecom", "energy-commodities"],
     horizontals: [],
-    buyer: { en: "Director General", ar: "المدير العام" },
+    buyer: { en: "Head of Bid Management", ar: "رئيس إدارة العطاءات" },
     pitch: {
-      en: "Bilingual EN/AR multi-turn agent for ministry call centres and chat — routed inside an air-gapped enclave, with full handoff context and provenance.",
-      ar: "وكيل ثنائي اللغة بالعربية والإنجليزية متعدد الجولات لمراكز اتصال الوزارات والدردشة — يعمل داخل بيئة معزولة سيادياً مع تسليم كامل السياق والمصدر.",
+      en: "End-to-end orchestration of mega-tender responses — parse the RFP, qualify bid/no-bid, draft sections in parallel, model pricing, run a legal red-team, compile the submission packet. Three human checkpoints: bid-no-bid, pricing sign-off, legal release.",
+      ar: "تنسيق شامل للاستجابة للمناقصات الكبرى — تحليل كرّاسة الشروط، تقييم قرار التقديم، صياغة الأقسام بالتوازي، نمذجة التسعير، مراجعة قانونية، وإصدار حزمة التقديم. ثلاث نقاط موافقة بشرية: قرار التقديم، اعتماد التسعير، الإفراج القانوني.",
     },
     longDescription: [
       {
-        en: "Citizen-facing services in the Gulf cannot be delivered by a hyperscaler chatbot. They need fluent Arabic, dialect tolerance, an air-gapped runtime, and a regulator-defensible audit trail. This agent does all four.",
-        ar: "خدمات المواطنين في الخليج لا يمكن تقديمها عبر روبوت محادثة من مزوّد سحابي عام. فهي تحتاج إلى عربية فصيحة، وقبول لهجات، وبيئة تشغيل معزولة، ومسار تدقيق قابل للدفاع تنظيمياً. يلبّي هذا الوكيل الأربعة.",
+        en: "A mega-tender response is a multi-week, multi-team orchestration problem. The Bid Conductor reads the RFP end-to-end, calls the Qualifier to recommend bid/no-bid, then fans out parallel Section Drafters, a Pricing Modeller, and a Partner Outreach agent — every output flows through a Legal Reviewer before the Packet Compiler stitches the final submission.",
+        ar: "تُعدّ الاستجابة للمناقصات الكبرى مشكلة تنسيق متعدّد الفرق على مدى أسابيع. يقرأ منسّق العطاء كرّاسة الشروط بالكامل، ويستدعي المُقيّم لاقتراح قرار التقديم، ثم يوزّع كتّاب الأقسام ومحاكي التسعير ومسؤول التواصل مع الشركاء — وتمرّ جميع المخرجات على المراجع القانوني قبل أن يجمعها مُجمّع الحزمة في عرض التقديم النهائي.",
       },
       {
-        en: "Routes the conversation through the ministry's own Arabic NLU stack, escalates to a human agent with the full context already assembled, and writes a citation trail back to the source policy or service catalogue every time.",
-        ar: "يوجّه المحادثة عبر مكدّس فهم اللغة العربية الخاص بالوزارة، ويصعّد إلى موظف بشري مع تسليم كامل السياق المعدّ مسبقاً، ويكتب مسار مصادر يعود إلى السياسة أو كتالوج الخدمة في كل مرة.",
+        en: "The agent never submits on the bidder's behalf. It pauses at three explicit checkpoints — Bid Director on bid/no-bid, CFO on pricing, General Counsel on legal release — so the bidder retains full accountability for every commercial and legal commitment.",
+        ar: "لا يقدّم الوكيل العطاء نيابةً عن مقدّمه أبداً. يتوقّف عند ثلاث نقاط موافقة صريحة — مدير العطاءات لقرار التقديم، المدير المالي للتسعير، المستشار العام للإفراج القانوني — حتى يحتفظ مقدّم العطاء بالمساءلة الكاملة عن كل التزام تجاري وقانوني.",
       },
       {
-        en: "Designed for sovereign-cloud and on-prem deployment. The model and the data never leave the national perimeter.",
-        ar: "مصمَّم للنشر على السحابة السيادية والداخلية. لا يغادر النموذج ولا البيانات النطاق الوطني.",
+        en: "Designed for EPC, telecom, and IT-services bidders responding to GCC government, telecom, and energy mega-tenders — Etimad, ADNOC e-Tender, ARAMCO procurement, STC and e&.",
+        ar: "مصمَّم لمقدّمي عروض EPC والاتصالات وخدمات IT الذين يستجيبون للمناقصات الحكومية والاتصالاتية والطاقة في الخليج — اعتماد، مناقصات أدنوك الإلكترونية، مشتريات أرامكو، STC وe&.",
       },
     ],
     screens: [
       {
-        title: { en: "Bilingual conversation pane", ar: "لوحة محادثة ثنائية اللغة" },
+        title: { en: "RFP intake & qualifier", ar: "استلام كرّاسة الشروط والتقييم" },
         caption: {
-          en: "Mid-conversation view with intent, dialect tag, and confidence visible to the supervisor.",
-          ar: "عرض في منتصف المحادثة مع نية المتصل ولهجته ومستوى الثقة ظاهرة للمشرف.",
+          en: "Parsed RFP with mandatory requirements, evaluation weights, and the Qualifier's bid/no-bid recommendation with rationale.",
+          ar: "كرّاسة شروط محلَّلة مع المتطلبات الإلزامية ومعايير التقييم وتوصية المُقيّم بقرار التقديم وتبريرها.",
         },
       },
       {
-        title: { en: "Agent handoff", ar: "تسليم إلى موظف بشري" },
+        title: { en: "Parallel section drafting board", ar: "لوحة صياغة الأقسام بالتوازي" },
         caption: {
-          en: "Routing screen showing the human agent the full context, citations, and recommended next action.",
-          ar: "شاشة التوجيه التي تُظهر للموظف البشري السياق الكامل والمراجع والإجراء التالي الموصى به.",
+          en: "Section Drafter lanes — technical, commercial, governance — running in parallel with status, draft preview, and Legal Reviewer flags.",
+          ar: "مسارات كتّاب الأقسام — التقني والتجاري والحوكمة — تعمل بالتوازي مع الحالة ومعاينة المسوّدة وملاحظات المراجع القانوني.",
         },
       },
       {
-        title: { en: "Audit trail", ar: "مسار التدقيق" },
+        title: { en: "Pricing model & checkpoint", ar: "نموذج التسعير ونقطة الموافقة" },
         caption: {
-          en: "Per-conversation evidence pack regulators can subpoena: prompts, citations, model version, retention policy.",
-          ar: "حزمة أدلة لكل محادثة يمكن للجهات التنظيمية طلبها: المطالبات، والمراجع، وإصدار النموذج، وسياسة الاحتفاظ.",
+          en: "Pricing Modeller's scenario range with margin sensitivity, partner cost-share, and the CFO sign-off gate before the price goes into the packet.",
+          ar: "نطاق سيناريوهات محاكي التسعير مع حساسية الهامش وتقاسم تكلفة الشريك وبوابة موافقة المدير المالي قبل دخول السعر إلى الحزمة.",
+        },
+      },
+      {
+        title: { en: "Submission packet preview", ar: "معاينة حزمة التقديم" },
+        caption: {
+          en: "Compiler-assembled packet — cover letter, technical, commercial, legal annexes, partner LOIs — with citation trail back to the source RFP clause.",
+          ar: "حزمة مُجمّعة — خطاب التغطية والتقني والتجاري والملاحق القانونية ورسائل نوايا الشركاء — مع سلسلة مراجع إلى بنود كرّاسة الشروط المصدرية.",
         },
       },
     ],
     dataModel: {
       inputs: [
-        { en: "Service catalogue, policies, FAQ — all ingested from ministry SharePoint", ar: "كتالوج الخدمات والسياسات والأسئلة الشائعة — تُستوعب من شيربوينت الوزارة" },
-        { en: "Live caller transcript (voice or chat)", ar: "نص الاتصال المباشر (صوتي أو محادثة)" },
+        { en: "RFP / ITT document set, addenda, Q&A logs", ar: "وثائق كرّاسة الشروط، الملاحق، سجلات الأسئلة والأجوبة" },
+        { en: "Bidder past-performance library, partner pricing cards, legal clause library", ar: "مكتبة الأداء السابق لمقدّم العطاء، بطاقات تسعير الشركاء، مكتبة البنود القانونية" },
       ],
       internal: [
-        { en: "Sovereign on-prem LLM runtime, Arabic NLU and dialect tagger", ar: "بيئة تشغيل نموذج لغة كبير سيادية داخلية، فهم لغة عربية، وموسم لهجات" },
-        { en: "Citation enforcer — every answer must cite a source", ar: "مُلزِم مرجعي — كل إجابة يجب أن تستند إلى مصدر" },
+        { en: "Bid Conductor planner, Qualifier scorer, Section Drafters, Pricing Modeller, Partner Outreach, Legal Reviewer, Packet Compiler", ar: "منسّق العطاء، المُقيّم، كتّاب الأقسام، محاكي التسعير، مسؤول الشركاء، المراجع القانوني، مُجمّع الحزمة" },
       ],
       outputs: [
-        { en: "Resolved request, escalation packet for a human agent, regulator-ready audit pack", ar: "طلب محلول، حزمة تصعيد لموظف بشري، حزمة تدقيق جاهزة للجهات التنظيمية" },
+        { en: "Bid/no-bid memo, drafted section pack, pricing scenario range, compiled submission packet, audit log of every checkpoint", ar: "مذكّرة قرار التقديم، حزمة الأقسام المسوّدة، نطاق سيناريوهات التسعير، حزمة التقديم المجمّعة، سجل تدقيق لكل نقطة موافقة" },
       ],
     },
     status: "live",
-    accent: "#0F9ED5",
-    icon: "Users",
-    relatedService: "agentic-ai-transformation",
-    relatedAssessment: "ari",
+    accent: "#196B24",
+    icon: "FileText",
+    relatedService: "ai-product-studio",
   },
   {
-    id: "procurement-intelligence",
-    slug: "procurement-intelligence",
-    title: { en: "Procurement Intelligence Agent", ar: "وكيل ذكاء المشتريات" },
+    id: "procurement-negotiation-agent",
+    slug: "procurement-negotiation-agent",
+    title: { en: "Procurement Negotiation Agent", ar: "وكيل التفاوض على المشتريات" },
     class: "supply-chain-agent",
     industries: ["public-sector", "energy-commodities"],
     horizontals: ["supply-chain"],
@@ -824,9 +829,9 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     relatedService: "ai-product-studio",
   },
   {
-    id: "network-ops-agent",
-    slug: "network-ops-agent",
-    title: { en: "Telecom Network Ops Agent", ar: "وكيل عمليات شبكات الاتصالات" },
+    id: "network-ops-war-room",
+    slug: "network-ops-war-room",
+    title: { en: "Network Ops War Room", ar: "غرفة عمليات الشبكة" },
     class: "knowledge-decision-copilot",
     industries: ["telecom"],
     horizontals: [],
@@ -889,9 +894,9 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     relatedService: "agentic-ai-transformation",
   },
   {
-    id: "sama-compliance-agent",
-    slug: "sama-compliance-agent",
-    title: { en: "SAMA Compliance Agent", ar: "وكيل الامتثال لساما" },
+    id: "sama-compliance-sentinel",
+    slug: "sama-compliance-sentinel",
+    title: { en: "SAMA Compliance Sentinel", ar: "حارس الامتثال لمؤسسة النقد" },
     class: "risk-compliance-agent",
     industries: ["financial-services"],
     horizontals: [],
@@ -956,345 +961,77 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     relatedAssessment: "dafi",
   },
   {
-    id: "energy-trading-copilot",
-    slug: "energy-trading-copilot",
-    title: { en: "Energy Trading Copilot", ar: "مساعد تداول الطاقة" },
-    class: "knowledge-decision-copilot",
-    industries: ["energy-commodities"],
-    horizontals: [],
-    buyer: { en: "Head of Trading", ar: "رئيس التداول" },
-    pitch: {
-      en: "Reads price feeds, weather, vessel positions and OPEC commentary — surfaces trade ideas with risk-band rationale. Human-in-the-loop only; the agent never executes.",
-      ar: "يقرأ مصادر الأسعار والطقس ومواقع الناقلات وتعليقات أوبك — ويبرز أفكار تداول مع تبرير نطاق المخاطر. الإنسان دائماً في الحلقة؛ والوكيل لا ينفّذ أبداً.",
+      id: "citizen-services-concierge",
+      slug: "citizen-services-concierge",
+      title: { en: "Citizen Services Concierge", ar: "كونسيرج خدمات المواطنين" },
+      class: "customer-ops-agent",
+      industries: ["public-sector"],
+      horizontals: [],
+      buyer: { en: "Director General", ar: "المدير العام" },
+      pitch: {
+        en: "Bilingual EN/AR multi-turn agent for ministry call centres and chat — routed inside an air-gapped enclave, with full handoff context and provenance.",
+        ar: "وكيل ثنائي اللغة بالعربية والإنجليزية متعدد الجولات لمراكز اتصال الوزارات والدردشة — يعمل داخل بيئة معزولة سيادياً مع تسليم كامل السياق والمصدر.",
+      },
+      longDescription: [
+        {
+          en: "Citizen-facing services in the Gulf cannot be delivered by a hyperscaler chatbot. They need fluent Arabic, dialect tolerance, an air-gapped runtime, and a regulator-defensible audit trail. This agent does all four.",
+          ar: "خدمات المواطنين في الخليج لا يمكن تقديمها عبر روبوت محادثة من مزوّد سحابي عام. فهي تحتاج إلى عربية فصيحة، وقبول لهجات، وبيئة تشغيل معزولة، ومسار تدقيق قابل للدفاع تنظيمياً. يلبّي هذا الوكيل الأربعة.",
+        },
+        {
+          en: "Routes the conversation through the ministry's own Arabic NLU stack, escalates to a human agent with the full context already assembled, and writes a citation trail back to the source policy or service catalogue every time.",
+          ar: "يوجّه المحادثة عبر مكدّس فهم اللغة العربية الخاص بالوزارة، ويصعّد إلى موظف بشري مع تسليم كامل السياق المعدّ مسبقاً، ويكتب مسار مصادر يعود إلى السياسة أو كتالوج الخدمة في كل مرة.",
+        },
+        {
+          en: "Designed for sovereign-cloud and on-prem deployment. The model and the data never leave the national perimeter.",
+          ar: "مصمَّم للنشر على السحابة السيادية والداخلية. لا يغادر النموذج ولا البيانات النطاق الوطني.",
+        },
+      ],
+      screens: [
+        {
+          title: { en: "Bilingual conversation pane", ar: "لوحة محادثة ثنائية اللغة" },
+          caption: {
+            en: "Mid-conversation view with intent, dialect tag, and confidence visible to the supervisor.",
+            ar: "عرض في منتصف المحادثة مع نية المتصل ولهجته ومستوى الثقة ظاهرة للمشرف.",
+          },
+        },
+        {
+          title: { en: "Agent handoff", ar: "تسليم إلى موظف بشري" },
+          caption: {
+            en: "Routing screen showing the human agent the full context, citations, and recommended next action.",
+            ar: "شاشة التوجيه التي تُظهر للموظف البشري السياق الكامل والمراجع والإجراء التالي الموصى به.",
+          },
+        },
+        {
+          title: { en: "Audit trail", ar: "مسار التدقيق" },
+          caption: {
+            en: "Per-conversation evidence pack regulators can subpoena: prompts, citations, model version, retention policy.",
+            ar: "حزمة أدلة لكل محادثة يمكن للجهات التنظيمية طلبها: المطالبات، والمراجع، وإصدار النموذج، وسياسة الاحتفاظ.",
+          },
+        },
+      ],
+      dataModel: {
+        inputs: [
+          { en: "Service catalogue, policies, FAQ — all ingested from ministry SharePoint", ar: "كتالوج الخدمات والسياسات والأسئلة الشائعة — تُستوعب من شيربوينت الوزارة" },
+          { en: "Live caller transcript (voice or chat)", ar: "نص الاتصال المباشر (صوتي أو محادثة)" },
+        ],
+        internal: [
+          { en: "Sovereign on-prem LLM runtime, Arabic NLU and dialect tagger", ar: "بيئة تشغيل نموذج لغة كبير سيادية داخلية، فهم لغة عربية، وموسم لهجات" },
+          { en: "Citation enforcer — every answer must cite a source", ar: "مُلزِم مرجعي — كل إجابة يجب أن تستند إلى مصدر" },
+        ],
+        outputs: [
+          { en: "Resolved request, escalation packet for a human agent, regulator-ready audit pack", ar: "طلب محلول، حزمة تصعيد لموظف بشري، حزمة تدقيق جاهزة للجهات التنظيمية" },
+        ],
+      },
+      status: "live",
+      accent: "#0F9ED5",
+      icon: "Users",
+      relatedService: "agentic-ai-transformation",
+      relatedAssessment: "ari",
     },
-    longDescription: [
-      {
-        en: "Energy traders drown in feeds. This copilot ingests the lot — Brent / WTI / Dubai / Murban prices, OPEC and JODI commentary, vessel positions, weather forecasts, refinery outages — and surfaces 3–5 trade ideas a day with the rationale spelled out.",
-        ar: "يغرق متداولو الطاقة في تدفقات البيانات. يستوعب هذا المساعد الكثير منها — أسعار برنت وWTI ودبي ومربان، وتعليقات أوبك وJODI، ومواقع الناقلات، وتنبؤات الطقس، وانقطاعات المصافي — ويبرز 3–5 أفكار تداول يومياً مع التبرير.",
-      },
-      {
-        en: "The agent never executes. It writes a trade-idea memo with the evidence — the trader decides. That separation makes it deployable inside trading floors with hard regulatory ringfences.",
-        ar: "لا ينفّذ الوكيل أبداً. بل يكتب مذكّرة فكرة تداول مع الأدلة — والمتداول يقرّر. هذا الفصل يجعله قابلاً للنشر داخل قاعات تداول لها حواجز تنظيمية صارمة.",
-      },
-      {
-        en: "Risk bands and confidence are explicit. Every recommendation carries the assumption set — the trader can pressure-test the assumptions before committing capital.",
-        ar: "نطاقات المخاطر ومستويات الثقة معلنة بوضوح. تحمل كل توصية مجموعة الافتراضات — ويمكن للمتداول اختبارها قبل تخصيص رأس المال.",
-      },
-    ],
-    screens: [
-      {
-        title: { en: "Trade-idea board", ar: "لوحة أفكار التداول" },
-        caption: {
-          en: "Today's ideas ranked by conviction and risk band, each with a one-paragraph rationale and the supporting feeds.",
-          ar: "أفكار اليوم مرتّبة حسب الاقتناع ونطاق المخاطر، مع تبرير من فقرة واحدة والمصادر الداعمة.",
-        },
-      },
-      {
-        title: { en: "Feed monitor", ar: "مراقب التدفقات" },
-        caption: {
-          en: "Live view of price, weather, vessel and macro feeds — and which idea each new event reinforces or weakens.",
-          ar: "عرض حيّ لتدفقات الأسعار والطقس والناقلات والاقتصاد الكلي — وأيّ فكرة يدعمها أو يضعفها كل حدث جديد.",
-        },
-      },
-      {
-        title: { en: "Trade memo draft", ar: "مسوّدة مذكّرة التداول" },
-        caption: {
-          en: "Drafted PDF memo for the trade-floor — assumption set, risk band, exit triggers — for the trader to sign.",
-          ar: "مسوّدة مذكّرة PDF لقاعة التداول — مجموعة الافتراضات، نطاق المخاطر، محفّزات الخروج — لتوقيع المتداول.",
-        },
-      },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "Price feeds, weather, vessel positions, OPEC and JODI commentary, refinery telemetry", ar: "مصادر الأسعار، الطقس، مواقع الناقلات، تعليقات أوبك وJODI، قياسات المصافي" },
-      ],
-      internal: [
-        { en: "Multi-feed event correlator, risk-band model, citation-enforcing rationale generator", ar: "رابط أحداث متعدد المصادر، نموذج نطاق المخاطر، مولّد تبريرات مع مراجع إلزامية" },
-      ],
-      outputs: [
-        { en: "Trade-idea memos, risk-band table, exit-trigger watchlist", ar: "مذكّرات أفكار التداول، جدول نطاق المخاطر، قائمة مراقبة محفّزات الخروج" },
-      ],
-    },
-    status: "live",
-    accent: "#E97132",
-    icon: "TrendingUp",
-    relatedService: "agentic-ai-transformation",
-  },
-  {
-    id: "retail-demand-forecaster",
-    slug: "retail-demand-forecaster",
-    title: { en: "Retail Demand Forecaster", ar: "متنبئ طلب التجزئة" },
-    class: "supply-chain-agent",
-    industries: ["retail-consumer"],
-    horizontals: ["supply-chain"],
-    buyer: { en: "Head of Merchandising", ar: "رئيس البضائع" },
-    pitch: {
-      en: "SKU-store-week forecast tuned for GCC seasonality — Ramadan, school-return, summer-exodus. Drives allocation, replenishment and promo planning.",
-      ar: "تنبؤ على مستوى المنتج/المتجر/الأسبوع مضبوط لموسمية الخليج — رمضان، عودة المدارس، نزوح الصيف. يقود التخصيص والتزويد وتخطيط العروض.",
-    },
-    longDescription: [
-      {
-        en: "GCC retail seasonality is its own problem. Ramadan timing shifts annually, schools return on overlapping calendars across emirates, and the summer exodus moves both volume and channel mix. Generic forecasters fail. This one is tuned for the regional reality.",
-        ar: "موسمية التجزئة الخليجية مشكلة قائمة بذاتها. توقيت رمضان يتغيّر سنوياً، وتعود المدارس بتقاويم متداخلة عبر الإمارات، ونزوح الصيف يحرّك الحجم ومزيج القنوات معاً. تفشل المتنبئات العامة. هذا مضبوط للواقع الإقليمي.",
-      },
-      {
-        en: "Forecast at SKU × store × week. Drives allocation, replenishment, and promo cadence. Hands off cleanly to the merchandiser's existing planning system — never replaces it.",
-        ar: "تنبؤ على مستوى المنتج × المتجر × الأسبوع. يقود التخصيص والتزويد وإيقاع العروض. يُسلَّم بسلاسة إلى نظام تخطيط البضائع الحالي — ولا يستبدله أبداً.",
-      },
-      {
-        en: "Out-of-the-box adapters for Oracle Retail, SAP Retail, and Microsoft Dynamics — plus a CSV import path for the dukan-to-D2C operators still standardising their stack.",
-        ar: "محوّلات جاهزة لـ Oracle Retail وSAP Retail وMicrosoft Dynamics — إضافة إلى استيراد CSV للمشغّلين من «الدكان إلى D2C» الذين ما زالوا يوحّدون أنظمتهم.",
-      },
-    ],
-    screens: [
-      {
-        title: { en: "Forecast cone by SKU", ar: "مخروط التنبؤ حسب المنتج" },
-        caption: {
-          en: "26-week cone with the seasonality overlay (Ramadan, schools, summer) toggleable.",
-          ar: "مخروط 26 أسبوعاً مع طبقة الموسمية (رمضان، المدارس، الصيف) قابلة للتفعيل.",
-        },
-      },
-      {
-        title: { en: "Allocation suggestion", ar: "اقتراح التخصيص" },
-        caption: {
-          en: "Per-store allocation suggestion against current on-hand and in-transit; merchandiser approves or overrides.",
-          ar: "اقتراح تخصيص لكل متجر مقابل المخزون والشحنات قيد النقل؛ يوافق رئيس البضائع أو يتجاوز.",
-        },
-      },
-      {
-        title: { en: "Promo lift simulator", ar: "محاكي رفع العروض" },
-        caption: {
-          en: "Simulate promo cadence and depth, see forecast lift and margin impact before committing.",
-          ar: "حاكِ إيقاع العروض وعمقها، وانظر رفع التنبؤ وأثر الهامش قبل الإلزام.",
-        },
-      },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "POS sales history, on-hand and in-transit inventory, promo calendar, store master", ar: "تاريخ مبيعات نقاط البيع، المخزون والشحنات قيد النقل، تقويم العروض، البيانات الرئيسية للمتاجر" },
-        { en: "Local calendars: Hijri, school terms by emirate, public holidays", ar: "تقاويم محلية: الهجري، فصول المدارس حسب الإمارة، الإجازات الرسمية" },
-      ],
-      internal: [
-        { en: "Hierarchical forecast (chain → cluster → store), Ramadan-shift overlay, promo-lift model", ar: "تنبؤ هرمي (السلسلة → التجمّع → المتجر)، طبقة إزاحة رمضان، نموذج رفع العروض" },
-      ],
-      outputs: [
-        { en: "SKU × store × week forecast, allocation suggestions, promo lift simulator", ar: "تنبؤ على مستوى المنتج × المتجر × الأسبوع، اقتراحات التخصيص، محاكي رفع العروض" },
-      ],
-    },
-    status: "live",
-    accent: "#196B24",
-    icon: "BarChart3",
-    relatedService: "ai-product-studio",
-  },
-  {
-    id: "hospitality-revenue-optimizer",
-    slug: "hospitality-revenue-optimizer",
-    title: { en: "Hospitality Revenue Optimizer", ar: "مُحسِّن إيرادات الضيافة" },
-    class: "fpa-forecaster",
-    industries: ["travel-hospitality"],
-    horizontals: ["fpa"],
-    buyer: { en: "Chief Commercial Officer", ar: "كبير مسؤولي التجارة" },
-    pitch: {
-      en: "Property-level rate, length-of-stay and channel-mix optimisation — with event overlays for Riyadh Season, F1, and Hajj cohorts driving demand.",
-      ar: "تحسين الأسعار وطول الإقامة ومزيج القنوات على مستوى الفندق — مع طبقات الأحداث لموسم الرياض وF1 وحجاج العمرة.",
-    },
-    longDescription: [
-      {
-        en: "GCC hospitality demand is event-driven. The optimiser overlays Riyadh Season, Hajj cohorts, F1, EXPO-class events, and the major business calendar onto property-level demand — so the rate desk and revenue management team can stop reacting and start steering.",
-        ar: "الطلب على الضيافة الخليجية يقوده الحدث. يُركّب المُحسِّن طبقات موسم الرياض وحجاج الحرمين وF1 وفعاليات بحجم إكسبو والتقويم التجاري الرئيسي على الطلب على مستوى الفندق — حتى يتوقف مكتب الأسعار وفريق إدارة الإيرادات عن ردود الفعل ويبدؤوا في القيادة.",
-      },
-      {
-        en: "Outputs an explicit recommendation per room-type per day — rate, length-of-stay restrictions, channel mix — with the assumption stack visible to the revenue manager.",
-        ar: "ينتج توصية صريحة لكل نوع غرفة لكل يوم — السعر، قيود طول الإقامة، مزيج القنوات — مع إظهار حزمة الافتراضات لمدير الإيرادات.",
-      },
-      {
-        en: "Designed for portfolio operators with multi-brand inventory across the GCC; per-property tuning weighted by brand standard and competitor set.",
-        ar: "مصمَّم لمشغّلي المحافظ متعدّدة العلامات عبر الخليج؛ ضبط لكل فندق بترجيح حسب معايير العلامة ومجموعة المنافسين.",
-      },
-    ],
-    screens: [
-      {
-        title: { en: "Demand calendar", ar: "تقويم الطلب" },
-        caption: {
-          en: "365-day calendar with event overlays — every cell colour-coded by demand pressure.",
-          ar: "تقويم لـ365 يوماً مع طبقات الأحداث — كل خلية ملوّنة حسب ضغط الطلب.",
-        },
-      },
-      {
-        title: { en: "Rate recommendation", ar: "توصية الأسعار" },
-        caption: {
-          en: "Per-room-type per-day rate recommendation with the assumptions and competitor benchmarks visible.",
-          ar: "توصية سعر لكل نوع غرفة لكل يوم مع إظهار الافتراضات ومعايير المنافسين.",
-        },
-      },
-      {
-        title: { en: "Channel-mix tuner", ar: "موالف مزيج القنوات" },
-        caption: {
-          en: "Tune the OTA / direct / corporate mix and see the margin impact before publishing.",
-          ar: "اضبط مزيج OTA والمباشر والشركات وانظر أثر الهامش قبل النشر.",
-        },
-      },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "PMS data (Opera, Mews, Cloudbeds), competitor rate scrape, event calendar", ar: "بيانات PMS (Opera وMews وCloudbeds)، استخراج أسعار المنافسين، تقويم الأحداث" },
-      ],
-      internal: [
-        { en: "Demand model with Hajj/Ramadan/Riyadh-Season overlays, channel-margin model", ar: "نموذج طلب مع طبقات الحج ورمضان وموسم الرياض، نموذج هامش القناة" },
-      ],
-      outputs: [
-        { en: "Rate, LOS, and channel-mix recommendations per room-type per day", ar: "توصيات السعر وطول الإقامة ومزيج القنوات لكل نوع غرفة لكل يوم" },
-      ],
-    },
-    status: "live",
-    accent: "#F5A623",
-    icon: "Hotel",
-    relatedService: "ai-product-studio",
-  },
-  {
-    id: "ev-battery-health-agent",
-    slug: "ev-battery-health-agent",
-    title: { en: "EV Battery Health Agent", ar: "وكيل صحة بطارية المركبات الكهربائية" },
-    class: "knowledge-decision-copilot",
-    industries: ["automotive"],
-    horizontals: [],
-    buyer: { en: "Head of Aftermarket", ar: "رئيس ما بعد البيع" },
-    pitch: {
-      en: "Connected-vehicle telemetry → battery state-of-health prediction → proactive service outreach. Designed for the multi-brand dealer network reality of GCC automotive groups.",
-      ar: "قياسات المركبات المتصلة → تنبؤ بحالة صحة البطارية → تواصل خدمة استباقي. مصمَّم لواقع الشبكات متعددة العلامات لمجموعات السيارات الخليجية.",
-    },
-    longDescription: [
-      {
-        en: "EV battery health is the new aftermarket. This agent ingests connected-vehicle telemetry — temperature, charge cycles, depth-of-discharge — and predicts state-of-health months ahead of the warning lights, so the dealer can reach the customer with a service appointment, not the customer reaching the dealer with a complaint.",
-        ar: "صحة بطارية المركبات الكهربائية هي ما بعد البيع الجديد. يستوعب هذا الوكيل قياسات المركبات المتصلة — الحرارة، دورات الشحن، عمق التفريغ — ويتنبّأ بحالة الصحة قبل أشهر من إنذارات اللوحة، فيستطيع الوكيل التواصل مع العميل لتحديد موعد خدمة، بدلاً من أن يتواصل العميل بشكوى.",
-      },
-      {
-        en: "Built for the multi-brand dealer reality of GCC automotive groups — Al-Futtaim, Petromin, Juffali, AlGhanim — where one customer may have BMW, Lucid and Tesla in the same household.",
-        ar: "مبنيّ لواقع الشبكات متعددة العلامات لمجموعات السيارات الخليجية — الفطيم، بترومين، جفلي، الغانم — حيث قد يمتلك عميل واحد BMW وLucid وتسلا في نفس المنزل.",
-      },
-      {
-        en: "Plugs into the dealer's CRM — outreach happens through the channel the customer already uses, not a new app the customer will never download.",
-        ar: "يتصل بنظام إدارة علاقات العملاء لدى الوكيل — يحدث التواصل عبر القناة التي يستخدمها العميل بالفعل، لا تطبيق جديد لن يحمّله أبداً.",
-      },
-    ],
-    screens: [
-      {
-        title: { en: "Fleet health map", ar: "خريطة صحة الأسطول" },
-        caption: {
-          en: "Geographic view of vehicles in service, coloured by predicted battery state-of-health.",
-          ar: "عرض جغرافي للمركبات في الخدمة، ملوّنة حسب حالة الصحة المتنبَّأ بها للبطارية.",
-        },
-      },
-      {
-        title: { en: "Vehicle deep-dive", ar: "تحليل تفصيلي للمركبة" },
-        caption: {
-          en: "Per-VIN charge-cycle history, temperature exposure, and the predicted intervention window.",
-          ar: "تاريخ دورات الشحن لكل رقم تعريف مركبة، التعرّض الحراري، ونافذة التدخّل المتنبَّأ بها.",
-        },
-      },
-      {
-        title: { en: "Outreach orchestration", ar: "تنسيق التواصل" },
-        caption: {
-          en: "Drafted SMS / WhatsApp / call-script outreach the service advisor can review and send.",
-          ar: "مسوّدة تواصل عبر الرسائل القصيرة وواتساب ونص الاتصال يمكن لمستشار الخدمة مراجعتها وإرسالها.",
-        },
-      },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "Connected-vehicle telemetry (OEM API), DMS/CRM data", ar: "قياسات المركبات المتصلة (واجهة برمجة OEM)، بيانات DMS/CRM" },
-        { en: "Service history, parts availability, charging-network data where available", ar: "تاريخ الخدمة، توفّر القطع، بيانات شبكة الشحن حيث تتوفّر" },
-      ],
-      internal: [
-        { en: "State-of-health model, intervention-window predictor, multi-brand customer graph", ar: "نموذج حالة الصحة، متنبئ نافذة التدخّل، رسم بياني للعميل متعدّد العلامات" },
-      ],
-      outputs: [
-        { en: "Predicted SOH curve per vehicle, intervention recommendations, drafted outreach", ar: "منحنى صحة متنبَّأ لكل مركبة، توصيات التدخّل، مسوّدة التواصل" },
-      ],
-    },
-    status: "live",
-    accent: "#0F9ED5",
-    icon: "Battery",
-    relatedService: "agentic-ai-transformation",
-  },
-  {
-    id: "fpa-rolling-forecast",
-    slug: "fpa-rolling-forecast",
-    title: { en: "FP&A Rolling Forecast Agent", ar: "وكيل التنبؤ المتجدد للتخطيط المالي" },
-    class: "fpa-forecaster",
-    industries: [
-      "public-sector",
-      "telecom",
-      "financial-services",
-      "energy-commodities",
-      "retail-consumer",
-      "travel-hospitality",
-      "automotive",
-    ],
-    horizontals: ["fpa"],
-    buyer: { en: "CFO", ar: "المدير المالي" },
-    pitch: {
-      en: "Driver-based rolling forecast — ingests actuals, regenerates the forecast cone, drafts the variance commentary, flags the three things the CFO needs to take to the board.",
-      ar: "تنبؤ متجدد قائم على المحركات — يستوعب الفعلي، ويعيد توليد مخروط التنبؤ، ويصوغ تعليق الانحرافات، ويبرز الأشياء الثلاثة التي يجب على المدير المالي رفعها لمجلس الإدارة.",
-    },
-    longDescription: [
-      {
-        en: "Most CFOs have a rolling forecast in spreadsheet form. The agent operationalises it: ingest actuals every period, regenerate the forecast cone using the existing driver tree, draft the variance commentary in the CFO's house style, and flag the three things the board needs to see.",
-        ar: "معظم المدراء الماليين لديهم تنبؤ متجدد بصيغة جدول بيانات. يقوم الوكيل بتشغيله: استيعاب الفعلي كل فترة، وإعادة توليد مخروط التنبؤ باستخدام شجرة المحركات الحالية، وصياغة تعليق الانحرافات بأسلوب المدير المالي، وإبراز الأشياء الثلاثة التي يجب أن يراها المجلس.",
-      },
-      {
-        en: "Plugs into the existing planning stack — Anaplan, Workday Adaptive, OneStream, or even Excel — without forcing a re-platform.",
-        ar: "يتصل بحزمة التخطيط الحالية — Anaplan أو Workday Adaptive أو OneStream أو حتى Excel — دون فرض إعادة بناء النظام.",
-      },
-      {
-        en: "Variance commentary is drafted, not finalised. The CFO retains the pen — the agent loads the gun.",
-        ar: "تعليق الانحرافات يُصاغ، لا يُختم. يحتفظ المدير المالي بالقلم — والوكيل يجهّز الذخيرة.",
-      },
-    ],
-    screens: [
-      {
-        title: { en: "Forecast cone", ar: "مخروط التنبؤ" },
-        caption: {
-          en: "Regenerated cone with the driver decomposition visible — exactly which assumption moved the line.",
-          ar: "مخروط معاد توليده مع تفصيل المحركات — أي افتراض تحديداً حرّك الخط.",
-        },
-      },
-      {
-        title: { en: "Variance commentary draft", ar: "مسوّدة تعليق الانحرافات" },
-        caption: {
-          en: "Drafted MD&A-style narrative in the CFO's house style; every claim cites the underlying figure.",
-          ar: "رواية مسوّدة بأسلوب MD&A بأسلوب المدير المالي؛ كل ادعاء يستشهد بالرقم الأساسي.",
-        },
-      },
-      {
-        title: { en: "Board-pack flag", ar: "إبراز حزمة مجلس الإدارة" },
-        caption: {
-          en: "The three items the agent thinks the board must see, with rationale and the underlying transaction-level evidence.",
-          ar: "البنود الثلاثة التي يرى الوكيل وجوب عرضها على المجلس، مع التبرير والأدلة على مستوى المعاملات.",
-        },
-      },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "Actuals from ERP and revenue subledgers; existing planning model (Anaplan, Adaptive, OneStream, Excel)", ar: "الفعلي من ERP ودفاتر الإيرادات الفرعية؛ نموذج التخطيط الحالي" },
-      ],
-      internal: [
-        { en: "Driver-tree library, MD&A draft generator with house-style retrieval", ar: "مكتبة شجرة المحركات، مولّد مسوّدة MD&A مع استرجاع أسلوب الشركة" },
-      ],
-      outputs: [
-        { en: "Updated forecast cone, drafted variance commentary, top-three board flags", ar: "مخروط تنبؤ محدّث، مسوّدة تعليق انحرافات، أهم ثلاثة بنود لمجلس الإدارة" },
-      ],
-    },
-    status: "live",
-    accent: "#156082",
-    icon: "LineChart",
-    relatedService: "ai-product-studio",
-    relatedAssessment: "uvr",
-  },
-  {
-    id: "customer-care-multi-agent",
-    slug: "customer-care-multi-agent",
-    title: { en: "Customer Care Multi-Agent", ar: "وكلاء خدمة العملاء المتعددون" },
+    {
+    id: "customer-care-hive",
+    slug: "customer-care-hive",
+    title: { en: "Customer Care Hive", ar: "خلية رعاية العملاء" },
     class: "customer-ops-agent",
     industries: ["telecom", "retail-consumer"],
     horizontals: [],
@@ -1357,10 +1094,10 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     relatedService: "agentic-ai-transformation",
   },
   {
-    id: "sovereign-data-workbench",
-    slug: "sovereign-data-workbench",
-    title: { en: "Sovereign Data Workbench", ar: "منصة البيانات السيادية" },
-    class: "sovereign-data-workbench",
+    id: "sovereign-data-steward",
+    slug: "sovereign-data-steward",
+    title: { en: "Sovereign Data Steward", ar: "حارس البيانات السيادي" },
+    class: "sovereign-data-steward",
     industries: ["public-sector"],
     horizontals: [],
     buyer: { en: "Chief Data Officer", ar: "كبير مسؤولي البيانات" },
@@ -1423,9 +1160,9 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     relatedAssessment: "dafi",
   },
   {
-    id: "knowledge-memory-agent",
-    slug: "knowledge-memory-agent",
-    title: { en: "Knowledge Memory Agent", ar: "وكيل ذاكرة المعرفة" },
+    id: "enterprise-knowledge-concierge",
+    slug: "enterprise-knowledge-concierge",
+    title: { en: "Enterprise Knowledge Concierge", ar: "كونسيرج المعرفة المؤسسية" },
     class: "knowledge-decision-copilot",
     industries: [
       "public-sector",

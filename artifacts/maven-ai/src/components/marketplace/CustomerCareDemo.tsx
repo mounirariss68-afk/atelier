@@ -153,7 +153,7 @@ export default function CustomerCareDemo() {
 
   return (
     <DemoShell
-      slug="customer-care-multi-agent"
+      slug="customer-care-hive"
       eyebrow={COPY.eyebrow}
       title={COPY.title}
       intro={COPY.intro}
@@ -328,7 +328,7 @@ export default function CustomerCareDemo() {
       </section>
       <section className="py-12 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AgentTrace slug="customer-care-multi-agent" log={trace} accent="#0F9ED5" />
+          <AgentTrace slug="customer-care-hive" log={trace} accent="#0F9ED5" />
         </div>
       </section>
     </DemoShell>

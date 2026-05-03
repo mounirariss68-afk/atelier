@@ -191,7 +191,7 @@ export default function KnowledgeMemoryDemo() {
 
   return (
     <DemoShell
-      slug="knowledge-memory-agent"
+      slug="enterprise-knowledge-concierge"
       eyebrow={COPY.eyebrow}
       title={COPY.title}
       intro={COPY.intro}
@@ -359,7 +359,7 @@ export default function KnowledgeMemoryDemo() {
       </section>
       <section className="py-12 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AgentTrace slug="knowledge-memory-agent" log={trace} accent="#156082" />
+          <AgentTrace slug="enterprise-knowledge-concierge" log={trace} accent="#156082" />
         </div>
       </section>
     </DemoShell>

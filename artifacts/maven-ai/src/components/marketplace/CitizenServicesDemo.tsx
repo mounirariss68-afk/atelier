@@ -182,7 +182,7 @@ export default function CitizenServicesDemo() {
 
   return (
     <DemoShell
-      slug="citizen-services-agent"
+      slug="citizen-services-concierge"
       eyebrow={COPY.eyebrow}
       title={COPY.title}
       intro={COPY.intro}
@@ -348,7 +348,7 @@ export default function CitizenServicesDemo() {
       </section>
       <section className="py-12 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AgentTrace slug="citizen-services-agent" log={trace} accent="#0F9ED5" />
+          <AgentTrace slug="citizen-services-concierge" log={trace} accent="#0F9ED5" />
         </div>
       </section>
     </DemoShell>

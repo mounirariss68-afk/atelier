@@ -131,7 +131,7 @@ export default function ProcurementIntelligenceDemo() {
 
   return (
     <DemoShell
-      slug="procurement-intelligence"
+      slug="procurement-negotiation-agent"
       eyebrow={COPY.eyebrow}
       title={COPY.title}
       intro={COPY.intro}
@@ -282,7 +282,7 @@ export default function ProcurementIntelligenceDemo() {
 
       <section className="py-12 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <AgentTrace slug="procurement-intelligence" log={trace} accent="#196B24" />
+          <AgentTrace slug="procurement-negotiation-agent" log={trace} accent="#196B24" />
         </div>
       </section>
     </DemoShell>

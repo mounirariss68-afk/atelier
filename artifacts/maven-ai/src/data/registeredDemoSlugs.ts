@@ -13,19 +13,15 @@
 
 export const REGISTERED_DEMO_SLUGS: readonly string[] = [
   "value-realization",
-  "programme-health-copilot",
-  "citizen-services-agent",
-  "procurement-intelligence",
-  "network-ops-agent",
-  "sama-compliance-agent",
-  "energy-trading-copilot",
-  "retail-demand-forecaster",
-  "hospitality-revenue-optimizer",
-  "ev-battery-health-agent",
-  "fpa-rolling-forecast",
-  "customer-care-multi-agent",
-  "sovereign-data-workbench",
-  "knowledge-memory-agent",
+  "programme-war-room",
+  "tender-response-studio",
+  "procurement-negotiation-agent",
+  "network-ops-war-room",
+  "sama-compliance-sentinel",
+  "citizen-services-concierge",
+  "customer-care-hive",
+  "sovereign-data-steward",
+  "enterprise-knowledge-concierge",
 ] as const;
 
 export const REGISTERED_DEMO_SLUG_SET: ReadonlySet<string> = new Set(
