@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { simulator } from "../demo-i18n";
 import {
-  products, competitorPrices, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel,
+  products, competitorPrices, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel, getProductSpecs,
   type ArcelikProduct, type ProductCategory, type PriceTier,
 } from "@/data/arcelik-seed";
 import { generateSimulatorRecommendations } from "@/data/arcelik-agent";
@@ -28,12 +28,13 @@ export default function SimulatorView() {
   const [selectedCat, setSelectedCat] = useState<ProductCategory>("buzdolabi");
   const [filterSub, setFilterSub] = useState<string | null>(null);
   const [filterTier, setFilterTier] = useState<PriceTier | null>(null);
+  const [filterSmart, setFilterSmart] = useState(false);
   const [priceAdjust, setPriceAdjust] = useState(0);
   const [showResults, setShowResults] = useState(false);
 
   const filteredProducts = useMemo(() =>
-    products.filter((p) => p.category === selectedCat && (!filterSub || p.subcategory === filterSub) && (!filterTier || p.priceTier === filterTier)),
-    [selectedCat, filterSub, filterTier]
+    products.filter((p) => p.category === selectedCat && (!filterSub || p.subcategory === filterSub) && (!filterTier || p.priceTier === filterTier) && (!filterSmart || getProductSpecs(p).smartFeatures.length > 0)),
+    [selectedCat, filterSub, filterTier, filterSmart]
   );
 
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function SimulatorView() {
               <div className="space-y-2 mb-3">
                 <select
                   value={selectedCat}
-                  onChange={(e) => { setSelectedCat(e.target.value as ProductCategory); setFilterSub(null); setFilterTier(null); }}
+                  onChange={(e) => { setSelectedCat(e.target.value as ProductCategory); setFilterSub(null); setFilterTier(null); setFilterSmart(false); }}
                   className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
                 >
                   {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => (
@@ -158,6 +159,14 @@ export default function SimulatorView() {
                     ))}
                   </select>
                 </div>
+                <button
+                  onClick={() => setFilterSmart(!filterSmart)}
+                  className={`w-full px-2 py-1.5 text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                    filterSmart ? "bg-blue-600 text-white" : "border border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  📡 {lang === "en" ? "Smart Products Only" : "Sadece Akıllı Ürünler"}
+                </button>
               </div>
             )}
             <div className="relative">

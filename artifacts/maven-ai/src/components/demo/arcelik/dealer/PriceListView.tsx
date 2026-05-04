@@ -63,7 +63,7 @@ export default function PriceListView() {
       else if (sortCol === "tsfPrice") { va = a.tsfPrice; vb = b.tsfPrice; }
       else if (sortCol === "dealerCost") { va = a.dealerCost; vb = b.dealerCost; }
       else if (sortCol === "margin") { va = a.marginPercent; vb = b.marginPercent; }
-      else if (sortCol === "specs") { va = getProductSpecs(a).warrantyYears * 1000 + (getProductSpecs(a).smartFeatures.length > 0 ? 500 : 0) + parseFloat(getProductSpecs(a).capacity) || 0; vb = getProductSpecs(b).warrantyYears * 1000 + (getProductSpecs(b).smartFeatures.length > 0 ? 500 : 0) + parseFloat(getProductSpecs(b).capacity) || 0; }
+      else if (sortCol === "specs") { const sa = getProductSpecs(a); const sb = getProductSpecs(b); const pc = (c: string) => { const n = parseFloat(c); return isNaN(n) ? 0 : n; }; va = sa.warrantyYears * 1000 + (sa.smartFeatures.length > 0 ? 500 : 0) + pc(sa.capacity); vb = sb.warrantyYears * 1000 + (sb.smartFeatures.length > 0 ? 500 : 0) + pc(sb.capacity); }
       else { va = a.name; vb = b.name; }
       if (typeof va === "string") return sortDir === "asc" ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
       return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
