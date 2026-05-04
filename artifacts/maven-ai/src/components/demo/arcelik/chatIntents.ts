@@ -4,7 +4,7 @@ import {
   type ProductCategory,
 } from "@/data/arcelik-seed";
 
-export type ResponseType = "text" | "metric" | "table" | "list" | "campaign-card" | "analysis";
+export type ResponseType = "text" | "metric" | "table" | "list" | "campaign-card" | "analysis" | "chart";
 
 export interface ChatResponse {
   agent: "analyst" | "campaign-mgr";
@@ -390,6 +390,53 @@ const INTENTS: Intent[] = [
       type: "text",
       text: "Size şu konularda yardımcı olabilirim:\n\n📊 Pazar analizi: \"Pazar payımız kaç?\", \"Haftalık özet ver\"\n🏷️ Fiyat: \"Vestel fiyatları\", \"Fiyat artışı yapmalı mıyız?\"\n📍 Bölgesel: \"İstanbul'daki durum\", \"Zayıf şehirler\"\n📢 Kampanya: \"Kampanya öner\", \"Ramazan kampanyası\"\n📦 Ürün: \"En çok satan ürünler\", \"Buzdolabı segmenti\"\n🏪 Bayi: \"Bayi uyum oranı\"\n\nTürkçe veya İngilizce sorabilirsiniz.",
     }),
+  },
+  {
+    patterns: [/kategori.*dağılım/i, /dağılım.*grafik/i, /pie.*chart/i, /pasta.*grafik/i],
+    handler: () => {
+      const catCounts = (Object.entries(CATEGORY_LABELS) as [ProductCategory, string][]).map(([cat, label]) => ({
+        name: label,
+        value: products.filter((p) => p.category === cat).length,
+      }));
+      return {
+        agent: "analyst",
+        type: "chart" as const,
+        text: "Ürün portföyünün kategori bazlı dağılımı:",
+        data: { chartType: "pie", chartData: catCounts, label: "Ürün Sayısı" },
+      };
+    },
+  },
+  {
+    patterns: [/marka.*fiyat.*grafik/i, /fiyat.*grafik/i, /grafik.*göster/i, /chart/i, /grafik/i],
+    handler: () => {
+      const brandAvgs = COMPETITOR_BRANDS.map((b) => {
+        const prices = competitorPrices.filter((cp) => cp.brand === b.name);
+        const avg = prices.length ? prices.reduce((s, p) => s + p.priceDeltaPercent, 0) / prices.length : 0;
+        return { name: b.name, value: +avg.toFixed(1) };
+      }).filter((b) => b.value !== 0);
+      return {
+        agent: "analyst",
+        type: "chart" as const,
+        text: "Rakip markaların Arçelik'e göre ortalama fiyat farkı (%):",
+        data: { chartType: "bar", chartData: brandAvgs, label: "Ort. Fiyat Farkı (%)" },
+      };
+    },
+  },
+  {
+    patterns: [/marj.*grafik/i, /marj.*dağılım/i, /kategori.*marj.*grafik/i],
+    handler: () => {
+      const catMargins = (Object.entries(CATEGORY_LABELS) as [ProductCategory, string][]).map(([cat, label]) => {
+        const ps = products.filter((p) => p.category === cat);
+        const avg = ps.length ? ps.reduce((s, p) => s + p.marginPercent, 0) / ps.length : 0;
+        return { name: label, value: +avg.toFixed(1) };
+      });
+      return {
+        agent: "analyst",
+        type: "chart" as const,
+        text: "Kategori bazlı ortalama brüt marj dağılımı:",
+        data: { chartType: "bar", chartData: catMargins, label: "Ortalama Marj (%)" },
+      };
+    },
   },
 ];
 

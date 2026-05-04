@@ -183,6 +183,42 @@ export default function CompetitorRadarView() {
         </motion.div>
       </div>
 
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="bg-white rounded-xl border border-gray-100 shadow-sm p-5"
+      >
+        <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+          <AlertTriangle size={16} className="text-amber-500" />
+          Fiyat Hareketleri Zaman Çizelgesi
+        </h3>
+        <div className="space-y-3">
+          {[
+            { date: "2 Mayıs 2026", brand: "Vestel", action: "Buzdolabı segmentinde %5 fiyat indirimi uygulandı", severity: "high" as const },
+            { date: "28 Nisan 2026", brand: "Samsung", action: "OLED TV serisinde kampanya fiyatı uygulandı", severity: "medium" as const },
+            { date: "25 Nisan 2026", brand: "Bosch", action: "Premium bulaşık makinesi yeni model lansmanı", severity: "low" as const },
+            { date: "20 Nisan 2026", brand: "Profilo", action: "Çamaşır makinesi serisinde %3 fiyat artışı", severity: "low" as const },
+            { date: "15 Nisan 2026", brand: "Vestel", action: "Klima segmentinde agresif yaz kampanyası başlangıcı", severity: "high" as const },
+          ].map((event, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <div className="flex flex-col items-center">
+                <div className={`w-3 h-3 rounded-full flex-shrink-0 ${event.severity === "high" ? "bg-red-500" : event.severity === "medium" ? "bg-amber-500" : "bg-green-500"}`} />
+                {i < 4 && <div className="w-px h-8 bg-gray-200" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-400">{event.date}</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: `${BRAND_COLORS[event.brand] || "#6B7280"}15`, color: BRAND_COLORS[event.brand] || "#6B7280" }}>{event.brand}</span>
+                  {event.severity === "high" && <AlertTriangle size={10} className="text-red-500" />}
+                </div>
+                <p className="text-xs text-gray-700 mt-0.5">{event.action}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {brandCards.map((b, i) => (
           <motion.div
@@ -221,6 +257,14 @@ export default function CompetitorRadarView() {
               <div className="flex justify-between">
                 <span>Kategoriler</span>
                 <span className="font-semibold text-[#0E2841]">{b.categoryCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Son Hareket</span>
+                <span className="text-[10px] font-semibold text-amber-600">{b.threat === "high" ? "Fiyat indirimi" : b.threat === "medium" ? "Kampanya" : "Güncelleme"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Aktif Promo</span>
+                <span className="text-[10px] font-semibold text-purple-600">{b.positioning === "value" ? "2 kampanya" : "1 kampanya"}</span>
               </div>
             </div>
           </motion.div>

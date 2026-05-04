@@ -13,10 +13,10 @@ import {
 type Tab = "suggested" | "builder" | "history";
 
 const MOCK_HISTORY = [
-  { id: "h1", name: "Mart Ramazan Kampanyası", status: "completed" as const, dates: "1 Mar – 21 Mar 2026", lift: "+1.1%", revenue: "+₺38M" },
-  { id: "h2", name: "Şubat Taksit Fırsatı", status: "completed" as const, dates: "1 Şub – 28 Şub 2026", lift: "+0.9%", revenue: "+₺28M" },
-  { id: "h3", name: "Ocak Enerji Kampanyası", status: "completed" as const, dates: "15 Oca – 5 Şub 2026", lift: "+0.4%", revenue: "+₺12M" },
-  { id: "h4", name: "Aralık Yılbaşı İndirimi", status: "completed" as const, dates: "15 Ara – 5 Oca 2026", lift: "+0.5%", revenue: "+₺22M" },
+  { id: "h1", name: "Mart Ramazan Kampanyası", status: "completed" as const, dates: "1 Mar – 21 Mar 2026", lift: "+1.1%", revenue: "+₺38M", projected: { lift: "+1.2%", revenue: "+₺42M", margin: "-0.8%" }, actual: { lift: "+1.1%", revenue: "+₺38M", margin: "-0.7%" } },
+  { id: "h2", name: "Şubat Taksit Fırsatı", status: "completed" as const, dates: "1 Şub – 28 Şub 2026", lift: "+0.9%", revenue: "+₺28M", projected: { lift: "+1.0%", revenue: "+₺30M", margin: "-0.3%" }, actual: { lift: "+0.9%", revenue: "+₺28M", margin: "-0.4%" } },
+  { id: "h3", name: "Ocak Enerji Kampanyası", status: "completed" as const, dates: "15 Oca – 5 Şub 2026", lift: "+0.4%", revenue: "+₺12M", projected: { lift: "+0.5%", revenue: "+₺15M", margin: "+0.3%" }, actual: { lift: "+0.4%", revenue: "+₺12M", margin: "+0.2%" } },
+  { id: "h4", name: "Aralık Yılbaşı İndirimi", status: "completed" as const, dates: "15 Ara – 5 Oca 2026", lift: "+0.5%", revenue: "+₺22M", projected: { lift: "+0.4%", revenue: "+₺22M", margin: "-0.3%" }, actual: { lift: "+0.5%", revenue: "+₺22M", margin: "-0.2%" } },
 ];
 
 function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLaunch: () => void }) {
@@ -109,6 +109,10 @@ function CampaignBuilder() {
   const [selectedCats, setSelectedCats] = useState<ProductCategory[]>([]);
   const [discount, setDiscount] = useState(10);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [promotionType, setPromotionType] = useState("indirim");
+  const [startDate, setStartDate] = useState("2026-06-01");
+  const [endDate, setEndDate] = useState("2026-06-30");
+  const [aiOptimizing, setAiOptimizing] = useState(false);
 
   const projectedImpact = {
     share: `+${(discount * 0.08).toFixed(1)}%`,
@@ -119,12 +123,13 @@ function CampaignBuilder() {
   const handleCreate = () => {
     toast({
       title: "Kampanya Oluşturuldu",
-      description: `"${name || "Yeni Kampanya"}" başarıyla oluşturuldu ve onaya gönderildi.`,
+      description: `"${name || "Yeni Kampanya"}" (${promotionType}) ${startDate} – ${endDate} tarihleri için onaya gönderildi.`,
     });
     setName("");
     setSelectedCats([]);
     setDiscount(10);
     setSelectedCities([]);
+    setPromotionType("indirim");
   };
 
   return (
@@ -144,6 +149,31 @@ function CampaignBuilder() {
               placeholder="Yaz Fırsatları 2026"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#E30613]/20 focus:border-[#E30613]"
             />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">Promosyon Tipi</label>
+            <select
+              value={promotionType}
+              onChange={(e) => setPromotionType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#E30613]/20 appearance-none"
+            >
+              <option value="indirim">İndirim</option>
+              <option value="taksit">Taksit</option>
+              <option value="trade-in">Trade-in (Eski-Yeni)</option>
+              <option value="paket">Paket İndirim</option>
+              <option value="hediye">Hediye / Ek Ürün</option>
+              <option value="bolgesel">Bölgesel Kampanya</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600 mb-1 block">Tarih Aralığı</label>
+            <div className="flex gap-2">
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#E30613]/20" />
+              <span className="text-gray-400 self-center text-xs">—</span>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#E30613]/20" />
+            </div>
           </div>
 
           <div>
@@ -218,10 +248,27 @@ function CampaignBuilder() {
             </div>
             <div className="mt-4 pt-3 border-t border-white/10">
               <p className="text-[10px] text-gray-400">
-                {selectedCats.length} kategori × {selectedCities.length || "tüm"} şehir × %{discount} indirim
+                {promotionType} • {selectedCats.length || "tüm"} kategori × {selectedCities.length || "tüm"} şehir × %{discount} • {startDate} – {endDate}
               </p>
             </div>
           </div>
+
+          <button
+            onClick={() => {
+              setAiOptimizing(true);
+              setTimeout(() => {
+                setDiscount(Math.min(30, discount + 3));
+                if (selectedCities.length === 0) setSelectedCities(["istanbul", "ankara", "izmir"]);
+                setAiOptimizing(false);
+                toast({ title: "AI Optimizasyonu Tamamlandı", description: "İndirim oranı, hedef şehirler ve zamanlama AI tarafından optimize edildi." });
+              }, 2000);
+            }}
+            disabled={aiOptimizing}
+            className="w-full py-2.5 rounded-xl border-2 border-[#F5A623] text-[#F5A623] font-bold text-sm hover:bg-[#F5A623]/5 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            <Sparkles size={16} className={aiOptimizing ? "animate-spin" : ""} />
+            {aiOptimizing ? "Optimize ediliyor..." : "AI ile Optimize Et"}
+          </button>
 
           <button
             onClick={handleCreate}
@@ -239,6 +286,7 @@ function CampaignBuilder() {
 export default function CampaignStudioView() {
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>("suggested");
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 
   const handleLaunch = (campaignName: string) => {
     toast({
@@ -292,19 +340,62 @@ export default function CampaignStudioView() {
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="px-5 py-4 flex items-center gap-4 hover:bg-gray-50/50"
+                className="hover:bg-gray-50/50 cursor-pointer"
+                onClick={() => setExpandedHistory(expandedHistory === h.id ? null : h.id)}
               >
-                <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center">
-                  <CheckCircle2 size={16} className="text-green-600" />
+                <div className="px-5 py-4 flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center">
+                    <CheckCircle2 size={16} className="text-green-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#0E2841]">{h.name}</p>
+                    <p className="text-[11px] text-gray-500 flex items-center gap-1"><Calendar size={10} /> {h.dates}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-green-600">{h.lift} pay artışı</p>
+                    <p className="text-[11px] text-gray-500">{h.revenue} gelir</p>
+                  </div>
+                  <ChevronRight size={14} className={`text-gray-400 transition-transform ${expandedHistory === h.id ? "rotate-90" : ""}`} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[#0E2841]">{h.name}</p>
-                  <p className="text-[11px] text-gray-500 flex items-center gap-1"><Calendar size={10} /> {h.dates}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-green-600">{h.lift} pay artışı</p>
-                  <p className="text-[11px] text-gray-500">{h.revenue} gelir</p>
-                </div>
+                <AnimatePresence>
+                  {expandedHistory === h.id && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-5 pb-4 pt-0">
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-3">Tahmini vs Gerçekleşen</p>
+                          <div className="grid grid-cols-3 gap-4 text-xs">
+                            <div>
+                              <p className="text-gray-400 text-[10px] mb-1">Pazar Payı Etkisi</p>
+                              <div className="space-y-0.5">
+                                <p className="text-gray-500">Tahmini: <strong>{h.projected.lift}</strong></p>
+                                <p className="text-green-600">Gerçek: <strong>{h.actual.lift}</strong></p>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-gray-400 text-[10px] mb-1">Gelir Değişimi</p>
+                              <div className="space-y-0.5">
+                                <p className="text-gray-500">Tahmini: <strong>{h.projected.revenue}</strong></p>
+                                <p className="text-green-600">Gerçek: <strong>{h.actual.revenue}</strong></p>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-gray-400 text-[10px] mb-1">Marj Etkisi</p>
+                              <div className="space-y-0.5">
+                                <p className="text-gray-500">Tahmini: <strong>{h.projected.margin}</strong></p>
+                                <p className={h.actual.margin.startsWith("-") ? "text-amber-600" : "text-green-600"}>Gerçek: <strong>{h.actual.margin}</strong></p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             ))}
           </div>

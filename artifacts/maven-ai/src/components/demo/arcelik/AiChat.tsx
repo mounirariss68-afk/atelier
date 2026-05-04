@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, Send, Bot, User, Sparkles, BarChart3 } from "lucide-react";
+import { X, Send, Bot, User, Sparkles } from "lucide-react";
+import {
+  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from "recharts";
 import { matchIntent, type ChatResponse } from "./chatIntents";
 
 interface Message {
@@ -168,6 +171,38 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
               )}
+
+              {msg.response?.type === "chart" && msg.response.data && (() => {
+                const CHART_COLORS = ["#E30613", "#0E2841", "#F5A623", "#16a34a", "#7c3aed", "#0891b2", "#db2777", "#d97706"];
+                const cData = msg.response.data.chartData as { name: string; value: number }[];
+                const cType = msg.response.data.chartType as string;
+                return (
+                  <div className="mt-2 bg-white border border-gray-200 rounded-xl p-3">
+                    <p className="text-[10px] font-semibold text-gray-500 mb-2">{String(msg.response.data.label || "")}</p>
+                    <div className="h-[160px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        {cType === "pie" ? (
+                          <PieChart>
+                            <Pie data={cData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={55} label={({ name, percent }: { name: string; percent: number }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={9}>
+                              {cData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                          </PieChart>
+                        ) : (
+                          <BarChart data={cData} margin={{ left: 0, right: 5 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={40} />
+                            <YAxis tick={{ fontSize: 9 }} width={35} />
+                            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                            <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={20}>
+                              {cData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                            </Bar>
+                          </BarChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <p className="text-[10px] text-gray-400 mt-1">
                 {msg.timestamp.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
