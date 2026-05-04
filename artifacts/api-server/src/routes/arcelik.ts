@@ -13,6 +13,7 @@ import {
   arcelikScrapeLogsTable,
   arcelikMarketplacePricesTable,
   arcelikProductEquivalencesTable,
+  arcelikProductSpecsTable,
 } from "@workspace/db";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -328,6 +329,200 @@ router.get("/equivalences", async (_req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to fetch equivalences");
     res.status(500).json({ error: "Failed to fetch equivalences" });
+  }
+});
+
+// Structured specs scraped from marketplace PDPs (Tüm Özellikler). Filter by
+// marketplace product id when provided; otherwise return the most recent
+// extractions. Used by the comparison view to show side-by-side spec tables.
+router.get("/product-specs", async (_req, res) => {
+  try {
+    const { marketplace, marketplaceProductId, limit } = _req.query;
+    const maxRows = Math.min(Number(limit) || 200, 2000);
+    const conditions = [];
+    if (marketplace)
+      conditions.push(
+        eq(arcelikProductSpecsTable.marketplace, String(marketplace)),
+      );
+    if (marketplaceProductId)
+      conditions.push(
+        eq(
+          arcelikProductSpecsTable.marketplaceProductId,
+          String(marketplaceProductId),
+        ),
+      );
+    let query = db
+      .select()
+      .from(arcelikProductSpecsTable)
+      .orderBy(desc(arcelikProductSpecsTable.extractedAt))
+      .limit(maxRows);
+    if (conditions.length > 0) {
+      query = query.where(
+        conditions.length === 1 ? conditions[0] : and(...conditions),
+      ) as typeof query;
+    }
+    const rows = await query;
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch product specs");
+    res.status(500).json({ error: "Failed to fetch product specs" });
+  }
+});
+
+// Multi-source aggregated competitor pricing. Combines hardcoded competitor
+// prices (from brand-site scrapers like Bosch/Vestel/Samsung) with marketplace
+// observations (n11 + trendyol) keyed by arcelik product, computing best/avg/
+// range across sources and a per-source breakdown.
+router.get("/competitor-prices/multi-source", async (_req, res) => {
+  try {
+    const { arcelikProductId, brand, category } = _req.query;
+
+    const competitorConditions = [];
+    if (brand)
+      competitorConditions.push(
+        eq(arcelikCompetitorPricesTable.brand, String(brand)),
+      );
+    if (category)
+      competitorConditions.push(
+        eq(arcelikCompetitorPricesTable.category, String(category)),
+      );
+    if (arcelikProductId)
+      competitorConditions.push(
+        eq(
+          arcelikCompetitorPricesTable.arcelikEquivalentId,
+          String(arcelikProductId),
+        ),
+      );
+    const competitorBaseQuery = db
+      .select()
+      .from(arcelikCompetitorPricesTable);
+    const competitorRows =
+      competitorConditions.length === 0
+        ? await competitorBaseQuery
+        : await competitorBaseQuery.where(
+            competitorConditions.length === 1
+              ? competitorConditions[0]
+              : and(...competitorConditions),
+          );
+
+    // Marketplace prices joined with their algorithmic Arçelik link
+    const marketplaceConditions = [];
+    if (brand)
+      marketplaceConditions.push(
+        eq(arcelikMarketplacePricesTable.brand, String(brand)),
+      );
+    if (category)
+      marketplaceConditions.push(
+        eq(arcelikMarketplacePricesTable.category, String(category)),
+      );
+    if (arcelikProductId)
+      marketplaceConditions.push(
+        eq(
+          arcelikMarketplacePricesTable.arcelikProductId,
+          String(arcelikProductId),
+        ),
+      );
+    const marketplaceBaseQuery = db
+      .select()
+      .from(arcelikMarketplacePricesTable);
+    const marketplaceRows =
+      marketplaceConditions.length === 0
+        ? await marketplaceBaseQuery
+        : await marketplaceBaseQuery.where(
+            marketplaceConditions.length === 1
+              ? marketplaceConditions[0]
+              : and(...marketplaceConditions),
+          );
+
+    // Group by arcelikProductId (or by competitor brand+model when no product link)
+    type Observation = {
+      source: string;
+      sourceType: "brand-site" | "marketplace";
+      brand: string;
+      model: string;
+      price: number;
+      url?: string;
+      scrapedAt?: string;
+    };
+    const buckets = new Map<
+      string,
+      { arcelikProductId: string | null; observations: Observation[] }
+    >();
+
+    const keyFor = (productId: string | null, brand: string, model: string) =>
+      productId ? `p:${productId}` : `m:${brand}:${model}`;
+
+    for (const cp of competitorRows) {
+      const k = keyFor(cp.arcelikEquivalentId, cp.brand, cp.competitorModel);
+      const bucket = buckets.get(k) ?? {
+        arcelikProductId: cp.arcelikEquivalentId,
+        observations: [],
+      };
+      bucket.observations.push({
+        source: "brand-site",
+        sourceType: "brand-site",
+        brand: cp.brand,
+        model: cp.competitorModel,
+        price: cp.competitorPrice,
+        scrapedAt: cp.scrapedAt ?? undefined,
+      });
+      buckets.set(k, bucket);
+    }
+    for (const mp of marketplaceRows) {
+      const k = keyFor(mp.arcelikProductId, mp.brand, mp.title);
+      const bucket = buckets.get(k) ?? {
+        arcelikProductId: mp.arcelikProductId,
+        observations: [],
+      };
+      bucket.observations.push({
+        source: mp.marketplace,
+        sourceType: "marketplace",
+        brand: mp.brand,
+        model: mp.title,
+        price: mp.price,
+        url: mp.productUrl,
+        scrapedAt: mp.scrapedAt?.toISOString?.() ?? String(mp.scrapedAt),
+      });
+      buckets.set(k, bucket);
+    }
+
+    const aggregated = Array.from(buckets.entries()).map(([key, b]) => {
+      const prices = b.observations.map((o) => o.price);
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      const avgPrice = Math.round(prices.reduce((s, n) => s + n, 0) / prices.length);
+      const bySource: Record<string, number[]> = {};
+      for (const o of b.observations) {
+        (bySource[o.source] ??= []).push(o.price);
+      }
+      const perSource = Object.entries(bySource).map(([source, ps]) => ({
+        source,
+        count: ps.length,
+        bestPrice: Math.min(...ps),
+        avgPrice: Math.round(ps.reduce((s, n) => s + n, 0) / ps.length),
+      }));
+      return {
+        key,
+        arcelikProductId: b.arcelikProductId,
+        sourceCount: Object.keys(bySource).length,
+        observationCount: b.observations.length,
+        bestPrice: minPrice,
+        avgPrice,
+        priceRange: { min: minPrice, max: maxPrice, spreadPct: minPrice > 0 ? Math.round(((maxPrice - minPrice) / minPrice) * 100) : 0 },
+        perSource,
+        observations: b.observations,
+      };
+    });
+
+    aggregated.sort((a, b) => b.sourceCount - a.sourceCount || b.observationCount - a.observationCount);
+
+    res.json({
+      total: aggregated.length,
+      groups: aggregated.slice(0, 500),
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to compute multi-source aggregation");
+    res.status(500).json({ error: "Failed to compute multi-source aggregation" });
   }
 });
 

@@ -3,8 +3,9 @@ import {
   arcelikProductsTable,
   arcelikMarketplacePricesTable,
   arcelikProductEquivalencesTable,
+  arcelikProductSpecsTable,
 } from "@workspace/db";
-import { sql, gte, lte, and, eq, ne, like } from "drizzle-orm";
+import { gte, eq, or, like } from "drizzle-orm";
 import { logger } from "./logger";
 
 function normalizeBrand(text: string): string {
@@ -75,6 +76,7 @@ interface ProductForMatching {
 interface MarketplaceForMatching {
   id: number;
   marketplace: string;
+  marketplaceProductId: string;
   brand: string;
   title: string;
   category: string;
@@ -82,6 +84,12 @@ interface MarketplaceForMatching {
   capacityLiters: number | null;
   capacityKg: number | null;
   energyClass: string | null;
+  // Structured spec values (joined from arcelik_product_specs); preferred
+  // over title-parsed fields when present.
+  specCapacityLiters: number | null;
+  specCapacityKg: number | null;
+  specEnergyClass: string | null;
+  specProductType: string | null;
 }
 
 export interface EquivalenceResult {
@@ -111,10 +119,14 @@ export async function rebuildEquivalences(
     .from(arcelikProductsTable)) as ProductForMatching[];
 
   const recentSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7);
-  const marketplaceRecords = (await db
+  // LEFT JOIN structured specs so the matcher can use real PDP-extracted
+  // capacity/energy when available, falling back to title-parsed values.
+  const rawRows = await db
     .select({
       id: arcelikMarketplacePricesTable.id,
       marketplace: arcelikMarketplacePricesTable.marketplace,
+      marketplaceProductId:
+        arcelikMarketplacePricesTable.marketplaceProductId,
       brand: arcelikMarketplacePricesTable.brand,
       title: arcelikMarketplacePricesTable.title,
       category: arcelikMarketplacePricesTable.category,
@@ -122,9 +134,18 @@ export async function rebuildEquivalences(
       capacityLiters: arcelikMarketplacePricesTable.capacityLiters,
       capacityKg: arcelikMarketplacePricesTable.capacityKg,
       energyClass: arcelikMarketplacePricesTable.energyClass,
+      specCapacityLiters: arcelikProductSpecsTable.capacityLiters,
+      specCapacityKg: arcelikProductSpecsTable.capacityKg,
+      specEnergyClass: arcelikProductSpecsTable.energyClass,
+      specProductType: arcelikProductSpecsTable.productType,
     })
     .from(arcelikMarketplacePricesTable)
-    .where(gte(arcelikMarketplacePricesTable.scrapedAt, recentSince))) as MarketplaceForMatching[];
+    .leftJoin(
+      arcelikProductSpecsTable,
+      eq(arcelikProductSpecsTable.marketplacePriceId, arcelikMarketplacePricesTable.id),
+    )
+    .where(gte(arcelikMarketplacePricesTable.scrapedAt, recentSince));
+  const marketplaceRecords = rawRows as MarketplaceForMatching[];
 
   if (marketplaceRecords.length === 0) {
     return { scanned: 0, created: 0, avgConfidence: 0 };
@@ -174,32 +195,38 @@ export async function rebuildEquivalences(
     for (const mp of candidates) {
       const reasons: string[] = ["category-match"];
       let score = 0.3; // baseline for category match
+      // Prefer structured specs (from PDP scrape) over title-parsed fallbacks.
+      const mpLiters = mp.specCapacityLiters ?? mp.capacityLiters;
+      const mpKg = mp.specCapacityKg ?? mp.capacityKg;
+      const mpEnergy = mp.specEnergyClass ?? mp.energyClass;
+      const usedSpec = mp.specCapacityLiters !== null || mp.specCapacityKg !== null;
+      if (usedSpec) reasons.push("spec-data-used");
 
       // Capacity comparison
       let capacityDelta: number | undefined;
-      if (pLiters && mp.capacityLiters) {
+      if (pLiters && mpLiters) {
         capacityDelta =
-          Math.round((Math.abs(mp.capacityLiters - pLiters) / pLiters) * 1000) / 10;
+          Math.round((Math.abs(mpLiters - pLiters) / pLiters) * 1000) / 10;
         if (capacityDelta <= 10) {
-          score += 0.25;
+          score += usedSpec ? 0.3 : 0.25;
           reasons.push(`capacity-within-10pct (${capacityDelta}%)`);
         } else if (capacityDelta <= 20) {
           score += 0.1;
           reasons.push(`capacity-within-20pct (${capacityDelta}%)`);
         }
-      } else if (pKg && mp.capacityKg) {
+      } else if (pKg && mpKg) {
         capacityDelta =
-          Math.round((Math.abs(mp.capacityKg - pKg) / pKg) * 1000) / 10;
+          Math.round((Math.abs(mpKg - pKg) / pKg) * 1000) / 10;
         if (capacityDelta <= 15) {
-          score += 0.25;
+          score += usedSpec ? 0.3 : 0.25;
           reasons.push(`capacity-kg-within-15pct (${capacityDelta}%)`);
         }
       }
 
-      // Energy class
+      // Energy class (uses spec value when available)
       const energyDistance = energyTierDistance(
         product.energyClass,
-        mp.energyClass,
+        mpEnergy,
       );
       const energyClassMatch =
         energyDistance !== null ? energyDistance <= 1 : undefined;
@@ -270,7 +297,9 @@ export async function rebuildEquivalences(
           competitorMarketplaceId: top.mp.id,
           matchConfidence: top.score,
           matchBasis: top.basis,
-          source: `n11/${scrapeRunId}`,
+          // Tag with the actual marketplace so the flush below targets only
+          // marketplace-sourced equivalences and we can audit per-source.
+          source: `${top.mp.marketplace}/${scrapeRunId}`,
         });
       }
     }
@@ -280,12 +309,18 @@ export async function rebuildEquivalences(
     return { scanned: marketplaceRecords.length, created: 0, avgConfidence: 0 };
   }
 
-  // Replace ALL n11-sourced equivalences (not just this run) so that older
-  // matches built before brand normalization or against stale marketplace rows
-  // are flushed and rebuilt from the freshest 7-day marketplace snapshot.
+  // Replace ALL marketplace-sourced equivalences (not just this run) so that
+  // older matches built before brand normalization or against stale marketplace
+  // rows are flushed and rebuilt from the freshest 7-day snapshot. Both n11
+  // and trendyol live in this table; only flush rows we own.
   await db
     .delete(arcelikProductEquivalencesTable)
-    .where(like(arcelikProductEquivalencesTable.source, "n11/%"));
+    .where(
+      or(
+        like(arcelikProductEquivalencesTable.source, "n11/%"),
+        like(arcelikProductEquivalencesTable.source, "trendyol/%"),
+      ),
+    );
 
   for (let i = 0; i < created.length; i += 100) {
     await db
@@ -322,12 +357,6 @@ export async function rebuildEquivalences(
       (created.reduce((s, c) => s + c.matchConfidence, 0) / created.length) *
         1000,
     ) / 1000;
-
-  // Suppress unused warnings for narrow imports
-  void sql;
-  void lte;
-  void and;
-  void ne;
 
   return {
     scanned: marketplaceRecords.length,

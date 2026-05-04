@@ -6,6 +6,7 @@ import {
   arcelikPriceHistoryTable,
   arcelikScrapeLogsTable,
   arcelikMarketplacePricesTable,
+  arcelikProductSpecsTable,
 } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { execSync } from "child_process";
@@ -511,6 +512,7 @@ async function scrapeN11(): Promise<ScrapedMarketplaceProduct[]> {
     { slug: "firin", category: "firin", maxPages: 2 },
     { slug: "klima", category: "klima", maxPages: 2 },
     { slug: "kurutma-makinesi", category: "kurutma", maxPages: 1 },
+    { slug: "kucuk-ev-aletleri", category: "kucuk-ev", maxPages: 2 },
   ];
 
   const results: ScrapedMarketplaceProduct[] = [];
@@ -620,6 +622,326 @@ async function scrapeN11(): Promise<ScrapedMarketplaceProduct[]> {
   return results;
 }
 
+async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Trendyol scrape (Playwright not available)");
+    return [];
+  }
+
+  // Trendyol blocks legacy category slugs; the search endpoint is open and
+  // stable, returns ~24 sponsored+organic cards per page, and is the same path
+  // used by their iOS/Android apps.
+  const categoryDefs = [
+    { query: "buzdolabi", category: "buzdolabi", maxPages: 2 },
+    { query: "camasir makinesi", category: "camasir", maxPages: 2 },
+    { query: "bulasik makinesi", category: "bulasik", maxPages: 2 },
+    { query: "ankastre firin", category: "firin", maxPages: 2 },
+    { query: "klima", category: "klima", maxPages: 2 },
+    { query: "kurutma makinesi", category: "kurutma", maxPages: 1 },
+    { query: "kucuk ev aletleri", category: "kucuk-ev", maxPages: 1 },
+  ];
+
+  const results: ScrapedMarketplaceProduct[] = [];
+  const seenIds = new Set<string>();
+
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+    extraHTTPHeaders: {
+      "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+    },
+  });
+
+  try {
+    for (const def of categoryDefs) {
+      for (let pg = 1; pg <= def.maxPages; pg++) {
+        const q = encodeURIComponent(def.query);
+        const url =
+          pg === 1
+            ? `https://www.trendyol.com/sr?q=${q}&os=1`
+            : `https://www.trendyol.com/sr?q=${q}&os=1&pi=${pg}`;
+        const page: Page = await context.newPage();
+        try {
+          await page.goto(url, {
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+          });
+          await page
+            .waitForSelector("a.product-card[id]", { timeout: 12000 })
+            .catch(() => {});
+          await page.evaluate(async () => {
+            for (let i = 0; i < 6; i++) {
+              window.scrollBy(0, 900);
+              await new Promise((r) => setTimeout(r, 250));
+            }
+          });
+          await page.waitForTimeout(800);
+
+          const items = await page.evaluate(() => {
+            const out: {
+              id: string;
+              href: string;
+              title: string;
+              priceText: string;
+            }[] = [];
+            document
+              .querySelectorAll('a.product-card[id], a[data-testid="product-card"]')
+              .forEach((el) => {
+                const id =
+                  el.getAttribute("id") ||
+                  el.getAttribute("data-id") ||
+                  "";
+                const href = (el as HTMLAnchorElement).href || "";
+                // Prefer descriptive title from the brand+name block; fall back
+                // to the full innerText for parsing.
+                const allText = (el as HTMLElement).innerText || "";
+                const lines = allText
+                  .split("\n")
+                  .map((l) => l.trim())
+                  .filter(
+                    (l) =>
+                      l.length > 0 &&
+                      !/^\d+(\.\d+)?$/.test(l) && // ratings
+                      !l.startsWith("(") &&
+                      !/Kargo|İndirim|Fenomen|En Çok|Günün|Bedava|Sepette|Kampanyalı|🚛/i.test(
+                        l,
+                      ),
+                  );
+                const title = lines[0] || "";
+                // Pull last "X TL" or "X.YYY TL" occurrence (final price after discounts)
+                const tlMatches = allText.match(/[\d.,]+\s*TL/g) || [];
+                const priceText = tlMatches[tlMatches.length - 1] || "";
+                if (id && title && priceText) {
+                  out.push({ id, href, title, priceText });
+                }
+              });
+            return out;
+          });
+
+          let pageAdded = 0;
+          for (const it of items) {
+            if (seenIds.has(it.id)) continue;
+            const price = parseTurkishPrice(it.priceText);
+            if (!price || price < 500) continue;
+            seenIds.add(it.id);
+            results.push({
+              marketplace: "trendyol",
+              marketplaceProductId: it.id,
+              productUrl: it.href,
+              brand: extractBrandFromTitle(it.title),
+              title: it.title,
+              category: def.category,
+              price,
+              capacityLiters: extractCapacityLitersFromTitle(it.title),
+              capacityKg: extractCapacityKgFromTitle(it.title),
+              energyClass: extractEnergyClassFromTitle(it.title),
+              scrapedAt: new Date().toISOString(),
+            });
+            pageAdded++;
+          }
+          logger.info(
+            { url, pageAdded, totalSoFar: results.length },
+            "Trendyol page scraped",
+          );
+          if (pageAdded === 0 && pg > 1) break;
+        } catch (err) {
+          logger.warn({ url, err }, "Trendyol page scrape failed");
+        } finally {
+          await page.close();
+        }
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return results;
+}
+
+interface ScrapedSpecRow {
+  marketplace: string;
+  marketplaceProductId: string;
+  capacityLiters: number | null;
+  capacityKg: number | null;
+  energyClass: string | null;
+  productType: string | null;
+  widthCm: number | null;
+  heightCm: number | null;
+  depthCm: number | null;
+  noiseLevelDb: number | null;
+  spinRpm: number | null;
+  rawSpecs: Record<string, string>;
+}
+
+function parseSpecNumber(value: string): number | null {
+  if (!value) return null;
+  const cleaned = value.replace(/[.,](?=\d{3}\b)/g, "").replace(",", ".");
+  const m = cleaned.match(/-?\d+(?:\.\d+)?/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseSpecRow(
+  rawSpecs: Record<string, string>,
+): Omit<ScrapedSpecRow, "marketplace" | "marketplaceProductId"> {
+  // N11 spec keys are Turkish; normalize to lookup
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ı/g, "i")
+      .trim();
+  const lookup: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawSpecs)) lookup[norm(k)] = v;
+
+  const get = (...keys: string[]): string | undefined => {
+    for (const k of keys) {
+      const v = lookup[norm(k)];
+      if (v) return v;
+    }
+    return undefined;
+  };
+
+  const cap = get("toplam kapasite", "kapasite", "net hacim");
+  let capacityLiters: number | null = null;
+  let capacityKg: number | null = null;
+  if (cap) {
+    if (/kg/i.test(cap)) {
+      const n = parseSpecNumber(cap);
+      if (n !== null && n >= 1 && n <= 25) capacityKg = n;
+    } else {
+      const n = parseSpecNumber(cap);
+      if (n !== null && n >= 30 && n <= 1500) capacityLiters = Math.round(n);
+    }
+  }
+
+  const energyRaw = get("enerji sinifi", "enerji sınıfı", "enerji");
+  let energyClass: string | null = null;
+  if (energyRaw) {
+    const m = energyRaw.toUpperCase().match(/\b([A-G][+]{0,3})\b/);
+    if (m) energyClass = m[1];
+  }
+
+  const productType = get("urun tipi", "ürün tipi", "tip", "tür") || null;
+
+  const width = get("genislik", "genişlik");
+  const height = get("yukseklik", "yükseklik");
+  const depth = get("derinlik");
+  const noise = get("ses seviyesi", "ses seviyesi (dba)", "ses");
+  const rpm = get("devir sayisi", "devir sayısı", "sıkma devri", "sikma devri");
+
+  return {
+    capacityLiters,
+    capacityKg,
+    energyClass,
+    productType,
+    widthCm: width ? parseSpecNumber(width) : null,
+    heightCm: height ? parseSpecNumber(height) : null,
+    depthCm: depth ? parseSpecNumber(depth) : null,
+    noiseLevelDb: noise
+      ? (() => {
+          const n = parseSpecNumber(noise);
+          return n !== null && n >= 10 && n <= 100 ? Math.round(n) : null;
+        })()
+      : null,
+    spinRpm: rpm
+      ? (() => {
+          const n = parseSpecNumber(rpm);
+          return n !== null && n >= 200 && n <= 2500 ? Math.round(n) : null;
+        })()
+      : null,
+    rawSpecs,
+  };
+}
+
+async function scrapeN11ProductSpecs(
+  productUrls: { marketplaceProductId: string; productUrl: string }[],
+  maxProducts = 60,
+): Promise<ScrapedSpecRow[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping N11 spec extraction (Playwright not available)");
+    return [];
+  }
+  if (productUrls.length === 0) return [];
+
+  const targets = productUrls.slice(0, maxProducts);
+  const results: ScrapedSpecRow[] = [];
+
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const target of targets) {
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(target.productUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 25000,
+        });
+        await page
+          .waitForSelector(".attribute-list .attribute-item", { timeout: 8000 })
+          .catch(() => {});
+        await page.evaluate(async () => {
+          for (let i = 0; i < 6; i++) {
+            window.scrollBy(0, 900);
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        });
+        await page.waitForTimeout(400);
+
+        const rawSpecs = await page.evaluate(() => {
+          const out: Record<string, string> = {};
+          document
+            .querySelectorAll(".attribute-list .attribute-item")
+            .forEach((li) => {
+              const k = li
+                .querySelector(".attribute-key")
+                ?.textContent?.trim();
+              const v = li
+                .querySelector(".attribute-val span, .attribute-val")
+                ?.textContent?.trim();
+              if (k && v) out[k] = v;
+            });
+          return out;
+        });
+
+        if (Object.keys(rawSpecs).length > 0) {
+          results.push({
+            marketplace: "n11",
+            marketplaceProductId: target.marketplaceProductId,
+            ...parseSpecRow(rawSpecs),
+          });
+        }
+      } catch (err) {
+        logger.warn(
+          { url: target.productUrl, err },
+          "N11 spec extraction failed for product",
+        );
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  logger.info(
+    { extracted: results.length, attempted: targets.length },
+    "N11 spec extraction completed",
+  );
+  return results;
+}
+
 type ScraperResults = {
   arcelik: ScrapedPrice[];
   beko: ScrapedPrice[];
@@ -720,10 +1042,27 @@ export async function runPriceScrape(
       scrapedCounts.n11 = 0;
     }
 
-    await closePlaywrightBrowser();
+    let trendyolItems: ScrapedMarketplaceProduct[] = [];
+    try {
+      logger.info("Scraping trendyol.com (marketplace)...");
+      trendyolItems = await scrapeTrendyol();
+      scrapedCounts.trendyol = trendyolItems.length;
+      logger.info(
+        { count: trendyolItems.length },
+        "trendyol.com: marketplace products scraped",
+      );
+    } catch (err) {
+      logger.error({ err }, "trendyol.com: scrape failed");
+      scrapedCounts.trendyol = 0;
+    }
 
-    if (n11Items.length > 0) {
-      const insertRows = n11Items.map((it) => ({
+    const marketplaceItems: ScrapedMarketplaceProduct[] = [
+      ...n11Items,
+      ...trendyolItems,
+    ];
+
+    if (marketplaceItems.length > 0) {
+      const insertRows = marketplaceItems.map((it) => ({
         marketplace: it.marketplace,
         marketplaceProductId: it.marketplaceProductId,
         productUrl: it.productUrl,
@@ -763,8 +1102,94 @@ export async function runPriceScrape(
             },
           });
       }
-      logger.info({ inserted: insertRows.length }, "N11 marketplace prices stored");
+      logger.info(
+        { inserted: insertRows.length, n11: n11Items.length, trendyol: trendyolItems.length },
+        "Marketplace prices stored",
+      );
     }
+
+    // Spec extraction runs against a sample of N11 products (PDPs are slow,
+    // so cap at 60 per run). This populates arcelik_product_specs which the
+    // matching engine and APIs use for structured comparison.
+    let specsExtracted = 0;
+    if (n11Items.length > 0) {
+      try {
+        const targets = n11Items
+          .filter((it) => it.productUrl)
+          .slice(0, 60)
+          .map((it) => ({
+            marketplaceProductId: it.marketplaceProductId,
+            productUrl: it.productUrl,
+          }));
+        const specs = await scrapeN11ProductSpecs(targets, 60);
+        if (specs.length > 0) {
+          // Look up the marketplace_prices.id for each spec (need the FK).
+          const ids = await db
+            .select({
+              id: arcelikMarketplacePricesTable.id,
+              marketplace: arcelikMarketplacePricesTable.marketplace,
+              marketplaceProductId:
+                arcelikMarketplacePricesTable.marketplaceProductId,
+            })
+            .from(arcelikMarketplacePricesTable);
+          const idMap = new Map(
+            ids.map((r) => [`${r.marketplace}:${r.marketplaceProductId}`, r.id]),
+          );
+          const specRows = specs
+            .map((s) => {
+              const fk = idMap.get(`${s.marketplace}:${s.marketplaceProductId}`);
+              if (!fk) return null;
+              return {
+                marketplacePriceId: fk,
+                marketplace: s.marketplace,
+                marketplaceProductId: s.marketplaceProductId,
+                capacityLiters: s.capacityLiters,
+                capacityKg: s.capacityKg,
+                energyClass: s.energyClass,
+                productType: s.productType,
+                widthCm: s.widthCm,
+                heightCm: s.heightCm,
+                depthCm: s.depthCm,
+                noiseLevelDb: s.noiseLevelDb,
+                spinRpm: s.spinRpm,
+                rawSpecs: s.rawSpecs,
+              };
+            })
+            .filter((r): r is NonNullable<typeof r> => r !== null);
+          for (let i = 0; i < specRows.length; i += 50) {
+            await db
+              .insert(arcelikProductSpecsTable)
+              .values(specRows.slice(i, i + 50))
+              .onConflictDoUpdate({
+                target: [
+                  arcelikProductSpecsTable.marketplace,
+                  arcelikProductSpecsTable.marketplaceProductId,
+                ],
+                set: {
+                  marketplacePriceId: sql`excluded.marketplace_price_id`,
+                  capacityLiters: sql`excluded.capacity_liters`,
+                  capacityKg: sql`excluded.capacity_kg`,
+                  energyClass: sql`excluded.energy_class`,
+                  productType: sql`excluded.product_type`,
+                  widthCm: sql`excluded.width_cm`,
+                  heightCm: sql`excluded.height_cm`,
+                  depthCm: sql`excluded.depth_cm`,
+                  noiseLevelDb: sql`excluded.noise_level_db`,
+                  spinRpm: sql`excluded.spin_rpm`,
+                  rawSpecs: sql`excluded.raw_specs`,
+                  extractedAt: sql`now()`,
+                },
+              });
+          }
+          specsExtracted = specRows.length;
+          scrapedCounts.specs = specsExtracted;
+        }
+      } catch (err) {
+        logger.error({ err }, "N11 spec extraction failed");
+      }
+    }
+
+    await closePlaywrightBrowser();
 
     const totalScraped =
       Object.values(scrapedCounts).reduce((s, n) => s + n, 0);
@@ -947,7 +1372,7 @@ export async function runPriceScrape(
     // Only rebuild equivalences when the marketplace scrape produced data this
     // run; otherwise we'd churn equivalences against stale data.
     let equivalencesCreated = 0;
-    if (n11Items.length > 0) {
+    if (marketplaceItems.length > 0) {
       try {
         const equivResult = await rebuildEquivalences(runId);
         equivalencesCreated = equivResult.created;

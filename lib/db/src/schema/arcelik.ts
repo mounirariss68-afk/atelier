@@ -224,6 +224,34 @@ export const arcelikProductEquivalencesTable = pgTable(
   ],
 );
 
+export const arcelikProductSpecsTable = pgTable(
+  "arcelik_product_specs",
+  {
+    id: serial("id").primaryKey(),
+    marketplacePriceId: integer("marketplace_price_id").notNull(),
+    marketplace: text("marketplace").notNull(),
+    marketplaceProductId: text("marketplace_product_id").notNull(),
+    capacityLiters: integer("capacity_liters"),
+    capacityKg: doublePrecision("capacity_kg"),
+    energyClass: text("energy_class"),
+    productType: text("product_type"),
+    widthCm: doublePrecision("width_cm"),
+    heightCm: doublePrecision("height_cm"),
+    depthCm: doublePrecision("depth_cm"),
+    noiseLevelDb: integer("noise_level_db"),
+    spinRpm: integer("spin_rpm"),
+    rawSpecs: jsonb("raw_specs").$type<Record<string, string>>(),
+    extractedAt: timestamp("extracted_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_specs_marketplace_pid").on(
+      t.marketplace,
+      t.marketplaceProductId,
+    ),
+    index("idx_specs_mp_price").on(t.marketplacePriceId),
+  ],
+);
+
 export const arcelikScrapeLogsTable = pgTable(
   "arcelik_scrape_logs",
   {
