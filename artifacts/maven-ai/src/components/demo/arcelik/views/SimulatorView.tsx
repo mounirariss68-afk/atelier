@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
@@ -30,6 +30,19 @@ export default function SimulatorView() {
   const [filterTier, setFilterTier] = useState<PriceTier | null>(null);
   const [priceAdjust, setPriceAdjust] = useState(0);
   const [showResults, setShowResults] = useState(false);
+
+  const filteredProducts = useMemo(() =>
+    products.filter((p) => p.category === selectedCat && (!filterSub || p.subcategory === filterSub) && (!filterTier || p.priceTier === filterTier)),
+    [selectedCat, filterSub, filterTier]
+  );
+
+  useEffect(() => {
+    if (simMode === "product" && filteredProducts.length > 0 && !filteredProducts.find((p) => p.id === selectedProduct.id)) {
+      setSelectedProduct(filteredProducts[0]);
+      setPriceAdjust(0);
+      setShowResults(false);
+    }
+  }, [filteredProducts, simMode, selectedProduct.id]);
 
   const catProducts = useMemo(() => products.filter((p) => p.category === selectedCat), [selectedCat]);
   const catAvgPrice = catProducts.length ? Math.round(catProducts.reduce((s, p) => s + p.tsfPrice, 0) / catProducts.length) : 0;
