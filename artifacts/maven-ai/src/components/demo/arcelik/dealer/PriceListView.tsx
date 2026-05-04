@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Clock, Tag, ArrowUpDown } from "lucide-react";
-import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, PRICE_TIER_LABELS, getPriceTierLabel, type ProductCategory, type PriceTier } from "@/data/arcelik-seed";
+import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel, getProductSpecs, type ProductCategory, type PriceTier } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { prices } from "../demo-i18n";
 
@@ -166,6 +166,7 @@ export default function PriceListView() {
                 {[
                   { id: "name", label: t.colProductName },
                   { id: "model", label: t.colModelCode },
+                  { id: "specs", label: t.colSpecs },
                   { id: "tsfPrice", label: t.colTSF },
                   { id: "dealerCost", label: t.colDealerCost },
                   { id: "margin", label: t.colMargin },
@@ -205,6 +206,14 @@ export default function PriceListView() {
                       <p className="text-[10px] text-gray-400">{p.energyClass !== "-" ? `${t.energy} ${p.energyClass}` : ""}</p>
                     </td>
                     <td className="px-4 py-3 text-xs font-mono text-gray-600">{p.modelCode}</td>
+                    <td className="px-4 py-3">
+                      {(() => { const specs = getProductSpecs(p); return (
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-medium text-gray-700">{specs.capacity !== "-" ? specs.capacity : ""} · {specs.warrantyYears} {t.warrantyYr}</p>
+                          {specs.smartFeatures.length > 0 && <p className="text-[9px] text-blue-600 font-medium">📡 {t.smart}</p>}
+                        </div>
+                      ); })()}
+                    </td>
                     <td className="px-4 py-3 text-xs font-mono">
                       {hasChange && <span className="line-through text-gray-400 mr-1">₺{fmt(change.oldPrice)}</span>}
                       ₺{fmt(p.tsfPrice)}

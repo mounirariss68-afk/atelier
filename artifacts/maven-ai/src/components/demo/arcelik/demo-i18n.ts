@@ -972,6 +972,9 @@ export const prices: I18n = {
     tierEntry: "Giriş",
     tierMid: "Orta",
     tierPremium: "Premium",
+    colSpecs: "Kapasite / Garanti",
+    warrantyYr: "yıl garanti",
+    smart: "Akıllı",
   },
   en: {
     title: "Price List",
@@ -997,6 +1000,9 @@ export const prices: I18n = {
     tierEntry: "Entry",
     tierMid: "Mid",
     tierPremium: "Premium",
+    colSpecs: "Capacity / Warranty",
+    warrantyYr: "yr warranty",
+    smart: "Smart",
   },
 };
 
