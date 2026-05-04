@@ -191,11 +191,11 @@ export default function DashboardView() {
     const rows = filtered.map((p) => {
       const comps = competitorPrices.filter((cp) => cp.arcelikEquivalentId === p.id && comparisonBrands.includes(cp.brand));
       const adjTsf = Math.round(p.tsfPrice * cityPriceIndex);
-      const brandPrices: Record<string, { price: number; delta: number }> = {};
+      const brandPrices: Record<string, { price: number; delta: number; sourceId: string; priceDate: string }> = {};
       comps.forEach((cp) => {
         const adjComp = Math.round(cp.competitorPrice * cityPriceIndex);
         const adjDelta = adjTsf > 0 ? +(((adjComp - adjTsf) / adjTsf) * 100).toFixed(1) : 0;
-        brandPrices[cp.brand] = { price: adjComp, delta: adjDelta };
+        brandPrices[cp.brand] = { price: adjComp, delta: adjDelta, sourceId: cp.sourceId, priceDate: cp.priceDate };
       });
       const deltas = Object.values(brandPrices).map((bp) => bp.delta);
       return {
@@ -435,8 +435,10 @@ export default function DashboardView() {
                       const bp = row.brandPrices[brand];
                       if (!bp) return <td key={brand} className="px-4 py-3 text-center text-[10px] text-gray-300">—</td>;
                       const deltaColor = bp.delta > 5 ? "text-green-600" : bp.delta < -5 ? "text-amber-600" : "text-gray-600";
+                      const srcEntry = DATA_SOURCES.find((s) => s.id === bp.sourceId);
+                      const srcTip = srcEntry ? `${lang === "en" ? srcEntry.nameEn : srcEntry.name} (${bp.priceDate})` : bp.priceDate;
                       return (
-                        <td key={brand} className="px-4 py-3 text-right">
+                        <td key={brand} className="px-4 py-3 text-right" title={srcTip}>
                           <div className="font-mono text-xs">₺{bp.price.toLocaleString("tr-TR")}</div>
                           <div className={`text-[10px] font-bold ${deltaColor}`}>{bp.delta > 0 ? "+" : ""}{bp.delta}%</div>
                         </td>
@@ -648,7 +650,10 @@ export default function DashboardView() {
             <BookOpen size={16} className="text-[#F5A623]" />
             {t.dataSourcesTitle}
           </span>
-          <ChevronRight size={16} className={`text-gray-400 transition-transform duration-200 ${showSources ? "rotate-90" : ""}`} />
+          <span className="flex items-center gap-2 text-xs text-gray-400">
+            {showSources ? t.dataSourcesHide : t.dataSourcesToggle}
+            <ChevronRight size={16} className={`transition-transform duration-200 ${showSources ? "rotate-90" : ""}`} />
+          </span>
         </button>
         <AnimatePresence>
           {showSources && (
