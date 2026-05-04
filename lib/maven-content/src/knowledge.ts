@@ -55,7 +55,8 @@ export type MarketplaceClass =
   | "customer-ops-agent"
   | "knowledge-decision-copilot"
   | "risk-compliance-agent"
-  | "sovereign-data-steward";
+  | "sovereign-data-steward"
+  | "pricing-intelligence";
 
 export type MarketplaceHorizontal = "pmo" | "supply-chain" | "fpa";
 
@@ -76,6 +77,15 @@ export interface MarketplaceDataModel {
   inputs: BiText[];
   internal: BiText[];
   outputs: BiText[];
+}
+
+export interface DemoVariant {
+  id: string;
+  label: BiText;
+  audience: BiText;
+  description: BiText;
+  icon: string;
+  route: string;
 }
 
 export interface MarketplaceToolEntry {
@@ -117,6 +127,7 @@ export interface MarketplaceToolEntry {
    * the shared knowledge module.
    */
   samplePortfolio?: ValueRealizationInitiative[];
+  demoVariants?: DemoVariant[];
   /**
    * Named cast of agents (and human checkpoints) that delivers this tool.
    * Powers the "How does this work?" explainer modal and the in-demo
@@ -432,6 +443,14 @@ export const marketplaceClasses: MarketplaceClassMeta[] = [
     description: {
       en: "Air-gapped agentic data engineering, lineage, and mastering for sovereign and on-prem environments.",
       ar: "هندسة بيانات وكيلية معزولة وتتبع نسب البيانات وضبطها للبيئات السيادية والداخلية.",
+    },
+  },
+  {
+    id: "pricing-intelligence",
+    title: { en: "Pricing Intelligence", ar: "ذكاء التسعير" },
+    description: {
+      en: "Real-time competitive price monitoring, demand-driven optimisation, campaign generation, and dealer coordination for consumer goods manufacturers.",
+      ar: "مراقبة أسعار تنافسية آنية وتحسين مبني على الطلب وإنشاء حملات وتنسيق مع الوكلاء لمصنّعي السلع الاستهلاكية.",
     },
   },
 ];
@@ -1231,6 +1250,99 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     accent: "#156082",
     icon: "BookOpen",
     relatedService: "data-governance-foundations",
+  },
+  {
+    id: "arcelik-fiyat-istihbarati",
+    slug: "arcelik-fiyat-istihbarati",
+    title: { en: "Arçelik Pricing Intelligence", ar: "ذكاء تسعير أرتشيليك" },
+    class: "pricing-intelligence",
+    industries: ["retail-consumer"],
+    horizontals: [],
+    buyer: { en: "Pricing Director", ar: "مدير التسعير" },
+    pitch: {
+      en: "AI-powered competitive pricing intelligence for Turkey's largest white goods manufacturer — real-time competitor monitoring across 8 brands, demand-driven pricing for 60+ product lines, automated campaign generation with dealer-ready creative, and coordinated push to 3,000+ exclusive dealers.",
+      ar: "ذكاء تسعير تنافسي مدعوم بالذكاء الاصطناعي لأكبر مصنّع أجهزة منزلية في تركيا — مراقبة آنية للمنافسين عبر 8 علامات تجارية وتسعير مبني على الطلب لأكثر من 60 خط إنتاج وإنشاء حملات آلي مع إبداعات جاهزة للوكلاء وتنسيق مع أكثر من 3,000 وكيل حصري.",
+    },
+    longDescription: [
+      {
+        en: "Arçelik — Turkey's largest white goods manufacturer — manages competitive pricing across 60+ product lines, 7 categories, and 8 major competitor brands, while coordinating pricing and promotions through a network of 3,000+ exclusive dealers in 81 provinces. Manual price monitoring misses competitor moves, regional demand shifts, and promotional gaps — costing market share points every quarter.",
+        ar: "أرتشيليك — أكبر مصنّع للأجهزة المنزلية في تركيا — تدير التسعير التنافسي عبر أكثر من 60 خط منتج و7 فئات و8 علامات تجارية منافسة رئيسية، بينما تنسّق التسعير والعروض عبر شبكة تضم أكثر من 3,000 وكيل حصري في 81 ولاية. المراقبة اليدوية للأسعار تُفوّت تحرّكات المنافسين وتغيّرات الطلب الإقليمي والفجوات الترويجية — ممّا يكلّف نقاط حصة سوقية كل ربع سنة.",
+      },
+      {
+        en: "The Pricing Intelligence platform deploys six specialised AI agents — from real-time competitor price scraping to campaign creative generation to dealer push — coordinated by an orchestrator that gates every pricing decision and campaign launch through human checkpoints. The result: a pricing director who sees every competitor move within hours, not days, and can respond with a targeted campaign before the market adjusts.",
+        ar: "تنشر منصة ذكاء التسعير ستة وكلاء ذكاء اصطناعي متخصّصين — من رصد أسعار المنافسين آنياً إلى إنشاء إبداعات الحملات وصولاً إلى التنسيق مع الوكلاء — بقيادة منسّق يمرّر كل قرار تسعيري وإطلاق حملة عبر نقاط موافقة بشرية. النتيجة: مدير تسعير يرى كل تحرّك منافس خلال ساعات وليس أيام ويستطيع الاستجابة بحملة موجّهة قبل أن يتكيّف السوق.",
+      },
+      {
+        en: "Purpose-built for the Turkish white goods market — the platform natively understands ÖTV and KDV tax incentive dynamics, seasonal patterns from Ramazan to the summer wedding season, regional demand variation across 20 major cities, and the trade-in programmes that drive dealer incentives. Three demo experiences show the platform from every stakeholder's perspective: the technical team, the business user, and the dealer.",
+        ar: "مصمّمة خصيصاً لسوق الأجهزة المنزلية التركي — تفهم المنصة بشكل أصيل ديناميكيات ضرائب ÖTV وKDV والأنماط الموسمية من رمضان إلى موسم الأعراس الصيفي وتفاوت الطلب الإقليمي عبر 20 مدينة رئيسية وبرامج الاستبدال التي تحفّز الوكلاء. ثلاث تجارب عرض تُظهر المنصة من منظور كل صاحب مصلحة: الفريق التقني والمستخدم التجاري والوكيل.",
+      },
+    ],
+    screens: [
+      {
+        title: { en: "Competitor radar", ar: "رادار المنافسين" },
+        caption: { en: "Real-time price comparison across 8 competitor brands with sparkline trends, city-by-city breakdowns, and automated price-drop alerts.", ar: "مقارنة أسعار آنية عبر 8 علامات منافسة مع رسوم بيانية للاتجاهات وتحليل حسب المدينة وتنبيهات تلقائية بانخفاض الأسعار." },
+      },
+      {
+        title: { en: "Turkey pricing heatmap", ar: "خريطة حرارية لأسعار تركيا" },
+        caption: { en: "Interactive SVG map of Turkey showing market share, price indices, and demand signals across 20 cities — click any city to drill down.", ar: "خريطة SVG تفاعلية لتركيا تعرض الحصة السوقية ومؤشرات الأسعار وإشارات الطلب عبر 20 مدينة — انقر على أي مدينة للتعمّق." },
+      },
+      {
+        title: { en: "Campaign studio", ar: "استوديو الحملات" },
+        caption: { en: "AI-generated campaign briefs with creative headlines, dealer POS materials, SMS notifications, and projected ROI — ready for the marketing director to approve.", ar: "موجزات حملات مُنشأة بالذكاء الاصطناعي مع عناوين إبداعية ومواد نقاط البيع للوكلاء وإشعارات SMS وعائد استثمار متوقّع — جاهزة لموافقة مدير التسويق." },
+      },
+      {
+        title: { en: "Dealer compliance dashboard", ar: "لوحة التزام الوكلاء" },
+        caption: { en: "Dealer network health — compliance scores, sales targets, stock levels, and commission tracking across 3,000+ exclusive dealers.", ar: "صحة شبكة الوكلاء — درجات الالتزام وأهداف المبيعات ومستويات المخزون وتتبّع العمولات عبر أكثر من 3,000 وكيل حصري." },
+      },
+      {
+        title: { en: "What-if pricing simulator", ar: "محاكي ماذا-لو للتسعير" },
+        caption: { en: "Drag a price slider and watch cascading impact projections — market share, revenue, margin, predicted competitor response, and dealer satisfaction.", ar: "اسحب شريط السعر وشاهد توقعات الأثر المتتالي — الحصة السوقية والإيرادات والهامش واستجابة المنافس المتوقّعة ورضا الوكلاء." },
+      },
+    ],
+    dataModel: {
+      inputs: [
+        { en: "Competitor price feeds (8 brands, 80+ SKUs), dealer sales data (3,000+ dealers)", ar: "بيانات أسعار المنافسين (8 علامات، أكثر من 80 وحدة)، بيانات مبيعات الوكلاء (أكثر من 3,000 وكيل)" },
+        { en: "Market research reports, ÖTV/KDV tax tables, seasonal demand patterns", ar: "تقارير أبحاث السوق، جداول ضريبة ÖTV/KDV، أنماط الطلب الموسمي" },
+        { en: "Promotional calendar (Arçelik + competitor campaigns)", ar: "التقويم الترويجي (حملات أرتشيليك + المنافسين)" },
+      ],
+      internal: [
+        { en: "Price optimisation model, demand forecasting engine, campaign ROI model", ar: "نموذج تحسين الأسعار، محرّك التنبؤ بالطلب، نموذج عائد الحملات" },
+        { en: "Competitor response predictor, dealer compliance scorer", ar: "متنبّئ استجابة المنافسين، مصنّف التزام الوكلاء" },
+      ],
+      outputs: [
+        { en: "Price recommendations (city × category × product), campaign briefs with creative", ar: "توصيات أسعار (مدينة × فئة × منتج)، موجزات حملات مع إبداعات" },
+        { en: "Dealer price lists, POS materials, SMS/WhatsApp dealer notifications", ar: "قوائم أسعار الوكلاء، مواد نقاط البيع، إشعارات SMS/واتساب للوكلاء" },
+      ],
+    },
+    status: "live",
+    accent: "#E30613",
+    icon: "LineChart",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Technical Monitoring Panel", ar: "لوحة المراقبة التقنية" },
+        audience: { en: "Technical teams", ar: "الفرق التقنية" },
+        description: { en: "Agent cockpit showing the orchestrator, six specialist agents, tool calls, and the full event trace — for technical teams monitoring agent performance.", ar: "لوحة قيادة الوكلاء تعرض المنسّق وستة وكلاء متخصّصين واستدعاءات الأدوات وسلسلة الأحداث الكاملة — للفرق التقنية." },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "dashboard",
+        label: { en: "Business User Dashboard", ar: "لوحة تحكّم المستخدم التجاري" },
+        audience: { en: "Pricing directors & category managers", ar: "مديرو التسعير ومديرو الفئات" },
+        description: { en: "Interactive pricing dashboard with competitor radar, campaign studio, what-if simulator, promotional calendar, and an AI assistant — for pricing directors.", ar: "لوحة تسعير تفاعلية مع رادار المنافسين واستوديو الحملات ومحاكي ماذا-لو والتقويم الترويجي ومساعد ذكي — لمديري التسعير." },
+        icon: "BarChart3",
+        route: "dashboard",
+      },
+      {
+        id: "bayi",
+        label: { en: "Dealer Portal", ar: "بوابة الوكلاء" },
+        audience: { en: "Arçelik's 3,000+ exclusive dealers", ar: "أكثر من 3,000 وكيل حصري لأرتشيليك" },
+        description: { en: "Dealer-facing portal with price lists, campaigns, targets, stock management, and a conversational assistant — what Arçelik's 3,000+ exclusive dealers see.", ar: "بوابة للوكلاء تشمل قوائم الأسعار والحملات والأهداف وإدارة المخزون ومساعد محادثة — ما يراه أكثر من 3,000 وكيل حصري." },
+        icon: "Users",
+        route: "bayi",
+      },
+    ],
   },
 ];
 

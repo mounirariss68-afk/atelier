@@ -18,6 +18,7 @@ import customerCare from "./customer-care-hive";
 import sovereignData from "./sovereign-data-steward";
 import knowledgeConcierge from "./enterprise-knowledge-concierge";
 import tenderResponse from "./tender-response-studio";
+import arcelikTeknik from "./arcelik-fiyat-istihbarati";
 
 const SCENARIOS: Record<string, Scenario> = {
   "value-realization": valueRealization,
@@ -30,9 +31,14 @@ const SCENARIOS: Record<string, Scenario> = {
   "customer-care-hive": customerCare,
   "sovereign-data-steward": sovereignData,
   "enterprise-knowledge-concierge": knowledgeConcierge,
+  "arcelik-fiyat-istihbarati": arcelikTeknik,
+  "arcelik-fiyat-istihbarati/teknik": arcelikTeknik,
 };
 
-export function getScenario(slug: string): Scenario | undefined {
+export function getScenario(slug: string, variant?: string): Scenario | undefined {
+  if (variant) {
+    return SCENARIOS[`${slug}/${variant}`] ?? SCENARIOS[slug];
+  }
   return SCENARIOS[slug];
 }
 

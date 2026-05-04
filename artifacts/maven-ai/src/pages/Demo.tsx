@@ -14,7 +14,8 @@ import { useLang, tStr } from "@/lib/lang";
 export default function Demo() {
   const params = useParams();
   const slug = (params as { slug?: string }).slug ?? "";
-  const scenario = getScenario(slug);
+  const variant = (params as { variant?: string }).variant;
+  const scenario = getScenario(slug, variant);
   const { lang } = useLang();
 
   if (!scenario) {

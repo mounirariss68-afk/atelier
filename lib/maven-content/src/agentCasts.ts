@@ -891,6 +891,100 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
       ar: "الفهرسة، وترشيح الصلاحيات، والاسترجاع، والصياغة، ومراقبة التغطية، شؤون متمايزة. دمجها في نموذج واحد يُفقد مسار التدقيق الذي يجعل الوكيل قابلاً للنشر قانونياً في البيئات المنظَّمة.",
     },
   },
+
+  // ─── 15. Arçelik Pricing Intelligence ─────────────────────────────────
+  "arcelik-fiyat-istihbarati": {
+    agents: [
+      {
+        id: "pricing-orchestrator",
+        name: { en: "Fiyatlandırma Orkestratörü", ar: "Fiyatlandırma Orkestratörü" },
+        role: { en: "Plans the pricing run, dispatches specialist agents, and gates every human checkpoint.", ar: "Plans the pricing run, dispatches specialist agents, and gates every human checkpoint." },
+        kind: "planner",
+        reads: [{ en: "Workflow trigger, pricing calendar, agent status", ar: "Workflow trigger, pricing calendar, agent status" }],
+        writes: [{ en: "Run plan, agent assignments, checkpoint schedule", ar: "Run plan, agent assignments, checkpoint schedule" }],
+      },
+      {
+        id: "price-monitor",
+        name: { en: "Fiyat İzleme Ajanı", ar: "Fiyat İzleme Ajanı" },
+        role: { en: "Scrapes competitor prices across 8 brands, 80+ product SKUs, and multiple retail channels.", ar: "Scrapes competitor prices across 8 brands, 80+ product SKUs, and multiple retail channels." },
+        kind: "monitor",
+        reads: [{ en: "Competitor websites, retail aggregators, dealer field reports", ar: "Competitor websites, retail aggregators, dealer field reports" }],
+        writes: [{ en: "Competitor price matrix with trend data", ar: "Competitor price matrix with trend data" }],
+      },
+      {
+        id: "competitor-analyst",
+        name: { en: "Rakip Analiz Ajanı", ar: "Rakip Analiz Ajanı" },
+        role: { en: "Analyses competitive positioning, price gaps, and recommends optimal pricing per city × category.", ar: "Analyses competitive positioning, price gaps, and recommends optimal pricing per city × category." },
+        kind: "scorer",
+        reads: [{ en: "Competitor price matrix, demand signals, margin targets", ar: "Competitor price matrix, demand signals, margin targets" }],
+        writes: [{ en: "Price recommendations, competitive position score", ar: "Price recommendations, competitive position score" }],
+      },
+      {
+        id: "demand-forecaster",
+        name: { en: "Talep Tahmin Ajanı", ar: "Talep Tahmin Ajanı" },
+        role: { en: "Forecasts demand by city and category using seasonal patterns, events, and search trends.", ar: "Forecasts demand by city and category using seasonal patterns, events, and search trends." },
+        kind: "retriever",
+        reads: [{ en: "Sales history, seasonal patterns, search trends, event calendar", ar: "Sales history, seasonal patterns, search trends, event calendar" }],
+        writes: [{ en: "City × category demand forecast, demand signal heatmap", ar: "City × category demand forecast, demand signal heatmap" }],
+      },
+      {
+        id: "campaign-strategist",
+        name: { en: "Kampanya Stratejisti", ar: "Kampanya Stratejisti" },
+        role: { en: "Generates campaign briefs with creative copy, target cities, projected ROI, and dealer POS materials.", ar: "Generates campaign briefs with creative copy, target cities, projected ROI, and dealer POS materials." },
+        kind: "drafter",
+        reads: [{ en: "Price recommendations, demand forecast, campaign templates, brand guidelines", ar: "Price recommendations, demand forecast, campaign templates, brand guidelines" }],
+        writes: [{ en: "Campaign brief with creative, projected ROI, dealer materials", ar: "Campaign brief with creative, projected ROI, dealer materials" }],
+      },
+      {
+        id: "dealer-network-mgr",
+        name: { en: "Bayi Ağı Yöneticisi", ar: "Bayi Ağı Yöneticisi" },
+        role: { en: "Pushes approved pricing and campaign materials to 3,000+ dealers, monitors compliance.", ar: "Pushes approved pricing and campaign materials to 3,000+ dealers, monitors compliance." },
+        kind: "compiler",
+        reads: [{ en: "Approved price lists, campaign materials, dealer profiles", ar: "Approved price lists, campaign materials, dealer profiles" }],
+        writes: [{ en: "Dealer price updates, SMS/WhatsApp notifications, compliance report", ar: "Dealer price updates, SMS/WhatsApp notifications, compliance report" }],
+      },
+    ],
+    edges: [
+      { from: "pricing-orchestrator", to: "price-monitor" },
+      { from: "pricing-orchestrator", to: "demand-forecaster" },
+      { from: "price-monitor", to: "competitor-analyst" },
+      { from: "demand-forecaster", to: "competitor-analyst" },
+      { from: "competitor-analyst", to: "campaign-strategist" },
+      { from: "campaign-strategist", to: "dealer-network-mgr" },
+    ],
+    humanCheckpoints: [
+      {
+        id: "pricing-director-approves",
+        name: { en: "Fiyatlandırma Direktörü", ar: "Fiyatlandırma Direktörü" },
+        decision: {
+          en: "Reviews and approves recommended price changes before they are pushed to the dealer network. The agent never changes a price without this sign-off.",
+          ar: "Reviews and approves recommended price changes before they are pushed to the dealer network. The agent never changes a price without this sign-off.",
+        },
+      },
+      {
+        id: "marketing-director-approves",
+        name: { en: "Pazarlama Direktörü", ar: "Pazarlama Direktörü" },
+        decision: {
+          en: "Reviews and approves campaign creative, messaging, and budget allocation before launch. The agent never publishes a campaign without this gate.",
+          ar: "Reviews and approves campaign creative, messaging, and budget allocation before launch. The agent never publishes a campaign without this gate.",
+        },
+      },
+    ],
+    flowOrder: [
+      { kind: "agent", id: "pricing-orchestrator" },
+      { kind: "agent", id: "price-monitor" },
+      { kind: "agent", id: "demand-forecaster" },
+      { kind: "agent", id: "competitor-analyst" },
+      { kind: "human", id: "pricing-director-approves" },
+      { kind: "agent", id: "campaign-strategist" },
+      { kind: "human", id: "marketing-director-approves" },
+      { kind: "agent", id: "dealer-network-mgr" },
+    ],
+    rationale: {
+      en: "Price monitoring, demand forecasting, competitive analysis, campaign strategy, and dealer coordination are five fundamentally different skills with different data sources. Splitting them lets each agent be auditable on its own, lets the pricing director intervene at exactly the right step, and means the marketing director signs off on creative separately from pricing — which is how Arçelik's organisation actually works.",
+      ar: "مراقبة الأسعار والتنبؤ بالطلب والتحليل التنافسي واستراتيجية الحملات وتنسيق الوكلاء خمس مهارات مختلفة جذرياً بمصادر بيانات مختلفة. تقسيمها يتيح تدقيق كل وكيل على حدة، ويتيح لمدير التسعير التدخّل في الخطوة الصحيحة، ويعني أن مدير التسويق يوافق على الإبداع منفصلاً عن التسعير — وهذا ما يحدث فعلاً في هيكل أرتشيليك.",
+    },
+  },
 };
 
 /** Returns the cast for a tool slug, or undefined if none registered. */

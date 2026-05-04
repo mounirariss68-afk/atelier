@@ -178,7 +178,7 @@ export default function MarketplaceDetail() {
             {tStr(tool.pitch, lang)}
           </p>
 
-          {hasScenario && (
+          {hasScenario && !tool.demoVariants?.length && (
             <Link
               href={`/demo/${tool.slug}`}
               className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-sm hover:bg-[#FFC15E] transition-colors"
@@ -186,6 +186,24 @@ export default function MarketplaceDetail() {
               <Play size={14} fill="currentColor" />
               {tStr(COPY.launchCta, lang)}
             </Link>
+          )}
+
+          {tool.demoVariants && tool.demoVariants.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-3">
+              {tool.demoVariants.map((v) => {
+                const VIcon = ICONS[v.icon] ?? Play;
+                return (
+                  <Link
+                    key={v.id}
+                    href={`/demo/${tool.slug}/${v.route}`}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-sm hover:bg-[#FFC15E] transition-colors"
+                  >
+                    <VIcon size={14} />
+                    {tStr(v.label, lang)}
+                  </Link>
+                );
+              })}
+            </div>
           )}
 
           <div className="grid sm:grid-cols-3 gap-4 mt-8 pt-8 border-t border-white/10">
@@ -481,8 +499,8 @@ export default function MarketplaceDetail() {
         </div>
       </section>
 
-      {/* Launch CTA */}
-      {hasScenario && (
+      {/* Launch CTA — single demo */}
+      {hasScenario && !tool.demoVariants?.length && (
         <section className="py-16 bg-gradient-to-br from-[#0E2841] to-[#156082]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-3">
@@ -501,6 +519,52 @@ export default function MarketplaceDetail() {
               <Play size={16} fill="currentColor" />
               {tStr(COPY.launchCta, lang)}
             </Link>
+          </div>
+        </section>
+      )}
+
+      {/* Launch CTA — multi-variant demos */}
+      {tool.demoVariants && tool.demoVariants.length > 0 && (
+        <section className="py-16 bg-gradient-to-br from-[#0E2841] to-[#156082]">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-3">
+                {tStr({ en: "Choose your experience", ar: "اختر تجربتك" }, lang)}
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-3">
+                {tStr({ en: "Three demos, three perspectives", ar: "ثلاثة عروض، ثلاث وجهات نظر" }, lang)}
+              </h2>
+              <p className="text-base text-gray-300 max-w-2xl mx-auto">
+                {tStr({ en: "Each demo shows the same platform from a different stakeholder's view.", ar: "كل عرض يُظهر المنصة نفسها من منظور صاحب مصلحة مختلف." }, lang)}
+              </p>
+            </div>
+            <div className={`grid gap-5 ${tool.demoVariants.length === 3 ? "sm:grid-cols-3" : tool.demoVariants.length === 2 ? "sm:grid-cols-2" : ""}`}>
+              {tool.demoVariants.map((v) => {
+                const VIcon = ICONS[v.icon] ?? Play;
+                return (
+                  <Link
+                    key={v.id}
+                    href={`/demo/${tool.slug}/${v.route}`}
+                    className="group relative p-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors flex flex-col gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: tool.accent }}>
+                        <VIcon size={20} className="text-white" />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+                        {tStr(v.audience, lang)}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-bold text-white">{tStr(v.label, lang)}</h3>
+                    <p className="text-sm text-gray-300 leading-relaxed flex-1">{tStr(v.description, lang)}</p>
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#F5A623] mt-2 group-hover:gap-3 transition-all">
+                      <Play size={12} fill="currentColor" />
+                      {tStr({ en: "Launch demo", ar: "ابدأ العرض" }, lang)}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </section>
       )}

@@ -33,12 +33,14 @@ const queryClient = new QueryClient();
  */
 function Router() {
   const [isDemo] = useRoute("/demo/:slug");
+  const [isDemoVariant] = useRoute("/demo/:slug/:variant");
 
-  if (isDemo) {
+  if (isDemo || isDemoVariant) {
     return (
       <>
         <ScrollToTop />
         <Switch>
+          <Route path="/demo/:slug/:variant" component={Demo} />
           <Route path="/demo/:slug" component={Demo} />
         </Switch>
       </>

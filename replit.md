@@ -8,6 +8,10 @@ A comprehensive, world-class marketing website for **Maven AI** — a boutique A
 - **Re-export**: `artifacts/maven-ai/src/data/content.ts` re-exports the three collections plus runs `assertSharedAlignment` and a self-consistency check (every `industries[]` id on a tool must exist in `industriesIndex`).
 - **Pages**: `Marketplace.tsx` (index with class card grid + filter chips, query-string deep link), `MarketplaceDetail.tsx` (coming-soon detail with screens & data-model 3-column), `components/marketplace/ValueRealizationDemo.tsx` (live flagship — sample portfolio, editable drawer, gauge for realization rate, expected-vs-realized bars, value-at-risk callout, leakage grouping, print summary, reset to sample).
 - **Chat**: `ChatSuggestionKind` includes `"marketplace"`; `buildKnownLinks()` emits `/marketplace` + `/marketplace/<slug>` per tool; `chat.ts` system prompt surfaces a MARKETPLACE TOOLS section flagging `value-realization` as the only LIVE demo.
+- **Multi-demo variants**: `DemoVariant` interface on `MarketplaceToolEntry` (`demoVariants?: DemoVariant[]`). Arçelik Pricing Intelligence is the first multi-variant tool with 3 variants (teknik/dashboard/bayi). Detail page renders per-variant pill buttons in the hero and a 3-column variant card grid at the bottom. Single-demo tools are unaffected (guard checks).
+- **Multi-demo routing**: `/demo/:slug/:variant` + `/demo/:slug` dual routes in App.tsx. `getScenario(slug, variant?)` in scenarios/index.ts looks up `${slug}/${variant}` first, then falls back to `slug`.
+- **Arçelik seed data**: `artifacts/maven-ai/src/data/arcelik-seed.ts` — 61 products (7 categories), 64 competitor prices (8 brands), 20 cities, 8 campaigns, 15 dealers, 8 KPI benchmarks, 16 promotional calendar entries. All Turkish.
+- **Arçelik scenario**: `arcelik-fiyat-istihbarati.ts` — 26-event technical cockpit scenario with 6 agents, 5 demo screens, 2 workflows, 2 human checkpoints, 5 KPIs. Registered under both `arcelik-fiyat-istihbarati` and `arcelik-fiyat-istihbarati/teknik`.
 - **Cross-links**: Navbar (between Industries and Diagnostics — desktop + mobile), Footer (new Marketplace column), Home (teaser section before the Maven Insights banner with a mini realized-vs-expected bar chart), Industries (per-industry "Related tools in the Marketplace" CTA with `?industry=<id>` deep link).
 - **Brief**: `artifacts/maven-ai/docs/marketplace-catalog.md`.
 - **Build gotcha**: `lib/maven-content` is a `composite: true` TS project with a `dist/` output. After adding new exports, the `tsconfig.tsbuildinfo` may keep dist stale and downstream `tsc` will complain about missing exports. The post-merge script clears the buildinfo and rebuilds the package; for local dev, run `rm -f lib/maven-content/tsconfig.tsbuildinfo && pnpm --filter @workspace/maven-content exec tsc -p tsconfig.json`.
@@ -55,7 +59,8 @@ A comprehensive, world-class marketing website for **Maven AI** — a boutique A
 | `/insights/:slug` | `InsightDetail.tsx` | Full article with related content sidebar |
 | `/industries` | `Industries.tsx` | Public Sector, Telecom, Financial Services |
 | `/marketplace` | `Marketplace.tsx` | Filterable index of 14 demo tools (class / industry / horizontal chips, deep-link via `?industry=&class=&horizontal=`) |
-| `/marketplace/:slug` | `MarketplaceDetail.tsx` | Detail page per tool (screens + data model). Dispatches `/marketplace/value-realization` to the live `ValueRealizationDemo` component |
+| `/marketplace/:slug` | `MarketplaceDetail.tsx` | Detail page per tool (screens + data model + variant cards for multi-demo tools). Dispatches `/marketplace/value-realization` to the live `ValueRealizationDemo` component |
+| `/demo/:slug/:variant` | `Demo.tsx` | Multi-variant demo route (e.g. `/demo/arcelik-fiyat-istihbarati/teknik`) |
 | `/contact` | `Contact.tsx` | Contact form + 4 GCC office locations |
 
 ## Content Data
