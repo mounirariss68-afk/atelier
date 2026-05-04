@@ -4,8 +4,9 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  LineChart, Line,
 } from "recharts";
-import { Shield, Eye, AlertTriangle } from "lucide-react";
+import { Shield, Eye, AlertTriangle, TrendingUp } from "lucide-react";
 import { useDashboardFilters } from "../DashboardContext";
 import { useDemoLang } from "../DemoLangContext";
 import { radar } from "../demo-i18n";
@@ -14,6 +15,7 @@ import {
   type ProductCategory,
 } from "@/data/arcelik-seed";
 import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
+import { usePriceHistory } from "@/hooks/usePriceHistory";
 
 const BRAND_COLORS: Record<string, string> = {
   Vestel: "#2563eb",
@@ -51,6 +53,7 @@ export default function CompetitorRadarView() {
   const { lang } = useDemoLang();
   const t = radar[lang];
   const { competitorPrices } = useArcelikData();
+  const { data: priceHistory } = usePriceHistory();
   const [selectedBrands, setSelectedBrands] = useState<string[]>(["Vestel", "Bosch"]);
   const [detailBrand, setDetailBrand] = useState<string | null>(null);
 
@@ -108,13 +111,63 @@ export default function CompetitorRadarView() {
     });
   }, [selectedBrands, filters.categories, lang]);
 
-  const timelineEvents = [
-    { date: t.timeDate1, brand: "Vestel", action: t.timeEvent1, severity: "high" as const },
-    { date: t.timeDate2, brand: "Samsung", action: t.timeEvent3, severity: "medium" as const },
-    { date: t.timeDate3, brand: "Bosch", action: t.timeEvent2, severity: "low" as const },
-    { date: t.timeDate4, brand: "Profilo", action: t.timeEvent5, severity: "low" as const },
-    { date: t.timeDate5, brand: "Vestel", action: t.timeEvent4, severity: "high" as const },
-  ];
+  const timelineEvents = useMemo(() => {
+    const fallback = [
+      { date: t.timeDate1, brand: "Vestel", action: t.timeEvent1, severity: "high" as const },
+      { date: t.timeDate2, brand: "Samsung", action: t.timeEvent3, severity: "medium" as const },
+      { date: t.timeDate3, brand: "Bosch", action: t.timeEvent2, severity: "low" as const },
+      { date: t.timeDate4, brand: "Profilo", action: t.timeEvent5, severity: "low" as const },
+      { date: t.timeDate5, brand: "Vestel", action: t.timeEvent4, severity: "high" as const },
+    ];
+    if (!priceHistory || priceHistory.length === 0) return fallback;
+    const significantChanges = priceHistory
+      .filter(r => r.priceChangePercent !== null && Math.abs(r.priceChangePercent!) > 2)
+      .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
+      .slice(0, 8);
+    if (significantChanges.length === 0) return fallback;
+    return significantChanges.map(r => {
+      const change = r.priceChangePercent!;
+      const absChange = Math.abs(change);
+      const severity: "high" | "medium" | "low" = absChange > 10 ? "high" : absChange > 5 ? "medium" : "low";
+      const dateStr = new Date(r.recordedAt).toLocaleDateString(
+        lang === "tr" ? "tr-TR" : "en-US",
+        { year: "numeric", month: "short", day: "numeric" }
+      );
+      const pctStr = lang === "tr" ? `%${absChange.toFixed(1)}` : `${absChange.toFixed(1)}%`;
+      const action = change < 0
+        ? `${r.modelCode} ${t.reducedBy} ${pctStr}`
+        : `${r.modelCode} ${t.raisedBy} ${pctStr}`;
+      return { date: dateStr, brand: r.brand, action, severity };
+    });
+  }, [priceHistory, lang, t]);
+
+  const trendChartData = useMemo(() => {
+    if (!priceHistory || priceHistory.length === 0) return [];
+    const brandFilter = new Set(selectedBrands);
+    const dateMap: Record<string, Record<string, { total: number; count: number }>> = {};
+    priceHistory.forEach(record => {
+      const displayBrand = record.recordType === "product" ? "Arçelik" : record.brand;
+      if (displayBrand !== "Arçelik" && !brandFilter.has(displayBrand)) return;
+      const dayKey = new Date(record.recordedAt).toISOString().split("T")[0];
+      if (!dateMap[dayKey]) dateMap[dayKey] = {};
+      if (!dateMap[dayKey][displayBrand]) dateMap[dayKey][displayBrand] = { total: 0, count: 0 };
+      dateMap[dayKey][displayBrand].total += record.price;
+      dateMap[dayKey][displayBrand].count += 1;
+    });
+    return Object.entries(dateMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dayKey, brands]) => {
+        const date = new Date(dayKey).toLocaleDateString(
+          lang === "tr" ? "tr-TR" : "en-US",
+          { month: "short", day: "numeric" }
+        );
+        const row: Record<string, unknown> = { date };
+        Object.entries(brands).forEach(([brand, { total, count }]) => {
+          row[brand] = Math.round(total / count);
+        });
+        return row;
+      });
+  }, [priceHistory, selectedBrands, lang]);
 
   return (
     <div className="space-y-6">
@@ -199,6 +252,35 @@ export default function CompetitorRadarView() {
         </motion.div>
       </div>
 
+      {trendChartData.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="bg-white rounded-xl border border-gray-100 shadow-sm p-5"
+        >
+          <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+            <TrendingUp size={16} className="text-[#E30613]" />
+            {t.priceTrendTitle}
+          </h3>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendChartData} margin={{ left: 5, right: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₺${(v / 1000).toFixed(0)}K`} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: number) => [`₺${v.toLocaleString("tr-TR")}`, ""]} />
+                <Line type="monotone" dataKey="Arçelik" stroke="#E30613" strokeWidth={2} dot={false} />
+                {selectedBrands.map((b) => (
+                  <Line key={b} type="monotone" dataKey={b} stroke={BRAND_COLORS[b] || "#6B7280"} strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                ))}
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -214,7 +296,7 @@ export default function CompetitorRadarView() {
             <div key={i} className="flex items-start gap-3">
               <div className="flex flex-col items-center">
                 <div className={`w-3 h-3 rounded-full flex-shrink-0 ${event.severity === "high" ? "bg-red-500" : event.severity === "medium" ? "bg-amber-500" : "bg-green-500"}`} />
-                {i < 4 && <div className="w-px h-8 bg-gray-200" />}
+                {i < timelineEvents.length - 1 && <div className="w-px h-8 bg-gray-200" />}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">

@@ -164,6 +164,9 @@ export const dashboard: I18n = {
     competitorsTracked: "rakip takipte",
     never: "Henüz güncellenmedi",
     daily: "Günlük",
+    priceHistoryBasis: "Fiyat geçmişi verisine dayalı",
+    dataPointsLabel: "veri noktası",
+    priceRangeLabel: "Aralık",
   },
   en: {
     heatMarketShare: "Market Share",
@@ -251,6 +254,9 @@ export const dashboard: I18n = {
     competitorsTracked: "competitors tracked",
     never: "Not yet updated",
     daily: "Daily",
+    priceHistoryBasis: "Based on price history data",
+    dataPointsLabel: "data points",
+    priceRangeLabel: "Range",
   },
 };
 
@@ -297,6 +303,9 @@ export const radar: I18n = {
     timeDate3: "25 Nisan 2026",
     timeDate4: "20 Nisan 2026",
     timeDate5: "15 Nisan 2026",
+    priceTrendTitle: "Fiyat Trend Grafiği",
+    reducedBy: "fiyatında düşüş",
+    raisedBy: "fiyatında artış",
   },
   en: {
     dimPrice: "Price Competitiveness",
@@ -340,6 +349,9 @@ export const radar: I18n = {
     timeDate3: "Apr 25, 2026",
     timeDate4: "Apr 20, 2026",
     timeDate5: "Apr 15, 2026",
+    priceTrendTitle: "Price Trend Chart",
+    reducedBy: "price reduced by",
+    raisedBy: "price raised by",
   },
 };
 

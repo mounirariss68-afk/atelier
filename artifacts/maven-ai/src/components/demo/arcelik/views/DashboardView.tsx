@@ -19,6 +19,7 @@ import {
 } from "@/data/arcelik-seed";
 import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 import { useScrapeStatus } from "@/hooks/useScrapeStatus";
+import { usePriceHistory, usePriceHistorySummary } from "@/hooks/usePriceHistory";
 import { TurkeyMap, CITY_POSITIONS } from "../TurkeyMap";
 
 function formatCronSchedule(cron: string, lang: string): string {
@@ -98,6 +99,8 @@ export default function DashboardView() {
   const t = dashboard[lang];
   const { products, competitorPrices, cities, campaigns, dealers, dataSources: DATA_SOURCES } = useArcelikData();
   const { data: scrapeStatus } = useScrapeStatus();
+  const { data: priceHistory } = usePriceHistory();
+  const { data: priceHistorySummary } = usePriceHistorySummary();
   const HEAT_LABELS: Record<HeatMetric, string> = {
     share: t.heatMarketShare,
     price: t.heatPriceIndex,
@@ -137,6 +140,31 @@ export default function DashboardView() {
     return cities.filter((c) => filters.cities.includes(c.id));
   }, [filters.cities]);
 
+  const priceHistoryMap = useMemo(() => {
+    if (!priceHistory || priceHistory.length === 0) return {};
+    const map: Record<string, number[]> = {};
+    priceHistory
+      .filter(r => r.recordType === "product")
+      .forEach(record => {
+        if (!map[record.referenceId]) map[record.referenceId] = [];
+        map[record.referenceId].push(record.price);
+      });
+    Object.values(map).forEach(arr => arr.reverse());
+    return map;
+  }, [priceHistory]);
+
+  const summaryStats = useMemo(() => {
+    if (!priceHistorySummary || priceHistorySummary.length === 0) return null;
+    const totalDataPoints = priceHistorySummary.reduce((s, r) => s + Number(r.dataPoints), 0);
+    const withTrend = priceHistorySummary.filter(r => Number(r.dataPoints) > 1 && Number(r.earliestPrice) > 0);
+    const avgTrend = withTrend.length > 0
+      ? withTrend.reduce((s, r) => s + (Number(r.latestPrice) - Number(r.earliestPrice)) / Number(r.earliestPrice), 0) / withTrend.length
+      : null;
+    const globalMin = Math.min(...priceHistorySummary.map(r => Number(r.minPrice)));
+    const globalMax = Math.max(...priceHistorySummary.map(r => Number(r.maxPrice)));
+    return { totalDataPoints, avgTrend, productCount: priceHistorySummary.length, minPrice: globalMin, maxPrice: globalMax };
+  }, [priceHistorySummary]);
+
   const heatValues = filteredCities.map((c) => getHeatValue(c, heatMetric));
   const heatMin = Math.min(...heatValues);
   const heatMax = Math.max(...heatValues);
@@ -172,9 +200,9 @@ export default function DashboardView() {
       { id: "revenue", label: t.kpiMonthlyRevenue, value: pRevenue, suffix: "%", target: ">3%", delta: `+₺${Math.round(12 * ps.revenue)}M`, positive: pRevenue > 0, icon: DollarSign, source: undefined },
       { id: "campaigns", label: t.kpiActiveCampaign, value: pCampaigns, suffix: "", target: "5", delta: `${pCampaigns >= 3 ? "+" : ""}${pCampaigns - 2}`, positive: pCampaigns >= 3, icon: Megaphone, source: undefined },
       { id: "compliance", label: t.kpiDealerCompliance, value: pCompliance, suffix: "%", target: "85%", delta: `${(pCompliance - 76).toFixed(1)}pp`, positive: pCompliance >= 75, icon: Users, source: undefined },
-      { id: "index", label: t.kpiCompetitorIndex, value: pIndex, suffix: "", target: "0.95–1.05", delta: `${(pIndex - 1.03) >= 0 ? "+" : ""}${(pIndex - 1.03).toFixed(2)}`, positive: pIndex >= 0.95 && pIndex <= 1.05, icon: BarChart3, source: undefined },
+      { id: "index", label: t.kpiCompetitorIndex, value: pIndex, suffix: "", target: "0.95–1.05", delta: summaryStats?.avgTrend != null ? `${summaryStats.avgTrend >= 0 ? "+" : ""}${(summaryStats.avgTrend * 100).toFixed(1)}%` : `${(pIndex - 1.03) >= 0 ? "+" : ""}${(pIndex - 1.03).toFixed(2)}`, positive: pIndex >= 0.95 && pIndex <= 1.05, icon: BarChart3, source: summaryStats ? `${t.priceHistoryBasis} (${summaryStats.totalDataPoints} ${t.dataPointsLabel}) · ${t.priceRangeLabel}: ₺${summaryStats.minPrice.toLocaleString("tr-TR")}–₺${summaryStats.maxPrice.toLocaleString("tr-TR")}` : undefined },
     ];
-  }, [filters, t]);
+  }, [filters, t, summaryStats]);
 
   const categoryData = useMemo(() => {
     const cats = filters.categories.length > 0 ? filters.categories : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
@@ -437,7 +465,8 @@ export default function DashboardView() {
             </thead>
             <tbody>
               {productComparison.slice(0, 20).map((row) => {
-                const sparkData = Array.from({ length: 6 }, (_, i) => row.tsfPrice * (0.96 + Math.sin(i + row.id.charCodeAt(0)) * 0.03));
+                const realHistory = priceHistoryMap[row.id];
+                const sparkData = realHistory && realHistory.length >= 2 ? realHistory : Array.from({ length: 6 }, (_, i) => row.tsfPrice * (0.96 + Math.sin(i + row.id.charCodeAt(0)) * 0.03));
                 return (
                   <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3">
