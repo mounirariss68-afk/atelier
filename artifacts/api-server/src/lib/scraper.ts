@@ -176,29 +176,68 @@ async function scrapeWithPlaywright(
           .catch(() => {});
 
         const items = await page.evaluate(() => {
-          const out: { name: string; priceText: string; modelCode: string }[] = [];
-          document
-            .querySelectorAll(
-              ".product-card, .product-item, [data-product-id], .product-list-item-wrap",
-            )
-            .forEach((el) => {
-              const nameEl = el.querySelector(
-                ".product-name, .product-title, h3, h2",
-              );
-              const priceEl = el.querySelector(
-                ".product-price, .price, [data-price], .product-price-helper",
-              );
-              const name = nameEl?.textContent?.trim() || "";
-              const priceText = priceEl?.textContent?.trim() || "";
-              const modelCode =
-                el.getAttribute("data-product-id") || "";
-              if (name && priceText) out.push({ name, priceText, modelCode });
-            });
+          const out: { name: string; priceText: string; modelCode: string; gtmPrice: string }[] = [];
+          // Arçelik & Beko Hybris pattern: article.prd.product-item with data-gtm-impression JSON
+          document.querySelectorAll("article.prd.product-item").forEach((el) => {
+            const gtmRaw = el.getAttribute("data-gtm-impression") || "";
+            let gtmName = "";
+            let gtmId = "";
+            let gtmPrice = "";
+            try {
+              const gtm = JSON.parse(gtmRaw);
+              gtmName = String(gtm.name || "").trim();
+              gtmId = String(gtm.id || "").trim();
+              gtmPrice = String(gtm.price || "").trim();
+            } catch {
+              // gtm JSON missing or malformed — fall back to attribute lookup below
+            }
+            const codeAttr =
+              el.querySelector("[data-product-code]")?.getAttribute("data-product-code") ||
+              el.getAttribute("data-product-code") ||
+              "";
+            const nameAttr =
+              el.querySelector("[data-product-name]")?.getAttribute("data-product-name") ||
+              "";
+            const priceText =
+              el.querySelector("span.prc.prc-last")?.textContent?.trim() ||
+              el.querySelector(".prd-price")?.textContent?.trim() ||
+              "";
+            const name = gtmName || nameAttr;
+            const modelCode = gtmId || codeAttr;
+            if (name && (priceText || gtmPrice)) {
+              out.push({ name, priceText, modelCode, gtmPrice });
+            }
+          });
+          // Fallback: generic product-card / product-item layouts (Vestel-like sites if used via Playwright)
+          if (out.length === 0) {
+            document
+              .querySelectorAll(
+                ".product-card, .product-item, [data-product-id], .product-list-item-wrap",
+              )
+              .forEach((el) => {
+                const nameEl = el.querySelector(
+                  ".product-name, .product-title, h3, h2",
+                );
+                const priceEl = el.querySelector(
+                  ".product-price, .price, [data-price], .product-price-helper",
+                );
+                const name = nameEl?.textContent?.trim() || "";
+                const priceText = priceEl?.textContent?.trim() || "";
+                const modelCode = el.getAttribute("data-product-id") || "";
+                if (name && priceText) out.push({ name, priceText, modelCode, gtmPrice: "" });
+              });
+          }
           return out;
         });
 
         for (const item of items) {
-          const price = extractFirstTurkishPrice(item.priceText);
+          // Prefer numeric gtm price ("71999.00") over rendered text ("71.999 TL")
+          let price: number | null = null;
+          if (item.gtmPrice) {
+            const n = parseFloat(item.gtmPrice);
+            if (!isNaN(n)) price = Math.round(n);
+          }
+          if (price === null) price = extractFirstTurkishPrice(item.priceText);
           if (price && price > 1000) {
             const modelMatch = item.name.match(/\b(\d{3,5}\s*[A-Z]{1,4})\b/);
             results.push({
