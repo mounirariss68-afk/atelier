@@ -201,6 +201,7 @@ export default function SimulatorView() {
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
 
+            {simMode === "product" && filteredProducts.length === 0 ? null : (
             <div className="mt-4 p-3 bg-gray-50 rounded-lg space-y-1.5 text-xs">
               {simMode === "product" ? (
                 <>
@@ -220,8 +221,10 @@ export default function SimulatorView() {
                 </>
               )}
             </div>
+            )}
           </div>
 
+          {!(simMode === "product" && filteredProducts.length === 0) && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <label className="text-xs font-semibold text-gray-600 mb-3 block">
               {t.priceChange} <span className={`text-base font-extrabold ${priceAdjust > 0 ? "text-green-600" : priceAdjust < 0 ? "text-red-500" : "text-gray-700"}`}>
@@ -251,6 +254,7 @@ export default function SimulatorView() {
               </p>
             </div>
           </div>
+          )}
         </div>
 
         <div className="lg:col-span-2 space-y-5">
