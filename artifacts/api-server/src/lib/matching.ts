@@ -67,9 +67,57 @@ interface ProductForMatching {
   modelCode: string;
   name: string;
   category: string;
+  subcategory: string;
   tsfPrice: number;
   energyClass: string;
   features: string[];
+}
+
+function normalizeSubtype(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+const SUBTYPE_SYNONYMS: Record<string, string[]> = {
+  "side-by-side": ["gardirop", "side-by-side", "sidebyside"],
+  kombi: ["kombi"],
+  mini: ["mini", "tezgah-alti"],
+  "no-frost": ["no-frost", "alttan-donduruculu", "ustten-donduruculu", "cift-kapili"],
+  "cift-kapili": ["cift-kapili", "alttan-donduruculu", "ustten-donduruculu"],
+  ankastre: ["ankastre"],
+  mikrodalga: ["mikrodalga"],
+  induksiyonlu: ["induksiyonlu", "induksiyon"],
+  "set-ustu": ["set-ustu", "ocak"],
+  ocak: ["ocak", "set-ustu"],
+  inverter: ["inverter"],
+  kompakt: ["kompakt", "compact"],
+  slim: ["slim", "ince"],
+  kurutmali: ["kurutmali", "kurutmali-camasir"],
+};
+
+function subtypeAlignment(
+  arcelikSubcategory: string,
+  specProductType: string | null,
+  marketplaceTitle: string,
+): { matched: boolean; signal: string | null } {
+  const arc = normalizeSubtype(arcelikSubcategory);
+  if (!arc) return { matched: false, signal: null };
+  const synonyms = SUBTYPE_SYNONYMS[arc] ?? [arc];
+  const specNorm = normalizeSubtype(specProductType);
+  if (specNorm && synonyms.some((s) => specNorm.includes(s) || s.includes(specNorm))) {
+    return { matched: true, signal: "spec" };
+  }
+  const titleNorm = normalizeSubtype(marketplaceTitle);
+  if (titleNorm && synonyms.some((s) => titleNorm.includes(s))) {
+    return { matched: true, signal: "title" };
+  }
+  return { matched: false, signal: null };
 }
 
 interface MarketplaceForMatching {
@@ -163,6 +211,8 @@ export async function rebuildEquivalences(
       energyClassMatch?: boolean;
       priceDeltaPercent?: number;
       tokenOverlap?: number;
+      subtypeMatch?: boolean;
+      subtypeSignal?: string;
     };
     source: string;
   }> = [];
@@ -188,6 +238,8 @@ export async function rebuildEquivalences(
         energyClassMatch?: boolean;
         priceDeltaPercent?: number;
         tokenOverlap?: number;
+        subtypeMatch?: boolean;
+        subtypeSignal?: string;
       };
     }> = [];
 
@@ -261,6 +313,22 @@ export async function rebuildEquivalences(
         reasons.push(`weak-title-overlap (${(overlap * 100).toFixed(0)}%)`);
       }
 
+      // Subtype/product-type alignment (prefer spec field, fall back to title)
+      const subtype = subtypeAlignment(
+        product.subcategory,
+        mp.specProductType,
+        mp.title,
+      );
+      if (subtype.matched) {
+        const bonus = subtype.signal === "spec" ? 0.15 : 0.08;
+        score += bonus;
+        reasons.push(
+          subtype.signal === "spec"
+            ? `subtype-match-spec (${product.subcategory})`
+            : `subtype-match-title (${product.subcategory})`,
+        );
+      }
+
       const finalScore = Math.min(1, Math.round(score * 100) / 100);
       if (finalScore < 0.5) continue;
 
@@ -270,6 +338,8 @@ export async function rebuildEquivalences(
         basis: {
           reasons,
           categoryMatch: true,
+          subtypeMatch: subtype.matched || undefined,
+          subtypeSignal: subtype.signal ?? undefined,
           capacityDeltaPercent: capacityDelta,
           energyClassMatch,
           priceDeltaPercent: priceDelta,
