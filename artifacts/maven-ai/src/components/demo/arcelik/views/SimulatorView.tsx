@@ -113,27 +113,38 @@ export default function SimulatorView() {
               {simMode === "product" ? t.selectProduct : t.selectCategory}
             </label>
             {simMode === "product" && (
-              <div className="flex gap-2 mb-3">
+              <div className="space-y-2 mb-3">
                 <select
-                  value={filterSub ?? ""}
-                  onChange={(e) => setFilterSub(e.target.value || null)}
-                  className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
+                  value={selectedCat}
+                  onChange={(e) => { setSelectedCat(e.target.value as ProductCategory); setFilterSub(null); setFilterTier(null); }}
+                  className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
                 >
-                  <option value="">{t.filterSubcategory}: {t.filterAllSubs}</option>
-                  {Array.from(new Set(products.filter((p) => p.category === selectedCat).map((p) => p.subcategory))).map((sub) => (
-                    <option key={sub} value={sub}>{getSubcategoryLabel(sub, lang)}</option>
+                  {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => (
+                    <option key={cat} value={cat}>{getCategoryLabel(cat, lang)}</option>
                   ))}
                 </select>
-                <select
-                  value={filterTier ?? ""}
-                  onChange={(e) => setFilterTier((e.target.value || null) as PriceTier | null)}
-                  className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
-                >
-                  <option value="">{t.filterPriceTier}: {t.filterAllTiers}</option>
-                  {(["entry", "mid", "premium"] as PriceTier[]).map((tier) => (
-                    <option key={tier} value={tier}>{getPriceTierLabel(tier, lang)}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={filterSub ?? ""}
+                    onChange={(e) => setFilterSub(e.target.value || null)}
+                    className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
+                  >
+                    <option value="">{t.filterSubcategory}: {t.filterAllSubs}</option>
+                    {Array.from(new Set(products.filter((p) => p.category === selectedCat).map((p) => p.subcategory))).map((sub) => (
+                      <option key={sub} value={sub}>{getSubcategoryLabel(sub, lang)}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterTier ?? ""}
+                    onChange={(e) => setFilterTier((e.target.value || null) as PriceTier | null)}
+                    className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
+                  >
+                    <option value="">{t.filterPriceTier}: {t.filterAllTiers}</option>
+                    {(["entry", "mid", "premium"] as PriceTier[]).map((tier) => (
+                      <option key={tier} value={tier}>{getPriceTierLabel(tier, lang)}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
             <div className="relative">
@@ -146,17 +157,11 @@ export default function SimulatorView() {
                   }}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
                 >
-                  {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => {
-                    const catProds = products.filter((p) => p.category === cat && (!filterSub || p.subcategory === filterSub) && (!filterTier || p.priceTier === filterTier));
-                    if (catProds.length === 0) return null;
-                    return (
-                      <optgroup key={cat} label={getCategoryLabel(cat, lang)}>
-                        {catProds.map((p) => (
-                          <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
+                  {products
+                    .filter((p) => p.category === selectedCat && (!filterSub || p.subcategory === filterSub) && (!filterTier || p.priceTier === filterTier))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
+                    ))}
                 </select>
               ) : (
                 <select
