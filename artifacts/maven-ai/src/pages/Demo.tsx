@@ -5,25 +5,27 @@ import BusinessDashboard from "@/components/demo/arcelik/BusinessDashboard";
 import DealerPortal from "@/components/demo/arcelik/DealerPortal";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLang, tStr } from "@/lib/lang";
+import { ArcelikDataProvider } from "@/hooks/useArcelikData";
 
-/**
- * /demo/:slug route — full-screen interactive demo experience.
- *
- * Looks up the scenario for the slug and mounts the shared DemoExperience
- * shell. Falls back to a friendly "scenario not found" panel rather than
- * a 404 so the rest of the site's chrome is still reachable.
- */
 export default function Demo() {
   const params = useParams();
   const slug = (params as { slug?: string }).slug ?? "";
   const variant = (params as { variant?: string }).variant;
 
   if (slug === "arcelik-fiyat-istihbarati" && variant === "dashboard") {
-    return <BusinessDashboard />;
+    return (
+      <ArcelikDataProvider>
+        <BusinessDashboard />
+      </ArcelikDataProvider>
+    );
   }
 
   if (slug === "arcelik-fiyat-istihbarati" && variant === "bayi") {
-    return <DealerPortal />;
+    return (
+      <ArcelikDataProvider>
+        <DealerPortal />
+      </ArcelikDataProvider>
+    );
   }
 
   const scenario = getScenario(slug, variant);

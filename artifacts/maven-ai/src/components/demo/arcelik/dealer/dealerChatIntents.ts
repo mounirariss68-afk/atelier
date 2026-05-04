@@ -1,15 +1,15 @@
 import {
-  products, competitorPrices, dealers, campaigns,
   CATEGORY_LABELS, CATEGORY_LABELS_EN,
   getProductName, getCampaignField,
   type ProductCategory,
 } from "@/data/arcelik-seed";
+import { getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 import type { DemoLang } from "../DemoLangContext";
-
-const DEALER = dealers[0];
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 
 const catLabels = (lang: DemoLang) => (lang === "en" ? CATEGORY_LABELS_EN : CATEGORY_LABELS);
+
+function d() { return getArcelikDataSnapshot(); }
 
 export type DealerResponseType = "text" | "metric" | "table" | "list" | "progress" | "campaign-card";
 
@@ -37,7 +37,7 @@ const INTENTS: DealerIntent[] = [
   {
     patterns: [/aktif kampanya/i, /kampanyalar neler/i, /hangi kampanya/i, /kampanya var mı/i, /naber kampanya/i, /active campaign/i, /which campaign/i, /any campaign/i, /current campaign/i],
     handler: (lang) => {
-      const active = campaigns.filter((c) => c.targetCities.includes(DEALER.city));
+      const active = d().campaigns.filter((c) => c.targetCities.includes(d().dealers[0].city));
       const list = active.slice(0, 4).map((c, i) => `${i + 1}. ${getCampaignField(c, "name", lang)}\n   ${getCampaignField(c, "discountDetail", lang)}`).join("\n\n");
       return {
         type: "list",
@@ -61,8 +61,8 @@ const INTENTS: DealerIntent[] = [
     handler: (lang) => ({
       type: "text",
       text: lang === "en"
-        ? `I'm great, thanks! 😊 What can I do today for ${DEALER.storeName}? I'm ready to help with campaigns, pricing, stock, or target tracking.`
-        : `İyiyim, teşekkürler! 😊 Bugün ${DEALER.storeName} için neler yapabilirim? Kampanya, fiyat, stok veya hedef takibi konularında hazırım.`,
+        ? `I'm great, thanks! 😊 What can I do today for ${d().dealers[0].storeName}? I'm ready to help with campaigns, pricing, stock, or target tracking.`
+        : `İyiyim, teşekkürler! 😊 Bugün ${d().dealers[0].storeName} için neler yapabilirim? Kampanya, fiyat, stok veya hedef takibi konularında hazırım.`,
     }),
   },
   {
@@ -77,7 +77,7 @@ const INTENTS: DealerIntent[] = [
   {
     patterns: [/fiyat listesi/i, /fiyat.*liste/i, /tüm fiyat/i, /güncel fiyat/i, /price list/i, /all prices/i, /current price/i],
     handler: (lang) => {
-      const sample = products.slice(0, 5);
+      const sample = d().products.slice(0, 5);
       return {
         type: "table",
         text: lang === "en" ? "Here are samples from the current price list:" : "İşte güncel fiyat listesinden örnekler:",
@@ -91,27 +91,27 @@ const INTENTS: DealerIntent[] = [
   {
     patterns: [/hedef.*ne kadar/i, /hedefime.*kaldı/i, /hedef durumu/i, /kaç ürün daha/i, /hedef takip/i, /target/i, /goal/i, /how.*much.*left/i, /target tracking/i],
     handler: (lang) => {
-      const remaining = DEALER.monthlySalesTarget - DEALER.currentProgress;
-      const pct = Math.round((DEALER.currentProgress / DEALER.monthlySalesTarget) * 100);
+      const remaining = d().dealers[0].monthlySalesTarget - d().dealers[0].currentProgress;
+      const pct = Math.round((d().dealers[0].currentProgress / d().dealers[0].monthlySalesTarget) * 100);
       const bonusMsg = lang === "en"
-        ? (DEALER.currentProgress >= 50 ? "✅ You crossed the +1% extra commission threshold! " : "")
-        : (DEALER.currentProgress >= 50 ? "✅ %1 ek prim eşiğini geçtiniz! " : "");
+        ? (d().dealers[0].currentProgress >= 50 ? "✅ You crossed the +1% extra commission threshold! " : "")
+        : (d().dealers[0].currentProgress >= 50 ? "✅ %1 ek prim eşiğini geçtiniz! " : "");
       const tail = lang === "en"
         ? (remaining <= 10 ? "You're very close to the target — great job! 💪" : "Keep going, you can reach the target!")
         : (remaining <= 10 ? "Hedefe çok yakınsınız, harika gidiyorsunuz! 💪" : "Devam edin, hedefe ulaşabilirsiniz!");
       return {
         type: "progress",
         text: lang === "en"
-          ? `Your target this month: ${DEALER.monthlySalesTarget} units\nSold so far: ${DEALER.currentProgress} units\nRemaining: ${remaining} units\n\n${bonusMsg}${tail}`
-          : `Bu ayki hedefiniz: ${DEALER.monthlySalesTarget} ürün\nŞu ana kadar: ${DEALER.currentProgress} ürün satıldı\nKalan: ${remaining} ürün\n\n${bonusMsg}${tail}`,
-        data: { current: DEALER.currentProgress, target: DEALER.monthlySalesTarget, percent: pct },
+          ? `Your target this month: ${d().dealers[0].monthlySalesTarget} units\nSold so far: ${d().dealers[0].currentProgress} units\nRemaining: ${remaining} units\n\n${bonusMsg}${tail}`
+          : `Bu ayki hedefiniz: ${d().dealers[0].monthlySalesTarget} ürün\nŞu ana kadar: ${d().dealers[0].currentProgress} ürün satıldı\nKalan: ${remaining} ürün\n\n${bonusMsg}${tail}`,
+        data: { current: d().dealers[0].currentProgress, target: d().dealers[0].monthlySalesTarget, percent: pct },
       };
     },
   },
   {
     patterns: [/5088|NFK.*5088/i],
     handler: (lang) => {
-      const p = products.find((pr) => pr.modelCode.includes("5088"));
+      const p = d().products.find((pr) => pr.modelCode.includes("5088"));
       if (!p) return { type: "text", text: lang === "en" ? "I couldn't find this model." : "Bu modeli bulamadım." };
       return {
         type: "metric",
@@ -134,7 +134,7 @@ const INTENTS: DealerIntent[] = [
   {
     patterns: [/vestel.*fiyat/i, /vestel.*karşı/i, /rakip fiyat/i, /rakip.*karşılaştır/i, /vestel.*price/i, /competitor.*price/i, /competitor.*compar/i],
     handler: (lang) => {
-      const vestel = competitorPrices.filter((cp) => cp.brand === "Vestel").slice(0, 5);
+      const vestel = d().competitorPrices.filter((cp) => cp.brand === "Vestel").slice(0, 5);
       return {
         type: "table",
         text: lang === "en"
@@ -152,21 +152,21 @@ const INTENTS: DealerIntent[] = [
     handler: (lang) => ({
       type: "metric",
       text: lang === "en"
-        ? `Commission earned this month: ₺${fmt(DEALER.earnedCommission)}\n\nA +₺2,400 increase compared to last month.\n\nBy category:\n• Refrigerator: ₺${fmt(Math.round(DEALER.earnedCommission * 0.35))}\n• Washer: ₺${fmt(Math.round(DEALER.earnedCommission * 0.22))}\n• Dishwasher: ₺${fmt(Math.round(DEALER.earnedCommission * 0.15))}\n• Other: ₺${fmt(Math.round(DEALER.earnedCommission * 0.28))}`
-        : `Bu ay kazanılan komisyon: ₺${fmt(DEALER.earnedCommission)}\n\nGeçen aya göre +₺2.400 artış gösterdiniz.\n\nKategori bazlı:\n• Buzdolabı: ₺${fmt(Math.round(DEALER.earnedCommission * 0.35))}\n• Çamaşır: ₺${fmt(Math.round(DEALER.earnedCommission * 0.22))}\n• Bulaşık: ₺${fmt(Math.round(DEALER.earnedCommission * 0.15))}\n• Diğer: ₺${fmt(Math.round(DEALER.earnedCommission * 0.28))}`,
-      data: { value: `₺${fmt(DEALER.earnedCommission)}`, label: lang === "en" ? "This Month's Commission" : "Bu Ay Komisyon" },
+        ? `Commission earned this month: ₺${fmt(d().dealers[0].earnedCommission)}\n\nA +₺2,400 increase compared to last month.\n\nBy category:\n• Refrigerator: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.35))}\n• Washer: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.22))}\n• Dishwasher: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.15))}\n• Other: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.28))}`
+        : `Bu ay kazanılan komisyon: ₺${fmt(d().dealers[0].earnedCommission)}\n\nGeçen aya göre +₺2.400 artış gösterdiniz.\n\nKategori bazlı:\n• Buzdolabı: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.35))}\n• Çamaşır: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.22))}\n• Bulaşık: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.15))}\n• Diğer: ₺${fmt(Math.round(d().dealers[0].earnedCommission * 0.28))}`,
+      data: { value: `₺${fmt(d().dealers[0].earnedCommission)}`, label: lang === "en" ? "This Month's Commission" : "Bu Ay Komisyon" },
     }),
   },
   {
     patterns: [/stok.*var mı/i, /stok durumu/i, /\bstok\b/i, /stok.*kardeşim/i, /stock status/i, /\bstock\b/i, /\binventory\b/i],
     handler: (lang) => {
       const labels = catLabels(lang);
-      const low = Object.entries(DEALER.stockLevels).filter(([cat, lv]) => {
+      const low = Object.entries(d().dealers[0].stockLevels).filter(([cat, lv]) => {
         const opt: Record<string, number> = { buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8 };
         return (lv ?? 0) < (opt[cat] ?? 10);
       });
       const lines = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => {
-        const lv = DEALER.stockLevels[cat] ?? 0;
+        const lv = d().dealers[0].stockLevels[cat] ?? 0;
         const icon = lv > 10 ? "✅" : lv > 0 ? "⚠️" : "❌";
         return lang === "en" ? `${icon} ${label}: ${lv} units` : `${icon} ${label}: ${lv} adet`;
       }).join("\n");
@@ -233,15 +233,15 @@ const INTENTS: DealerIntent[] = [
     patterns: [/en çok.*sat/i, /en çok.*ürün/i, /popüler/i, /best.?sell/i, /en iyi sat/i, /top.?sell/i, /most popular/i, /top.*product/i],
     handler: (lang) => {
       const labels = catLabels(lang);
-      const sorted = (Object.entries(DEALER.productMix) as [ProductCategory, number][]).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+      const sorted = (Object.entries(d().dealers[0].productMix) as [ProductCategory, number][]).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
       const list = sorted.slice(0, 5).map(([cat, count], i) => lang === "en"
         ? `${i + 1}. ${labels[cat]}: ${count} units`
         : `${i + 1}. ${labels[cat]}: ${count} adet`).join("\n");
       return {
         type: "list",
         text: lang === "en"
-          ? `Your top-selling categories this month:\n\n${list}\n\nTotal: ${DEALER.currentProgress} units sold.`
-          : `Bu ay en çok sattığınız kategoriler:\n\n${list}\n\nToplam: ${DEALER.currentProgress} ürün satışı.`,
+          ? `Your top-selling categories this month:\n\n${list}\n\nTotal: ${d().dealers[0].currentProgress} units sold.`
+          : `Bu ay en çok sattığınız kategoriler:\n\n${list}\n\nToplam: ${d().dealers[0].currentProgress} ürün satışı.`,
       };
     },
   },
@@ -295,7 +295,7 @@ const INTENTS: DealerIntent[] = [
     patterns: [/düşük stok/i, /stok uyarı/i, /tükenen/i, /kritik stok/i, /low stock/i, /stock alert/i, /out of stock/i, /critical stock/i],
     handler: (lang) => {
       const labels = catLabels(lang);
-      const low = Object.entries(DEALER.stockLevels).filter(([cat, lv]) => {
+      const low = Object.entries(d().dealers[0].stockLevels).filter(([cat, lv]) => {
         const opt: Record<string, number> = { buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8 };
         return (lv ?? 0) < (opt[cat] ?? 10);
       });
@@ -342,7 +342,7 @@ const INTENTS: DealerIntent[] = [
   {
     patterns: [/kampanya matery/i, /afiş/i, /SMS şablon/i, /sosyal medya/i, /materyal/i, /campaign material/i, /poster/i, /sms template/i, /social media/i],
     handler: (lang) => {
-      const c = campaigns.find((c) => c.id === "enerji-verimlilik") ?? campaigns[0];
+      const c = d().campaigns.find((c) => c.id === "enerji-verimlilik") ?? d().campaigns[0];
       return {
         type: "text",
         text: lang === "en"
@@ -356,9 +356,9 @@ const INTENTS: DealerIntent[] = [
     handler: (lang) => ({
       type: "metric",
       text: lang === "en"
-        ? `Your compliance score: ${DEALER.complianceScore}/100\n\n${DEALER.complianceScore >= 85 ? "✅ Great! You're above the compliance target." : "⚠️ Target is 85 points. To raise your score, ensure TSF price compliance and display campaign materials in the storefront."}\n\nCompliance score criteria:\n• TSF price compliance\n• Use of campaign materials\n• Timely orders and stock management\n• Training participation`
-        : `Uyum puanınız: ${DEALER.complianceScore}/100\n\n${DEALER.complianceScore >= 85 ? "✅ Harika! Uyum hedefinizin üzerindesiniz." : "⚠️ Hedef 85 puan. Puanınızı artırmak için TSF fiyatlarına uyumu ve kampanya materyallerini vitrine koymayı unutmayın."}\n\nUyum puanı kriterleri:\n• TSF fiyatına uygunluk\n• Kampanya materyalleri kullanımı\n• Zamanında sipariş ve stok yönetimi\n• Eğitimlere katılım`,
-      data: { value: `${DEALER.complianceScore}/100`, label: lang === "en" ? "Compliance Score" : "Uyum Puanı" },
+        ? `Your compliance score: ${d().dealers[0].complianceScore}/100\n\n${d().dealers[0].complianceScore >= 85 ? "✅ Great! You're above the compliance target." : "⚠️ Target is 85 points. To raise your score, ensure TSF price compliance and display campaign materials in the storefront."}\n\nCompliance score criteria:\n• TSF price compliance\n• Use of campaign materials\n• Timely orders and stock management\n• Training participation`
+        : `Uyum puanınız: ${d().dealers[0].complianceScore}/100\n\n${d().dealers[0].complianceScore >= 85 ? "✅ Harika! Uyum hedefinizin üzerindesiniz." : "⚠️ Hedef 85 puan. Puanınızı artırmak için TSF fiyatlarına uyumu ve kampanya materyallerini vitrine koymayı unutmayın."}\n\nUyum puanı kriterleri:\n• TSF fiyatına uygunluk\n• Kampanya materyalleri kullanımı\n• Zamanında sipariş ve stok yönetimi\n• Eğitimlere katılım`,
+      data: { value: `${d().dealers[0].complianceScore}/100`, label: lang === "en" ? "Compliance Score" : "Uyum Puanı" },
     }),
   },
   {
@@ -382,37 +382,37 @@ const INTENTS: DealerIntent[] = [
   {
     patterns: [/buzdolab/i, /fridge/i, /refrigerator/i],
     handler: (lang) => {
-      const buzProducts = products.filter((p) => p.category === "buzdolabi");
-      const stock = DEALER.stockLevels.buzdolabi ?? 0;
+      const buzProducts = d().products.filter((p) => p.category === "buzdolabi");
+      const stock = d().dealers[0].stockLevels.buzdolabi ?? 0;
       const min = fmt(Math.min(...buzProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...buzProducts.map((p) => p.tsfPrice)));
       return {
         type: "list",
         text: lang === "en"
-          ? `Refrigerator category:\n\n• ${buzProducts.length} model portfolio\n• Price range: ₺${min} – ₺${max}\n• Current stock: ${stock} units\n• Sales this month: ${DEALER.productMix.buzdolabi ?? 0} units\n\nMost preferred: 5088 NFK, 5076 NFK, Side-by-Side 274560`
-          : `Buzdolabı kategorisi:\n\n• ${buzProducts.length} model portföyü\n• Fiyat aralığı: ₺${min} – ₺${max}\n• Mevcut stok: ${stock} adet\n• Bu ay satışınız: ${DEALER.productMix.buzdolabi ?? 0} adet\n\nEn çok tercih edilenler: 5088 NFK, 5076 NFK, Side-by-Side 274560`,
+          ? `Refrigerator category:\n\n• ${buzProducts.length} model portfolio\n• Price range: ₺${min} – ₺${max}\n• Current stock: ${stock} units\n• Sales this month: ${d().dealers[0].productMix.buzdolabi ?? 0} units\n\nMost preferred: 5088 NFK, 5076 NFK, Side-by-Side 274560`
+          : `Buzdolabı kategorisi:\n\n• ${buzProducts.length} model portföyü\n• Fiyat aralığı: ₺${min} – ₺${max}\n• Mevcut stok: ${stock} adet\n• Bu ay satışınız: ${d().dealers[0].productMix.buzdolabi ?? 0} adet\n\nEn çok tercih edilenler: 5088 NFK, 5076 NFK, Side-by-Side 274560`,
       };
     },
   },
   {
     patterns: [/çamaşır/i, /washing/i, /washer/i],
     handler: (lang) => {
-      const camProducts = products.filter((p) => p.category === "camasir");
+      const camProducts = d().products.filter((p) => p.category === "camasir");
       const min = fmt(Math.min(...camProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...camProducts.map((p) => p.tsfPrice)));
       return {
         type: "list",
         text: lang === "en"
-          ? `Washing machine category:\n\n• ${camProducts.length} models\n• Price range: ₺${min} – ₺${max}\n• Current stock: ${DEALER.stockLevels.camasir ?? 0} units\n• Sales this month: ${DEALER.productMix.camasir ?? 0} units`
-          : `Çamaşır makinesi kategorisi:\n\n• ${camProducts.length} model\n• Fiyat aralığı: ₺${min} – ₺${max}\n• Mevcut stok: ${DEALER.stockLevels.camasir ?? 0} adet\n• Bu ay satışınız: ${DEALER.productMix.camasir ?? 0} adet`,
+          ? `Washing machine category:\n\n• ${camProducts.length} models\n• Price range: ₺${min} – ₺${max}\n• Current stock: ${d().dealers[0].stockLevels.camasir ?? 0} units\n• Sales this month: ${d().dealers[0].productMix.camasir ?? 0} units`
+          : `Çamaşır makinesi kategorisi:\n\n• ${camProducts.length} model\n• Fiyat aralığı: ₺${min} – ₺${max}\n• Mevcut stok: ${d().dealers[0].stockLevels.camasir ?? 0} adet\n• Bu ay satışınız: ${d().dealers[0].productMix.camasir ?? 0} adet`,
       };
     },
   },
   {
     patterns: [/klima/i, /air.?con/i],
     handler: (lang) => {
-      const klimaProducts = products.filter((p) => p.category === "klima");
-      const stock = DEALER.stockLevels.klima ?? 0;
+      const klimaProducts = d().products.filter((p) => p.category === "klima");
+      const stock = d().dealers[0].stockLevels.klima ?? 0;
       const min = fmt(Math.min(...klimaProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...klimaProducts.map((p) => p.tsfPrice)));
       const lowMark = lang === "en" ? "⚠️ (low!)" : "⚠️ (düşük!)";
@@ -429,7 +429,7 @@ const INTENTS: DealerIntent[] = [
     handler: (lang) => {
       const labels = catLabels(lang);
       const cats = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => {
-        const ps = products.filter((p) => p.category === cat);
+        const ps = d().products.filter((p) => p.category === cat);
         const avg = ps.length ? (ps.reduce((s, p) => s + p.marginPercent, 0) / ps.length).toFixed(1) : "0";
         return lang === "en" ? `• ${label}: ${avg}%` : `• ${label}: %${avg}`;
       }).join("\n");

@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
-import { cities, COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel, getCityName, type ProductCategory } from "@/data/arcelik-seed";
+import { COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel, getCityName, type ProductCategory } from "@/data/arcelik-seed";
+import { useArcelikData } from "@/hooks/useArcelikData";
 import { generateAlerts, type AgentAlert, type Severity } from "@/data/arcelik-agent";
 import { DemoLangProvider, useDemoLang } from "./DemoLangContext";
 import { shell } from "./demo-i18n";
@@ -57,6 +58,7 @@ function Shell() {
   const { filters, update } = useDashboardFilters();
   const { lang, setLang } = useDemoLang();
   const t = shell[lang];
+  const { cities } = useArcelikData();
 
   const agentAlerts = useMemo(() => generateAlerts(), []);
   const critHighAlerts = agentAlerts.filter((a) => a.severity === "critical" || a.severity === "high");

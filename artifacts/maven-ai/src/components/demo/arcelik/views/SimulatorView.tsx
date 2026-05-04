@@ -12,9 +12,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { simulator } from "../demo-i18n";
 import {
-  products, competitorPrices, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel, getProductSpecs,
+  CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel, getProductSpecs,
   type ArcelikProduct, type ProductCategory, type PriceTier,
 } from "@/data/arcelik-seed";
+import { useArcelikData } from "@/hooks/useArcelikData";
 import { generateSimulatorRecommendations } from "@/data/arcelik-agent";
 
 type SimMode = "product" | "category";
@@ -23,6 +24,7 @@ export default function SimulatorView() {
   const { toast } = useToast();
   const { lang } = useDemoLang();
   const t = simulator[lang];
+  const { products, competitorPrices } = useArcelikData();
   const [simMode, setSimMode] = useState<SimMode>("product");
   const [selectedProduct, setSelectedProduct] = useState<ArcelikProduct>(products[0]);
   const [selectedCat, setSelectedCat] = useState<ProductCategory>("buzdolabi");

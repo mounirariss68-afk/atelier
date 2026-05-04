@@ -3,18 +3,15 @@ import {
   Award, TrendingUp, Tag, AlertTriangle, Package, BarChart3,
   Clock, ChevronRight, Megaphone, Info, Brain, CheckCircle2,
 } from "lucide-react";
-import { dealers, campaigns, cities as allCities, getCategoryLabel, getCampaignField, getCityName } from "@/data/arcelik-seed";
+import { getCategoryLabel, getCampaignField, getCityName } from "@/data/arcelik-seed";
 import { generateDealerAgentTasks } from "@/data/arcelik-agent";
 import type { DealerViewId } from "../DealerPortal";
 import { useDemoLang } from "../DemoLangContext";
 import { dealerHome } from "../demo-i18n";
+import { useArcelikData } from "@/hooks/useArcelikData";
 
-const DEALER = dealers[0];
 const TIER_COLORS: Record<string, string> = { gold: "#F5A623", silver: "#94A3B8", bronze: "#CD7F32" };
 const OPTIMAL_STOCK: Record<string, number> = { buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8 };
-
-const activeCampaigns = campaigns.filter((c) => c.targetCities.includes(DEALER.city)).slice(0, 3);
-const lowStockCount = Object.entries(DEALER.stockLevels).filter(([cat, lv]) => (lv ?? 0) < (OPTIMAL_STOCK[cat] ?? 10)).length;
 
 const ANNOUNCEMENT_KEYS = [
   { id: 1, catKey: "annCatNewProduct", titleKey: "ann1Title", dateKey: "ann1Date", read: false },
@@ -48,8 +45,12 @@ function ComplianceRing({ score }: { score: number }) {
 export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerViewId) => void }) {
   const { lang } = useDemoLang();
   const t = dealerHome[lang];
+  const { dealers, campaigns, cities: allCities } = useArcelikData();
+  const DEALER = dealers[0];
+  const activeCampaigns = campaigns.filter((c) => c.targetCities.includes(DEALER?.city)).slice(0, 3);
+  const lowStockCount = DEALER ? Object.entries(DEALER.stockLevels).filter(([cat, lv]) => (lv ?? 0) < (OPTIMAL_STOCK[cat] ?? 10)).length : 0;
   const tierLabels: Record<string, string> = { gold: t.tierGold, silver: t.tierSilver, bronze: t.tierBronze };
-  const cityObj = allCities.find((c) => c.id === DEALER.city);
+  const cityObj = allCities.find((c) => c.id === DEALER?.city);
   const cityName = cityObj ? getCityName(cityObj, lang) : "Istanbul";
   const progressPct = Math.round((DEALER.currentProgress / DEALER.monthlySalesTarget) * 100);
 

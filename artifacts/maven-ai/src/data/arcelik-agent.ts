@@ -1,7 +1,7 @@
 import {
-  products, competitorPrices, cities, dealers,
   type CityData,
 } from "./arcelik-seed";
+import { getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 
 export type DirectorRole = "pricing" | "finance" | "marketing";
 export type Severity = "critical" | "high" | "medium" | "low";
@@ -122,23 +122,28 @@ const daysFromNow = (d: number) => {
   return dt.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
 };
 
+function getData() {
+  return getArcelikDataSnapshot();
+}
+
 function findWeakCities(): CityData[] {
-  return [...cities].sort((a, b) => a.marketSharePercent - b.marketSharePercent).slice(0, 5);
+  return [...getData().cities].sort((a, b) => a.marketSharePercent - b.marketSharePercent).slice(0, 5);
 }
 
 function findLowMarginProducts() {
-  return [...products].sort((a, b) => a.marginPercent - b.marginPercent).slice(0, 5);
+  return [...getData().products].sort((a, b) => a.marginPercent - b.marginPercent).slice(0, 5);
 }
 
 function findCompetitorUndercuts() {
-  return competitorPrices.filter((cp) => cp.priceDeltaPercent < -10).slice(0, 8);
+  return getData().competitorPrices.filter((cp) => cp.priceDeltaPercent < -10).slice(0, 8);
 }
 
 function findPremiumGaps() {
-  return competitorPrices.filter((cp) => cp.priceDeltaPercent > 20).slice(0, 5);
+  return getData().competitorPrices.filter((cp) => cp.priceDeltaPercent > 20).slice(0, 5);
 }
 
 export function generateRecommendations(): AgentRecommendation[] {
+  const { products, dealers } = getData();
   const undercuts = findCompetitorUndercuts();
   const weakCities = findWeakCities();
   const premiumGaps = findPremiumGaps();
@@ -216,7 +221,7 @@ export function generateRecommendations(): AgentRecommendation[] {
       confidence: 95,
       reasoning: [
         { source: "Sezonsal Talep Modeli", observation: "Son 3 yılın verilerine göre klima satışları Mayıs'ta %80, Haziran'da %150, Temmuz'da %180 artış gösteriyor", conclusion: "Sezon piki yaklaşıyor" },
-        { source: "Stok Seviyesi Analizi", observation: `Mevcut bayi stokları ortalama ${Math.round(dealers.reduce((s, d) => s + (d.stockLevels.klima ?? 0), 0) / dealers.length)} adet — hedefin altında`, conclusion: "Stok takviyesi acil" },
+        { source: "Stok Seviyesi Analizi", observation: `Mevcut bayi stokları ortalama ${Math.round(getData().dealers.reduce((s, d) => s + (d.stockLevels.klima ?? 0), 0) / getData().dealers.length)} adet — hedefin altında`, conclusion: "Stok takviyesi acil" },
         { source: "Rekabet Durumu", observation: `Regal klima %24 daha ucuz, Vestel %15 daha ucuz konumda`, conclusion: "Sezon başında fiyat avantajı kaybedilmemeli" },
         { source: "Marj Fırsatı", observation: "Yaz piğinde talep elastikiyeti düşer, %3-5 fiyat artışı uygulanabilir", conclusion: "Sezon başında fiyat sabitle, Temmuz'da %3 artış planla" },
       ],
@@ -351,7 +356,7 @@ export function generateRecommendations(): AgentRecommendation[] {
       confidence: 76,
       reasoning: [
         { source: "Mevzuat Tarama Ajanı", observation: "Yeni enerji etiketleme sistemi 2026 Q3'te yürürlüğe giriyor", conclusion: "A+++ ürünler öne çıkacak" },
-        { source: "Portföy Analizi", observation: `${products.filter(p => p.energyClass === "A+++").length} A+++ ürün portföyde mevcut`, conclusion: "Hazırlıklı konumdayız" },
+        { source: "Portföy Analizi", observation: `${getData().products.filter(p => p.energyClass === "A+++").length} A+++ ürün portföyde mevcut`, conclusion: "Hazırlıklı konumdayız" },
         { source: "Tüketici Araştırması", observation: "Enerji maliyeti farkındalığı %78'e yükseldi (geçen yıl %62)", conclusion: "Tüketici A+++ için prim ödemeye hazır" },
       ],
       impact: { revenue: "+₺10M", margin: "+0.3%", share: "+0.2pp" },
@@ -650,7 +655,7 @@ export function generateDecisionHistory(): AgentDecisionLog[] {
 }
 
 export function generateDealerAgentTasks(dealerCity: string): AgentTask[] {
-  const cityName = cities.find((c) => c.id === dealerCity)?.name ?? dealerCity;
+  const cityName = getData().cities.find((c) => c.id === dealerCity)?.name ?? dealerCity;
   return [
     { id: "dt-01", title: "Klima stok seviyesini artır", description: `Yaz sezonu yaklaşıyor. Mevcut klima stoku optimum seviyenin altında. ${daysFromNow(7)} tarihine kadar sipariş verin.`, assignee: "Bayi", assigneeRole: "marketing", priority: "high", deadline: daysFromNow(7), status: "open", createdAt: hoursAgo(4) },
     { id: "dt-02", title: "Ramazan kampanyası POS materyallerini güncelle", description: "Yeni kampanya afişleri ve fiyat etiketleri hazır. Vitrininizde görünür şekilde konumlandırın.", assignee: "Bayi", assigneeRole: "marketing", priority: "medium", deadline: daysFromNow(2), status: "open", createdAt: hoursAgo(8) },

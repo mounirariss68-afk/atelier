@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Tag, Target, Users, ChevronDown, ChevronUp, Megaphone, Gift, CheckCircle2 } from "lucide-react";
-import { campaigns, dealers, getCategoryLabel, getCampaignField } from "@/data/arcelik-seed";
+import { getCategoryLabel, getCampaignField } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { dealerCampaigns } from "../demo-i18n";
-
-const DEALER = dealers[0];
-const allForCity = campaigns.filter((c) => c.targetCities.includes(DEALER.city));
+import { useArcelikData } from "@/hooks/useArcelikData";
 
 interface CampaignStatus {
   id: string;
@@ -38,6 +36,9 @@ function getStatus(id: string) {
 export default function CampaignsView() {
   const { lang } = useDemoLang();
   const t = dealerCampaigns[lang];
+  const { campaigns, dealers } = useArcelikData();
+  const DEALER = dealers[0];
+  const allForCity = campaigns.filter((c) => c.targetCities.includes(DEALER?.city));
   const [showCompleted, setShowCompleted] = useState(false);
 
   const active = allForCity.filter((c) => { const s = getStatus(c.id); return s.status === "active"; });

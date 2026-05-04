@@ -1,10 +1,10 @@
 import {
-  products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, CATEGORY_LABELS_EN, COMPETITOR_BRANDS,
   getProductName, getCampaignField, getCitySeasonalPattern, getCityName,
   getSubcategoryLabel, getPriceTierLabel, getProductSpecs,
   type ProductCategory, type PriceTier,
 } from "@/data/arcelik-seed";
+import { getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 import type { DemoLang } from "./DemoLangContext";
 
 export type ResponseType = "text" | "metric" | "table" | "list" | "campaign-card" | "analysis" | "chart";
@@ -24,6 +24,8 @@ interface Intent {
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 
 const catLabels = (lang: DemoLang) => (lang === "en" ? CATEGORY_LABELS_EN : CATEGORY_LABELS);
+
+function d() { return getArcelikDataSnapshot(); }
 
 const INTENTS: Intent[] = [
   {
@@ -94,7 +96,7 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const labels = catLabels(lang);
       const catBreakdown = Object.entries(labels).map(([cat, label]) => {
-        const ps = products.filter((p) => p.category === cat);
+        const ps = d().products.filter((p) => p.category === cat);
         const avg = ps.length ? (ps.reduce((s, p) => s + p.marginPercent, 0) / ps.length).toFixed(1) : "0";
         return `${label}: %${avg}`;
       }).join(", ");
@@ -111,7 +113,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/en çok sat/i, /best.?sell/i, /popüler ürün/i, /en iyi ürün/i, /top.*product/i, /top.*selling/i],
     handler: (lang) => {
-      const top5 = [...products].sort((a, b) => b.tsfPrice * (100 - a.marginPercent) - a.tsfPrice * (100 - b.marginPercent)).slice(0, 5);
+      const top5 = [...d().products].sort((a, b) => b.tsfPrice * (100 - a.marginPercent) - a.tsfPrice * (100 - b.marginPercent)).slice(0, 5);
       const list = top5.map((p, i) => lang === "en"
         ? `${i + 1}. ${getProductName(p, lang)} — ₺${fmt(p.tsfPrice)} (margin: ${p.marginPercent}%)`
         : `${i + 1}. ${p.name} — ₺${fmt(p.tsfPrice)} (marj: %${p.marginPercent})`).join("\n");
@@ -128,7 +130,7 @@ const INTENTS: Intent[] = [
     patterns: [/vestel.*fiyat/i, /vestel.*ne/i, /vestel.*son/i, /vestel.*price/i, /vestel.*latest/i],
     handler: (lang) => {
       const labels = catLabels(lang);
-      const vestelPrices = competitorPrices.filter((cp) => cp.brand === "Vestel");
+      const vestelPrices = d().competitorPrices.filter((cp) => cp.brand === "Vestel");
       const avg = (vestelPrices.reduce((s, p) => s + p.priceDeltaPercent, 0) / vestelPrices.length).toFixed(1);
       return {
         agent: "analyst",
@@ -149,7 +151,7 @@ const INTENTS: Intent[] = [
     patterns: [/bosch.*fiyat/i, /bosch.*karşı/i, /bosch.*ne/i, /bosch.*price/i, /bosch.*compare/i],
     handler: (lang) => {
       const labels = catLabels(lang);
-      const boschPrices = competitorPrices.filter((cp) => cp.brand === "Bosch");
+      const boschPrices = d().competitorPrices.filter((cp) => cp.brand === "Bosch");
       const avg = (boschPrices.reduce((s, p) => s + p.priceDeltaPercent, 0) / boschPrices.length).toFixed(0);
       return {
         agent: "analyst",
@@ -170,7 +172,7 @@ const INTENTS: Intent[] = [
     patterns: [/samsung/i],
     handler: (lang) => {
       const labels = catLabels(lang);
-      const samsungPrices = competitorPrices.filter((cp) => cp.brand === "Samsung");
+      const samsungPrices = d().competitorPrices.filter((cp) => cp.brand === "Samsung");
       const avg = (samsungPrices.reduce((s, p) => s + p.priceDeltaPercent, 0) / (samsungPrices.length || 1)).toFixed(0);
       return {
         agent: "analyst",
@@ -190,8 +192,8 @@ const INTENTS: Intent[] = [
   {
     patterns: [/kampanya.*öner/i, /yeni kampanya/i, /campaign.*suggest/i, /ne kampanya/i, /suggest.*campaign/i, /new campaign/i, /recommend.*campaign/i],
     handler: (lang) => {
-      const c = campaigns[Math.floor(Math.random() * campaigns.length)];
-      const cityNames = c.targetCities.map((id) => { const ct = cities.find((ct) => ct.id === id); return ct ? getCityName(ct, lang) : null; }).filter(Boolean).join(", ");
+      const c = d().campaigns[Math.floor(Math.random() * d().campaigns.length)];
+      const cityNames = c.targetCities.map((id) => { const ct = d().cities.find((ct) => ct.id === id); return ct ? getCityName(ct, lang) : null; }).filter(Boolean).join(", ");
       return {
         agent: "campaign-mgr",
         type: "campaign-card",
@@ -205,7 +207,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/ramazan/i, /bayram.*kampanya/i, /ramadan/i],
     handler: (lang) => {
-      const c = campaigns.find((c) => c.id === "ramazan")!;
+      const c = d().campaigns.find((c) => c.id === "ramazan")!;
       return {
         agent: "campaign-mgr",
         type: "campaign-card",
@@ -219,8 +221,8 @@ const INTENTS: Intent[] = [
   {
     patterns: [/düğün/i, /çeyiz/i, /wedding/i, /trousseau/i],
     handler: (lang) => {
-      const c = campaigns.find((c) => c.id === "dugun-sezonu")!;
-      const cityNames = c.targetCities.map((id) => { const ct = cities.find((ct) => ct.id === id); return ct ? getCityName(ct, lang) : null; }).filter(Boolean).join(", ");
+      const c = d().campaigns.find((c) => c.id === "dugun-sezonu")!;
+      const cityNames = c.targetCities.map((id) => { const ct = d().cities.find((ct) => ct.id === id); return ct ? getCityName(ct, lang) : null; }).filter(Boolean).join(", ");
       return {
         agent: "campaign-mgr",
         type: "campaign-card",
@@ -235,26 +237,26 @@ const INTENTS: Intent[] = [
     patterns: [/kaç ürün/i, /ürün sayısı/i, /toplam ürün/i, /how many product/i, /product count/i, /total product/i],
     handler: (lang) => {
       const labels = catLabels(lang);
-      const breakdown = Object.entries(labels).map(([cat, label]) => `${label}: ${products.filter((p) => p.category === cat).length}`).join(", ");
+      const breakdown = Object.entries(labels).map(([cat, label]) => `${label}: ${d().products.filter((p) => p.category === cat).length}`).join(", ");
       return {
         agent: "analyst",
         type: "metric",
         text: lang === "en"
-          ? `${products.length} products are being tracked in total. Breakdown by category: ${breakdown}`
-          : `Toplam ${products.length} ürün takip ediliyor. Kategori bazlı dağılım: ${breakdown}`,
-        data: { value: products.length.toString(), label: lang === "en" ? "Total Products" : "Toplam Ürün" },
+          ? `${d().products.length} products are being tracked in total. Breakdown by category: ${breakdown}`
+          : `Toplam ${d().products.length} ürün takip ediliyor. Kategori bazlı dağılım: ${breakdown}`,
+        data: { value: d().products.length.toString(), label: lang === "en" ? "Total Products" : "Toplam Ürün" },
       };
     },
   },
   {
     patterns: [/bayi.*uyum/i, /compliance/i, /bayi.*durum/i, /bayi.*skor/i, /dealer.*compliance/i, /dealer.*status/i, /dealer.*score/i],
     handler: (lang) => {
-      const avg = dealers.reduce((s, d) => s + d.complianceScore, 0) / dealers.length;
-      const gold = dealers.filter((d) => d.tier === "gold").length;
-      const silver = dealers.filter((d) => d.tier === "silver").length;
-      const bronze = dealers.filter((d) => d.tier === "bronze").length;
-      const top = [...dealers].sort((a, b) => b.complianceScore - a.complianceScore)[0];
-      const low = [...dealers].sort((a, b) => a.complianceScore - b.complianceScore)[0];
+      const avg = d().dealers.reduce((s, d) => s + d.complianceScore, 0) / d().dealers.length;
+      const gold = d().dealers.filter((d) => d.tier === "gold").length;
+      const silver = d().dealers.filter((d) => d.tier === "silver").length;
+      const bronze = d().dealers.filter((d) => d.tier === "bronze").length;
+      const top = [...d().dealers].sort((a, b) => b.complianceScore - a.complianceScore)[0];
+      const low = [...d().dealers].sort((a, b) => a.complianceScore - b.complianceScore)[0];
       return {
         agent: "analyst",
         type: "analysis",
@@ -267,7 +269,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/düşük marj/i, /en düşük.*marj/i, /marj.*düşük/i, /zayıf marj/i, /low margin/i, /weakest margin/i],
     handler: (lang) => {
-      const sorted = [...products].sort((a, b) => a.marginPercent - b.marginPercent).slice(0, 5);
+      const sorted = [...d().products].sort((a, b) => a.marginPercent - b.marginPercent).slice(0, 5);
       const list = sorted.map((p, i) => lang === "en"
         ? `${i + 1}. ${getProductName(p, lang)} — ${p.marginPercent}% margin (₺${fmt(p.tsfPrice)})`
         : `${i + 1}. ${p.name} — %${p.marginPercent} marj (₺${fmt(p.tsfPrice)})`).join("\n");
@@ -275,7 +277,7 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "list",
         text: lang === "en"
-          ? `Bottom 5 products by margin:\n${list}\n\n⚠️ Price optimization may be considered for these products.`
+          ? `Bottom 5 products by margin:\n${list}\n\n⚠️ Price optimization may be considered for these d().products.`
           : `En düşük marjlı 5 ürün:\n${list}\n\n⚠️ Bu ürünlerde fiyat optimizasyonu değerlendirilebilir.`,
       };
     },
@@ -283,12 +285,12 @@ const INTENTS: Intent[] = [
   {
     patterns: [/en rekabet/i, /avantaj/i, /güçlü.*ürün/i, /biz.*nerede.*iyi/i, /our.*advantage/i, /strong.*product/i, /where.*strong/i],
     handler: (lang) => {
-      const advantages = competitorPrices.filter((cp) => cp.priceDeltaPercent > 15).map((cp) => {
-        const arc = products.find((p) => p.id === cp.arcelikEquivalentId);
+      const advantages = d().competitorPrices.filter((cp) => cp.priceDeltaPercent > 15).map((cp) => {
+        const arc = d().products.find((p) => p.id === cp.arcelikEquivalentId);
         return { ...cp, arcelikName: arc?.name ?? "" };
       });
       const items = advantages.slice(0, 5).map((a) => {
-        const arcPrice = fmt(products.find((p) => p.id === a.arcelikEquivalentId)?.tsfPrice ?? 0);
+        const arcPrice = fmt(d().products.find((p) => p.id === a.arcelikEquivalentId)?.tsfPrice ?? 0);
         return lang === "en"
           ? `• ${a.brand} ${a.competitorModel}: ₺${fmt(a.competitorPrice)} vs Arçelik ₺${arcPrice} (${a.priceDeltaPercent}% gap)`
           : `• ${a.brand} ${a.competitorModel}: ₺${fmt(a.competitorPrice)} vs Arçelik ₺${arcPrice} (%${a.priceDeltaPercent} fark)`;
@@ -305,7 +307,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/zayıf.*şehir/i, /düşük.*pay.*şehir/i, /kaybet/i, /nerede.*zayıf/i, /weak.*cit/i, /losing/i, /where.*weak/i],
     handler: (lang) => {
-      const weak = [...cities].sort((a, b) => a.marketSharePercent - b.marketSharePercent).slice(0, 5);
+      const weak = [...d().cities].sort((a, b) => a.marketSharePercent - b.marketSharePercent).slice(0, 5);
       const list = weak.map((c, i) => lang === "en"
         ? `${i + 1}. ${getCityName(c, lang)} — ${c.marketSharePercent}% (Index: ${c.avgPriceIndex})`
         : `${i + 1}. ${getCityName(c, lang)} — %${c.marketSharePercent} (Endeks: ${c.avgPriceIndex})`).join("\n");
@@ -313,7 +315,7 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "list",
         text: lang === "en"
-          ? `Bottom 5 cities by market share:\n${list}\n\nRegional campaigns and dealer empowerment recommended for these cities.`
+          ? `Bottom 5 cities by market share:\n${list}\n\nRegional campaigns and dealer empowerment recommended for these d().cities.`
           : `En düşük pazar payına sahip 5 şehir:\n${list}\n\nBu şehirlerde bölgesel kampanya ve bayi güçlendirme önerilir.`,
       };
     },
@@ -321,8 +323,8 @@ const INTENTS: Intent[] = [
   {
     patterns: [/klima/i, /air.?con/i],
     handler: (lang) => {
-      const klimaProducts = products.filter((p) => p.category === "klima");
-      const klimaComp = competitorPrices.filter((cp) => cp.category === "klima");
+      const klimaProducts = d().products.filter((p) => p.category === "klima");
+      const klimaComp = d().competitorPrices.filter((cp) => cp.category === "klima");
       const min = fmt(Math.min(...klimaProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...klimaProducts.map((p) => p.tsfPrice)));
       const margin = (klimaProducts.reduce((s, p) => s + p.marginPercent, 0) / klimaProducts.length).toFixed(1);
@@ -338,7 +340,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/buzdolab/i, /fridge/i, /refrigerator/i],
     handler: (lang) => {
-      const buzProducts = products.filter((p) => p.category === "buzdolabi");
+      const buzProducts = d().products.filter((p) => p.category === "buzdolabi");
       const min = fmt(Math.min(...buzProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...buzProducts.map((p) => p.tsfPrice)));
       const margin = (buzProducts.reduce((s, p) => s + p.marginPercent, 0) / buzProducts.length).toFixed(1);
@@ -354,7 +356,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/çamaşır/i, /washing/i, /washer/i],
     handler: (lang) => {
-      const camProducts = products.filter((p) => p.category === "camasir");
+      const camProducts = d().products.filter((p) => p.category === "camasir");
       const min = fmt(Math.min(...camProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...camProducts.map((p) => p.tsfPrice)));
       const margin = (camProducts.reduce((s, p) => s + p.marginPercent, 0) / camProducts.length).toFixed(1);
@@ -370,7 +372,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/bulaşık/i, /dishwash/i],
     handler: (lang) => {
-      const bulProducts = products.filter((p) => p.category === "bulasik");
+      const bulProducts = d().products.filter((p) => p.category === "bulasik");
       const min = fmt(Math.min(...bulProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...bulProducts.map((p) => p.tsfPrice)));
       const margin = (bulProducts.reduce((s, p) => s + p.marginPercent, 0) / bulProducts.length).toFixed(1);
@@ -397,13 +399,13 @@ const INTENTS: Intent[] = [
   {
     patterns: [/haftalık.*özet/i, /weekly/i, /genel.*durum/i, /özet/i, /summary/i, /overview/i],
     handler: (lang) => {
-      const aboveTarget = dealers.filter((d) => d.currentProgress / d.monthlySalesTarget > 0.7).length;
+      const aboveTarget = d().dealers.filter((d) => d.currentProgress / d.monthlySalesTarget > 0.7).length;
       return {
         agent: "analyst",
         type: "analysis",
         text: lang === "en"
-          ? `Weekly Summary:\n\n📊 Market: National share 39.8%, +0.2pp last week\n💰 Revenue: 80% of monthly target completed\n🏷️ Pricing: Competitor price index 1.00 (stable)\n📢 Campaign: 3 active campaigns; Ramadan campaign with highest impact\n🏪 Dealers: ${aboveTarget}/${dealers.length} dealers above 70% of target\n⚠️ Watch: Vestel targeting market share via aggressive pricing`
-          : `Haftalık Özet:\n\n📊 Pazar: Ulusal pay %39.8, son haftada +0.2pp\n💰 Gelir: Aylık hedefin %80'i tamamlandı\n🏷️ Fiyat: Rakip fiyat endeksi 1.00 (stabil)\n📢 Kampanya: 3 aktif kampanya, Ramazan kampanyası en yüksek etki\n🏪 Bayi: ${aboveTarget}/${dealers.length} bayi hedefin %70'inin üzerinde\n⚠️ Dikkat: Vestel agresif fiyatlandırma ile pazar payı hedefliyor`,
+          ? `Weekly Summary:\n\n📊 Market: National share 39.8%, +0.2pp last week\n💰 Revenue: 80% of monthly target completed\n🏷️ Pricing: Competitor price index 1.00 (stable)\n📢 Campaign: 3 active campaigns; Ramadan campaign with highest impact\n🏪 Dealers: ${aboveTarget}/${d().dealers.length} dealers above 70% of target\n⚠️ Watch: Vestel targeting market share via aggressive pricing`
+          : `Haftalık Özet:\n\n📊 Pazar: Ulusal pay %39.8, son haftada +0.2pp\n💰 Gelir: Aylık hedefin %80'i tamamlandı\n🏷️ Fiyat: Rakip fiyat endeksi 1.00 (stabil)\n📢 Kampanya: 3 aktif kampanya, Ramazan kampanyası en yüksek etki\n🏪 Bayi: ${aboveTarget}/${d().dealers.length} bayi hedefin %70'inin üzerinde\n⚠️ Dikkat: Vestel agresif fiyatlandırma ile pazar payı hedefliyor`,
       };
     },
   },
@@ -411,7 +413,7 @@ const INTENTS: Intent[] = [
     patterns: [/rakip.*fiyat.*analiz/i, /fiyat.*karşılaş/i, /karşılaştırma/i, /competitor.*price.*analysis/i, /price.*compar/i, /comparison/i],
     handler: (lang) => {
       const byBrand = COMPETITOR_BRANDS.map((b) => {
-        const prices = competitorPrices.filter((cp) => cp.brand === b.name);
+        const prices = d().competitorPrices.filter((cp) => cp.brand === b.name);
         const avg = prices.length ? prices.reduce((s, p) => s + p.priceDeltaPercent, 0) / prices.length : 0;
         return { name: b.name, count: prices.length, avgDelta: avg.toFixed(1), positioning: b.positioning };
       }).filter((b) => b.count > 0);
@@ -446,15 +448,15 @@ const INTENTS: Intent[] = [
   {
     patterns: [/enerji/i, /a\+\+\+/i, /verimli/i, /energy/i, /efficient/i],
     handler: (lang) => {
-      const aPlusPlus = products.filter((p) => p.energyClass === "A+++" || p.energyClass === "A++");
-      const aPlusPlusPlus = products.filter((p) => p.energyClass === "A+++").length;
-      const aPP = products.filter((p) => p.energyClass === "A++").length;
+      const aPlusPlus = d().products.filter((p) => p.energyClass === "A+++" || p.energyClass === "A++");
+      const aPlusPlusPlus = d().products.filter((p) => p.energyClass === "A+++").length;
+      const aPP = d().products.filter((p) => p.energyClass === "A++").length;
       return {
         agent: "analyst",
         type: "analysis",
         text: lang === "en"
-          ? `Energy-efficient product portfolio:\n• A+++ products: ${aPlusPlusPlus}\n• A++ products: ${aPP}\n• Total efficient (A++ and above): ${aPlusPlus.length}/${products.length}\n• In this segment, an energy-efficiency campaign with a 12% extra discount + ÖTV (excise) advantage can be offered.\n• Estimated impact: Market share +0.5%, Revenue +₺15M`
-          : `Enerji verimli ürün portföyü:\n• A+++ ürün: ${aPlusPlusPlus}\n• A++ ürün: ${aPP}\n• Toplam verimli (A++ ve üzeri): ${aPlusPlus.length}/${products.length}\n• Bu segmentte enerji verimliliği kampanyası ile %12 ek indirim + ÖTV avantajı sunulabilir.\n• Tahmini etki: Pazar payı +0.5%, Gelir +₺15M`,
+          ? `Energy-efficient product portfolio:\n• A+++ products: ${aPlusPlusPlus}\n• A++ products: ${aPP}\n• Total efficient (A++ and above): ${aPlusPlus.length}/${d().products.length}\n• In this segment, an energy-efficiency campaign with a 12% extra discount + ÖTV (excise) advantage can be offered.\n• Estimated impact: Market share +0.5%, Revenue +₺15M`
+          : `Enerji verimli ürün portföyü:\n• A+++ ürün: ${aPlusPlusPlus}\n• A++ ürün: ${aPP}\n• Toplam verimli (A++ ve üzeri): ${aPlusPlus.length}/${d().products.length}\n• Bu segmentte enerji verimliliği kampanyası ile %12 ek indirim + ÖTV avantajı sunulabilir.\n• Tahmini etki: Pazar payı +0.5%, Gelir +₺15M`,
       };
     },
   },
@@ -471,7 +473,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/\btv\b/i, /televizyon/i, /elektronik/i, /television/i, /electronic/i],
     handler: (lang) => {
-      const tvProducts = products.filter((p) => p.category === "tv-elektronik");
+      const tvProducts = d().products.filter((p) => p.category === "tv-elektronik");
       const min = fmt(Math.min(...tvProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...tvProducts.map((p) => p.tsfPrice)));
       const margin = (tvProducts.reduce((s, p) => s + p.marginPercent, 0) / tvProducts.length).toFixed(1);
@@ -487,7 +489,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/küçük ev/i, /small appliance/i, /çay/i, /kahve/i, /süpürge/i, /coffee/i, /vacuum/i, /tea/i],
     handler: (lang) => {
-      const kevProducts = products.filter((p) => p.category === "kucuk-ev");
+      const kevProducts = d().products.filter((p) => p.category === "kucuk-ev");
       const min = fmt(Math.min(...kevProducts.map((p) => p.tsfPrice)));
       const max = fmt(Math.max(...kevProducts.map((p) => p.tsfPrice)));
       return {
@@ -525,7 +527,7 @@ const INTENTS: Intent[] = [
       const labels = catLabels(lang);
       const catCounts = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => ({
         name: label,
-        value: products.filter((p) => p.category === cat).length,
+        value: d().products.filter((p) => p.category === cat).length,
       }));
       return {
         agent: "analyst",
@@ -560,7 +562,7 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const labels = catLabels(lang);
       const catMargins = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => {
-        const ps = products.filter((p) => p.category === cat);
+        const ps = d().products.filter((p) => p.category === cat);
         const avg = ps.length ? ps.reduce((s, p) => s + p.marginPercent, 0) / ps.length : 0;
         return { name: label, value: +avg.toFixed(1) };
       });
@@ -576,7 +578,7 @@ const INTENTS: Intent[] = [
     patterns: [/marka.*fiyat.*grafik/i, /fiyat.*grafik/i, /grafik.*göster/i, /chart/i, /brand.*price.*chart/i, /show.*chart/i],
     handler: (lang) => {
       const brandAvgs = COMPETITOR_BRANDS.map((b) => {
-        const prices = competitorPrices.filter((cp) => cp.brand === b.name);
+        const prices = d().competitorPrices.filter((cp) => cp.brand === b.name);
         const avg = prices.length ? prices.reduce((s, p) => s + p.priceDeltaPercent, 0) / prices.length : 0;
         return { name: b.name, value: +avg.toFixed(1) };
       }).filter((b) => b.value !== 0);
@@ -593,7 +595,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/istanbul/i],
     handler: (lang) => {
-      const ist = cities.find((c) => c.id === "istanbul")!;
+      const ist = d().cities.find((c) => c.id === "istanbul")!;
       return {
         agent: "analyst",
         type: "analysis",
@@ -606,7 +608,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/ankara/i],
     handler: (lang) => {
-      const ank = cities.find((c) => c.id === "ankara")!;
+      const ank = d().cities.find((c) => c.id === "ankara")!;
       return {
         agent: "analyst",
         type: "analysis",
@@ -619,7 +621,7 @@ const INTENTS: Intent[] = [
   {
     patterns: [/izmir/i],
     handler: (lang) => {
-      const izm = cities.find((c) => c.id === "izmir")!;
+      const izm = d().cities.find((c) => c.id === "izmir")!;
       return {
         agent: "analyst",
         type: "analysis",
@@ -632,9 +634,9 @@ const INTENTS: Intent[] = [
   {
     patterns: [/konya|kayseri|gaziantep|adana|bursa|antalya|mersin|diyarbak|samsun|trabzon|erzurum|van|malatya|eskişehir|denizli|manisa|tekirdağ/i],
     handler: (lang) => {
-      const anatolia = cities.filter((c) => c.populationTier !== "tier-1");
+      const anatolia = d().cities.filter((c) => c.populationTier !== "tier-1");
       const avgShare = (anatolia.reduce((s, c) => s + c.marketSharePercent, 0) / anatolia.length).toFixed(1);
-      const top3 = [...cities].sort((a, b) => b.marketSharePercent - a.marketSharePercent).slice(0, 3);
+      const top3 = [...d().cities].sort((a, b) => b.marketSharePercent - a.marketSharePercent).slice(0, 3);
       const list = top3.map((c) => lang === "en" ? `${getCityName(c, lang)} (${c.marketSharePercent}%)` : `${getCityName(c, lang)} (%${c.marketSharePercent})`).join(", ");
       return {
         agent: "analyst",
@@ -650,7 +652,7 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const labels = catLabels(lang);
       const breakdown = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => {
-        const subs = Array.from(new Set(products.filter((p) => p.category === cat).map((p) => p.subcategory)));
+        const subs = Array.from(new Set(d().products.filter((p) => p.category === cat).map((p) => p.subcategory)));
         const subLabels = subs.map((s) => getSubcategoryLabel(s, lang)).join(", ");
         return `${label}: ${subLabels}`;
       }).join("\n");
@@ -668,7 +670,7 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const tiers: PriceTier[] = ["entry", "mid", "premium"];
       const tierBreakdown = tiers.map((tier) => {
-        const ps = products.filter((p) => p.priceTier === tier);
+        const ps = d().products.filter((p) => p.priceTier === tier);
         const avgPrice = ps.length ? Math.round(ps.reduce((s, p) => s + p.tsfPrice, 0) / ps.length) : 0;
         const avgMargin = ps.length ? (ps.reduce((s, p) => s + p.marginPercent, 0) / ps.length).toFixed(1) : "0";
         return lang === "en"
@@ -679,8 +681,8 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "analysis",
         text: lang === "en"
-          ? `Price tier distribution across ${products.length} products:\n\n${tierBreakdown}\n\nPremium products have higher margins and 3-year warranty. Use tier filters in the Price List to explore.`
-          : `${products.length} ürün genelinde fiyat segmenti dağılımı:\n\n${tierBreakdown}\n\nPremium ürünler daha yüksek marj ve 3 yıl garantiye sahip. Fiyat Listesi'ndeki segment filtrelerini kullanarak keşfedebilirsiniz.`,
+          ? `Price tier distribution across ${d().products.length} products:\n\n${tierBreakdown}\n\nPremium products have higher margins and 3-year warranty. Use tier filters in the Price List to explore.`
+          : `${d().products.length} ürün genelinde fiyat segmenti dağılımı:\n\n${tierBreakdown}\n\nPremium ürünler daha yüksek marj ve 3 yıl garantiye sahip. Fiyat Listesi'ndeki segment filtrelerini kullanarak keşfedebilirsiniz.`,
       };
     },
   },
@@ -689,7 +691,7 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const labels = catLabels(lang);
       const catSpecs = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => {
-        const ps = products.filter((p) => p.category === cat);
+        const ps = d().products.filter((p) => p.category === cat);
         const smartCount = ps.filter((p) => getProductSpecs(p).smartFeatures.length > 0).length;
         const premiumCount = ps.filter((p) => p.priceTier === "premium").length;
         const capacities = ps.map((p) => getProductSpecs(p).capacity).filter((c) => c !== "-");

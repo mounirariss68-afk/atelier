@@ -10,9 +10,10 @@ import { useDashboardFilters } from "../DashboardContext";
 import { useDemoLang } from "../DemoLangContext";
 import { radar } from "../demo-i18n";
 import {
-  competitorPrices, COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel,
+  COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel,
   type ProductCategory,
 } from "@/data/arcelik-seed";
+import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 
 const BRAND_COLORS: Record<string, string> = {
   Vestel: "#2563eb",
@@ -26,6 +27,7 @@ const BRAND_COLORS: Record<string, string> = {
 };
 
 function computeBrandScores(brandName: string) {
+  const { competitorPrices } = getArcelikDataSnapshot();
   const prices = competitorPrices.filter((cp) => cp.brand === brandName);
   const avgDelta = prices.length ? prices.reduce((s, p) => s + Math.abs(p.priceDeltaPercent), 0) / prices.length : 0;
   const categories = new Set(prices.map((p) => p.category));
@@ -48,6 +50,7 @@ export default function CompetitorRadarView() {
   const { filters } = useDashboardFilters();
   const { lang } = useDemoLang();
   const t = radar[lang];
+  const { competitorPrices } = useArcelikData();
   const [selectedBrands, setSelectedBrands] = useState<string[]>(["Vestel", "Bosch"]);
   const [detailBrand, setDetailBrand] = useState<string | null>(null);
 

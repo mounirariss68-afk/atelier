@@ -12,13 +12,13 @@ import TargetsView from "./dealer/TargetsView";
 import StockOrdersView from "./dealer/StockOrdersView";
 import AnnouncementsView from "./dealer/AnnouncementsView";
 import DealerChat from "./dealer/DealerChat";
-import { dealers, cities as allCities, getCityName } from "@/data/arcelik-seed";
+import { getCityName } from "@/data/arcelik-seed";
+import { useArcelikData } from "@/hooks/useArcelikData";
 import { DemoLangProvider, useDemoLang } from "./DemoLangContext";
 import { dealerShell } from "./demo-i18n";
 
 export type DealerViewId = "home" | "prices" | "campaigns" | "targets" | "stock" | "announcements";
 
-export const DEALER = dealers[0];
 export const OPTIMAL_STOCK: Record<string, number> = {
   buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8,
 };
@@ -44,6 +44,8 @@ export default function DealerPortal() {
 function DealerPortalInner() {
   const { lang, setLang } = useDemoLang();
   const t = dealerShell[lang];
+  const { dealers, cities: allCities } = useArcelikData();
+  const DEALER = dealers[0];
   const [view, setView] = useState<DealerViewId>("home");
   const [chatOpen, setChatOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);

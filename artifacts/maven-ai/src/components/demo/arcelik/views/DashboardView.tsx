@@ -12,12 +12,12 @@ import { useDashboardFilters, type Period } from "../DashboardContext";
 import { useDemoLang } from "../DemoLangContext";
 import { dashboard } from "../demo-i18n";
 import {
-  products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, COMPETITOR_BRANDS, getCategoryLabel, getCityName,
   getProductName, getCitySeasonalPattern, getCampaignField,
-  DATA_SOURCES, type DataSource,
+  type DataSource,
   type ProductCategory, type CityData,
 } from "@/data/arcelik-seed";
+import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 import { TurkeyMap, CITY_POSITIONS } from "../TurkeyMap";
 
 type HeatMetric = "share" | "price" | "dealers" | "competition" | "campaigns" | "demand";
@@ -26,7 +26,7 @@ function getHeatValue(city: CityData, metric: HeatMetric): number {
   if (metric === "share") return city.marketSharePercent;
   if (metric === "price") return city.avgPriceIndex * 100;
   if (metric === "dealers") return city.dealerCount;
-  if (metric === "campaigns") return campaigns.filter((c) => c.targetCities.includes(city.id)).length;
+  if (metric === "campaigns") return getArcelikDataSnapshot().campaigns.filter((c) => c.targetCities.includes(city.id)).length;
   if (metric === "demand") return city.marketSharePercent * city.avgPriceIndex * (city.populationTier === "tier-1" ? 2 : city.populationTier === "tier-2" ? 1.3 : 1);
   return city.competitorStrength.reduce((s, c) => s + c.strength, 0);
 }
@@ -84,6 +84,7 @@ export default function DashboardView() {
   const { filters } = useDashboardFilters();
   const { lang } = useDemoLang();
   const t = dashboard[lang];
+  const { products, competitorPrices, cities, campaigns, dealers, dataSources: DATA_SOURCES } = useArcelikData();
   const HEAT_LABELS: Record<HeatMetric, string> = {
     share: t.heatMarketShare,
     price: t.heatPriceIndex,

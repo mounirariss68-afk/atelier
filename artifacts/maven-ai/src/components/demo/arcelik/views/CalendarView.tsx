@@ -5,10 +5,11 @@ import { useDashboardFilters } from "../DashboardContext";
 import { useDemoLang } from "../DemoLangContext";
 import { calendar } from "../demo-i18n";
 import {
-  promotionalCalendar, campaigns, cities, COMPETITOR_BRANDS, getCategoryLabel,
+  COMPETITOR_BRANDS, getCategoryLabel,
   getCalendarEntryName, getCampaignField, getCityName,
   type CalendarEntry,
 } from "@/data/arcelik-seed";
+import { useArcelikData } from "@/hooks/useArcelikData";
 
 const BRAND_COLORS: Record<string, string> = {
   "Arçelik": "#E30613",
@@ -44,6 +45,7 @@ export default function CalendarView() {
   const { filters } = useDashboardFilters();
   const { lang } = useDemoLang();
   const t = calendar[lang];
+  const { promotionalCalendar, campaigns, cities } = useArcelikData();
   const MONTHS = [
     t.monthJan, t.monthFeb, t.monthMar, t.monthApr, t.monthMay, t.monthJun,
     t.monthJul, t.monthAug, t.monthSep, t.monthOct, t.monthNov, t.monthDec,

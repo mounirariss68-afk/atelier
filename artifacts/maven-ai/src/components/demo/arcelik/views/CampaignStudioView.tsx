@@ -9,9 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { campaign as campaignI18n } from "../demo-i18n";
 import {
-  campaigns, cities, products, CATEGORY_LABELS, getCategoryLabel, getCampaignField, getCityName, getProductName, getPromotionTypeLabel,
+  CATEGORY_LABELS, getCategoryLabel, getCampaignField, getCityName, getProductName, getPromotionTypeLabel,
   type CampaignTemplate, type ProductCategory,
 } from "@/data/arcelik-seed";
+import { useArcelikData } from "@/hooks/useArcelikData";
 import { generateCampaignSuggestions } from "@/data/arcelik-agent";
 
 type Tab = "suggested" | "builder" | "history";
@@ -26,6 +27,7 @@ const MOCK_HISTORY_KEYS = [
 function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLaunch: () => void }) {
   const { lang } = useDemoLang();
   const t = campaignI18n[lang];
+  const { cities } = useArcelikData();
   const [expanded, setExpanded] = useState(false);
   const targetCityNames = campaign.targetCities.map((id) => { const c = cities.find((c) => c.id === id); return c ? getCityName(c, lang) : null; }).filter(Boolean);
 
@@ -363,6 +365,7 @@ export default function CampaignStudioView() {
   const { toast } = useToast();
   const { lang } = useDemoLang();
   const t = campaignI18n[lang];
+  const { campaigns, cities, products } = useArcelikData();
   const [tab, setTab] = useState<Tab>("suggested");
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
 

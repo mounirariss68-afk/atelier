@@ -1,20 +1,13 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Clock, Tag, ArrowUpDown } from "lucide-react";
-import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel, getProductSpecs, type ProductCategory, type PriceTier } from "@/data/arcelik-seed";
+import { CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel, getProductSpecs, type ProductCategory, type PriceTier } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { prices } from "../demo-i18n";
+import { useArcelikData } from "@/hooks/useArcelikData";
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as ProductCategory[];
 const TIERS: PriceTier[] = ["entry", "mid", "premium"];
-
-const ACTIVE_DISCOUNTS: Record<string, { rate: number; campaignName: string }> = {};
-const energyCampaign = campaigns.find((c) => c.id === "enerji-verimlilik");
-if (energyCampaign) {
-  products.filter((p) => energyCampaign.eligibleCategories.includes(p.category) && p.energyClass === "A+++").forEach((p) => {
-    ACTIVE_DISCOUNTS[p.id] = { rate: 12, campaignName: energyCampaign.name };
-  });
-}
 
 const RECENT_CHANGE_DATA: Record<string, { oldPrice: number; dateKey: string }> = {
   "buz-01": { oldPrice: 24990, dateKey: "changeDateBuz01" },
@@ -27,6 +20,15 @@ const fmt = (n: number) => n.toLocaleString("tr-TR");
 export default function PriceListView() {
   const { lang } = useDemoLang();
   const t = prices[lang];
+  const { products, campaigns } = useArcelikData();
+
+  const ACTIVE_DISCOUNTS: Record<string, { rate: number; campaignName: string }> = {};
+  const energyCampaign = campaigns.find((c) => c.id === "enerji-verimlilik");
+  if (energyCampaign) {
+    products.filter((p) => energyCampaign.eligibleCategories.includes(p.category) && p.energyClass === "A+++").forEach((p) => {
+      ACTIVE_DISCOUNTS[p.id] = { rate: 12, campaignName: energyCampaign.name };
+    });
+  }
   const [activeTab, setActiveTab] = useState<ProductCategory>("buzdolabi");
   const [activeSub, setActiveSub] = useState<string | null>(null);
   const [activeTier, setActiveTier] = useState<PriceTier | null>(null);

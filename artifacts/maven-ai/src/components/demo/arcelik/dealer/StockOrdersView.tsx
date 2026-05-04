@@ -1,12 +1,12 @@
 import { Fragment, useState } from "react";
 import { motion } from "framer-motion";
 import { Package, AlertTriangle, CheckCircle2, XCircle, ShoppingCart, Truck, Clock, ChevronDown, ChevronRight } from "lucide-react";
-import { dealers, products, CATEGORY_LABELS, getCategoryLabel, getProductName, type ProductCategory } from "@/data/arcelik-seed";
+import { CATEGORY_LABELS, getCategoryLabel, getProductName, type ProductCategory } from "@/data/arcelik-seed";
 import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { stock } from "../demo-i18n";
+import { useArcelikData } from "@/hooks/useArcelikData";
 
-const DEALER = dealers[0];
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 const OPTIMAL: Record<string, number> = { buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8 };
 
@@ -48,23 +48,26 @@ interface ProductRow {
   status: StockStatus;
 }
 
-const categoryRows: CategoryRow[] = (Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => {
-  const catLevel = DEALER.stockLevels[cat] ?? 0;
-  const catOptimal = OPTIMAL[cat] ?? 10;
-  const catProducts = products.filter((p) => p.category === cat);
-  const productRows: ProductRow[] = catProducts.map((p) => {
-    const s = pseudoStock(p.id, catLevel, catOptimal, catProducts.length);
-    const opt = pseudoOptimal(p.id, catOptimal, catProducts.length);
-    return { id: p.id, modelCode: p.modelCode, name: p.name, stock: s, optimal: opt, status: getStatus(s, opt) };
+function buildCategoryRows(DEALER: { stockLevels: Record<string, number | undefined> } | undefined, allProducts: { id: string; modelCode: string; name: string; category: string }[]): CategoryRow[] {
+  if (!DEALER) return [];
+  return (Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => {
+    const catLevel = DEALER.stockLevels[cat] ?? 0;
+    const catOptimal = OPTIMAL[cat] ?? 10;
+    const catProducts = allProducts.filter((p) => p.category === cat);
+    const productRows: ProductRow[] = catProducts.map((p) => {
+      const s = pseudoStock(p.id, catLevel, catOptimal, catProducts.length);
+      const opt = pseudoOptimal(p.id, catOptimal, catProducts.length);
+      return { id: p.id, modelCode: p.modelCode, name: p.name, stock: s, optimal: opt, status: getStatus(s, opt) };
+    }).sort((a, b) => {
+      const order: Record<StockStatus, number> = { out: 0, low: 1, ok: 2 };
+      return order[a.status] - order[b.status];
+    });
+    return { cat, level: catLevel, optimal: catOptimal, status: getStatus(catLevel, catOptimal), productRows };
   }).sort((a, b) => {
     const order: Record<StockStatus, number> = { out: 0, low: 1, ok: 2 };
     return order[a.status] - order[b.status];
   });
-  return { cat, level: catLevel, optimal: catOptimal, status: getStatus(catLevel, catOptimal), productRows };
-}).sort((a, b) => {
-  const order: Record<StockStatus, number> = { out: 0, low: 1, ok: 2 };
-  return order[a.status] - order[b.status];
-});
+}
 
 interface Order {
   id: string;
@@ -109,6 +112,9 @@ export default function StockOrdersView() {
   const { toast } = useToast();
   const { lang } = useDemoLang();
   const t = stock[lang];
+  const { dealers, products } = useArcelikData();
+  const DEALER = dealers[0];
+  const categoryRows = buildCategoryRows(DEALER, products);
   const [tab, setTab] = useState<"stock" | "orders">("stock");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 

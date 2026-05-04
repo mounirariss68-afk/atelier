@@ -1,17 +1,14 @@
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Target, Award, TrendingUp, Trophy, Users } from "lucide-react";
-import { dealers, CATEGORY_LABELS, getCategoryLabel, type ProductCategory } from "@/data/arcelik-seed";
+import { CATEGORY_LABELS, getCategoryLabel, type ProductCategory } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { targets } from "../demo-i18n";
+import { useArcelikData } from "@/hooks/useArcelikData";
 
-const DEALER = dealers[0];
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 
 const QUARTERLY_TARGET = 220;
-const QUARTERLY_PROGRESS = DEALER.currentProgress + 42 + 55;
-const quarterlyPct = Math.round((QUARTERLY_PROGRESS / QUARTERLY_TARGET) * 100);
-
 const dealerRank = 23;
 const totalDealers = 127;
 const percentile = Math.round((1 - dealerRank / totalDealers) * 100);
@@ -19,6 +16,10 @@ const percentile = Math.round((1 - dealerRank / totalDealers) * 100);
 export default function TargetsView() {
   const { lang } = useDemoLang();
   const t = targets[lang];
+  const { dealers } = useArcelikData();
+  const DEALER = dealers[0];
+  const QUARTERLY_PROGRESS = (DEALER?.currentProgress ?? 0) + 42 + 55;
+  const quarterlyPct = Math.round((QUARTERLY_PROGRESS / QUARTERLY_TARGET) * 100);
 
   const THRESHOLDS = [
     { units: 50, bonus: t.threshold1, color: "#F5A623" },
