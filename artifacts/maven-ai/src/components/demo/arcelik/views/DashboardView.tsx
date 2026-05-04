@@ -6,6 +6,7 @@ import {
 import {
   TrendingUp, TrendingDown, MapPin, ArrowUpDown, X, ChevronDown,
   Target, Percent, BarChart3, Users, Megaphone, DollarSign, Package,
+  ExternalLink, BookOpen, ChevronRight, Info,
 } from "lucide-react";
 import { useDashboardFilters, type Period } from "../DashboardContext";
 import { useDemoLang } from "../DemoLangContext";
@@ -14,20 +15,10 @@ import {
   products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, COMPETITOR_BRANDS, getCategoryLabel, getCityName,
   getProductName, getCitySeasonalPattern, getCampaignField,
+  DATA_SOURCES, type DataSource,
   type ProductCategory, type CityData,
 } from "@/data/arcelik-seed";
-
-const TURKEY_OUTLINE = "M44,57 L109,46 L196,57 L326,40 L457,57 L544,69 L631,86 L674,74 L740,90 L805,114 L826,171 L805,229 L761,286 L718,314 L660,340 L600,355 L520,368 L457,371 L390,365 L326,371 L270,360 L196,371 L152,343 L100,320 L65,314 L44,257 L28,200 L22,171 L30,140 L44,114 L55,100 L65,97 Z";
-
-const CITY_POS: Record<string, { x: number; y: number }> = {
-  istanbul: { x: 134, y: 72 }, ankara: { x: 309, y: 145 }, izmir: { x: 55, y: 242 },
-  bursa: { x: 140, y: 125 }, antalya: { x: 215, y: 340 }, adana: { x: 402, y: 333 },
-  konya: { x: 295, y: 278 }, gaziantep: { x: 510, y: 327 }, mersin: { x: 384, y: 350 },
-  kayseri: { x: 425, y: 225 }, diyarbakir: { x: 635, y: 278 }, samsun: { x: 461, y: 52 },
-  trabzon: { x: 613, y: 72 }, eskisehir: { x: 205, y: 152 }, denizli: { x: 140, y: 285 },
-  malatya: { x: 550, y: 245 }, erzurum: { x: 684, y: 145 }, van: { x: 778, y: 238 },
-  manisa: { x: 68, y: 232 }, tekirdag: { x: 72, y: 72 },
-};
+import { TurkeyMap, CITY_POSITIONS } from "../TurkeyMap";
 
 type HeatMetric = "share" | "price" | "dealers" | "competition" | "campaigns" | "demand";
 
@@ -107,6 +98,25 @@ export default function DashboardView() {
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | null>(null);
   const [sortCol, setSortCol] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [showSources, setShowSources] = useState(false);
+
+  const srcTypeLabel = (s: DataSource) => {
+    const map: Record<string, string> = {
+      "annual-report": t.srcTypeAnnualReport, "website-catalog": t.srcTypeWebsite,
+      "public-filing": t.srcTypeFiling, "industry-report": t.srcTypeIndustry, geographic: t.srcTypeGeographic,
+    };
+    return map[s.sourceType] ?? s.sourceType;
+  };
+  const srcCatLabel = (s: DataSource) => {
+    const map: Record<string, string> = {
+      "product-prices": t.srcCatProductPrices, "competitor-prices": t.srcCatCompetitorPrices,
+      "market-share": t.srcCatMarketShare, financial: t.srcCatFinancial,
+      "dealer-network": t.srcCatDealerNetwork, map: t.srcCatMap,
+    };
+    return map[s.category] ?? s.category;
+  };
+  const srcName = (s: DataSource) => lang === "en" ? s.nameEn : s.name;
+  const srcDesc = (s: DataSource) => lang === "en" ? s.descriptionEn : s.description;
 
   const filteredCities = useMemo(() => {
     if (filters.cities.length === 0) return cities;
@@ -143,12 +153,12 @@ export default function DashboardView() {
     const pCompliance = +(avgCompliance * ps.compliance).toFixed(1);
     const pIndex = +(avgIndex * ps.index).toFixed(2);
     return [
-      { id: "share", label: t.kpiNationalShare, value: pShare, suffix: "%", target: "42.0%", delta: `${pShare >= 39 ? "+" : ""}${(pShare - 39).toFixed(1)}pp`, positive: pShare >= 39, icon: Target },
-      { id: "margin", label: t.kpiAvgMargin, value: pMargin, suffix: "%", target: "22.5%", delta: `${(pMargin - 22.1).toFixed(1)}pp`, positive: pMargin >= 22, icon: Percent },
-      { id: "revenue", label: t.kpiMonthlyRevenue, value: pRevenue, suffix: "%", target: ">3%", delta: `+₺${Math.round(12 * ps.revenue)}M`, positive: pRevenue > 0, icon: DollarSign },
-      { id: "campaigns", label: t.kpiActiveCampaign, value: pCampaigns, suffix: "", target: "5", delta: `${pCampaigns >= 3 ? "+" : ""}${pCampaigns - 2}`, positive: pCampaigns >= 3, icon: Megaphone },
-      { id: "compliance", label: t.kpiDealerCompliance, value: pCompliance, suffix: "%", target: "85%", delta: `${(pCompliance - 76).toFixed(1)}pp`, positive: pCompliance >= 75, icon: Users },
-      { id: "index", label: t.kpiCompetitorIndex, value: pIndex, suffix: "", target: "0.95–1.05", delta: `${(pIndex - 1.03) >= 0 ? "+" : ""}${(pIndex - 1.03).toFixed(2)}`, positive: pIndex >= 0.95 && pIndex <= 1.05, icon: BarChart3 },
+      { id: "share", label: t.kpiNationalShare, value: pShare, suffix: "%", target: "48.0%", delta: `${pShare >= 44 ? "+" : ""}${(pShare - 44).toFixed(1)}pp`, positive: pShare >= 44, icon: Target, source: t.shareBasis },
+      { id: "margin", label: t.kpiAvgMargin, value: pMargin, suffix: "%", target: "31.0%", delta: `${(pMargin - 29.5).toFixed(1)}pp`, positive: pMargin >= 29, icon: Percent, source: t.marginBasis },
+      { id: "revenue", label: t.kpiMonthlyRevenue, value: pRevenue, suffix: "%", target: ">3%", delta: `+₺${Math.round(12 * ps.revenue)}M`, positive: pRevenue > 0, icon: DollarSign, source: undefined },
+      { id: "campaigns", label: t.kpiActiveCampaign, value: pCampaigns, suffix: "", target: "5", delta: `${pCampaigns >= 3 ? "+" : ""}${pCampaigns - 2}`, positive: pCampaigns >= 3, icon: Megaphone, source: undefined },
+      { id: "compliance", label: t.kpiDealerCompliance, value: pCompliance, suffix: "%", target: "85%", delta: `${(pCompliance - 76).toFixed(1)}pp`, positive: pCompliance >= 75, icon: Users, source: undefined },
+      { id: "index", label: t.kpiCompetitorIndex, value: pIndex, suffix: "", target: "0.95–1.05", delta: `${(pIndex - 1.03) >= 0 ? "+" : ""}${(pIndex - 1.03).toFixed(2)}`, positive: pIndex >= 0.95 && pIndex <= 1.05, icon: BarChart3, source: undefined },
     ];
   }, [filters, t]);
 
@@ -255,6 +265,12 @@ export default function DashboardView() {
                 </span>
                 <span className="text-[10px] text-gray-400">{t.target} {kpi.target}</span>
               </div>
+              {kpi.source && (
+                <div className="flex items-center gap-1 mt-1.5 text-[9px] text-blue-500/70" title={kpi.source}>
+                  <Info size={10} />
+                  <span className="truncate">{kpi.source}</span>
+                </div>
+              )}
             </motion.div>
           );
         })}
@@ -286,16 +302,15 @@ export default function DashboardView() {
             </div>
           </div>
           <div className="relative p-4">
-            <svg viewBox="0 0 850 400" className="w-full h-auto">
-              <path d={TURKEY_OUTLINE} fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
+            <TurkeyMap viewBox="0 0 660 190" className="w-full h-auto">
               {filteredCities.map((city) => {
-                const pos = CITY_POS[city.id];
+                const pos = CITY_POSITIONS[city.id];
                 if (!pos) return null;
                 const val = getHeatValue(city, heatMetric);
                 const heatT = heatMax > heatMin ? (val - heatMin) / (heatMax - heatMin) : 0.5;
                 const color = heatColor(heatT);
                 const isHovered = hoverCity === city.id;
-                const r = city.populationTier === "tier-1" ? 14 : city.populationTier === "tier-2" ? 10 : 7;
+                const r = city.populationTier === "tier-1" ? 8 : city.populationTier === "tier-2" ? 6 : 4.5;
                 return (
                   <g
                     key={city.id}
@@ -308,13 +323,13 @@ export default function DashboardView() {
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedCity(city); }}
                     aria-label={`${getCityName(city, lang)} ${t.showCityDetails}`}
                   >
-                    <circle cx={pos.x} cy={pos.y} r={r + 4} fill={color} opacity={0.15} />
-                    <circle cx={pos.x} cy={pos.y} r={isHovered ? r + 2 : r} fill={color} stroke="white" strokeWidth="2" className="transition-all duration-150" />
-                    <text x={pos.x} y={pos.y - r - 6} textAnchor="middle" fill="#374151" className="text-[9px] font-semibold pointer-events-none">{getCityName(city, lang)}</text>
+                    <circle cx={pos.x} cy={pos.y} r={r + 3} fill={color} opacity={0.15} />
+                    <circle cx={pos.x} cy={pos.y} r={isHovered ? r + 1.5 : r} fill={color} stroke="white" strokeWidth="1.2" className="transition-all duration-150" />
+                    <text x={pos.x} y={pos.y - r - 4} textAnchor="middle" fill="#374151" className="text-[5px] font-semibold pointer-events-none">{getCityName(city, lang)}</text>
                   </g>
                 );
               })}
-            </svg>
+            </TurkeyMap>
             {hoveredCityData && (
               <div className="absolute top-4 right-4 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 shadow-lg w-52 pointer-events-none z-10">
                 <p className="text-xs font-bold text-[#0E2841] mb-1">{getCityName(hoveredCityData, lang)}</p>
@@ -618,6 +633,59 @@ export default function DashboardView() {
           </motion.div>
         </div>
       )}
+
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
+      >
+        <button
+          onClick={() => setShowSources(!showSources)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-sm font-bold text-[#0E2841]">
+            <BookOpen size={16} className="text-[#F5A623]" />
+            {t.dataSourcesTitle}
+          </span>
+          <ChevronRight size={16} className={`text-gray-400 transition-transform duration-200 ${showSources ? "rotate-90" : ""}`} />
+        </button>
+        <AnimatePresence>
+          {showSources && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="px-5 pb-4 border-t border-gray-100">
+                <p className="text-[10px] text-gray-400 mt-3 mb-3">{t.kpiSourceTooltip}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {DATA_SOURCES.map((src) => (
+                    <div key={src.id} className="border border-gray-100 rounded-lg p-3 hover:border-blue-200 hover:bg-blue-50/30 transition-colors">
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <span className="text-xs font-semibold text-[#0E2841] leading-tight">{srcName(src)}</span>
+                        {src.sourceUrl && (
+                          <a href={src.sourceUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-blue-500 hover:text-blue-700" title={src.sourceUrl}>
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">{srcDesc(src)}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">{srcCatLabel(src)}</span>
+                        <span className="inline-flex items-center text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{srcTypeLabel(src)}</span>
+                        <span className="text-[9px] text-gray-400 ml-auto">{t.srcDate}: {src.sourceDate}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }
