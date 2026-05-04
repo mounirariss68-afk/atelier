@@ -15,7 +15,7 @@ import type { InferInsertModel } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 const DRY_RUN = process.argv.includes("--dry-run");
-const SCRAPE = process.argv.includes("--scrape");
+const NO_SCRAPE = process.argv.includes("--no-scrape");
 
 interface ScrapedPrice {
   modelCode: string;
@@ -236,6 +236,7 @@ function applyScrapedPrices(
 function applyScrapedCompetitorPrices(
   competitors: typeof FALLBACK_COMPETITOR_PRICES,
   scraped: Awaited<ReturnType<typeof runScrapers>>,
+  products: typeof FALLBACK_PRODUCTS,
 ): typeof FALLBACK_COMPETITOR_PRICES {
   const today = new Date().toISOString().split("T")[0];
   let updated = 0;
@@ -243,6 +244,7 @@ function applyScrapedCompetitorPrices(
   const vestelMap = new Map(scraped.vestel.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
   const boschMap = new Map(scraped.bosch.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
   const samsungMap = new Map(scraped.samsung.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+  const productPriceMap = new Map(products.map((p) => [p.id, p.tsfPrice]));
 
   for (const cp of competitors) {
     const key = cp.competitorModel.split(" ").slice(0, 2).join("").toLowerCase();
@@ -256,8 +258,14 @@ function applyScrapedCompetitorPrices(
       cp.priceDate = today;
       updated++;
     }
+
+    const arcelikPrice = productPriceMap.get(cp.arcelikEquivalentId);
+    if (arcelikPrice && arcelikPrice > 0) {
+      cp.priceDeltaPercent = Math.round(((cp.competitorPrice - arcelikPrice) / arcelikPrice) * 100);
+    }
   }
   console.log(`  Applied ${updated}/${competitors.length} scraped competitor prices`);
+  console.log(`  Recomputed priceDeltaPercent for all ${competitors.length} competitor entries`);
   return competitors;
 }
 
@@ -569,27 +577,63 @@ const KPI_BENCHMARKS = [
   { id: "dealer-satisfaction", label: "Bayi Memnuniyet Skoru", value: "7.4/10", target: "8.0/10" },
 ];
 
+function recomputeDeltas(
+  competitors: typeof FALLBACK_COMPETITOR_PRICES,
+  products: typeof FALLBACK_PRODUCTS,
+) {
+  const productPriceMap = new Map(products.map((p) => [p.id, p.tsfPrice]));
+  let recomputed = 0;
+  for (const cp of competitors) {
+    const arcelikPrice = productPriceMap.get(cp.arcelikEquivalentId);
+    if (arcelikPrice && arcelikPrice > 0) {
+      cp.priceDeltaPercent = Math.round(((cp.competitorPrice - arcelikPrice) / arcelikPrice) * 100);
+      recomputed++;
+    }
+  }
+  console.log(`\n📐 Recomputed priceDeltaPercent for ${recomputed}/${competitors.length} competitor entries`);
+}
+
+function printCoverageReport(
+  products: typeof FALLBACK_PRODUCTS,
+  competitors: typeof FALLBACK_COMPETITOR_PRICES,
+) {
+  const categories = new Set(products.map((p) => p.category));
+  const brands = new Set(competitors.map((c) => c.brand));
+  const today = new Date().toISOString().split("T")[0];
+  const freshProducts = products.filter((p) => p.priceDate === today).length;
+  const freshCompetitors = competitors.filter((c) => c.priceDate === today).length;
+
+  console.log("\n📋 Data Coverage Report:");
+  console.log(`  Products: ${products.length} across ${categories.size} categories`);
+  console.log(`  Competitor prices: ${competitors.length} across ${brands.size} brands`);
+  console.log(`  Fresh prices (today): ${freshProducts}/${products.length} products, ${freshCompetitors}/${competitors.length} competitors`);
+  console.log(`  Coverage: products ${Math.round((freshProducts / products.length) * 100)}%, competitors ${Math.round((freshCompetitors / competitors.length) * 100)}%`);
+}
+
 async function main() {
   console.log(DRY_RUN ? "=== DRY RUN ===" : "=== Seeding Arçelik data ===");
 
   let products = [...FALLBACK_PRODUCTS];
   let competitorPrices = [...FALLBACK_COMPETITOR_PRICES];
 
-  if (!SCRAPE) {
-    console.log("Skipping live scrape (pass --scrape to fetch live prices from websites)");
-    console.log("Using verified fallback data sourced from arcelik.com.tr, beko.com.tr, vestel.com.tr, bosch-home.com.tr, samsung.com/tr");
+  if (NO_SCRAPE) {
+    console.log("Skipping live scrape (--no-scrape flag set)");
+    console.log("Using verified baseline data sourced from arcelik.com.tr, beko.com.tr, vestel.com.tr, bosch-home.com.tr, samsung.com/tr");
   } else {
-    console.log("\n🔍 Running price scrapers against live websites...");
+    console.log("\n🔍 Scraping live prices from websites (default behavior, pass --no-scrape to skip)...");
     const scraped = await runScrapers();
     const totalScraped = Object.values(scraped).reduce((s, arr) => s + arr.length, 0);
     if (totalScraped > 0) {
       console.log(`\n📊 Scraped ${totalScraped} total prices from live sites, merging with dataset...`);
       products = applyScrapedPrices(products, scraped);
-      competitorPrices = applyScrapedCompetitorPrices(competitorPrices, scraped);
+      competitorPrices = applyScrapedCompetitorPrices(competitorPrices, scraped, products);
     } else {
-      console.log("\n⚠️  No prices scraped (sites may be blocking requests). Using verified fallback data.");
+      console.log("\n⚠️  No prices scraped (sites may be blocking requests). Using verified baseline data.");
     }
   }
+
+  recomputeDeltas(competitorPrices, products);
+  printCoverageReport(products, competitorPrices);
 
   await upsertAll(arcelikDataSourcesTable, DATA_SOURCES, "data sources");
   await upsertAll(arcelikProductsTable, products, "products");
