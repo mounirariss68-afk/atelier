@@ -161,7 +161,11 @@ export default function SimulatorView() {
               </div>
             )}
             <div className="relative">
-              {simMode === "product" ? (
+              {simMode === "product" && filteredProducts.length === 0 ? (
+                <div className="w-full px-3 py-2.5 border border-amber-200 bg-amber-50 rounded-lg text-sm text-amber-700">
+                  {lang === "en" ? "No products match the selected filters." : "Seçili filtrelere uygun ürün bulunamadı."}
+                </div>
+              ) : simMode === "product" ? (
                 <select
                   value={selectedProduct.id}
                   onChange={(e) => {
@@ -170,11 +174,9 @@ export default function SimulatorView() {
                   }}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
                 >
-                  {products
-                    .filter((p) => p.category === selectedCat && (!filterSub || p.subcategory === filterSub) && (!filterTier || p.priceTier === filterTier))
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
-                    ))}
+                  {filteredProducts.map((p) => (
+                    <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
+                  ))}
                 </select>
               ) : (
                 <select
