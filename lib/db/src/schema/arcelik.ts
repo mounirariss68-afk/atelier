@@ -175,8 +175,14 @@ export const arcelikMarketplacePricesTable = pgTable(
     capacityLiters: integer("capacity_liters"),
     capacityKg: doublePrecision("capacity_kg"),
     energyClass: text("energy_class"),
-    arcelikProductId: text("arcelik_product_id"),
-    competitorPriceId: text("competitor_price_id"),
+    arcelikProductId: text("arcelik_product_id").references(
+      () => arcelikProductsTable.id,
+      { onDelete: "set null" },
+    ),
+    competitorPriceId: text("competitor_price_id").references(
+      () => arcelikCompetitorPricesTable.id,
+      { onDelete: "set null" },
+    ),
     matchConfidence: doublePrecision("match_confidence"),
     scrapedAt: timestamp("scraped_at").notNull().defaultNow(),
     scrapeRunId: text("scrape_run_id").notNull(),
@@ -200,7 +206,9 @@ export const arcelikProductEquivalencesTable = pgTable(
   "arcelik_product_equivalences",
   {
     id: serial("id").primaryKey(),
-    arcelikProductId: text("arcelik_product_id").notNull(),
+    arcelikProductId: text("arcelik_product_id")
+      .notNull()
+      .references(() => arcelikProductsTable.id, { onDelete: "cascade" }),
     competitorBrand: text("competitor_brand").notNull(),
     competitorModel: text("competitor_model").notNull(),
     competitorMarketplaceId: integer("competitor_marketplace_id"),
@@ -228,7 +236,9 @@ export const arcelikProductSpecsTable = pgTable(
   "arcelik_product_specs",
   {
     id: serial("id").primaryKey(),
-    marketplacePriceId: integer("marketplace_price_id").notNull(),
+    marketplacePriceId: integer("marketplace_price_id")
+      .notNull()
+      .references(() => arcelikMarketplacePricesTable.id, { onDelete: "cascade" }),
     marketplace: text("marketplace").notNull(),
     marketplaceProductId: text("marketplace_product_id").notNull(),
     capacityLiters: integer("capacity_liters"),
@@ -263,7 +273,10 @@ export const arcelikMarketplacePriceHistoryTable = pgTable(
     price: integer("price").notNull(),
     previousPrice: integer("previous_price"),
     priceChangePercent: doublePrecision("price_change_percent"),
-    arcelikProductId: text("arcelik_product_id"),
+    arcelikProductId: text("arcelik_product_id").references(
+      () => arcelikProductsTable.id,
+      { onDelete: "set null" },
+    ),
     scrapeRunId: text("scrape_run_id").notNull(),
     recordedAt: timestamp("recorded_at").notNull().defaultNow(),
   },
