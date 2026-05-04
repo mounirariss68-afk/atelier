@@ -22,7 +22,7 @@ export default function Demo() {
 
   if (slug === "arcelik-fiyat-istihbarati" && variant === "bayi") {
     return (
-      <ArcelikDataProvider>
+      <ArcelikDataProvider variant="dealer">
         <DealerPortal />
       </ArcelikDataProvider>
     );

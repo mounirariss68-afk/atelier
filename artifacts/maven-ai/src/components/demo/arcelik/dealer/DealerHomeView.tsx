@@ -49,7 +49,14 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
   const DEALER = dealers[0];
 
   if (!DEALER) {
-    return <div className="p-8 text-center text-gray-400 text-sm">Loading dealer data…</div>;
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center space-y-3">
+          <div className="w-6 h-6 border-2 border-[#E30613] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-gray-400">Loading dealer data…</p>
+        </div>
+      </div>
+    );
   }
 
   const activeCampaigns = campaigns.filter((c) => c.targetCities.includes(DEALER.city)).slice(0, 3);

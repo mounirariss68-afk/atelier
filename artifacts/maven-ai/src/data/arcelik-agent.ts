@@ -1,7 +1,7 @@
 import {
   type CityData,
 } from "./arcelik-seed";
-import { getArcelikDataSnapshot } from "@/hooks/useArcelikData";
+import { getArcelikDataSnapshot, isArcelikDataReady } from "@/hooks/useArcelikData";
 
 export type DirectorRole = "pricing" | "finance" | "marketing";
 export type Severity = "critical" | "high" | "medium" | "low";
@@ -143,12 +143,13 @@ function findPremiumGaps() {
 }
 
 export function generateRecommendations(): AgentRecommendation[] {
+  if (!isArcelikDataReady()) return [];
   const { products, dealers } = getData();
   const undercuts = findCompetitorUndercuts();
   const weakCities = findWeakCities();
   const premiumGaps = findPremiumGaps();
   const klimaProducts = products.filter((p) => p.category === "klima");
-  const avgDealerCompliance = dealers.reduce((s, d) => s + d.complianceScore, 0) / dealers.length;
+  const avgDealerCompliance = dealers.length > 0 ? dealers.reduce((s, d) => s + d.complianceScore, 0) / dealers.length : 0;
   const lowComplianceDealers = dealers.filter((d) => d.complianceScore < 75);
 
   const recs: AgentRecommendation[] = [
@@ -655,6 +656,7 @@ export function generateDecisionHistory(): AgentDecisionLog[] {
 }
 
 export function generateDealerAgentTasks(dealerCity: string): AgentTask[] {
+  if (!isArcelikDataReady()) return [];
   const cityName = getData().cities.find((c) => c.id === dealerCity)?.name ?? dealerCity;
   return [
     { id: "dt-01", title: "Klima stok seviyesini artır", description: `Yaz sezonu yaklaşıyor. Mevcut klima stoku optimum seviyenin altında. ${daysFromNow(7)} tarihine kadar sipariş verin.`, assignee: "Bayi", assigneeRole: "marketing", priority: "high", deadline: daysFromNow(7), status: "open", createdAt: hoursAgo(4) },

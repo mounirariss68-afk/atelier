@@ -10,6 +10,7 @@ import type {
   DataSource,
   KpiBenchmark,
 } from "@/data/arcelik-seed";
+import { DashboardSkeleton, DealerPortalSkeleton, DataErrorState } from "@/components/demo/arcelik/DataLoadingStates";
 
 export interface ArcelikData {
   products: ArcelikProduct[];
@@ -34,9 +35,14 @@ const EMPTY: ArcelikData = {
 };
 
 let _snapshot: ArcelikData = EMPTY;
+let _snapshotReady = false;
 
 export function getArcelikDataSnapshot(): ArcelikData {
   return _snapshot;
+}
+
+export function isArcelikDataReady(): boolean {
+  return _snapshotReady;
 }
 
 const BASE = "/api/arcelik";
@@ -78,6 +84,7 @@ async function fetchAllArcelikData(): Promise<ArcelikData> {
     kpiBenchmarks,
   };
   _snapshot = data;
+  _snapshotReady = true;
   return data;
 }
 
@@ -90,11 +97,13 @@ export function useArcelikData(): ArcelikData {
 export function ArcelikDataProvider({
   children,
   fallback,
+  variant = "business",
 }: {
   children: ReactNode;
   fallback?: ReactNode;
+  variant?: "business" | "dealer";
 }) {
-  const { data, isLoading, isError } = useQuery<ArcelikData>({
+  const { data, isLoading, isError, refetch } = useQuery<ArcelikData>({
     queryKey: ["arcelik", "all-data"],
     queryFn: fetchAllArcelikData,
     staleTime: 5 * 60 * 1000,
@@ -102,34 +111,13 @@ export function ArcelikDataProvider({
   });
 
   if (isLoading && !data) {
-    return (
-      fallback ?? (
-        <div className="min-h-screen flex items-center justify-center bg-[#0E2841]">
-          <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-2 border-[#F5A623] border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-sm text-gray-400">Loading data…</p>
-          </div>
-        </div>
-      )
-    );
+    if (fallback) return <>{fallback}</>;
+    return variant === "dealer" ? <DealerPortalSkeleton /> : <DashboardSkeleton />;
   }
 
   if (isError && !data) {
-    return (
-      fallback ?? (
-        <div className="min-h-screen flex items-center justify-center bg-[#0E2841]">
-          <div className="text-center space-y-3">
-            <p className="text-sm text-red-400">Failed to load data. Please refresh.</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-[#F5A623] text-[#0E2841] rounded-lg text-sm font-semibold hover:bg-[#e09520] transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )
-    );
+    if (fallback) return <>{fallback}</>;
+    return <DataErrorState onRetry={() => refetch()} />;
   }
 
   const value = data ?? EMPTY;

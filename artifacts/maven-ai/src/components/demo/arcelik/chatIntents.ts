@@ -4,7 +4,7 @@ import {
   getSubcategoryLabel, getPriceTierLabel, getProductSpecs,
   type ProductCategory, type PriceTier,
 } from "@/data/arcelik-seed";
-import { getArcelikDataSnapshot } from "@/hooks/useArcelikData";
+import { getArcelikDataSnapshot, isArcelikDataReady } from "@/hooks/useArcelikData";
 import type { DemoLang } from "./DemoLangContext";
 
 export type ResponseType = "text" | "metric" | "table" | "list" | "campaign-card" | "analysis" | "chart";
@@ -721,6 +721,15 @@ const FALLBACK = (lang: DemoLang): ChatResponse => ({
 });
 
 export function matchIntent(input: string, lang: DemoLang = "tr"): ChatResponse {
+  if (!isArcelikDataReady()) {
+    return {
+      agent: "analyst",
+      type: "text",
+      text: lang === "en"
+        ? "Data is still loading. Please wait a moment and try again."
+        : "Veriler henüz yükleniyor. Lütfen bir an bekleyin ve tekrar deneyin.",
+    };
+  }
   for (const intent of INTENTS) {
     for (const pattern of intent.patterns) {
       if (pattern.test(input)) {

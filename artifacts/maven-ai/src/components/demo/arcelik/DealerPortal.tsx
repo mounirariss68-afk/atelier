@@ -51,7 +51,14 @@ function DealerPortalInner() {
   const [notifOpen, setNotifOpen] = useState(false);
 
   if (!DEALER) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50"><p className="text-gray-500 text-sm">Loading dealer data…</p></div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center space-y-3">
+          <div className="w-6 h-6 border-2 border-[#E30613] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-gray-400">Loading dealer data…</p>
+        </div>
+      </div>
+    );
   }
 
   const tierLabels: Record<string, string> = {

@@ -3,7 +3,7 @@ import {
   getProductName, getCampaignField,
   type ProductCategory,
 } from "@/data/arcelik-seed";
-import { getArcelikDataSnapshot } from "@/hooks/useArcelikData";
+import { getArcelikDataSnapshot, isArcelikDataReady } from "@/hooks/useArcelikData";
 import type { DemoLang } from "../DemoLangContext";
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 
@@ -467,6 +467,14 @@ const FALLBACK = (lang: DemoLang): DealerChatResponse => ({
 });
 
 export function matchDealerIntent(input: string, lang: DemoLang = "tr"): DealerChatResponse {
+  if (!isArcelikDataReady()) {
+    return {
+      type: "text",
+      text: lang === "en"
+        ? "Data is still loading. Please wait a moment and try again."
+        : "Veriler henüz yükleniyor. Lütfen bir an bekleyin ve tekrar deneyin.",
+    };
+  }
   for (const intent of INTENTS) {
     for (const pattern of intent.patterns) {
       if (pattern.test(input)) return intent.handler(lang);
