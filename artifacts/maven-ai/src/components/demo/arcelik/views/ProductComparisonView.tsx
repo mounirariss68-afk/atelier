@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
@@ -16,7 +17,7 @@ import {
   type ProductCategory, type ArcelikProduct, type CompetitorPrice,
 } from "@/data/arcelik-seed";
 import { useArcelikData } from "@/hooks/useArcelikData";
-import { usePriceHistory, type PriceHistoryRecord } from "@/hooks/usePriceHistory";
+import { type PriceHistoryRecord } from "@/hooks/usePriceHistory";
 
 const MAX_SELECTED = 4;
 const MIN_TO_COMPARE = 2;
@@ -171,12 +172,12 @@ export default function ProductComparisonView() {
   const { lang } = useDemoLang();
   const t = comparison[lang];
   const { products, competitorPrices } = useArcelikData();
-  const { data: priceHistoryAll } = usePriceHistory({ limit: 2000 });
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [filterKind, setFilterKind] = useState<"all" | "arcelik" | "competitor">("all");
   const [filterCategory, setFilterCategory] = useState<ProductCategory | "all">("all");
   const [filterTier, setFilterTier] = useState<"all" | "entry" | "mid" | "premium">("all");
+  const [filterBrand, setFilterBrand] = useState<string>("all");
 
   const allItems = useMemo<ComparisonItem[]>(() => {
     const a: ComparisonItem[] = products.map((p) => buildArcelikItem(p, lang));
@@ -195,12 +196,20 @@ export default function ProductComparisonView() {
     [selectedKeys, itemsByKey],
   );
 
+  // Brand list available across the catalog + competitor data, sorted
+  const availableBrands = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of allItems) set.add(it.brand);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [allItems]);
+
   const filteredList = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allItems
       .filter((it) => filterKind === "all" || it.kind === filterKind)
       .filter((it) => filterCategory === "all" || it.category === filterCategory)
       .filter((it) => filterTier === "all" || it.priceTier === filterTier)
+      .filter((it) => filterBrand === "all" || it.brand === filterBrand)
       .filter((it) => {
         if (!q) return true;
         return (
@@ -210,7 +219,7 @@ export default function ProductComparisonView() {
         );
       })
       .slice(0, 80);
-  }, [allItems, search, filterKind, filterCategory, filterTier]);
+  }, [allItems, search, filterKind, filterCategory, filterTier, filterBrand]);
 
   function toggle(key: string) {
     setSelectedKeys((prev) => {
@@ -277,21 +286,43 @@ export default function ProductComparisonView() {
     }));
   }, [selectedItems, valueScores]);
 
+  // Per-item price history fetches: each selected product hits the API
+  // with its own referenceId + recordType so we never miss historical
+  // points to a global LIMIT slice. Disabled queries skip the request.
+  const historyQueries = useQueries({
+    queries: selectedItems.map((it) => ({
+      queryKey: [
+        "arcelik",
+        "price-history",
+        { referenceId: it.historyRefId, recordType: it.historyRecordType, limit: 500 },
+      ],
+      queryFn: async (): Promise<PriceHistoryRecord[]> => {
+        const qs = new URLSearchParams({
+          referenceId: it.historyRefId,
+          recordType: it.historyRecordType,
+          limit: "500",
+        });
+        const res = await fetch(`/api/arcelik/price-history?${qs}`);
+        if (!res.ok) throw new Error("Failed to fetch price history");
+        return res.json();
+      },
+      staleTime: 60 * 1000,
+    })),
+  });
+
   // Price history chart: pivot by date, one line per selected item
   const historyChartData = useMemo(() => {
-    if (!priceHistoryAll || priceHistoryAll.length === 0 || selectedItems.length === 0) return [];
+    if (selectedItems.length === 0) return [];
     const byBucket = new Map<string, Record<string, number | string>>();
     const since = Date.now() - 90 * 24 * 60 * 60 * 1000;
-    for (const it of selectedItems) {
-      const records = (priceHistoryAll as PriceHistoryRecord[]).filter(
-        (r) =>
-          r.referenceId === it.historyRefId &&
-          r.recordType === it.historyRecordType &&
-          new Date(r.recordedAt).getTime() >= since,
+    selectedItems.forEach((it, idx) => {
+      const records: PriceHistoryRecord[] = historyQueries[idx]?.data ?? [];
+      const inWindow = records.filter(
+        (r) => new Date(r.recordedAt).getTime() >= since,
       );
       // Group by day, take last price per day
       const dayMap = new Map<string, number>();
-      for (const r of records) {
+      for (const r of inWindow) {
         const day = r.recordedAt.slice(0, 10);
         dayMap.set(day, r.price);
       }
@@ -304,11 +335,11 @@ export default function ProductComparisonView() {
         row[it.key] = price;
         byBucket.set(day, row);
       }
-    }
+    });
     return Array.from(byBucket.values()).sort((a, b) =>
       String(a.date).localeCompare(String(b.date)),
     );
-  }, [priceHistoryAll, selectedItems]);
+  }, [historyQueries, selectedItems]);
 
   const hasMeaningfulHistory = useMemo(() => {
     if (historyChartData.length < 2) return false;
@@ -436,6 +467,19 @@ export default function ProductComparisonView() {
               {(["entry", "mid", "premium"] as const).map((tier) => (
                 <option key={tier} value={tier}>
                   {getPriceTierLabel(tier, lang)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterBrand}
+              onChange={(e) => setFilterBrand(e.target.value)}
+              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0E2841]"
+            >
+              <option value="all">{t.filterBrandAll}</option>
+              {availableBrands.map((b) => (
+                <option key={b} value={b}>
+                  {b}
                 </option>
               ))}
             </select>
