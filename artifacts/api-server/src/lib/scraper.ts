@@ -1045,8 +1045,6 @@ export async function runPriceScrape(
       scrapedCounts.n11 = n11Items.length;
       logger.info({ count: n11Items.length }, "n11.com: marketplace products scraped");
 
-      // Drift guard: warn if any expected N11 category returned zero items
-      // — usually a sign that selectors/URL slugs have moved underneath us.
       const n11ByCat = new Map<string, number>();
       for (const it of n11Items) {
         n11ByCat.set(it.category, (n11ByCat.get(it.category) ?? 0) + 1);
@@ -1142,10 +1140,7 @@ export async function runPriceScrape(
         "Marketplace prices stored",
       );
 
-      // Per-source price history. Look up the previous observation for each
-      // (marketplace, marketplaceProductId) and insert a history row capturing
-      // the new price, previous price, and percentage change. Insert-only —
-      // never upsert — so we get an append-only timeline per SKU per source.
+      // Append-only per-source price history.
       try {
         const ids = insertRows.map((r) => r.marketplaceProductId);
         const previousByKey = new Map<string, number>();
@@ -1210,11 +1205,7 @@ export async function runPriceScrape(
       }
     }
 
-    // Spec extraction runs against a sample of N11 products (PDPs are slow).
-    // Cap raised to 250/run AND we prioritize SKUs that don't yet have a spec
-    // row, so each cron run extends coverage instead of redoing the same
-    // first N items. Once everything has specs, we fall back to the oldest
-    // extractedAt entries (refresh-in-place).
+    // Cap PDP scrapes per run; prioritize uncovered/oldest first.
     const SPEC_CAP_PER_RUN = 250;
     let specsExtracted = 0;
     if (n11Items.length > 0) {
@@ -1232,7 +1223,6 @@ export async function runPriceScrape(
             r.extractedAt?.getTime() ?? 0,
           ]),
         );
-        // Sort: never-extracted first, then oldest-extracted next.
         const eligible = n11Items
           .filter((it) => it.productUrl)
           .map((it) => ({
@@ -1259,10 +1249,6 @@ export async function runPriceScrape(
         );
         const specs = await scrapeN11ProductSpecs(targets, SPEC_CAP_PER_RUN);
         if (specs.length > 0) {
-          // Look up the marketplace_prices.id for each spec (need the FK).
-          // Filter to ONLY the (marketplace, marketplaceProductId) pairs we
-          // just extracted specs for — avoids a full-table scan as the
-          // marketplace_prices table grows across runs.
           const specMpIds = Array.from(
             new Set(specs.map((s) => s.marketplaceProductId)),
           );
@@ -1341,9 +1327,6 @@ export async function runPriceScrape(
         logger.error({ err }, "N11 spec extraction failed");
       }
     }
-
-    // Browser close moved to outer finally so it always runs (early failures
-    // in matching/upsert paths previously leaked the chromium process).
 
     const totalScraped =
       Object.values(scrapedCounts).reduce((s, n) => s + n, 0);
@@ -1521,10 +1504,6 @@ export async function runPriceScrape(
           "Cross-brand equivalences rebuilt from marketplace data",
         );
 
-        // Backfill arcelik_product_id on history rows for THIS run from the
-        // freshly-resolved arcelikProductId on arcelik_marketplace_prices.
-        // This enables product-linked historical analysis without joining
-        // back to the equivalences table at query time.
         const backfill = await db.execute(sql`
           UPDATE ${arcelikMarketplacePriceHistoryTable} h
           SET arcelik_product_id = mp.arcelik_product_id
@@ -1619,9 +1598,6 @@ export async function runPriceScrape(
       errorMessage,
     };
   } finally {
-    // Always release the chromium process even if matching/upsert paths
-    // throw before the normal close. Failure to do this leaks the browser
-    // and accumulates zombies across repeated failed runs.
     try {
       await closePlaywrightBrowser();
     } catch (err) {

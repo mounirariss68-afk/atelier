@@ -67,14 +67,7 @@ router.get("/competitor-prices", async (_req, res) => {
       ? await baseQuery.where(and(...conditions))
       : await baseQuery;
 
-    // Optional ?includeMarketplace=true augments each row with a marketplace
-    // breakdown (n11/trendyol observations linked to the same arcelikProductId
-    // via the equivalence engine). Lets a single endpoint serve both the
-    // legacy brand-site view and the multi-source view.
     if (String(includeMarketplace).toLowerCase() === "true") {
-      // arcelikEquivalentId on competitor_prices and arcelikProductId on
-      // marketplace_prices both reference the same Arçelik product key, so
-      // we join on equality across the two columns.
       const productIds = Array.from(
         new Set(
           rows
@@ -315,10 +308,6 @@ router.get("/marketplace-prices", async (_req, res) => {
 
 router.get("/coverage", async (_req, res) => {
   try {
-    // Per-source / per-category coverage report. Tracks how much of the
-    // marketplace catalog we've ingested, how many SKUs have structured
-    // PDP specs, and how many are linked to an Arçelik product. Useful for
-    // monitoring backfill progress and operator confidence in the pipeline.
     const sinceDays = Math.min(Number(_req.query.sinceDays) || 14, 90);
     const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * sinceDays);
 
@@ -329,8 +318,6 @@ router.get("/coverage", async (_req, res) => {
             marketplace: arcelikMarketplacePricesTable.marketplace,
             category: arcelikMarketplacePricesTable.category,
             skuCount: sql<number>`count(distinct ${arcelikMarketplacePricesTable.marketplaceProductId})::int`,
-            // Use distinct SKU count filtered on linked rows so repeated
-            // observations of the same SKU don't inflate coverage metrics.
             linkedCount: sql<number>`count(distinct ${arcelikMarketplacePricesTable.marketplaceProductId}) filter (where ${arcelikMarketplacePricesTable.arcelikProductId} is not null)::int`,
             avgPrice: sql<number>`round(avg(${arcelikMarketplacePricesTable.price}))::int`,
           })
@@ -368,8 +355,7 @@ router.get("/coverage", async (_req, res) => {
           .limit(20),
       ]);
 
-    // Collapse equivalences-by-source onto the marketplace prefix (e.g.
-    // "n11/run-123" → "n11") so callers see a clean per-source rollup.
+    // Collapse "n11/run-123" → "n11".
     const equivByMarketplace: Record<
       string,
       { count: number; avgConfidence: number }

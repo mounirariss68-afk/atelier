@@ -305,14 +305,7 @@ export async function rebuildEquivalences(
     }
   }
 
-  // CRITICAL — clear stale links FIRST. Marketplace rows are upserted by
-  // (marketplace, marketplaceProductId), which preserves arcelikProductId
-  // and matchConfidence on conflict. Without this reset, any SKU that was
-  // matched in a prior run but no longer matches (because its title changed,
-  // category drifted, or this run's confidence falls below 0.5) would keep
-  // its stale arcelikProductId — contaminating /competitor-prices/multi-source
-  // (which groups directly on arcelikProductId) and the marketplace summary.
-  // Reset all n11/trendyol rows to NULL, then write back only fresh winners.
+  // Reset stale matches before re-matching; upsert preserves them otherwise.
   await db
     .update(arcelikMarketplacePricesTable)
     .set({ arcelikProductId: null, matchConfidence: null })
@@ -324,8 +317,6 @@ export async function rebuildEquivalences(
     );
 
   if (created.length === 0) {
-    // Still flush old equivalences even if this run produced none, so stale
-    // matches don't survive indefinitely.
     await db
       .delete(arcelikProductEquivalencesTable)
       .where(
