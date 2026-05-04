@@ -3,7 +3,7 @@ import {
   Award, TrendingUp, Tag, AlertTriangle, Package, BarChart3,
   Clock, ChevronRight, Megaphone, Info, Brain, CheckCircle2,
 } from "lucide-react";
-import { dealers, campaigns, cities as allCities, getCategoryLabel } from "@/data/arcelik-seed";
+import { dealers, campaigns, cities as allCities, getCategoryLabel, getCampaignField } from "@/data/arcelik-seed";
 import { generateDealerAgentTasks } from "@/data/arcelik-agent";
 import type { DealerViewId } from "../DealerPortal";
 import { useDemoLang } from "../DemoLangContext";
@@ -135,8 +135,8 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
                   <span className="text-[10px] font-bold uppercase text-[#E30613] bg-red-50 px-2 py-0.5 rounded-full">{t.active}</span>
                   <span className="text-[10px] font-semibold text-amber-600 flex items-center gap-1"><Clock size={10} />{daysLeft} {t.daysRemaining}</span>
                 </div>
-                <h3 className="text-sm font-bold mb-1">{c.name}</h3>
-                <p className="text-[11px] text-gray-500 mb-2">{c.discountDetail}</p>
+                <h3 className="text-sm font-bold mb-1">{getCampaignField(c, "name", lang)}</h3>
+                <p className="text-[11px] text-gray-500 mb-2">{getCampaignField(c, "discountDetail", lang)}</p>
                 <div className="flex flex-wrap gap-1">
                   {c.eligibleCategories.slice(0, 3).map((cat) => (
                     <span key={cat} className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{getCategoryLabel(cat, lang)}</span>

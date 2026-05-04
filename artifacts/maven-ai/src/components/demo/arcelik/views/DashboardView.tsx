@@ -13,6 +13,7 @@ import { dashboard } from "../demo-i18n";
 import {
   products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, COMPETITOR_BRANDS, getCategoryLabel,
+  getProductName, getCitySeasonalPattern, getCampaignField,
   type ProductCategory, type CityData,
 } from "@/data/arcelik-seed";
 
@@ -188,7 +189,7 @@ export default function DashboardView() {
       });
       const deltas = Object.values(brandPrices).map((bp) => bp.delta);
       return {
-        id: p.id, name: p.name, category: getCategoryLabel(p.category, lang),
+        id: p.id, name: getProductName(p, lang), category: getCategoryLabel(p.category, lang),
         tsfPrice: adjTsf, brandPrices,
         avgDelta: deltas.length ? +(deltas.reduce((s, d) => s + d, 0) / deltas.length).toFixed(1) : 0,
       };
@@ -202,7 +203,7 @@ export default function DashboardView() {
       if (typeof va === "string" && typeof vb === "string") return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
       return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
-  }, [filters.categories, comparisonBrands, sortCol, sortDir, cityPriceIndex]);
+  }, [filters.categories, comparisonBrands, sortCol, sortDir, cityPriceIndex, lang]);
 
   const categoryProducts = useMemo(() => {
     if (!selectedCategory) return [];
@@ -330,9 +331,9 @@ export default function DashboardView() {
               <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#f59e0b]" /><span className="text-[10px] text-gray-500">{t.legendMedium}</span></div>
               <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#ef4444]" /><span className="text-[10px] text-gray-500">{t.legendLow}</span></div>
               <div className="flex items-center gap-2 ml-auto text-[10px] text-gray-400">
-                <span className="flex items-center gap-1"><span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300" /> Tier-1</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border-2 border-gray-300" /> Tier-2</span>
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full border-2 border-gray-300" /> Tier-3</span>
+                <span className="flex items-center gap-1"><span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300" /> {t.legendTier1}</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border-2 border-gray-300" /> {t.legendTier2}</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full border-2 border-gray-300" /> {t.legendTier3}</span>
               </div>
             </div>
           </div>
@@ -481,7 +482,7 @@ export default function DashboardView() {
                     {categoryProducts.map((p) => (
                       <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                         <td className="px-4 py-2.5">
-                          <div className="text-xs font-semibold text-[#0E2841]">{p.name}</div>
+                          <div className="text-xs font-semibold text-[#0E2841]">{getProductName(p, lang)}</div>
                           <div className="text-[10px] text-gray-400">{p.modelCode}</div>
                         </td>
                         <td className="px-4 py-2.5 text-right font-mono text-xs font-bold">₺{p.tsfPrice.toLocaleString("tr-TR")}</td>
@@ -540,7 +541,7 @@ export default function DashboardView() {
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-[10px] text-gray-500 uppercase">{t.citySegment}</p>
-                  <p className="text-xl font-extrabold text-[#0E2841] capitalize">{selectedCity.populationTier.replace("-", " ")}</p>
+                  <p className="text-xl font-extrabold text-[#0E2841] capitalize">{selectedCity.populationTier === "tier-1" ? t.cityTier1 : selectedCity.populationTier === "tier-2" ? t.cityTier2 : t.cityTier3}</p>
                 </div>
               </div>
 
@@ -585,8 +586,8 @@ export default function DashboardView() {
                   <div className="space-y-2">
                     {cityCampaigns.map((c) => (
                       <div key={c.id} className="bg-purple-50 rounded-lg p-2.5">
-                        <p className="text-xs font-semibold text-purple-800">{c.name}</p>
-                        <p className="text-[10px] text-purple-600 mt-0.5">{c.promotionType} — {c.discountDetail}</p>
+                        <p className="text-xs font-semibold text-purple-800">{getCampaignField(c, "name", lang)}</p>
+                        <p className="text-[10px] text-purple-600 mt-0.5">{getCampaignField(c, "promotionType", lang)} — {getCampaignField(c, "discountDetail", lang)}</p>
                         <p className="text-[10px] text-purple-500 mt-0.5">{t.cityImpact} {c.projectedImpact.marketShareLift}, {t.cityRevenue} {c.projectedImpact.revenueDelta}</p>
                       </div>
                     ))}
@@ -611,7 +612,7 @@ export default function DashboardView() {
 
               <div>
                 <p className="text-xs font-bold text-gray-700 mb-1">{t.citySeasonalPattern}</p>
-                <p className="text-xs text-gray-500 leading-relaxed">{selectedCity.seasonalPattern}</p>
+                <p className="text-xs text-gray-500 leading-relaxed">{getCitySeasonalPattern(selectedCity, lang)}</p>
               </div>
             </div>
           </motion.div>

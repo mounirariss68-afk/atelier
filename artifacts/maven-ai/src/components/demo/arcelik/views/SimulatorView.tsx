@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { simulator } from "../demo-i18n";
 import {
-  products, competitorPrices, CATEGORY_LABELS, getCategoryLabel,
+  products, competitorPrices, CATEGORY_LABELS, getCategoryLabel, getProductName,
   type ArcelikProduct, type ProductCategory,
 } from "@/data/arcelik-seed";
 import { generateSimulatorRecommendations } from "@/data/arcelik-agent";
@@ -37,7 +37,7 @@ export default function SimulatorView() {
   const basePrice = simMode === "product" ? selectedProduct.tsfPrice : catAvgPrice;
   const baseCost = simMode === "product" ? selectedProduct.dealerCost : catAvgCost;
   const baseMargin = simMode === "product" ? selectedProduct.marginPercent : catAvgMargin;
-  const displayName = simMode === "product" ? selectedProduct.name : getCategoryLabel(selectedCat, lang);
+  const displayName = simMode === "product" ? getProductName(selectedProduct, lang) : getCategoryLabel(selectedCat, lang);
 
   const newPrice = Math.round(basePrice * (1 + priceAdjust / 100));
   const newMargin = +((1 - baseCost / newPrice) * 100).toFixed(1);
@@ -121,7 +121,7 @@ export default function SimulatorView() {
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
                 >
                   {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
+                    <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
                   ))}
                 </select>
               ) : (

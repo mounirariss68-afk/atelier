@@ -6,6 +6,7 @@ import { useDemoLang } from "../DemoLangContext";
 import { calendar } from "../demo-i18n";
 import {
   promotionalCalendar, campaigns, cities, COMPETITOR_BRANDS, getCategoryLabel,
+  getCalendarEntryName, getCampaignField,
   type CalendarEntry,
 } from "@/data/arcelik-seed";
 
@@ -143,7 +144,7 @@ export default function CalendarView() {
                     >
                       <div className="px-4 py-2.5 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: BRAND_COLORS[entry.brand] || "#6B7280" }} />
-                        <span className="text-xs font-medium text-[#0E2841] truncate">{entry.campaignName}</span>
+                        <span className="text-xs font-medium text-[#0E2841] truncate">{getCalendarEntryName(entry, lang)}</span>
                         {entry.type === "confirmed" ? (
                           <CheckCircle2 size={11} className="text-green-500 flex-shrink-0" />
                         ) : (
@@ -190,7 +191,7 @@ export default function CalendarView() {
                     >
                       <div className="px-4 py-2.5 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: BRAND_COLORS[entry.brand] || "#6B7280" }} />
-                        <span className="text-xs font-medium text-gray-700 truncate">{entry.campaignName}</span>
+                        <span className="text-xs font-medium text-gray-700 truncate">{getCalendarEntryName(entry, lang)}</span>
                         {entry.type === "predicted" && <Eye size={11} className="text-amber-500 flex-shrink-0" />}
                       </div>
                       {MONTHS.map((_, mi) => (
@@ -266,7 +267,7 @@ export default function CalendarView() {
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full" style={{ backgroundColor: BRAND_COLORS[selectedEntry.brand] || "#6B7280" }} />
-                  <h3 className="text-sm font-bold">{selectedEntry.campaignName}</h3>
+                  <h3 className="text-sm font-bold">{getCalendarEntryName(selectedEntry, lang)}</h3>
                 </div>
                 <button onClick={() => setSelectedEntry(null)} className="p-1 hover:bg-gray-100 rounded-lg" aria-label={t.closeCampaignDetail}><X size={18} /></button>
               </div>
@@ -311,18 +312,18 @@ export default function CalendarView() {
                   <>
                     <div className="border-t border-gray-100 pt-4">
                       <p className="text-xs font-bold text-gray-700 mb-2">{t.detailCampaignDetails}</p>
-                      <p className="text-xs text-gray-600 leading-relaxed mb-3">{matchedCampaign.headline}</p>
-                      <p className="text-[11px] text-gray-500 italic leading-relaxed">{matchedCampaign.bodyCopy}</p>
+                      <p className="text-xs text-gray-600 leading-relaxed mb-3">{getCampaignField(matchedCampaign, "headline", lang)}</p>
+                      <p className="text-[11px] text-gray-500 italic leading-relaxed">{getCampaignField(matchedCampaign, "bodyCopy", lang)}</p>
                     </div>
 
                     <div>
                       <p className="text-xs font-bold text-gray-700 mb-2">{t.detailTargetSegment}</p>
-                      <p className="text-xs text-gray-600">{matchedCampaign.targetSegment}</p>
+                      <p className="text-xs text-gray-600">{getCampaignField(matchedCampaign, "targetSegment", lang)}</p>
                     </div>
 
                     <div>
                       <p className="text-xs font-bold text-gray-700 mb-2">{t.detailDiscountDetail}</p>
-                      <p className="text-xs text-gray-600">{matchedCampaign.discountDetail}</p>
+                      <p className="text-xs text-gray-600">{getCampaignField(matchedCampaign, "discountDetail", lang)}</p>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3">
@@ -354,7 +355,7 @@ export default function CalendarView() {
 
                     <div className="bg-blue-50 rounded-xl p-3">
                       <p className="text-[11px] font-semibold text-blue-700 mb-1">{t.detailPosMessage}</p>
-                      <p className="text-[11px] text-blue-600">{matchedCampaign.dealerPosMessaging}</p>
+                      <p className="text-[11px] text-blue-600">{getCampaignField(matchedCampaign, "dealerPosMessaging", lang)}</p>
                     </div>
                   </>
                 )}

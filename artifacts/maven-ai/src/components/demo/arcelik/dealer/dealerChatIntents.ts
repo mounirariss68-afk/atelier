@@ -1,6 +1,7 @@
 import {
   products, competitorPrices, dealers, campaigns,
   CATEGORY_LABELS, CATEGORY_LABELS_EN,
+  getProductName, getCampaignField,
   type ProductCategory,
 } from "@/data/arcelik-seed";
 import type { DemoLang } from "../DemoLangContext";
@@ -37,7 +38,7 @@ const INTENTS: DealerIntent[] = [
     patterns: [/aktif kampanya/i, /kampanyalar neler/i, /hangi kampanya/i, /kampanya var mı/i, /naber kampanya/i, /active campaign/i, /which campaign/i, /any campaign/i, /current campaign/i],
     handler: (lang) => {
       const active = campaigns.filter((c) => c.targetCities.includes(DEALER.city));
-      const list = active.slice(0, 4).map((c, i) => `${i + 1}. ${c.name}\n   ${c.discountDetail}`).join("\n\n");
+      const list = active.slice(0, 4).map((c, i) => `${i + 1}. ${getCampaignField(c, "name", lang)}\n   ${getCampaignField(c, "discountDetail", lang)}`).join("\n\n");
       return {
         type: "list",
         text: lang === "en"
@@ -115,7 +116,7 @@ const INTENTS: DealerIntent[] = [
       return {
         type: "metric",
         text: lang === "en"
-          ? `${p.name}\n\nTSF: ₺${fmt(p.tsfPrice)}\nDealer Cost: ₺${fmt(p.dealerCost)}\nMargin: ${p.marginPercent}%\nEnergy: ${p.energyClass}\nFeatures: ${p.features.join(", ")}`
+          ? `${getProductName(p, lang)}\n\nTSF: ₺${fmt(p.tsfPrice)}\nDealer Cost: ₺${fmt(p.dealerCost)}\nMargin: ${p.marginPercent}%\nEnergy: ${p.energyClass}\nFeatures: ${p.features.join(", ")}`
           : `${p.name}\n\nTSF: ₺${fmt(p.tsfPrice)}\nBayi Alış: ₺${fmt(p.dealerCost)}\nMarj: %${p.marginPercent}\nEnerji: ${p.energyClass}\nÖzellikler: ${p.features.join(", ")}`,
         data: { value: `₺${fmt(p.tsfPrice)}`, label: lang === "en" ? "TSF Price" : "TSF Fiyatı" },
       };
@@ -345,7 +346,7 @@ const INTENTS: DealerIntent[] = [
       return {
         type: "text",
         text: lang === "en"
-          ? `Campaign materials:\n\n📱 SMS Template:\n"${c.dealerSmsNotification}"\n\n🏪 POS Message:\n"${c.dealerPosMessaging}"\n\n📋 Banner Description:\n${c.bannerDescription}\n\nAll materials are accessible from the Campaigns section.`
+          ? `Campaign materials:\n\n📱 SMS Template:\n"${getCampaignField(c, "dealerSmsNotification", lang)}"\n\n🏪 POS Message:\n"${getCampaignField(c, "dealerPosMessaging", lang)}"\n\n📋 Banner Description:\n${getCampaignField(c, "bannerDescription", lang)}\n\nAll materials are accessible from the Campaigns section.`
           : `Kampanya materyalleri:\n\n📱 SMS Şablonu:\n"${c.dealerSmsNotification}"\n\n🏪 POS Mesajı:\n"${c.dealerPosMessaging}"\n\n📋 Afiş Açıklaması:\n${c.bannerDescription}\n\nTüm materyallere Kampanyalar bölümünden ulaşabilirsiniz.`,
       };
     },

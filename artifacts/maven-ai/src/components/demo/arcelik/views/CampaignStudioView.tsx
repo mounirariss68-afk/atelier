@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { campaign as campaignI18n } from "../demo-i18n";
 import {
-  campaigns, cities, CATEGORY_LABELS, getCategoryLabel,
+  campaigns, cities, CATEGORY_LABELS, getCategoryLabel, getCampaignField,
   type CampaignTemplate, type ProductCategory,
 } from "@/data/arcelik-seed";
 import { generateCampaignSuggestions } from "@/data/arcelik-agent";
@@ -43,8 +43,8 @@ function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLa
               <Sparkles size={18} className="text-[#E30613]" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-[#0E2841]">{campaign.name}</h4>
-              <p className="text-[11px] text-gray-500">{campaign.targetSegment}</p>
+              <h4 className="text-sm font-bold text-[#0E2841]">{getCampaignField(campaign, "name", lang)}</h4>
+              <p className="text-[11px] text-gray-500">{getCampaignField(campaign, "targetSegment", lang)}</p>
             </div>
           </div>
           <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -52,7 +52,7 @@ function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLa
           </span>
         </div>
 
-        <p className="text-xs text-gray-600 mb-3 line-clamp-2">{campaign.headline}</p>
+        <p className="text-xs text-gray-600 mb-3 line-clamp-2">{getCampaignField(campaign, "headline", lang)}</p>
 
         <div className="grid grid-cols-3 gap-3 mb-3">
           <div className="bg-gray-50 rounded-lg p-2">
@@ -79,14 +79,14 @@ function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLa
         {expanded && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="overflow-hidden">
             <div className="border-t border-gray-100 pt-3 space-y-2 text-xs text-gray-600">
-              <p><strong>{t.discount}</strong> {campaign.discountDetail}</p>
-              <p><strong>{t.tone}</strong> {campaign.messagingTone}</p>
-              <p><strong>{t.duration}</strong> {campaign.durationPattern}</p>
+              <p><strong>{t.discount}</strong> {getCampaignField(campaign, "discountDetail", lang)}</p>
+              <p><strong>{t.tone}</strong> {getCampaignField(campaign, "messagingTone", lang)}</p>
+              <p><strong>{t.duration}</strong> {getCampaignField(campaign, "durationPattern", lang)}</p>
               <p><strong>{t.categoriesLabel}</strong> {campaign.eligibleCategories.map((c) => getCategoryLabel(c, lang)).join(", ")}</p>
-              <p className="text-gray-400 italic">{campaign.bodyCopy}</p>
+              <p className="text-gray-400 italic">{getCampaignField(campaign, "bodyCopy", lang)}</p>
               <div className="bg-blue-50 rounded-lg p-3 mt-2">
                 <p className="text-[11px] font-semibold text-blue-700 mb-1">{t.dealerPosMessage}</p>
-                <p className="text-[11px] text-blue-600">{campaign.dealerPosMessaging}</p>
+                <p className="text-[11px] text-blue-600">{getCampaignField(campaign, "dealerPosMessaging", lang)}</p>
               </div>
             </div>
           </motion.div>
@@ -359,7 +359,7 @@ export default function CampaignStudioView() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {campaigns.map((c) => (
-              <CampaignCard key={c.id} campaign={c} onLaunch={() => handleLaunch(c.name)} />
+              <CampaignCard key={c.id} campaign={c} onLaunch={() => handleLaunch(getCampaignField(c, "name", lang))} />
             ))}
           </div>
         </>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Tag, Target, Users, ChevronDown, ChevronUp, Megaphone, Gift, CheckCircle2 } from "lucide-react";
-import { campaigns, dealers, getCategoryLabel } from "@/data/arcelik-seed";
+import { campaigns, dealers, getCategoryLabel, getCampaignField } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { dealerCampaigns } from "../demo-i18n";
 
@@ -64,27 +64,27 @@ export default function CampaignsView() {
                       )}
                       {st.daysLeft === 999 && <span className="text-[10px] font-semibold text-green-600">{t.unlimited}</span>}
                     </div>
-                    <h3 className="text-sm font-bold">{c.name}</h3>
+                    <h3 className="text-sm font-bold">{getCampaignField(c, "name", lang)}</h3>
                   </div>
                   <Megaphone size={20} className="text-[#E30613] flex-shrink-0" />
                 </div>
-                <p className="text-xs text-gray-600 mb-3">{c.headline}</p>
+                <p className="text-xs text-gray-600 mb-3">{getCampaignField(c, "headline", lang)}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs">
                       <Clock size={13} className="text-gray-400" />
                       <span className="text-gray-500">{t.duration}</span>
-                      <span className="font-semibold">{c.durationPattern}</span>
+                      <span className="font-semibold">{getCampaignField(c, "durationPattern", lang)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <Gift size={13} className="text-gray-400" />
                       <span className="text-gray-500">{t.discount}</span>
-                      <span className="font-semibold text-[#E30613]">{c.discountDetail}</span>
+                      <span className="font-semibold text-[#E30613]">{getCampaignField(c, "discountDetail", lang)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <Users size={13} className="text-gray-400" />
                       <span className="text-gray-500">{t.target}</span>
-                      <span className="font-semibold">{c.targetSegment}</span>
+                      <span className="font-semibold">{getCampaignField(c, "targetSegment", lang)}</span>
                     </div>
                     <div className="flex items-start gap-2 text-xs">
                       <Tag size={13} className="text-gray-400 mt-0.5" />
@@ -119,15 +119,15 @@ export default function CampaignsView() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div className="text-xs">
                       <span className="text-gray-400">{t.posMessage} </span>
-                      <span className="text-gray-700">{c.dealerPosMessaging}</span>
+                      <span className="text-gray-700">{getCampaignField(c, "dealerPosMessaging", lang)}</span>
                     </div>
                     <div className="text-xs">
                       <span className="text-gray-400">{t.smsTemplate} </span>
-                      <span className="text-gray-700">{c.dealerSmsNotification}</span>
+                      <span className="text-gray-700">{getCampaignField(c, "dealerSmsNotification", lang)}</span>
                     </div>
                     <div className="text-xs">
                       <span className="text-gray-400">{t.socialMedia} </span>
-                      <span className="text-gray-700">{c.bodyCopy}</span>
+                      <span className="text-gray-700">{getCampaignField(c, "bodyCopy", lang)}</span>
                     </div>
                   </div>
                 </div>
@@ -146,10 +146,10 @@ export default function CampaignsView() {
                 <div key={c.id} className="bg-white rounded-xl border border-dashed border-gray-200 p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{t.upcomingBadge}</span>
-                    <span className="text-[10px] text-gray-400">{c.durationPattern}</span>
+                    <span className="text-[10px] text-gray-400">{getCampaignField(c, "durationPattern", lang)}</span>
                   </div>
-                  <h3 className="text-sm font-bold">{c.name}</h3>
-                  <p className="text-[11px] text-gray-500 mt-0.5">{c.discountDetail}</p>
+                  <h3 className="text-sm font-bold">{getCampaignField(c, "name", lang)}</h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5">{getCampaignField(c, "discountDetail", lang)}</p>
                 </div>
               );
             })}
@@ -175,7 +175,7 @@ export default function CampaignsView() {
                         <span className="text-[10px] font-bold uppercase text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{t.completedBadge}</span>
                         <span className="text-[10px] text-gray-400">{t.endDate} {t[st.endDateKey] || "—"}</span>
                       </div>
-                      <h3 className="text-sm font-bold text-gray-600">{c.name}</h3>
+                      <h3 className="text-sm font-bold text-gray-600">{getCampaignField(c, "name", lang)}</h3>
                       <p className="text-[11px] text-gray-500 mt-0.5">{t.result} {st.sold} / {st.target} {t.unitsSold} ({Math.round((st.sold / st.target) * 100)}%)</p>
                     </div>
                   );

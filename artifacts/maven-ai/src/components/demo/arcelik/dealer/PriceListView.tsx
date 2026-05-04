@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Clock, Tag, ArrowUpDown } from "lucide-react";
-import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, type ProductCategory } from "@/data/arcelik-seed";
+import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getProductName, type ProductCategory } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { prices } from "../demo-i18n";
 
@@ -138,7 +138,7 @@ export default function PriceListView() {
                     }`}
                   >
                     <td className="px-4 py-3">
-                      <p className="text-xs font-medium">{p.name}</p>
+                      <p className="text-xs font-medium">{getProductName(p, lang)}</p>
                       <p className="text-[10px] text-gray-400">{p.energyClass !== "-" ? `${t.energy} ${p.energyClass}` : ""}</p>
                     </td>
                     <td className="px-4 py-3 text-xs font-mono text-gray-600">{p.modelCode}</td>

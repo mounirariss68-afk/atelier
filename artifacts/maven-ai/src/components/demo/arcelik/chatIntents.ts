@@ -1,6 +1,7 @@
 import {
   products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, CATEGORY_LABELS_EN, COMPETITOR_BRANDS,
+  getProductName, getCampaignField, getCitySeasonalPattern,
   type ProductCategory,
 } from "@/data/arcelik-seed";
 import type { DemoLang } from "./DemoLangContext";
@@ -111,7 +112,7 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const top5 = [...products].sort((a, b) => b.tsfPrice * (100 - a.marginPercent) - a.tsfPrice * (100 - b.marginPercent)).slice(0, 5);
       const list = top5.map((p, i) => lang === "en"
-        ? `${i + 1}. ${p.name} — ₺${fmt(p.tsfPrice)} (margin: ${p.marginPercent}%)`
+        ? `${i + 1}. ${getProductName(p, lang)} — ₺${fmt(p.tsfPrice)} (margin: ${p.marginPercent}%)`
         : `${i + 1}. ${p.name} — ₺${fmt(p.tsfPrice)} (marj: %${p.marginPercent})`).join("\n");
       return {
         agent: "analyst",
@@ -194,9 +195,9 @@ const INTENTS: Intent[] = [
         agent: "campaign-mgr",
         type: "campaign-card",
         text: lang === "en"
-          ? `AI campaign suggestion: "${c.name}"\n\n🎯 Target: ${c.targetSegment}\n📍 Cities: ${cityNames}\n💰 Discount: ${c.discountDetail}\n📈 Estimated impact: Market share ${c.projectedImpact.marketShareLift}, Revenue ${c.projectedImpact.revenueDelta}`
+          ? `AI campaign suggestion: "${getCampaignField(c, "name", lang)}"\n\n🎯 Target: ${getCampaignField(c, "targetSegment", lang)}\n📍 Cities: ${cityNames}\n💰 Discount: ${getCampaignField(c, "discountDetail", lang)}\n📈 Estimated impact: Market share ${c.projectedImpact.marketShareLift}, Revenue ${c.projectedImpact.revenueDelta}`
           : `AI kampanya önerisi: "${c.name}"\n\n🎯 Hedef: ${c.targetSegment}\n📍 Şehirler: ${cityNames}\n💰 İndirim: ${c.discountDetail}\n📈 Tahmini etki: Pazar payı ${c.projectedImpact.marketShareLift}, Gelir ${c.projectedImpact.revenueDelta}`,
-        data: { campaignId: c.id, name: c.name },
+        data: { campaignId: c.id, name: getCampaignField(c, "name", lang) },
       };
     },
   },
@@ -208,7 +209,7 @@ const INTENTS: Intent[] = [
         agent: "campaign-mgr",
         type: "campaign-card",
         text: lang === "en"
-          ? `Ramadan / Eid Campaign details:\n\n📋 ${c.headline}\n📝 ${c.bodyCopy}\n🎯 ${c.targetSegment}\n💰 ${c.discountDetail}\n📈 Impact: Market share ${c.projectedImpact.marketShareLift}, Revenue ${c.projectedImpact.revenueDelta}, Margin ${c.projectedImpact.marginEffect}`
+          ? `Ramadan / Eid Campaign details:\n\n📋 ${getCampaignField(c, "headline", lang)}\n📝 ${getCampaignField(c, "bodyCopy", lang)}\n🎯 ${getCampaignField(c, "targetSegment", lang)}\n💰 ${getCampaignField(c, "discountDetail", lang)}\n📈 Impact: Market share ${c.projectedImpact.marketShareLift}, Revenue ${c.projectedImpact.revenueDelta}, Margin ${c.projectedImpact.marginEffect}`
           : `Ramazan Bayramı Kampanyası detayları:\n\n📋 ${c.headline}\n📝 ${c.bodyCopy}\n🎯 ${c.targetSegment}\n💰 ${c.discountDetail}\n📈 Etki: Pazar payı ${c.projectedImpact.marketShareLift}, Gelir ${c.projectedImpact.revenueDelta}, Marj ${c.projectedImpact.marginEffect}`,
         data: { campaignId: c.id },
       };
@@ -223,7 +224,7 @@ const INTENTS: Intent[] = [
         agent: "campaign-mgr",
         type: "campaign-card",
         text: lang === "en"
-          ? `Wedding Season Trousseau Bundle:\n\n📋 ${c.headline}\n🎯 ${c.targetSegment}\n💰 ${c.discountDetail}\n📈 Estimated impact: Market share ${c.projectedImpact.marketShareLift}, Revenue ${c.projectedImpact.revenueDelta}\n📍 Target cities: ${cityNames}`
+          ? `Wedding Season Trousseau Bundle:\n\n📋 ${getCampaignField(c, "headline", lang)}\n🎯 ${getCampaignField(c, "targetSegment", lang)}\n💰 ${getCampaignField(c, "discountDetail", lang)}\n📈 Estimated impact: Market share ${c.projectedImpact.marketShareLift}, Revenue ${c.projectedImpact.revenueDelta}\n📍 Target cities: ${cityNames}`
           : `Düğün Sezonu Çeyiz Paketi:\n\n📋 ${c.headline}\n🎯 ${c.targetSegment}\n💰 ${c.discountDetail}\n📈 Tahmini etki: Pazar payı ${c.projectedImpact.marketShareLift}, Gelir ${c.projectedImpact.revenueDelta}\n📍 Hedef şehirler: ${cityNames}`,
         data: { campaignId: c.id },
       };
@@ -267,7 +268,7 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const sorted = [...products].sort((a, b) => a.marginPercent - b.marginPercent).slice(0, 5);
       const list = sorted.map((p, i) => lang === "en"
-        ? `${i + 1}. ${p.name} — ${p.marginPercent}% margin (₺${fmt(p.tsfPrice)})`
+        ? `${i + 1}. ${getProductName(p, lang)} — ${p.marginPercent}% margin (₺${fmt(p.tsfPrice)})`
         : `${i + 1}. ${p.name} — %${p.marginPercent} marj (₺${fmt(p.tsfPrice)})`).join("\n");
       return {
         agent: "analyst",
@@ -596,7 +597,7 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "analysis",
         text: lang === "en"
-          ? `Istanbul report:\n• Market Share: ${ist.marketSharePercent}%\n• Price Index: ${ist.avgPriceIndex}\n• Dealer Count: ${ist.dealerCount}\n• Strong Competitors: ${ist.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Seasonal: ${ist.seasonalPattern}`
+          ? `Istanbul report:\n• Market Share: ${ist.marketSharePercent}%\n• Price Index: ${ist.avgPriceIndex}\n• Dealer Count: ${ist.dealerCount}\n• Strong Competitors: ${ist.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Seasonal: ${getCitySeasonalPattern(ist, lang)}`
           : `İstanbul raporu:\n• Pazar Payı: %${ist.marketSharePercent}\n• Fiyat Endeksi: ${ist.avgPriceIndex}\n• Bayi Sayısı: ${ist.dealerCount}\n• Güçlü Rakipler: ${ist.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${ist.seasonalPattern}`,
       };
     },
@@ -609,7 +610,7 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "analysis",
         text: lang === "en"
-          ? `Ankara report:\n• Market Share: ${ank.marketSharePercent}%\n• Price Index: ${ank.avgPriceIndex}\n• Dealer Count: ${ank.dealerCount}\n• Strong Competitors: ${ank.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Seasonal: ${ank.seasonalPattern}`
+          ? `Ankara report:\n• Market Share: ${ank.marketSharePercent}%\n• Price Index: ${ank.avgPriceIndex}\n• Dealer Count: ${ank.dealerCount}\n• Strong Competitors: ${ank.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Seasonal: ${getCitySeasonalPattern(ank, lang)}`
           : `Ankara raporu:\n• Pazar Payı: %${ank.marketSharePercent}\n• Fiyat Endeksi: ${ank.avgPriceIndex}\n• Bayi Sayısı: ${ank.dealerCount}\n• Güçlü Rakipler: ${ank.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${ank.seasonalPattern}`,
       };
     },
@@ -622,7 +623,7 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "analysis",
         text: lang === "en"
-          ? `Izmir report:\n• Market Share: ${izm.marketSharePercent}%\n• Price Index: ${izm.avgPriceIndex}\n• Dealer Count: ${izm.dealerCount}\n• Strong Competitors: ${izm.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Seasonal: ${izm.seasonalPattern}`
+          ? `Izmir report:\n• Market Share: ${izm.marketSharePercent}%\n• Price Index: ${izm.avgPriceIndex}\n• Dealer Count: ${izm.dealerCount}\n• Strong Competitors: ${izm.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Seasonal: ${getCitySeasonalPattern(izm, lang)}`
           : `İzmir raporu:\n• Pazar Payı: %${izm.marketSharePercent}\n• Fiyat Endeksi: ${izm.avgPriceIndex}\n• Bayi Sayısı: ${izm.dealerCount}\n• Güçlü Rakipler: ${izm.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${izm.seasonalPattern}`,
       };
     },

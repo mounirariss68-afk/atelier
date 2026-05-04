@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { motion } from "framer-motion";
 import { Package, AlertTriangle, CheckCircle2, XCircle, ShoppingCart, Truck, Clock, ChevronDown, ChevronRight } from "lucide-react";
-import { dealers, products, CATEGORY_LABELS, getCategoryLabel, type ProductCategory } from "@/data/arcelik-seed";
+import { dealers, products, CATEGORY_LABELS, getCategoryLabel, getProductName, type ProductCategory } from "@/data/arcelik-seed";
 import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { stock } from "../demo-i18n";
@@ -198,7 +198,7 @@ export default function StockOrdersView() {
                         <tr key={pr.id} className="border-b border-gray-50/50 bg-gray-50/20">
                           <td className="pl-10 pr-4 py-2">
                             <p className="text-[11px] font-medium text-gray-700">{pr.modelCode}</p>
-                            <p className="text-[9px] text-gray-400 truncate max-w-[200px]">{pr.name}</p>
+                            <p className="text-[9px] text-gray-400 truncate max-w-[200px]">{getProductName(products.find(x => x.id === pr.id)!, lang)}</p>
                           </td>
                           <td className="px-4 py-2 text-center">
                             <span className={`text-xs font-bold ${pr.status === "ok" ? "text-green-600" : pr.status === "low" ? "text-amber-600" : "text-red-600"}`}>{pr.stock}</span>
