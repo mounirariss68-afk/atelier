@@ -50,6 +50,10 @@ function DealerPortalInner() {
   const [chatOpen, setChatOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
+  if (!DEALER) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50"><p className="text-gray-500 text-sm">Loading dealer data…</p></div>;
+  }
+
   const tierLabels: Record<string, string> = {
     gold: t.tierGold,
     silver: t.tierSilver,

@@ -38,7 +38,12 @@ export default function CampaignsView() {
   const t = dealerCampaigns[lang];
   const { campaigns, dealers } = useArcelikData();
   const DEALER = dealers[0];
-  const allForCity = campaigns.filter((c) => c.targetCities.includes(DEALER?.city));
+
+  if (!DEALER) {
+    return <div className="p-8 text-center text-gray-400 text-sm">Loading dealer data…</div>;
+  }
+
+  const allForCity = campaigns.filter((c) => c.targetCities.includes(DEALER.city));
   const [showCompleted, setShowCompleted] = useState(false);
 
   const active = allForCity.filter((c) => { const s = getStatus(c.id); return s.status === "active"; });

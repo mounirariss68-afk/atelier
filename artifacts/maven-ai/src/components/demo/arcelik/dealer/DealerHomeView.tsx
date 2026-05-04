@@ -47,10 +47,15 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
   const t = dealerHome[lang];
   const { dealers, campaigns, cities: allCities } = useArcelikData();
   const DEALER = dealers[0];
-  const activeCampaigns = campaigns.filter((c) => c.targetCities.includes(DEALER?.city)).slice(0, 3);
-  const lowStockCount = DEALER ? Object.entries(DEALER.stockLevels).filter(([cat, lv]) => (lv ?? 0) < (OPTIMAL_STOCK[cat] ?? 10)).length : 0;
+
+  if (!DEALER) {
+    return <div className="p-8 text-center text-gray-400 text-sm">Loading dealer data…</div>;
+  }
+
+  const activeCampaigns = campaigns.filter((c) => c.targetCities.includes(DEALER.city)).slice(0, 3);
+  const lowStockCount = Object.entries(DEALER.stockLevels).filter(([cat, lv]) => (lv ?? 0) < (OPTIMAL_STOCK[cat] ?? 10)).length;
   const tierLabels: Record<string, string> = { gold: t.tierGold, silver: t.tierSilver, bronze: t.tierBronze };
-  const cityObj = allCities.find((c) => c.id === DEALER?.city);
+  const cityObj = allCities.find((c) => c.id === DEALER.city);
   const cityName = cityObj ? getCityName(cityObj, lang) : "Istanbul";
   const progressPct = Math.round((DEALER.currentProgress / DEALER.monthlySalesTarget) * 100);
 

@@ -114,6 +114,11 @@ export default function StockOrdersView() {
   const t = stock[lang];
   const { dealers, products } = useArcelikData();
   const DEALER = dealers[0];
+
+  if (!DEALER) {
+    return <div className="p-8 text-center text-gray-400 text-sm">Loading dealer data…</div>;
+  }
+
   const categoryRows = buildCategoryRows(DEALER, products);
   const [tab, setTab] = useState<"stock" | "orders">("stock");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());

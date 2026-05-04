@@ -11,6 +11,8 @@ import {
   arcelikKpiBenchmarksTable,
 } from "@workspace/db";
 import * as cheerio from "cheerio";
+import type { InferInsertModel } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const SCRAPE = process.argv.includes("--scrape");
@@ -259,19 +261,20 @@ function applyScrapedCompetitorPrices(
   return competitors;
 }
 
-async function upsertAll<T extends Record<string, unknown>>(
-  table: any,
-  data: T[],
+async function upsertAll<T extends PgTable>(
+  table: T,
+  data: InferInsertModel<T>[],
   label: string,
 ) {
   if (DRY_RUN) {
     console.log(`[DRY RUN] Would upsert ${data.length} ${label}`);
     return;
   }
+  const idCol = (table as unknown as typeof arcelikProductsTable).id;
   for (const row of data) {
-    await db.insert(table).values(row as any).onConflictDoUpdate({
-      target: (table as any).id,
-      set: row as any,
+    await db.insert(table).values(row).onConflictDoUpdate({
+      target: idCol,
+      set: row,
     });
   }
   console.log(`Upserted ${data.length} ${label}`);
@@ -572,19 +575,20 @@ async function main() {
   let products = [...FALLBACK_PRODUCTS];
   let competitorPrices = [...FALLBACK_COMPETITOR_PRICES];
 
-  if (SCRAPE) {
-    console.log("\n🔍 Running price scrapers (--scrape flag detected)...");
+  if (!SCRAPE) {
+    console.log("Skipping live scrape (pass --scrape to fetch live prices from websites)");
+    console.log("Using verified fallback data sourced from arcelik.com.tr, beko.com.tr, vestel.com.tr, bosch-home.com.tr, samsung.com/tr");
+  } else {
+    console.log("\n🔍 Running price scrapers against live websites...");
     const scraped = await runScrapers();
     const totalScraped = Object.values(scraped).reduce((s, arr) => s + arr.length, 0);
     if (totalScraped > 0) {
-      console.log(`\n📊 Scraped ${totalScraped} total prices, applying to dataset...`);
+      console.log(`\n📊 Scraped ${totalScraped} total prices from live sites, merging with dataset...`);
       products = applyScrapedPrices(products, scraped);
       competitorPrices = applyScrapedCompetitorPrices(competitorPrices, scraped);
     } else {
-      console.log("\n⚠️  No prices scraped (sites may be blocking or down). Using verified fallback data.");
+      console.log("\n⚠️  No prices scraped (sites may be blocking requests). Using verified fallback data.");
     }
-  } else {
-    console.log("Using verified fallback prices (run with --scrape to fetch live prices)");
   }
 
   await upsertAll(arcelikDataSourcesTable, DATA_SOURCES, "data sources");

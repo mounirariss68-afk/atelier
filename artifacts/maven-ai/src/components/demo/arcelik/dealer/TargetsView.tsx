@@ -18,7 +18,12 @@ export default function TargetsView() {
   const t = targets[lang];
   const { dealers } = useArcelikData();
   const DEALER = dealers[0];
-  const QUARTERLY_PROGRESS = (DEALER?.currentProgress ?? 0) + 42 + 55;
+
+  if (!DEALER) {
+    return <div className="p-8 text-center text-gray-400 text-sm">Loading dealer data…</div>;
+  }
+
+  const QUARTERLY_PROGRESS = DEALER.currentProgress + 42 + 55;
   const quarterlyPct = Math.round((QUARTERLY_PROGRESS / QUARTERLY_TARGET) * 100);
 
   const THRESHOLDS = [

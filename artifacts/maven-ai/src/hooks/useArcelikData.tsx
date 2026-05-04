@@ -114,6 +114,24 @@ export function ArcelikDataProvider({
     );
   }
 
+  if (isError && !data) {
+    return (
+      fallback ?? (
+        <div className="min-h-screen flex items-center justify-center bg-[#0E2841]">
+          <div className="text-center space-y-3">
+            <p className="text-sm text-red-400">Failed to load data. Please refresh.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-[#F5A623] text-[#0E2841] rounded-lg text-sm font-semibold hover:bg-[#e09520] transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    );
+  }
+
   const value = data ?? EMPTY;
 
   return (
