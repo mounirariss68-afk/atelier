@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Clock, Tag, ArrowUpDown } from "lucide-react";
-import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getProductName, type ProductCategory } from "@/data/arcelik-seed";
+import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, type ProductCategory } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { prices } from "../demo-i18n";
 
@@ -27,13 +27,23 @@ export default function PriceListView() {
   const { lang } = useDemoLang();
   const t = prices[lang];
   const [activeTab, setActiveTab] = useState<ProductCategory>("buzdolabi");
+  const [activeSub, setActiveSub] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showChanges, setShowChanges] = useState(false);
   const [sortCol, setSortCol] = useState<string>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
+  const subcategories = useMemo(() => {
+    const subs = new Set<string>();
+    products.filter((p) => p.category === activeTab).forEach((p) => subs.add(p.subcategory));
+    return Array.from(subs);
+  }, [activeTab]);
+
   const filtered = useMemo(() => {
     let items = products.filter((p) => p.category === activeTab);
+    if (activeSub) {
+      items = items.filter((p) => p.subcategory === activeSub);
+    }
     if (search) {
       const q = search.toLowerCase();
       items = items.filter((p) => p.name.toLowerCase().includes(q) || p.modelCode.toLowerCase().includes(q));
@@ -48,7 +58,7 @@ export default function PriceListView() {
       if (typeof va === "string") return sortDir === "asc" ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
       return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
-  }, [activeTab, search, sortCol, sortDir]);
+  }, [activeTab, activeSub, search, sortCol, sortDir]);
 
   const toggleSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -85,7 +95,7 @@ export default function PriceListView() {
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
-            onClick={() => setActiveTab(cat)}
+            onClick={() => { setActiveTab(cat); setActiveSub(null); }}
             className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
               activeTab === cat ? "bg-[#E30613] text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
             }`}
@@ -94,6 +104,31 @@ export default function PriceListView() {
           </button>
         ))}
       </div>
+
+      {subcategories.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-medium text-gray-400">{t.subcategoryFilter}</span>
+          <button
+            onClick={() => setActiveSub(null)}
+            className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
+              activeSub === null ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            {t.subcategoryAll}
+          </button>
+          {subcategories.map((sub) => (
+            <button
+              key={sub}
+              onClick={() => setActiveSub(activeSub === sub ? null : sub)}
+              className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
+                activeSub === sub ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              {getSubcategoryLabel(sub, lang)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">

@@ -957,6 +957,8 @@ export const prices: I18n = {
     changeDateBuz01: "1 Mayıs",
     changeDateCam03: "29 Nisan",
     changeDateKli02: "30 Nisan",
+    subcategoryAll: "Tümü",
+    subcategoryFilter: "Alt Kategori:",
   },
   en: {
     title: "Price List",
@@ -975,6 +977,8 @@ export const prices: I18n = {
     changeDateBuz01: "May 1",
     changeDateCam03: "Apr 29",
     changeDateKli02: "Apr 30",
+    subcategoryAll: "All",
+    subcategoryFilter: "Subcategory:",
   },
 };
 
