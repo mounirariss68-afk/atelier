@@ -240,6 +240,22 @@ export function getSubcategoryLabel(sub: string, lang: "tr" | "en" = "tr"): stri
 
 export type PriceTier = "entry" | "mid" | "premium";
 
+export const PRICE_TIER_LABELS: Record<PriceTier, string> = {
+  entry: "Giriş",
+  mid: "Orta",
+  premium: "Premium",
+};
+
+const PRICE_TIER_LABELS_EN: Record<PriceTier, string> = {
+  entry: "Entry",
+  mid: "Mid",
+  premium: "Premium",
+};
+
+export function getPriceTierLabel(tier: PriceTier, lang: "tr" | "en" = "tr"): string {
+  return lang === "en" ? PRICE_TIER_LABELS_EN[tier] : PRICE_TIER_LABELS[tier];
+}
+
 export interface ArcelikProduct {
   id: string;
   modelCode: string;
@@ -254,6 +270,44 @@ export interface ArcelikProduct {
   features: string[];
   sourceId: string;
   priceDate: string;
+}
+
+export interface ProductSpecs {
+  capacity: string;
+  warrantyYears: number;
+  smartFeatures: string[];
+}
+
+const SMART_KEYWORDS = ["Wi-Fi", "HomeWhiz", "Dijital dokunmatik ekran", "TFT ekran", "Full-touch ekran", "Kamera", "Bluetooth", "Akıllı", "Smart", "App"];
+
+export function getProductSpecs(p: ArcelikProduct): ProductSpecs {
+  let capacity = "-";
+  for (const f of p.features) {
+    const litreMatch = f.match(/(\d+)\s*L/);
+    if (litreMatch) { capacity = `${litreMatch[1]} L`; break; }
+    const kgMatch = f.match(/(\d+)\s*kg/);
+    if (kgMatch) { capacity = `${kgMatch[1]} kg`; break; }
+    const kisiMatch = f.match(/(\d+)\s*kişilik/);
+    if (kisiMatch) { capacity = `${kisiMatch[1]} kişilik`; break; }
+    const wattMatch = f.match(/(\d+)\s*W/);
+    if (wattMatch) { capacity = `${wattMatch[1]}W`; break; }
+  }
+  if (capacity === "-" && p.subcategory.includes("btu")) {
+    const btuMatch = p.subcategory.match(/(\d+)-btu/);
+    if (btuMatch) capacity = `${btuMatch[1]} BTU`;
+  }
+  if (capacity === "-" && p.category === "tv-elektronik") {
+    const inchMatch = p.name.match(/(\d{2,3})["'']/);
+    if (inchMatch) capacity = `${inchMatch[1]}"`;
+  }
+
+  const warrantyYears = p.priceTier === "premium" ? 3 : 2;
+
+  const smartFeatures = p.features.filter((f) =>
+    SMART_KEYWORDS.some((kw) => f.toLowerCase().includes(kw.toLowerCase()))
+  );
+
+  return { capacity, warrantyYears, smartFeatures };
 }
 
 export interface CompetitorPrice {

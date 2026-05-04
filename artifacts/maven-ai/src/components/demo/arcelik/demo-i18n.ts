@@ -532,6 +532,10 @@ export const simulator: I18n = {
     reactSamsung: "Benzer indirim kampanyası başlatabilir, dikkatli olun.",
     validLabel: "Geçerlilik",
     clickToSimulate: "Simüle etmek için tıklayın",
+    filterSubcategory: "Alt Kategori",
+    filterAllSubs: "Tümü",
+    filterPriceTier: "Fiyat Segmenti",
+    filterAllTiers: "Tümü",
   },
   en: {
     title: "Price Simulator (What-If)",
@@ -592,6 +596,10 @@ export const simulator: I18n = {
     reactSamsung: "May launch similar discount campaign, beware.",
     validLabel: "Valid",
     clickToSimulate: "Click to simulate",
+    filterSubcategory: "Subcategory",
+    filterAllSubs: "All",
+    filterPriceTier: "Price Tier",
+    filterAllTiers: "All",
   },
 };
 
@@ -959,6 +967,11 @@ export const prices: I18n = {
     changeDateKli02: "30 Nisan",
     subcategoryAll: "Tümü",
     subcategoryFilter: "Alt Kategori:",
+    tierFilter: "Fiyat Segmenti:",
+    tierAll: "Tümü",
+    tierEntry: "Giriş",
+    tierMid: "Orta",
+    tierPremium: "Premium",
   },
   en: {
     title: "Price List",
@@ -979,6 +992,11 @@ export const prices: I18n = {
     changeDateKli02: "Apr 30",
     subcategoryAll: "All",
     subcategoryFilter: "Subcategory:",
+    tierFilter: "Price Tier:",
+    tierAll: "All",
+    tierEntry: "Entry",
+    tierMid: "Mid",
+    tierPremium: "Premium",
   },
 };
 

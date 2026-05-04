@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Clock, Tag, ArrowUpDown } from "lucide-react";
-import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, type ProductCategory } from "@/data/arcelik-seed";
+import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, PRICE_TIER_LABELS, getPriceTierLabel, type ProductCategory, type PriceTier } from "@/data/arcelik-seed";
 import { useDemoLang } from "../DemoLangContext";
 import { prices } from "../demo-i18n";
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as ProductCategory[];
+const TIERS: PriceTier[] = ["entry", "mid", "premium"];
 
 const ACTIVE_DISCOUNTS: Record<string, { rate: number; campaignName: string }> = {};
 const energyCampaign = campaigns.find((c) => c.id === "enerji-verimlilik");
@@ -28,6 +29,7 @@ export default function PriceListView() {
   const t = prices[lang];
   const [activeTab, setActiveTab] = useState<ProductCategory>("buzdolabi");
   const [activeSub, setActiveSub] = useState<string | null>(null);
+  const [activeTier, setActiveTier] = useState<PriceTier | null>(null);
   const [search, setSearch] = useState("");
   const [showChanges, setShowChanges] = useState(false);
   const [sortCol, setSortCol] = useState<string>("name");
@@ -44,6 +46,9 @@ export default function PriceListView() {
     if (activeSub) {
       items = items.filter((p) => p.subcategory === activeSub);
     }
+    if (activeTier) {
+      items = items.filter((p) => p.priceTier === activeTier);
+    }
     if (search) {
       const q = search.toLowerCase();
       items = items.filter((p) => p.name.toLowerCase().includes(q) || p.modelCode.toLowerCase().includes(q));
@@ -58,7 +63,7 @@ export default function PriceListView() {
       if (typeof va === "string") return sortDir === "asc" ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
       return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
-  }, [activeTab, activeSub, search, sortCol, sortDir]);
+  }, [activeTab, activeSub, activeTier, search, sortCol, sortDir]);
 
   const toggleSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -95,7 +100,7 @@ export default function PriceListView() {
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
-            onClick={() => { setActiveTab(cat); setActiveSub(null); }}
+            onClick={() => { setActiveTab(cat); setActiveSub(null); setActiveTier(null); }}
             className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
               activeTab === cat ? "bg-[#E30613] text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
             }`}
@@ -129,6 +134,29 @@ export default function PriceListView() {
           ))}
         </div>
       )}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-medium text-gray-400">{t.tierFilter}</span>
+        <button
+          onClick={() => setActiveTier(null)}
+          className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
+            activeTier === null ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          {t.tierAll}
+        </button>
+        {TIERS.map((tier) => (
+          <button
+            key={tier}
+            onClick={() => setActiveTier(activeTier === tier ? null : tier)}
+            className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
+              activeTier === tier ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            {getPriceTierLabel(tier, lang)}
+          </button>
+        ))}
+      </div>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">

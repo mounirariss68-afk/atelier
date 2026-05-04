@@ -12,8 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { simulator } from "../demo-i18n";
 import {
-  products, competitorPrices, CATEGORY_LABELS, getCategoryLabel, getProductName,
-  type ArcelikProduct, type ProductCategory,
+  products, competitorPrices, CATEGORY_LABELS, getCategoryLabel, getSubcategoryLabel, getProductName, getPriceTierLabel,
+  type ArcelikProduct, type ProductCategory, type PriceTier,
 } from "@/data/arcelik-seed";
 import { generateSimulatorRecommendations } from "@/data/arcelik-agent";
 
@@ -26,6 +26,8 @@ export default function SimulatorView() {
   const [simMode, setSimMode] = useState<SimMode>("product");
   const [selectedProduct, setSelectedProduct] = useState<ArcelikProduct>(products[0]);
   const [selectedCat, setSelectedCat] = useState<ProductCategory>("buzdolabi");
+  const [filterSub, setFilterSub] = useState<string | null>(null);
+  const [filterTier, setFilterTier] = useState<PriceTier | null>(null);
   const [priceAdjust, setPriceAdjust] = useState(0);
   const [showResults, setShowResults] = useState(false);
 
@@ -110,6 +112,30 @@ export default function SimulatorView() {
             <label className="text-xs font-semibold text-gray-600 mb-2 block">
               {simMode === "product" ? t.selectProduct : t.selectCategory}
             </label>
+            {simMode === "product" && (
+              <div className="flex gap-2 mb-3">
+                <select
+                  value={filterSub ?? ""}
+                  onChange={(e) => setFilterSub(e.target.value || null)}
+                  className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
+                >
+                  <option value="">{t.filterSubcategory}: {t.filterAllSubs}</option>
+                  {Array.from(new Set(products.map((p) => p.subcategory))).map((sub) => (
+                    <option key={sub} value={sub}>{getSubcategoryLabel(sub, lang)}</option>
+                  ))}
+                </select>
+                <select
+                  value={filterTier ?? ""}
+                  onChange={(e) => setFilterTier((e.target.value || null) as PriceTier | null)}
+                  className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
+                >
+                  <option value="">{t.filterPriceTier}: {t.filterAllTiers}</option>
+                  {(["entry", "mid", "premium"] as PriceTier[]).map((tier) => (
+                    <option key={tier} value={tier}>{getPriceTierLabel(tier, lang)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="relative">
               {simMode === "product" ? (
                 <select
@@ -120,13 +146,17 @@ export default function SimulatorView() {
                   }}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
                 >
-                  {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => (
-                    <optgroup key={cat} label={getCategoryLabel(cat, lang)}>
-                      {products.filter((p) => p.category === cat).map((p) => (
-                        <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
-                      ))}
-                    </optgroup>
-                  ))}
+                  {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => {
+                    const catProds = products.filter((p) => p.category === cat && (!filterSub || p.subcategory === filterSub) && (!filterTier || p.priceTier === filterTier));
+                    if (catProds.length === 0) return null;
+                    return (
+                      <optgroup key={cat} label={getCategoryLabel(cat, lang)}>
+                        {catProds.map((p) => (
+                          <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
                 </select>
               ) : (
                 <select

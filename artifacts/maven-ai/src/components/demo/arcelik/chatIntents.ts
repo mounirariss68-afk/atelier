@@ -2,7 +2,8 @@ import {
   products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, CATEGORY_LABELS_EN, COMPETITOR_BRANDS,
   getProductName, getCampaignField, getCitySeasonalPattern, getCityName,
-  type ProductCategory,
+  getSubcategoryLabel, getPriceTierLabel, getProductSpecs,
+  type ProductCategory, type PriceTier,
 } from "@/data/arcelik-seed";
 import type { DemoLang } from "./DemoLangContext";
 
@@ -641,6 +642,68 @@ const INTENTS: Intent[] = [
         text: lang === "en"
           ? `For a city-specific report, click the city on the map. Overall Anatolia performance:\n• Average Market Share: ${avgShare}%\n• Our strongest cities: ${list}`
           : `Şehir bazlı detaylı rapor için haritadan şehre tıklayabilirsiniz. Genel Anadolu performansı:\n• Ortalama Pazar Payı: %${avgShare}\n• En güçlü olduğumuz şehirler: ${list}`,
+      };
+    },
+  },
+  {
+    patterns: [/alt.?kategori/i, /subcategor/i, /hangi.*alt.*segment/i, /which.*sub/i],
+    handler: (lang) => {
+      const labels = catLabels(lang);
+      const breakdown = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => {
+        const subs = Array.from(new Set(products.filter((p) => p.category === cat).map((p) => p.subcategory)));
+        const subLabels = subs.map((s) => getSubcategoryLabel(s, lang)).join(", ");
+        return `${label}: ${subLabels}`;
+      }).join("\n");
+      return {
+        agent: "analyst",
+        type: "analysis",
+        text: lang === "en"
+          ? `Subcategory breakdown across all categories:\n\n${breakdown}\n\nUse the subcategory filters in Price List or Simulator to drill down.`
+          : `Tüm kategorilerdeki alt kategori dağılımı:\n\n${breakdown}\n\nDetay için Fiyat Listesi veya Simülatör'deki alt kategori filtrelerini kullanabilirsiniz.`,
+      };
+    },
+  },
+  {
+    patterns: [/fiyat.?seg/i, /fiyat.?tier/i, /giriş.?sev/i, /premium.?ürün/i, /entry.?level/i, /price.?tier/i, /segment.*dağılım/i, /tier.*break/i],
+    handler: (lang) => {
+      const tiers: PriceTier[] = ["entry", "mid", "premium"];
+      const tierBreakdown = tiers.map((tier) => {
+        const ps = products.filter((p) => p.priceTier === tier);
+        const avgPrice = ps.length ? Math.round(ps.reduce((s, p) => s + p.tsfPrice, 0) / ps.length) : 0;
+        const avgMargin = ps.length ? (ps.reduce((s, p) => s + p.marginPercent, 0) / ps.length).toFixed(1) : "0";
+        return lang === "en"
+          ? `• ${getPriceTierLabel(tier, lang)}: ${ps.length} products, avg ₺${fmt(avgPrice)}, avg margin ${avgMargin}%`
+          : `• ${getPriceTierLabel(tier, lang)}: ${ps.length} ürün, ort. ₺${fmt(avgPrice)}, ort. marj %${avgMargin}`;
+      }).join("\n");
+      return {
+        agent: "analyst",
+        type: "analysis",
+        text: lang === "en"
+          ? `Price tier distribution across ${products.length} products:\n\n${tierBreakdown}\n\nPremium products have higher margins and 3-year warranty. Use tier filters in the Price List to explore.`
+          : `${products.length} ürün genelinde fiyat segmenti dağılımı:\n\n${tierBreakdown}\n\nPremium ürünler daha yüksek marj ve 3 yıl garantiye sahip. Fiyat Listesi'ndeki segment filtrelerini kullanarak keşfedebilirsiniz.`,
+      };
+    },
+  },
+  {
+    patterns: [/özellik.*karşılaş/i, /ürün.*karşılaş/i, /feature.*compar/i, /product.*compar/i, /kapasite/i, /capacity/i, /garanti/i, /warranty/i, /akıllı.*özellik/i, /smart.*feature/i],
+    handler: (lang) => {
+      const labels = catLabels(lang);
+      const catSpecs = (Object.entries(labels) as [ProductCategory, string][]).map(([cat, label]) => {
+        const ps = products.filter((p) => p.category === cat);
+        const smartCount = ps.filter((p) => getProductSpecs(p).smartFeatures.length > 0).length;
+        const premiumCount = ps.filter((p) => p.priceTier === "premium").length;
+        const capacities = ps.map((p) => getProductSpecs(p).capacity).filter((c) => c !== "-");
+        const capacityRange = capacities.length > 0 ? `${capacities[0]}–${capacities[capacities.length - 1]}` : "-";
+        return lang === "en"
+          ? `• ${label}: ${ps.length} models, ${smartCount} smart, ${premiumCount} premium, capacity range: ${capacityRange}`
+          : `• ${label}: ${ps.length} model, ${smartCount} akıllı, ${premiumCount} premium, kapasite aralığı: ${capacityRange}`;
+      }).join("\n");
+      return {
+        agent: "analyst",
+        type: "analysis",
+        text: lang === "en"
+          ? `Product feature comparison overview:\n\n${catSpecs}\n\n📊 Premium products: 3-year warranty, smart connectivity (Wi-Fi/HomeWhiz)\n📊 Mid-range: 2-year warranty, select smart features\n📊 Entry-level: 2-year warranty, essential features`
+          : `Ürün özellik karşılaştırma özeti:\n\n${catSpecs}\n\n📊 Premium ürünler: 3 yıl garanti, akıllı bağlantı (Wi-Fi/HomeWhiz)\n📊 Orta segment: 2 yıl garanti, seçili akıllı özellikler\n📊 Giriş seviye: 2 yıl garanti, temel özellikler`,
       };
     },
   },
