@@ -539,6 +539,7 @@ export default function AgentDecisionsView() {
     if (priorityFilter !== "all") recs = recs.filter((r) => r.severity === priorityFilter);
     if (sortBy === "severity") recs.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
     else if (sortBy === "confidence") recs.sort((a, b) => b.confidence - a.confidence);
+    else if (sortBy === "newest") recs.reverse();
     return recs;
   }, [recommendations, roleFilter, priorityFilter, sortBy]);
   const pendingCount = recommendations.filter((r) => r.status === "pending").length;
