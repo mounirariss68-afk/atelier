@@ -131,11 +131,11 @@ function fuzzyMatchScraped(
   if (exact) return exact;
 
   const tokens = extractModelTokens(baselineModel);
-  const coreToken = tokens.find((t) => /\d{3,}/.test(t));
-  if (!coreToken) return undefined;
+  const coreTokens = tokens.filter((t) => /[a-z]\d{3,}|^\d{4,}/.test(t) && t.length >= 4);
+  if (coreTokens.length === 0) return undefined;
 
   for (const [key, scraped] of scrapedMap) {
-    if (key.includes(coreToken)) return scraped;
+    if (coreTokens.some((ct) => key.includes(ct))) return scraped;
   }
   return undefined;
 }
