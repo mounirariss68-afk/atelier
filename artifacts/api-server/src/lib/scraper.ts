@@ -1263,7 +1263,8 @@ export async function runPriceScrape(
       }
     }
 
-    await closePlaywrightBrowser();
+    // Browser close moved to outer finally so it always runs (early failures
+    // in matching/upsert paths previously leaked the chromium process).
 
     const totalScraped =
       Object.values(scrapedCounts).reduce((s, n) => s + n, 0);
@@ -1440,6 +1441,24 @@ export async function runPriceScrape(
           equivResult,
           "Cross-brand equivalences rebuilt from marketplace data",
         );
+
+        // Backfill arcelik_product_id on history rows for THIS run from the
+        // freshly-resolved arcelikProductId on arcelik_marketplace_prices.
+        // This enables product-linked historical analysis without joining
+        // back to the equivalences table at query time.
+        const backfill = await db.execute(sql`
+          UPDATE ${arcelikMarketplacePriceHistoryTable} h
+          SET arcelik_product_id = mp.arcelik_product_id
+          FROM ${arcelikMarketplacePricesTable} mp
+          WHERE h.scrape_run_id = ${runId}
+            AND mp.marketplace = h.marketplace
+            AND mp.marketplace_product_id = h.marketplace_product_id
+            AND mp.arcelik_product_id IS NOT NULL
+        `);
+        logger.info(
+          { runId, updated: (backfill as { rowCount?: number }).rowCount ?? 0 },
+          "Backfilled arcelikProductId on marketplace price history",
+        );
       } catch (err) {
         logger.error({ err }, "Failed to rebuild cross-brand equivalences");
       }
@@ -1521,6 +1540,14 @@ export async function runPriceScrape(
       errorMessage,
     };
   } finally {
+    // Always release the chromium process even if matching/upsert paths
+    // throw before the normal close. Failure to do this leaks the browser
+    // and accumulates zombies across repeated failed runs.
+    try {
+      await closePlaywrightBrowser();
+    } catch (err) {
+      logger.warn({ err }, "Failed to close Playwright browser cleanly");
+    }
     scrapeInProgress = false;
   }
 }

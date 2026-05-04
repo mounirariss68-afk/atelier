@@ -263,6 +263,104 @@ router.get("/marketplace-prices", async (_req, res) => {
   }
 });
 
+router.get("/coverage", async (_req, res) => {
+  try {
+    // Per-source / per-category coverage report. Tracks how much of the
+    // marketplace catalog we've ingested, how many SKUs have structured
+    // PDP specs, and how many are linked to an Arçelik product. Useful for
+    // monitoring backfill progress and operator confidence in the pipeline.
+    const sinceDays = Math.min(Number(_req.query.sinceDays) || 14, 90);
+    const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * sinceDays);
+
+    const [byMarketplaceCategory, specsBySource, equivalencesBySource, scrapeRuns] =
+      await Promise.all([
+        db
+          .select({
+            marketplace: arcelikMarketplacePricesTable.marketplace,
+            category: arcelikMarketplacePricesTable.category,
+            skuCount: sql<number>`count(distinct ${arcelikMarketplacePricesTable.marketplaceProductId})::int`,
+            linkedCount: sql<number>`count(${arcelikMarketplacePricesTable.arcelikProductId})::int`,
+            avgPrice: sql<number>`round(avg(${arcelikMarketplacePricesTable.price}))::int`,
+          })
+          .from(arcelikMarketplacePricesTable)
+          .where(gte(arcelikMarketplacePricesTable.scrapedAt, since))
+          .groupBy(
+            arcelikMarketplacePricesTable.marketplace,
+            arcelikMarketplacePricesTable.category,
+          ),
+        db
+          .select({
+            marketplace: arcelikProductSpecsTable.marketplace,
+            specCount: sql<number>`count(*)::int`,
+          })
+          .from(arcelikProductSpecsTable)
+          .groupBy(arcelikProductSpecsTable.marketplace),
+        db
+          .select({
+            source: arcelikProductEquivalencesTable.source,
+            count: sql<number>`count(*)::int`,
+            avgConfidence: sql<number>`round(avg(${arcelikProductEquivalencesTable.matchConfidence})::numeric, 3)::float`,
+          })
+          .from(arcelikProductEquivalencesTable)
+          .groupBy(arcelikProductEquivalencesTable.source),
+        db
+          .select({
+            runId: arcelikScrapeLogsTable.id,
+            startedAt: arcelikScrapeLogsTable.startedAt,
+            status: arcelikScrapeLogsTable.status,
+            scrapedCounts: arcelikScrapeLogsTable.scrapedCounts,
+          })
+          .from(arcelikScrapeLogsTable)
+          .where(gte(arcelikScrapeLogsTable.startedAt, since))
+          .orderBy(desc(arcelikScrapeLogsTable.startedAt))
+          .limit(20),
+      ]);
+
+    // Collapse equivalences-by-source onto the marketplace prefix (e.g.
+    // "n11/run-123" → "n11") so callers see a clean per-source rollup.
+    const equivByMarketplace: Record<
+      string,
+      { count: number; avgConfidence: number }
+    > = {};
+    for (const r of equivalencesBySource) {
+      const mp = String(r.source).split("/")[0];
+      const prev = equivByMarketplace[mp] ?? { count: 0, avgConfidence: 0 };
+      const newCount = prev.count + r.count;
+      const newAvg =
+        (prev.avgConfidence * prev.count + r.avgConfidence * r.count) /
+        Math.max(1, newCount);
+      equivByMarketplace[mp] = {
+        count: newCount,
+        avgConfidence: Math.round(newAvg * 1000) / 1000,
+      };
+    }
+
+    const byMarketplace: Record<string, { totalSkus: number; linkedSkus: number; categories: number }> = {};
+    for (const r of byMarketplaceCategory) {
+      const mp = String(r.marketplace);
+      const prev = byMarketplace[mp] ?? { totalSkus: 0, linkedSkus: 0, categories: 0 };
+      byMarketplace[mp] = {
+        totalSkus: prev.totalSkus + r.skuCount,
+        linkedSkus: prev.linkedSkus + r.linkedCount,
+        categories: prev.categories + 1,
+      };
+    }
+
+    res.json({
+      windowDays: sinceDays,
+      generatedAt: new Date().toISOString(),
+      byMarketplace,
+      byMarketplaceCategory,
+      specsByMarketplace: specsBySource,
+      equivalencesByMarketplace: equivByMarketplace,
+      recentRuns: scrapeRuns,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to compute coverage report");
+    res.status(500).json({ error: "Failed to compute coverage report" });
+  }
+});
+
 router.get("/marketplace-prices/history", async (_req, res) => {
   try {
     const { marketplace, marketplaceProductId, brand, sinceDays, limit } =
