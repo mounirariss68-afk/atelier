@@ -363,12 +363,12 @@ export default function DashboardView() {
         );
       })()}
 
-      <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
+          className="lg:col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
         >
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -445,7 +445,7 @@ export default function DashboardView() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="bg-white rounded-xl border border-gray-100 shadow-sm"
+          className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col"
         >
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="text-sm font-bold flex items-center gap-2">
@@ -454,7 +454,7 @@ export default function DashboardView() {
             </h3>
             <p className="text-[10px] text-gray-400 mt-0.5">{t.categoryChartHint}</p>
           </div>
-          <div className="p-4 h-[320px]">
+          <div className="p-4 flex-1 min-h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categoryData} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
