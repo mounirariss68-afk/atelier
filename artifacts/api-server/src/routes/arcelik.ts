@@ -9,8 +9,13 @@ import {
   arcelikCampaignsTable,
   arcelikCalendarTable,
   arcelikKpiBenchmarksTable,
+  arcelikPriceHistoryTable,
+  arcelikScrapeLogsTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { logger } from "../lib/logger";
+import { runPriceScrape, isScrapeRunning } from "../lib/scraper";
+import { getSchedulerStatus } from "../lib/scheduler";
 
 const router: IRouter = Router();
 
@@ -140,6 +145,145 @@ router.get("/kpi-benchmarks", async (_req, res) => {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch KPI benchmarks" });
+  }
+});
+
+router.get("/price-history", async (_req, res) => {
+  try {
+    const { referenceId, brand, recordType, limit } = _req.query;
+    const maxRows = Math.min(Number(limit) || 500, 2000);
+
+    let query = db
+      .select()
+      .from(arcelikPriceHistoryTable)
+      .orderBy(desc(arcelikPriceHistoryTable.recordedAt))
+      .limit(maxRows);
+
+    const conditions = [];
+    if (referenceId) {
+      conditions.push(
+        eq(arcelikPriceHistoryTable.referenceId, String(referenceId)),
+      );
+    }
+    if (brand) {
+      conditions.push(eq(arcelikPriceHistoryTable.brand, String(brand)));
+    }
+    if (recordType) {
+      conditions.push(
+        eq(arcelikPriceHistoryTable.recordType, String(recordType)),
+      );
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(
+        conditions.length === 1 ? conditions[0] : and(...conditions),
+      ) as typeof query;
+    }
+
+    const rows = await query;
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch price history" });
+  }
+});
+
+router.get("/price-history/summary", async (_req, res) => {
+  try {
+    const rows = await db
+      .select({
+        referenceId: arcelikPriceHistoryTable.referenceId,
+        brand: arcelikPriceHistoryTable.brand,
+        modelCode: arcelikPriceHistoryTable.modelCode,
+        recordType: arcelikPriceHistoryTable.recordType,
+        latestPrice: sql<number>`(array_agg(${arcelikPriceHistoryTable.price} ORDER BY ${arcelikPriceHistoryTable.recordedAt} DESC))[1]`,
+        earliestPrice: sql<number>`(array_agg(${arcelikPriceHistoryTable.price} ORDER BY ${arcelikPriceHistoryTable.recordedAt} ASC))[1]`,
+        minPrice: sql<number>`min(${arcelikPriceHistoryTable.price})`,
+        maxPrice: sql<number>`max(${arcelikPriceHistoryTable.price})`,
+        dataPoints: sql<number>`count(*)`,
+        firstSeen: sql<string>`min(${arcelikPriceHistoryTable.recordedAt})`,
+        lastSeen: sql<string>`max(${arcelikPriceHistoryTable.recordedAt})`,
+      })
+      .from(arcelikPriceHistoryTable)
+      .groupBy(
+        arcelikPriceHistoryTable.referenceId,
+        arcelikPriceHistoryTable.brand,
+        arcelikPriceHistoryTable.modelCode,
+        arcelikPriceHistoryTable.recordType,
+      );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch price history summary" });
+  }
+});
+
+router.get("/scrape-status", async (_req, res) => {
+  try {
+    const recentLogs = await db
+      .select()
+      .from(arcelikScrapeLogsTable)
+      .orderBy(desc(arcelikScrapeLogsTable.startedAt))
+      .limit(10);
+
+    const lastCompleted = recentLogs.find((l) => l.status === "completed");
+
+    const productLastUpdated = await db
+      .select({
+        lastScraped: sql<string>`max(${arcelikProductsTable.scrapedAt})`,
+        lastUpdated: sql<string>`max(${arcelikProductsTable.updatedAt})`,
+        autoScrapedCount: sql<number>`count(*) filter (where ${arcelikProductsTable.dataProvenance} = 'auto-scraped')`,
+        totalCount: sql<number>`count(*)`,
+      })
+      .from(arcelikProductsTable);
+
+    const competitorLastUpdated = await db
+      .select({
+        lastScraped: sql<string>`max(${arcelikCompetitorPricesTable.scrapedAt})`,
+        lastUpdated: sql<string>`max(${arcelikCompetitorPricesTable.updatedAt})`,
+        autoScrapedCount: sql<number>`count(*) filter (where ${arcelikCompetitorPricesTable.dataProvenance} = 'auto-scraped')`,
+        totalCount: sql<number>`count(*)`,
+      })
+      .from(arcelikCompetitorPricesTable);
+
+    const scheduler = getSchedulerStatus();
+
+    res.json({
+      scheduler,
+      scrapeInProgress: isScrapeRunning(),
+      lastCompletedRun: lastCompleted ?? null,
+      recentRuns: recentLogs,
+      products: productLastUpdated[0] ?? null,
+      competitors: competitorLastUpdated[0] ?? null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch scrape status" });
+  }
+});
+
+let lastManualScrapeTime = 0;
+const MANUAL_SCRAPE_COOLDOWN_MS = 5 * 60 * 1000;
+
+router.post("/scrape", async (_req, res) => {
+  try {
+    const now = Date.now();
+    if (now - lastManualScrapeTime < MANUAL_SCRAPE_COOLDOWN_MS) {
+      const waitSec = Math.ceil((MANUAL_SCRAPE_COOLDOWN_MS - (now - lastManualScrapeTime)) / 1000);
+      res.status(429).json({ error: `Rate limited. Try again in ${waitSec}s` });
+      return;
+    }
+
+    if (isScrapeRunning()) {
+      res.status(409).json({ error: "A scrape job is already in progress" });
+      return;
+    }
+
+    lastManualScrapeTime = now;
+    res.json({ message: "Scrape job started", status: "running" });
+
+    runPriceScrape("manual").catch((err) => {
+      logger.error({ err }, "Manual scrape job failed");
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to start scrape job" });
   }
 });
 

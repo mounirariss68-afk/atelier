@@ -136,3 +136,47 @@ export const arcelikKpiBenchmarksTable = pgTable("arcelik_kpi_benchmarks", {
   value: text("value").notNull(),
   target: text("target").notNull(),
 });
+
+export const arcelikPriceHistoryTable = pgTable(
+  "arcelik_price_history",
+  {
+    id: serial("id").primaryKey(),
+    recordType: text("record_type").notNull(),
+    referenceId: text("reference_id").notNull(),
+    brand: text("brand").notNull(),
+    modelCode: text("model_code").notNull(),
+    price: integer("price").notNull(),
+    previousPrice: integer("previous_price"),
+    priceChangePercent: doublePrecision("price_change_percent"),
+    source: text("source").notNull(),
+    scrapeRunId: text("scrape_run_id").notNull(),
+    recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_price_history_ref").on(t.referenceId),
+    index("idx_price_history_brand").on(t.brand),
+    index("idx_price_history_recorded").on(t.recordedAt),
+    index("idx_price_history_type").on(t.recordType),
+  ],
+);
+
+export const arcelikScrapeLogsTable = pgTable(
+  "arcelik_scrape_logs",
+  {
+    id: text("id").primaryKey(),
+    trigger: text("trigger").notNull(),
+    status: text("status").notNull(),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+    scrapedCounts: jsonb("scraped_counts").$type<Record<string, number>>(),
+    matchedProducts: integer("matched_products"),
+    matchedCompetitors: integer("matched_competitors"),
+    totalProducts: integer("total_products"),
+    totalCompetitors: integer("total_competitors"),
+    errorMessage: text("error_message"),
+  },
+  (t) => [
+    index("idx_scrape_logs_status").on(t.status),
+    index("idx_scrape_logs_started").on(t.startedAt),
+  ],
+);

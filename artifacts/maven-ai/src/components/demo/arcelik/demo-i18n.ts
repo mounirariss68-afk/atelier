@@ -157,6 +157,13 @@ export const dashboard: I18n = {
     kpiSourceTooltip: "Kaynak:",
     marginBasis: "Arçelik 2024 Faaliyet Raporu brüt marj %30.2 baz alınarak bayi dağıtım marjına göre düzeltilmiştir",
     shareBasis: "Arçelik 2024 Faaliyet Raporu ulusal beyaz eşya pazar payı %45–48, bölgesel bayi yoğunluğuna göre modellenmiştir",
+    lastUpdated: "Son güncelleme",
+    nextScheduled: "Sonraki planlanan güncelleme",
+    autoScrapeActive: "Otomatik fiyat güncelleme aktif",
+    productsTracked: "ürün takipte",
+    competitorsTracked: "rakip takipte",
+    never: "Henüz güncellenmedi",
+    daily: "Günlük",
   },
   en: {
     heatMarketShare: "Market Share",
@@ -237,6 +244,13 @@ export const dashboard: I18n = {
     kpiSourceTooltip: "Source:",
     marginBasis: "Based on Arçelik 2024 Annual Report gross margin of 30.2%, adjusted for dealer distribution margin",
     shareBasis: "Based on Arçelik 2024 Annual Report national white goods market share of 45–48%, modeled by regional dealer density",
+    lastUpdated: "Last updated",
+    nextScheduled: "Next scheduled update",
+    autoScrapeActive: "Automatic price updates active",
+    productsTracked: "products tracked",
+    competitorsTracked: "competitors tracked",
+    never: "Not yet updated",
+    daily: "Daily",
   },
 };
 

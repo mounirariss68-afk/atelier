@@ -6,7 +6,7 @@ import {
 import {
   TrendingUp, TrendingDown, MapPin, ArrowUpDown, X, ChevronDown,
   Target, Percent, BarChart3, Users, Megaphone, DollarSign, Package,
-  ExternalLink, BookOpen, ChevronRight, Info,
+  ExternalLink, BookOpen, ChevronRight, Info, RefreshCw, Clock,
 } from "lucide-react";
 import { useDashboardFilters, type Period } from "../DashboardContext";
 import { useDemoLang } from "../DemoLangContext";
@@ -18,7 +18,19 @@ import {
   type ProductCategory, type CityData,
 } from "@/data/arcelik-seed";
 import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
+import { useScrapeStatus } from "@/hooks/useScrapeStatus";
 import { TurkeyMap, CITY_POSITIONS } from "../TurkeyMap";
+
+function formatCronSchedule(cron: string, lang: string): string {
+  const parts = cron.split(/\s+/);
+  if (parts.length < 5) return cron;
+  const [minute, hour] = parts;
+  const hourStr = hour.padStart(2, "0");
+  const minuteStr = minute.padStart(2, "0");
+  const allDays = parts[2] === "*" && parts[3] === "*" && parts[4] === "*";
+  if (allDays) return `${lang === "tr" ? "Günlük" : "Daily"} (${hourStr}:${minuteStr} UTC)`;
+  return `${cron} (UTC)`;
+}
 
 type HeatMetric = "share" | "price" | "dealers" | "competition" | "campaigns" | "demand";
 
@@ -85,6 +97,7 @@ export default function DashboardView() {
   const { lang } = useDemoLang();
   const t = dashboard[lang];
   const { products, competitorPrices, cities, campaigns, dealers, dataSources: DATA_SOURCES } = useArcelikData();
+  const { data: scrapeStatus } = useScrapeStatus();
   const HEAT_LABELS: Record<HeatMetric, string> = {
     share: t.heatMarketShare,
     price: t.heatPriceIndex,
@@ -635,6 +648,40 @@ export default function DashboardView() {
             </div>
           </motion.div>
         </div>
+      )}
+
+      {scrapeStatus && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.55 }}
+          className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-3"
+        >
+          <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${scrapeStatus.scheduler.running ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+              <span className="text-xs font-semibold text-[#0E2841]">{t.autoScrapeActive}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <Clock size={12} />
+              <span>{t.lastUpdated}:</span>
+              <span className="font-medium text-[#0E2841]">
+                {(scrapeStatus.products?.lastScraped ?? scrapeStatus.products?.lastUpdated)
+                  ? new Date((scrapeStatus.products?.lastScraped ?? scrapeStatus.products?.lastUpdated)!).toLocaleDateString(lang === "tr" ? "tr-TR" : "en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                  : t.never}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <RefreshCw size={12} />
+              <span>{t.nextScheduled}:</span>
+              <span className="font-medium text-[#0E2841]">{formatCronSchedule(scrapeStatus.scheduler.cronExpression, lang)}</span>
+            </div>
+            <div className="flex items-center gap-3 ml-auto text-[10px] text-gray-400">
+              <span>{scrapeStatus.products?.totalCount ?? 0} {t.productsTracked}</span>
+              <span>{scrapeStatus.competitors?.totalCount ?? 0} {t.competitorsTracked}</span>
+            </div>
+          </div>
+        </motion.div>
       )}
 
       <motion.div
