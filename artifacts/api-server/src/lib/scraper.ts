@@ -9,7 +9,7 @@ import {
   arcelikMarketplacePriceHistoryTable,
   arcelikProductSpecsTable,
 } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, inArray } from "drizzle-orm";
 import { execSync } from "child_process";
 import { logger } from "./logger";
 import type { Browser, BrowserContext, Page } from "playwright-core";
@@ -1044,6 +1044,21 @@ export async function runPriceScrape(
       n11Items = await scrapeN11();
       scrapedCounts.n11 = n11Items.length;
       logger.info({ count: n11Items.length }, "n11.com: marketplace products scraped");
+
+      // Drift guard: warn if any expected N11 category returned zero items
+      // — usually a sign that selectors/URL slugs have moved underneath us.
+      const n11ByCat = new Map<string, number>();
+      for (const it of n11Items) {
+        n11ByCat.set(it.category, (n11ByCat.get(it.category) ?? 0) + 1);
+      }
+      const n11ExpectedCats = ["buzdolabi", "camasir", "bulasik", "firin", "klima", "kurutma", "kucuk-ev"];
+      const n11Empty = n11ExpectedCats.filter((c) => (n11ByCat.get(c) ?? 0) === 0);
+      if (n11Empty.length > 0) {
+        logger.warn(
+          { emptyCategories: n11Empty, perCategory: Object.fromEntries(n11ByCat) },
+          "N11 category drift: one or more expected categories returned 0 items — selectors may have changed",
+        );
+      }
     } catch (err) {
       logger.error({ err }, "n11.com: scrape failed");
       scrapedCounts.n11 = 0;
@@ -1054,6 +1069,19 @@ export async function runPriceScrape(
       logger.info("Scraping trendyol.com (marketplace)...");
       trendyolItems = await scrapeTrendyol();
       scrapedCounts.trendyol = trendyolItems.length;
+
+      const tyByCat = new Map<string, number>();
+      for (const it of trendyolItems) {
+        tyByCat.set(it.category, (tyByCat.get(it.category) ?? 0) + 1);
+      }
+      const tyExpectedCats = ["buzdolabi", "camasir", "bulasik", "firin", "klima", "kurutma", "kucuk-ev"];
+      const tyEmpty = tyExpectedCats.filter((c) => (tyByCat.get(c) ?? 0) === 0);
+      if (tyEmpty.length > 0) {
+        logger.warn(
+          { emptyCategories: tyEmpty, perCategory: Object.fromEntries(tyByCat) },
+          "Trendyol category drift: one or more expected categories returned 0 items — selectors may have changed",
+        );
+      }
       logger.info(
         { count: trendyolItems.length },
         "trendyol.com: marketplace products scraped",
@@ -1232,14 +1260,31 @@ export async function runPriceScrape(
         const specs = await scrapeN11ProductSpecs(targets, SPEC_CAP_PER_RUN);
         if (specs.length > 0) {
           // Look up the marketplace_prices.id for each spec (need the FK).
-          const ids = await db
-            .select({
-              id: arcelikMarketplacePricesTable.id,
-              marketplace: arcelikMarketplacePricesTable.marketplace,
-              marketplaceProductId:
-                arcelikMarketplacePricesTable.marketplaceProductId,
-            })
-            .from(arcelikMarketplacePricesTable);
+          // Filter to ONLY the (marketplace, marketplaceProductId) pairs we
+          // just extracted specs for — avoids a full-table scan as the
+          // marketplace_prices table grows across runs.
+          const specMpIds = Array.from(
+            new Set(specs.map((s) => s.marketplaceProductId)),
+          );
+          const ids = specMpIds.length === 0
+            ? []
+            : await db
+                .select({
+                  id: arcelikMarketplacePricesTable.id,
+                  marketplace: arcelikMarketplacePricesTable.marketplace,
+                  marketplaceProductId:
+                    arcelikMarketplacePricesTable.marketplaceProductId,
+                })
+                .from(arcelikMarketplacePricesTable)
+                .where(
+                  and(
+                    eq(arcelikMarketplacePricesTable.marketplace, "n11"),
+                    inArray(
+                      arcelikMarketplacePricesTable.marketplaceProductId,
+                      specMpIds,
+                    ),
+                  ),
+                );
           const idMap = new Map(
             ids.map((r) => [`${r.marketplace}:${r.marketplaceProductId}`, r.id]),
           );

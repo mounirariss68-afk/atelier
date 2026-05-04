@@ -16,7 +16,7 @@ import {
   arcelikProductEquivalencesTable,
   arcelikProductSpecsTable,
 } from "@workspace/db";
-import { eq, and, desc, sql, gte } from "drizzle-orm";
+import { eq, and, desc, sql, gte, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { runPriceScrape, isScrapeRunning } from "../lib/scraper";
 import { getSchedulerStatus } from "../lib/scheduler";
@@ -58,31 +58,81 @@ router.get("/products", async (_req, res) => {
 
 router.get("/competitor-prices", async (_req, res) => {
   try {
-    const { brand, category } = _req.query;
-    let rows;
-    if (brand && category) {
-      rows = await db
-        .select()
-        .from(arcelikCompetitorPricesTable)
-        .where(
-          and(
-            eq(arcelikCompetitorPricesTable.brand, String(brand)),
-            eq(arcelikCompetitorPricesTable.category, String(category)),
-          ),
-        );
-    } else if (brand) {
-      rows = await db
-        .select()
-        .from(arcelikCompetitorPricesTable)
-        .where(eq(arcelikCompetitorPricesTable.brand, String(brand)));
-    } else if (category) {
-      rows = await db
-        .select()
-        .from(arcelikCompetitorPricesTable)
-        .where(eq(arcelikCompetitorPricesTable.category, String(category)));
-    } else {
-      rows = await db.select().from(arcelikCompetitorPricesTable);
+    const { brand, category, includeMarketplace } = _req.query;
+    const conditions = [];
+    if (brand) conditions.push(eq(arcelikCompetitorPricesTable.brand, String(brand)));
+    if (category) conditions.push(eq(arcelikCompetitorPricesTable.category, String(category)));
+    const baseQuery = db.select().from(arcelikCompetitorPricesTable);
+    const rows = conditions.length
+      ? await baseQuery.where(and(...conditions))
+      : await baseQuery;
+
+    // Optional ?includeMarketplace=true augments each row with a marketplace
+    // breakdown (n11/trendyol observations linked to the same arcelikProductId
+    // via the equivalence engine). Lets a single endpoint serve both the
+    // legacy brand-site view and the multi-source view.
+    if (String(includeMarketplace).toLowerCase() === "true") {
+      // arcelikEquivalentId on competitor_prices and arcelikProductId on
+      // marketplace_prices both reference the same Arçelik product key, so
+      // we join on equality across the two columns.
+      const productIds = Array.from(
+        new Set(
+          rows
+            .map((r) => r.arcelikEquivalentId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      const mpByProductId = new Map<
+        string,
+        Array<{
+          marketplace: string;
+          brand: string;
+          title: string;
+          price: number;
+          sourceUrl: string;
+          matchConfidence: number | null;
+          scrapedAt: Date;
+        }>
+      >();
+      if (productIds.length > 0) {
+        const mpRows = await db
+          .select({
+            arcelikProductId: arcelikMarketplacePricesTable.arcelikProductId,
+            marketplace: arcelikMarketplacePricesTable.marketplace,
+            brand: arcelikMarketplacePricesTable.brand,
+            title: arcelikMarketplacePricesTable.title,
+            price: arcelikMarketplacePricesTable.price,
+            sourceUrl: arcelikMarketplacePricesTable.productUrl,
+            matchConfidence: arcelikMarketplacePricesTable.matchConfidence,
+            scrapedAt: arcelikMarketplacePricesTable.scrapedAt,
+          })
+          .from(arcelikMarketplacePricesTable)
+          .where(inArray(arcelikMarketplacePricesTable.arcelikProductId, productIds));
+        for (const r of mpRows) {
+          if (!r.arcelikProductId) continue;
+          const arr = mpByProductId.get(r.arcelikProductId) ?? [];
+          arr.push({
+            marketplace: r.marketplace,
+            brand: r.brand,
+            title: r.title,
+            price: r.price,
+            sourceUrl: r.sourceUrl,
+            matchConfidence: r.matchConfidence,
+            scrapedAt: r.scrapedAt,
+          });
+          mpByProductId.set(r.arcelikProductId, arr);
+        }
+      }
+      const enriched = rows.map((row) => ({
+        ...row,
+        marketplaceObservations: row.arcelikEquivalentId
+          ? mpByProductId.get(row.arcelikEquivalentId) ?? []
+          : [],
+      }));
+      res.json(enriched);
+      return;
     }
+
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch competitor prices" });
