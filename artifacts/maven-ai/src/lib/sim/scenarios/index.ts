@@ -37,7 +37,7 @@ const SCENARIOS: Record<string, Scenario> = {
 
 export function getScenario(slug: string, variant?: string): Scenario | undefined {
   if (variant) {
-    return SCENARIOS[`${slug}/${variant}`] ?? SCENARIOS[slug];
+    return SCENARIOS[`${slug}/${variant}`];
   }
   return SCENARIOS[slug];
 }

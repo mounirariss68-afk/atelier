@@ -95,8 +95,38 @@ const scenario: Scenario = {
       receivedAt: "Pzt 08:00",
       status: "new",
     },
+    {
+      id: "inbox-dealer-feedback",
+      source: { en: "Bayi Ağı Yöneticisi", ar: "Bayi Ağı Yöneticisi" },
+      subject: { en: "Bayi Geri Bildirimi — Konya Bölge Şikayeti", ar: "Bayi Geri Bildirimi — Konya Bölge Şikayeti" },
+      preview: { en: "Konya bölgesinde 3 bayi, geçen haftaki fiyat listesinin geç ulaştığını bildirdi. Uyum oranı %72'ye düştü — acil takip gerekiyor.", ar: "Konya bölgesinde 3 bayi, geçen haftaki fiyat listesinin geç ulaştığını bildirdi. Uyum oranı %72'ye düştü — acil takip gerekiyor." },
+      receivedAt: "Pzt 07:45",
+      status: "new",
+    },
+    {
+      id: "inbox-campaign-report",
+      source: { en: "Kampanya Stratejisti", ar: "Kampanya Stratejisti" },
+      subject: { en: "Geçen Hafta Kampanya Raporu — 'Bahar Tazeleği' Sonuçları", ar: "Geçen Hafta Kampanya Raporu — 'Bahar Tazeleği' Sonuçları" },
+      preview: { en: "Geçen haftaki buzdolabı kampanyası ROI: 3.2x. 480 bayiden geri dönüş alındı. İstanbul %94 uyum, Ankara %89 uyum. Detaylı rapor hazır.", ar: "Geçen haftaki buzdolabı kampanyası ROI: 3.2x. 480 bayiden geri dönüş alındı. İstanbul %94 uyum, Ankara %89 uyum. Detaylı rapor hazır." },
+      receivedAt: "Pzt 07:30",
+      status: "new",
+    },
   ],
-  initialWorkspace: [],
+  initialWorkspace: [
+    {
+      id: "pricing-summary",
+      kind: "metric-grid",
+      title: { en: "Fiyatlandırma Onay Özeti — Son 7 Gün", ar: "Fiyatlandırma Onay Özeti — Son 7 Gün" },
+      rows: [
+        [{ en: "Metrik", ar: "Metrik" }, { en: "Değer", ar: "Değer" }, { en: "Trend", ar: "Trend" }],
+        [{ en: "Onaylanan Fiyat Değişikliği", ar: "Onaylanan Fiyat Değişikliği" }, { en: "12 ürün / 5 şehir", ar: "12 ürün / 5 şehir" }, { en: "↑ geçen hafta 8", ar: "↑ geçen hafta 8" }],
+        [{ en: "Ortalama İndirim Oranı", ar: "Ortalama İndirim Oranı" }, { en: "%6.4", ar: "%6.4" }, { en: "↓ geçen hafta %8.1", ar: "↓ geçen hafta %8.1" }],
+        [{ en: "Bayi Uyum Oranı", ar: "Bayi Uyum Oranı" }, { en: "%79.4", ar: "%79.4" }, { en: "↑ geçen hafta %76.2", ar: "↑ geçen hafta %76.2" }],
+        [{ en: "Aktif Kampanya Sayısı", ar: "Aktif Kampanya Sayısı" }, { en: "3", ar: "3" }, { en: "— geçen hafta 3", ar: "— geçen hafta 3" }],
+        [{ en: "Rakip Fiyat Uyarısı", ar: "Rakip Fiyat Uyarısı" }, { en: "5 uyarı", ar: "5 uyarı" }, { en: "↑ geçen hafta 2", ar: "↑ geçen hafta 2" }],
+      ],
+    },
+  ],
   events: [
     {
       id: "e01",
