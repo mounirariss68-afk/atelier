@@ -1229,14 +1229,38 @@ export async function runPriceScrape(
             r.extractedAt?.getTime() ?? 0,
           ]),
         );
+        const ARCELIK_FAMILY = new Set([
+          "arcelik",
+          "arçelik",
+          "beko",
+          "grundig",
+          "altus",
+        ]);
+        const isArcelikFamily = (brand: string): boolean =>
+          ARCELIK_FAMILY.has(
+            brand
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/ı/g, "i")
+              .trim(),
+          );
         const eligible = n11Items
           .filter((it) => it.productUrl)
           .map((it) => ({
             it,
             extractedAt:
               existingSpecMap.get(it.marketplaceProductId) ?? -1,
+            arcelikFamily: isArcelikFamily(it.brand),
           }))
-          .sort((a, b) => a.extractedAt - b.extractedAt);
+          // Sort: Arcelik-family first (calibrates pricing baseline),
+          // then uncovered (extractedAt = -1), then oldest-extracted.
+          .sort((a, b) => {
+            if (a.arcelikFamily !== b.arcelikFamily) {
+              return a.arcelikFamily ? -1 : 1;
+            }
+            return a.extractedAt - b.extractedAt;
+          });
         const targets = eligible
           .slice(0, SPEC_CAP_PER_RUN)
           .map((e) => ({
