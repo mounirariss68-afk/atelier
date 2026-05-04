@@ -693,7 +693,8 @@ const INTENTS: Intent[] = [
         const smartCount = ps.filter((p) => getProductSpecs(p).smartFeatures.length > 0).length;
         const premiumCount = ps.filter((p) => p.priceTier === "premium").length;
         const capacities = ps.map((p) => getProductSpecs(p).capacity).filter((c) => c !== "-");
-        const capacityRange = capacities.length > 0 ? `${capacities[0]}–${capacities[capacities.length - 1]}` : "-";
+        const numericCaps = capacities.map((c) => parseFloat(c)).filter((n) => !isNaN(n));
+        const capacityRange = numericCaps.length > 0 ? `${Math.min(...numericCaps)}–${Math.max(...numericCaps)}` : (capacities.length > 0 ? capacities[0] : "-");
         return lang === "en"
           ? `• ${label}: ${ps.length} models, ${smartCount} smart, ${premiumCount} premium, capacity range: ${capacityRange}`
           : `• ${label}: ${ps.length} model, ${smartCount} akıllı, ${premiumCount} premium, kapasite aralığı: ${capacityRange}`;

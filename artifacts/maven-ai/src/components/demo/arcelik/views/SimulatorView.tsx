@@ -120,7 +120,7 @@ export default function SimulatorView() {
                   className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-[11px] appearance-none focus:outline-none focus:ring-1 focus:ring-[#E30613]/20"
                 >
                   <option value="">{t.filterSubcategory}: {t.filterAllSubs}</option>
-                  {Array.from(new Set(products.map((p) => p.subcategory))).map((sub) => (
+                  {Array.from(new Set(products.filter((p) => p.category === selectedCat).map((p) => p.subcategory))).map((sub) => (
                     <option key={sub} value={sub}>{getSubcategoryLabel(sub, lang)}</option>
                   ))}
                 </select>
