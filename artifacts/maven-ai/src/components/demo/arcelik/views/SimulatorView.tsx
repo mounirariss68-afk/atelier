@@ -5,36 +5,50 @@ import {
 } from "recharts";
 import {
   SlidersHorizontal, TrendingUp, TrendingDown, AlertTriangle,
-  ChevronDown, DollarSign, Percent, Users, ShoppingCart, Send, CheckCircle2,
+  ChevronDown, DollarSign, Percent, Users, ShoppingCart, Send, CheckCircle2, Layers,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   products, competitorPrices, CATEGORY_LABELS, COMPETITOR_BRANDS,
-  type ArcelikProduct,
+  type ArcelikProduct, type ProductCategory,
 } from "@/data/arcelik-seed";
+
+type SimMode = "product" | "category";
 
 export default function SimulatorView() {
   const { toast } = useToast();
+  const [simMode, setSimMode] = useState<SimMode>("product");
   const [selectedProduct, setSelectedProduct] = useState<ArcelikProduct>(products[0]);
+  const [selectedCat, setSelectedCat] = useState<ProductCategory>("buzdolabi");
   const [priceAdjust, setPriceAdjust] = useState(0);
   const [showResults, setShowResults] = useState(false);
 
-  const newPrice = Math.round(selectedProduct.tsfPrice * (1 + priceAdjust / 100));
-  const newMargin = +((1 - selectedProduct.dealerCost / newPrice) * 100).toFixed(1);
-  const originalMargin = selectedProduct.marginPercent;
-  const marginDelta = +(newMargin - originalMargin).toFixed(1);
+  const catProducts = useMemo(() => products.filter((p) => p.category === selectedCat), [selectedCat]);
+  const catAvgPrice = catProducts.length ? Math.round(catProducts.reduce((s, p) => s + p.tsfPrice, 0) / catProducts.length) : 0;
+  const catAvgCost = catProducts.length ? Math.round(catProducts.reduce((s, p) => s + p.dealerCost, 0) / catProducts.length) : 0;
+  const catAvgMargin = catProducts.length ? +(catProducts.reduce((s, p) => s + p.marginPercent, 0) / catProducts.length).toFixed(1) : 0;
 
-  const competitors = useMemo(
-    () => competitorPrices.filter((cp) => cp.arcelikEquivalentId === selectedProduct.id),
-    [selectedProduct.id],
-  );
+  const basePrice = simMode === "product" ? selectedProduct.tsfPrice : catAvgPrice;
+  const baseCost = simMode === "product" ? selectedProduct.dealerCost : catAvgCost;
+  const baseMargin = simMode === "product" ? selectedProduct.marginPercent : catAvgMargin;
+  const displayName = simMode === "product" ? selectedProduct.name : CATEGORY_LABELS[selectedCat];
+
+  const newPrice = Math.round(basePrice * (1 + priceAdjust / 100));
+  const newMargin = +((1 - baseCost / newPrice) * 100).toFixed(1);
+  const marginDelta = +(newMargin - baseMargin).toFixed(1);
+
+  const competitors = useMemo(() => {
+    if (simMode === "product") {
+      return competitorPrices.filter((cp) => cp.arcelikEquivalentId === selectedProduct.id);
+    }
+    return competitorPrices.filter((cp) => cp.category === selectedCat);
+  }, [simMode, selectedProduct.id, selectedCat]);
 
   const impactData = useMemo(() => {
     const volumeChange = priceAdjust > 0 ? -priceAdjust * 1.2 : -priceAdjust * 0.8;
     const revenueChange = ((1 + priceAdjust / 100) * (1 + volumeChange / 100) - 1) * 100;
     const shareImpact = priceAdjust > 0 ? -priceAdjust * 0.15 : -priceAdjust * 0.2;
     const dealerSatisfaction = priceAdjust > 5 ? -2 : priceAdjust < -5 ? 1 : 0;
-
     return {
       volumeChange: +volumeChange.toFixed(1),
       revenueChange: +revenueChange.toFixed(1),
@@ -48,48 +62,94 @@ export default function SimulatorView() {
     const rows: { name: string; price: number; fill: string }[] = [
       { name: `Arçelik (yeni)`, price: newPrice, fill: "#E30613" },
     ];
+    const seen = new Set<string>();
     competitors.forEach((cp) => {
-      rows.push({
-        name: cp.brand,
-        price: cp.competitorPrice,
-        fill: cp.positioning === "premium" ? "#7c3aed" : cp.positioning === "value" ? "#2563eb" : "#6B7280",
-      });
+      if (!seen.has(cp.brand)) {
+        seen.add(cp.brand);
+        rows.push({
+          name: cp.brand,
+          price: cp.competitorPrice,
+          fill: cp.positioning === "premium" ? "#7c3aed" : cp.positioning === "value" ? "#2563eb" : "#6B7280",
+        });
+      }
     });
     return rows.sort((a, b) => b.price - a.price);
   }, [newPrice, competitors]);
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
-        <SlidersHorizontal size={20} /> Fiyat Simülatörü (What-If)
-      </h2>
+      <div className="flex items-center gap-4">
+        <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
+          <SlidersHorizontal size={20} /> Fiyat Simülatörü (What-If)
+        </h2>
+        <div className="flex bg-gray-100 rounded-lg p-0.5 ml-auto">
+          <button
+            onClick={() => { setSimMode("product"); setPriceAdjust(0); setShowResults(false); }}
+            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${simMode === "product" ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500"}`}
+          >
+            Ürün Bazlı
+          </button>
+          <button
+            onClick={() => { setSimMode("category"); setPriceAdjust(0); setShowResults(false); }}
+            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${simMode === "category" ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500"}`}
+          >
+            <Layers size={12} /> Kategori Bazlı
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-5">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-            <label className="text-xs font-semibold text-gray-600 mb-2 block">Ürün Seçin</label>
+            <label className="text-xs font-semibold text-gray-600 mb-2 block">
+              {simMode === "product" ? "Ürün Seçin" : "Kategori Seçin"}
+            </label>
             <div className="relative">
-              <select
-                value={selectedProduct.id}
-                onChange={(e) => {
-                  const p = products.find((p) => p.id === e.target.value);
-                  if (p) { setSelectedProduct(p); setPriceAdjust(0); setShowResults(false); }
-                }}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
-                ))}
-              </select>
+              {simMode === "product" ? (
+                <select
+                  value={selectedProduct.id}
+                  onChange={(e) => {
+                    const p = products.find((p) => p.id === e.target.value);
+                    if (p) { setSelectedProduct(p); setPriceAdjust(0); setShowResults(false); }
+                  }}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={selectedCat}
+                  onChange={(e) => { setSelectedCat(e.target.value as ProductCategory); setPriceAdjust(0); setShowResults(false); }}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
+                >
+                  {(Object.entries(CATEGORY_LABELS) as [ProductCategory, string][]).map(([id, label]) => (
+                    <option key={id} value={id}>{label}</option>
+                  ))}
+                </select>
+              )}
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
 
             <div className="mt-4 p-3 bg-gray-50 rounded-lg space-y-1.5 text-xs">
-              <div className="flex justify-between"><span className="text-gray-500">Kategori</span><span className="font-semibold">{CATEGORY_LABELS[selectedProduct.category]}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Mevcut TSF</span><span className="font-semibold">₺{selectedProduct.tsfPrice.toLocaleString("tr-TR")}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Bayi Maliyeti</span><span className="font-semibold">₺{selectedProduct.dealerCost.toLocaleString("tr-TR")}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Mevcut Marj</span><span className="font-semibold">%{selectedProduct.marginPercent}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Enerji Sınıfı</span><span className="font-semibold">{selectedProduct.energyClass}</span></div>
+              {simMode === "product" ? (
+                <>
+                  <div className="flex justify-between"><span className="text-gray-500">Kategori</span><span className="font-semibold">{CATEGORY_LABELS[selectedProduct.category]}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Mevcut TSF</span><span className="font-semibold">₺{selectedProduct.tsfPrice.toLocaleString("tr-TR")}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Bayi Maliyeti</span><span className="font-semibold">₺{selectedProduct.dealerCost.toLocaleString("tr-TR")}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Mevcut Marj</span><span className="font-semibold">%{selectedProduct.marginPercent}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Enerji Sınıfı</span><span className="font-semibold">{selectedProduct.energyClass}</span></div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between"><span className="text-gray-500">Ürün Sayısı</span><span className="font-semibold">{catProducts.length} ürün</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Ort. TSF Fiyat</span><span className="font-semibold">₺{catAvgPrice.toLocaleString("tr-TR")}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Ort. Bayi Maliyeti</span><span className="font-semibold">₺{catAvgCost.toLocaleString("tr-TR")}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Ort. Marj</span><span className="font-semibold">%{catAvgMargin}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Rakip Ürün</span><span className="font-semibold">{competitors.length}</span></div>
+                </>
+              )}
             </div>
           </div>
 
@@ -115,7 +175,7 @@ export default function SimulatorView() {
             </div>
 
             <div className="mt-4 p-4 bg-gradient-to-r from-[#0E2841] to-[#1a3a5c] rounded-xl text-white text-center">
-              <p className="text-[10px] uppercase tracking-widest text-gray-400">Yeni Fiyat</p>
+              <p className="text-[10px] uppercase tracking-widest text-gray-400">Yeni {simMode === "category" ? "Ort. " : ""}Fiyat</p>
               <p className="text-3xl font-extrabold">₺{newPrice.toLocaleString("tr-TR")}</p>
               <p className={`text-xs mt-1 ${marginDelta >= 0 ? "text-green-400" : "text-amber-400"}`}>
                 Yeni marj: %{newMargin} ({marginDelta >= 0 ? "+" : ""}{marginDelta}pp)
@@ -194,22 +254,22 @@ export default function SimulatorView() {
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-500 py-8 text-center">Bu ürün için rakip fiyat verisi bulunamadı.</p>
+                  <p className="text-xs text-gray-500 py-8 text-center">Bu {simMode === "product" ? "ürün" : "kategori"} için rakip fiyat verisi bulunamadı.</p>
                 )}
               </div>
 
               <div className="flex items-center gap-3 mt-5">
                 <button
-                  onClick={() => toast({ title: "Fiyat Değişikliği Onaylandı", description: `${selectedProduct.name} için %${priceAdjust > 0 ? "+" : ""}${priceAdjust} fiyat değişikliği onay sürecine gönderildi.` })}
+                  onClick={() => toast({ title: "Fiyat Onaylandı", description: `${displayName} için %${priceAdjust > 0 ? "+" : ""}${priceAdjust} fiyat değişikliği onaylandı.` })}
                   className="flex-1 py-3 rounded-xl bg-[#E30613] text-white font-bold text-sm hover:bg-[#c00510] transition-colors flex items-center justify-center gap-2"
                 >
-                  <CheckCircle2 size={16} /> Onayla & Uygula
+                  <CheckCircle2 size={16} /> Bu Fiyatı Onayla
                 </button>
                 <button
-                  onClick={() => toast({ title: "Yöneticiye Gönderildi", description: "Fiyat değişikliği teklifi yönetici onayına gönderildi." })}
+                  onClick={() => toast({ title: "Bayilere Gönderildi", description: `${displayName} fiyat güncellemesi tüm bayilere iletildi.` })}
                   className="flex-1 py-3 rounded-xl border-2 border-[#0E2841] text-[#0E2841] font-bold text-sm hover:bg-[#0E2841]/5 transition-colors flex items-center justify-center gap-2"
                 >
-                  <Send size={16} /> Onaya Gönder
+                  <Send size={16} /> Tüm Bayilere Gönder
                 </button>
               </div>
             </motion.div>

@@ -407,18 +407,17 @@ const INTENTS: Intent[] = [
     },
   },
   {
-    patterns: [/marka.*fiyat.*grafik/i, /fiyat.*grafik/i, /grafik.*göster/i, /chart/i, /grafik/i],
+    patterns: [/trend.*grafik/i, /fiyat.*trend/i, /aylık.*grafik/i, /line.*chart/i, /trend/i],
     handler: () => {
-      const brandAvgs = COMPETITOR_BRANDS.map((b) => {
-        const prices = competitorPrices.filter((cp) => cp.brand === b.name);
-        const avg = prices.length ? prices.reduce((s, p) => s + p.priceDeltaPercent, 0) / prices.length : 0;
-        return { name: b.name, value: +avg.toFixed(1) };
-      }).filter((b) => b.value !== 0);
+      const monthlyData = [
+        { name: "Oca", value: 37.2 }, { name: "Şub", value: 37.8 }, { name: "Mar", value: 39.5 },
+        { name: "Nis", value: 38.1 }, { name: "May", value: 39.2 },
+      ];
       return {
         agent: "analyst",
         type: "chart" as const,
-        text: "Rakip markaların Arçelik'e göre ortalama fiyat farkı (%):",
-        data: { chartType: "bar", chartData: brandAvgs, label: "Ort. Fiyat Farkı (%)" },
+        text: "Arçelik'in son 5 aylık pazar payı trendi:",
+        data: { chartType: "line", chartData: monthlyData, label: "Aylık Pazar Payı (%)" },
       };
     },
   },
@@ -435,6 +434,22 @@ const INTENTS: Intent[] = [
         type: "chart" as const,
         text: "Kategori bazlı ortalama brüt marj dağılımı:",
         data: { chartType: "bar", chartData: catMargins, label: "Ortalama Marj (%)" },
+      };
+    },
+  },
+  {
+    patterns: [/marka.*fiyat.*grafik/i, /fiyat.*grafik/i, /grafik.*göster/i, /chart/i],
+    handler: () => {
+      const brandAvgs = COMPETITOR_BRANDS.map((b) => {
+        const prices = competitorPrices.filter((cp) => cp.brand === b.name);
+        const avg = prices.length ? prices.reduce((s, p) => s + p.priceDeltaPercent, 0) / prices.length : 0;
+        return { name: b.name, value: +avg.toFixed(1) };
+      }).filter((b) => b.value !== 0);
+      return {
+        agent: "analyst",
+        type: "chart" as const,
+        text: "Rakip markaların Arçelik'e göre ortalama fiyat farkı (%):",
+        data: { chartType: "bar", chartData: brandAvgs, label: "Ort. Fiyat Farkı (%)" },
       };
     },
   },

@@ -28,7 +28,7 @@ function getBarSpan(entry: CalendarEntry): { start: number; end: number } {
 
 function findGaps(entries: CalendarEntry[]): number[] {
   const covered = new Set<number>();
-  entries.filter((e) => e.brand === "Arçelik").forEach((e) => {
+  entries.filter((e) => e.brand !== "Arçelik").forEach((e) => {
     const { start, end } = getBarSpan(e);
     for (let m = start; m <= end; m++) covered.add(m);
   });
@@ -219,13 +219,13 @@ export default function CalendarView() {
           <div className="flex items-start gap-3">
             <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-bold text-amber-800">Kampanya Boşluğu Tespit Edildi</p>
+              <p className="text-sm font-bold text-amber-800">Fırsat Penceresi Tespit Edildi</p>
               <p className="text-xs text-amber-700 mt-1">
-                Arçelik'in şu aylarda aktif kampanyası bulunmuyor: <strong>{gaps.map((g) => MONTHS[g]).join(", ")}</strong>.
-                Bu dönemlerde rakiplerin (özellikle Vestel ve Samsung) kampanya faaliyetleri öne çıkabilir.
+                Şu aylarda rakiplerin aktif promosyonu bulunmuyor: <strong>{gaps.map((g) => MONTHS[g]).join(", ")}</strong>.
+                Bu dönemler Arçelik için fırsat penceresi — kampanya yoğunluğunu artırarak pazar payı kazanılabilir.
               </p>
               <p className="text-xs text-amber-600 mt-2">
-                AI önerisi: Bu dönemler için enerji verimliliği kampanyası veya bölgesel bayi kampanyası planlanabilir.
+                AI önerisi: Rakip sessizliğinden yararlanarak bu aylara özel enerji verimliliği veya bölgesel bayi kampanyası planlanabilir.
               </p>
             </div>
           </div>

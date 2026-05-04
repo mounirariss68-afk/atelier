@@ -232,7 +232,12 @@ export default function CompetitorRadarView() {
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-bold text-[#0E2841]">{b.name}</span>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: BRAND_COLORS[b.name] || "#6B7280" }}>
+                  {b.name.charAt(0)}
+                </div>
+                <span className="text-sm font-bold text-[#0E2841]">{b.name}</span>
+              </div>
               {b.threat === "high" && <AlertTriangle size={14} className="text-red-500" />}
               {b.threat === "medium" && <Eye size={14} className="text-amber-500" />}
             </div>
@@ -244,6 +249,10 @@ export default function CompetitorRadarView() {
               </span>
             </div>
             <div className="mt-2 space-y-1 text-xs text-gray-500">
+              <div className="flex justify-between">
+                <span>Pazar Payı</span>
+                <span className="font-semibold text-[#0E2841]">{b.positioning === "premium" ? "~8%" : b.positioning === "value" ? "~15%" : "~6%"}</span>
+              </div>
               <div className="flex justify-between">
                 <span>Takip edilen</span>
                 <span className="font-semibold text-[#0E2841]">{b.priceCount} ürün</span>

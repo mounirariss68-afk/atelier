@@ -87,6 +87,8 @@ export default function DashboardView() {
   const [selectedCity, setSelectedCity] = useState<CityData | null>(null);
   const [hoverCity, setHoverCity] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | null>(null);
+  const [sortCol, setSortCol] = useState<string>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filteredCities = useMemo(() => {
     if (filters.cities.length === 0) return cities;
@@ -129,37 +131,41 @@ export default function DashboardView() {
     const cats = filters.categories.length > 0 ? filters.categories : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
     return cats.map((cat) => {
       const catProducts = products.filter((p) => p.category === cat);
-      const avgMargin = catProducts.length ? catProducts.reduce((s, p) => s + p.marginPercent, 0) / catProducts.length : 0;
-      const avgPrice = catProducts.length ? catProducts.reduce((s, p) => s + p.tsfPrice, 0) / catProducts.length : 0;
-      const compCount = competitorPrices.filter((cp) => cp.category === cat).length;
-      return { name: CATEGORY_LABELS[cat], margin: +avgMargin.toFixed(1), avgPrice: Math.round(avgPrice), competitors: compCount, cat };
+      const compProducts = competitorPrices.filter((cp) => cp.category === cat);
+      const total = catProducts.length + compProducts.length;
+      const share = total > 0 ? +((catProducts.length / total) * 100).toFixed(1) : 0;
+      return { name: CATEGORY_LABELS[cat], share, products: catProducts.length, competitors: compProducts.length, cat };
     });
   }, [filters.categories]);
-
-  const comparisonData = useMemo(() => {
-    const cats = filters.categories.length > 0 ? filters.categories : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
-    const brands = filters.competitors.length > 0
-      ? COMPETITOR_BRANDS.filter((b) => filters.competitors.includes(b.id)).map((b) => b.name)
-      : COMPARISON_BRANDS;
-    return cats.map((cat) => {
-      const arcProducts = products.filter((p) => p.category === cat);
-      const arcAvg = arcProducts.length ? Math.round(arcProducts.reduce((s, p) => s + p.tsfPrice, 0) / arcProducts.length) : 0;
-      const brandPrices: Record<string, { avg: number; delta: number; count: number }> = {};
-      brands.forEach((brand) => {
-        const cp = competitorPrices.filter((p) => p.brand === brand && p.category === cat);
-        if (cp.length > 0) {
-          const avg = Math.round(cp.reduce((s, p) => s + p.competitorPrice, 0) / cp.length);
-          const delta = +(((avg - arcAvg) / arcAvg) * 100).toFixed(1);
-          brandPrices[brand] = { avg, delta, count: cp.length };
-        }
-      });
-      return { cat, name: CATEGORY_LABELS[cat], arcAvg, brands: brandPrices };
-    });
-  }, [filters.categories, filters.competitors]);
 
   const comparisonBrands = filters.competitors.length > 0
     ? COMPETITOR_BRANDS.filter((b) => filters.competitors.includes(b.id)).map((b) => b.name)
     : COMPARISON_BRANDS;
+
+  const productComparison = useMemo(() => {
+    const cats = filters.categories.length > 0 ? filters.categories : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
+    const filtered = products.filter((p) => cats.includes(p.category));
+    const rows = filtered.map((p) => {
+      const comps = competitorPrices.filter((cp) => cp.arcelikEquivalentId === p.id && comparisonBrands.includes(cp.brand));
+      const brandPrices: Record<string, { price: number; delta: number }> = {};
+      comps.forEach((cp) => { brandPrices[cp.brand] = { price: cp.competitorPrice, delta: cp.priceDeltaPercent }; });
+      const deltas = comps.map((c) => c.priceDeltaPercent);
+      return {
+        id: p.id, name: p.name, category: CATEGORY_LABELS[p.category],
+        tsfPrice: p.tsfPrice, brandPrices,
+        avgDelta: deltas.length ? +(deltas.reduce((s, d) => s + d, 0) / deltas.length).toFixed(1) : 0,
+      };
+    });
+    return rows.sort((a, b) => {
+      let va: number | string, vb: number | string;
+      if (sortCol === "name") { va = a.name; vb = b.name; }
+      else if (sortCol === "tsfPrice") { va = a.tsfPrice; vb = b.tsfPrice; }
+      else if (sortCol === "avgDelta") { va = a.avgDelta; vb = b.avgDelta; }
+      else { va = a.brandPrices[sortCol]?.price ?? 0; vb = b.brandPrices[sortCol]?.price ?? 0; }
+      if (typeof va === "string" && typeof vb === "string") return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+      return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
+    });
+  }, [filters.categories, comparisonBrands, sortCol, sortDir]);
 
   const categoryProducts = useMemo(() => {
     if (!selectedCategory) return [];
@@ -304,7 +310,7 @@ export default function DashboardView() {
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="text-sm font-bold flex items-center gap-2">
               <BarChart3 size={16} className="text-[#F5A623]" />
-              Kategori Performansı — Ortalama Marj
+              Kategori Performansı — Pazar Payı
             </h3>
             <p className="text-[10px] text-gray-400 mt-0.5">Tıklayarak ürün detayına bakın</p>
           </div>
@@ -312,10 +318,10 @@ export default function DashboardView() {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categoryData} layout="vertical" margin={{ left: 10, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                <XAxis type="number" domain={[0, 35]} tick={{ fontSize: 11 }} tickFormatter={(v) => `%${v}`} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `%${v}`} />
                 <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(val: number) => [`%${val}`, "Ortalama Marj"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="margin" radius={[0, 6, 6, 0]} barSize={18} className="cursor-pointer" onClick={(_: unknown, idx: number) => setSelectedCategory(categoryData[idx]?.cat as ProductCategory)}>
+                <Tooltip formatter={(val: number) => [`%${val}`, "Pazar Payı"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Bar dataKey="share" radius={[0, 6, 6, 0]} barSize={18} className="cursor-pointer" onClick={(_: unknown, idx: number) => setSelectedCategory(categoryData[idx]?.cat as ProductCategory)}>
                   {categoryData.map((_, i) => (
                     <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
                   ))}
@@ -334,40 +340,60 @@ export default function DashboardView() {
       >
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-sm font-bold">Rakip Fiyat Karşılaştırması</h3>
-          <span className="text-[10px] text-gray-400">{comparisonData.length} kategori × {comparisonBrands.length} rakip</span>
+          <span className="text-[10px] text-gray-400">{productComparison.length} ürün × {comparisonBrands.length} rakip</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-5 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Kategori</th>
-                <th className="text-right px-4 py-3 text-[11px] font-semibold text-[#E30613] uppercase tracking-wide">Arçelik Ort.</th>
-                {comparisonBrands.map((brand) => (
-                  <th key={brand} className="text-right px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{brand}</th>
+                {[
+                  { key: "name", label: "Ürün", align: "left" as const },
+                  { key: "tsfPrice", label: "Arçelik TSF", align: "right" as const },
+                  ...comparisonBrands.map((b) => ({ key: b, label: b, align: "right" as const })),
+                  { key: "avgDelta", label: "Ort. Fark", align: "right" as const },
+                ].map((col) => (
+                  <th
+                    key={col.key}
+                    onClick={() => { setSortCol(col.key); setSortDir((prev) => sortCol === col.key ? (prev === "asc" ? "desc" : "asc") : "asc"); }}
+                    className={`${col.align === "left" ? "text-left" : "text-right"} px-4 py-3 text-[11px] font-semibold uppercase tracking-wide cursor-pointer hover:text-[#0E2841] select-none ${
+                      col.key === "tsfPrice" ? "text-[#E30613]" : sortCol === col.key ? "text-[#0E2841]" : "text-gray-500"
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {sortCol === col.key && <ArrowUpDown size={10} />}
+                    </span>
+                  </th>
                 ))}
                 <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Trend</th>
               </tr>
             </thead>
             <tbody>
-              {comparisonData.map((row) => {
-                const sparkData = Array.from({ length: 6 }, (_, i) => row.arcAvg * (0.96 + Math.sin(i + row.cat.charCodeAt(0)) * 0.03));
+              {productComparison.slice(0, 20).map((row) => {
+                const sparkData = Array.from({ length: 6 }, (_, i) => row.tsfPrice * (0.96 + Math.sin(i + row.id.charCodeAt(0)) * 0.03));
                 return (
-                  <tr key={row.cat} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-5 py-3">
-                      <span className="text-xs font-semibold text-[#0E2841]">{row.name}</span>
+                  <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="text-xs font-semibold text-[#0E2841]">{row.name}</div>
+                      <div className="text-[10px] text-gray-400">{row.category}</div>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#E30613]">₺{row.arcAvg.toLocaleString("tr-TR")}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#E30613]">₺{row.tsfPrice.toLocaleString("tr-TR")}</td>
                     {comparisonBrands.map((brand) => {
-                      const bp = row.brands[brand];
+                      const bp = row.brandPrices[brand];
                       if (!bp) return <td key={brand} className="px-4 py-3 text-center text-[10px] text-gray-300">—</td>;
                       const deltaColor = bp.delta > 5 ? "text-green-600" : bp.delta < -5 ? "text-amber-600" : "text-gray-600";
                       return (
                         <td key={brand} className="px-4 py-3 text-right">
-                          <div className="font-mono text-xs">₺{bp.avg.toLocaleString("tr-TR")}</div>
+                          <div className="font-mono text-xs">₺{bp.price.toLocaleString("tr-TR")}</div>
                           <div className={`text-[10px] font-bold ${deltaColor}`}>{bp.delta > 0 ? "+" : ""}{bp.delta}%</div>
                         </td>
                       );
                     })}
+                    <td className="px-4 py-3 text-right">
+                      <span className={`text-xs font-bold ${row.avgDelta > 0 ? "text-green-600" : row.avgDelta < 0 ? "text-amber-600" : "text-gray-500"}`}>
+                        {row.avgDelta > 0 ? "+" : ""}{row.avgDelta}%
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-center">
                       <Sparkline data={sparkData} color="#0E2841" />
                     </td>

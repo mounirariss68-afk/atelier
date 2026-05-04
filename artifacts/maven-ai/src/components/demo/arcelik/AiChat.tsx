@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, Send, Bot, User, Sparkles } from "lucide-react";
 import {
-  BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, LineChart, Line, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { matchIntent, type ChatResponse } from "./chatIntents";
 
@@ -23,12 +23,10 @@ const WELCOME: Message = {
 };
 
 const QUICK_PROMPTS = [
-  "Pazar payımız kaç?",
-  "Haftalık özet ver",
-  "Kampanya öner",
-  "Vestel fiyatları",
-  "En zayıf şehirler",
-  "Fiyat artışı yapmalı mıyız?",
+  "Rakip fiyat analizi",
+  "Yeni kampanya öner",
+  "Şehir bazlı rapor",
+  "Haftalık özet",
 ];
 
 export default function AiChat({ onClose }: { onClose: () => void }) {
@@ -71,7 +69,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
       };
       setMessages((prev) => [...prev, assistantMsg]);
       setTyping(false);
-    }, 800 + Math.random() * 1200);
+    }, 500);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -188,6 +186,13 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                             </Pie>
                             <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                           </PieChart>
+                        ) : cType === "line" ? (
+                          <LineChart data={cData} margin={{ left: 0, right: 5 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} width={35} />
+                            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                            <Line type="monotone" dataKey="value" stroke="#E30613" strokeWidth={2} dot={{ r: 3, fill: "#E30613" }} />
+                          </LineChart>
                         ) : (
                           <BarChart data={cData} margin={{ left: 0, right: 5 }}>
                             <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-20} textAnchor="end" height={40} />
