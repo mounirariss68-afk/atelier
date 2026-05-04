@@ -176,6 +176,7 @@ export default function ProductComparisonView() {
   const [search, setSearch] = useState("");
   const [filterKind, setFilterKind] = useState<"all" | "arcelik" | "competitor">("all");
   const [filterCategory, setFilterCategory] = useState<ProductCategory | "all">("all");
+  const [filterTier, setFilterTier] = useState<"all" | "entry" | "mid" | "premium">("all");
 
   const allItems = useMemo<ComparisonItem[]>(() => {
     const a: ComparisonItem[] = products.map((p) => buildArcelikItem(p, lang));
@@ -199,6 +200,7 @@ export default function ProductComparisonView() {
     return allItems
       .filter((it) => filterKind === "all" || it.kind === filterKind)
       .filter((it) => filterCategory === "all" || it.category === filterCategory)
+      .filter((it) => filterTier === "all" || it.priceTier === filterTier)
       .filter((it) => {
         if (!q) return true;
         return (
@@ -208,7 +210,7 @@ export default function ProductComparisonView() {
         );
       })
       .slice(0, 80);
-  }, [allItems, search, filterKind, filterCategory]);
+  }, [allItems, search, filterKind, filterCategory, filterTier]);
 
   function toggle(key: string) {
     setSelectedKeys((prev) => {
@@ -422,6 +424,21 @@ export default function ProductComparisonView() {
                 <option key={c} value={c}>{getCategoryLabel(c, lang)}</option>
               ))}
             </select>
+
+            <select
+              value={filterTier}
+              onChange={(e) =>
+                setFilterTier(e.target.value as "all" | "entry" | "mid" | "premium")
+              }
+              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0E2841]"
+            >
+              <option value="all">{t.filterTierAll}</option>
+              {(["entry", "mid", "premium"] as const).map((tier) => (
+                <option key={tier} value={tier}>
+                  {getPriceTierLabel(tier, lang)}
+                </option>
+              ))}
+            </select>
           </div>
 
           {selectedItems.length >= MAX_SELECTED && (
@@ -523,7 +540,7 @@ export default function ProductComparisonView() {
                         <button
                           onClick={() => toggle(it.key)}
                           className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
-                          aria-label="Remove"
+                          aria-label={t.removeFromSelection}
                         >
                           <X size={12} />
                         </button>
