@@ -144,6 +144,7 @@ function CampaignBuilder() {
     setName("");
     setSelectedCats([]);
     setSelectedProductIds([]);
+    setProductTargetOpen(false);
     setDiscount(10);
     setSelectedCities([]);
     setPromotionType("indirim");
