@@ -23,23 +23,24 @@ The project is built on a modern web stack: React, Vite, TypeScript, Tailwind CS
 - **AI Integrations:** Anthropic (claude-sonnet-4-5) and OpenAI (gpt-5) for AI memo generation and chat assistant responses.
 - **Email Service:** Resend for sending emails.
 - **Database:** PostgreSQL for persistent storage of assessment submissions, call requests, team invitations, and Arçelik demo pricing data (8 tables).
-- **Scraper Dependencies:** cheerio (HTML parsing for Vestel/Bosch/Samsung), playwright-core (headless Chromium for Arçelik/Beko behind Akamai WAF — currently returns 0 products due to anti-bot protection, graceful fallback in place). Nix chromium at `/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium`.
+- **Scraper Dependencies:** cheerio (HTML parsing for Vestel/Bosch/Samsung), playwright-core (headless Chromium for Arçelik/Beko, both on the Hybris e-commerce platform). Nix chromium at `/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium`. All 5 scrapers return live data (276 products total: arcelik=79, beko=60, vestel=63, bosch=36, samsung=38).
 
 ## Scraper Architecture
 The price scraping system lives in two parallel codebases that must be kept in sync:
 - `artifacts/api-server/src/lib/scraper.ts` — runtime scraper used by the API server's daily cron job and manual POST /api/arcelik/scrape endpoint
 - `scripts/src/seed-arcelik.ts` — seed-time scraper used during initial database population
 
-**Working scrapers (Cheerio-based, 137 products total):**
+**Cheerio-based scrapers:**
 - **Vestel** (63 products): URLs `/buzdolabi`, `/camasir-makinesi` (singular!), `/bulasik-makineleri` (plural!). Selectors: `.product-list-item-wrap`, `.product-title`, `.product-price-helper`. Model codes from `data-product-id` attribute or regex extraction from product name.
 - **Bosch** (36 products): URL pattern `/tr/category/{cat}` with categories `buzdolaplari-derin-dondurucular`, `camasir-makineleri`, `bulasik-makineleri`. Uses stable `data-testid` attributes: `product-teaser-container-for-*`, `product-code`, `product-teaser-header-headline`, `price-main-price`. First product per category has CSS garbage in headline — filtered with `.includes("{")` check.
 - **Samsung** (38 products): URL pattern `/tr/{cat}/` with geo cookies `country_codes=tr; country_region=TR`. Parses JSON-LD `ItemList` structured data. No SKU field — model codes extracted from URL slugs via regex `[-]([a-z]{2}\d{2,}[a-z0-9]*)\/?$`.
 
-**Playwright-based scrapers (Arçelik/Beko — 0 products, Akamai WAF blocks):**
-- Infrastructure fully in place with `scrapeWithPlaywright()` helper, but Akamai anti-bot returns "Access Denied" even with headless Chromium + stealth args. Gracefully falls back to empty array.
-- Future improvement: stealth plugins (playwright-extra) or residential proxies needed.
+**Playwright-based scrapers (Arçelik 79 products, Beko 60 products):**
+- Both sites run on the **Hybris e-commerce platform**, sharing the same DOM structure. The `scrapeWithPlaywright()` helper extracts from `article.prd.product-item` containers, parsing the `data-gtm-impression` JSON attribute for clean `name`, `id`, and `price` fields.
+- Fallback chain: `data-product-code` / `data-product-name` attributes + `span.prc.prc-last` text → generic `[data-product-id]` selectors.
+- Headless Chromium is launched with `--disable-blink-features=AutomationControlled` plus a realistic Chrome user-agent and `Accept-Language: tr-TR` headers. This is enough to pass Akamai for both sites — no stealth plugin or residential proxy needed.
 
-**Model matching:** Baseline data in `arcelik-baseline.json` has been updated with real scraped model codes from Vestel (63 products), Bosch (36), Samsung (38). The scraper uses `buildEnhancedMap()` which indexes scraped products by both modelCode and name-extracted tokens for fuzzy matching (45/82 competitors matched). LG and Electrolux remain unmatched (19 entries) due to no scraper coverage.
+**Model matching:** Baseline data in `arcelik-baseline.json` has model codes from Vestel (63 products), Bosch (36), Samsung (38). The scraper uses `buildEnhancedMap()` which indexes scraped products by both modelCode and name-extracted tokens for fuzzy matching (45/82 competitors matched, 8/105 own-products matched). Arçelik own-product match rate is low because the scraped Arçelik IDs are 10-digit catalog numbers (e.g. `7286520155`) while baseline uses short codes (e.g. `5088 NFK`); refreshing baseline modelCodes against scraped names is a future improvement. LG and Electrolux remain unmatched (19 entries) due to no scraper coverage.
 
 **New Dashboard Views:**
 - **Product Comparison View** (`ProductComparisonView.tsx`): Card view with expandable product cards showing competitor bar charts, and scatter plot view for price distribution mapping. Search/sort by name, price, delta, competitor count. Full TR/EN i18n.
