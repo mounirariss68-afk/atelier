@@ -82,9 +82,6 @@ const PROVINCE_PATHS: { id: string; d: string }[] = [
   { id: "zonguldak", d: "M220,28 L234,24 L246,28 L244,36 L232,40 L222,36 Z" },
   { id: "bartin", d: "M246,28 L256,24 L266,26 L262,34 L252,36 L246,34 Z" },
   { id: "karabuk", d: "M246,34 L252,36 L262,34 L268,40 L262,44 L250,38 L244,36 Z" },
-  { id: "cankiri2", d: "M300,36 L286,26 L300,30 Z" },
-  { id: "tokat2", d: "M436,56 L440,48 L436,56 Z" },
-  { id: "samsun_coast", d: "M350,38 L360,32 L372,28 L388,30 L400,36 L406,44 Z" },
 ];
 
 const REGION_PATHS: { id: string; d: string; fill: string }[] = [
