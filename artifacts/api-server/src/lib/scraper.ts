@@ -505,14 +505,18 @@ async function scrapeN11(): Promise<ScrapedMarketplaceProduct[]> {
     return [];
   }
 
+  // maxPages is an upper bound; the inner loop terminates early once a page
+  // yields no new product IDs (true catalog-exhaustion termination, see
+  // `pageAdded === 0` check below). Set high enough that the cap is rarely
+  // hit before exhaustion under normal N11 catalog sizes.
   const categoryDefs = [
-    { slug: "buzdolabi", category: "buzdolabi", maxPages: 3 },
-    { slug: "camasir-makinesi", category: "camasir", maxPages: 3 },
-    { slug: "bulasik-makinesi", category: "bulasik", maxPages: 2 },
-    { slug: "firin", category: "firin", maxPages: 2 },
-    { slug: "klima", category: "klima", maxPages: 2 },
-    { slug: "kurutma-makinesi", category: "kurutma", maxPages: 1 },
-    { slug: "kucuk-ev-aletleri", category: "kucuk-ev", maxPages: 2 },
+    { slug: "buzdolabi", category: "buzdolabi", maxPages: 15 },
+    { slug: "camasir-makinesi", category: "camasir", maxPages: 15 },
+    { slug: "bulasik-makinesi", category: "bulasik", maxPages: 12 },
+    { slug: "firin", category: "firin", maxPages: 12 },
+    { slug: "klima", category: "klima", maxPages: 12 },
+    { slug: "kurutma-makinesi", category: "kurutma", maxPages: 8 },
+    { slug: "kucuk-ev-aletleri", category: "kucuk-ev", maxPages: 12 },
   ];
 
   const results: ScrapedMarketplaceProduct[] = [];
@@ -631,15 +635,17 @@ async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
 
   // Trendyol blocks legacy category slugs; the search endpoint is open and
   // stable, returns ~24 sponsored+organic cards per page, and is the same path
-  // used by their iOS/Android apps.
+  // used by their iOS/Android apps. maxPages is an upper bound; the inner loop
+  // terminates early once a page returns no new product IDs (true catalog
+  // exhaustion via the `pageAdded === 0` check below).
   const categoryDefs = [
-    { query: "buzdolabi", category: "buzdolabi", maxPages: 2 },
-    { query: "camasir makinesi", category: "camasir", maxPages: 2 },
-    { query: "bulasik makinesi", category: "bulasik", maxPages: 2 },
-    { query: "ankastre firin", category: "firin", maxPages: 2 },
-    { query: "klima", category: "klima", maxPages: 2 },
-    { query: "kurutma makinesi", category: "kurutma", maxPages: 1 },
-    { query: "kucuk ev aletleri", category: "kucuk-ev", maxPages: 1 },
+    { query: "buzdolabi", category: "buzdolabi", maxPages: 12 },
+    { query: "camasir makinesi", category: "camasir", maxPages: 12 },
+    { query: "bulasik makinesi", category: "bulasik", maxPages: 10 },
+    { query: "ankastre firin", category: "firin", maxPages: 10 },
+    { query: "klima", category: "klima", maxPages: 10 },
+    { query: "kurutma makinesi", category: "kurutma", maxPages: 8 },
+    { query: "kucuk ev aletleri", category: "kucuk-ev", maxPages: 8 },
   ];
 
   const results: ScrapedMarketplaceProduct[] = [];
@@ -1347,21 +1353,6 @@ export async function runPriceScrape(
         .where(eq(arcelikCompetitorPricesTable.id, cp.id));
     }
 
-    const completedAt = new Date();
-
-    await db
-      .update(arcelikScrapeLogsTable)
-      .set({
-        status: "completed",
-        completedAt,
-        scrapedCounts,
-        matchedProducts,
-        matchedCompetitors,
-        totalProducts: existingProducts.length,
-        totalCompetitors: existingCompetitors.length,
-      })
-      .where(eq(arcelikScrapeLogsTable.id, runId));
-
     if (unmatchedCompetitors > 0) {
       logger.warn(
         { unmatchedCompetitors, totalCompetitors: existingCompetitors.length },
@@ -1389,6 +1380,23 @@ export async function runPriceScrape(
         "Skipping equivalence rebuild — N11 scrape returned no items this run",
       );
     }
+
+    // Persist the final telemetry AFTER the equivalence rebuild so the
+    // scrape_logs row reflects equivalences created in this run.
+    const completedAt = new Date();
+
+    await db
+      .update(arcelikScrapeLogsTable)
+      .set({
+        status: "completed",
+        completedAt,
+        scrapedCounts,
+        matchedProducts,
+        matchedCompetitors,
+        totalProducts: existingProducts.length,
+        totalCompetitors: existingCompetitors.length,
+      })
+      .where(eq(arcelikScrapeLogsTable.id, runId));
 
     logger.info(
       {

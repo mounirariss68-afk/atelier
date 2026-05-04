@@ -15,6 +15,13 @@
       "when": 1777914389011,
       "tag": "0001_exotic_the_hand",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777931064256,
+      "tag": "0002_aromatic_mandrill",
+      "breakpoints": true
     }
   ]
 }
