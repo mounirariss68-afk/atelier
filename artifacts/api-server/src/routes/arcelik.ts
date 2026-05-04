@@ -56,6 +56,16 @@ router.get("/products", async (_req, res) => {
   }
 });
 
+// GET /competitor-prices
+//   Returns brand-site competitor price snapshots (one row per
+//   competitor SKU). Filters: ?brand, ?category.
+//   ?includeMarketplace=true augments each row with a
+//   `marketplaceObservations` array containing every marketplace
+//   listing currently linked to the same Arçelik product
+//   (joined via arcelikEquivalentId↔arcelikProductId).
+//   Semantics: PRODUCT-CENTRIC, not brand-scoped — the augmented
+//   observations may include other competitor brands so long as
+//   they map to the same Arçelik catalog SKU.
 router.get("/competitor-prices", async (_req, res) => {
   try {
     const { brand, category, includeMarketplace } = _req.query;
@@ -549,6 +559,16 @@ router.get("/product-specs", async (_req, res) => {
 // prices (from brand-site scrapers like Bosch/Vestel/Samsung) with marketplace
 // observations (n11 + trendyol) keyed by arcelik product, computing best/avg/
 // range across sources and a per-source breakdown.
+// GET /competitor-prices/multi-source
+//   Per Arçelik product, aggregates pricing observations across
+//   ALL sources (brand-site competitor scrapes + every marketplace
+//   linked via the equivalence engine). Filters: ?arcelikProductId,
+//   ?brand, ?category.
+//   Semantics: PRODUCT-CENTRIC. Each result group is keyed by
+//   Arçelik product and may contain observations from multiple
+//   competitor brands. Returns {bestPrice, avgPrice,
+//   priceRange{min,max,spreadPct}, perSource[{source,count,
+//   bestPrice,avgPrice}], observations[]}.
 router.get("/competitor-prices/multi-source", async (_req, res) => {
   try {
     const { arcelikProductId, brand, category } = _req.query;

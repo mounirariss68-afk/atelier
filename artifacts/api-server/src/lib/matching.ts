@@ -5,7 +5,8 @@ import {
   arcelikProductEquivalencesTable,
   arcelikProductSpecsTable,
 } from "@workspace/db";
-import { gte, eq, or, like } from "drizzle-orm";
+import { eq, gte, inArray, like, or } from "drizzle-orm";
+import { MARKETPLACE_SOURCES } from "./marketplace-sources";
 
 function normalizeBrand(text: string): string {
   return text
@@ -379,9 +380,9 @@ export async function rebuildEquivalences(
     .update(arcelikMarketplacePricesTable)
     .set({ arcelikProductId: null, matchConfidence: null })
     .where(
-      or(
-        eq(arcelikMarketplacePricesTable.marketplace, "n11"),
-        eq(arcelikMarketplacePricesTable.marketplace, "trendyol"),
+      inArray(
+        arcelikMarketplacePricesTable.marketplace,
+        MARKETPLACE_SOURCES as unknown as string[],
       ),
     );
 
@@ -390,8 +391,9 @@ export async function rebuildEquivalences(
       .delete(arcelikProductEquivalencesTable)
       .where(
         or(
-          like(arcelikProductEquivalencesTable.source, "n11/%"),
-          like(arcelikProductEquivalencesTable.source, "trendyol/%"),
+          ...MARKETPLACE_SOURCES.map((m) =>
+            like(arcelikProductEquivalencesTable.source, `${m}/%`),
+          ),
         ),
       );
     return { scanned: marketplaceRecords.length, created: 0, avgConfidence: 0 };
@@ -405,8 +407,9 @@ export async function rebuildEquivalences(
     .delete(arcelikProductEquivalencesTable)
     .where(
       or(
-        like(arcelikProductEquivalencesTable.source, "n11/%"),
-        like(arcelikProductEquivalencesTable.source, "trendyol/%"),
+        ...MARKETPLACE_SOURCES.map((m) =>
+          like(arcelikProductEquivalencesTable.source, `${m}/%`),
+        ),
       ),
     );
 
