@@ -22,7 +22,7 @@ The project is built on a modern web stack: React, Vite, TypeScript, Tailwind CS
 ## External Dependencies
 - **AI Integrations:** Anthropic (claude-sonnet-4-5) and OpenAI (gpt-5) for AI memo generation and chat assistant responses.
 - **Email Service:** Resend for sending emails.
-- **Database:** PostgreSQL for persistent storage of assessment submissions, call requests, team invitations, and Arçelik demo pricing data (12 tables).
+- **Database:** PostgreSQL for persistent storage of assessment submissions, call requests, team invitations, and Arçelik demo pricing data (14 tables).
 - **Scraper Dependencies:** cheerio (HTML parsing for Vestel/Bosch/Samsung), playwright-core (headless Chromium for Arçelik/Beko/N11/Trendyol). Nix chromium at `/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium`. All 7 scrapers return live data (~944 products per run: arcelik=79, beko=60, vestel=63, bosch=36, samsung=38, n11=~299 multi-brand SKUs across 7 categories incl. small appliances, trendyol=~369 multi-brand SKUs from search endpoint).
 
 ## Scraper Architecture
@@ -53,14 +53,19 @@ Both scrapers extract brand via `N11_BRAND_MAP` (diacritic-insensitive matching 
 
 **Cross-brand matching engine (`rebuildEquivalences()` in `matching.ts`):** LEFT JOINs `arcelik_product_specs` so it prefers structured PDP-extracted capacity/energy values over title-parsed fallbacks (with a 0.05 score boost for spec-backed matches and a `spec-data-used` reason in `matchBasis`). For each Arçelik product, scores every non-Arçelik-family marketplace record on (a) category match, (b) capacity within 10–20%, (c) energy class within one tier, (d) price within 25–50%, (e) title-token Jaccard overlap. Matches ≥0.5 confidence are kept (top 3 per competitor brand per product). Brand-family check (`Arçelik`/`Beko`/`Grundig`/`Altus` normalized via NFD + `ı→i`) prevents matching Arçelik products against sibling brands. The flush deletes ALL marketplace-sourced equivalences (`source LIKE 'n11/%'` OR `'trendyol/%'`) before reinsert so stale equivalences from old runs don't accumulate. Each row's `source` field tags the actual marketplace (`n11/runId` or `trendyol/runId`) for per-source auditing. Last verified run: **845 equivalences (549 n11 + 296 trendyol), avg conf 0.63, 575 ≥0.6**, spanning Bosch/Siemens/Profilo/Vestel/LG/Regal/Hoover/Electrolux.
 
+**Stale-link lifecycle:** Marketplace rows are upserted by (marketplace, marketplaceProductId), so on conflict the row's `arcelikProductId` and `matchConfidence` would persist across runs. To prevent contamination of multi-source aggregation, `rebuildEquivalences()` first NULLs both columns on every n11/trendyol row, then writes back only the fresh top match per row. This guarantees that any non-NULL `arcelikProductId` on `arcelik_marketplace_prices` reflects the latest run only.
+
+**Per-source price history (`arcelik_marketplace_price_history`):** Append-only timeline of every (marketplace, marketplaceProductId, scrapeRunId, price) observation. Each insert looks up the most recent prior observation for the SKU+marketplace pair and stores `previousPrice` + `priceChangePercent`. Insert-only — never upsert — so it serves as a true per-source price evolution log alongside the upserted "current price" view in `arcelik_marketplace_prices`.
+
 **API routes** (`artifacts/api-server/src/routes/arcelik.ts`):
 - `GET /api/arcelik/marketplace-prices` — filter by brand/category/marketplace/arcelikProductId
 - `GET /api/arcelik/marketplace-prices/summary` — aggregated min/avg/max/count grouped by marketplace+brand+category, last 14 days
+- `GET /api/arcelik/marketplace-prices/history` — append-only per-source price observations; filter by marketplace/marketplaceProductId/brand/sinceDays
 - `GET /api/arcelik/equivalences` — filter by arcelikProductId/brand/minConfidence
 - `GET /api/arcelik/product-specs` — filter by marketplace/marketplaceProductId
 - `GET /api/arcelik/competitor-prices/multi-source` — combines brand-site competitor prices with marketplace observations, returns per-key `{bestPrice, avgPrice, priceRange{min,max,spreadPct}, perSource[{source,count,bestPrice,avgPrice}], observations[]}`. Verified output: top group `cam-01` aggregates 3 sources (brand-site + n11 + trendyol) with 28 observations spanning 17,999–42,760 TL.
 
-Manual scrape via `POST /api/arcelik/scrape` reports `n11`, `trendyol`, `specs`, and `equivalences` counts in `scrapedCounts`.
+Manual scrape via `POST /api/arcelik/scrape` reports `n11`, `trendyol`, `specs`, `equivalences`, and `marketplaceHistory` counts in `scrapedCounts`.
 
 **New Dashboard Views:**
 - **Product Comparison View** (`ProductComparisonView.tsx`): Card view with expandable product cards showing competitor bar charts, and scatter plot view for price distribution mapping. Search/sort by name, price, delta, competitor count. Full TR/EN i18n.

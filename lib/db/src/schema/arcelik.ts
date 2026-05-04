@@ -252,6 +252,31 @@ export const arcelikProductSpecsTable = pgTable(
   ],
 );
 
+export const arcelikMarketplacePriceHistoryTable = pgTable(
+  "arcelik_marketplace_price_history",
+  {
+    id: serial("id").primaryKey(),
+    marketplace: text("marketplace").notNull(),
+    marketplaceProductId: text("marketplace_product_id").notNull(),
+    brand: text("brand").notNull(),
+    category: text("category").notNull(),
+    price: integer("price").notNull(),
+    previousPrice: integer("previous_price"),
+    priceChangePercent: doublePrecision("price_change_percent"),
+    arcelikProductId: text("arcelik_product_id"),
+    scrapeRunId: text("scrape_run_id").notNull(),
+    recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_mp_history_marketplace").on(t.marketplace),
+    index("idx_mp_history_pid").on(t.marketplaceProductId),
+    index("idx_mp_history_brand").on(t.brand),
+    index("idx_mp_history_recorded").on(t.recordedAt),
+    index("idx_mp_history_run").on(t.scrapeRunId),
+    index("idx_mp_history_arcelik_product").on(t.arcelikProductId),
+  ],
+);
+
 export const arcelikScrapeLogsTable = pgTable(
   "arcelik_scrape_logs",
   {

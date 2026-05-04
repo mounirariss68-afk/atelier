@@ -12,6 +12,7 @@ import {
   arcelikPriceHistoryTable,
   arcelikScrapeLogsTable,
   arcelikMarketplacePricesTable,
+  arcelikMarketplacePriceHistoryTable,
   arcelikProductEquivalencesTable,
   arcelikProductSpecsTable,
 } from "@workspace/db";
@@ -259,6 +260,45 @@ router.get("/marketplace-prices", async (_req, res) => {
   } catch (err) {
     logger.error({ err }, "Failed to fetch marketplace prices");
     res.status(500).json({ error: "Failed to fetch marketplace prices" });
+  }
+});
+
+router.get("/marketplace-prices/history", async (_req, res) => {
+  try {
+    const { marketplace, marketplaceProductId, brand, sinceDays, limit } =
+      _req.query;
+    const days = Math.min(Number(sinceDays) || 30, 365);
+    const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * days);
+    const maxRows = Math.min(Number(limit) || 1000, 10000);
+
+    const conditions = [gte(arcelikMarketplacePriceHistoryTable.recordedAt, since)];
+    if (marketplace)
+      conditions.push(
+        eq(arcelikMarketplacePriceHistoryTable.marketplace, String(marketplace)),
+      );
+    if (marketplaceProductId)
+      conditions.push(
+        eq(
+          arcelikMarketplacePriceHistoryTable.marketplaceProductId,
+          String(marketplaceProductId),
+        ),
+      );
+    if (brand)
+      conditions.push(
+        eq(arcelikMarketplacePriceHistoryTable.brand, String(brand)),
+      );
+
+    const rows = await db
+      .select()
+      .from(arcelikMarketplacePriceHistoryTable)
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+      .orderBy(desc(arcelikMarketplacePriceHistoryTable.recordedAt))
+      .limit(maxRows);
+
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch marketplace price history");
+    res.status(500).json({ error: "Failed to fetch marketplace price history" });
   }
 });
 

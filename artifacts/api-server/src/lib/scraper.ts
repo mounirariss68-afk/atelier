@@ -6,6 +6,7 @@ import {
   arcelikPriceHistoryTable,
   arcelikScrapeLogsTable,
   arcelikMarketplacePricesTable,
+  arcelikMarketplacePriceHistoryTable,
   arcelikProductSpecsTable,
 } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
@@ -1112,6 +1113,73 @@ export async function runPriceScrape(
         { inserted: insertRows.length, n11: n11Items.length, trendyol: trendyolItems.length },
         "Marketplace prices stored",
       );
+
+      // Per-source price history. Look up the previous observation for each
+      // (marketplace, marketplaceProductId) and insert a history row capturing
+      // the new price, previous price, and percentage change. Insert-only —
+      // never upsert — so we get an append-only timeline per SKU per source.
+      try {
+        const ids = insertRows.map((r) => r.marketplaceProductId);
+        const previousByKey = new Map<string, number>();
+        for (let i = 0; i < ids.length; i += 200) {
+          const slice = ids.slice(i, i + 200);
+          const prevRows = await db
+            .select({
+              marketplace: arcelikMarketplacePriceHistoryTable.marketplace,
+              marketplaceProductId:
+                arcelikMarketplacePriceHistoryTable.marketplaceProductId,
+              price: arcelikMarketplacePriceHistoryTable.price,
+              recordedAt: arcelikMarketplacePriceHistoryTable.recordedAt,
+            })
+            .from(arcelikMarketplacePriceHistoryTable)
+            .where(
+              sql`${arcelikMarketplacePriceHistoryTable.marketplaceProductId} IN (${sql.join(
+                slice.map((id) => sql`${id}`),
+                sql`, `,
+              )})`,
+            )
+            .orderBy(sql`${arcelikMarketplacePriceHistoryTable.recordedAt} DESC`);
+          for (const r of prevRows) {
+            const k = `${r.marketplace}:${r.marketplaceProductId}`;
+            if (!previousByKey.has(k)) previousByKey.set(k, r.price);
+          }
+        }
+
+        const historyRows = insertRows.map((r) => {
+          const k = `${r.marketplace}:${r.marketplaceProductId}`;
+          const prev = previousByKey.get(k) ?? null;
+          const pct =
+            prev && prev > 0
+              ? Math.round(((r.price - prev) / prev) * 1000) / 10
+              : null;
+          return {
+            marketplace: r.marketplace,
+            marketplaceProductId: r.marketplaceProductId,
+            brand: r.brand,
+            category: r.category,
+            price: r.price,
+            previousPrice: prev,
+            priceChangePercent: pct,
+            scrapeRunId: runId,
+            recordedAt: r.scrapedAt,
+          };
+        });
+        for (let i = 0; i < historyRows.length; i += 200) {
+          await db
+            .insert(arcelikMarketplacePriceHistoryTable)
+            .values(historyRows.slice(i, i + 200));
+        }
+        const changedCount = historyRows.filter(
+          (h) => h.priceChangePercent !== null && Math.abs(h.priceChangePercent) >= 0.1,
+        ).length;
+        scrapedCounts.marketplaceHistory = historyRows.length;
+        logger.info(
+          { recorded: historyRows.length, withChange: changedCount },
+          "Marketplace price history recorded",
+        );
+      } catch (err) {
+        logger.error({ err }, "Failed to record marketplace price history");
+      }
     }
 
     // Spec extraction runs against a sample of N11 products (PDPs are slow,
