@@ -12,7 +12,7 @@ import { useDemoLang } from "../DemoLangContext";
 import { dashboard } from "../demo-i18n";
 import {
   products, competitorPrices, cities, campaigns, dealers,
-  CATEGORY_LABELS, COMPETITOR_BRANDS, getCategoryLabel,
+  CATEGORY_LABELS, COMPETITOR_BRANDS, getCategoryLabel, getCityName,
   getProductName, getCitySeasonalPattern, getCampaignField,
   type ProductCategory, type CityData,
 } from "@/data/arcelik-seed";
@@ -306,18 +306,18 @@ export default function DashboardView() {
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedCity(city); }}
-                    aria-label={`${city.name} ${t.showCityDetails}`}
+                    aria-label={`${getCityName(city, lang)} ${t.showCityDetails}`}
                   >
                     <circle cx={pos.x} cy={pos.y} r={r + 4} fill={color} opacity={0.15} />
                     <circle cx={pos.x} cy={pos.y} r={isHovered ? r + 2 : r} fill={color} stroke="white" strokeWidth="2" className="transition-all duration-150" />
-                    <text x={pos.x} y={pos.y - r - 6} textAnchor="middle" fill="#374151" className="text-[9px] font-semibold pointer-events-none">{city.name}</text>
+                    <text x={pos.x} y={pos.y - r - 6} textAnchor="middle" fill="#374151" className="text-[9px] font-semibold pointer-events-none">{getCityName(city, lang)}</text>
                   </g>
                 );
               })}
             </svg>
             {hoveredCityData && (
               <div className="absolute top-4 right-4 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 shadow-lg w-52 pointer-events-none z-10">
-                <p className="text-xs font-bold text-[#0E2841] mb-1">{hoveredCityData.name}</p>
+                <p className="text-xs font-bold text-[#0E2841] mb-1">{getCityName(hoveredCityData, lang)}</p>
                 <div className="space-y-1 text-[11px] text-gray-600">
                   <div className="flex justify-between"><span>{t.tooltipMarketShare}</span><span className="font-bold text-[#0E2841]">%{hoveredCityData.marketSharePercent}</span></div>
                   <div className="flex justify-between"><span>{t.tooltipPriceIndex}</span><span className="font-bold">{hoveredCityData.avgPriceIndex}</span></div>
@@ -522,7 +522,7 @@ export default function DashboardView() {
             className="relative w-[420px] bg-white shadow-2xl h-full overflow-y-auto"
           >
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-              <h3 className="text-lg font-bold">{selectedCity.name}</h3>
+              <h3 className="text-lg font-bold">{getCityName(selectedCity, lang)}</h3>
               <button onClick={() => setSelectedCity(null)} className="p-1 hover:bg-gray-100 rounded-lg" aria-label={t.closeCityDetail}><X size={18} /></button>
             </div>
             <div className="p-6 space-y-5">

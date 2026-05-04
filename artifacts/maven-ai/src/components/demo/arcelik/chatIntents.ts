@@ -1,7 +1,7 @@
 import {
   products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, CATEGORY_LABELS_EN, COMPETITOR_BRANDS,
-  getProductName, getCampaignField, getCitySeasonalPattern,
+  getProductName, getCampaignField, getCitySeasonalPattern, getCityName,
   type ProductCategory,
 } from "@/data/arcelik-seed";
 import type { DemoLang } from "./DemoLangContext";
@@ -190,7 +190,7 @@ const INTENTS: Intent[] = [
     patterns: [/kampanya.*öner/i, /yeni kampanya/i, /campaign.*suggest/i, /ne kampanya/i, /suggest.*campaign/i, /new campaign/i, /recommend.*campaign/i],
     handler: (lang) => {
       const c = campaigns[Math.floor(Math.random() * campaigns.length)];
-      const cityNames = c.targetCities.map((id) => cities.find((ct) => ct.id === id)?.name).filter(Boolean).join(", ");
+      const cityNames = c.targetCities.map((id) => { const ct = cities.find((ct) => ct.id === id); return ct ? getCityName(ct, lang) : null; }).filter(Boolean).join(", ");
       return {
         agent: "campaign-mgr",
         type: "campaign-card",
@@ -219,7 +219,7 @@ const INTENTS: Intent[] = [
     patterns: [/düğün/i, /çeyiz/i, /wedding/i, /trousseau/i],
     handler: (lang) => {
       const c = campaigns.find((c) => c.id === "dugun-sezonu")!;
-      const cityNames = c.targetCities.map((id) => cities.find((ct) => ct.id === id)?.name).filter(Boolean).join(", ");
+      const cityNames = c.targetCities.map((id) => { const ct = cities.find((ct) => ct.id === id); return ct ? getCityName(ct, lang) : null; }).filter(Boolean).join(", ");
       return {
         agent: "campaign-mgr",
         type: "campaign-card",
@@ -306,8 +306,8 @@ const INTENTS: Intent[] = [
     handler: (lang) => {
       const weak = [...cities].sort((a, b) => a.marketSharePercent - b.marketSharePercent).slice(0, 5);
       const list = weak.map((c, i) => lang === "en"
-        ? `${i + 1}. ${c.name} — ${c.marketSharePercent}% (Index: ${c.avgPriceIndex})`
-        : `${i + 1}. ${c.name} — %${c.marketSharePercent} (Endeks: ${c.avgPriceIndex})`).join("\n");
+        ? `${i + 1}. ${getCityName(c, lang)} — ${c.marketSharePercent}% (Index: ${c.avgPriceIndex})`
+        : `${i + 1}. ${getCityName(c, lang)} — %${c.marketSharePercent} (Endeks: ${c.avgPriceIndex})`).join("\n");
       return {
         agent: "analyst",
         type: "list",
@@ -634,7 +634,7 @@ const INTENTS: Intent[] = [
       const anatolia = cities.filter((c) => c.populationTier !== "tier-1");
       const avgShare = (anatolia.reduce((s, c) => s + c.marketSharePercent, 0) / anatolia.length).toFixed(1);
       const top3 = [...cities].sort((a, b) => b.marketSharePercent - a.marketSharePercent).slice(0, 3);
-      const list = top3.map((c) => lang === "en" ? `${c.name} (${c.marketSharePercent}%)` : `${c.name} (%${c.marketSharePercent})`).join(", ");
+      const list = top3.map((c) => lang === "en" ? `${getCityName(c, lang)} (${c.marketSharePercent}%)` : `${getCityName(c, lang)} (%${c.marketSharePercent})`).join(", ");
       return {
         agent: "analyst",
         type: "analysis",

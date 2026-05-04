@@ -6,7 +6,7 @@ import { useDemoLang } from "../DemoLangContext";
 import { calendar } from "../demo-i18n";
 import {
   promotionalCalendar, campaigns, cities, COMPETITOR_BRANDS, getCategoryLabel,
-  getCalendarEntryName, getCampaignField,
+  getCalendarEntryName, getCampaignField, getCityName,
   type CalendarEntry,
 } from "@/data/arcelik-seed";
 
@@ -347,7 +347,7 @@ export default function CalendarView() {
                         {matchedCampaign.targetCities.map((cid) => {
                           const city = cities.find((c) => c.id === cid);
                           return city ? (
-                            <span key={cid} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">{city.name}</span>
+                            <span key={cid} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">{getCityName(city, lang)}</span>
                           ) : null;
                         })}
                       </div>

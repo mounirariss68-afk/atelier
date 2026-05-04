@@ -12,7 +12,7 @@ import TargetsView from "./dealer/TargetsView";
 import StockOrdersView from "./dealer/StockOrdersView";
 import AnnouncementsView from "./dealer/AnnouncementsView";
 import DealerChat from "./dealer/DealerChat";
-import { dealers, cities as allCities } from "@/data/arcelik-seed";
+import { dealers, cities as allCities, getCityName } from "@/data/arcelik-seed";
 import { DemoLangProvider, useDemoLang } from "./DemoLangContext";
 import { dealerShell } from "./demo-i18n";
 
@@ -61,7 +61,8 @@ function DealerPortalInner() {
     { id: 4, type: "announcement" as const, text: t.notif4, time: t.notif4Time },
   ];
 
-  const cityName = allCities.find((c) => c.id === DEALER.city)?.name || "İstanbul";
+  const cityObj = allCities.find((c) => c.id === DEALER.city);
+  const cityName = cityObj ? getCityName(cityObj, lang) : "Istanbul";
   const lowStockCount = Object.entries(DEALER.stockLevels).filter(
     ([cat, level]) => (level ?? 0) < (OPTIMAL_STOCK[cat] ?? 10)
   ).length;

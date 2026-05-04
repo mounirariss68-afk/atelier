@@ -688,6 +688,48 @@ const CALENDAR_NAME_EN: Record<string, string> = {
   "gap-2": "Opportunity Window: Mid-July",
 };
 
+const PROMO_TYPE_EN: Record<string, string> = {
+  indirim: "Discount",
+  taksit: "Installment",
+  "trade-in": "Trade-in",
+  paket: "Bundle",
+  hediye: "Gift",
+  bolgesel: "Regional",
+};
+
+export function getPromotionTypeLabel(code: string, lang: Lang): string {
+  if (lang === "tr") return code;
+  return PROMO_TYPE_EN[code] ?? code;
+}
+
+const CITY_NAME_EN: Record<string, string> = {
+  istanbul: "Istanbul",
+  ankara: "Ankara",
+  izmir: "Izmir",
+  bursa: "Bursa",
+  antalya: "Antalya",
+  adana: "Adana",
+  konya: "Konya",
+  gaziantep: "Gaziantep",
+  mersin: "Mersin",
+  kayseri: "Kayseri",
+  diyarbakir: "Diyarbakir",
+  samsun: "Samsun",
+  trabzon: "Trabzon",
+  eskisehir: "Eskisehir",
+  denizli: "Denizli",
+  malatya: "Malatya",
+  erzurum: "Erzurum",
+  van: "Van",
+  manisa: "Manisa",
+  tekirdag: "Tekirdag",
+};
+
+export function getCityName(city: CityData, lang: Lang): string {
+  if (lang === "tr") return city.name;
+  return CITY_NAME_EN[city.id] ?? city.name;
+}
+
 export function getCalendarEntryName(entry: CalendarEntry, lang: Lang): string {
   if (lang === "tr") return entry.campaignName;
   return CALENDAR_NAME_EN[entry.id] ?? entry.campaignName;

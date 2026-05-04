@@ -3,7 +3,7 @@ import {
   Award, TrendingUp, Tag, AlertTriangle, Package, BarChart3,
   Clock, ChevronRight, Megaphone, Info, Brain, CheckCircle2,
 } from "lucide-react";
-import { dealers, campaigns, cities as allCities, getCategoryLabel, getCampaignField } from "@/data/arcelik-seed";
+import { dealers, campaigns, cities as allCities, getCategoryLabel, getCampaignField, getCityName } from "@/data/arcelik-seed";
 import { generateDealerAgentTasks } from "@/data/arcelik-agent";
 import type { DealerViewId } from "../DealerPortal";
 import { useDemoLang } from "../DemoLangContext";
@@ -49,7 +49,8 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
   const { lang } = useDemoLang();
   const t = dealerHome[lang];
   const tierLabels: Record<string, string> = { gold: t.tierGold, silver: t.tierSilver, bronze: t.tierBronze };
-  const cityName = allCities.find((c) => c.id === DEALER.city)?.name || "Istanbul";
+  const cityObj = allCities.find((c) => c.id === DEALER.city);
+  const cityName = cityObj ? getCityName(cityObj, lang) : "Istanbul";
   const progressPct = Math.round((DEALER.currentProgress / DEALER.monthlySalesTarget) * 100);
 
   return (

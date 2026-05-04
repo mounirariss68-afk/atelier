@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
-import { cities, COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel, type ProductCategory } from "@/data/arcelik-seed";
+import { cities, COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel, getCityName, type ProductCategory } from "@/data/arcelik-seed";
 import { generateAlerts, type AgentAlert, type Severity } from "@/data/arcelik-agent";
 import { DemoLangProvider, useDemoLang } from "./DemoLangContext";
 import { shell } from "./demo-i18n";
@@ -275,7 +275,7 @@ function Shell() {
                           : "border-gray-200 text-gray-600 hover:border-blue-300"
                       }`}
                     >
-                      {c.name}
+                      {getCityName(c, lang)}
                     </button>
                   ))}
                 </div>

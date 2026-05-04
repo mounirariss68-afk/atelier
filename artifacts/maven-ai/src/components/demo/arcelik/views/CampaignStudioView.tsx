@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { campaign as campaignI18n } from "../demo-i18n";
 import {
-  campaigns, cities, CATEGORY_LABELS, getCategoryLabel, getCampaignField,
+  campaigns, cities, CATEGORY_LABELS, getCategoryLabel, getCampaignField, getCityName, getPromotionTypeLabel,
   type CampaignTemplate, type ProductCategory,
 } from "@/data/arcelik-seed";
 import { generateCampaignSuggestions } from "@/data/arcelik-agent";
@@ -27,7 +27,7 @@ function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLa
   const { lang } = useDemoLang();
   const t = campaignI18n[lang];
   const [expanded, setExpanded] = useState(false);
-  const targetCityNames = campaign.targetCities.map((id) => cities.find((c) => c.id === id)?.name).filter(Boolean);
+  const targetCityNames = campaign.targetCities.map((id) => { const c = cities.find((c) => c.id === id); return c ? getCityName(c, lang) : null; }).filter(Boolean);
 
   return (
     <motion.div
@@ -131,7 +131,7 @@ function CampaignBuilder() {
   const handleCreate = () => {
     toast({
       title: t.toastCreated,
-      description: `"${name || t.newCampaignDefault}" (${promotionType}) ${startDate} – ${endDate}`,
+      description: `"${name || t.newCampaignDefault}" (${getPromotionTypeLabel(promotionType, lang)}) ${startDate} – ${endDate}`,
     });
     setName("");
     setSelectedCats([]);
@@ -228,7 +228,7 @@ function CampaignBuilder() {
                     selectedCities.includes(c.id) ? "bg-blue-500 text-white border-blue-500" : "border-gray-200 text-gray-600"
                   }`}
                 >
-                  {c.name}
+                  {getCityName(c, lang)}
                 </button>
               ))}
             </div>
@@ -256,7 +256,7 @@ function CampaignBuilder() {
             </div>
             <div className="mt-4 pt-3 border-t border-white/10">
               <p className="text-[10px] text-gray-400">
-                {promotionType} • {selectedCats.length || t.allLabel} {t.categorySummary} × {selectedCities.length || t.allLabel} {t.citySummary} × %{discount} • {startDate} – {endDate}
+                {getPromotionTypeLabel(promotionType, lang)} • {selectedCats.length || t.allLabel} {t.categorySummary} × {selectedCities.length || t.allLabel} {t.citySummary} × %{discount} • {startDate} – {endDate}
               </p>
             </div>
           </div>
