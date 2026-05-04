@@ -24,6 +24,18 @@ A comprehensive, world-class marketing website for **Maven AI** — a boutique A
   - `AiChat.tsx` — Slide-out chat panel with typing indicator, quick prompts, inline metric/table/campaign-card/chart rendering (Recharts bar + pie), dual agent personas.
   - Wired in `Demo.tsx` with early return: `if (slug === "arcelik-fiyat-istihbarati" && variant === "dashboard") return <BusinessDashboard />;`
   - Color scheme: Arçelik red #E30613, Maven navy #0E2841, amber #F5A623. All UI in Turkish.
+- **Arçelik Dealer Portal** (Task #33): Full dealer-facing portal at `/demo/arcelik-fiyat-istihbarati/bayi`. Components in `src/components/demo/arcelik/dealer/`. Features:
+  - `DealerPortal.tsx` — Main shell with sidebar nav (6 views), top chrome (Arçelik branding, dealer identity "Yılmaz Elektronik", Gold badge, notifications), "Bayi Asistanı" chat toggle button.
+  - `DealerHomeView.tsx` — Scorecard (compliance ring 92/100, sales target 68/85, commission ₺24,500), 4 quick-stat cards (campaigns, low stock, pending orders, price changes), featured campaigns row, recent announcements.
+  - `PriceListView.tsx` — Category-tabbed product table (TSF, dealer cost, margin, campaign flag), search, "Son Değişiklikler" toggle with recent price changes timeline.
+  - `CampaignsView.tsx` — Active campaigns with countdown timers, eligible categories, dealer tips, completed campaigns collapsible section.
+  - `TargetsView.tsx` — Monthly target progress bar, category breakdown chart, quarterly bonus tracker, dealer ranking (23rd), commission table by tier.
+  - `StockOrdersView.tsx` — Dual tabs: stock status table with optimal/low indicators + order form with toast confirmation; recent orders with delivery stepper.
+  - `AnnouncementsView.tsx` — Filterable announcement cards (Yeni Ürün, Fiyat, Kampanya, Eğitim, Sistem) with read/unread toggle, category badges.
+  - `DealerChat.tsx` — Slide-out chat panel with typing indicator, quick prompts, inline metric/table/progress rendering.
+  - `dealerChatIntents.ts` — 30+ Turkish intent patterns: campaigns, prices, targets, commissions, stock, orders, delivery, taksit, competitor prices, announcements, compliance, help, greetings.
+  - Wired in `Demo.tsx` with early return: `if (slug === "arcelik-fiyat-istihbarati" && variant === "bayi") return <DealerPortal />;`
+  - Color scheme: Arçelik red #E30613, Maven navy #0E2841, amber #F5A623. All UI in Turkish.
 - **Cross-links**: Navbar (between Industries and Diagnostics — desktop + mobile), Footer (new Marketplace column), Home (teaser section before the Maven Insights banner with a mini realized-vs-expected bar chart), Industries (per-industry "Related tools in the Marketplace" CTA with `?industry=<id>` deep link).
 - **Brief**: `artifacts/maven-ai/docs/marketplace-catalog.md`.
 - **Build gotcha**: `lib/maven-content` is a `composite: true` TS project with a `dist/` output. After adding new exports, the `tsconfig.tsbuildinfo` may keep dist stale and downstream `tsc` will complain about missing exports. The post-merge script clears the buildinfo and rebuilds the package; for local dev, run `rm -f lib/maven-content/tsconfig.tsbuildinfo && pnpm --filter @workspace/maven-content exec tsc -p tsconfig.json`.

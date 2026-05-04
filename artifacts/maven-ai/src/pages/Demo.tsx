@@ -2,6 +2,7 @@ import { useParams, Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import DemoExperience from "@/components/demo/DemoExperience";
 import BusinessDashboard from "@/components/demo/arcelik/BusinessDashboard";
+import DealerPortal from "@/components/demo/arcelik/DealerPortal";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLang, tStr } from "@/lib/lang";
 
@@ -19,6 +20,10 @@ export default function Demo() {
 
   if (slug === "arcelik-fiyat-istihbarati" && variant === "dashboard") {
     return <BusinessDashboard />;
+  }
+
+  if (slug === "arcelik-fiyat-istihbarati" && variant === "bayi") {
+    return <DealerPortal />;
   }
 
   const scenario = getScenario(slug, variant);
