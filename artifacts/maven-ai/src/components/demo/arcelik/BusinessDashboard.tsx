@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Link } from "wouter";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard, Radar, Megaphone, SlidersHorizontal,
   CalendarRange, Bot, Bell, LogOut, ChevronLeft, ChevronRight,
-  X, Filter, Brain,
+  X, Filter, Brain, AlertTriangle,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
 import { cities, COMPETITOR_BRANDS, CATEGORY_LABELS, type ProductCategory } from "@/data/arcelik-seed";
-import { generateAlerts } from "@/data/arcelik-agent";
+import { generateAlerts, type AgentAlert, type Severity } from "@/data/arcelik-agent";
 import DashboardView from "./views/DashboardView";
 import CompetitorRadarView from "./views/CompetitorRadarView";
 import CampaignStudioView from "./views/CampaignStudioView";
@@ -41,7 +41,23 @@ function Shell() {
   const [chatOpen, setChatOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
   const { filters, update } = useDashboardFilters();
+
+  const agentAlerts = useMemo(() => generateAlerts(), []);
+  const critHighAlerts = agentAlerts.filter((a) => a.severity === "critical" || a.severity === "high");
+
+  const SEV_DOT: Record<Severity, string> = { critical: "bg-red-500", high: "bg-orange-500", medium: "bg-amber-500", low: "bg-gray-400" };
+  const SEV_LABEL: Record<Severity, string> = { critical: "Kritik", high: "Yüksek", medium: "Orta", low: "Düşük" };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-[#F4F6F8] text-[#0E2841]">
@@ -55,16 +71,62 @@ function Shell() {
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#E30613]">Arçelik</p>
           <p className="text-xs font-semibold truncate">Fiyat İstihbarat Platformu</p>
         </div>
-        <button
-          onClick={() => setView("decisions")}
-          className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
-          aria-label="Bildirimler"
-        >
-          <Bell size={16} />
-          <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-[#E30613] text-[9px] font-bold flex items-center justify-center animate-pulse">
-            {generateAlerts().filter((a) => a.severity === "critical" || a.severity === "high").length}
-          </span>
-        </button>
+        <div className="relative" ref={notifRef}>
+          <button
+            onClick={() => setNotifOpen(!notifOpen)}
+            className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
+            aria-label="Bildirimler"
+          >
+            <Bell size={16} />
+            <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-[#E30613] text-[9px] font-bold flex items-center justify-center animate-pulse">
+              {critHighAlerts.length}
+            </span>
+          </button>
+          <AnimatePresence>
+            {notifOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden"
+              >
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-1.5"><AlertTriangle size={14} className="text-[#E30613]" /> Ajan Uyarıları</h3>
+                  <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{critHighAlerts.length} acil</span>
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                  {agentAlerts.slice(0, 6).map((alert) => (
+                    <button
+                      key={alert.id}
+                      onClick={() => { setView("decisions"); setNotifOpen(false); }}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${SEV_DOT[alert.severity]}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                              alert.severity === "critical" ? "bg-red-100 text-red-700" : alert.severity === "high" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
+                            }`}>{SEV_LABEL[alert.severity]}</span>
+                            <span className="text-[9px] text-gray-400 ml-auto">{alert.category}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-[#0E2841] truncate">{alert.title}</p>
+                          <p className="text-[11px] text-gray-500 truncate">{alert.detail}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => { setView("decisions"); setNotifOpen(false); }}
+                  className="w-full px-4 py-2.5 text-center text-xs font-bold text-[#E30613] hover:bg-red-50 transition-colors border-t border-gray-100"
+                >
+                  Tüm Uyarıları ve Kararları Gör →
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10">
           <div className="w-7 h-7 rounded-full bg-[#E30613] flex items-center justify-center text-[10px] font-bold">ED</div>
           <div className="hidden md:block text-xs">

@@ -4,18 +4,18 @@ import {
   Brain, CheckCircle2, XCircle, ChevronDown, ChevronRight,
   AlertTriangle, Clock, ListTodo, Activity, Shield, Zap,
   DollarSign, TrendingUp, Filter, BarChart3,
-  Play, Pause, CheckCheck,
+  Play, Pause, CheckCheck, Edit3, History,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   generateRecommendations, generateTasks, generateAlerts,
-  generateActivityLog, PLAYBOOKS,
+  generateActivityLog, generateDecisionHistory, PLAYBOOKS,
   type AgentRecommendation, type AgentTask, type AgentAlert,
-  type AgentPlaybook, type AgentActivityEntry,
-  type DirectorRole, type Severity,
+  type AgentPlaybook, type AgentActivityEntry, type AgentDecisionLog,
+  type DirectorRole, type Severity, type DecisionType,
 } from "@/data/arcelik-agent";
 
-type SubTab = "recommendations" | "tasks" | "alerts" | "playbooks" | "activity";
+type SubTab = "recommendations" | "tasks" | "alerts" | "playbooks" | "activity" | "history";
 
 const ROLE_LABELS: Record<DirectorRole, string> = {
   pricing: "Fiyatlandırma",
@@ -92,12 +92,15 @@ function ReasoningTrace({ reasoning }: { reasoning: AgentRecommendation["reasoni
   );
 }
 
-function RecommendationCard({ rec, onApprove, onReject }: {
+function RecommendationCard({ rec, onApprove, onReject, onModify }: {
   rec: AgentRecommendation;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  onModify: (id: string, note: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [modifyOpen, setModifyOpen] = useState(false);
+  const [modifyNote, setModifyNote] = useState("");
 
   return (
     <motion.div
@@ -105,7 +108,7 @@ function RecommendationCard({ rec, onApprove, onReject }: {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-shadow hover:shadow-md ${
-        rec.status === "approved" ? "border-green-200" : rec.status === "rejected" ? "border-red-200" : "border-gray-100"
+        rec.status === "approved" ? "border-green-200" : rec.status === "rejected" ? "border-red-200" : rec.status === "modified" ? "border-blue-200" : "border-gray-100"
       }`}
     >
       <div className="p-4">
@@ -162,6 +165,37 @@ function RecommendationCard({ rec, onApprove, onReject }: {
                 )}
               </motion.div>
             )}
+
+            {modifyOpen && rec.status === "pending" && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="mt-3">
+                <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/50">
+                  <p className="text-[10px] font-bold text-blue-700 mb-2 flex items-center gap-1"><Edit3 size={10} /> Değişiklik Notu</p>
+                  <textarea
+                    value={modifyNote}
+                    onChange={(e) => setModifyNote(e.target.value)}
+                    placeholder="Öneride hangi değişiklikleri istediğinizi yazın..."
+                    className="w-full text-xs border border-blue-200 rounded-lg p-2.5 resize-none h-20 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button onClick={() => { setModifyOpen(false); setModifyNote(""); }} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">İptal</button>
+                    <button
+                      onClick={() => { if (modifyNote.trim()) { onModify(rec.id, modifyNote); setModifyOpen(false); setModifyNote(""); } }}
+                      disabled={!modifyNote.trim()}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-40"
+                    >
+                      Değişiklikle Onayla
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {rec.status === "modified" && rec.decisionNote && (
+              <div className="mt-3 border border-blue-200 rounded-lg p-3 bg-blue-50/30">
+                <p className="text-[10px] font-bold text-blue-700 mb-0.5 flex items-center gap-1"><Edit3 size={10} /> Değişiklik Notu</p>
+                <p className="text-xs text-blue-800">{rec.decisionNote}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -184,6 +218,12 @@ function RecommendationCard({ rec, onApprove, onReject }: {
               <XCircle size={13} /> Reddet
             </button>
             <button
+              onClick={() => setModifyOpen(!modifyOpen)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${modifyOpen ? "bg-blue-100 text-blue-700" : "text-blue-600 hover:bg-blue-50"}`}
+            >
+              <Edit3 size={13} /> Değiştir
+            </button>
+            <button
               onClick={() => onApprove(rec.id)}
               className="px-3 py-1.5 rounded-lg bg-[#E30613] text-white text-xs font-bold hover:bg-[#c00510] transition-colors flex items-center gap-1"
             >
@@ -197,8 +237,96 @@ function RecommendationCard({ rec, onApprove, onReject }: {
         {rec.status === "rejected" && (
           <span className="text-xs font-bold text-red-500 flex items-center gap-1"><XCircle size={13} /> Reddedildi</span>
         )}
+        {rec.status === "modified" && (
+          <span className="text-xs font-bold text-blue-600 flex items-center gap-1"><Edit3 size={13} /> Değiştirildi</span>
+        )}
       </div>
     </motion.div>
+  );
+}
+
+function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
+  const DECISION_COLORS: Record<DecisionType, { bg: string; text: string; label: string }> = {
+    approved: { bg: "bg-green-100", text: "text-green-700", label: "Onaylandı" },
+    rejected: { bg: "bg-red-100", text: "text-red-700", label: "Reddedildi" },
+    modified: { bg: "bg-blue-100", text: "text-blue-700", label: "Değiştirildi" },
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="flex gap-4 text-center">
+          <div>
+            <p className="text-lg font-extrabold text-green-600">{entries.filter((e) => e.decisionType === "approved").length}</p>
+            <p className="text-[10px] text-gray-500 font-medium">Onaylanan</p>
+          </div>
+          <div className="w-px bg-gray-200" />
+          <div>
+            <p className="text-lg font-extrabold text-blue-600">{entries.filter((e) => e.decisionType === "modified").length}</p>
+            <p className="text-[10px] text-gray-500 font-medium">Değiştirilen</p>
+          </div>
+          <div className="w-px bg-gray-200" />
+          <div>
+            <p className="text-lg font-extrabold text-red-600">{entries.filter((e) => e.decisionType === "rejected").length}</p>
+            <p className="text-[10px] text-gray-500 font-medium">Reddedilen</p>
+          </div>
+        </div>
+      </div>
+
+      {entries.map((entry, i) => {
+        const dc = DECISION_COLORS[entry.decisionType];
+        return (
+          <motion.div
+            key={entry.id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.04 }}
+            className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+          >
+            <div className="p-4">
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dc.bg} ${dc.text}`}>{dc.label}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[entry.role]}`}>{ROLE_LABELS[entry.role]}</span>
+                <span className="text-[10px] text-gray-400 ml-auto flex items-center gap-0.5"><Clock size={10} /> {timeAgo(entry.timestamp)}</span>
+              </div>
+              <h4 className="text-sm font-bold text-[#0E2841] mb-1">{entry.recommendationTitle}</h4>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-full bg-[#0E2841] flex items-center justify-center text-[8px] font-bold text-white">{entry.decidedBy.split(" ").map((n) => n[0]).join("")}</div>
+                <span className="text-xs text-gray-600 font-medium">{entry.decidedBy}</span>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Karar Gerekçesi</p>
+                <p className="text-xs text-[#0E2841]">{entry.rationale}</p>
+              </div>
+              {entry.modificationNote && (
+                <div className="bg-blue-50 rounded-lg p-3 mb-3 border border-blue-100">
+                  <p className="text-[10px] font-bold text-blue-700 mb-0.5 flex items-center gap-1"><Edit3 size={10} /> Değişiklik</p>
+                  <p className="text-xs text-blue-800">{entry.modificationNote}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-4 gap-2">
+                <div className="bg-gray-50 rounded-lg p-2 text-center">
+                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.revenue}</p>
+                  <p className="text-[9px] text-gray-400">Gelir Etkisi</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-2 text-center">
+                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.margin}</p>
+                  <p className="text-[9px] text-gray-400">Marj Etkisi</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-2 text-center">
+                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.share}</p>
+                  <p className="text-[9px] text-gray-400">Pay Etkisi</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-2 text-center">
+                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.timeframe}</p>
+                  <p className="text-[9px] text-gray-400">Süre</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -405,6 +533,8 @@ export default function AgentDecisionsView() {
   const pendingCount = recommendations.filter((r) => r.status === "pending").length;
   const criticalCount = recommendations.filter((r) => r.severity === "critical" && r.status === "pending").length;
 
+  const decisionHistory = useMemo(() => generateDecisionHistory(), []);
+
   const handleApprove = (id: string) => {
     setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const, decidedBy: "Elif Demir" } : r));
     const rec = recommendations.find((r) => r.id === id);
@@ -417,11 +547,18 @@ export default function AgentDecisionsView() {
     toast({ title: "Öneri Reddedildi", description: `"${rec?.title}" reddedildi.` });
   };
 
+  const handleModify = (id: string, note: string) => {
+    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "modified" as const, decidedBy: "Elif Demir", decisionNote: note } : r));
+    const rec = recommendations.find((r) => r.id === id);
+    toast({ title: "Öneri Değiştirildi", description: `"${rec?.title}" değişiklik notuyla onaylandı.` });
+  };
+
   const SUB_TABS: { id: SubTab; label: string; icon: typeof Brain; count?: number }[] = [
     { id: "recommendations", label: "Öneriler", icon: Brain, count: pendingCount },
     { id: "tasks", label: "Görevler", icon: ListTodo, count: tasks.filter((t) => t.status === "open").length },
     { id: "alerts", label: "Uyarılar", icon: AlertTriangle, count: alerts.length },
     { id: "playbooks", label: "Oyun Planları", icon: Zap, count: PLAYBOOKS.filter((p) => p.status !== "completed").length },
+    { id: "history", label: "Karar Geçmişi", icon: History, count: decisionHistory.length },
     { id: "activity", label: "Ajan Aktivitesi", icon: Activity },
   ];
 
@@ -512,7 +649,7 @@ export default function AgentDecisionsView() {
       {subTab === "recommendations" && (
         <div className="space-y-4">
           {filteredRecs.map((rec) => (
-            <RecommendationCard key={rec.id} rec={rec} onApprove={handleApprove} onReject={handleReject} />
+            <RecommendationCard key={rec.id} rec={rec} onApprove={handleApprove} onReject={handleReject} onModify={handleModify} />
           ))}
         </div>
       )}
@@ -520,6 +657,7 @@ export default function AgentDecisionsView() {
       {subTab === "tasks" && <TaskQueue tasks={tasks} />}
       {subTab === "alerts" && <AlertTimeline alerts={alerts} />}
       {subTab === "playbooks" && <PlaybookView playbooks={PLAYBOOKS} />}
+      {subTab === "history" && <DecisionHistoryPanel entries={decisionHistory} />}
       {subTab === "activity" && <ActivityLog entries={activityLog} />}
     </div>
   );

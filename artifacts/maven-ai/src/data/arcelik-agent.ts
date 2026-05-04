@@ -84,6 +84,26 @@ export interface AgentActivityEntry {
   type: "scan" | "analysis" | "recommendation" | "approval" | "alert";
 }
 
+export type DecisionType = "approved" | "rejected" | "modified";
+
+export interface AgentDecisionLog {
+  id: string;
+  recommendationId: string;
+  recommendationTitle: string;
+  decisionType: DecisionType;
+  decidedBy: string;
+  role: DirectorRole;
+  timestamp: string;
+  rationale: string;
+  modificationNote?: string;
+  simulatedOutcome: {
+    revenue: string;
+    margin: string;
+    share: string;
+    timeframe: string;
+  };
+}
+
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 const now = new Date();
 const dayAgo = (d: number) => {
@@ -542,6 +562,90 @@ export function generateActivityLog(): AgentActivityEntry[] {
     { id: "act-10", agent: "Karar Motoru", action: "Q2 hedef risk analizi tamamlandı", detail: "₺158M hedef açığı için 3 senaryo modellendi. Eş zamanlı aksiyon paketi önerildi.", timestamp: hoursAgo(1), type: "recommendation" },
     { id: "act-11", agent: "Optimizasyon Ajanı", action: "Ramazan kampanyası optimizasyon önerisi hazırlandı", detail: "Dijital bütçe +%30 ve taksit mesajı önceliklendirmesi önerildi.", timestamp: hoursAgo(6), type: "recommendation" },
     { id: "act-12", agent: "Fiyat İzleme Ajanı", action: "Regal klima fiyat düşüşü tespit edildi", detail: "INV 09R: ₺12.990 → ₺11.490. Arçelik eşdeğerden %32 ucuz.", timestamp: hoursAgo(4), type: "alert" },
+  ];
+}
+
+export function generateDecisionHistory(): AgentDecisionLog[] {
+  return [
+    {
+      id: "dl-01",
+      recommendationId: "rec-hist-01",
+      recommendationTitle: "Samsung Bulaşık Makinesi Fiyat Eşleştirme",
+      decisionType: "approved",
+      decidedBy: "Elif Demir",
+      role: "pricing",
+      timestamp: dayAgo(3),
+      rationale: "Rakip fiyat avantajı ciddi. Pazar payı kaybını önlemek için acil müdahale gerekli.",
+      simulatedOutcome: { revenue: "+₺4.2M", margin: "-0.5%", share: "+0.2pp", timeframe: "30 gün" },
+    },
+    {
+      id: "dl-02",
+      recommendationId: "rec-hist-02",
+      recommendationTitle: "Küçük Ev Aletleri Premium Fiyatlandırma",
+      decisionType: "modified",
+      decidedBy: "Elif Demir",
+      role: "pricing",
+      timestamp: dayAgo(5),
+      rationale: "Fiyat artışı mantıklı ancak %8 yerine %5 ile başlayıp tepkiyi ölçmek daha güvenli.",
+      modificationNote: "Önerilen %8 artış %5'e düşürüldü. 2 hafta sonra değerlendirme yapılacak.",
+      simulatedOutcome: { revenue: "+₺6.1M", margin: "+1.2%", share: "-0.1pp", timeframe: "60 gün" },
+    },
+    {
+      id: "dl-03",
+      recommendationId: "rec-hist-03",
+      recommendationTitle: "Beko Alt Segmenti Agresif Kampanya",
+      decisionType: "rejected",
+      decidedBy: "Mehmet Acar",
+      role: "finance",
+      timestamp: dayAgo(7),
+      rationale: "Marj etkisi kabul edilemez. %15 indirim ile EBITDA hedefi tehlikeye girer.",
+      simulatedOutcome: { revenue: "+₺18M", margin: "-3.1%", share: "+0.8pp", timeframe: "90 gün" },
+    },
+    {
+      id: "dl-04",
+      recommendationId: "rec-hist-04",
+      recommendationTitle: "Klima Erken Sezon Stok Artışı",
+      decisionType: "approved",
+      decidedBy: "Ayşe Yılmaz",
+      role: "marketing",
+      timestamp: dayAgo(10),
+      rationale: "Geçen yıl stok yetersizliği nedeniyle ₺22M kayıp yaşandı. Erken tedarik stratejik öncelik.",
+      simulatedOutcome: { revenue: "+₺22M", margin: "+0.8%", share: "+0.6pp", timeframe: "120 gün" },
+    },
+    {
+      id: "dl-05",
+      recommendationId: "rec-hist-05",
+      recommendationTitle: "TV Segmentinde Taksit Süresi Uzatma",
+      decisionType: "modified",
+      decidedBy: "Elif Demir",
+      role: "pricing",
+      timestamp: dayAgo(12),
+      rationale: "36 ay taksit finans riski yüksek. 24 ay ile sınırlandırıldı, ancak faiz oranı düşürüldü.",
+      modificationNote: "36 ay → 24 ay taksit, faiz oranı %1.29 → %0.99 olarak revize edildi.",
+      simulatedOutcome: { revenue: "+₺9.5M", margin: "-0.2%", share: "+0.3pp", timeframe: "60 gün" },
+    },
+    {
+      id: "dl-06",
+      recommendationId: "rec-hist-06",
+      recommendationTitle: "Doğu Anadolu Bayi Destek Paketi",
+      decisionType: "approved",
+      decidedBy: "Ayşe Yılmaz",
+      role: "marketing",
+      timestamp: dayAgo(15),
+      rationale: "Bölgesel pazar payı %18'e düşmüş. Bayi teşvik paketi ile toparlanma mümkün.",
+      simulatedOutcome: { revenue: "+₺7.3M", margin: "+0.1%", share: "+1.2pp", timeframe: "90 gün" },
+    },
+    {
+      id: "dl-07",
+      recommendationId: "rec-hist-07",
+      recommendationTitle: "Çamaşır Makinesi Enerji Verimliliği Kampanyası",
+      decisionType: "approved",
+      decidedBy: "Mehmet Acar",
+      role: "finance",
+      timestamp: dayAgo(18),
+      rationale: "Devlet teşviki ile kombine edilebilir. ROI pozitif. Bütçe içinde.",
+      simulatedOutcome: { revenue: "+₺11M", margin: "+0.4%", share: "+0.5pp", timeframe: "45 gün" },
+    },
   ];
 }
 
