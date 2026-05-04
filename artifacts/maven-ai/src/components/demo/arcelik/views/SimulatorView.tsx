@@ -120,8 +120,12 @@ export default function SimulatorView() {
                   }}
                   className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm appearance-none pr-8 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20"
                 >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
+                  {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => (
+                    <optgroup key={cat} label={getCategoryLabel(cat, lang)}>
+                      {products.filter((p) => p.category === cat).map((p) => (
+                        <option key={p.id} value={p.id}>{getProductName(p, lang)} — ₺{p.tsfPrice.toLocaleString("tr-TR")}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               ) : (

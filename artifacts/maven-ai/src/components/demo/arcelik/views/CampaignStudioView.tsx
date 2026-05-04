@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles, Target, MapPin, TrendingUp, Calendar, ChevronRight,
   Send, CheckCircle2, Clock, DollarSign, Edit3,
-  Brain, Shield,
+  Brain, Shield, Package,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDemoLang } from "../DemoLangContext";
 import { campaign as campaignI18n } from "../demo-i18n";
 import {
-  campaigns, cities, CATEGORY_LABELS, getCategoryLabel, getCampaignField, getCityName, getPromotionTypeLabel,
+  campaigns, cities, products, CATEGORY_LABELS, getCategoryLabel, getCampaignField, getCityName, getProductName, getPromotionTypeLabel,
   type CampaignTemplate, type ProductCategory,
 } from "@/data/arcelik-seed";
 import { generateCampaignSuggestions } from "@/data/arcelik-agent";
@@ -115,12 +115,19 @@ function CampaignBuilder() {
   const t = campaignI18n[lang];
   const [name, setName] = useState("");
   const [selectedCats, setSelectedCats] = useState<ProductCategory[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [discount, setDiscount] = useState(10);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [promotionType, setPromotionType] = useState("indirim");
   const [startDate, setStartDate] = useState("2026-06-01");
   const [endDate, setEndDate] = useState("2026-06-30");
   const [aiOptimizing, setAiOptimizing] = useState(false);
+  const [productTargetOpen, setProductTargetOpen] = useState(false);
+
+  const eligibleProducts = useMemo(() => {
+    if (selectedCats.length === 0) return [];
+    return products.filter((p) => selectedCats.includes(p.category));
+  }, [selectedCats]);
 
   const projectedImpact = {
     share: `+${(discount * 0.08).toFixed(1)}%`,
@@ -129,12 +136,14 @@ function CampaignBuilder() {
   };
 
   const handleCreate = () => {
+    const productInfo = selectedProductIds.length > 0 ? ` • ${selectedProductIds.length} ${t.selectedProductCount}` : "";
     toast({
       title: t.toastCreated,
-      description: `"${name || t.newCampaignDefault}" (${getPromotionTypeLabel(promotionType, lang)}) ${startDate} – ${endDate}`,
+      description: `"${name || t.newCampaignDefault}" (${getPromotionTypeLabel(promotionType, lang)})${productInfo} ${startDate} – ${endDate}`,
     });
     setName("");
     setSelectedCats([]);
+    setSelectedProductIds([]);
     setDiscount(10);
     setSelectedCities([]);
     setPromotionType("indirim");
@@ -190,7 +199,16 @@ function CampaignBuilder() {
               {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((id) => (
                 <button
                   key={id}
-                  onClick={() => setSelectedCats((prev) => prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id])}
+                  onClick={() => {
+                    setSelectedCats((prev) => {
+                      const next = prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id];
+                      setSelectedProductIds((pids) => pids.filter((pid) => {
+                        const prod = products.find((p) => p.id === pid);
+                        return prod && next.includes(prod.category);
+                      }));
+                      return next;
+                    });
+                  }}
                   className={`px-2.5 py-1 text-[11px] rounded-full border font-medium ${
                     selectedCats.includes(id) ? "bg-[#E30613] text-white border-[#E30613]" : "border-gray-200 text-gray-600 hover:border-gray-400"
                   }`}
@@ -200,6 +218,55 @@ function CampaignBuilder() {
               ))}
             </div>
           </div>
+
+          {selectedCats.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setProductTargetOpen((v) => !v)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 mb-1 w-full"
+              >
+                <Package size={12} />
+                {t.targetProductsLabel}
+                <ChevronRight size={12} className={`ml-auto transition-transform ${productTargetOpen ? "rotate-90" : ""}`} />
+                {selectedProductIds.length > 0 && (
+                  <span className="text-[10px] text-[#E30613] font-medium">{selectedProductIds.length} {t.selectedProductCount}</span>
+                )}
+              </button>
+              {productTargetOpen && (
+                <>
+                  <p className="text-[10px] text-gray-400 mb-1.5">{t.targetProductsHint}</p>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-0.5">
+                    {selectedCats.map((cat) => {
+                      const catProds = eligibleProducts.filter((p) => p.category === cat);
+                      if (catProds.length === 0) return null;
+                      return (
+                        <div key={cat}>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide px-1 pt-1">{getCategoryLabel(cat, lang)}</p>
+                          {catProds.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => setSelectedProductIds((prev) => prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id])}
+                              className={`w-full text-left px-2 py-1 text-[11px] rounded transition-colors ${
+                                selectedProductIds.includes(p.id) ? "bg-[#E30613]/10 text-[#E30613] font-semibold" : "text-gray-600 hover:bg-gray-50"
+                              }`}
+                            >
+                              {getProductName(p, lang)}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {selectedProductIds.length > 0
+                      ? `${selectedProductIds.length} ${t.selectedProductCount}`
+                      : t.allProductsInCategory}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">{t.discountRate} %{discount}</label>
@@ -256,7 +323,7 @@ function CampaignBuilder() {
             </div>
             <div className="mt-4 pt-3 border-t border-white/10">
               <p className="text-[10px] text-gray-400">
-                {getPromotionTypeLabel(promotionType, lang)} • {selectedCats.length || t.allLabel} {t.categorySummary} × {selectedCities.length || t.allLabel} {t.citySummary} × %{discount} • {startDate} – {endDate}
+                {getPromotionTypeLabel(promotionType, lang)} • {selectedCats.length || t.allLabel} {t.categorySummary}{selectedProductIds.length > 0 ? ` (${selectedProductIds.length} ${t.selectedProductCount})` : ""} × {selectedCities.length || t.allLabel} {t.citySummary} × %{discount} • {startDate} – {endDate}
               </p>
             </div>
           </div>
