@@ -92,11 +92,11 @@ function simplifyRing(coords, tolerance) {
   return result;
 }
 
-function ringToPath(coords, xScale, yScale, xOff, yOff) {
+function ringToPath(coords, xScale, yScale, xOff, yOff, padX, padY) {
   return coords.map((c, i) => {
     const [mx, my] = projectMercator(c[0], c[1]);
-    const x = (mx - xOff) * xScale;
-    const y = (yOff - my) * yScale;
+    const x = (mx - xOff) * xScale + padX;
+    const y = (yOff - my) * yScale + padY;
     return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(" ") + " Z";
 }
@@ -143,6 +143,11 @@ async function main() {
   const availH = TARGET_HEIGHT - PADDING * 2;
   const scale = Math.min(availW / geoWidth, availH / geoHeight);
 
+  const contentW = geoWidth * scale;
+  const contentH = geoHeight * scale;
+  const padX = (TARGET_WIDTH - contentW) / 2;
+  const padY = (TARGET_HEIGHT - contentH) / 2;
+
   const provinces = [];
   const centroids = {};
 
@@ -162,7 +167,7 @@ async function main() {
         const svgArea = area * scale * scale;
         if (svgArea < MIN_RING_AREA) continue;
         const simplified = simplifyRing(ring, 0.008);
-        pathD += ringToPath(simplified, scale, scale, minX, maxY);
+        pathD += ringToPath(simplified, scale, scale, minX, maxY, padX, padY);
       }
     }
 
@@ -170,8 +175,8 @@ async function main() {
 
     const allCoords = coords.flatMap(p => p);
     const [centX, centY] = polygonCentroid(allCoords);
-    const svgX = (centX - minX) * scale + PADDING;
-    const svgY = (maxY - centY) * scale + PADDING;
+    const svgX = (centX - minX) * scale + padX;
+    const svgY = (maxY - centY) * scale + padY;
 
     centroids[id] = { x: Math.round(svgX * 10) / 10, y: Math.round(svgY * 10) / 10 };
     provinces.push({ id, region, d: pathD });
