@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { motion } from "framer-motion";
 import { Package, AlertTriangle, CheckCircle2, XCircle, ShoppingCart, Truck, Clock, ChevronDown, ChevronRight } from "lucide-react";
 import { dealers, products, CATEGORY_LABELS, type ProductCategory } from "@/data/arcelik-seed";
@@ -156,8 +156,8 @@ export default function StockOrdersView() {
                 const Icon = si.icon;
                 const isExpanded = expanded.has(row.cat);
                 return (
-                  <>
-                    <tr key={row.cat} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 ${row.status === "low" ? "bg-amber-50/30" : row.status === "out" ? "bg-red-50/30" : ""}`} onClick={() => toggleExpand(row.cat)}>
+                  <Fragment key={row.cat}>
+                    <tr className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 ${row.status === "low" ? "bg-amber-50/30" : row.status === "out" ? "bg-red-50/30" : ""}`} onClick={() => toggleExpand(row.cat)}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           {isExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
@@ -218,7 +218,7 @@ export default function StockOrdersView() {
                         </tr>
                       );
                     })}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
