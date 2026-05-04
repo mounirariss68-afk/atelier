@@ -646,6 +646,29 @@ async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
     { query: "kucuk ev aletleri", category: "kucuk-ev", maxPages: 8 },
   ];
 
+  // Per-category title keyword gate. Trendyol search returns broad results
+  // (sponsored/cross-sell/accessories), so require at least one category-
+  // specific keyword in the listing title before accepting it.
+  const TITLE_KEYWORDS: Record<string, string[]> = {
+    buzdolabi: ["buzdolab", "no frost", "no-frost", "kombi dolap", "side by side"],
+    camasir: ["camasir makinesi", "camaşır makines", "camasir mak"],
+    bulasik: ["bulasik makinesi", "bulaşık makines", "bulasik mak"],
+    firin: ["firin", "fırın", "ankastre", "ocak", "set ustu", "set üstü"],
+    klima: ["klima", "split", "btu"],
+    kurutma: ["kurutma makinesi", "kurutucu"],
+    "kucuk-ev": [],
+  };
+  const titleMatchesCategory = (title: string, category: string): boolean => {
+    const kws = TITLE_KEYWORDS[category];
+    if (!kws || kws.length === 0) return true;
+    const norm = title
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ı/g, "i");
+    return kws.some((kw) => norm.includes(kw));
+  };
+
   const results: ScrapedMarketplaceProduct[] = [];
   const seenIds = new Set<string>();
 
@@ -728,6 +751,7 @@ async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
           let pageAdded = 0;
           for (const it of items) {
             if (seenIds.has(it.id)) continue;
+            if (!titleMatchesCategory(it.title, def.category)) continue;
             const price = parseTurkishPrice(it.priceText);
             if (!price || price < 500) continue;
             seenIds.add(it.id);
