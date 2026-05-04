@@ -17,20 +17,24 @@ interface AnnouncementSeed {
   categoryColor: string;
   titleKey: string;
   bodyKey: string;
-  date: string;
+  dateObj: Date;
   read: boolean;
 }
 
 const ANNOUNCEMENT_SEEDS: AnnouncementSeed[] = [
-  { id: 1, categoryKey: "catNewProduct",   categoryColor: "#7c3aed", titleKey: "ann1Title", bodyKey: "ann1Body", date: "2 Mayıs 2026",  read: false },
-  { id: 2, categoryKey: "catPriceUpdate",  categoryColor: "#E30613", titleKey: "ann2Title", bodyKey: "ann2Body", date: "1 Mayıs 2026",  read: false },
-  { id: 3, categoryKey: "catTraining",     categoryColor: "#0891b2", titleKey: "ann3Title", bodyKey: "ann3Body", date: "30 Nisan 2026", read: true  },
-  { id: 4, categoryKey: "catCampaignNews", categoryColor: "#16a34a", titleKey: "ann4Title", bodyKey: "ann4Body", date: "28 Nisan 2026", read: true  },
-  { id: 5, categoryKey: "catPolicyChange", categoryColor: "#d97706", titleKey: "ann5Title", bodyKey: "ann5Body", date: "25 Nisan 2026", read: true  },
-  { id: 6, categoryKey: "catNewProduct",   categoryColor: "#7c3aed", titleKey: "ann6Title", bodyKey: "ann6Body", date: "22 Nisan 2026", read: true  },
-  { id: 7, categoryKey: "catTraining",     categoryColor: "#0891b2", titleKey: "ann7Title", bodyKey: "ann7Body", date: "20 Nisan 2026", read: true  },
-  { id: 8, categoryKey: "catCampaignNews", categoryColor: "#16a34a", titleKey: "ann8Title", bodyKey: "ann8Body", date: "18 Nisan 2026", read: true  },
+  { id: 1, categoryKey: "catNewProduct",   categoryColor: "#7c3aed", titleKey: "ann1Title", bodyKey: "ann1Body", dateObj: new Date(2026, 4, 2),  read: false },
+  { id: 2, categoryKey: "catPriceUpdate",  categoryColor: "#E30613", titleKey: "ann2Title", bodyKey: "ann2Body", dateObj: new Date(2026, 4, 1),  read: false },
+  { id: 3, categoryKey: "catTraining",     categoryColor: "#0891b2", titleKey: "ann3Title", bodyKey: "ann3Body", dateObj: new Date(2026, 3, 30), read: true  },
+  { id: 4, categoryKey: "catCampaignNews", categoryColor: "#16a34a", titleKey: "ann4Title", bodyKey: "ann4Body", dateObj: new Date(2026, 3, 28), read: true  },
+  { id: 5, categoryKey: "catPolicyChange", categoryColor: "#d97706", titleKey: "ann5Title", bodyKey: "ann5Body", dateObj: new Date(2026, 3, 25), read: true  },
+  { id: 6, categoryKey: "catNewProduct",   categoryColor: "#7c3aed", titleKey: "ann6Title", bodyKey: "ann6Body", dateObj: new Date(2026, 3, 22), read: true  },
+  { id: 7, categoryKey: "catTraining",     categoryColor: "#0891b2", titleKey: "ann7Title", bodyKey: "ann7Body", dateObj: new Date(2026, 3, 20), read: true  },
+  { id: 8, categoryKey: "catCampaignNews", categoryColor: "#16a34a", titleKey: "ann8Title", bodyKey: "ann8Body", dateObj: new Date(2026, 3, 18), read: true  },
 ];
+
+function formatAnnouncementDate(d: Date, lang: "tr" | "en"): string {
+  return d.toLocaleDateString(lang === "tr" ? "tr-TR" : "en-US", { day: "numeric", month: "long", year: "numeric" });
+}
 
 const CATEGORY_ICONS: Record<AnnouncementCategoryKey, typeof Bell> = {
   catNewProduct: Tag,
@@ -62,8 +66,9 @@ export default function AnnouncementsView() {
       title: t[a.titleKey] ?? a.titleKey,
       body: t[a.bodyKey] ?? a.bodyKey,
       categoryLabel: t[a.categoryKey] ?? a.categoryKey,
+      date: formatAnnouncementDate(a.dateObj, lang),
     })),
-    [readMap, t],
+    [readMap, t, lang],
   );
 
   const categoryKeys: AnnouncementCategoryKey[] = useMemo(
