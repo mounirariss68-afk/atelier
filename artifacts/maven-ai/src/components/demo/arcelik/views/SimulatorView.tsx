@@ -366,6 +366,10 @@ export default function SimulatorView() {
                         onClick={() => {
                           if (product) {
                             setSimMode("product");
+                            setSelectedCat(product.category);
+                            setFilterSub(null);
+                            setFilterTier(null);
+                            setFilterSmart(false);
                             setSelectedProduct(product);
                             setPriceAdjust(rec.suggestedAdjustment);
                             setShowResults(true);
