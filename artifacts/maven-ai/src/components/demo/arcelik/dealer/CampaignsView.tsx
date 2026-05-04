@@ -108,7 +108,7 @@ export default function CampaignsView() {
 
                 <div className="bg-gray-50 rounded-lg p-3 space-y-2">
                   <p className="text-[10px] font-bold uppercase text-gray-500">Kampanya Materyalleri</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div className="text-xs">
                       <span className="text-gray-400">POS Mesajı: </span>
                       <span className="text-gray-700">{c.dealerPosMessaging}</span>
@@ -116,6 +116,10 @@ export default function CampaignsView() {
                     <div className="text-xs">
                       <span className="text-gray-400">SMS Şablonu: </span>
                       <span className="text-gray-700">{c.dealerSmsNotification}</span>
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-gray-400">Sosyal Medya: </span>
+                      <span className="text-gray-700">{c.bodyCopy}</span>
                     </div>
                   </div>
                 </div>
