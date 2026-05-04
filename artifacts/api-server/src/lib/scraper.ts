@@ -5,11 +5,13 @@ import {
   arcelikCompetitorPricesTable,
   arcelikPriceHistoryTable,
   arcelikScrapeLogsTable,
+  arcelikMarketplacePricesTable,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { execSync } from "child_process";
 import { logger } from "./logger";
 import type { Browser, BrowserContext, Page } from "playwright-core";
+import { rebuildEquivalences } from "./matching";
 
 interface ScrapedPrice {
   modelCode: string;
@@ -17,6 +19,93 @@ interface ScrapedPrice {
   price: number;
   sourceUrl: string;
   scrapedAt: string;
+}
+
+export interface ScrapedMarketplaceProduct {
+  marketplace: string;
+  marketplaceProductId: string;
+  productUrl: string;
+  brand: string;
+  title: string;
+  category: string;
+  price: number;
+  capacityLiters: number | null;
+  capacityKg: number | null;
+  energyClass: string | null;
+  scrapedAt: string;
+}
+
+// Match keys are diacritic-stripped, lowercased; canonical names follow
+const N11_BRAND_MAP: Array<{ keys: string[]; canonical: string }> = [
+  { keys: ["arcelik", "arçelik"], canonical: "Arçelik" },
+  { keys: ["beko"], canonical: "Beko" },
+  { keys: ["bosch"], canonical: "Bosch" },
+  { keys: ["siemens"], canonical: "Siemens" },
+  { keys: ["profilo"], canonical: "Profilo" },
+  { keys: ["samsung"], canonical: "Samsung" },
+  { keys: ["vestel"], canonical: "Vestel" },
+  { keys: ["regal"], canonical: "Regal" },
+  { keys: ["grundig", "grundıg"], canonical: "Grundig" },
+  { keys: ["lg"], canonical: "LG" },
+  { keys: ["altus"], canonical: "Altus" },
+  { keys: ["electrolux"], canonical: "Electrolux" },
+  { keys: ["whirlpool"], canonical: "Whirlpool" },
+  { keys: ["hotpoint"], canonical: "Hotpoint" },
+  { keys: ["indesit"], canonical: "Indesit" },
+  { keys: ["kumtel"], canonical: "Kumtel" },
+  { keys: ["silverline"], canonical: "Silverline" },
+  { keys: ["simfer"], canonical: "Simfer" },
+  { keys: ["haier"], canonical: "Haier" },
+  { keys: ["hoover"], canonical: "Hoover" },
+  { keys: ["dijitsu"], canonical: "Dijitsu" },
+  { keys: ["windsor"], canonical: "Windsor" },
+  { keys: ["daewoo"], canonical: "Daewoo" },
+];
+
+function normalizeForMatch(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i");
+}
+
+function extractBrandFromTitle(title: string): string {
+  const lower = normalizeForMatch(title.trim());
+  for (const entry of N11_BRAND_MAP) {
+    for (const key of entry.keys) {
+      const k = normalizeForMatch(key);
+      if (lower.startsWith(k + " ") || lower.startsWith(k + "-")) {
+        return entry.canonical;
+      }
+    }
+  }
+  // Unknown brand: return original first token (capitalized as-is) but never
+  // accidentally treat unrecognized variants as competitor brands. Returning
+  // an unmapped first token lets matching exclude it via brand-family check.
+  return title.trim().split(/\s+/)[0] || "Unknown";
+}
+
+function extractCapacityLitersFromTitle(title: string): number | null {
+  const m = title.match(/\b(\d{2,4})\s*(?:lt|l\b|litre)/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return n >= 50 && n <= 1200 ? n : null;
+}
+
+function extractCapacityKgFromTitle(title: string): number | null {
+  const m = title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*kg/i);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(",", "."));
+  return n >= 1 && n <= 25 ? n : null;
+}
+
+function extractEnergyClassFromTitle(title: string): string | null {
+  const m = title.match(/\b([A-G](?:\+{1,3})?)\s*(?:enerji|sınıf)/i);
+  if (m) return m[1].toUpperCase();
+  const m2 = title.match(/\b(A\+{0,3}|B|C|D|E|F|G)\s+enerji/i);
+  if (m2) return m2[1].toUpperCase();
+  return null;
 }
 
 function parseTurkishPrice(raw: string): number | null {
@@ -408,6 +497,129 @@ async function scrapeSamsung(): Promise<ScrapedPrice[]> {
   return results;
 }
 
+async function scrapeN11(): Promise<ScrapedMarketplaceProduct[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping N11 scrape (Playwright not available)");
+    return [];
+  }
+
+  const categoryDefs = [
+    { slug: "buzdolabi", category: "buzdolabi", maxPages: 3 },
+    { slug: "camasir-makinesi", category: "camasir", maxPages: 3 },
+    { slug: "bulasik-makinesi", category: "bulasik", maxPages: 2 },
+    { slug: "firin", category: "firin", maxPages: 2 },
+    { slug: "klima", category: "klima", maxPages: 2 },
+    { slug: "kurutma-makinesi", category: "kurutma", maxPages: 1 },
+  ];
+
+  const results: ScrapedMarketplaceProduct[] = [];
+  const seenIds = new Set<string>();
+
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const def of categoryDefs) {
+      for (let pg = 1; pg <= def.maxPages; pg++) {
+        const url =
+          pg === 1
+            ? `https://www.n11.com/beyaz-esya/${def.slug}`
+            : `https://www.n11.com/beyaz-esya/${def.slug}?pg=${pg}`;
+        const page: Page = await context.newPage();
+        try {
+          await page.goto(url, {
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+          });
+          // N11 uses Vue, products render after networkidle + scroll
+          await page
+            .waitForSelector("a.product-item[data-prod-id]", { timeout: 12000 })
+            .catch(() => {});
+          await page.evaluate(async () => {
+            for (let i = 0; i < 6; i++) {
+              window.scrollBy(0, 900);
+              await new Promise((r) => setTimeout(r, 250));
+            }
+          });
+          await page.waitForTimeout(800);
+
+          const items = await page.evaluate(() => {
+            const out: {
+              id: string;
+              href: string;
+              title: string;
+              priceText: string;
+            }[] = [];
+            document
+              .querySelectorAll("a.product-item[data-prod-id]")
+              .forEach((el) => {
+                const id = el.getAttribute("data-prod-id") || "";
+                const href = (el as HTMLAnchorElement).href || "";
+                const title =
+                  el
+                    .querySelector(".product-item-title")
+                    ?.textContent?.trim() || "";
+                const priceText =
+                  el
+                    .querySelector(".basket-price .price-currency")
+                    ?.textContent?.trim() ||
+                  el
+                    .querySelector(".price-currency")
+                    ?.textContent?.trim() ||
+                  "";
+                if (id && title && priceText) {
+                  out.push({ id, href, title, priceText });
+                }
+              });
+            return out;
+          });
+
+          let pageAdded = 0;
+          for (const it of items) {
+            if (seenIds.has(it.id)) continue;
+            const price = parseTurkishPrice(it.priceText);
+            if (!price || price < 500) continue;
+            seenIds.add(it.id);
+            results.push({
+              marketplace: "n11",
+              marketplaceProductId: it.id,
+              productUrl: it.href,
+              brand: extractBrandFromTitle(it.title),
+              title: it.title,
+              category: def.category,
+              price,
+              capacityLiters: extractCapacityLitersFromTitle(it.title),
+              capacityKg: extractCapacityKgFromTitle(it.title),
+              energyClass: extractEnergyClassFromTitle(it.title),
+              scrapedAt: new Date().toISOString(),
+            });
+            pageAdded++;
+          }
+          logger.info(
+            { url, pageAdded, totalSoFar: results.length },
+            "N11 page scraped",
+          );
+          // Stop pagination when a page yields nothing new
+          if (pageAdded === 0 && pg > 1) break;
+        } catch (err) {
+          logger.warn({ url, err }, "N11 page scrape failed");
+        } finally {
+          await page.close();
+        }
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return results;
+}
+
 type ScraperResults = {
   arcelik: ScrapedPrice[];
   beko: ScrapedPrice[];
@@ -449,7 +661,6 @@ async function runScrapers(): Promise<ScraperResults> {
     }
   }
 
-  await closePlaywrightBrowser();
   return results;
 }
 
@@ -498,10 +709,65 @@ export async function runPriceScrape(
       scrapedCounts[key] = arr.length;
     }
 
-    const totalScraped = Object.values(scrapedCounts).reduce(
-      (s, n) => s + n,
-      0,
-    );
+    let n11Items: ScrapedMarketplaceProduct[] = [];
+    try {
+      logger.info("Scraping n11.com (marketplace)...");
+      n11Items = await scrapeN11();
+      scrapedCounts.n11 = n11Items.length;
+      logger.info({ count: n11Items.length }, "n11.com: marketplace products scraped");
+    } catch (err) {
+      logger.error({ err }, "n11.com: scrape failed");
+      scrapedCounts.n11 = 0;
+    }
+
+    await closePlaywrightBrowser();
+
+    if (n11Items.length > 0) {
+      const insertRows = n11Items.map((it) => ({
+        marketplace: it.marketplace,
+        marketplaceProductId: it.marketplaceProductId,
+        productUrl: it.productUrl,
+        brand: it.brand,
+        title: it.title,
+        category: it.category,
+        price: it.price,
+        capacityLiters: it.capacityLiters,
+        capacityKg: it.capacityKg,
+        energyClass: it.energyClass,
+        scrapeRunId: runId,
+        scrapedAt: new Date(it.scrapedAt),
+      }));
+      // Batch insert in chunks to avoid parameter limits, upserting on the
+      // unique (marketplace, marketplaceProductId) index so repeated scrapes
+      // refresh prices instead of accumulating duplicates.
+      for (let i = 0; i < insertRows.length; i += 100) {
+        await db
+          .insert(arcelikMarketplacePricesTable)
+          .values(insertRows.slice(i, i + 100))
+          .onConflictDoUpdate({
+            target: [
+              arcelikMarketplacePricesTable.marketplace,
+              arcelikMarketplacePricesTable.marketplaceProductId,
+            ],
+            set: {
+              productUrl: sql`excluded.product_url`,
+              brand: sql`excluded.brand`,
+              title: sql`excluded.title`,
+              category: sql`excluded.category`,
+              price: sql`excluded.price`,
+              capacityLiters: sql`excluded.capacity_liters`,
+              capacityKg: sql`excluded.capacity_kg`,
+              energyClass: sql`excluded.energy_class`,
+              scrapeRunId: sql`excluded.scrape_run_id`,
+              scrapedAt: sql`excluded.scraped_at`,
+            },
+          });
+      }
+      logger.info({ inserted: insertRows.length }, "N11 marketplace prices stored");
+    }
+
+    const totalScraped =
+      Object.values(scrapedCounts).reduce((s, n) => s + n, 0);
     logger.info({ totalScraped, scrapedCounts }, "Scrape completed, matching prices...");
 
     const existingProducts = await db
@@ -675,6 +941,27 @@ export async function runPriceScrape(
       logger.warn(
         { unmatchedCompetitors, totalCompetitors: existingCompetitors.length },
         "Some competitor entries had no scraped match (baseline model codes may need updating)",
+      );
+    }
+
+    // Only rebuild equivalences when the marketplace scrape produced data this
+    // run; otherwise we'd churn equivalences against stale data.
+    let equivalencesCreated = 0;
+    if (n11Items.length > 0) {
+      try {
+        const equivResult = await rebuildEquivalences(runId);
+        equivalencesCreated = equivResult.created;
+        scrapedCounts.equivalences = equivalencesCreated;
+        logger.info(
+          equivResult,
+          "Cross-brand equivalences rebuilt from marketplace data",
+        );
+      } catch (err) {
+        logger.error({ err }, "Failed to rebuild cross-brand equivalences");
+      }
+    } else {
+      logger.warn(
+        "Skipping equivalence rebuild — N11 scrape returned no items this run",
       );
     }
 

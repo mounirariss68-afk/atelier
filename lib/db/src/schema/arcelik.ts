@@ -7,6 +7,7 @@ import {
   doublePrecision,
   integer,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const arcelikProductsTable = pgTable(
@@ -157,6 +158,69 @@ export const arcelikPriceHistoryTable = pgTable(
     index("idx_price_history_brand").on(t.brand),
     index("idx_price_history_recorded").on(t.recordedAt),
     index("idx_price_history_type").on(t.recordType),
+  ],
+);
+
+export const arcelikMarketplacePricesTable = pgTable(
+  "arcelik_marketplace_prices",
+  {
+    id: serial("id").primaryKey(),
+    marketplace: text("marketplace").notNull(),
+    marketplaceProductId: text("marketplace_product_id").notNull(),
+    productUrl: text("product_url").notNull(),
+    brand: text("brand").notNull(),
+    title: text("title").notNull(),
+    category: text("category").notNull(),
+    price: integer("price").notNull(),
+    capacityLiters: integer("capacity_liters"),
+    capacityKg: doublePrecision("capacity_kg"),
+    energyClass: text("energy_class"),
+    arcelikProductId: text("arcelik_product_id"),
+    competitorPriceId: text("competitor_price_id"),
+    matchConfidence: doublePrecision("match_confidence"),
+    scrapedAt: timestamp("scraped_at").notNull().defaultNow(),
+    scrapeRunId: text("scrape_run_id").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uniq_mp_prices_marketplace_pid").on(
+      t.marketplace,
+      t.marketplaceProductId,
+    ),
+    index("idx_mp_prices_marketplace").on(t.marketplace),
+    index("idx_mp_prices_brand").on(t.brand),
+    index("idx_mp_prices_category").on(t.category),
+    index("idx_mp_prices_arcelik_product").on(t.arcelikProductId),
+    index("idx_mp_prices_competitor").on(t.competitorPriceId),
+    index("idx_mp_prices_scraped").on(t.scrapedAt),
+    index("idx_mp_prices_run").on(t.scrapeRunId),
+  ],
+);
+
+export const arcelikProductEquivalencesTable = pgTable(
+  "arcelik_product_equivalences",
+  {
+    id: serial("id").primaryKey(),
+    arcelikProductId: text("arcelik_product_id").notNull(),
+    competitorBrand: text("competitor_brand").notNull(),
+    competitorModel: text("competitor_model").notNull(),
+    competitorMarketplaceId: integer("competitor_marketplace_id"),
+    competitorPriceRecordId: text("competitor_price_record_id"),
+    matchConfidence: doublePrecision("match_confidence").notNull(),
+    matchBasis: jsonb("match_basis").notNull().$type<{
+      reasons: string[];
+      categoryMatch: boolean;
+      capacityDeltaPercent?: number;
+      energyClassMatch?: boolean;
+      priceDeltaPercent?: number;
+      tokenOverlap?: number;
+    }>(),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_equiv_arcelik").on(t.arcelikProductId),
+    index("idx_equiv_brand").on(t.competitorBrand),
+    index("idx_equiv_confidence").on(t.matchConfidence),
   ],
 );
 

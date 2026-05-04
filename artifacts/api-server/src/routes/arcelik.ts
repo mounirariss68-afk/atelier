@@ -11,8 +11,10 @@ import {
   arcelikKpiBenchmarksTable,
   arcelikPriceHistoryTable,
   arcelikScrapeLogsTable,
+  arcelikMarketplacePricesTable,
+  arcelikProductEquivalencesTable,
 } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gte } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { runPriceScrape, isScrapeRunning } from "../lib/scraper";
 import { getSchedulerStatus } from "../lib/scheduler";
@@ -213,6 +215,119 @@ router.get("/price-history/summary", async (_req, res) => {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch price history summary" });
+  }
+});
+
+router.get("/marketplace-prices", async (_req, res) => {
+  try {
+    const { brand, category, marketplace, arcelikProductId, limit } =
+      _req.query;
+    const maxRows = Math.min(Number(limit) || 500, 5000);
+    const conditions = [];
+    if (brand) conditions.push(eq(arcelikMarketplacePricesTable.brand, String(brand)));
+    if (category)
+      conditions.push(
+        eq(arcelikMarketplacePricesTable.category, String(category)),
+      );
+    if (marketplace)
+      conditions.push(
+        eq(arcelikMarketplacePricesTable.marketplace, String(marketplace)),
+      );
+    if (arcelikProductId)
+      conditions.push(
+        eq(
+          arcelikMarketplacePricesTable.arcelikProductId,
+          String(arcelikProductId),
+        ),
+      );
+
+    let query = db
+      .select()
+      .from(arcelikMarketplacePricesTable)
+      .orderBy(desc(arcelikMarketplacePricesTable.scrapedAt))
+      .limit(maxRows);
+
+    if (conditions.length > 0) {
+      query = query.where(
+        conditions.length === 1 ? conditions[0] : and(...conditions),
+      ) as typeof query;
+    }
+
+    const rows = await query;
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch marketplace prices");
+    res.status(500).json({ error: "Failed to fetch marketplace prices" });
+  }
+});
+
+router.get("/marketplace-prices/summary", async (_req, res) => {
+  try {
+    const recentSince = new Date(Date.now() - 1000 * 60 * 60 * 24 * 14);
+    const rows = await db
+      .select({
+        marketplace: arcelikMarketplacePricesTable.marketplace,
+        brand: arcelikMarketplacePricesTable.brand,
+        category: arcelikMarketplacePricesTable.category,
+        productCount: sql<number>`count(*)`,
+        minPrice: sql<number>`min(${arcelikMarketplacePricesTable.price})`,
+        maxPrice: sql<number>`max(${arcelikMarketplacePricesTable.price})`,
+        avgPrice: sql<number>`round(avg(${arcelikMarketplacePricesTable.price}))`,
+      })
+      .from(arcelikMarketplacePricesTable)
+      .where(gte(arcelikMarketplacePricesTable.scrapedAt, recentSince))
+      .groupBy(
+        arcelikMarketplacePricesTable.marketplace,
+        arcelikMarketplacePricesTable.brand,
+        arcelikMarketplacePricesTable.category,
+      );
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch marketplace summary");
+    res.status(500).json({ error: "Failed to fetch marketplace summary" });
+  }
+});
+
+router.get("/equivalences", async (_req, res) => {
+  try {
+    const { arcelikProductId, brand, minConfidence, limit } = _req.query;
+    const maxRows = Math.min(Number(limit) || 500, 5000);
+    const minConf = Number(minConfidence);
+
+    const conditions = [];
+    if (arcelikProductId)
+      conditions.push(
+        eq(
+          arcelikProductEquivalencesTable.arcelikProductId,
+          String(arcelikProductId),
+        ),
+      );
+    if (brand)
+      conditions.push(
+        eq(arcelikProductEquivalencesTable.competitorBrand, String(brand)),
+      );
+    if (Number.isFinite(minConf))
+      conditions.push(
+        gte(arcelikProductEquivalencesTable.matchConfidence, minConf),
+      );
+
+    let query = db
+      .select()
+      .from(arcelikProductEquivalencesTable)
+      .orderBy(desc(arcelikProductEquivalencesTable.matchConfidence))
+      .limit(maxRows);
+
+    if (conditions.length > 0) {
+      query = query.where(
+        conditions.length === 1 ? conditions[0] : and(...conditions),
+      ) as typeof query;
+    }
+
+    const rows = await query;
+    res.json(rows);
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch equivalences");
+    res.status(500).json({ error: "Failed to fetch equivalences" });
   }
 });
 
