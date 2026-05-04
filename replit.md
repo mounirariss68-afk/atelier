@@ -1,122 +1,23 @@
 # Maven AI — Marketing Website + Diagnostic Suite
 
-## Project Overview
-A comprehensive, world-class marketing website for **Maven AI** — a boutique AI advisory and engineering services firm, sister company to Maven Insights. Built as a React + Vite single-page application with full routing. Now includes the **Maven AI Diagnostic Assessment Suite** — four free bilingual (EN/AR) wizards (ARI, MVI, DAFI, UVR) backed by an Express API, Postgres persistence, AI executive memos and branded PDF reports.
+## Overview
+This project delivers a world-class marketing website for Maven AI, an AI advisory and engineering services firm. It's built as a React + Vite single-page application. A key enhancement is the integration of the Maven AI Diagnostic Assessment Suite, offering four free, bilingual (EN/AR) diagnostic wizards (ARI, MVI, DAFI, UVR). This suite is supported by an Express API, uses Postgres for persistence, and generates AI-powered executive memos and branded PDF reports. The website aims to showcase Maven AI's expertise, services, and diagnostic capabilities, with a strong focus on a premium user experience and robust functionality.
 
-## Marketplace (Task #21)
-- **Catalog**: 8 demo classes, 3 horizontals, 14 specific tools — bilingual EN/AR title/pitch/long-description/screens/data-model — all in `lib/maven-content/src/knowledge.ts` (`marketplaceClasses`, `marketplaceHorizontals`, `marketplaceTools`).
-- **Re-export**: `artifacts/maven-ai/src/data/content.ts` re-exports the three collections plus runs `assertSharedAlignment` and a self-consistency check (every `industries[]` id on a tool must exist in `industriesIndex`).
-- **Pages**: `Marketplace.tsx` (index with class card grid + filter chips, query-string deep link), `MarketplaceDetail.tsx` (coming-soon detail with screens & data-model 3-column), `components/marketplace/ValueRealizationDemo.tsx` (live flagship — sample portfolio, editable drawer, gauge for realization rate, expected-vs-realized bars, value-at-risk callout, leakage grouping, print summary, reset to sample).
-- **Chat**: `ChatSuggestionKind` includes `"marketplace"`; `buildKnownLinks()` emits `/marketplace` + `/marketplace/<slug>` per tool; `chat.ts` system prompt surfaces a MARKETPLACE TOOLS section flagging `value-realization` as the only LIVE demo.
-- **Multi-demo variants**: `DemoVariant` interface on `MarketplaceToolEntry` (`demoVariants?: DemoVariant[]`). Arçelik Pricing Intelligence is the first multi-variant tool with 3 variants (teknik/dashboard/bayi). Detail page renders per-variant pill buttons in the hero and a 3-column variant card grid at the bottom. Single-demo tools are unaffected (guard checks).
-- **Multi-demo routing**: `/demo/:slug/:variant` + `/demo/:slug` dual routes in App.tsx. `getScenario(slug, variant?)` in scenarios/index.ts looks up `${slug}/${variant}` first, then falls back to `slug`.
-- **Arçelik seed data**: `artifacts/maven-ai/src/data/arcelik-seed.ts` — 61 products (7 categories), 64 competitor prices (8 brands), 20 cities, 8 campaigns, 15 dealers, 8 KPI benchmarks, 16 promotional calendar entries. All Turkish.
-- **Arçelik scenario**: `arcelik-fiyat-istihbarati.ts` — 26-event technical cockpit scenario with 6 agents, 5 demo screens, 2 workflows, 2 human checkpoints, 5 KPIs. Registered under both `arcelik-fiyat-istihbarati` and `arcelik-fiyat-istihbarati/teknik`.
-- **Arçelik Business Dashboard** (Task #32): Full enterprise pricing dashboard at `/demo/arcelik-fiyat-istihbarati/dashboard`. Components in `src/components/demo/arcelik/`. Features:
-  - `BusinessDashboard.tsx` — Main shell with sidebar nav (6 views), top chrome (Arçelik branding, notifications, user avatar), global filter bar (cities/categories/competitors/period), AI chat overlay toggle.
-  - `DashboardContext.tsx` — React context for global filter state shared across all views.
-  - `views/DashboardView.tsx` — KPI summary bar (6 animated cards computed from active filters), Turkey SVG heatmap with 20 city markers (color-coded, supports campaigns/demand heat metrics), city detail drawer with category breakdown + active campaigns + dealer list, clickable category performance bars → product-level drill-down modal with competitor prices, restructured competitor comparison table (category rows × brand columns).
-  - `views/CompetitorRadarView.tsx` — Radar chart (Recharts) comparing Arçelik vs selected competitors, category price delta bar chart, price-movement alert timeline (5 events with severity indicators), competitor detail cards with threat-level badges + "Son Hareket" + "Aktif Promo" fields.
-  - `views/CampaignStudioView.tsx` — 3-tab layout: AI-suggested campaigns (8 from seed), campaign builder form with promotion type selector + date range picker + "AI ile Optimize Et" button + live projected impact, historical campaigns with expandable items showing actual-vs-projected comparison. Uses useToast for confirmations.
-  - `views/SimulatorView.tsx` — What-if pricing simulator: product selector, price slider (±20%), cascading impact projections (volume/revenue/share/dealer), risk warnings, predicted competitor reaction messaging, competitor comparison chart, "Onayla & Uygula" and "Onaya Gönder" approval buttons.
-  - `views/CalendarView.tsx` — 12-month Gantt calendar with brand-coded bars, confirmed vs predicted entries, gap analysis with AI suggestions, click-to-open campaign detail drawer with matched campaign template details (categories, impact metrics, target cities, dealer POS messaging).
-  - `chatIntents.ts` — 35 Turkish intent patterns with regex matching covering market share, margins, competitors, cities, campaigns, products, seasonal, help, greetings, plus 3 chart-returning intents (category distribution pie, brand price bar, margin bar).
-  - `AiChat.tsx` — Slide-out chat panel with typing indicator, quick prompts, inline metric/table/campaign-card/chart rendering (Recharts bar + pie), dual agent personas.
-  - Wired in `Demo.tsx` with early return: `if (slug === "arcelik-fiyat-istihbarati" && variant === "dashboard") return <BusinessDashboard />;`
-  - Color scheme: Arçelik red #E30613, Maven navy #0E2841, amber #F5A623. All UI in Turkish.
-- **Arçelik Dealer Portal** (Task #33): Full dealer-facing portal at `/demo/arcelik-fiyat-istihbarati/bayi`. Components in `src/components/demo/arcelik/dealer/`. Features:
-  - `DealerPortal.tsx` — Main shell with sidebar nav (6 views), top chrome (Arçelik branding, dealer identity "Yılmaz Elektronik", Gold badge, notifications), "Bayi Asistanı" chat toggle button.
-  - `DealerHomeView.tsx` — Scorecard (compliance ring 92/100, sales target 68/85, commission ₺24,500), 4 quick-stat cards (campaigns, low stock, pending orders, price changes), featured campaigns row, recent announcements.
-  - `PriceListView.tsx` — Category-tabbed product table (TSF, dealer cost, margin, campaign flag), search, "Son Değişiklikler" toggle with recent price changes timeline.
-  - `CampaignsView.tsx` — Active campaigns with countdown timers, eligible categories, dealer tips, completed campaigns collapsible section.
-  - `TargetsView.tsx` — Monthly target progress bar, category breakdown chart, quarterly bonus tracker, dealer ranking (23rd), commission table by tier.
-  - `StockOrdersView.tsx` — Dual tabs: stock status table with optimal/low indicators + order form with toast confirmation; recent orders with delivery stepper.
-  - `AnnouncementsView.tsx` — Filterable announcement cards (Yeni Ürün, Fiyat, Kampanya, Eğitim, Sistem) with read/unread toggle, category badges.
-  - `DealerChat.tsx` — Slide-out chat panel with typing indicator, quick prompts, inline metric/table/progress rendering.
-  - `dealerChatIntents.ts` — 30+ Turkish intent patterns: campaigns, prices, targets, commissions, stock, orders, delivery, taksit, competitor prices, announcements, compliance, help, greetings.
-  - Wired in `Demo.tsx` with early return: `if (slug === "arcelik-fiyat-istihbarati" && variant === "bayi") return <DealerPortal />;`
-  - Color scheme: Arçelik red #E30613, Maven navy #0E2841, amber #F5A623. All UI in Turkish.
-- **Cross-links**: Navbar (between Industries and Diagnostics — desktop + mobile), Footer (new Marketplace column), Home (teaser section before the Maven Insights banner with a mini realized-vs-expected bar chart), Industries (per-industry "Related tools in the Marketplace" CTA with `?industry=<id>` deep link).
-- **Brief**: `artifacts/maven-ai/docs/marketplace-catalog.md`.
-- **Build gotcha**: `lib/maven-content` is a `composite: true` TS project with a `dist/` output. After adding new exports, the `tsconfig.tsbuildinfo` may keep dist stale and downstream `tsc` will complain about missing exports. The post-merge script clears the buildinfo and rebuilds the package; for local dev, run `rm -f lib/maven-content/tsconfig.tsbuildinfo && pnpm --filter @workspace/maven-content exec tsc -p tsconfig.json`.
+## User Preferences
+The user wants me to follow an iterative development approach. I should ask for confirmation before implementing any major changes. The user prefers detailed explanations of the code and design decisions. I should use clear, simple language in all communications.
 
-## Diagnostic Suite Architecture
-- **Shared lib**: `lib/assessments` — pure-TS scoring engine, sovereign sub-score, anti-patterns, peer benchmarks, cost-of-inaction, recommendations, i18n strings, all 4 framework definitions.
-- **Schema**: `lib/db/src/schema/assessments.ts` (`assessment_submissions`, `call_requests`, `team_invitations`).
-- **API**: `artifacts/api-server/src/routes/assessments.ts` — submit, fetch, memo, email, book-call, team-links, heatmap, reinvention-index. AI memo via Anthropic (claude-sonnet-4-5) → OpenAI (gpt-5) → deterministic template fallback. Email via Resend with log-only fallback.
-- **UI**: `artifacts/maven-ai/src/pages/assessments/*` and `src/components/assessment/*` — wizard engine, results screen with gauge/radar/heatmap/UVR portfolio, react-pdf branded report, EN/AR with RTL toggle.
-- **Routes**: `/assessments`, `/assessments/:slug`, `/assessments/:slug/results/:publicId`, `/assessments/team/:token`.
-- **Entry points**: Navbar (Diagnostics + Free Assessment), Footer (Diagnostics column), Home (hero CTA + suite banner), ServiceDetail (diagnostic CTA), Contact (hero CTA).
+## System Architecture
+The project is built on a modern web stack: React, Vite, TypeScript, Tailwind CSS v4, Framer Motion, and Wouter for routing, managed within a pnpm monorepo. The design emphasizes a McKinsey/Accenture-quality aesthetic, utilizing a consistent brand identity with a navy (`#0E2841`), teal (`#156082`), and amber (`#F5A623`) color scheme, and Plus Jakarta Sans for typography.
 
-## Architecture
-- **Stack**: React + Vite + TypeScript + Tailwind CSS v4 + Framer Motion + Wouter routing
-- **Monorepo**: pnpm workspace at `/artifacts/maven-ai`
-- **Port**: 22132 (via `$PORT` env variable)
-- **Preview path**: `/`
+**Key Features:**
+- **UI/UX:** Responsive design with mobile-first considerations, animated sections using Framer Motion, and a sophisticated visual language. The site includes a floating amber FAB for the chat widget, which also supports full-screen mode on mobile.
+- **Content Management:** All static content (founders, services, insights, industries) is centrally managed within `src/data/content.ts` and `lib/maven-content`.
+- **Navigation & Routing:** Comprehensive routing handles main pages, service details, insight articles, industry profiles, a dynamic marketplace for demo tools, and dedicated routes for diagnostic assessments and multi-variant demos (e.g., `/demo/:slug/:variant`).
+- **Marketplace:** Features a filterable catalog of demo tools with detailed pages showcasing screens, data models, and multi-demo variants. Includes flagship demos like Value Realization and detailed, localized (Turkish) demos for Arçelik Pricing Intelligence with both Business Dashboard and Dealer Portal variants. These variants include complex UIs such as KPI summaries, heatmaps, radar charts, campaign builders, pricing simulators, and Gantt calendars, all with AI chat integrations and specific Turkish intent patterns. The Arçelik demo features a full **agentic pricing intelligence platform** with: autonomous reasoning engine generating 15+ recommendations with multi-step reasoning traces, agent task queue, alert monitoring, automated playbooks, approval/rejection workflows, decision history, role-based filtering (Pricing/Finance/Marketing Director), and integration across all views — Agent Decisions view (5 sub-tabs), Simulator (agent-recommended scenarios), Campaign Studio (agent suggestions), Dealer Portal (personalized agent tasks), and Chat (agent-aware intents). Key data model lives in `arcelik-agent.ts` with deterministic engine; main view is `AgentDecisionsView.tsx`.
+- **Diagnostic Suite:** Comprises a shared TypeScript library for the scoring engine, i18n, and framework definitions. The UI includes a wizard engine, results screens with gauges, radar charts, heatmaps, and a portfolio view, plus React-PDF for branded reports, supporting both English and Arabic with an RTL toggle.
+- **AI Chat Assistant:** A site-wide assistant integrates with both server-side (Anthropic/OpenAI) and client-side logic. It leverages a shared `knowledgeBase` from `lib/maven-content`, uses an OpenAPI-defined `POST /chat` endpoint for SSE, implements a strict allow-list for internal links, and provides a user-friendly interface with rate limiting, streaming responses, and session persistence.
 
-## Brand Identity
-- **Navy**: `#0E2841` (primary background)
-- **Teal**: `#156082` (secondary/accent)
-- **Amber**: `#F5A623` (primary CTA / brand accent)
-- **Font**: Plus Jakarta Sans (Google Fonts)
-- (Two intentional `#E97132` references remain — Automotive industry palette + assessments hero badge.)
-
-## Site-Wide AI Chat Assistant (Task #13)
-- **Shared knowledge**: `lib/maven-content` — typed `knowledgeBase` (services, industries, insights, assessments, founders, firmFacts) + `buildKnownLinks()` allow-list. Imported by both server (prompt context) and client (suggestion link allow-list).
-- **OpenAPI**: `POST /chat` (text/event-stream) with `ChatMessage`/`ChatRequest`/`ChatSuggestion`/`ChatStreamEvent` schemas in `lib/api-spec/openapi.yaml`. Codegen produces `ChatBody` zod + TS types.
-- **Allow-list invariants** (every href MUST resolve to a real maven-ai route):
-  - Industries are in-page anchors on the single Industries page: `/industries#<id>` (NOT `/industries/<id>` — there is no per-industry route).
-  - There is NO `/founders` page; founders live on `/about`.
-  - High-intent CTAs use `/contact?topic=<service-slug>` — the Contact page reads `?topic=` and pre-fills the interest dropdown + scrolls to the form.
-- **Server**: `artifacts/api-server/src/routes/chat.ts` — SSE endpoint. Anthropic claude-sonnet-4-5 primary, OpenAI gpt-5 fallback (via `AI_INTEGRATIONS_*` env), deterministic template fallback. Per-IP sliding-window rate limit (20 / 5 min, with `app.set("trust proxy", true)`); rate-limit error message is friendly and points users to the Contact page. Streaming token filter strips the `<<<SUGGESTIONS>>>...<<<END>>>` marker (split-chunk safe, 256-char tail) AND inline markdown link syntax `[label](url)` (defense-in-depth vs allow-list bypass). Final suggestions are filtered against the `KNOWN_LINKS` allow-list. Prompt requires plain-text inline citations of artefact titles. 15s heartbeat keeps proxies alive. Aborts upstream work if the client disconnects (via `res.on("close")` + `writableEnded` guard).
-- **Client hook**: `artifacts/maven-ai/src/hooks/useChatStream.ts` — spec-compliant SSE parser (LF/CRLF, multi-line `data:`, comments, partial-line buffering, multi-event chunks). History capped at 24 messages outbound. `abort()` (no clear), `reset()` (abort + clear), and `retry()` (re-stream the last user turn after an interrupted/errored stream — replaces the failed assistant in-place, never duplicates the user turn). Transcript is persisted in `sessionStorage` (versioned + language-scoped) so a refresh keeps the conversation. Abort on unmount and on panel close.
-- **UI**: `artifacts/maven-ai/src/components/chat/ChatWidget.tsx` — floating amber FAB anchored bottom-right site-wide (does NOT mirror in RTL — only the panel content flips), 400px panel, full-screen on mobile, navy header. EN/AR via `useLang`. SessionStorage open state. 1000-char input cap with friendly near-limit + over-limit hints. "Try again" button on errored assistant turns. Suggestions render as wouter `<Link>` chips. Tiny `**bold**` markdown formatter. Mounted in `App.tsx` inside `<LangProvider>` and `<WouterRouter>`.
-
-## Pages
-| Route | Component | Description |
-|-------|-----------|-------------|
-| `/` | `Home.tsx` | Hero, stats, services, insights, industries CTA |
-| `/about` | `About.tsx` | Company story, 4 founders, operating model, Maven Insights |
-| `/services` | `Services.tsx` | All 4 service cards overview |
-| `/services/:slug` | `ServiceDetail.tsx` | Individual service detail with engagement model |
-| `/insights` | `Insights.tsx` | Filterable library of 8 research reports |
-| `/insights/:slug` | `InsightDetail.tsx` | Full article with related content sidebar |
-| `/industries` | `Industries.tsx` | Public Sector, Telecom, Financial Services |
-| `/marketplace` | `Marketplace.tsx` | Filterable index of 14 demo tools (class / industry / horizontal chips, deep-link via `?industry=&class=&horizontal=`) |
-| `/marketplace/:slug` | `MarketplaceDetail.tsx` | Detail page per tool (screens + data model + variant cards for multi-demo tools). Dispatches `/marketplace/value-realization` to the live `ValueRealizationDemo` component |
-| `/demo/:slug/:variant` | `Demo.tsx` | Multi-variant demo route (e.g. `/demo/arcelik-fiyat-istihbarati/teknik`) |
-| `/contact` | `Contact.tsx` | Contact form + 4 GCC office locations |
-
-## Content Data
-All content lives in `src/data/content.ts`:
-- 4 founders: Mounir Aris (CEO), Gokhan Guney, Alper Kulak, Khalid Al Khudairi
-- 4 services: Agentic AI Transformation, AI-Driven SDLC, Data & Governance, AI Product Studio
-- 8 insight articles with full content
-- 3 industry profiles with case vignettes and stats
-
-## Components
-- `Navbar.tsx` — Responsive nav with dropdown menus for Services/Insights
-- `Footer.tsx` — 4-column footer with GCC office grid
-
-## Images
-Located in `public/images/`:
-- `logo-mark.png` — AI-generated Maven AI logo
-- `report-1.png` through `report-8.png` — AI-generated report covers
-- `founder-mounir.png`, `founder-gokhan.png`, `founder-alper.png`, `founder-khalid.png` — Founder portraits
-
-## Key Features
-- McKinsey/Accenture-quality design language
-- Navy/teal/orange brand system throughout
-- Full-content articles (800-2000 words each)
-- Filterable insights library with search
-- Animated sections with Framer Motion
-- Mobile-responsive navigation with hamburger menu
-- Contact form with success state
-- Service detail pages with engagement model timelines
-- Industry pages with case vignettes and metrics
-
-## GCC Offices
-- Dubai: JLT Swiss Tower 3402
-- Riyadh: 4288 Anas Bin Malik, Al Malqa
-- Abu Dhabi: Musaffah M40
-- Doha: Regus No. 67
+## External Dependencies
+- **AI Integrations:** Anthropic (claude-sonnet-4-5) and OpenAI (gpt-5) for AI memo generation and chat assistant responses.
+- **Email Service:** Resend for sending emails.
+- **Database:** PostgreSQL for persistent storage of assessment submissions, call requests, and team invitations.

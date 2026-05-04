@@ -4,22 +4,25 @@ import { AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Radar, Megaphone, SlidersHorizontal,
   CalendarRange, Bot, Bell, LogOut, ChevronLeft, ChevronRight,
-  X, Filter,
+  X, Filter, Brain,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
 import { cities, COMPETITOR_BRANDS, CATEGORY_LABELS, type ProductCategory } from "@/data/arcelik-seed";
+import { generateAlerts } from "@/data/arcelik-agent";
 import DashboardView from "./views/DashboardView";
 import CompetitorRadarView from "./views/CompetitorRadarView";
 import CampaignStudioView from "./views/CampaignStudioView";
 import SimulatorView from "./views/SimulatorView";
 import CalendarView from "./views/CalendarView";
+import AgentDecisionsView from "./views/AgentDecisionsView";
 import AiChat from "./AiChat";
 
-type ViewId = "dashboard" | "radar" | "campaign" | "simulator" | "calendar";
+type ViewId = "dashboard" | "radar" | "campaign" | "simulator" | "calendar" | "decisions";
 
-const NAV_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard }[] = [
+const NAV_ITEMS: { id: ViewId; label: string; icon: typeof LayoutDashboard; badge?: string }[] = [
   { id: "dashboard", label: "Gösterge Paneli", icon: LayoutDashboard },
+  { id: "decisions", label: "Ajan Kararları", icon: Brain, badge: "AI" },
   { id: "radar", label: "Rakip Radarı", icon: Radar },
   { id: "campaign", label: "Kampanya Stüdyosu", icon: Megaphone },
   { id: "simulator", label: "Fiyat Simülatörü", icon: SlidersHorizontal },
@@ -52,9 +55,15 @@ function Shell() {
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#E30613]">Arçelik</p>
           <p className="text-xs font-semibold truncate">Fiyat İstihbarat Platformu</p>
         </div>
-        <button className="relative p-2 hover:bg-white/10 rounded-lg transition-colors" aria-label="Bildirimler">
+        <button
+          onClick={() => setView("decisions")}
+          className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
+          aria-label="Bildirimler"
+        >
           <Bell size={16} />
-          <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-[#E30613] text-[9px] font-bold flex items-center justify-center">3</span>
+          <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-[#E30613] text-[9px] font-bold flex items-center justify-center animate-pulse">
+            {generateAlerts().filter((a) => a.severity === "critical" || a.severity === "high").length}
+          </span>
         </button>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10">
           <div className="w-7 h-7 rounded-full bg-[#E30613] flex items-center justify-center text-[10px] font-bold">ED</div>
@@ -91,6 +100,9 @@ function Shell() {
                 >
                   <Icon size={17} className="flex-shrink-0" />
                   {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                  {!sidebarCollapsed && item.badge && (
+                    <span className="ml-auto text-[9px] font-bold bg-[#E30613] text-white px-1.5 py-0.5 rounded-full">{item.badge}</span>
+                  )}
                 </button>
               );
             })}
@@ -239,6 +251,7 @@ function Shell() {
 
           <div className="p-5">
             {view === "dashboard" && <DashboardView />}
+            {view === "decisions" && <AgentDecisionsView />}
             {view === "radar" && <CompetitorRadarView />}
             {view === "campaign" && <CampaignStudioView />}
             {view === "simulator" && <SimulatorView />}

@@ -2,13 +2,15 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles, Target, MapPin, TrendingUp, Calendar, ChevronRight,
-  Megaphone, Send, CheckCircle2, Clock, DollarSign, Users, Edit3,
+  Megaphone, Send, CheckCircle2, Clock, DollarSign, Edit3,
+  Brain, Shield,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   campaigns, cities, products, CATEGORY_LABELS,
   type CampaignTemplate, type ProductCategory,
 } from "@/data/arcelik-seed";
+import { generateCampaignSuggestions } from "@/data/arcelik-agent";
 
 type Tab = "suggested" | "builder" | "history";
 
@@ -319,11 +321,40 @@ export default function CampaignStudioView() {
       </div>
 
       {tab === "suggested" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {campaigns.map((c) => (
-            <CampaignCard key={c.id} campaign={c} onLaunch={() => handleLaunch(c.name)} />
-          ))}
-        </div>
+        <>
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-5">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+              <Brain size={15} className="text-[#E30613]" />
+              <h3 className="text-sm font-bold text-[#0E2841]">Ajan Kampanya Önerileri</h3>
+              <span className="text-[9px] font-bold bg-[#E30613] text-white px-1.5 py-0.5 rounded-full ml-1">AI</span>
+              <span className="text-[10px] text-gray-400 ml-auto">Otonom analiz sonuçları</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {generateCampaignSuggestions().map((s) => (
+                <div key={s.id} className="px-5 py-4 hover:bg-gray-50/50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={14} className="text-purple-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[#0E2841] mb-0.5">{s.suggestion}</p>
+                      <p className="text-xs text-gray-500 mb-1.5">{s.reasoning}</p>
+                      <div className="flex items-center gap-3 text-[10px]">
+                        <span className="text-green-600 font-bold">{s.impact}</span>
+                        <span className="text-gray-400 flex items-center gap-0.5"><Shield size={9} /> Güven: %{s.confidence}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {campaigns.map((c) => (
+              <CampaignCard key={c.id} campaign={c} onLaunch={() => handleLaunch(c.name)} />
+            ))}
+          </div>
+        </>
       )}
 
       {tab === "builder" && <CampaignBuilder />}

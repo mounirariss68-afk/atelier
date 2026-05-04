@@ -6,12 +6,14 @@ import {
 import {
   SlidersHorizontal, TrendingUp, TrendingDown, AlertTriangle,
   ChevronDown, DollarSign, Percent, Users, ShoppingCart, Send, CheckCircle2, Layers,
+  Brain, Shield, Zap, ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   products, competitorPrices, CATEGORY_LABELS, COMPETITOR_BRANDS,
   type ArcelikProduct, type ProductCategory,
 } from "@/data/arcelik-seed";
+import { generateSimulatorRecommendations } from "@/data/arcelik-agent";
 
 type SimMode = "product" | "category";
 
@@ -276,11 +278,57 @@ export default function SimulatorView() {
           )}
 
           {!showResults && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
-              <SlidersHorizontal size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-sm font-bold text-gray-600 mb-1">Fiyat simülasyonu başlatın</p>
-              <p className="text-xs text-gray-400">Soldaki kaydırıcıyı hareket ettirerek fiyat değişikliğinin etkilerini görün</p>
-            </div>
+            <>
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-12 text-center">
+                <SlidersHorizontal size={48} className="mx-auto text-gray-300 mb-4" />
+                <p className="text-sm font-bold text-gray-600 mb-1">Fiyat simülasyonu başlatın</p>
+                <p className="text-xs text-gray-400">Soldaki kaydırıcıyı hareket ettirerek fiyat değişikliğinin etkilerini görün</p>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mt-5">
+                <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                  <Brain size={15} className="text-[#E30613]" />
+                  <h3 className="text-sm font-bold text-[#0E2841]">Ajan Önerili Fiyat Senaryoları</h3>
+                  <span className="text-[9px] font-bold bg-[#E30613] text-white px-1.5 py-0.5 rounded-full ml-auto">AI</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {generateSimulatorRecommendations().map((rec) => {
+                    const product = products.find((p) => p.id === rec.productId);
+                    return (
+                      <div
+                        key={rec.id}
+                        className="px-5 py-4 hover:bg-gray-50/50 cursor-pointer transition-colors"
+                        onClick={() => {
+                          if (product) {
+                            setSimMode("product");
+                            setSelectedProduct(product);
+                            setPriceAdjust(rec.suggestedAdjustment);
+                            setShowResults(true);
+                          }
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${rec.suggestedAdjustment > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                            <Zap size={14} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <h4 className="text-sm font-semibold text-[#0E2841] truncate">{rec.productName}</h4>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 ${rec.suggestedAdjustment > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                {rec.suggestedAdjustment > 0 ? "+" : ""}{rec.suggestedAdjustment}%
+                              </span>
+                              <span className="text-[10px] text-gray-400 flex items-center gap-0.5 ml-auto"><Shield size={9} /> %{rec.confidence}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 line-clamp-2">{rec.reasoning}</p>
+                            <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">Geçerlilik: {rec.expiresIn} <ArrowRight size={9} /> Simüle etmek için tıklayın</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

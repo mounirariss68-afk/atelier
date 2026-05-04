@@ -22,11 +22,27 @@ const fmt = (n: number) => n.toLocaleString("tr-TR");
 
 const INTENTS: Intent[] = [
   {
+    patterns: [/ajan.*karar/i, /ajan.*öner/i, /bekleyen.*karar/i, /bekleyen.*öner/i, /agent.*decision/i, /onay bekleyen/i],
+    handler: () => ({
+      agent: "analyst",
+      type: "analysis",
+      text: `Şu anda 15 bekleyen ajan önerisi var. Kritik olanlar:\n\n🔴 Q2 Hedefler Risk Altında — ₺158M açığı kapatmak için eş zamanlı kampanya paketi önerildi\n🟠 Vestel Buzdolabı Fiyat Saldırısı — Ekonomik segmentte karşı strateji gerekli (%87 güven)\n🟠 Klima Sezon Hazırlığı — Bayi stoklarını 2x artırma ve Temmuz fiyat artışı önerisi (%95 güven)\n🟠 Ramazan Kampanyası ROI Düşüşü — Dijital bütçe artışı ve mesaj uyarlaması önerildi\n\n📋 Tüm önerileri görmek için "Ajan Kararları" sekmesine gidin.\n🤖 3 aktif oyun planı çalışıyor (rakip fiyat müdahalesi, kampanya optimizasyonu, stok takviyesi).`,
+    }),
+  },
+  {
+    patterns: [/playbook/i, /oyun planı/i, /otomasyon/i, /ajan.*ne.*yapıyor/i, /ajan.*aktiv/i],
+    handler: () => ({
+      agent: "analyst",
+      type: "analysis",
+      text: `Aktif ajan oyun planları:\n\n⚡ Rakip Fiyat Müdahale Protokolü — Çalışıyor (4/6 adım tamamlandı)\n   Vestel fiyat düşüşüne karşı strateji hazırlanıyor\n\n⚡ Kampanya Performans Müdahale — Onay Bekliyor\n   Ramazan kampanyası optimizasyonu pazarlama direktörünün onayında\n\n⚡ Stok Optimizasyon Protokolü — Çalışıyor (3/5 adım)\n   Klima stok takviyesi siparişi hesaplanıyor\n\n✅ Bayi Coaching Programı — Tamamlandı\n   8 bayiden 6'sında uyum puanı artışı sağlandı\n\n12 ajan son 24 saatte 12 aksiyon gerçekleştirdi.`,
+    }),
+  },
+  {
     patterns: [/merhaba/i, /selam/i, /hey/i, /günaydın/i, /iyi günler/i],
     handler: () => ({
       agent: "analyst",
       type: "text",
-      text: "Merhaba! Arçelik Fiyat İstihbarat Platformu'na hoş geldiniz. Size pazar analizi, rakip fiyatlandırma, kampanya önerisi veya bölgesel raporlar konusunda yardımcı olabilirim. Ne sormak istersiniz?",
+      text: "Merhaba! Arçelik Fiyat İstihbarat Platformu'na hoş geldiniz. 🤖 Şu anda 15 ajan önerisi onay bekliyor ve 3 oyun planı aktif çalışıyor. Size pazar analizi, rakip fiyatlandırma, kampanya önerisi, ajan kararları veya bölgesel raporlar konusunda yardımcı olabilirim. Ne sormak istersiniz?",
     }),
   },
   {
@@ -345,7 +361,7 @@ const INTENTS: Intent[] = [
     handler: () => ({
       agent: "analyst",
       type: "text",
-      text: "Size şu konularda yardımcı olabilirim:\n\n📊 Pazar analizi: \"Pazar payımız kaç?\", \"Haftalık özet ver\"\n🏷️ Fiyat: \"Vestel fiyatları\", \"Fiyat artışı yapmalı mıyız?\"\n📍 Bölgesel: \"İstanbul'daki durum\", \"Zayıf şehirler\"\n📢 Kampanya: \"Kampanya öner\", \"Ramazan kampanyası\"\n📦 Ürün: \"En çok satan ürünler\", \"Buzdolabı segmenti\"\n🏪 Bayi: \"Bayi uyum oranı\"\n\nTürkçe veya İngilizce sorabilirsiniz.",
+      text: "Size şu konularda yardımcı olabilirim:\n\n🤖 Ajan Kararları: \"Bekleyen ajan kararları\", \"Oyun planları ne durumda?\"\n📊 Pazar analizi: \"Pazar payımız kaç?\", \"Haftalık özet ver\"\n🏷️ Fiyat: \"Vestel fiyatları\", \"Fiyat artışı yapmalı mıyız?\"\n📍 Bölgesel: \"İstanbul'daki durum\", \"Zayıf şehirler\"\n📢 Kampanya: \"Kampanya öner\", \"Ramazan kampanyası\"\n📦 Ürün: \"En çok satan ürünler\", \"Buzdolabı segmenti\"\n🏪 Bayi: \"Bayi uyum oranı\"\n\nTürkçe veya İngilizce sorabilirsiniz.",
     }),
   },
   {

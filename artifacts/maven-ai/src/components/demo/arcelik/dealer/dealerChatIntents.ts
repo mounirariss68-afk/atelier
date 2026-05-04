@@ -22,6 +22,13 @@ interface DealerIntent {
 
 const INTENTS: DealerIntent[] = [
   {
+    patterns: [/ajan.*görev/i, /yapılacak/i, /agent.*task/i, /görevlerim/i, /ajan.*öner/i, /aksiyon.*öğe/i],
+    handler: () => ({
+      type: "list",
+      text: `Sizin için oluşturulan ajan görevleri:\n\n🔴 Klima stok seviyesini artırın — Yaz sezonu yaklaşıyor, mevcut stok optimum altında\n🟠 Ramazan kampanyası POS materyallerini güncelleyin — Yeni afişler ve fiyat etiketleri hazır\n🟠 3 bekleyen buzdolabı teklifini takip edin — Son 7 günde kapanmamış teklifler var\n🟢 Enerji Verimliliği kampanyasını öne çıkarın — A+++ ürünlerde %12 indirim aktif\n🔴 TSF fiyat uyumluluğunu kontrol edin — Haftalık denetim yaklaşıyor\n\nDetaylar Ana Sayfa'daki Ajan Görevleri bölümünde görünür.`,
+    }),
+  },
+  {
     patterns: [/aktif kampanya/i, /kampanyalar neler/i, /hangi kampanya/i, /kampanya var mı/i, /naber kampanya/i],
     handler: () => {
       const active = campaigns.filter((c) => c.targetCities.includes(DEALER.city));
@@ -277,7 +284,7 @@ const INTENTS: DealerIntent[] = [
     patterns: [/yardım/i, /ne yapabilirsin/i, /komut/i, /menü/i, /help/i],
     handler: () => ({
       type: "text",
-      text: "Size şu konularda yardımcı olabilirim:\n\n📋 Kampanyalar — aktif kampanyalar, bitiş tarihleri\n💰 Fiyatlar — ürün fiyatları, rakip karşılaştırma\n📦 Stok — stok durumu, düşük stok uyarıları\n🎯 Hedefler — satış hedefi takibi, prim durumu\n🚛 Siparişler — sipariş durumu, nasıl sipariş verilir\n📣 Duyurular — yeni ürünler, eğitimler\n💳 Taksit — banka taksit seçenekleri\n🏆 Sıralama — bölgesel bayi sıralaması\n\nSormak istediğiniz konuyu yazmanız yeterli!",
+      text: "Size şu konularda yardımcı olabilirim:\n\n🤖 Ajan Görevleri — yapılacak görevler, aksiyon öğeleri\n📋 Kampanyalar — aktif kampanyalar, bitiş tarihleri\n💰 Fiyatlar — ürün fiyatları, rakip karşılaştırma\n📦 Stok — stok durumu, düşük stok uyarıları\n🎯 Hedefler — satış hedefi takibi, prim durumu\n🚛 Siparişler — sipariş durumu, nasıl sipariş verilir\n📣 Duyurular — yeni ürünler, eğitimler\n💳 Taksit — banka taksit seçenekleri\n🏆 Sıralama — bölgesel bayi sıralaması\n\nSormak istediğiniz konuyu yazmanız yeterli!",
     }),
   },
   {

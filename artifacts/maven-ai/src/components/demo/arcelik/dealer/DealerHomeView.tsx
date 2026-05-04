@@ -1,9 +1,10 @@
 import { motion } from "framer-motion";
 import {
   Award, TrendingUp, Tag, AlertTriangle, Package, BarChart3,
-  Clock, ChevronRight, Megaphone, Info,
+  Clock, ChevronRight, Megaphone, Info, Brain, CheckCircle2,
 } from "lucide-react";
 import { dealers, campaigns, CATEGORY_LABELS, cities as allCities } from "@/data/arcelik-seed";
+import { generateDealerAgentTasks } from "@/data/arcelik-agent";
 import type { DealerViewId } from "../DealerPortal";
 
 const DEALER = dealers[0];
@@ -144,7 +145,41 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
         </div>
       </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+          <Brain size={15} className="text-[#E30613]" />
+          <h2 className="text-sm font-bold">Ajan Görevleri</h2>
+          <span className="text-[9px] font-bold bg-[#E30613] text-white px-1.5 py-0.5 rounded-full ml-1">AI</span>
+          <span className="text-[10px] text-gray-400 ml-auto">Size özel aksiyon öğeleri</span>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {generateDealerAgentTasks(DEALER.city).map((task, i) => {
+            const sevColor = task.priority === "high" ? "bg-red-500" : task.priority === "medium" ? "bg-amber-500" : "bg-gray-400";
+            return (
+              <div key={task.id} className="px-5 py-3.5 hover:bg-gray-50/50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${sevColor}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h4 className="text-xs font-semibold text-[#0E2841]">{task.title}</h4>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${task.priority === "high" ? "bg-red-50 text-red-600" : task.priority === "medium" ? "bg-amber-50 text-amber-600" : "bg-gray-100 text-gray-500"}`}>
+                        {task.priority === "high" ? "Yüksek" : task.priority === "medium" ? "Orta" : "Düşük"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500">{task.description}</p>
+                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Clock size={9} /> Son tarih: {task.deadline}</p>
+                  </div>
+                  <button className="text-[10px] font-semibold text-green-600 hover:text-green-700 flex items-center gap-0.5 flex-shrink-0 mt-1">
+                    <CheckCircle2 size={11} /> Tamam
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-bold flex items-center gap-2"><Info size={16} className="text-blue-500" /> Son Duyurular</h2>
           <button onClick={() => onNavigate("announcements")} className="text-xs text-[#E30613] font-semibold hover:underline">Tümünü Gör →</button>
