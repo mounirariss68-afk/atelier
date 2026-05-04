@@ -528,29 +528,89 @@ export default function AgentDecisionsView() {
   const tasks = useMemo(() => generateTasks(), []);
   const alerts = useMemo(() => generateAlerts(), []);
   const activityLog = useMemo(() => generateActivityLog(), []);
+  const [liveDecisions, setLiveDecisions] = useState<AgentDecisionLog[]>([]);
 
   const filteredRecs = roleFilter === "all" ? recommendations : recommendations.filter((r) => r.targetRole === roleFilter);
   const pendingCount = recommendations.filter((r) => r.status === "pending").length;
   const criticalCount = recommendations.filter((r) => r.severity === "critical" && r.status === "pending").length;
 
-  const decisionHistory = useMemo(() => generateDecisionHistory(), []);
+  const seedHistory = useMemo(() => generateDecisionHistory(), []);
+  const allDecisions = [...liveDecisions, ...seedHistory];
+
+  function createDecisionEntry(rec: AgentRecommendation, type: DecisionType, note?: string): AgentDecisionLog {
+    const impactMultiplier = type === "rejected" ? 0 : type === "modified" ? 0.7 : 1;
+    const parseNum = (s: string) => {
+      const m = s.match(/[+-]?[\d.]+/);
+      return m ? parseFloat(m[0]) : 0;
+    };
+    const formatOutcome = (val: number, prefix: string, suffix: string) => {
+      const sign = val >= 0 ? "+" : "";
+      return `${sign}${prefix}${Math.abs(val).toFixed(1)}${suffix}`;
+    };
+    const rev = parseNum(rec.impact.revenue) * impactMultiplier;
+    const mar = parseNum(rec.impact.margin) * impactMultiplier;
+    const sha = parseNum(rec.impact.share) * impactMultiplier;
+
+    return {
+      id: `dl-live-${Date.now()}-${rec.id}`,
+      recommendationId: rec.id,
+      recommendationTitle: rec.title,
+      decisionType: type,
+      decidedBy: "Elif Demir",
+      role: "pricing",
+      timestamp: new Date().toISOString(),
+      rationale: type === "approved"
+        ? `Ajan önerisi incelendi ve uygun bulundu. ${rec.reasoning[rec.reasoning.length - 1]?.conclusion ?? ""}`
+        : type === "rejected"
+        ? "Mevcut koşullarda uygulanması uygun değil."
+        : note ?? "",
+      modificationNote: type === "modified" ? note : undefined,
+      simulatedOutcome: {
+        revenue: formatOutcome(rev, "₺", "M"),
+        margin: formatOutcome(mar, "", "%"),
+        share: formatOutcome(sha, "", "pp"),
+        timeframe: rec.severity === "critical" ? "15 gün" : rec.severity === "high" ? "30 gün" : "60 gün",
+      },
+    };
+  }
 
   const handleApprove = (id: string) => {
-    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const, decidedBy: "Elif Demir" } : r));
     const rec = recommendations.find((r) => r.id === id);
-    toast({ title: "Öneri Onaylandı", description: `"${rec?.title}" onaylandı ve uygulamaya alınacak.` });
+    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const, decidedBy: "Elif Demir" } : r));
+    if (rec) {
+      const entry = createDecisionEntry(rec, "approved");
+      setLiveDecisions((prev) => [entry, ...prev]);
+      toast({
+        title: "Öneri Onaylandı",
+        description: `"${rec.title}" — Tahmini etki: ${entry.simulatedOutcome.revenue} gelir, ${entry.simulatedOutcome.margin} marj, ${entry.simulatedOutcome.share} pazar payı (${entry.simulatedOutcome.timeframe})`,
+      });
+    }
   };
 
   const handleReject = (id: string) => {
-    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "rejected" as const, decidedBy: "Elif Demir" } : r));
     const rec = recommendations.find((r) => r.id === id);
-    toast({ title: "Öneri Reddedildi", description: `"${rec?.title}" reddedildi.` });
+    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "rejected" as const, decidedBy: "Elif Demir" } : r));
+    if (rec) {
+      const entry = createDecisionEntry(rec, "rejected");
+      setLiveDecisions((prev) => [entry, ...prev]);
+      toast({
+        title: "Öneri Reddedildi",
+        description: `"${rec.title}" reddedildi. Karar geçmişine eklendi.`,
+      });
+    }
   };
 
   const handleModify = (id: string, note: string) => {
-    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "modified" as const, decidedBy: "Elif Demir", decisionNote: note } : r));
     const rec = recommendations.find((r) => r.id === id);
-    toast({ title: "Öneri Değiştirildi", description: `"${rec?.title}" değişiklik notuyla onaylandı.` });
+    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "modified" as const, decidedBy: "Elif Demir", decisionNote: note } : r));
+    if (rec) {
+      const entry = createDecisionEntry(rec, "modified", note);
+      setLiveDecisions((prev) => [entry, ...prev]);
+      toast({
+        title: "Öneri Değiştirildi",
+        description: `"${rec.title}" — Revize etki: ${entry.simulatedOutcome.revenue} gelir, ${entry.simulatedOutcome.margin} marj (${entry.simulatedOutcome.timeframe})`,
+      });
+    }
   };
 
   const SUB_TABS: { id: SubTab; label: string; icon: typeof Brain; count?: number }[] = [
@@ -558,7 +618,7 @@ export default function AgentDecisionsView() {
     { id: "tasks", label: "Görevler", icon: ListTodo, count: tasks.filter((t) => t.status === "open").length },
     { id: "alerts", label: "Uyarılar", icon: AlertTriangle, count: alerts.length },
     { id: "playbooks", label: "Oyun Planları", icon: Zap, count: PLAYBOOKS.filter((p) => p.status !== "completed").length },
-    { id: "history", label: "Karar Geçmişi", icon: History, count: decisionHistory.length },
+    { id: "history", label: "Karar Geçmişi", icon: History, count: allDecisions.length },
     { id: "activity", label: "Ajan Aktivitesi", icon: Activity },
   ];
 
@@ -657,7 +717,7 @@ export default function AgentDecisionsView() {
       {subTab === "tasks" && <TaskQueue tasks={tasks} />}
       {subTab === "alerts" && <AlertTimeline alerts={alerts} />}
       {subTab === "playbooks" && <PlaybookView playbooks={PLAYBOOKS} />}
-      {subTab === "history" && <DecisionHistoryPanel entries={decisionHistory} />}
+      {subTab === "history" && <DecisionHistoryPanel entries={allDecisions} />}
       {subTab === "activity" && <ActivityLog entries={activityLog} />}
     </div>
   );
