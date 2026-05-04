@@ -975,6 +975,7 @@ export const prices: I18n = {
     colSpecs: "Kapasite / Garanti",
     warrantyYr: "yıl garanti",
     smart: "Akıllı",
+    smartFilter: "Akıllı Ürünler",
   },
   en: {
     title: "Price List",
@@ -1003,6 +1004,7 @@ export const prices: I18n = {
     colSpecs: "Capacity / Warranty",
     warrantyYr: "yr warranty",
     smart: "Smart",
+    smartFilter: "Smart Products",
   },
 };
 

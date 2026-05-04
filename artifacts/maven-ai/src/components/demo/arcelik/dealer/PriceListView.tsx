@@ -30,6 +30,7 @@ export default function PriceListView() {
   const [activeTab, setActiveTab] = useState<ProductCategory>("buzdolabi");
   const [activeSub, setActiveSub] = useState<string | null>(null);
   const [activeTier, setActiveTier] = useState<PriceTier | null>(null);
+  const [smartOnly, setSmartOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [showChanges, setShowChanges] = useState(false);
   const [sortCol, setSortCol] = useState<string>("name");
@@ -49,6 +50,9 @@ export default function PriceListView() {
     if (activeTier) {
       items = items.filter((p) => p.priceTier === activeTier);
     }
+    if (smartOnly) {
+      items = items.filter((p) => getProductSpecs(p).smartFeatures.length > 0);
+    }
     if (search) {
       const q = search.toLowerCase();
       items = items.filter((p) => p.name.toLowerCase().includes(q) || p.modelCode.toLowerCase().includes(q));
@@ -59,11 +63,12 @@ export default function PriceListView() {
       else if (sortCol === "tsfPrice") { va = a.tsfPrice; vb = b.tsfPrice; }
       else if (sortCol === "dealerCost") { va = a.dealerCost; vb = b.dealerCost; }
       else if (sortCol === "margin") { va = a.marginPercent; vb = b.marginPercent; }
+      else if (sortCol === "specs") { va = getProductSpecs(a).warrantyYears * 1000 + (getProductSpecs(a).smartFeatures.length > 0 ? 500 : 0) + parseFloat(getProductSpecs(a).capacity) || 0; vb = getProductSpecs(b).warrantyYears * 1000 + (getProductSpecs(b).smartFeatures.length > 0 ? 500 : 0) + parseFloat(getProductSpecs(b).capacity) || 0; }
       else { va = a.name; vb = b.name; }
       if (typeof va === "string") return sortDir === "asc" ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
       return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
-  }, [activeTab, activeSub, activeTier, search, sortCol, sortDir]);
+  }, [activeTab, activeSub, activeTier, smartOnly, search, sortCol, sortDir]);
 
   const toggleSort = (col: string) => {
     if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -100,7 +105,7 @@ export default function PriceListView() {
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
-            onClick={() => { setActiveTab(cat); setActiveSub(null); setActiveTier(null); }}
+            onClick={() => { setActiveTab(cat); setActiveSub(null); setActiveTier(null); setSmartOnly(false); }}
             className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
               activeTab === cat ? "bg-[#E30613] text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
             }`}
@@ -156,6 +161,15 @@ export default function PriceListView() {
             {getPriceTierLabel(tier, lang)}
           </button>
         ))}
+        <span className="text-gray-300 mx-1">|</span>
+        <button
+          onClick={() => setSmartOnly(!smartOnly)}
+          className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors flex items-center gap-1 ${
+            smartOnly ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          📡 {t.smartFilter}
+        </button>
       </div>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -175,9 +189,9 @@ export default function PriceListView() {
                 ].map((col) => (
                   <th
                     key={col.id}
-                    onClick={() => ["name", "tsfPrice", "dealerCost", "margin"].includes(col.id) ? toggleSort(col.id) : undefined}
+                    onClick={() => ["name", "tsfPrice", "dealerCost", "margin", "specs"].includes(col.id) ? toggleSort(col.id) : undefined}
                     className={`px-4 py-3 text-[11px] font-semibold text-gray-500 text-left whitespace-nowrap ${
-                      ["name", "tsfPrice", "dealerCost", "margin"].includes(col.id) ? "cursor-pointer hover:text-[#0E2841]" : ""
+                      ["name", "tsfPrice", "dealerCost", "margin", "specs"].includes(col.id) ? "cursor-pointer hover:text-[#0E2841]" : ""
                     }`}
                   >
                     <span className="flex items-center gap-1">
