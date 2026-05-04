@@ -82,9 +82,6 @@ function extractBrandFromTitle(title: string): string {
       }
     }
   }
-  // Unknown brand: return original first token (capitalized as-is) but never
-  // accidentally treat unrecognized variants as competitor brands. Returning
-  // an unmapped first token lets matching exclude it via brand-family check.
   return title.trim().split(/\s+/)[0] || "Unknown";
 }
 
@@ -1142,29 +1139,38 @@ export async function runPriceScrape(
 
       // Append-only per-source price history.
       try {
-        const ids = insertRows.map((r) => r.marketplaceProductId);
         const previousByKey = new Map<string, number>();
-        for (let i = 0; i < ids.length; i += 200) {
-          const slice = ids.slice(i, i + 200);
-          const prevRows = await db
-            .select({
-              marketplace: arcelikMarketplacePriceHistoryTable.marketplace,
-              marketplaceProductId:
-                arcelikMarketplacePriceHistoryTable.marketplaceProductId,
-              price: arcelikMarketplacePriceHistoryTable.price,
-              recordedAt: arcelikMarketplacePriceHistoryTable.recordedAt,
-            })
-            .from(arcelikMarketplacePriceHistoryTable)
-            .where(
-              sql`${arcelikMarketplacePriceHistoryTable.marketplaceProductId} IN (${sql.join(
-                slice.map((id) => sql`${id}`),
-                sql`, `,
-              )})`,
-            )
-            .orderBy(sql`${arcelikMarketplacePriceHistoryTable.recordedAt} DESC`);
-          for (const r of prevRows) {
-            const k = `${r.marketplace}:${r.marketplaceProductId}`;
-            if (!previousByKey.has(k)) previousByKey.set(k, r.price);
+        const byMarketplace = new Map<string, string[]>();
+        for (const r of insertRows) {
+          const arr = byMarketplace.get(r.marketplace) ?? [];
+          arr.push(r.marketplaceProductId);
+          byMarketplace.set(r.marketplace, arr);
+        }
+        for (const [marketplace, mpIds] of byMarketplace) {
+          for (let i = 0; i < mpIds.length; i += 200) {
+            const slice = mpIds.slice(i, i + 200);
+            const prevRows = await db
+              .select({
+                marketplaceProductId:
+                  arcelikMarketplacePriceHistoryTable.marketplaceProductId,
+                price: arcelikMarketplacePriceHistoryTable.price,
+                recordedAt: arcelikMarketplacePriceHistoryTable.recordedAt,
+              })
+              .from(arcelikMarketplacePriceHistoryTable)
+              .where(
+                and(
+                  eq(arcelikMarketplacePriceHistoryTable.marketplace, marketplace),
+                  inArray(
+                    arcelikMarketplacePriceHistoryTable.marketplaceProductId,
+                    slice,
+                  ),
+                ),
+              )
+              .orderBy(sql`${arcelikMarketplacePriceHistoryTable.recordedAt} DESC`);
+            for (const r of prevRows) {
+              const k = `${marketplace}:${r.marketplaceProductId}`;
+              if (!previousByKey.has(k)) previousByKey.set(k, r.price);
+            }
           }
         }
 

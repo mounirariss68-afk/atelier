@@ -6,7 +6,6 @@ import {
   arcelikProductSpecsTable,
 } from "@workspace/db";
 import { gte, eq, or, like } from "drizzle-orm";
-import { logger } from "./logger";
 
 function normalizeBrand(text: string): string {
   return text
