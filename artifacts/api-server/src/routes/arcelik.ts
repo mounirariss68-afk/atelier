@@ -279,7 +279,9 @@ router.get("/coverage", async (_req, res) => {
             marketplace: arcelikMarketplacePricesTable.marketplace,
             category: arcelikMarketplacePricesTable.category,
             skuCount: sql<number>`count(distinct ${arcelikMarketplacePricesTable.marketplaceProductId})::int`,
-            linkedCount: sql<number>`count(${arcelikMarketplacePricesTable.arcelikProductId})::int`,
+            // Use distinct SKU count filtered on linked rows so repeated
+            // observations of the same SKU don't inflate coverage metrics.
+            linkedCount: sql<number>`count(distinct ${arcelikMarketplacePricesTable.marketplaceProductId}) filter (where ${arcelikMarketplacePricesTable.arcelikProductId} is not null)::int`,
             avgPrice: sql<number>`round(avg(${arcelikMarketplacePricesTable.price}))::int`,
           })
           .from(arcelikMarketplacePricesTable)

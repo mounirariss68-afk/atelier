@@ -1182,20 +1182,54 @@ export async function runPriceScrape(
       }
     }
 
-    // Spec extraction runs against a sample of N11 products (PDPs are slow,
-    // so cap at 60 per run). This populates arcelik_product_specs which the
-    // matching engine and APIs use for structured comparison.
+    // Spec extraction runs against a sample of N11 products (PDPs are slow).
+    // Cap raised to 250/run AND we prioritize SKUs that don't yet have a spec
+    // row, so each cron run extends coverage instead of redoing the same
+    // first N items. Once everything has specs, we fall back to the oldest
+    // extractedAt entries (refresh-in-place).
+    const SPEC_CAP_PER_RUN = 250;
     let specsExtracted = 0;
     if (n11Items.length > 0) {
       try {
-        const targets = n11Items
+        const existingSpecRows = await db
+          .select({
+            marketplaceProductId: arcelikProductSpecsTable.marketplaceProductId,
+            extractedAt: arcelikProductSpecsTable.extractedAt,
+          })
+          .from(arcelikProductSpecsTable)
+          .where(eq(arcelikProductSpecsTable.marketplace, "n11"));
+        const existingSpecMap = new Map(
+          existingSpecRows.map((r) => [
+            r.marketplaceProductId,
+            r.extractedAt?.getTime() ?? 0,
+          ]),
+        );
+        // Sort: never-extracted first, then oldest-extracted next.
+        const eligible = n11Items
           .filter((it) => it.productUrl)
-          .slice(0, 60)
           .map((it) => ({
-            marketplaceProductId: it.marketplaceProductId,
-            productUrl: it.productUrl,
+            it,
+            extractedAt:
+              existingSpecMap.get(it.marketplaceProductId) ?? -1,
+          }))
+          .sort((a, b) => a.extractedAt - b.extractedAt);
+        const targets = eligible
+          .slice(0, SPEC_CAP_PER_RUN)
+          .map((e) => ({
+            marketplaceProductId: e.it.marketplaceProductId,
+            productUrl: e.it.productUrl,
           }));
-        const specs = await scrapeN11ProductSpecs(targets, 60);
+        const newCount = eligible.filter((e) => e.extractedAt < 0).length;
+        logger.info(
+          {
+            cap: SPEC_CAP_PER_RUN,
+            queued: targets.length,
+            uncoveredInQueue: Math.min(newCount, SPEC_CAP_PER_RUN),
+            totalUncovered: newCount,
+          },
+          "Queuing N11 PDPs for spec extraction (uncovered prioritized)",
+        );
+        const specs = await scrapeN11ProductSpecs(targets, SPEC_CAP_PER_RUN);
         if (specs.length > 0) {
           // Look up the marketplace_prices.id for each spec (need the FK).
           const ids = await db
