@@ -290,12 +290,12 @@ export default function DashboardView() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="space-y-6">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="lg:col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
+          className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"
         >
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -316,7 +316,7 @@ export default function DashboardView() {
             </div>
           </div>
           <div className="relative p-4">
-            <TurkeyMap viewBox="0 0 650 185" className="w-full h-auto">
+            <TurkeyMap viewBox="0 -10 650 205" className="w-full h-auto">
               {filteredCities.map((city) => {
                 const pos = CITY_POSITIONS[city.id];
                 if (!pos) return null;
@@ -324,7 +324,7 @@ export default function DashboardView() {
                 const heatT = heatMax > heatMin ? (val - heatMin) / (heatMax - heatMin) : 0.5;
                 const color = heatColor(heatT);
                 const isHovered = hoverCity === city.id;
-                const r = city.populationTier === "tier-1" ? 8 : city.populationTier === "tier-2" ? 6 : 4.5;
+                const r = city.populationTier === "tier-1" ? 11 : city.populationTier === "tier-2" ? 9 : 7;
                 return (
                   <g
                     key={city.id}
@@ -337,9 +337,9 @@ export default function DashboardView() {
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedCity(city); }}
                     aria-label={`${getCityName(city, lang)} ${t.showCityDetails}`}
                   >
-                    <circle cx={pos.x} cy={pos.y} r={r + 3} fill={color} opacity={0.15} />
-                    <circle cx={pos.x} cy={pos.y} r={isHovered ? r + 1.5 : r} fill={color} stroke="white" strokeWidth="1.2" className="transition-all duration-150" />
-                    <text x={pos.x} y={pos.y - r - 4} textAnchor="middle" fill="#374151" className="text-[5px] font-semibold pointer-events-none">{getCityName(city, lang)}</text>
+                    <circle cx={pos.x} cy={pos.y} r={r + 4} fill={color} opacity={0.15} />
+                    <circle cx={pos.x} cy={pos.y} r={isHovered ? r + 2 : r} fill={color} stroke="white" strokeWidth="1.5" className="transition-all duration-150" />
+                    <text x={pos.x} y={pos.y - r - 3} textAnchor="middle" fill="#374151" className="text-[8px] font-semibold pointer-events-none">{getCityName(city, lang)}</text>
                   </g>
                 );
               })}
@@ -372,7 +372,7 @@ export default function DashboardView() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm"
+          className="bg-white rounded-xl border border-gray-100 shadow-sm"
         >
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="text-sm font-bold flex items-center gap-2">
