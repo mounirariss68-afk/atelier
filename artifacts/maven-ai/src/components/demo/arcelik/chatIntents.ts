@@ -108,49 +108,6 @@ const INTENTS: Intent[] = [
     },
   },
   {
-    patterns: [/istanbul/i],
-    handler: () => {
-      const ist = cities.find((c) => c.id === "istanbul")!;
-      return {
-        agent: "analyst",
-        type: "analysis",
-        text: `İstanbul raporu:\n• Pazar Payı: %${ist.marketSharePercent}\n• Fiyat Endeksi: ${ist.avgPriceIndex}\n• Bayi Sayısı: ${ist.dealerCount}\n• Güçlü Rakipler: ${ist.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${ist.seasonalPattern}`,
-      };
-    },
-  },
-  {
-    patterns: [/ankara/i],
-    handler: () => {
-      const ank = cities.find((c) => c.id === "ankara")!;
-      return {
-        agent: "analyst",
-        type: "analysis",
-        text: `Ankara raporu:\n• Pazar Payı: %${ank.marketSharePercent}\n• Fiyat Endeksi: ${ank.avgPriceIndex}\n• Bayi Sayısı: ${ank.dealerCount}\n• Güçlü Rakipler: ${ank.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${ank.seasonalPattern}`,
-      };
-    },
-  },
-  {
-    patterns: [/izmir/i],
-    handler: () => {
-      const izm = cities.find((c) => c.id === "izmir")!;
-      return {
-        agent: "analyst",
-        type: "analysis",
-        text: `İzmir raporu:\n• Pazar Payı: %${izm.marketSharePercent}\n• Fiyat Endeksi: ${izm.avgPriceIndex}\n• Bayi Sayısı: ${izm.dealerCount}\n• Güçlü Rakipler: ${izm.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${izm.seasonalPattern}`,
-      };
-    },
-  },
-  {
-    patterns: [/konya|kayseri|gaziantep|adana|bursa|antalya|mersin|diyarbak|samsun|trabzon|erzurum|van|malatya|eskişehir|denizli|manisa|tekirdağ/i],
-    handler: () => {
-      return {
-        agent: "analyst",
-        type: "analysis",
-        text: `Şehir bazlı detaylı rapor için haritadan şehre tıklayabilirsiniz. Genel Anadolu performansı:\n• Ortalama Pazar Payı: %${(cities.filter((c) => c.populationTier !== "tier-1").reduce((s, c) => s + c.marketSharePercent, 0) / cities.filter((c) => c.populationTier !== "tier-1").length).toFixed(1)}\n• En güçlü olduğumuz şehirler: ${cities.sort((a, b) => b.marketSharePercent - a.marketSharePercent).slice(0, 3).map((c) => `${c.name} (%${c.marketSharePercent})`).join(", ")}`,
-      };
-    },
-  },
-  {
     patterns: [/kampanya.*öner/i, /yeni kampanya/i, /campaign.*suggest/i, /ne kampanya/i],
     handler: () => {
       const c = campaigns[Math.floor(Math.random() * campaigns.length)];
@@ -450,6 +407,49 @@ const INTENTS: Intent[] = [
         type: "chart" as const,
         text: "Rakip markaların Arçelik'e göre ortalama fiyat farkı (%):",
         data: { chartType: "bar", chartData: brandAvgs, label: "Ort. Fiyat Farkı (%)" },
+      };
+    },
+  },
+  {
+    patterns: [/istanbul/i],
+    handler: () => {
+      const ist = cities.find((c) => c.id === "istanbul")!;
+      return {
+        agent: "analyst",
+        type: "analysis",
+        text: `İstanbul raporu:\n• Pazar Payı: %${ist.marketSharePercent}\n• Fiyat Endeksi: ${ist.avgPriceIndex}\n• Bayi Sayısı: ${ist.dealerCount}\n• Güçlü Rakipler: ${ist.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${ist.seasonalPattern}`,
+      };
+    },
+  },
+  {
+    patterns: [/ankara/i],
+    handler: () => {
+      const ank = cities.find((c) => c.id === "ankara")!;
+      return {
+        agent: "analyst",
+        type: "analysis",
+        text: `Ankara raporu:\n• Pazar Payı: %${ank.marketSharePercent}\n• Fiyat Endeksi: ${ank.avgPriceIndex}\n• Bayi Sayısı: ${ank.dealerCount}\n• Güçlü Rakipler: ${ank.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${ank.seasonalPattern}`,
+      };
+    },
+  },
+  {
+    patterns: [/izmir/i],
+    handler: () => {
+      const izm = cities.find((c) => c.id === "izmir")!;
+      return {
+        agent: "analyst",
+        type: "analysis",
+        text: `İzmir raporu:\n• Pazar Payı: %${izm.marketSharePercent}\n• Fiyat Endeksi: ${izm.avgPriceIndex}\n• Bayi Sayısı: ${izm.dealerCount}\n• Güçlü Rakipler: ${izm.competitorStrength.map((c) => `${c.brand} (${c.strength}/10)`).join(", ")}\n• Sezonsal: ${izm.seasonalPattern}`,
+      };
+    },
+  },
+  {
+    patterns: [/konya|kayseri|gaziantep|adana|bursa|antalya|mersin|diyarbak|samsun|trabzon|erzurum|van|malatya|eskişehir|denizli|manisa|tekirdağ/i],
+    handler: () => {
+      return {
+        agent: "analyst",
+        type: "analysis",
+        text: `Şehir bazlı detaylı rapor için haritadan şehre tıklayabilirsiniz. Genel Anadolu performansı:\n• Ortalama Pazar Payı: %${(cities.filter((c) => c.populationTier !== "tier-1").reduce((s, c) => s + c.marketSharePercent, 0) / cities.filter((c) => c.populationTier !== "tier-1").length).toFixed(1)}\n• En güçlü olduğumuz şehirler: ${[...cities].sort((a, b) => b.marketSharePercent - a.marketSharePercent).slice(0, 3).map((c) => `${c.name} (%${c.marketSharePercent})`).join(", ")}`,
       };
     },
   },

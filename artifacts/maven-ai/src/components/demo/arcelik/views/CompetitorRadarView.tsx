@@ -25,30 +25,31 @@ const BRAND_COLORS: Record<string, string> = {
 
 const RADAR_DIMS = [
   { key: "price", label: "Fiyat Rekabetçiliği" },
-  { key: "range", label: "Ürün Çeşitliliği" },
-  { key: "coverage", label: "Pazar Kapsamı" },
-  { key: "premium", label: "Premium Güç" },
-  { key: "value", label: "Değer Segmenti" },
-  { key: "innovation", label: "İnovasyon" },
+  { key: "variety", label: "Ürün Çeşitliliği" },
+  { key: "dealer", label: "Bayi Ağı Genişliği" },
+  { key: "campaign", label: "Kampanya Sıklığı" },
+  { key: "brand", label: "Marka Bilinirliği" },
+  { key: "satisfaction", label: "Müşteri Memnuniyeti" },
 ];
 
 function computeBrandScores(brandName: string) {
   const prices = competitorPrices.filter((cp) => cp.brand === brandName);
   const avgDelta = prices.length ? prices.reduce((s, p) => s + Math.abs(p.priceDeltaPercent), 0) / prices.length : 0;
   const categories = new Set(prices.map((p) => p.category));
-  const premiumCount = prices.filter((p) => p.positioning === "premium").length;
-  const valueCount = prices.filter((p) => p.positioning === "value").length;
+  const b = COMPETITOR_BRANDS.find((cb) => cb.name === brandName);
+  const isValue = b?.positioning === "value";
+  const isPremium = b?.positioning === "premium";
   return {
     price: Math.min(100, 50 + avgDelta * 2),
-    range: categories.size * 15,
-    coverage: Math.min(100, prices.length * 12),
-    premium: premiumCount * 20,
-    value: valueCount * 15,
-    innovation: 40 + Math.random() * 30,
+    variety: Math.min(100, categories.size * 15),
+    dealer: isValue ? 70 : isPremium ? 50 : 40,
+    campaign: Math.min(100, prices.length * 10 + (isValue ? 25 : 10)),
+    brand: isPremium ? 85 : isValue ? 60 : 45,
+    satisfaction: isPremium ? 78 : isValue ? 55 : 50,
   };
 }
 
-const ARCELIK_SCORES = { price: 80, range: 95, coverage: 90, premium: 75, value: 70, innovation: 85 };
+const ARCELIK_SCORES = { price: 80, variety: 95, dealer: 90, campaign: 75, brand: 88, satisfaction: 82 };
 
 export default function CompetitorRadarView() {
   const { filters } = useDashboardFilters();

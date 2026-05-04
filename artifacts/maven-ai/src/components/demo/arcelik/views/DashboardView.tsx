@@ -7,7 +7,7 @@ import {
   TrendingUp, TrendingDown, MapPin, ArrowUpDown, X, ChevronDown,
   Target, Percent, BarChart3, Users, Megaphone, DollarSign, Package,
 } from "lucide-react";
-import { useDashboardFilters } from "../DashboardContext";
+import { useDashboardFilters, type Period } from "../DashboardContext";
 import {
   products, competitorPrices, cities, campaigns, dealers,
   CATEGORY_LABELS, COMPETITOR_BRANDS,
@@ -45,6 +45,15 @@ function heatColor(t: number): string {
   if (t > 0.7) return "#16a34a";
   if (t > 0.4) return "#f59e0b";
   return "#ef4444";
+}
+
+function periodScale(period: Period) {
+  switch (period) {
+    case "this-week": return { share: 0.97, margin: 0.99, revenue: 0.65, campaigns: 0.85, compliance: 0.98, index: 1.01, price: 1.01 };
+    case "this-month": return { share: 1.0, margin: 1.0, revenue: 1.0, campaigns: 1.0, compliance: 1.0, index: 1.0, price: 1.0 };
+    case "3-months": return { share: 1.03, margin: 1.01, revenue: 1.2, campaigns: 1.15, compliance: 1.02, index: 0.99, price: 0.99 };
+    case "6-months": return { share: 1.05, margin: 1.02, revenue: 1.35, campaigns: 1.3, compliance: 1.04, index: 0.98, price: 0.98 };
+  }
 }
 
 function AnimatedCounter({ value, decimals = 1 }: { value: number; decimals?: number }) {
@@ -117,42 +126,62 @@ export default function DashboardView() {
       : competitorPrices;
     const catComps = filters.categories.length > 0 ? fComps.filter((cp) => filters.categories.includes(cp.category)) : fComps;
     const avgIndex = catComps.length ? +(catComps.reduce((s, cp) => s + (1 + cp.priceDeltaPercent / 100), 0) / catComps.length).toFixed(2) : 1.0;
+    const ps = periodScale(filters.period);
+    const pShare = +(avgShare * ps.share).toFixed(1);
+    const pMargin = +(avgMargin * ps.margin).toFixed(1);
+    const pRevenue = +(4.5 * (fc.length / cities.length) * ps.revenue).toFixed(1);
+    const pCampaigns = Math.round(activeCampaigns * ps.campaigns);
+    const pCompliance = +(avgCompliance * ps.compliance).toFixed(1);
+    const pIndex = +(avgIndex * ps.index).toFixed(2);
     return [
-      { id: "share", label: "Ulusal Pazar Payı", value: +avgShare.toFixed(1), suffix: "%", target: "42.0%", delta: `${avgShare >= 39 ? "+" : ""}${(avgShare - 39).toFixed(1)}pp`, positive: avgShare >= 39, icon: Target },
-      { id: "margin", label: "Ortalama Brüt Marj", value: +avgMargin.toFixed(1), suffix: "%", target: "22.5%", delta: `${(avgMargin - 22.1).toFixed(1)}pp`, positive: avgMargin >= 22, icon: Percent },
-      { id: "revenue", label: "Aylık Gelir Değişimi", value: +(4.5 * (fc.length / cities.length)).toFixed(1), suffix: "%", target: ">3%", delta: "+₺12M", positive: true, icon: DollarSign },
-      { id: "campaigns", label: "Aktif Kampanya", value: activeCampaigns, suffix: "", target: "5", delta: `${activeCampaigns >= 3 ? "+" : ""}${activeCampaigns - 2}`, positive: activeCampaigns >= 3, icon: Megaphone },
-      { id: "compliance", label: "Bayi Uyum Oranı", value: +avgCompliance.toFixed(1), suffix: "%", target: "85%", delta: `${(avgCompliance - 76).toFixed(1)}pp`, positive: avgCompliance >= 75, icon: Users },
-      { id: "index", label: "Rakip Fiyat Endeksi", value: avgIndex, suffix: "", target: "0.95–1.05", delta: `${(avgIndex - 1.03) >= 0 ? "+" : ""}${(avgIndex - 1.03).toFixed(2)}`, positive: avgIndex >= 0.95 && avgIndex <= 1.05, icon: BarChart3 },
+      { id: "share", label: "Ulusal Pazar Payı", value: pShare, suffix: "%", target: "42.0%", delta: `${pShare >= 39 ? "+" : ""}${(pShare - 39).toFixed(1)}pp`, positive: pShare >= 39, icon: Target },
+      { id: "margin", label: "Ortalama Brüt Marj", value: pMargin, suffix: "%", target: "22.5%", delta: `${(pMargin - 22.1).toFixed(1)}pp`, positive: pMargin >= 22, icon: Percent },
+      { id: "revenue", label: "Aylık Gelir Değişimi", value: pRevenue, suffix: "%", target: ">3%", delta: `+₺${Math.round(12 * ps.revenue)}M`, positive: pRevenue > 0, icon: DollarSign },
+      { id: "campaigns", label: "Aktif Kampanya", value: pCampaigns, suffix: "", target: "5", delta: `${pCampaigns >= 3 ? "+" : ""}${pCampaigns - 2}`, positive: pCampaigns >= 3, icon: Megaphone },
+      { id: "compliance", label: "Bayi Uyum Oranı", value: pCompliance, suffix: "%", target: "85%", delta: `${(pCompliance - 76).toFixed(1)}pp`, positive: pCompliance >= 75, icon: Users },
+      { id: "index", label: "Rakip Fiyat Endeksi", value: pIndex, suffix: "", target: "0.95–1.05", delta: `${(pIndex - 1.03) >= 0 ? "+" : ""}${(pIndex - 1.03).toFixed(2)}`, positive: pIndex >= 0.95 && pIndex <= 1.05, icon: BarChart3 },
     ];
   }, [filters]);
 
   const categoryData = useMemo(() => {
     const cats = filters.categories.length > 0 ? filters.categories : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
+    const ps = periodScale(filters.period);
     return cats.map((cat) => {
       const catProducts = products.filter((p) => p.category === cat);
       const compProducts = competitorPrices.filter((cp) => cp.category === cat);
       const total = catProducts.length + compProducts.length;
-      const share = total > 0 ? +((catProducts.length / total) * 100).toFixed(1) : 0;
+      const rawShare = total > 0 ? (catProducts.length / total) * 100 : 0;
+      const share = +(rawShare * ps.share).toFixed(1);
       return { name: CATEGORY_LABELS[cat], share, products: catProducts.length, competitors: compProducts.length, cat };
     });
-  }, [filters.categories]);
+  }, [filters.categories, filters.period]);
 
   const comparisonBrands = filters.competitors.length > 0
     ? COMPETITOR_BRANDS.filter((b) => filters.competitors.includes(b.id)).map((b) => b.name)
     : COMPARISON_BRANDS;
+
+  const cityPriceIndex = useMemo(() => {
+    if (filters.cities.length === 0) return 1;
+    const fc = cities.filter((c) => filters.cities.includes(c.id));
+    return fc.length > 0 ? fc.reduce((s, c) => s + c.avgPriceIndex, 0) / fc.length : 1;
+  }, [filters.cities]);
 
   const productComparison = useMemo(() => {
     const cats = filters.categories.length > 0 ? filters.categories : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
     const filtered = products.filter((p) => cats.includes(p.category));
     const rows = filtered.map((p) => {
       const comps = competitorPrices.filter((cp) => cp.arcelikEquivalentId === p.id && comparisonBrands.includes(cp.brand));
+      const adjTsf = Math.round(p.tsfPrice * cityPriceIndex);
       const brandPrices: Record<string, { price: number; delta: number }> = {};
-      comps.forEach((cp) => { brandPrices[cp.brand] = { price: cp.competitorPrice, delta: cp.priceDeltaPercent }; });
-      const deltas = comps.map((c) => c.priceDeltaPercent);
+      comps.forEach((cp) => {
+        const adjComp = Math.round(cp.competitorPrice * cityPriceIndex);
+        const adjDelta = adjTsf > 0 ? +(((adjComp - adjTsf) / adjTsf) * 100).toFixed(1) : 0;
+        brandPrices[cp.brand] = { price: adjComp, delta: adjDelta };
+      });
+      const deltas = Object.values(brandPrices).map((bp) => bp.delta);
       return {
         id: p.id, name: p.name, category: CATEGORY_LABELS[p.category],
-        tsfPrice: p.tsfPrice, brandPrices,
+        tsfPrice: adjTsf, brandPrices,
         avgDelta: deltas.length ? +(deltas.reduce((s, d) => s + d, 0) / deltas.length).toFixed(1) : 0,
       };
     });
@@ -165,7 +194,7 @@ export default function DashboardView() {
       if (typeof va === "string" && typeof vb === "string") return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
       return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
     });
-  }, [filters.categories, comparisonBrands, sortCol, sortDir]);
+  }, [filters.categories, comparisonBrands, sortCol, sortDir, cityPriceIndex]);
 
   const categoryProducts = useMemo(() => {
     if (!selectedCategory) return [];
