@@ -524,13 +524,23 @@ export default function AgentDecisionsView() {
   const { toast } = useToast();
   const [subTab, setSubTab] = useState<SubTab>("recommendations");
   const [roleFilter, setRoleFilter] = useState<DirectorRole | "all">("all");
+  const [priorityFilter, setPriorityFilter] = useState<Severity | "all">("all");
+  const [sortBy, setSortBy] = useState<"severity" | "confidence" | "newest">("severity");
   const [recommendations, setRecommendations] = useState(() => generateRecommendations());
   const tasks = useMemo(() => generateTasks(), []);
   const alerts = useMemo(() => generateAlerts(), []);
   const activityLog = useMemo(() => generateActivityLog(), []);
   const [liveDecisions, setLiveDecisions] = useState<AgentDecisionLog[]>([]);
 
-  const filteredRecs = roleFilter === "all" ? recommendations : recommendations.filter((r) => r.targetRole === roleFilter);
+  const SEVERITY_ORDER: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const filteredRecs = useMemo(() => {
+    let recs = recommendations.slice();
+    if (roleFilter !== "all") recs = recs.filter((r) => r.targetRole === roleFilter);
+    if (priorityFilter !== "all") recs = recs.filter((r) => r.severity === priorityFilter);
+    if (sortBy === "severity") recs.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+    else if (sortBy === "confidence") recs.sort((a, b) => b.confidence - a.confidence);
+    return recs;
+  }, [recommendations, roleFilter, priorityFilter, sortBy]);
   const pendingCount = recommendations.filter((r) => r.status === "pending").length;
   const criticalCount = recommendations.filter((r) => r.severity === "critical" && r.status === "pending").length;
 
@@ -658,19 +668,46 @@ export default function AgentDecisionsView() {
         </div>
 
         {subTab === "recommendations" && (
-          <div className="flex items-center gap-1.5 ml-auto">
-            <Filter size={13} className="text-gray-400" />
-            {(["all", "pricing", "finance", "marketing"] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRoleFilter(r)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                  roleFilter === r ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {r === "all" ? "Tümü" : ROLE_LABELS[r]}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 ml-auto flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <Filter size={13} className="text-gray-400" />
+              {(["all", "pricing", "finance", "marketing"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRoleFilter(r)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                    roleFilter === r ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {r === "all" ? "Tümü" : ROLE_LABELS[r]}
+                </button>
+              ))}
+            </div>
+            <div className="h-4 w-px bg-gray-200" />
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle size={13} className="text-gray-400" />
+              {(["all", "critical", "high", "medium", "low"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setPriorityFilter(s)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                    priorityFilter === s ? "bg-[#E30613] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {s === "all" ? "Tüm Öncelik" : s === "critical" ? "Kritik" : s === "high" ? "Yüksek" : s === "medium" ? "Orta" : "Düşük"}
+                </button>
+              ))}
+            </div>
+            <div className="h-4 w-px bg-gray-200" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as "severity" | "confidence" | "newest")}
+              className="text-[11px] font-medium bg-gray-100 border-0 rounded-full px-2.5 py-1 text-gray-600 cursor-pointer"
+            >
+              <option value="severity">Önceliğe Göre</option>
+              <option value="confidence">Güvene Göre</option>
+              <option value="newest">En Yeni</option>
+            </select>
           </div>
         )}
       </div>

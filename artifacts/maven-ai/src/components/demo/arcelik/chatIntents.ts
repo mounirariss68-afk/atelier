@@ -30,6 +30,14 @@ const INTENTS: Intent[] = [
     }),
   },
   {
+    patterns: [/vestel.*ne.*yapmalı/i, /vestel.*öner/i, /vestel.*strateji/i, /vestel.*karşı/i, /vestel.*fiyat.*saldır/i, /vestel.*nasıl.*karşıla/i],
+    handler: () => ({
+      agent: "analyst",
+      type: "analysis",
+      text: `🔴 Vestel Buzdolabı Fiyat Saldırısı — Ajan Önerisi (Güven: %87)\n\n📊 Akıl Yürütme:\n1. Veri Toplama: Vestel ekonomik segment buzdolabı fiyatlarını %12 düşürdü (3 gün önce)\n2. Etki Analizi: Arçelik ekonomik segmentte %3.2pp pazar payı kaybı riski\n3. Rakip Modelleme: Vestel'in marj yapısı bu fiyatı 45 günden fazla sürdüremez\n4. Strateji: Doğrudan fiyat indirimi yerine değer odaklı paket önerisi\n\n💡 Önerilen Aksiyon:\n• Ekonomik buzdolabı + küçük ev aleti paketi (sepet değeri korunur)\n• 10 yıl kompresör garantisi vurgusu (Vestel'de 5 yıl)\n• Hedef bayilerde özel lansman (önce Tier-1 şehirler)\n\n📈 Tahmini Etki: +₺4.2M gelir, +0.8pp marj, +1.1pp pazar payı (30 gün)\n\n➡️ Bu öneriyi onaylamak/değiştirmek için "Ajan Kararları" sekmesindeki Öneriler paneline gidin.`,
+    }),
+  },
+  {
     patterns: [/playbook/i, /oyun planı/i, /otomasyon/i, /ajan.*ne.*yapıyor/i, /ajan.*aktiv/i],
     handler: () => ({
       agent: "analyst",
