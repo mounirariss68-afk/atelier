@@ -144,12 +144,14 @@ export default function DealerPortal() {
               </button>
             );
           })}
-          <div className="mt-auto p-4 border-t border-gray-100">
+          <div className="mt-auto border-t border-gray-100">
             <button
               onClick={() => setChatOpen(true)}
-              className="w-full px-3 py-2.5 flex items-center justify-center gap-2 text-sm font-semibold text-white bg-[#E30613] rounded-lg hover:bg-[#C00511] transition-colors"
+              className={`w-full px-4 py-3.5 flex items-center gap-3 text-[13px] font-semibold border-l-[3px] transition-colors ${
+                chatOpen ? "border-[#E30613] text-[#E30613] bg-red-50/60" : "border-transparent text-[#E30613] hover:bg-red-50/40"
+              }`}
             >
-              <MessageCircle size={16} />
+              <MessageCircle size={18} />
               Bayi Asistanı
             </button>
           </div>
