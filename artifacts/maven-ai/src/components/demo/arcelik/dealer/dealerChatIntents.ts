@@ -22,6 +22,17 @@ interface DealerIntent {
 
 const INTENTS: DealerIntent[] = [
   {
+    patterns: [/aktif kampanya/i, /kampanyalar neler/i, /hangi kampanya/i, /kampanya var mı/i, /naber kampanya/i],
+    handler: () => {
+      const active = campaigns.filter((c) => c.targetCities.includes(DEALER.city));
+      const list = active.slice(0, 4).map((c, i) => `${i + 1}. ${c.name}\n   ${c.discountDetail}`).join("\n\n");
+      return {
+        type: "list",
+        text: `Şu anda bölgenizde ${active.length} aktif kampanya var:\n\n${list}\n\nDetaylar için Kampanyalar bölümünü ziyaret edebilirsiniz.`,
+      };
+    },
+  },
+  {
     patterns: [/merhaba/i, /selam/i, /hey/i, /günaydın/i, /iyi günler/i],
     handler: () => ({
       type: "text",
@@ -34,17 +45,6 @@ const INTENTS: DealerIntent[] = [
       type: "text",
       text: `İyiyim, teşekkürler! 😊 Bugün ${DEALER.storeName} için neler yapabilirim? Kampanya, fiyat, stok veya hedef takibi konularında hazırım.`,
     }),
-  },
-  {
-    patterns: [/aktif kampanya/i, /kampanyalar neler/i, /hangi kampanya/i, /kampanya var mı/i, /naber kampanya/i],
-    handler: () => {
-      const active = campaigns.filter((c) => c.targetCities.includes(DEALER.city));
-      const list = active.slice(0, 4).map((c, i) => `${i + 1}. ${c.name}\n   ${c.discountDetail}`).join("\n\n");
-      return {
-        type: "list",
-        text: `Şu anda bölgenizde ${active.length} aktif kampanya var:\n\n${list}\n\nDetaylar için Kampanyalar bölümünü ziyaret edebilirsiniz.`,
-      };
-    },
   },
   {
     patterns: [/kampanya.*bitiyor/i, /bitiş tarihi/i, /ne zaman sona/i, /kampanya.*ne zaman/i, /kalan gün/i],
