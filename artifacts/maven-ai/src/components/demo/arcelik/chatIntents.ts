@@ -277,7 +277,7 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "list",
         text: lang === "en"
-          ? `Bottom 5 products by margin:\n${list}\n\n⚠️ Price optimization may be considered for these d().products.`
+          ? `Bottom 5 products by margin:\n${list}\n\n⚠️ Price optimization may be considered for these products.`
           : `En düşük marjlı 5 ürün:\n${list}\n\n⚠️ Bu ürünlerde fiyat optimizasyonu değerlendirilebilir.`,
       };
     },
@@ -315,7 +315,7 @@ const INTENTS: Intent[] = [
         agent: "analyst",
         type: "list",
         text: lang === "en"
-          ? `Bottom 5 cities by market share:\n${list}\n\nRegional campaigns and dealer empowerment recommended for these d().cities.`
+          ? `Bottom 5 cities by market share:\n${list}\n\nRegional campaigns and dealer empowerment recommended for these cities.`
           : `En düşük pazar payına sahip 5 şehir:\n${list}\n\nBu şehirlerde bölgesel kampanya ve bayi güçlendirme önerilir.`,
       };
     },

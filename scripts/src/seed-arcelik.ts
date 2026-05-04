@@ -10,8 +10,254 @@ import {
   arcelikCalendarTable,
   arcelikKpiBenchmarksTable,
 } from "@workspace/db";
+import * as cheerio from "cheerio";
 
 const DRY_RUN = process.argv.includes("--dry-run");
+const SCRAPE = process.argv.includes("--scrape");
+
+interface ScrapedPrice {
+  modelCode: string;
+  name: string;
+  price: number;
+  sourceUrl: string;
+  scrapedAt: string;
+}
+
+function parseTurkishPrice(raw: string): number | null {
+  const cleaned = raw
+    .replace(/[^\d.,]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : Math.round(num);
+}
+
+async function fetchPage(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept-Language": "tr-TR,tr;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+async function scrapeArcelik(): Promise<ScrapedPrice[]> {
+  const categories = ["buzdolabi", "camasir-makinesi", "bulasik-makinesi", "ankastre-firinlar", "klima"];
+  const results: ScrapedPrice[] = [];
+  for (const cat of categories) {
+    const html = await fetchPage(`https://www.arcelik.com.tr/${cat}`);
+    if (!html) continue;
+    const $ = cheerio.load(html);
+    $('[data-product-id], .product-card, .product-item').each((_, el) => {
+      const name = $(el).find('.product-name, .product-title, h3, h2').first().text().trim();
+      const priceText = $(el).find('.product-price, .price, [data-price]').first().text().trim();
+      const price = parseTurkishPrice(priceText);
+      if (name && price && price > 1000) {
+        const modelMatch = name.match(/\b(\d{3,5}\s*[A-Z]{1,4}(?:\s+\w+)?)\b/);
+        results.push({
+          modelCode: modelMatch ? modelMatch[1].trim() : name.slice(0, 30),
+          name,
+          price,
+          sourceUrl: `https://www.arcelik.com.tr/${cat}`,
+          scrapedAt: new Date().toISOString(),
+        });
+      }
+    });
+  }
+  return results;
+}
+
+async function scrapeBeko(): Promise<ScrapedPrice[]> {
+  const categories = ["buzdolabi", "camasir-makinesi", "bulasik-makinesi"];
+  const results: ScrapedPrice[] = [];
+  for (const cat of categories) {
+    const html = await fetchPage(`https://www.beko.com.tr/${cat}`);
+    if (!html) continue;
+    const $ = cheerio.load(html);
+    $('[data-product], .product-card, .product-tile').each((_, el) => {
+      const name = $(el).find('.product-name, .product-title, h3').first().text().trim();
+      const priceText = $(el).find('.product-price, .price, .sale-price').first().text().trim();
+      const price = parseTurkishPrice(priceText);
+      if (name && price && price > 1000) {
+        results.push({
+          modelCode: name.split(" ").slice(1, 4).join(" ").trim() || name.slice(0, 20),
+          name,
+          price,
+          sourceUrl: `https://www.beko.com.tr/${cat}`,
+          scrapedAt: new Date().toISOString(),
+        });
+      }
+    });
+  }
+  return results;
+}
+
+async function scrapeVestel(): Promise<ScrapedPrice[]> {
+  const categories = ["beyaz-esya/buzdolabi", "beyaz-esya/camasir-makinesi", "beyaz-esya/bulasik-makinesi"];
+  const results: ScrapedPrice[] = [];
+  for (const cat of categories) {
+    const html = await fetchPage(`https://www.vestel.com.tr/${cat}`);
+    if (!html) continue;
+    const $ = cheerio.load(html);
+    $('.product-card, .product-item, [data-product-id]').each((_, el) => {
+      const name = $(el).find('.product-name, .product-title, h3').first().text().trim();
+      const priceText = $(el).find('.product-price, .price, .current-price').first().text().trim();
+      const price = parseTurkishPrice(priceText);
+      if (name && price && price > 1000) {
+        results.push({
+          modelCode: name.split(" ").slice(1, 3).join(" ").trim() || name.slice(0, 20),
+          name,
+          price,
+          sourceUrl: `https://www.vestel.com.tr/${cat}`,
+          scrapedAt: new Date().toISOString(),
+        });
+      }
+    });
+  }
+  return results;
+}
+
+async function scrapeBosch(): Promise<ScrapedPrice[]> {
+  const categories = ["urun-listeleme/buzdolaplari", "urun-listeleme/camasir-makineleri", "urun-listeleme/bulasik-makineleri"];
+  const results: ScrapedPrice[] = [];
+  for (const cat of categories) {
+    const html = await fetchPage(`https://www.bosch-home.com.tr/${cat}`);
+    if (!html) continue;
+    const $ = cheerio.load(html);
+    $('.product-tile, .product-card, [data-product]').each((_, el) => {
+      const name = $(el).find('.product-name, .product-title, h3').first().text().trim();
+      const priceText = $(el).find('.product-price, .price, .current-price').first().text().trim();
+      const price = parseTurkishPrice(priceText);
+      if (name && price && price > 1000) {
+        results.push({
+          modelCode: name.split(" ").slice(0, 3).join(" ").trim() || name.slice(0, 20),
+          name,
+          price,
+          sourceUrl: `https://www.bosch-home.com.tr/${cat}`,
+          scrapedAt: new Date().toISOString(),
+        });
+      }
+    });
+  }
+  return results;
+}
+
+async function scrapeSamsung(): Promise<ScrapedPrice[]> {
+  const categories = ["home-appliances/refrigerators/all-refrigerators", "home-appliances/washing-machines/all-washing-machines", "home-appliances/dishwashers/all-dishwashers"];
+  const results: ScrapedPrice[] = [];
+  for (const cat of categories) {
+    const html = await fetchPage(`https://www.samsung.com/tr/${cat}/`);
+    if (!html) continue;
+    const $ = cheerio.load(html);
+    $('.product-card, [data-product-id], .product-card__item').each((_, el) => {
+      const name = $(el).find('.product-card__name, .product-title, h3').first().text().trim();
+      const priceText = $(el).find('.product-card__price, .price, [data-price]').first().text().trim();
+      const price = parseTurkishPrice(priceText);
+      if (name && price && price > 1000) {
+        results.push({
+          modelCode: name.split(" ").slice(0, 3).join(" ").trim() || name.slice(0, 20),
+          name,
+          price,
+          sourceUrl: `https://www.samsung.com/tr/${cat}/`,
+          scrapedAt: new Date().toISOString(),
+        });
+      }
+    });
+  }
+  return results;
+}
+
+async function runScrapers(): Promise<{
+  arcelik: ScrapedPrice[];
+  beko: ScrapedPrice[];
+  vestel: ScrapedPrice[];
+  bosch: ScrapedPrice[];
+  samsung: ScrapedPrice[];
+}> {
+  const scrapers = [
+    { name: "arcelik.com.tr", fn: scrapeArcelik },
+    { name: "beko.com.tr", fn: scrapeBeko },
+    { name: "vestel.com.tr", fn: scrapeVestel },
+    { name: "bosch-home.com.tr", fn: scrapeBosch },
+    { name: "samsung.com/tr", fn: scrapeSamsung },
+  ] as const;
+
+  const results = { arcelik: [] as ScrapedPrice[], beko: [] as ScrapedPrice[], vestel: [] as ScrapedPrice[], bosch: [] as ScrapedPrice[], samsung: [] as ScrapedPrice[] };
+  const keys = ["arcelik", "beko", "vestel", "bosch", "samsung"] as const;
+
+  for (let i = 0; i < scrapers.length; i++) {
+    const s = scrapers[i];
+    console.log(`  Scraping ${s.name}...`);
+    try {
+      const scraped = await s.fn();
+      results[keys[i]] = scraped;
+      console.log(`  ✓ ${s.name}: ${scraped.length} products found`);
+    } catch (err) {
+      console.log(`  ✗ ${s.name}: scrape failed (${err instanceof Error ? err.message : "unknown error"})`);
+    }
+  }
+  return results;
+}
+
+function applyScrapedPrices(
+  products: typeof FALLBACK_PRODUCTS,
+  scraped: Awaited<ReturnType<typeof runScrapers>>,
+): typeof FALLBACK_PRODUCTS {
+  const today = new Date().toISOString().split("T")[0];
+  let updated = 0;
+
+  const arcelikMap = new Map(scraped.arcelik.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+  const bekoMap = new Map(scraped.beko.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+
+  for (const p of products) {
+    const key = p.modelCode.toLowerCase().replace(/\s+/g, "");
+    const match = arcelikMap.get(key) ?? bekoMap.get(key);
+    if (match) {
+      p.tsfPrice = match.price;
+      p.dealerCost = Math.round(match.price * (1 - p.marginPercent / 100));
+      p.priceDate = today;
+      updated++;
+    }
+  }
+  console.log(`  Applied ${updated}/${products.length} scraped product prices`);
+  return products;
+}
+
+function applyScrapedCompetitorPrices(
+  competitors: typeof FALLBACK_COMPETITOR_PRICES,
+  scraped: Awaited<ReturnType<typeof runScrapers>>,
+): typeof FALLBACK_COMPETITOR_PRICES {
+  const today = new Date().toISOString().split("T")[0];
+  let updated = 0;
+
+  const vestelMap = new Map(scraped.vestel.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+  const boschMap = new Map(scraped.bosch.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+  const samsungMap = new Map(scraped.samsung.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+
+  for (const cp of competitors) {
+    const key = cp.competitorModel.split(" ").slice(0, 2).join("").toLowerCase();
+    let match: ScrapedPrice | undefined;
+    if (cp.brand === "Vestel" || cp.brand === "Regal") match = vestelMap.get(key);
+    else if (cp.brand === "Bosch" || cp.brand === "Siemens" || cp.brand === "Profilo") match = boschMap.get(key);
+    else if (cp.brand === "Samsung") match = samsungMap.get(key);
+
+    if (match) {
+      cp.competitorPrice = match.price;
+      cp.priceDate = today;
+      updated++;
+    }
+  }
+  console.log(`  Applied ${updated}/${competitors.length} scraped competitor prices`);
+  return competitors;
+}
 
 async function upsertAll<T extends Record<string, unknown>>(
   table: any,
@@ -45,7 +291,7 @@ const DATA_SOURCES = [
   { id: "src-turkey-map", category: "map", name: "Türkiye İl Sınırları Haritası (Coğrafi veri)", nameEn: "Turkey Provincial Boundaries Map (Geographic data)", sourceType: "geographic", sourceUrl: "https://commons.wikimedia.org/wiki/File:Turkey_location_map.svg", sourceDate: "2024-01-01", description: "Türkiye 81 il sınırları ve 7 coğrafi bölge haritası, Wikimedia Commons kaynaklı", descriptionEn: "Turkey 81 province boundaries and 7 geographic regions map, sourced from Wikimedia Commons" },
 ];
 
-const PRODUCTS = [
+const FALLBACK_PRODUCTS = [
   { id: "buz-01", modelCode: "5088 NFK", name: "Arçelik 5088 NFK No-Frost Buzdolabı", category: "buzdolabi", subcategory: "no-frost", priceTier: "mid", tsfPrice: 27499, dealerCost: 19249, marginPercent: 30, energyClass: "A++", features: ["No-Frost","Ion Fresh teknolojisi","560 L hacim","Dijital dokunmatik ekran"], sourceId: "src-arcelik-prices", priceDate: "2026-05-01" },
   { id: "buz-02", modelCode: "5076 NFK", name: "Arçelik 5076 NFK No-Frost", category: "buzdolabi", subcategory: "no-frost", priceTier: "mid", tsfPrice: 23999, dealerCost: 16799, marginPercent: 30, energyClass: "A++", features: ["No-Frost","480 L hacim","Antibakteriyel filtre"], sourceId: "src-arcelik-prices", priceDate: "2026-05-01" },
   { id: "buz-03", modelCode: "5060 NFK", name: "Arçelik 5060 NFK A+++", category: "buzdolabi", subcategory: "no-frost", priceTier: "mid", tsfPrice: 21499, dealerCost: 15264, marginPercent: 29, energyClass: "A+++", features: ["No-Frost","430 L hacim","Enerji tasarruflu"], sourceId: "src-arcelik-prices", priceDate: "2026-05-01" },
@@ -153,7 +399,7 @@ const PRODUCTS = [
   { id: "tv-15", modelCode: "A65 L 9895 5S", name: "Arçelik A65 L 9895 5S OLED TV 65\"", category: "tv-elektronik", subcategory: "oled-tv", priceTier: "premium", tsfPrice: 64999, dealerCost: 49399, marginPercent: 24, energyClass: "G", features: ["65 inç","OLED","4K","Dolby Vision IQ","120Hz","HDMI 2.1"], sourceId: "src-arcelik-prices", priceDate: "2026-05-01" },
 ];
 
-const COMPETITOR_PRICES = [
+const FALLBACK_COMPETITOR_PRICES = [
   { id: "cp-v-01", brand: "Vestel", competitorModel: "NF600 EX A++", category: "buzdolabi", competitorPrice: 22999, arcelikEquivalentId: "buz-04", priceDeltaPercent: 24, positioning: "value", note: "Fiyat odaklı segment lideri", sourceId: "src-vestel-prices", priceDate: "2026-05-01" },
   { id: "cp-v-02", brand: "Vestel", competitorModel: "NF520 A++", category: "buzdolabi", competitorPrice: 18499, arcelikEquivalentId: "buz-03", priceDeltaPercent: -14, positioning: "value", note: "Agresif fiyatlandırma", sourceId: "src-vestel-prices", priceDate: "2026-05-01" },
   { id: "cp-v-03", brand: "Vestel", competitorModel: "CM 9812 İnverter", category: "camasir", competitorPrice: 16999, arcelikEquivalentId: "cam-01", priceDeltaPercent: -15, positioning: "value", note: "Fiyat avantajı ile pazar payı hedefi", sourceId: "src-vestel-prices", priceDate: "2026-05-01" },
@@ -323,9 +569,27 @@ const KPI_BENCHMARKS = [
 async function main() {
   console.log(DRY_RUN ? "=== DRY RUN ===" : "=== Seeding Arçelik data ===");
 
+  let products = [...FALLBACK_PRODUCTS];
+  let competitorPrices = [...FALLBACK_COMPETITOR_PRICES];
+
+  if (SCRAPE) {
+    console.log("\n🔍 Running price scrapers (--scrape flag detected)...");
+    const scraped = await runScrapers();
+    const totalScraped = Object.values(scraped).reduce((s, arr) => s + arr.length, 0);
+    if (totalScraped > 0) {
+      console.log(`\n📊 Scraped ${totalScraped} total prices, applying to dataset...`);
+      products = applyScrapedPrices(products, scraped);
+      competitorPrices = applyScrapedCompetitorPrices(competitorPrices, scraped);
+    } else {
+      console.log("\n⚠️  No prices scraped (sites may be blocking or down). Using verified fallback data.");
+    }
+  } else {
+    console.log("Using verified fallback prices (run with --scrape to fetch live prices)");
+  }
+
   await upsertAll(arcelikDataSourcesTable, DATA_SOURCES, "data sources");
-  await upsertAll(arcelikProductsTable, PRODUCTS, "products");
-  await upsertAll(arcelikCompetitorPricesTable, COMPETITOR_PRICES, "competitor prices");
+  await upsertAll(arcelikProductsTable, products, "products");
+  await upsertAll(arcelikCompetitorPricesTable, competitorPrices, "competitor prices");
   await upsertAll(arcelikCitiesTable, CITIES, "cities");
   await upsertAll(arcelikDealersTable, DEALERS, "dealers");
   await upsertAll(arcelikCampaignsTable, CAMPAIGNS, "campaigns");

@@ -115,6 +115,7 @@ function CampaignBuilder() {
   const { toast } = useToast();
   const { lang } = useDemoLang();
   const t = campaignI18n[lang];
+  const { products, cities } = useArcelikData();
   const [name, setName] = useState("");
   const [selectedCats, setSelectedCats] = useState<ProductCategory[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
