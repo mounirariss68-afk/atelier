@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Tag, BookOpen, DollarSign, GraduationCap, Megaphone, Settings, Eye, EyeOff } from "lucide-react";
+import { Bell, Tag, DollarSign, GraduationCap, Megaphone, Settings, Eye, EyeOff } from "lucide-react";
 
 interface Announcement {
   id: number;

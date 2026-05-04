@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 import {
-  Award, TrendingUp, TrendingDown, Tag, AlertTriangle, Package, BarChart3,
+  Award, TrendingUp, Tag, AlertTriangle, Package, BarChart3,
   Clock, ChevronRight, Megaphone, Info,
 } from "lucide-react";
-import { dealers, campaigns, products, CATEGORY_LABELS, cities as allCities, type ProductCategory } from "@/data/arcelik-seed";
+import { dealers, campaigns, CATEGORY_LABELS, cities as allCities } from "@/data/arcelik-seed";
 import type { DealerViewId } from "../DealerPortal";
 
 const DEALER = dealers[0];

@@ -12,7 +12,7 @@ import TargetsView from "./dealer/TargetsView";
 import StockOrdersView from "./dealer/StockOrdersView";
 import AnnouncementsView from "./dealer/AnnouncementsView";
 import DealerChat from "./dealer/DealerChat";
-import { dealers, cities as allCities, CATEGORY_LABELS } from "@/data/arcelik-seed";
+import { dealers, cities as allCities } from "@/data/arcelik-seed";
 
 export type DealerViewId = "home" | "prices" | "campaigns" | "targets" | "stock" | "announcements";
 

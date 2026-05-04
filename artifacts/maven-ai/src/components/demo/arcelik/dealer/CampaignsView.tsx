@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Clock, Tag, Target, Users, ChevronDown, ChevronUp, Megaphone, Gift, MessageSquare, CheckCircle2 } from "lucide-react";
+import { Clock, Tag, Target, Users, ChevronDown, ChevronUp, Megaphone, Gift, CheckCircle2 } from "lucide-react";
 import { campaigns, dealers, CATEGORY_LABELS } from "@/data/arcelik-seed";
 
 const DEALER = dealers[0];
@@ -134,7 +134,6 @@ export default function CampaignsView() {
           <h2 className="text-sm font-bold text-gray-500 mb-3">Yaklaşan Kampanyalar</h2>
           <div className="space-y-3">
             {upcoming.map((c) => {
-              const st = getStatus(c.id);
               return (
                 <div key={c.id} className="bg-white rounded-xl border border-dashed border-gray-200 p-4">
                   <div className="flex items-center gap-2 mb-1">

@@ -1,6 +1,6 @@
 import {
   products, competitorPrices, dealers, campaigns,
-  CATEGORY_LABELS, COMPETITOR_BRANDS,
+  CATEGORY_LABELS,
   type ProductCategory,
 } from "@/data/arcelik-seed";
 

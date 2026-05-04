@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { Target, Award, TrendingUp, Trophy, Users } from "lucide-react";
-import { dealers, products, CATEGORY_LABELS, type ProductCategory } from "@/data/arcelik-seed";
+import { dealers, CATEGORY_LABELS, type ProductCategory } from "@/data/arcelik-seed";
 
 const DEALER = dealers[0];
 const fmt = (n: number) => n.toLocaleString("tr-TR");
@@ -32,14 +32,12 @@ const QUARTERLY_TARGET = 220;
 const QUARTERLY_PROGRESS = DEALER.currentProgress + 42 + 55;
 const quarterlyPct = Math.round((QUARTERLY_PROGRESS / QUARTERLY_TARGET) * 100);
 
-const REGION_DEALERS = dealers.filter((d) => d.city === DEALER.city || d.city === "ankara" || d.city === "izmir" || d.city === "bursa");
 const dealerRank = 23;
 const totalDealers = 127;
 const percentile = Math.round((1 - dealerRank / totalDealers) * 100);
 
 export default function TargetsView() {
   const progressPct = Math.round((DEALER.currentProgress / DEALER.monthlySalesTarget) * 100);
-  const currentThreshold = THRESHOLDS.filter((t) => DEALER.currentProgress >= t.units).pop();
 
   return (
     <div className="space-y-6">
