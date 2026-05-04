@@ -26,7 +26,18 @@ function parseTurkishPrice(raw: string): number | null {
   return isNaN(num) ? null : Math.round(num);
 }
 
-async function fetchPage(url: string): Promise<string | null> {
+function extractFirstTurkishPrice(text: string): number | null {
+  const m = text.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s*(?:TL|₺)/);
+  if (m) return parseTurkishPrice(m[1]);
+  const fallback = text.match(/(\d{1,3}(?:\.\d{3})+)/);
+  if (fallback) return parseTurkishPrice(fallback[1]);
+  return null;
+}
+
+async function fetchPage(
+  url: string,
+  extraHeaders?: Record<string, string>,
+): Promise<string | null> {
   try {
     const res = await fetch(url, {
       headers: {
@@ -35,122 +46,201 @@ async function fetchPage(url: string): Promise<string | null> {
         "Accept-Language": "tr-TR,tr;q=0.9",
         Accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        ...extraHeaders,
       },
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      logger.warn({ url, status: res.status }, "fetchPage non-OK response");
+      return null;
+    }
     return await res.text();
-  } catch {
+  } catch (err) {
+    logger.warn({ url, err }, "fetchPage error");
     return null;
   }
 }
 
-async function scrapeArcelik(): Promise<ScrapedPrice[]> {
-  const categories = [
-    "buzdolabi",
-    "camasir-makinesi",
-    "bulasik-makinesi",
-    "ankastre-firinlar",
-    "klima",
-  ];
-  const results: ScrapedPrice[] = [];
-  for (const cat of categories) {
-    const html = await fetchPage(`https://www.arcelik.com.tr/${cat}`);
-    if (!html) continue;
-    const $ = cheerio.load(html);
-    $("[data-product-id], .product-card, .product-item").each((_, el) => {
-      const name = $(el)
-        .find(".product-name, .product-title, h3, h2")
-        .first()
-        .text()
-        .trim();
-      const priceText = $(el)
-        .find(".product-price, .price, [data-price]")
-        .first()
-        .text()
-        .trim();
-      const price = parseTurkishPrice(priceText);
-      if (name && price && price > 1000) {
-        const modelMatch = name.match(
-          /\b(\d{3,5}\s*[A-Z]{1,4}(?:\s+\w+)?)\b/,
-        );
-        results.push({
-          modelCode: modelMatch ? modelMatch[1].trim() : name.slice(0, 30),
-          name,
-          price,
-          sourceUrl: `https://www.arcelik.com.tr/${cat}`,
-          scrapedAt: new Date().toISOString(),
-        });
-      }
+let _pwBrowser: any = null;
+
+async function findChromiumPath(): Promise<string> {
+  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) return process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  const { execSync } = await import("child_process");
+  try {
+    const p = execSync("which chromium", { encoding: "utf-8" }).trim();
+    if (p) return p;
+  } catch {}
+  try {
+    const p = execSync("which chromium-browser", { encoding: "utf-8" }).trim();
+    if (p) return p;
+  } catch {}
+  return "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium";
+}
+
+async function getPlaywrightBrowser(): Promise<any> {
+  if (_pwBrowser) return _pwBrowser;
+  try {
+    const { chromium } = await import("playwright-core");
+    const execPath = await findChromiumPath();
+    logger.info({ execPath }, "Launching Playwright with Chromium");
+    _pwBrowser = await chromium.launch({
+      headless: true,
+      executablePath: execPath,
+      args: [
+        "--disable-blink-features=AutomationControlled",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
     });
+    logger.info("Playwright browser launched successfully");
+    return _pwBrowser;
+  } catch (err) {
+    logger.warn(
+      { err },
+      "Playwright unavailable — browser-based scraping disabled",
+    );
+    return null;
   }
+}
+
+async function closePlaywrightBrowser(): Promise<void> {
+  if (_pwBrowser) {
+    await _pwBrowser.close().catch(() => {});
+    _pwBrowser = null;
+  }
+}
+
+async function scrapeWithPlaywright(
+  baseUrl: string,
+  categories: string[],
+  brandLabel: string,
+): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info(`Skipping ${brandLabel} scrape (Playwright not available)`);
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+  });
+
+  try {
+    for (const cat of categories) {
+      const url = `${baseUrl}/${cat}`;
+      const page = await context.newPage();
+      try {
+        await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+        await page
+          .waitForSelector(
+            ".product-card, .product-item, [data-product-id], .product-list",
+            { timeout: 10000 },
+          )
+          .catch(() => {});
+
+        const items: Array<{
+          name: string;
+          priceText: string;
+          modelCode: string;
+        }> = await page.evaluate(
+          /* istanbul ignore next -- runs in browser context */
+          // @ts-expect-error -- DOM types only available in browser evaluate context
+          () => {
+            const out: { name: string; priceText: string; modelCode: string }[] = [];
+            document
+              .querySelectorAll(
+                ".product-card, .product-item, [data-product-id], .product-list-item-wrap",
+              )
+              .forEach((el: Element) => {
+                const nameEl = el.querySelector(
+                  ".product-name, .product-title, h3, h2",
+                );
+                const priceEl = el.querySelector(
+                  ".product-price, .price, [data-price], .product-price-helper",
+                );
+                const name = nameEl?.textContent?.trim() || "";
+                const priceText = priceEl?.textContent?.trim() || "";
+                const modelCode =
+                  (el as any).dataset?.productId || "";
+                if (name && priceText) out.push({ name, priceText, modelCode });
+              });
+            return out;
+          },
+        );
+
+        for (const item of items) {
+          const price = extractFirstTurkishPrice(item.priceText);
+          if (price && price > 1000) {
+            const modelMatch = item.name.match(/\b(\d{3,5}\s*[A-Z]{1,4})\b/);
+            results.push({
+              modelCode:
+                item.modelCode ||
+                (modelMatch ? modelMatch[1].trim() : item.name.slice(0, 30)),
+              name: item.name,
+              price,
+              sourceUrl: url,
+              scrapedAt: new Date().toISOString(),
+            });
+          }
+        }
+      } catch (err) {
+        logger.warn({ url, err }, `${brandLabel} page scrape failed`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
   return results;
+}
+
+async function scrapeArcelik(): Promise<ScrapedPrice[]> {
+  return scrapeWithPlaywright(
+    "https://www.arcelik.com.tr",
+    ["buzdolabi", "camasir-makinesi", "bulasik-makinesi", "ankastre-firinlar", "klima"],
+    "Arçelik",
+  );
 }
 
 async function scrapeBeko(): Promise<ScrapedPrice[]> {
-  const categories = ["buzdolabi", "camasir-makinesi", "bulasik-makinesi"];
-  const results: ScrapedPrice[] = [];
-  for (const cat of categories) {
-    const html = await fetchPage(`https://www.beko.com.tr/${cat}`);
-    if (!html) continue;
-    const $ = cheerio.load(html);
-    $("[data-product], .product-card, .product-tile").each((_, el) => {
-      const name = $(el)
-        .find(".product-name, .product-title, h3")
-        .first()
-        .text()
-        .trim();
-      const priceText = $(el)
-        .find(".product-price, .price, .sale-price")
-        .first()
-        .text()
-        .trim();
-      const price = parseTurkishPrice(priceText);
-      if (name && price && price > 1000) {
-        results.push({
-          modelCode:
-            name.split(" ").slice(1, 4).join(" ").trim() || name.slice(0, 20),
-          name,
-          price,
-          sourceUrl: `https://www.beko.com.tr/${cat}`,
-          scrapedAt: new Date().toISOString(),
-        });
-      }
-    });
-  }
-  return results;
+  return scrapeWithPlaywright(
+    "https://www.beko.com.tr",
+    ["buzdolabi", "camasir-makinesi", "bulasik-makinesi"],
+    "Beko",
+  );
 }
 
 async function scrapeVestel(): Promise<ScrapedPrice[]> {
-  const categories = [
-    "beyaz-esya/buzdolabi",
-    "beyaz-esya/camasir-makinesi",
-    "beyaz-esya/bulasik-makinesi",
-  ];
+  const categories = ["buzdolabi", "camasir-makinesi", "bulasik-makineleri"];
   const results: ScrapedPrice[] = [];
   for (const cat of categories) {
-    const html = await fetchPage(`https://www.vestel.com.tr/${cat}`);
+    const url = `https://www.vestel.com.tr/${cat}`;
+    const html = await fetchPage(url);
     if (!html) continue;
     const $ = cheerio.load(html);
-    $(".product-card, .product-item, [data-product-id]").each((_, el) => {
-      const name = $(el)
-        .find(".product-name, .product-title, h3")
-        .first()
-        .text()
-        .trim();
-      const priceText = $(el)
-        .find(".product-price, .price, .current-price")
-        .first()
-        .text()
-        .trim();
-      const price = parseTurkishPrice(priceText);
+    $(".product-list-item-wrap").each((_, el) => {
+      const name = $(el).find(".product-title").first().text().trim();
+      const priceRaw = $(el).find(".product-price-helper").first().text().trim();
+      const price = extractFirstTurkishPrice(priceRaw);
       if (name && price && price > 1000) {
+        const modelMatch = name.match(
+          /\b([A-Z]{2,5}\d{3,5}[A-Z0-9]*(?:\s+[A-Z]{1,3})?)\b/i,
+        );
+        const dataId =
+          $(el).attr("data-product-id") ||
+          $(el).find("[data-product-id]").first().attr("data-product-id") ||
+          "";
         results.push({
-          modelCode:
-            name.split(" ").slice(1, 3).join(" ").trim() || name.slice(0, 20),
+          modelCode: dataId || (modelMatch ? modelMatch[1].trim().toUpperCase() : name.slice(0, 30)),
           name,
           price,
-          sourceUrl: `https://www.vestel.com.tr/${cat}`,
+          sourceUrl: url,
           scrapedAt: new Date().toISOString(),
         });
       }
@@ -161,34 +251,41 @@ async function scrapeVestel(): Promise<ScrapedPrice[]> {
 
 async function scrapeBosch(): Promise<ScrapedPrice[]> {
   const categories = [
-    "urun-listeleme/buzdolaplari",
-    "urun-listeleme/camasir-makineleri",
-    "urun-listeleme/bulasik-makineleri",
+    "buzdolaplari-derin-dondurucular",
+    "camasir-makineleri",
+    "bulasik-makineleri",
   ];
   const results: ScrapedPrice[] = [];
   for (const cat of categories) {
-    const html = await fetchPage(`https://www.bosch-home.com.tr/${cat}`);
+    const url = `https://www.bosch-home.com.tr/tr/category/${cat}`;
+    const html = await fetchPage(url);
     if (!html) continue;
     const $ = cheerio.load(html);
-    $(".product-tile, .product-card, [data-product]").each((_, el) => {
-      const name = $(el)
-        .find(".product-name, .product-title, h3")
+    $('[data-testid^="product-teaser-container-for-"]').each((_, el) => {
+      const rawName = $(el)
+        .find('[data-testid="product-teaser-header-headline"]')
+        .first()
+        .text()
+        .trim();
+      const name =
+        rawName.includes("{") || rawName.includes("@media") ? "" : rawName;
+      const modelCode = $(el)
+        .find('[data-testid="product-code"]')
         .first()
         .text()
         .trim();
       const priceText = $(el)
-        .find(".product-price, .price, .current-price")
+        .find('[data-testid="price-main-price"]')
         .first()
         .text()
         .trim();
       const price = parseTurkishPrice(priceText);
-      if (name && price && price > 1000) {
+      if (modelCode && price && price > 1000) {
         results.push({
-          modelCode:
-            name.split(" ").slice(0, 3).join(" ").trim() || name.slice(0, 20),
-          name,
+          modelCode,
+          name: name || modelCode,
           price,
-          sourceUrl: `https://www.bosch-home.com.tr/${cat}`,
+          sourceUrl: url,
           scrapedAt: new Date().toISOString(),
         });
       }
@@ -199,41 +296,50 @@ async function scrapeBosch(): Promise<ScrapedPrice[]> {
 
 async function scrapeSamsung(): Promise<ScrapedPrice[]> {
   const categories = [
-    "home-appliances/refrigerators/all-refrigerators",
-    "home-appliances/washing-machines/all-washing-machines",
-    "home-appliances/dishwashers/all-dishwashers",
+    "refrigerators/all-refrigerators",
+    "washers-and-dryers/all-washers-and-dryers",
+    "dishwashers/all-dishwashers",
   ];
   const results: ScrapedPrice[] = [];
   for (const cat of categories) {
-    const html = await fetchPage(`https://www.samsung.com/tr/${cat}/`);
+    const url = `https://www.samsung.com/tr/${cat}/`;
+    const html = await fetchPage(url, {
+      Cookie: "country_codes=tr; country_region=TR",
+    });
     if (!html) continue;
     const $ = cheerio.load(html);
-    $(".product-card, [data-product-id], .product-card__item").each(
-      (_, el) => {
-        const name = $(el)
-          .find(".product-card__name, .product-title, h3")
-          .first()
-          .text()
-          .trim();
-        const priceText = $(el)
-          .find(".product-card__price, .price, [data-price]")
-          .first()
-          .text()
-          .trim();
-        const price = parseTurkishPrice(priceText);
-        if (name && price && price > 1000) {
+    $('script[type="application/ld+json"]').each((_, el) => {
+      try {
+        const data = JSON.parse($(el).html() || "");
+        if (data["@type"] !== "ItemList" || !data.itemListElement) return;
+        for (const entry of data.itemListElement) {
+          const item = entry.item || entry;
+          const name = item.name;
+          const rawPrice = item.offers?.price;
+          const price =
+            typeof rawPrice === "number"
+              ? Math.round(rawPrice)
+              : parseTurkishPrice(String(rawPrice || ""));
+          if (!name || !price || price < 1000) continue;
+
+          let modelCode = item.sku || item.productID || item.model || "";
+          if (!modelCode && item.url) {
+            const slug = String(item.url).split("/").filter(Boolean).pop() || "";
+            const codeMatch = slug.match(/[-]([a-z]{2}\d{2,}[a-z0-9]*)\/?$/i);
+            modelCode = codeMatch ? codeMatch[1].toUpperCase() : "";
+          }
           results.push({
-            modelCode:
-              name.split(" ").slice(0, 3).join(" ").trim() ||
-              name.slice(0, 20),
+            modelCode: modelCode || name.slice(0, 30),
             name,
             price,
-            sourceUrl: `https://www.samsung.com/tr/${cat}/`,
+            sourceUrl: url,
             scrapedAt: new Date().toISOString(),
           });
         }
-      },
-    );
+      } catch {
+        // skip malformed JSON-LD blocks
+      }
+    });
   }
   return results;
 }
@@ -278,6 +384,8 @@ async function runScrapers(): Promise<ScraperResults> {
       );
     }
   }
+
+  await closePlaywrightBrowser();
   return results;
 }
 

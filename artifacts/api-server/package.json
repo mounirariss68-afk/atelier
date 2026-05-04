@@ -24,6 +24,7 @@
     "openai": "^6.35.0",
     "pino": "^9",
     "pino-http": "^10",
+    "playwright-core": "^1.59.1",
     "zod": "catalog:"
   },
   "devDependencies": {

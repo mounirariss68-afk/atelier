@@ -23,3 +23,20 @@ The project is built on a modern web stack: React, Vite, TypeScript, Tailwind CS
 - **AI Integrations:** Anthropic (claude-sonnet-4-5) and OpenAI (gpt-5) for AI memo generation and chat assistant responses.
 - **Email Service:** Resend for sending emails.
 - **Database:** PostgreSQL for persistent storage of assessment submissions, call requests, team invitations, and Arçelik demo pricing data (8 tables).
+- **Scraper Dependencies:** cheerio (HTML parsing for Vestel/Bosch/Samsung), playwright-core (headless Chromium for Arçelik/Beko behind Akamai WAF — currently returns 0 products due to anti-bot protection, graceful fallback in place). Nix chromium at `/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium`.
+
+## Scraper Architecture
+The price scraping system lives in two parallel codebases that must be kept in sync:
+- `artifacts/api-server/src/lib/scraper.ts` — runtime scraper used by the API server's daily cron job and manual POST /api/arcelik/scrape endpoint
+- `scripts/src/seed-arcelik.ts` — seed-time scraper used during initial database population
+
+**Working scrapers (Cheerio-based, 137 products total):**
+- **Vestel** (63 products): URLs `/buzdolabi`, `/camasir-makinesi` (singular!), `/bulasik-makineleri` (plural!). Selectors: `.product-list-item-wrap`, `.product-title`, `.product-price-helper`. Model codes from `data-product-id` attribute or regex extraction from product name.
+- **Bosch** (36 products): URL pattern `/tr/category/{cat}` with categories `buzdolaplari-derin-dondurucular`, `camasir-makineleri`, `bulasik-makineleri`. Uses stable `data-testid` attributes: `product-teaser-container-for-*`, `product-code`, `product-teaser-header-headline`, `price-main-price`. First product per category has CSS garbage in headline — filtered with `.includes("{")` check.
+- **Samsung** (38 products): URL pattern `/tr/{cat}/` with geo cookies `country_codes=tr; country_region=TR`. Parses JSON-LD `ItemList` structured data. No SKU field — model codes extracted from URL slugs via regex `[-]([a-z]{2}\d{2,}[a-z0-9]*)\/?$`.
+
+**Playwright-based scrapers (Arçelik/Beko — 0 products, Akamai WAF blocks):**
+- Infrastructure fully in place with `scrapeWithPlaywright()` helper, but Akamai anti-bot returns "Access Denied" even with headless Chromium + stealth args. Gracefully falls back to empty array.
+- Future improvement: stealth plugins (playwright-extra) or residential proxies needed.
+
+**Model matching gap:** Baseline data in `arcelik-baseline.json` uses older model codes (e.g., `NF600 EX A++`, `KGN56VIF0N`) that don't match current website products (e.g., `NF52111`, `KGP86AXB0N`). Matching will improve as baseline is refreshed with current product lines.

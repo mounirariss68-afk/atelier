@@ -10,7 +10,8 @@
   "dependencies": {
     "@workspace/db": "workspace:*",
     "cheerio": "^1.0.0",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "playwright-core": "^1.59.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",
