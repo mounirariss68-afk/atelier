@@ -7,6 +7,7 @@ import {
   TrendingUp, TrendingDown, MapPin, ArrowUpDown, X, ChevronDown,
   Target, Percent, BarChart3, Users, Megaphone, DollarSign, Package,
   ExternalLink, BookOpen, ChevronRight, Info, RefreshCw, Clock,
+  Brain, CheckCircle2, AlertTriangle as AlertTriangleIcon, Zap,
 } from "lucide-react";
 import { useDashboardFilters, type Period } from "../DashboardContext";
 import { useDemoLang } from "../DemoLangContext";
@@ -21,6 +22,7 @@ import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 import { useScrapeStatus } from "@/hooks/useScrapeStatus";
 import { usePriceHistory, usePriceHistorySummary } from "@/hooks/usePriceHistory";
 import { TurkeyMap, CITY_POSITIONS } from "../TurkeyMap";
+import { generateRecommendations, generateAlerts } from "@/data/arcelik-agent";
 
 function formatCronSchedule(cron: string, lang: string): string {
   const parts = cron.split(/\s+/);
@@ -318,6 +320,49 @@ export default function DashboardView() {
         })}
       </div>
 
+      {(() => {
+        const recs = generateRecommendations();
+        const alerts = generateAlerts();
+        const pending = recs.filter(r => r.status === "pending").length;
+        const approved = recs.filter(r => r.status === "approved").length;
+        const critAlerts = alerts.filter(a => a.severity === "critical" || a.severity === "high").length;
+        const avgConf = recs.length > 0 ? Math.round(recs.reduce((s, r) => s + r.confidence, 0) / recs.length) : 0;
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="bg-gradient-to-r from-[#0E2841] to-[#1a3a5c] rounded-xl p-4 text-white"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Brain size={16} className="text-[#F5A623]" />
+                <h3 className="text-sm font-bold">{t.agentImpactTitle}</h3>
+              </div>
+              <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full">{t.agentImpactLive}</span>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <div className="bg-white/10 rounded-lg p-2.5 text-center">
+                <p className="text-[10px] text-gray-300">{t.agentPending}</p>
+                <p className="text-lg font-extrabold text-[#F5A623]">{pending}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-2.5 text-center">
+                <p className="text-[10px] text-gray-300">{t.agentApproved}</p>
+                <p className="text-lg font-extrabold text-green-400">{approved}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-2.5 text-center">
+                <p className="text-[10px] text-gray-300">{t.agentCritAlerts}</p>
+                <p className="text-lg font-extrabold text-red-400">{critAlerts}</p>
+              </div>
+              <div className="bg-white/10 rounded-lg p-2.5 text-center">
+                <p className="text-[10px] text-gray-300">{t.agentAvgConf}</p>
+                <p className="text-lg font-extrabold text-white">%{avgConf}</p>
+              </div>
+            </div>
+          </motion.div>
+        );
+      })()}
+
       <div className="space-y-6">
         <motion.div
           initial={{ opacity: 0 }}
@@ -438,68 +483,76 @@ export default function DashboardView() {
           <span className="text-[10px] text-gray-400">{productComparison.length} × {comparisonBrands.length} {t.competitorTableSubtitle}</span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                {[
-                  { key: "name", label: t.colProduct, align: "left" as const },
-                  { key: "tsfPrice", label: t.colArcelikTSF, align: "right" as const },
-                  ...comparisonBrands.map((b) => ({ key: b, label: b, align: "right" as const })),
-                  { key: "avgDelta", label: t.colAvgDiff, align: "right" as const },
-                ].map((col) => (
-                  <th
-                    key={col.key}
-                    onClick={() => { setSortCol(col.key); setSortDir((prev) => sortCol === col.key ? (prev === "asc" ? "desc" : "asc") : "asc"); }}
-                    className={`${col.align === "left" ? "text-left" : "text-right"} px-4 py-3 text-[11px] font-semibold uppercase tracking-wide cursor-pointer hover:text-[#0E2841] select-none ${
-                      col.key === "tsfPrice" ? "text-[#E30613]" : sortCol === col.key ? "text-[#0E2841]" : "text-gray-500"
-                    }`}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      {sortCol === col.key && <ArrowUpDown size={10} />}
-                    </span>
-                  </th>
-                ))}
-                <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{t.colTrend}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productComparison.slice(0, 20).map((row) => {
-                const realHistory = priceHistoryMap[row.id];
-                const sparkData = realHistory && realHistory.length >= 2 ? realHistory : Array.from({ length: 6 }, (_, i) => row.tsfPrice * (0.96 + Math.sin(i + row.id.charCodeAt(0)) * 0.03));
-                return (
-                  <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="text-xs font-semibold text-[#0E2841]">{row.name}</div>
-                      <div className="text-[10px] text-gray-400">{row.category}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#E30613]">₺{row.tsfPrice.toLocaleString("tr-TR")}</td>
-                    {comparisonBrands.map((brand) => {
-                      const bp = row.brandPrices[brand];
-                      if (!bp) return <td key={brand} className="px-4 py-3 text-center text-[10px] text-gray-300">—</td>;
-                      const deltaColor = bp.delta > 5 ? "text-green-600" : bp.delta < -5 ? "text-amber-600" : "text-gray-600";
-                      const srcEntry = DATA_SOURCES.find((s) => s.id === bp.sourceId);
-                      const srcTip = srcEntry ? `${lang === "en" ? srcEntry.nameEn : srcEntry.name} (${bp.priceDate})` : bp.priceDate;
-                      return (
-                        <td key={brand} className="px-4 py-3 text-right" title={srcTip}>
-                          <div className="font-mono text-xs">₺{bp.price.toLocaleString("tr-TR")}</div>
-                          <div className={`text-[10px] font-bold ${deltaColor}`}>{bp.delta > 0 ? "+" : ""}{bp.delta}%</div>
-                        </td>
-                      );
-                    })}
-                    <td className="px-4 py-3 text-right">
-                      <span className={`text-xs font-bold ${row.avgDelta > 0 ? "text-green-600" : row.avgDelta < 0 ? "text-amber-600" : "text-gray-500"}`}>
-                        {row.avgDelta > 0 ? "+" : ""}{row.avgDelta}%
+          {productComparison.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Package size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">{t.noDataTitle}</p>
+              <p className="text-xs mt-1">{t.noDataDesc}</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50">
+                  {[
+                    { key: "name", label: t.colProduct, align: "left" as const },
+                    { key: "tsfPrice", label: t.colArcelikTSF, align: "right" as const },
+                    ...comparisonBrands.map((b) => ({ key: b, label: b, align: "right" as const })),
+                    { key: "avgDelta", label: t.colAvgDiff, align: "right" as const },
+                  ].map((col) => (
+                    <th
+                      key={col.key}
+                      onClick={() => { setSortCol(col.key); setSortDir((prev) => sortCol === col.key ? (prev === "asc" ? "desc" : "asc") : "asc"); }}
+                      className={`${col.align === "left" ? "text-left" : "text-right"} px-4 py-3 text-[11px] font-semibold uppercase tracking-wide cursor-pointer hover:text-[#0E2841] select-none ${
+                        col.key === "tsfPrice" ? "text-[#E30613]" : sortCol === col.key ? "text-[#0E2841]" : "text-gray-500"
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {sortCol === col.key && <ArrowUpDown size={10} />}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Sparkline data={sparkData} color="#0E2841" />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </th>
+                  ))}
+                  <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{t.colTrend}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productComparison.slice(0, 20).map((row) => {
+                  const realHistory = priceHistoryMap[row.id];
+                  const sparkData = realHistory && realHistory.length >= 2 ? realHistory : Array.from({ length: 6 }, (_, i) => row.tsfPrice * (0.96 + Math.sin(i + row.id.charCodeAt(0)) * 0.03));
+                  return (
+                    <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="text-xs font-semibold text-[#0E2841]">{row.name}</div>
+                        <div className="text-[10px] text-gray-400">{row.category}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#E30613]">₺{row.tsfPrice.toLocaleString("tr-TR")}</td>
+                      {comparisonBrands.map((brand) => {
+                        const bp = row.brandPrices[brand];
+                        if (!bp) return <td key={brand} className="px-4 py-3 text-center text-[10px] text-gray-300">—</td>;
+                        const deltaColor = bp.delta > 5 ? "text-green-600" : bp.delta < -5 ? "text-amber-600" : "text-gray-600";
+                        const srcEntry = DATA_SOURCES.find((s) => s.id === bp.sourceId);
+                        const srcTip = srcEntry ? `${lang === "en" ? srcEntry.nameEn : srcEntry.name} (${bp.priceDate})` : bp.priceDate;
+                        return (
+                          <td key={brand} className="px-4 py-3 text-right" title={srcTip}>
+                            <div className="font-mono text-xs">₺{bp.price.toLocaleString("tr-TR")}</div>
+                            <div className={`text-[10px] font-bold ${deltaColor}`}>{bp.delta > 0 ? "+" : ""}{bp.delta}%</div>
+                          </td>
+                        );
+                      })}
+                      <td className="px-4 py-3 text-right">
+                        <span className={`text-xs font-bold ${row.avgDelta > 0 ? "text-green-600" : row.avgDelta < 0 ? "text-amber-600" : "text-gray-500"}`}>
+                          {row.avgDelta > 0 ? "+" : ""}{row.avgDelta}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Sparkline data={sparkData} color="#0E2841" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </motion.div>
 

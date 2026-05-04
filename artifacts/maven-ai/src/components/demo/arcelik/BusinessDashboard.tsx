@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Radar, Megaphone, SlidersHorizontal,
   CalendarRange, Bot, Bell, LogOut, ChevronLeft, ChevronRight,
   X, Filter, Brain, AlertTriangle, GitCompareArrows, Crosshair,
+  ArrowLeftRight,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
@@ -159,6 +160,14 @@ function Shell() {
           <button onClick={() => setLang("tr")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "tr" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>TR</button>
           <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>EN</button>
         </div>
+        <Link
+          href="/demo/arcelik-fiyat-istihbarati/bayi"
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
+          title={t.switchToDealer}
+        >
+          <ArrowLeftRight size={14} />
+          <span className="hidden md:inline">{t.switchToDealer}</span>
+        </Link>
         <Link
           href="/marketplace/arcelik-fiyat-istihbarati"
           className="flex items-center gap-1 text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors"

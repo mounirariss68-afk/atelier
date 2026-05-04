@@ -213,11 +213,21 @@ function CampaignBuilder() {
                       return next;
                     });
                   }}
-                  className={`px-2.5 py-1 text-[11px] rounded-full border font-medium ${
+                  className={`px-2.5 py-1 text-[11px] rounded-full border font-medium inline-flex items-center gap-1 ${
                     selectedCats.includes(id) ? "bg-[#E30613] text-white border-[#E30613]" : "border-gray-200 text-gray-600 hover:border-gray-400"
                   }`}
                 >
                   {getCategoryLabel(id, lang)}
+                  {selectedCats.includes(id) && (() => {
+                    const count = selectedProductIds.filter(pid => {
+                      const prod = products.find(p => p.id === pid);
+                      return prod && prod.category === id;
+                    }).length;
+                    const total = products.filter(p => p.category === id).length;
+                    return count > 0 ? (
+                      <span className="bg-white/30 text-[9px] font-bold px-1.5 py-0.5 rounded-full">{count}/{total}</span>
+                    ) : null;
+                  })()}
                 </button>
               ))}
             </div>

@@ -255,6 +255,7 @@ router.get("/scrape-status", async (_req, res) => {
       competitors: competitorLastUpdated[0] ?? null,
     });
   } catch (err) {
+    logger.error({ err }, "Failed to fetch scrape status");
     res.status(500).json({ error: "Failed to fetch scrape status" });
   }
 });

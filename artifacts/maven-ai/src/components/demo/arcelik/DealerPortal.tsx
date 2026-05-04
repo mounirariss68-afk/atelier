@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home, ListOrdered, Tag, Target, Package, Bell, MessageCircle,
-  LogOut, Award, X,
+  LogOut, Award, X, ArrowLeftRight,
 } from "lucide-react";
 import DealerHomeView from "./dealer/DealerHomeView";
 import PriceListView from "./dealer/PriceListView";
@@ -119,7 +119,15 @@ function DealerPortalInner() {
             <button onClick={() => setLang("tr")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "tr" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>TR</button>
             <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>EN</button>
           </div>
-          <Link href="/marketplace/arcelik-fiyat-istihbarati" className="text-xs text-white/50 hover:text-white flex items-center gap-1 ml-1">
+          <Link
+            href="/demo/arcelik-fiyat-istihbarati/dashboard"
+            className="text-xs text-white/50 hover:text-white flex items-center gap-1 ml-1"
+            title={t.switchToBusiness}
+          >
+            <ArrowLeftRight size={14} />
+            <span className="hidden md:inline">{t.switchToBusiness}</span>
+          </Link>
+          <Link href="/marketplace/arcelik-fiyat-istihbarati" className="text-xs text-white/50 hover:text-white flex items-center gap-1">
             <LogOut size={14} />
             <span className="hidden md:inline">{t.logout}</span>
           </Link>
