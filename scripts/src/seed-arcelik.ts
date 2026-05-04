@@ -14,7 +14,9 @@ import * as cheerio from "cheerio";
 import type { InferInsertModel } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { readFileSync } from "fs";
+import { execSync } from "child_process";
 import { resolve } from "path";
+import type { Browser, BrowserContext, Page } from "playwright-core";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const NO_SCRAPE = process.argv.includes("--no-scrape");
@@ -104,27 +106,58 @@ async function fetchPage(
   }
 }
 
-let _pwBrowser: any = null;
+let _pwBrowser: Browser | null = null;
 
-async function findChromiumPath(): Promise<string> {
-  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) return process.env.PLAYWRIGHT_CHROMIUM_PATH;
-  const { execSync } = await import("child_process");
-  try {
-    const p = execSync("which chromium", { encoding: "utf-8" }).trim();
-    if (p) return p;
-  } catch {}
-  try {
-    const p = execSync("which chromium-browser", { encoding: "utf-8" }).trim();
-    if (p) return p;
-  } catch {}
-  return "/nix/store/qa9cnw4v5xkxyip6mb9kxqfq1z4x2dx1-chromium-138.0.7204.100/bin/chromium";
+function normalizeModelKey(code: string): string {
+  return code
+    .toLowerCase()
+    .replace(/[\s\-_/]+/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
-async function getPlaywrightBrowser(): Promise<any> {
+function extractModelTokens(model: string): string[] {
+  return model
+    .split(/[\s\-_/]+/)
+    .map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, ""))
+    .filter((t) => t.length >= 2);
+}
+
+function fuzzyMatchScraped(
+  baselineModel: string,
+  scrapedMap: Map<string, ScrapedPrice>,
+): ScrapedPrice | undefined {
+  const exactKey = normalizeModelKey(baselineModel);
+  const exact = scrapedMap.get(exactKey);
+  if (exact) return exact;
+
+  const tokens = extractModelTokens(baselineModel);
+  const coreToken = tokens.find((t) => /\d{3,}/.test(t));
+  if (!coreToken) return undefined;
+
+  for (const [key, scraped] of scrapedMap) {
+    if (key.includes(coreToken)) return scraped;
+  }
+  return undefined;
+}
+
+function findChromiumPath(): string | null {
+  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) return process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  for (const bin of ["chromium", "chromium-browser", "google-chrome"]) {
+    try {
+      const p = execSync(`which ${bin}`, { encoding: "utf-8" }).trim();
+      if (p) return p;
+    } catch {}
+  }
+  console.log("  No Chromium binary found. Set PLAYWRIGHT_CHROMIUM_PATH or install chromium.");
+  return null;
+}
+
+async function getPlaywrightBrowser(): Promise<Browser | null> {
   if (_pwBrowser) return _pwBrowser;
+  const execPath = findChromiumPath();
+  if (!execPath) return null;
   try {
     const { chromium } = await import("playwright-core");
-    const execPath = await findChromiumPath();
     console.log(`  Launching Playwright with Chromium at: ${execPath}`);
     _pwBrowser = await chromium.launch({
       headless: true,
@@ -159,7 +192,7 @@ async function scrapeWithPlaywright(
   if (!browser) return [];
 
   const results: ScrapedPrice[] = [];
-  const context = await browser.newContext({
+  const context: BrowserContext = await browser.newContext({
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     locale: "tr-TR",
@@ -168,7 +201,7 @@ async function scrapeWithPlaywright(
   try {
     for (const cat of categories) {
       const url = `${baseUrl}/${cat}`;
-      const page = await context.newPage();
+      const page: Page = await context.newPage();
       try {
         await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
         await page
@@ -178,25 +211,24 @@ async function scrapeWithPlaywright(
           )
           .catch(() => {});
 
-        const items: Array<{ name: string; priceText: string; modelCode: string }> =
-          await page.evaluate(() => {
-            const out: Array<{ name: string; priceText: string; modelCode: string }> = [];
-            document
-              .querySelectorAll(
-                ".product-card, .product-item, [data-product-id], .product-list-item-wrap",
-              )
-              .forEach((el) => {
-                const nameEl = el.querySelector(".product-name, .product-title, h3, h2");
-                const priceEl = el.querySelector(
-                  ".product-price, .price, [data-price], .product-price-helper",
-                );
-                const name = nameEl?.textContent?.trim() || "";
-                const priceText = priceEl?.textContent?.trim() || "";
-                const modelCode = (el as HTMLElement).dataset?.productId || "";
-                if (name && priceText) out.push({ name, priceText, modelCode });
-              });
-            return out;
-          });
+        const items = await page.evaluate(() => {
+          const out: { name: string; priceText: string; modelCode: string }[] = [];
+          document
+            .querySelectorAll(
+              ".product-card, .product-item, [data-product-id], .product-list-item-wrap",
+            )
+            .forEach((el) => {
+              const nameEl = el.querySelector(".product-name, .product-title, h3, h2");
+              const priceEl = el.querySelector(
+                ".product-price, .price, [data-price], .product-price-helper",
+              );
+              const name = nameEl?.textContent?.trim() || "";
+              const priceText = priceEl?.textContent?.trim() || "";
+              const modelCode = el.getAttribute("data-product-id") || "";
+              if (name && priceText) out.push({ name, priceText, modelCode });
+            });
+          return out;
+        });
 
         for (const item of items) {
           const price = extractFirstTurkishPrice(item.priceText);
@@ -414,21 +446,22 @@ function applyScrapedPrices(
   let updated = 0;
   const unmatched: string[] = [];
 
-  const arcelikMap = new Map(scraped.arcelik.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
-  const bekoMap = new Map(scraped.beko.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+  const arcelikMap = new Map(scraped.arcelik.map((s) => [normalizeModelKey(s.modelCode), s]));
+  const bekoMap = new Map(scraped.beko.map((s) => [normalizeModelKey(s.modelCode), s]));
 
   const matchedScrapedKeys = new Set<string>();
 
   for (const p of products) {
-    const key = (p.modelCode as string).toLowerCase().replace(/\s+/g, "");
-    const match = arcelikMap.get(key) ?? bekoMap.get(key);
+    const match =
+      fuzzyMatchScraped(p.modelCode as string, arcelikMap) ??
+      fuzzyMatchScraped(p.modelCode as string, bekoMap);
     if (match) {
       p.tsfPrice = match.price;
       p.dealerCost = Math.round(match.price * (1 - (p.marginPercent as number) / 100));
       p.priceDate = today;
       p.dataProvenance = "auto-scraped";
       p.scrapedAt = match.scrapedAt;
-      matchedScrapedKeys.add(key);
+      matchedScrapedKeys.add(normalizeModelKey(match.modelCode));
       updated++;
     }
   }
@@ -452,26 +485,28 @@ function applyScrapedCompetitorPrices(
   let updated = 0;
   const unmatched: string[] = [];
 
-  const vestelMap = new Map(scraped.vestel.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
-  const boschMap = new Map(scraped.bosch.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
-  const samsungMap = new Map(scraped.samsung.map((s) => [s.modelCode.toLowerCase().replace(/\s+/g, ""), s]));
+  const vestelMap = new Map(scraped.vestel.map((s) => [normalizeModelKey(s.modelCode), s]));
+  const boschMap = new Map(scraped.bosch.map((s) => [normalizeModelKey(s.modelCode), s]));
+  const samsungMap = new Map(scraped.samsung.map((s) => [normalizeModelKey(s.modelCode), s]));
   const productPriceMap = new Map(products.map((p) => [p.id as string, p.tsfPrice as number]));
 
   const matchedKeys = new Set<string>();
 
   for (const cp of competitors) {
-    const key = (cp.competitorModel as string).split(" ").slice(0, 2).join("").toLowerCase();
     let match: ScrapedPrice | undefined;
-    if (cp.brand === "Vestel" || cp.brand === "Regal") match = vestelMap.get(key);
-    else if (cp.brand === "Bosch" || cp.brand === "Siemens" || cp.brand === "Profilo") match = boschMap.get(key);
-    else if (cp.brand === "Samsung") match = samsungMap.get(key);
+    if (cp.brand === "Vestel" || cp.brand === "Regal")
+      match = fuzzyMatchScraped(cp.competitorModel as string, vestelMap);
+    else if (cp.brand === "Bosch" || cp.brand === "Siemens" || cp.brand === "Profilo")
+      match = fuzzyMatchScraped(cp.competitorModel as string, boschMap);
+    else if (cp.brand === "Samsung")
+      match = fuzzyMatchScraped(cp.competitorModel as string, samsungMap);
 
     if (match) {
       cp.competitorPrice = match.price;
       cp.priceDate = today;
       cp.dataProvenance = "auto-scraped";
       cp.scrapedAt = match.scrapedAt;
-      matchedKeys.add(key);
+      matchedKeys.add(normalizeModelKey(match.modelCode));
       updated++;
     }
 
