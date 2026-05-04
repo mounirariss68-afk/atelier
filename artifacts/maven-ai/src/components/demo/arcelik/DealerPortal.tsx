@@ -13,6 +13,8 @@ import StockOrdersView from "./dealer/StockOrdersView";
 import AnnouncementsView from "./dealer/AnnouncementsView";
 import DealerChat from "./dealer/DealerChat";
 import { dealers, cities as allCities } from "@/data/arcelik-seed";
+import { DemoLangProvider, useDemoLang } from "./DemoLangContext";
+import { dealerShell } from "./demo-i18n";
 
 export type DealerViewId = "home" | "prices" | "campaigns" | "targets" | "stock" | "announcements";
 
@@ -21,28 +23,43 @@ export const OPTIMAL_STOCK: Record<string, number> = {
   buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8,
 };
 export const TIER_COLORS: Record<string, string> = { gold: "#F5A623", silver: "#94A3B8", bronze: "#CD7F32" };
-export const TIER_LABELS: Record<string, string> = { gold: "Altın Bayi", silver: "Gümüş Bayi", bronze: "Bronz Bayi" };
 
-const NAV: { id: DealerViewId; label: string; icon: typeof Home }[] = [
-  { id: "home", label: "Ana Sayfa", icon: Home },
-  { id: "prices", label: "Fiyat Listesi", icon: ListOrdered },
-  { id: "campaigns", label: "Kampanyalar", icon: Tag },
-  { id: "targets", label: "Hedefler & Primler", icon: Target },
-  { id: "stock", label: "Stok & Siparişler", icon: Package },
-  { id: "announcements", label: "Duyurular", icon: Bell },
-];
-
-const NOTIFICATIONS = [
-  { id: 1, type: "campaign" as const, text: "Yeni kampanya: Enerji Verimliliği Kampanyası başladı", time: "2 saat önce" },
-  { id: 2, type: "stock" as const, text: "Klima kategorisinde stok seviyesi düşük (8 adet)", time: "5 saat önce" },
-  { id: 3, type: "campaign" as const, text: "Banka Taksit kampanyası güncellendi — 24 aya kadar faizsiz", time: "1 gün önce" },
-  { id: 4, type: "announcement" as const, text: "Yeni ürün: Grundig Premium Klima G 12420 eklendi", time: "2 gün önce" },
+const NAV_ITEMS: { id: DealerViewId; labelKey: "navHome" | "navPrices" | "navCampaigns" | "navTargets" | "navStock" | "navAnnouncements"; icon: typeof Home }[] = [
+  { id: "home", labelKey: "navHome", icon: Home },
+  { id: "prices", labelKey: "navPrices", icon: ListOrdered },
+  { id: "campaigns", labelKey: "navCampaigns", icon: Tag },
+  { id: "targets", labelKey: "navTargets", icon: Target },
+  { id: "stock", labelKey: "navStock", icon: Package },
+  { id: "announcements", labelKey: "navAnnouncements", icon: Bell },
 ];
 
 export default function DealerPortal() {
+  return (
+    <DemoLangProvider>
+      <DealerPortalInner />
+    </DemoLangProvider>
+  );
+}
+
+function DealerPortalInner() {
+  const { lang, setLang } = useDemoLang();
+  const t = dealerShell[lang];
   const [view, setView] = useState<DealerViewId>("home");
   const [chatOpen, setChatOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+
+  const tierLabels: Record<string, string> = {
+    gold: t.tierGold,
+    silver: t.tierSilver,
+    bronze: t.tierBronze,
+  };
+
+  const notifications = [
+    { id: 1, type: "campaign" as const, text: t.notif1, time: t.notif1Time },
+    { id: 2, type: "stock" as const, text: t.notif2, time: t.notif2Time },
+    { id: 3, type: "campaign" as const, text: t.notif3, time: t.notif3Time },
+    { id: 4, type: "announcement" as const, text: t.notif4, time: t.notif4Time },
+  ];
 
   const cityName = allCities.find((c) => c.id === DEALER.city)?.name || "İstanbul";
   const lowStockCount = Object.entries(DEALER.stockLevels).filter(
@@ -57,7 +74,7 @@ export default function DealerPortal() {
           <div className="w-8 h-8 rounded-lg bg-[#E30613] flex items-center justify-center text-white font-bold text-sm">A</div>
           <div className="hidden sm:block leading-tight">
             <p className="text-[11px] font-bold text-[#E30613] tracking-wide">ARÇELİK</p>
-            <p className="text-[10px] font-semibold text-white/70">Bayi Portalı</p>
+            <p className="text-[10px] font-semibold text-white/70">{t.dealerPortal}</p>
           </div>
         </div>
         <div className="h-6 w-px bg-white/20" />
@@ -71,7 +88,7 @@ export default function DealerPortal() {
             style={{ backgroundColor: TIER_COLORS[DEALER.tier] + "30", color: TIER_COLORS[DEALER.tier] }}
           >
             <Award size={10} />
-            {TIER_LABELS[DEALER.tier]}
+            {tierLabels[DEALER.tier]}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -81,12 +98,16 @@ export default function DealerPortal() {
               <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#E30613] text-[9px] font-bold flex items-center justify-center">{notifCount}</span>
             )}
           </button>
-          <button onClick={() => setChatOpen(true)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Bayi Asistanı">
+          <button onClick={() => setChatOpen(true)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title={t.dealerAssistant}>
             <MessageCircle size={18} />
           </button>
+          <div className="flex items-center bg-white/10 rounded-full p-0.5">
+            <button onClick={() => setLang("tr")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "tr" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>TR</button>
+            <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>EN</button>
+          </div>
           <Link href="/marketplace/arcelik-fiyat-istihbarati" className="text-xs text-white/50 hover:text-white flex items-center gap-1 ml-1">
             <LogOut size={14} />
-            <span className="hidden md:inline">Çıkış</span>
+            <span className="hidden md:inline">{t.logout}</span>
           </Link>
         </div>
 
@@ -101,11 +122,11 @@ export default function DealerPortal() {
                 className="absolute top-12 right-16 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 text-[#0E2841] overflow-hidden"
               >
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <p className="text-sm font-bold">Bildirimler</p>
+                  <p className="text-sm font-bold">{t.notifications}</p>
                   <button onClick={() => setNotifOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
                 </div>
                 <div className="max-h-64 overflow-y-auto divide-y divide-gray-50">
-                  {NOTIFICATIONS.map((n) => (
+                  {notifications.map((n) => (
                     <div key={n.id} className="px-4 py-3 hover:bg-gray-50/50 cursor-pointer">
                       <div className="flex items-start gap-2">
                         <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.type === "stock" ? "bg-amber-500" : n.type === "campaign" ? "bg-[#E30613]" : "bg-blue-500"}`} />
@@ -125,7 +146,7 @@ export default function DealerPortal() {
 
       <div className="flex-1 flex min-h-0">
         <nav className="flex-shrink-0 w-52 bg-white border-r border-gray-200 flex flex-col">
-          {NAV.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = view === item.id;
             return (
@@ -137,7 +158,7 @@ export default function DealerPortal() {
                 }`}
               >
                 <Icon size={18} />
-                {item.label}
+                {t[item.labelKey]}
                 {item.id === "stock" && lowStockCount > 0 && (
                   <span className="ml-auto w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold flex items-center justify-center">{lowStockCount}</span>
                 )}
@@ -152,7 +173,7 @@ export default function DealerPortal() {
               }`}
             >
               <MessageCircle size={18} />
-              Bayi Asistanı
+              {t.dealerAssistant}
             </button>
           </div>
         </nav>

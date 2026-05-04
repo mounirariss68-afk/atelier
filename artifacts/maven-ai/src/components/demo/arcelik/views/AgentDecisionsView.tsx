@@ -14,14 +14,10 @@ import {
   type AgentPlaybook, type AgentActivityEntry, type AgentDecisionLog,
   type DirectorRole, type Severity, type DecisionType,
 } from "@/data/arcelik-agent";
+import { useDemoLang } from "../DemoLangContext";
+import { decisions } from "../demo-i18n";
 
 type SubTab = "recommendations" | "tasks" | "alerts" | "playbooks" | "activity" | "history";
-
-const ROLE_LABELS: Record<DirectorRole, string> = {
-  pricing: "Fiyatlandırma",
-  finance: "Finans",
-  marketing: "Pazarlama",
-};
 const ROLE_COLORS: Record<DirectorRole, string> = {
   pricing: "bg-blue-50 text-blue-700",
   finance: "bg-emerald-50 text-emerald-700",
@@ -39,20 +35,20 @@ const SEV_DOT: Record<Severity, string> = {
   medium: "bg-amber-500",
   low: "bg-gray-400",
 };
-const SEV_LABELS: Record<Severity, string> = {
-  critical: "Kritik",
-  high: "Yüksek",
-  medium: "Orta",
-  low: "Düşük",
-};
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins} dk önce`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} saat önce`;
-  return `${Math.floor(hrs / 24)} gün önce`;
+function useDecisionsI18n() {
+  const { lang } = useDemoLang();
+  const t = decisions[lang];
+  const sevLabels: Record<Severity, string> = { critical: t.sevCritical, high: t.sevHigh, medium: t.sevMedium, low: t.sevLow };
+  const roleLabels: Record<DirectorRole, string> = { pricing: t.rolePricing, finance: t.roleFinance, marketing: t.roleMarketing };
+  function timeAgo(iso: string) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins} ${t.timeMinAgo}`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} ${t.timeHoursAgo}`;
+    return `${Math.floor(hrs / 24)} ${t.timeDaysAgo}`;
+  }
+  return { lang, t, sevLabels, roleLabels, timeAgo };
 }
 
 function ConfidenceBadge({ value }: { value: number }) {
@@ -65,10 +61,11 @@ function ConfidenceBadge({ value }: { value: number }) {
 }
 
 function ReasoningTrace({ reasoning }: { reasoning: AgentRecommendation["reasoning"] }) {
+  const { t } = useDecisionsI18n();
   return (
     <div className="mt-3 space-y-2">
       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
-        <Brain size={11} /> Akıl Yürütme Zinciri
+        <Brain size={11} /> {t.reasoningChain}
       </p>
       <div className="relative pl-4 border-l-2 border-[#0E2841]/20 space-y-3">
         {reasoning.map((step, i) => (
@@ -101,6 +98,7 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
   const [expanded, setExpanded] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [modifyNote, setModifyNote] = useState("");
+  const { t, sevLabels, roleLabels, timeAgo } = useDecisionsI18n();
 
   return (
     <motion.div
@@ -116,8 +114,8 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
           <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${SEV_DOT[rec.severity]}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[rec.severity]}`}>{SEV_LABELS[rec.severity]}</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[rec.targetRole]}`}>{ROLE_LABELS[rec.targetRole]} Direktörü</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[rec.severity]}`}>{sevLabels[rec.severity]}</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[rec.targetRole]}`}>{roleLabels[rec.targetRole]}</span>
               <ConfidenceBadge value={rec.confidence} />
               <span className="text-[10px] text-gray-400 ml-auto flex items-center gap-0.5"><Clock size={10} />{timeAgo(rec.createdAt)}</span>
             </div>
@@ -128,22 +126,22 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
               <div className="bg-gray-50 rounded-lg p-2 text-center">
                 <DollarSign size={12} className="mx-auto text-gray-400 mb-0.5" />
                 <p className="text-xs font-bold text-[#0E2841]">{rec.impact.revenue}</p>
-                <p className="text-[9px] text-gray-400">Gelir</p>
+                <p className="text-[9px] text-gray-400">{t.revenue}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-2 text-center">
                 <BarChart3 size={12} className="mx-auto text-gray-400 mb-0.5" />
                 <p className="text-xs font-bold text-[#0E2841]">{rec.impact.margin}</p>
-                <p className="text-[9px] text-gray-400">Marj</p>
+                <p className="text-[9px] text-gray-400">{t.margin}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-2 text-center">
                 <TrendingUp size={12} className="mx-auto text-gray-400 mb-0.5" />
                 <p className="text-xs font-bold text-[#0E2841]">{rec.impact.share}</p>
-                <p className="text-[9px] text-gray-400">Pazar Payı</p>
+                <p className="text-[9px] text-gray-400">{t.marketShareLabel}</p>
               </div>
             </div>
 
             <div className="mt-3 p-3 bg-[#0E2841]/5 rounded-lg">
-              <p className="text-[10px] font-bold text-[#0E2841] mb-0.5 flex items-center gap-1"><Zap size={10} /> Önerilen Aksiyon</p>
+              <p className="text-[10px] font-bold text-[#0E2841] mb-0.5 flex items-center gap-1"><Zap size={10} /> {t.suggestedAction}</p>
               <p className="text-xs text-[#0E2841]">{rec.recommendedAction}</p>
             </div>
 
@@ -152,7 +150,7 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
                 <ReasoningTrace reasoning={rec.reasoning} />
                 {rec.alternatives.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Alternatifler</p>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t.alternatives}</p>
                     <div className="space-y-1">
                       {rec.alternatives.map((alt, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs text-gray-500">
@@ -169,21 +167,20 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
             {modifyOpen && rec.status === "pending" && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="mt-3">
                 <div className="border border-blue-200 rounded-lg p-3 bg-blue-50/50">
-                  <p className="text-[10px] font-bold text-blue-700 mb-2 flex items-center gap-1"><Edit3 size={10} /> Değişiklik Notu</p>
+                  <p className="text-[10px] font-bold text-blue-700 mb-2 flex items-center gap-1"><Edit3 size={10} /> {t.modifyNote}</p>
                   <textarea
                     value={modifyNote}
                     onChange={(e) => setModifyNote(e.target.value)}
-                    placeholder="Öneride hangi değişiklikleri istediğinizi yazın..."
                     className="w-full text-xs border border-blue-200 rounded-lg p-2.5 resize-none h-20 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
                   />
                   <div className="flex justify-end gap-2 mt-2">
-                    <button onClick={() => { setModifyOpen(false); setModifyNote(""); }} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">İptal</button>
+                    <button onClick={() => { setModifyOpen(false); setModifyNote(""); }} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">{t.cancel}</button>
                     <button
                       onClick={() => { if (modifyNote.trim()) { onModify(rec.id, modifyNote); setModifyOpen(false); setModifyNote(""); } }}
                       disabled={!modifyNote.trim()}
                       className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-40"
                     >
-                      Değişiklikle Onayla
+                      {t.approveWithMod}
                     </button>
                   </div>
                 </div>
@@ -192,7 +189,7 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
 
             {rec.status === "modified" && rec.decisionNote && (
               <div className="mt-3 border border-blue-200 rounded-lg p-3 bg-blue-50/30">
-                <p className="text-[10px] font-bold text-blue-700 mb-0.5 flex items-center gap-1"><Edit3 size={10} /> Değişiklik Notu</p>
+                <p className="text-[10px] font-bold text-blue-700 mb-0.5 flex items-center gap-1"><Edit3 size={10} /> {t.modifyNote}</p>
                 <p className="text-xs text-blue-800">{rec.decisionNote}</p>
               </div>
             )}
@@ -206,7 +203,7 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
           className="text-xs text-gray-500 hover:text-[#0E2841] font-medium flex items-center gap-1"
         >
           <Brain size={12} />
-          {expanded ? "Analizi Gizle" : "Akıl Yürütmeyi Göster"}
+          {expanded ? t.hideAnalysis : t.showReasoning}
           <ChevronDown size={12} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
         {rec.status === "pending" && (
@@ -215,30 +212,30 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
               onClick={() => onReject(rec.id)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1"
             >
-              <XCircle size={13} /> Reddet
+              <XCircle size={13} /> {t.reject}
             </button>
             <button
               onClick={() => setModifyOpen(!modifyOpen)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1 ${modifyOpen ? "bg-blue-100 text-blue-700" : "text-blue-600 hover:bg-blue-50"}`}
             >
-              <Edit3 size={13} /> Değiştir
+              <Edit3 size={13} /> {t.modify}
             </button>
             <button
               onClick={() => onApprove(rec.id)}
               className="px-3 py-1.5 rounded-lg bg-[#E30613] text-white text-xs font-bold hover:bg-[#c00510] transition-colors flex items-center gap-1"
             >
-              <CheckCircle2 size={13} /> Onayla
+              <CheckCircle2 size={13} /> {t.approve}
             </button>
           </div>
         )}
         {rec.status === "approved" && (
-          <span className="text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle2 size={13} /> Onaylandı</span>
+          <span className="text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle2 size={13} /> {t.statusApproved}</span>
         )}
         {rec.status === "rejected" && (
-          <span className="text-xs font-bold text-red-500 flex items-center gap-1"><XCircle size={13} /> Reddedildi</span>
+          <span className="text-xs font-bold text-red-500 flex items-center gap-1"><XCircle size={13} /> {t.statusRejected}</span>
         )}
         {rec.status === "modified" && (
-          <span className="text-xs font-bold text-blue-600 flex items-center gap-1"><Edit3 size={13} /> Değiştirildi</span>
+          <span className="text-xs font-bold text-blue-600 flex items-center gap-1"><Edit3 size={13} /> {t.statusModified}</span>
         )}
       </div>
     </motion.div>
@@ -246,10 +243,11 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
 }
 
 function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
+  const { t, roleLabels, timeAgo } = useDecisionsI18n();
   const DECISION_COLORS: Record<DecisionType, { bg: string; text: string; label: string }> = {
-    approved: { bg: "bg-green-100", text: "text-green-700", label: "Onaylandı" },
-    rejected: { bg: "bg-red-100", text: "text-red-700", label: "Reddedildi" },
-    modified: { bg: "bg-blue-100", text: "text-blue-700", label: "Değiştirildi" },
+    approved: { bg: "bg-green-100", text: "text-green-700", label: t.statusApproved },
+    rejected: { bg: "bg-red-100", text: "text-red-700", label: t.statusRejected },
+    modified: { bg: "bg-blue-100", text: "text-blue-700", label: t.statusModified },
   };
 
   return (
@@ -258,17 +256,17 @@ function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
         <div className="flex gap-4 text-center">
           <div>
             <p className="text-lg font-extrabold text-green-600">{entries.filter((e) => e.decisionType === "approved").length}</p>
-            <p className="text-[10px] text-gray-500 font-medium">Onaylanan</p>
+            <p className="text-[10px] text-gray-500 font-medium">{t.histApproved}</p>
           </div>
           <div className="w-px bg-gray-200" />
           <div>
             <p className="text-lg font-extrabold text-blue-600">{entries.filter((e) => e.decisionType === "modified").length}</p>
-            <p className="text-[10px] text-gray-500 font-medium">Değiştirilen</p>
+            <p className="text-[10px] text-gray-500 font-medium">{t.histModified}</p>
           </div>
           <div className="w-px bg-gray-200" />
           <div>
             <p className="text-lg font-extrabold text-red-600">{entries.filter((e) => e.decisionType === "rejected").length}</p>
-            <p className="text-[10px] text-gray-500 font-medium">Reddedilen</p>
+            <p className="text-[10px] text-gray-500 font-medium">{t.histRejected}</p>
           </div>
         </div>
       </div>
@@ -286,7 +284,7 @@ function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
             <div className="p-4">
               <div className="flex items-center gap-2 flex-wrap mb-2">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dc.bg} ${dc.text}`}>{dc.label}</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[entry.role]}`}>{ROLE_LABELS[entry.role]}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[entry.role]}`}>{roleLabels[entry.role]}</span>
                 <span className="text-[10px] text-gray-400 ml-auto flex items-center gap-0.5"><Clock size={10} /> {timeAgo(entry.timestamp)}</span>
               </div>
               <h4 className="text-sm font-bold text-[#0E2841] mb-1">{entry.recommendationTitle}</h4>
@@ -295,31 +293,31 @@ function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
                 <span className="text-xs text-gray-600 font-medium">{entry.decidedBy}</span>
               </div>
               <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Karar Gerekçesi</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t.histRationale}</p>
                 <p className="text-xs text-[#0E2841]">{entry.rationale}</p>
               </div>
               {entry.modificationNote && (
                 <div className="bg-blue-50 rounded-lg p-3 mb-3 border border-blue-100">
-                  <p className="text-[10px] font-bold text-blue-700 mb-0.5 flex items-center gap-1"><Edit3 size={10} /> Değişiklik</p>
+                  <p className="text-[10px] font-bold text-blue-700 mb-0.5 flex items-center gap-1"><Edit3 size={10} /> {t.histModification}</p>
                   <p className="text-xs text-blue-800">{entry.modificationNote}</p>
                 </div>
               )}
               <div className="grid grid-cols-4 gap-2">
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
                   <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.revenue}</p>
-                  <p className="text-[9px] text-gray-400">Gelir Etkisi</p>
+                  <p className="text-[9px] text-gray-400">{t.histRevenueImpact}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
                   <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.margin}</p>
-                  <p className="text-[9px] text-gray-400">Marj Etkisi</p>
+                  <p className="text-[9px] text-gray-400">{t.histMarginImpact}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
                   <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.share}</p>
-                  <p className="text-[9px] text-gray-400">Pay Etkisi</p>
+                  <p className="text-[9px] text-gray-400">{t.histShareImpact}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
                   <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.timeframe}</p>
-                  <p className="text-[9px] text-gray-400">Süre</p>
+                  <p className="text-[9px] text-gray-400">{t.histDuration}</p>
                 </div>
               </div>
             </div>
@@ -331,6 +329,7 @@ function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
 }
 
 function TaskQueue({ tasks }: { tasks: AgentTask[] }) {
+  const { t, sevLabels, timeAgo } = useDecisionsI18n();
   return (
     <div className="space-y-3">
       {tasks.map((task, i) => (
@@ -345,13 +344,13 @@ function TaskQueue({ tasks }: { tasks: AgentTask[] }) {
             <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${SEV_DOT[task.priority]}`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[task.priority]}`}>{SEV_LABELS[task.priority]}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[task.priority]}`}>{sevLabels[task.priority]}</span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[task.assigneeRole]}`}>{task.assignee}</span>
               </div>
               <h4 className="text-sm font-semibold text-[#0E2841]">{task.title}</h4>
               <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>
               <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400">
-                <span className="flex items-center gap-1"><Clock size={10} /> Son tarih: {task.deadline}</span>
+                <span className="flex items-center gap-1"><Clock size={10} /> {t.taskDeadline} {task.deadline}</span>
                 <span className="flex items-center gap-1"><Activity size={10} /> {timeAgo(task.createdAt)}</span>
               </div>
             </div>
@@ -363,6 +362,7 @@ function TaskQueue({ tasks }: { tasks: AgentTask[] }) {
 }
 
 function AlertTimeline({ alerts }: { alerts: AgentAlert[] }) {
+  const { sevLabels, timeAgo } = useDecisionsI18n();
   return (
     <div className="relative pl-6 space-y-4">
       <div className="absolute left-2 top-2 bottom-2 w-px bg-gray-200" />
@@ -377,7 +377,7 @@ function AlertTimeline({ alerts }: { alerts: AgentAlert[] }) {
           <div className={`absolute -left-[17px] top-3 w-3 h-3 rounded-full border-2 border-white ${SEV_DOT[alert.severity]}`} />
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-2 mb-1">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[alert.severity]}`}>{SEV_LABELS[alert.severity]}</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[alert.severity]}`}>{sevLabels[alert.severity]}</span>
               <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{alert.category}</span>
               <span className="text-[10px] text-gray-400 ml-auto">{timeAgo(alert.timestamp)}</span>
             </div>
@@ -392,6 +392,7 @@ function AlertTimeline({ alerts }: { alerts: AgentAlert[] }) {
 
 function PlaybookView({ playbooks }: { playbooks: AgentPlaybook[] }) {
   const [expanded, setExpanded] = useState<string | null>(playbooks[0]?.id ?? null);
+  const { t } = useDecisionsI18n();
   const statusColors: Record<string, string> = {
     triggered: "bg-blue-100 text-blue-700",
     running: "bg-amber-100 text-amber-700",
@@ -399,10 +400,10 @@ function PlaybookView({ playbooks }: { playbooks: AgentPlaybook[] }) {
     completed: "bg-green-100 text-green-700",
   };
   const statusLabels: Record<string, string> = {
-    triggered: "Tetiklendi",
-    running: "Çalışıyor",
-    "awaiting-approval": "Onay Bekliyor",
-    completed: "Tamamlandı",
+    triggered: t.playbookActive,
+    running: t.playbookActive,
+    "awaiting-approval": t.playbookPaused,
+    completed: t.playbookCompleted,
   };
   const stepIcons: Record<string, typeof CheckCheck> = {
     completed: CheckCheck,
@@ -473,6 +474,7 @@ function PlaybookView({ playbooks }: { playbooks: AgentPlaybook[] }) {
 }
 
 function ActivityLog({ entries }: { entries: AgentActivityEntry[] }) {
+  const { timeAgo } = useDecisionsI18n();
   const typeIcons: Record<string, typeof Activity> = {
     scan: Shield,
     analysis: BarChart3,
@@ -522,6 +524,7 @@ function ActivityLog({ entries }: { entries: AgentActivityEntry[] }) {
 
 export default function AgentDecisionsView() {
   const { toast } = useToast();
+  const { t, sevLabels, roleLabels } = useDecisionsI18n();
   const [subTab, setSubTab] = useState<SubTab>("recommendations");
   const [roleFilter, setRoleFilter] = useState<DirectorRole | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Severity | "all">("all");
@@ -571,16 +574,16 @@ export default function AgentDecisionsView() {
       role: "pricing",
       timestamp: new Date().toISOString(),
       rationale: type === "approved"
-        ? `Ajan önerisi incelendi ve uygun bulundu. ${rec.reasoning[rec.reasoning.length - 1]?.conclusion ?? ""}`
+        ? `${rec.reasoning[rec.reasoning.length - 1]?.conclusion ?? ""}`
         : type === "rejected"
-        ? "Mevcut koşullarda uygulanması uygun değil."
+        ? ""
         : note ?? "",
       modificationNote: type === "modified" ? note : undefined,
       simulatedOutcome: {
         revenue: formatOutcome(rev, "₺", "M"),
         margin: formatOutcome(mar, "", "%"),
         share: formatOutcome(sha, "", "pp"),
-        timeframe: rec.severity === "critical" ? "15 gün" : rec.severity === "high" ? "30 gün" : "60 gün",
+        timeframe: rec.severity === "critical" ? "15d" : rec.severity === "high" ? "30d" : "60d",
       },
     };
   }
@@ -592,8 +595,8 @@ export default function AgentDecisionsView() {
       const entry = createDecisionEntry(rec, "approved");
       setLiveDecisions((prev) => [entry, ...prev]);
       toast({
-        title: "Öneri Onaylandı",
-        description: `"${rec.title}" — Tahmini etki: ${entry.simulatedOutcome.revenue} gelir, ${entry.simulatedOutcome.margin} marj, ${entry.simulatedOutcome.share} pazar payı (${entry.simulatedOutcome.timeframe})`,
+        title: t.toastApproved,
+        description: `"${rec.title}" — ${t.toastApprovedDesc} ${entry.simulatedOutcome.revenue} ${t.revenueShort}, ${entry.simulatedOutcome.margin} ${t.marginShort}, ${entry.simulatedOutcome.share} ${t.shareShort} (${entry.simulatedOutcome.timeframe})`,
       });
     }
   };
@@ -605,8 +608,8 @@ export default function AgentDecisionsView() {
       const entry = createDecisionEntry(rec, "rejected");
       setLiveDecisions((prev) => [entry, ...prev]);
       toast({
-        title: "Öneri Reddedildi",
-        description: `"${rec.title}" reddedildi. Karar geçmişine eklendi.`,
+        title: t.toastRejected,
+        description: `"${rec.title}" ${t.toastRejectedDesc}`,
       });
     }
   };
@@ -618,50 +621,50 @@ export default function AgentDecisionsView() {
       const entry = createDecisionEntry(rec, "modified", note);
       setLiveDecisions((prev) => [entry, ...prev]);
       toast({
-        title: "Öneri Değiştirildi",
-        description: `"${rec.title}" — Revize etki: ${entry.simulatedOutcome.revenue} gelir, ${entry.simulatedOutcome.margin} marj (${entry.simulatedOutcome.timeframe})`,
+        title: t.toastModified,
+        description: `"${rec.title}" — ${t.toastModifiedDesc} ${entry.simulatedOutcome.revenue} ${t.revenueShort}, ${entry.simulatedOutcome.margin} ${t.marginShort} (${entry.simulatedOutcome.timeframe})`,
       });
     }
   };
 
   const SUB_TABS: { id: SubTab; label: string; icon: typeof Brain; count?: number }[] = [
-    { id: "recommendations", label: "Öneriler", icon: Brain, count: pendingCount },
-    { id: "tasks", label: "Görevler", icon: ListTodo, count: tasks.filter((t) => t.status === "open").length },
-    { id: "alerts", label: "Uyarılar", icon: AlertTriangle, count: alerts.length },
-    { id: "playbooks", label: "Oyun Planları", icon: Zap, count: PLAYBOOKS.filter((p) => p.status !== "completed").length },
-    { id: "history", label: "Karar Geçmişi", icon: History, count: allDecisions.length },
-    { id: "activity", label: "Ajan Aktivitesi", icon: Activity },
+    { id: "recommendations", label: t.subRecommendations, icon: Brain, count: pendingCount },
+    { id: "tasks", label: t.subTasks, icon: ListTodo, count: tasks.filter((tk) => tk.status === "open").length },
+    { id: "alerts", label: t.subAlerts, icon: AlertTriangle, count: alerts.length },
+    { id: "playbooks", label: t.subPlaybooks, icon: Zap, count: PLAYBOOKS.filter((p) => p.status !== "completed").length },
+    { id: "history", label: t.subHistory, icon: History, count: allDecisions.length },
+    { id: "activity", label: t.subActivity, icon: Activity },
   ];
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
-          <Brain size={20} className="text-[#E30613]" /> Ajan Kararları & Otonom İstihbarat
+          <Brain size={20} className="text-[#E30613]" /> {t.headerTitle}
         </h2>
         {criticalCount > 0 && (
           <span className="text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full flex items-center gap-1 animate-pulse">
-            <AlertTriangle size={12} /> {criticalCount} kritik karar bekliyor
+            <AlertTriangle size={12} /> {criticalCount} {t.criticalPending}
           </span>
         )}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex bg-gray-100 rounded-lg p-0.5">
-          {SUB_TABS.map((t) => (
+          {SUB_TABS.map((tab) => (
             <button
-              key={t.id}
-              onClick={() => setSubTab(t.id)}
+              key={tab.id}
+              onClick={() => setSubTab(tab.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                subTab === t.id ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500 hover:text-gray-700"
+                subTab === tab.id ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500 hover:text-gray-700"
               }`}
             >
-              <t.icon size={13} /> {t.label}
-              {t.count != null && t.count > 0 && (
+              <tab.icon size={13} /> {tab.label}
+              {tab.count != null && tab.count > 0 && (
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                  subTab === t.id ? "bg-[#E30613] text-white" : "bg-gray-200 text-gray-600"
+                  subTab === tab.id ? "bg-[#E30613] text-white" : "bg-gray-200 text-gray-600"
                 }`}>
-                  {t.count}
+                  {tab.count}
                 </span>
               )}
             </button>
@@ -680,7 +683,7 @@ export default function AgentDecisionsView() {
                     roleFilter === r ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
-                  {r === "all" ? "Tümü" : ROLE_LABELS[r]}
+                  {r === "all" ? t.filterAll : roleLabels[r]}
                 </button>
               ))}
             </div>
@@ -695,7 +698,7 @@ export default function AgentDecisionsView() {
                     priorityFilter === s ? "bg-[#E30613] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
-                  {s === "all" ? "Tüm Öncelik" : s === "critical" ? "Kritik" : s === "high" ? "Yüksek" : s === "medium" ? "Orta" : "Düşük"}
+                  {s === "all" ? t.filterAllPriority : sevLabels[s]}
                 </button>
               ))}
             </div>
@@ -705,9 +708,9 @@ export default function AgentDecisionsView() {
               onChange={(e) => setSortBy(e.target.value as "severity" | "confidence" | "newest")}
               className="text-[11px] font-medium bg-gray-100 border-0 rounded-full px-2.5 py-1 text-gray-600 cursor-pointer"
             >
-              <option value="severity">Önceliğe Göre</option>
-              <option value="confidence">Güvene Göre</option>
-              <option value="newest">En Yeni</option>
+              <option value="severity">{t.sortPriority}</option>
+              <option value="confidence">{t.sortConfidence}</option>
+              <option value="newest">{t.sortNewest}</option>
             </select>
           </div>
         )}
@@ -717,28 +720,28 @@ export default function AgentDecisionsView() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <Brain size={14} className="text-[#E30613]" />
-            <span className="text-[10px] font-semibold text-gray-500 uppercase">Bekleyen Karar</span>
+            <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statPending}</span>
           </div>
           <p className="text-2xl font-extrabold text-[#0E2841]">{pendingCount}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <ListTodo size={14} className="text-blue-500" />
-            <span className="text-[10px] font-semibold text-gray-500 uppercase">Açık Görev</span>
+            <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statOpenTask}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">{tasks.filter((t) => t.status === "open").length}</p>
+          <p className="text-2xl font-extrabold text-[#0E2841]">{tasks.filter((tk) => tk.status === "open").length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <Zap size={14} className="text-[#F5A623]" />
-            <span className="text-[10px] font-semibold text-gray-500 uppercase">Aktif Playbook</span>
+            <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statActivePlaybook}</span>
           </div>
           <p className="text-2xl font-extrabold text-[#0E2841]">{PLAYBOOKS.filter((p) => p.status !== "completed").length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <Activity size={14} className="text-purple-500" />
-            <span className="text-[10px] font-semibold text-gray-500 uppercase">Son 24s Aksiyon</span>
+            <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statLast24h}</span>
           </div>
           <p className="text-2xl font-extrabold text-[#0E2841]">{activityLog.length}</p>
         </div>

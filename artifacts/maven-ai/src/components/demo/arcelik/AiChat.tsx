@@ -5,6 +5,8 @@ import {
   BarChart, Bar, PieChart, Pie, LineChart, Line, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { matchIntent, type ChatResponse } from "./chatIntents";
+import { useDemoLang } from "./DemoLangContext";
+import { aiChat } from "./demo-i18n";
 
 interface Message {
   id: string;
@@ -14,22 +16,17 @@ interface Message {
   timestamp: Date;
 }
 
-const WELCOME: Message = {
-  id: "welcome",
-  role: "assistant",
-  text: "Merhaba! Ben Maven AI Fiyat İstihbarat asistanınız. Pazar analizi, rakip fiyatları, kampanya önerileri veya bölgesel raporlar hakkında sorularınızı yanıtlayabilirim. Nasıl yardımcı olabilirim?",
-  response: { agent: "analyst", type: "text", text: "" },
-  timestamp: new Date(),
-};
-
-const QUICK_PROMPTS = [
-  "Rakip fiyat analizi",
-  "Yeni kampanya öner",
-  "Şehir bazlı rapor",
-  "Haftalık özet",
-];
-
 export default function AiChat({ onClose }: { onClose: () => void }) {
+  const { lang } = useDemoLang();
+  const t = aiChat[lang];
+  const QUICK_PROMPTS = [t.prompt1, t.prompt2, t.prompt3, t.prompt4];
+  const WELCOME: Message = {
+    id: "welcome",
+    role: "assistant",
+    text: t.welcome,
+    response: { agent: "analyst", type: "text", text: "" },
+    timestamp: new Date(),
+  };
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
@@ -59,7 +56,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
     setTyping(true);
 
     setTimeout(() => {
-      const response = matchIntent(msg);
+      const response = matchIntent(msg, lang);
       const assistantMsg: Message = {
         id: `a-${Date.now()}`,
         role: "assistant",
@@ -92,10 +89,10 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
           <Bot size={18} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold">AI Asistan</p>
-          <p className="text-[10px] text-gray-400">Fiyat İstihbarat & Kampanya</p>
+          <p className="text-sm font-bold">{t.headerTitle}</p>
+          <p className="text-[10px] text-gray-400">{t.headerSubtitle}</p>
         </div>
-        <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg" aria-label="Sohbeti kapat"><X size={18} /></button>
+        <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg" aria-label={t.headerTitle}><X size={18} /></button>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -111,7 +108,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
             <div className={`max-w-[300px] ${msg.role === "user" ? "order-first" : ""}`}>
               {msg.role === "assistant" && msg.response?.agent && (
                 <p className="text-[10px] text-gray-400 mb-1 font-semibold">
-                  {msg.response.agent === "campaign-mgr" ? "Kampanya Yöneticisi" : "Pazar Analisti"}
+                  {msg.response.agent === "campaign-mgr" ? t.roleCampaignMgr : t.roleAnalyst}
                 </p>
               )}
               <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
@@ -133,7 +130,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                     ) : null}
                   </div>
                   {msg.response.data.target != null && (
-                    <p className="text-[10px] text-gray-400 mt-1">Hedef: {String(msg.response.data.target as string)}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">{t.targetLabel} {String(msg.response.data.target as string)}</p>
                   )}
                 </div>
               )}
@@ -165,7 +162,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                 <div className="mt-2 bg-purple-50 border border-purple-100 rounded-xl p-3">
                   <div className="flex items-center gap-1.5 mb-1">
                     <Sparkles size={12} className="text-purple-600" />
-                    <span className="text-[10px] font-bold text-purple-700">AI Kampanya Önerisi</span>
+                    <span className="text-[10px] font-bold text-purple-700">{t.aiCampaignSuggestion}</span>
                   </div>
                 </div>
               )}
@@ -255,7 +252,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Sorunuzu yazın..."
+            placeholder={t.placeholder}
             className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#E30613]/20 focus:border-[#E30613]"
           />
           <button

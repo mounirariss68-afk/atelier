@@ -3,12 +3,14 @@ import { motion } from "framer-motion";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Legend, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import { Shield, TrendingUp, TrendingDown, Eye, AlertTriangle } from "lucide-react";
+import { Shield, Eye, AlertTriangle } from "lucide-react";
 import { useDashboardFilters } from "../DashboardContext";
+import { useDemoLang } from "../DemoLangContext";
+import { radar } from "../demo-i18n";
 import {
-  competitorPrices, products, COMPETITOR_BRANDS, CATEGORY_LABELS,
+  competitorPrices, COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel,
   type ProductCategory,
 } from "@/data/arcelik-seed";
 
@@ -22,15 +24,6 @@ const BRAND_COLORS: Record<string, string> = {
   LG: "#dc2626",
   "Electrolux/AEG": "#4f46e5",
 };
-
-const RADAR_DIMS = [
-  { key: "price", label: "Fiyat Rekabetçiliği" },
-  { key: "variety", label: "Ürün Çeşitliliği" },
-  { key: "dealer", label: "Bayi Ağı Genişliği" },
-  { key: "campaign", label: "Kampanya Sıklığı" },
-  { key: "brand", label: "Marka Bilinirliği" },
-  { key: "satisfaction", label: "Müşteri Memnuniyeti" },
-];
 
 function computeBrandScores(brandName: string) {
   const prices = competitorPrices.filter((cp) => cp.brand === brandName);
@@ -53,8 +46,19 @@ const ARCELIK_SCORES = { price: 80, variety: 95, dealer: 90, campaign: 75, brand
 
 export default function CompetitorRadarView() {
   const { filters } = useDashboardFilters();
+  const { lang } = useDemoLang();
+  const t = radar[lang];
   const [selectedBrands, setSelectedBrands] = useState<string[]>(["Vestel", "Bosch"]);
   const [detailBrand, setDetailBrand] = useState<string | null>(null);
+
+  const RADAR_DIMS = [
+    { key: "price", label: t.dimPrice },
+    { key: "variety", label: t.dimVariety },
+    { key: "dealer", label: t.dimDealer },
+    { key: "campaign", label: t.dimCampaign },
+    { key: "brand", label: t.dimBrand },
+    { key: "satisfaction", label: t.dimSatisfaction },
+  ];
 
   const toggleBrand = (name: string) => {
     setSelectedBrands((prev) =>
@@ -92,20 +96,28 @@ export default function CompetitorRadarView() {
       ? filters.categories
       : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
     return cats.map((cat) => {
-      const row: Record<string, unknown> = { name: CATEGORY_LABELS[cat] };
+      const row: Record<string, unknown> = { name: getCategoryLabel(cat, lang) };
       selectedBrands.forEach((brand) => {
         const cp = competitorPrices.find((p) => p.brand === brand && p.category === cat);
         row[brand] = cp ? cp.priceDeltaPercent : 0;
       });
       return row;
     });
-  }, [selectedBrands, filters.categories]);
+  }, [selectedBrands, filters.categories, lang]);
+
+  const timelineEvents = [
+    { date: t.timeDate1, brand: "Vestel", action: t.timeEvent1, severity: "high" as const },
+    { date: t.timeDate2, brand: "Samsung", action: t.timeEvent3, severity: "medium" as const },
+    { date: t.timeDate3, brand: "Bosch", action: t.timeEvent2, severity: "low" as const },
+    { date: t.timeDate4, brand: "Profilo", action: t.timeEvent5, severity: "low" as const },
+    { date: t.timeDate5, brand: "Vestel", action: t.timeEvent4, severity: "high" as const },
+  ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-lg font-bold text-[#0E2841]">Rakip Radarı</h2>
-        <span className="text-xs text-gray-500">Karşılaştırmak için marka seçin (maks. 4)</span>
+        <h2 className="text-lg font-bold text-[#0E2841]">{t.title}</h2>
+        <span className="text-xs text-gray-500">{t.selectBrands}</span>
         <div className="flex gap-2 ml-auto">
           {COMPETITOR_BRANDS.map((b) => (
             <button
@@ -132,7 +144,7 @@ export default function CompetitorRadarView() {
         >
           <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
             <Shield size={16} className="text-[#0E2841]" />
-            Rekabet Haritası
+            {t.competitionMap}
           </h3>
           <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -166,7 +178,7 @@ export default function CompetitorRadarView() {
           transition={{ delay: 0.1 }}
           className="bg-white rounded-xl border border-gray-100 shadow-sm p-5"
         >
-          <h3 className="text-sm font-bold mb-4">Kategori Bazlı Fiyat Farkı (%)</h3>
+          <h3 className="text-sm font-bold mb-4">{t.categoryPriceGap}</h3>
           <div className="h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={priceDeltaChart} layout="vertical" margin={{ left: 5, right: 20 }}>
@@ -192,16 +204,10 @@ export default function CompetitorRadarView() {
       >
         <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
           <AlertTriangle size={16} className="text-amber-500" />
-          Fiyat Hareketleri Zaman Çizelgesi
+          {t.timelineTitle}
         </h3>
         <div className="space-y-3">
-          {[
-            { date: "2 Mayıs 2026", brand: "Vestel", action: "Buzdolabı segmentinde %5 fiyat indirimi uygulandı", severity: "high" as const },
-            { date: "28 Nisan 2026", brand: "Samsung", action: "OLED TV serisinde kampanya fiyatı uygulandı", severity: "medium" as const },
-            { date: "25 Nisan 2026", brand: "Bosch", action: "Premium bulaşık makinesi yeni model lansmanı", severity: "low" as const },
-            { date: "20 Nisan 2026", brand: "Profilo", action: "Çamaşır makinesi serisinde %3 fiyat artışı", severity: "low" as const },
-            { date: "15 Nisan 2026", brand: "Vestel", action: "Klima segmentinde agresif yaz kampanyası başlangıcı", severity: "high" as const },
-          ].map((event, i) => (
+          {timelineEvents.map((event, i) => (
             <div key={i} className="flex items-start gap-3">
               <div className="flex flex-col items-center">
                 <div className={`w-3 h-3 rounded-full flex-shrink-0 ${event.severity === "high" ? "bg-red-500" : event.severity === "medium" ? "bg-amber-500" : "bg-green-500"}`} />
@@ -246,35 +252,35 @@ export default function CompetitorRadarView() {
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                 b.positioning === "premium" ? "bg-purple-50 text-purple-700" : b.positioning === "value" ? "bg-blue-50 text-blue-700" : "bg-gray-50 text-gray-600"
               }`}>
-                {b.positioning === "premium" ? "Premium" : b.positioning === "value" ? "Değer" : "Orta"}
+                {b.positioning === "premium" ? "Premium" : b.positioning === "value" ? t.posValue : t.posMid}
               </span>
             </div>
             <div className="mt-2 space-y-1 text-xs text-gray-500">
               <div className="flex justify-between">
-                <span>Pazar Payı</span>
+                <span>{t.posMarketShare}</span>
                 <span className="font-semibold text-[#0E2841]">{b.positioning === "premium" ? "~8%" : b.positioning === "value" ? "~15%" : "~6%"}</span>
               </div>
               <div className="flex justify-between">
-                <span>Takip edilen</span>
-                <span className="font-semibold text-[#0E2841]">{b.priceCount} ürün</span>
+                <span>{t.tracked}</span>
+                <span className="font-semibold text-[#0E2841]">{b.priceCount} {t.trackedProducts}</span>
               </div>
               <div className="flex justify-between">
-                <span>Ort. fiyat farkı</span>
+                <span>{t.avgPriceGap}</span>
                 <span className={`font-semibold ${parseFloat(b.avgDelta) < 0 ? "text-amber-600" : "text-green-600"}`}>
                   {parseFloat(b.avgDelta) > 0 ? "+" : ""}{b.avgDelta}%
                 </span>
               </div>
               <div className="flex justify-between">
-                <span>Kategoriler</span>
+                <span>{t.categories}</span>
                 <span className="font-semibold text-[#0E2841]">{b.categoryCount}</span>
               </div>
               <div className="flex justify-between">
-                <span>Son Hareket</span>
-                <span className="text-[10px] font-semibold text-amber-600">{b.threat === "high" ? "Fiyat indirimi" : b.threat === "medium" ? "Kampanya" : "Güncelleme"}</span>
+                <span>{t.lastMove}</span>
+                <span className="text-[10px] font-semibold text-amber-600">{b.threat === "high" ? t.priceCut : b.threat === "medium" ? t.campaignLabel : t.update}</span>
               </div>
               <div className="flex justify-between">
-                <span>Aktif Promo</span>
-                <span className="text-[10px] font-semibold text-purple-600">{b.positioning === "value" ? "2 kampanya" : "1 kampanya"}</span>
+                <span>{t.activePromo}</span>
+                <span className="text-[10px] font-semibold text-purple-600">{b.positioning === "value" ? t.twoCampaigns : t.oneCampaign}</span>
               </div>
             </div>
           </motion.div>
@@ -287,23 +293,23 @@ export default function CompetitorRadarView() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-xl border border-gray-100 shadow-sm p-5"
         >
-          <h3 className="text-sm font-bold mb-3">{detailBrand} — Detaylı Fiyat Takibi</h3>
+          <h3 className="text-sm font-bold mb-3">{detailBrand} — {t.detailedTracking}</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-gray-500">Model</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-gray-500">Kategori</th>
-                  <th className="text-right px-4 py-2 text-[11px] font-semibold text-gray-500">Fiyat</th>
-                  <th className="text-right px-4 py-2 text-[11px] font-semibold text-gray-500">Fark</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-gray-500">Not</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-gray-500">{t.colModel}</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-gray-500">{t.colCategory}</th>
+                  <th className="text-right px-4 py-2 text-[11px] font-semibold text-gray-500">{t.colPrice}</th>
+                  <th className="text-right px-4 py-2 text-[11px] font-semibold text-gray-500">{t.colGap}</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-gray-500">{t.colNote}</th>
                 </tr>
               </thead>
               <tbody>
                 {competitorPrices.filter((cp) => cp.brand === detailBrand).map((cp) => (
                   <tr key={cp.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                     <td className="px-4 py-2 text-xs font-medium">{cp.competitorModel}</td>
-                    <td className="px-4 py-2 text-xs text-gray-500">{CATEGORY_LABELS[cp.category]}</td>
+                    <td className="px-4 py-2 text-xs text-gray-500">{getCategoryLabel(cp.category, lang)}</td>
                     <td className="px-4 py-2 text-xs text-right font-mono">₺{cp.competitorPrice.toLocaleString("tr-TR")}</td>
                     <td className={`px-4 py-2 text-xs text-right font-bold ${cp.priceDeltaPercent < 0 ? "text-amber-600" : "text-green-600"}`}>
                       {cp.priceDeltaPercent > 0 ? "+" : ""}{cp.priceDeltaPercent}%

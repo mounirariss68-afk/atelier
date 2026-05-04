@@ -3,22 +3,23 @@ import {
   Award, TrendingUp, Tag, AlertTriangle, Package, BarChart3,
   Clock, ChevronRight, Megaphone, Info, Brain, CheckCircle2,
 } from "lucide-react";
-import { dealers, campaigns, CATEGORY_LABELS, cities as allCities } from "@/data/arcelik-seed";
+import { dealers, campaigns, cities as allCities, getCategoryLabel } from "@/data/arcelik-seed";
 import { generateDealerAgentTasks } from "@/data/arcelik-agent";
 import type { DealerViewId } from "../DealerPortal";
+import { useDemoLang } from "../DemoLangContext";
+import { dealerHome } from "../demo-i18n";
 
 const DEALER = dealers[0];
 const TIER_COLORS: Record<string, string> = { gold: "#F5A623", silver: "#94A3B8", bronze: "#CD7F32" };
-const TIER_LABELS: Record<string, string> = { gold: "Altın Bayi", silver: "Gümüş Bayi", bronze: "Bronz Bayi" };
 const OPTIMAL_STOCK: Record<string, number> = { buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8 };
 
 const activeCampaigns = campaigns.filter((c) => c.targetCities.includes(DEALER.city)).slice(0, 3);
 const lowStockCount = Object.entries(DEALER.stockLevels).filter(([cat, lv]) => (lv ?? 0) < (OPTIMAL_STOCK[cat] ?? 10)).length;
 
-const ANNOUNCEMENTS = [
-  { id: 1, category: "Yeni Ürün", title: "Grundig Premium Klima G 12420 — Yeni Model Eklendi", date: "2 Mayıs 2026", read: false },
-  { id: 2, category: "Fiyat Güncellemesi", title: "Buzdolabı ve çamaşır makinesi serisinde fiyat güncellemesi yapıldı", date: "1 Mayıs 2026", read: false },
-  { id: 3, category: "Eğitim", title: "Online bayi eğitimi: Yeni enerji verimliliği mevzuatı — 8 Mayıs 14:00", date: "30 Nisan 2026", read: true },
+const ANNOUNCEMENT_KEYS = [
+  { id: 1, catKey: "annCatNewProduct", titleKey: "ann1Title", dateKey: "ann1Date", read: false },
+  { id: 2, catKey: "annCatPriceUpdate", titleKey: "ann2Title", dateKey: "ann2Date", read: false },
+  { id: 3, catKey: "annCatTraining", titleKey: "ann3Title", dateKey: "ann3Date", read: true },
 ];
 
 function ComplianceRing({ score }: { score: number }) {
@@ -45,7 +46,10 @@ function ComplianceRing({ score }: { score: number }) {
 }
 
 export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerViewId) => void }) {
-  const cityName = allCities.find((c) => c.id === DEALER.city)?.name || "İstanbul";
+  const { lang } = useDemoLang();
+  const t = dealerHome[lang];
+  const tierLabels: Record<string, string> = { gold: t.tierGold, silver: t.tierSilver, bronze: t.tierBronze };
+  const cityName = allCities.find((c) => c.id === DEALER.city)?.name || "Istanbul";
   const progressPct = Math.round((DEALER.currentProgress / DEALER.monthlySalesTarget) * 100);
 
   return (
@@ -56,37 +60,37 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-lg font-bold">{DEALER.storeName}</h1>
               <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ backgroundColor: TIER_COLORS[DEALER.tier] + "20", color: TIER_COLORS[DEALER.tier] }}>
-                <Award size={10} className="inline mr-0.5" />{TIER_LABELS[DEALER.tier]}
+                <Award size={10} className="inline mr-0.5" />{tierLabels[DEALER.tier]}
               </span>
             </div>
             <p className="text-sm text-gray-500">{DEALER.district}, {cityName}</p>
-            <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1"><Clock size={11} /> Son güncelleme: 4 Mayıs 2026, 09:45</p>
+            <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1"><Clock size={11} /> {t.lastUpdate} {t.lastUpdateDate}</p>
           </div>
 
           <div className="text-center">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Uyum Puanı</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">{t.complianceScore}</p>
             <ComplianceRing score={DEALER.complianceScore} />
           </div>
 
           <div className="min-w-[200px]">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Bu Ayki Satış Hedefi</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase mb-2">{t.salesTarget}</p>
             <div className="flex items-end gap-2 mb-1">
               <span className="text-2xl font-bold">{DEALER.currentProgress}</span>
-              <span className="text-sm text-gray-400">/ {DEALER.monthlySalesTarget} ürün</span>
+              <span className="text-sm text-gray-400">/ {DEALER.monthlySalesTarget} {t.products}</span>
             </div>
             <div className="h-3 bg-gray-100 rounded-full overflow-hidden relative">
               <div className="h-full rounded-full bg-[#E30613] transition-all" style={{ width: `${Math.min(progressPct, 100)}%` }} />
-              <div className="absolute top-0 h-full w-px bg-amber-400" style={{ left: `${(50 / DEALER.monthlySalesTarget) * 100}%` }} title="50 ürün — %1 prim" />
-              <div className="absolute top-0 h-full w-px bg-green-500" style={{ left: `${(75 / DEALER.monthlySalesTarget) * 100}%` }} title="75 ürün — %2 prim" />
+              <div className="absolute top-0 h-full w-px bg-amber-400" style={{ left: `${(50 / DEALER.monthlySalesTarget) * 100}%` }} title={t.progressTip50} />
+              <div className="absolute top-0 h-full w-px bg-green-500" style={{ left: `${(75 / DEALER.monthlySalesTarget) * 100}%` }} title={t.progressTip75} />
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">{progressPct}% tamamlandı — {DEALER.monthlySalesTarget - DEALER.currentProgress} ürün kaldı</p>
+            <p className="text-[10px] text-gray-400 mt-1">{progressPct}% {t.completed} — {DEALER.monthlySalesTarget - DEALER.currentProgress} {t.productsRemaining}</p>
           </div>
 
           <div className="text-center min-w-[120px]">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Kazanılan Prim</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">{t.earnedBonus}</p>
             <p className="text-2xl font-bold text-green-600">₺{DEALER.earnedCommission.toLocaleString("tr-TR")}</p>
             <p className="text-[11px] text-green-600 flex items-center justify-center gap-0.5 mt-1">
-              <TrendingUp size={12} /> +₺2.400 vs geçen ay
+              <TrendingUp size={12} /> +₺2.400 {t.vsLastMonth}
             </p>
           </div>
         </div>
@@ -94,10 +98,10 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Aktif Kampanya", value: activeCampaigns.length, icon: Megaphone, color: "#E30613", onClick: () => onNavigate("campaigns") },
-          { label: "Düşük Stok Uyarısı", value: lowStockCount, icon: AlertTriangle, color: lowStockCount > 0 ? "#ef4444" : "#16a34a", onClick: () => onNavigate("stock") },
-          { label: "Bekleyen Sipariş", value: DEALER.pendingOrders, icon: Package, color: "#0891b2", onClick: () => onNavigate("stock") },
-          { label: "Fiyat Değişikliği", value: 3, icon: BarChart3, color: "#7c3aed", onClick: () => onNavigate("prices") },
+          { label: t.statActiveCampaign, value: activeCampaigns.length, icon: Megaphone, color: "#E30613", onClick: () => onNavigate("campaigns") },
+          { label: t.statLowStock, value: lowStockCount, icon: AlertTriangle, color: lowStockCount > 0 ? "#ef4444" : "#16a34a", onClick: () => onNavigate("stock") },
+          { label: t.statPendingOrder, value: DEALER.pendingOrders, icon: Package, color: "#0891b2", onClick: () => onNavigate("stock") },
+          { label: t.statPriceChange, value: 3, icon: BarChart3, color: "#7c3aed", onClick: () => onNavigate("prices") },
         ].map((card, i) => (
           <motion.button
             key={i}
@@ -119,8 +123,8 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold flex items-center gap-2"><Tag size={16} className="text-[#E30613]" /> Öne Çıkan Kampanyalar</h2>
-          <button onClick={() => onNavigate("campaigns")} className="text-xs text-[#E30613] font-semibold hover:underline">Tümünü Gör →</button>
+          <h2 className="text-sm font-bold flex items-center gap-2"><Tag size={16} className="text-[#E30613]" /> {t.featuredCampaigns}</h2>
+          <button onClick={() => onNavigate("campaigns")} className="text-xs text-[#E30613] font-semibold hover:underline">{t.seeAll}</button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {activeCampaigns.map((c, i) => {
@@ -128,14 +132,14 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
             return (
               <div key={c.id} className="border border-gray-100 rounded-lg p-4 hover:border-[#E30613]/20 transition-colors">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase text-[#E30613] bg-red-50 px-2 py-0.5 rounded-full">AKTİF</span>
-                  <span className="text-[10px] font-semibold text-amber-600 flex items-center gap-1"><Clock size={10} />{daysLeft} gün kaldı</span>
+                  <span className="text-[10px] font-bold uppercase text-[#E30613] bg-red-50 px-2 py-0.5 rounded-full">{t.active}</span>
+                  <span className="text-[10px] font-semibold text-amber-600 flex items-center gap-1"><Clock size={10} />{daysLeft} {t.daysRemaining}</span>
                 </div>
                 <h3 className="text-sm font-bold mb-1">{c.name}</h3>
                 <p className="text-[11px] text-gray-500 mb-2">{c.discountDetail}</p>
                 <div className="flex flex-wrap gap-1">
                   {c.eligibleCategories.slice(0, 3).map((cat) => (
-                    <span key={cat} className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{CATEGORY_LABELS[cat]}</span>
+                    <span key={cat} className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{getCategoryLabel(cat, lang)}</span>
                   ))}
                   {c.eligibleCategories.length > 3 && <span className="text-[9px] text-gray-400">+{c.eligibleCategories.length - 3}</span>}
                 </div>
@@ -148,12 +152,12 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
           <Brain size={15} className="text-[#E30613]" />
-          <h2 className="text-sm font-bold">Ajan Görevleri</h2>
+          <h2 className="text-sm font-bold">{t.agentTasks}</h2>
           <span className="text-[9px] font-bold bg-[#E30613] text-white px-1.5 py-0.5 rounded-full ml-1">AI</span>
-          <span className="text-[10px] text-gray-400 ml-auto">Size özel aksiyon öğeleri</span>
+          <span className="text-[10px] text-gray-400 ml-auto">{t.agentTasksSubtitle}</span>
         </div>
         <div className="divide-y divide-gray-50">
-          {generateDealerAgentTasks(DEALER.city).map((task, i) => {
+          {generateDealerAgentTasks(DEALER.city).map((task) => {
             const sevColor = task.priority === "high" ? "bg-red-500" : task.priority === "medium" ? "bg-amber-500" : "bg-gray-400";
             return (
               <div key={task.id} className="px-5 py-3.5 hover:bg-gray-50/50 transition-colors">
@@ -163,14 +167,14 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
                     <div className="flex items-center gap-2 mb-0.5">
                       <h4 className="text-xs font-semibold text-[#0E2841]">{task.title}</h4>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${task.priority === "high" ? "bg-red-50 text-red-600" : task.priority === "medium" ? "bg-amber-50 text-amber-600" : "bg-gray-100 text-gray-500"}`}>
-                        {task.priority === "high" ? "Yüksek" : task.priority === "medium" ? "Orta" : "Düşük"}
+                        {task.priority === "high" ? t.priorityHigh : task.priority === "medium" ? t.priorityMedium : t.priorityLow}
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-500">{task.description}</p>
-                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Clock size={9} /> Son tarih: {task.deadline}</p>
+                    <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><Clock size={9} /> {t.deadline} {task.deadline}</p>
                   </div>
                   <button className="text-[10px] font-semibold text-green-600 hover:text-green-700 flex items-center gap-0.5 flex-shrink-0 mt-1">
-                    <CheckCircle2 size={11} /> Tamam
+                    <CheckCircle2 size={11} /> {t.done}
                   </button>
                 </div>
               </div>
@@ -181,20 +185,20 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold flex items-center gap-2"><Info size={16} className="text-blue-500" /> Son Duyurular</h2>
-          <button onClick={() => onNavigate("announcements")} className="text-xs text-[#E30613] font-semibold hover:underline">Tümünü Gör →</button>
+          <h2 className="text-sm font-bold flex items-center gap-2"><Info size={16} className="text-blue-500" /> {t.latestAnnouncements}</h2>
+          <button onClick={() => onNavigate("announcements")} className="text-xs text-[#E30613] font-semibold hover:underline">{t.seeAll}</button>
         </div>
         <div className="space-y-3">
-          {ANNOUNCEMENTS.map((a) => (
+          {ANNOUNCEMENT_KEYS.map((a) => (
             <div key={a.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
               <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${a.read ? "bg-gray-300" : "bg-[#E30613]"}`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{a.category}</span>
-                  <span className="text-[10px] text-gray-400">{a.date}</span>
-                  {!a.read && <span className="text-[9px] font-bold text-[#E30613]">YENİ</span>}
+                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{t[a.catKey]}</span>
+                  <span className="text-[10px] text-gray-400">{t[a.dateKey]}</span>
+                  {!a.read && <span className="text-[9px] font-bold text-[#E30613]">{t.newBadge}</span>}
                 </div>
-                <p className="text-xs text-gray-700">{a.title}</p>
+                <p className="text-xs text-gray-700">{t[a.titleKey]}</p>
               </div>
             </div>
           ))}

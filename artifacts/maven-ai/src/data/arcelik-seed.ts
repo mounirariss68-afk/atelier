@@ -10,6 +10,20 @@ export const CATEGORY_LABELS: Record<ProductCategory, string> = {
   "tv-elektronik": "TV & Elektronik",
 };
 
+export const CATEGORY_LABELS_EN: Record<ProductCategory, string> = {
+  buzdolabi: "Refrigerator",
+  camasir: "Washing Machine",
+  bulasik: "Dishwasher",
+  firin: "Oven & Cooktop",
+  klima: "Air Conditioner",
+  "kucuk-ev": "Small Appliances",
+  "tv-elektronik": "TV & Electronics",
+};
+
+export function getCategoryLabel(cat: ProductCategory, lang: "tr" | "en" = "tr"): string {
+  return lang === "en" ? CATEGORY_LABELS_EN[cat] : CATEGORY_LABELS[cat];
+}
+
 export interface ArcelikProduct {
   id: string;
   modelCode: string;

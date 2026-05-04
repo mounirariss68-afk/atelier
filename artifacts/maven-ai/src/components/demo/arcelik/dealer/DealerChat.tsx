@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, Send, Bot, User, Tag, ListOrdered, Package, Target, ShoppingCart } from "lucide-react";
 import { matchDealerIntent, type DealerChatResponse } from "./dealerChatIntents";
+import { useDemoLang } from "../DemoLangContext";
+import { dealerChat } from "../demo-i18n";
 
 interface Message {
   id: number;
@@ -11,20 +13,20 @@ interface Message {
   data?: Record<string, unknown>;
 }
 
-const QUICK_PROMPTS = [
-  { label: "Aktif Kampanyalar", icon: Tag },
-  { label: "Fiyat Listesi", icon: ListOrdered },
-  { label: "Stok Durumu", icon: Package },
-  { label: "Hedef Takibi", icon: Target },
-  { label: "Sipariş Ver", icon: ShoppingCart },
-];
-
-const WELCOME: Message = {
-  id: 0, role: "agent",
-  text: "Merhaba! Ben Arçelik Bayi Asistanı. Kampanyalar, fiyat listesi, stok durumu, hedefleriniz ve siparişleriniz hakkında size yardımcı olabilirim. Ne sormak istersiniz?",
-};
-
 export default function DealerChat({ onClose }: { onClose: () => void }) {
+  const { lang } = useDemoLang();
+  const t = dealerChat[lang];
+  const QUICK_PROMPTS = [
+    { label: t.prompt1, icon: Tag },
+    { label: t.prompt2, icon: ListOrdered },
+    { label: t.prompt3, icon: Package },
+    { label: t.prompt4, icon: Target },
+    { label: t.prompt5, icon: ShoppingCart },
+  ];
+  const WELCOME: Message = {
+    id: 0, role: "agent",
+    text: t.welcome,
+  };
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
@@ -42,7 +44,7 @@ export default function DealerChat({ onClose }: { onClose: () => void }) {
     setTyping(true);
 
     setTimeout(() => {
-      const response = matchDealerIntent(text.trim());
+      const response = matchDealerIntent(text.trim(), lang);
       const agentMsg: Message = {
         id: idRef.current++, role: "agent",
         text: response.text,
@@ -71,8 +73,8 @@ export default function DealerChat({ onClose }: { onClose: () => void }) {
           <Bot size={18} />
         </div>
         <div className="flex-1">
-          <p className="text-sm font-bold">Arçelik Bayi Asistanı</p>
-          <p className="text-[10px] text-white/70">Kampanya, fiyat ve stok desteği</p>
+          <p className="text-sm font-bold">{t.headerTitle}</p>
+          <p className="text-[10px] text-white/70">{t.headerSubtitle}</p>
         </div>
         <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"><X size={18} /></button>
       </div>
@@ -176,7 +178,7 @@ export default function DealerChat({ onClose }: { onClose: () => void }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Mesajınızı yazın..."
+            placeholder={t.placeholder}
             rows={1}
             className="flex-1 resize-none text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20 focus:border-[#E30613]"
           />

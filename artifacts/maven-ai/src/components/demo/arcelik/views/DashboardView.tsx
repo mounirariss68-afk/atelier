@@ -8,9 +8,11 @@ import {
   Target, Percent, BarChart3, Users, Megaphone, DollarSign, Package,
 } from "lucide-react";
 import { useDashboardFilters, type Period } from "../DashboardContext";
+import { useDemoLang } from "../DemoLangContext";
+import { dashboard } from "../demo-i18n";
 import {
   products, competitorPrices, cities, campaigns, dealers,
-  CATEGORY_LABELS, COMPETITOR_BRANDS,
+  CATEGORY_LABELS, COMPETITOR_BRANDS, getCategoryLabel,
   type ProductCategory, type CityData,
 } from "@/data/arcelik-seed";
 
@@ -27,10 +29,6 @@ const CITY_POS: Record<string, { x: number; y: number }> = {
 };
 
 type HeatMetric = "share" | "price" | "dealers" | "competition" | "campaigns" | "demand";
-const HEAT_LABELS: Record<HeatMetric, string> = {
-  share: "Pazar Payı", price: "Fiyat Endeksi", dealers: "Bayi Sayısı",
-  competition: "Rekabet Yoğunluğu", campaigns: "Kampanya Aktivitesi", demand: "Talep Sinyali",
-};
 
 function getHeatValue(city: CityData, metric: HeatMetric): number {
   if (metric === "share") return city.marketSharePercent;
@@ -92,6 +90,16 @@ const COMPARISON_BRANDS = ["Vestel", "Bosch", "Samsung", "Profilo"];
 
 export default function DashboardView() {
   const { filters } = useDashboardFilters();
+  const { lang } = useDemoLang();
+  const t = dashboard[lang];
+  const HEAT_LABELS: Record<HeatMetric, string> = {
+    share: t.heatMarketShare,
+    price: t.heatPriceIndex,
+    dealers: t.heatDealerCount,
+    competition: t.heatCompetition,
+    campaigns: t.heatCampaignActivity,
+    demand: t.heatDemandSignal,
+  };
   const [heatMetric, setHeatMetric] = useState<HeatMetric>("share");
   const [selectedCity, setSelectedCity] = useState<CityData | null>(null);
   const [hoverCity, setHoverCity] = useState<string | null>(null);
@@ -134,14 +142,14 @@ export default function DashboardView() {
     const pCompliance = +(avgCompliance * ps.compliance).toFixed(1);
     const pIndex = +(avgIndex * ps.index).toFixed(2);
     return [
-      { id: "share", label: "Ulusal Pazar Payı", value: pShare, suffix: "%", target: "42.0%", delta: `${pShare >= 39 ? "+" : ""}${(pShare - 39).toFixed(1)}pp`, positive: pShare >= 39, icon: Target },
-      { id: "margin", label: "Ortalama Brüt Marj", value: pMargin, suffix: "%", target: "22.5%", delta: `${(pMargin - 22.1).toFixed(1)}pp`, positive: pMargin >= 22, icon: Percent },
-      { id: "revenue", label: "Aylık Gelir Değişimi", value: pRevenue, suffix: "%", target: ">3%", delta: `+₺${Math.round(12 * ps.revenue)}M`, positive: pRevenue > 0, icon: DollarSign },
-      { id: "campaigns", label: "Aktif Kampanya", value: pCampaigns, suffix: "", target: "5", delta: `${pCampaigns >= 3 ? "+" : ""}${pCampaigns - 2}`, positive: pCampaigns >= 3, icon: Megaphone },
-      { id: "compliance", label: "Bayi Uyum Oranı", value: pCompliance, suffix: "%", target: "85%", delta: `${(pCompliance - 76).toFixed(1)}pp`, positive: pCompliance >= 75, icon: Users },
-      { id: "index", label: "Rakip Fiyat Endeksi", value: pIndex, suffix: "", target: "0.95–1.05", delta: `${(pIndex - 1.03) >= 0 ? "+" : ""}${(pIndex - 1.03).toFixed(2)}`, positive: pIndex >= 0.95 && pIndex <= 1.05, icon: BarChart3 },
+      { id: "share", label: t.kpiNationalShare, value: pShare, suffix: "%", target: "42.0%", delta: `${pShare >= 39 ? "+" : ""}${(pShare - 39).toFixed(1)}pp`, positive: pShare >= 39, icon: Target },
+      { id: "margin", label: t.kpiAvgMargin, value: pMargin, suffix: "%", target: "22.5%", delta: `${(pMargin - 22.1).toFixed(1)}pp`, positive: pMargin >= 22, icon: Percent },
+      { id: "revenue", label: t.kpiMonthlyRevenue, value: pRevenue, suffix: "%", target: ">3%", delta: `+₺${Math.round(12 * ps.revenue)}M`, positive: pRevenue > 0, icon: DollarSign },
+      { id: "campaigns", label: t.kpiActiveCampaign, value: pCampaigns, suffix: "", target: "5", delta: `${pCampaigns >= 3 ? "+" : ""}${pCampaigns - 2}`, positive: pCampaigns >= 3, icon: Megaphone },
+      { id: "compliance", label: t.kpiDealerCompliance, value: pCompliance, suffix: "%", target: "85%", delta: `${(pCompliance - 76).toFixed(1)}pp`, positive: pCompliance >= 75, icon: Users },
+      { id: "index", label: t.kpiCompetitorIndex, value: pIndex, suffix: "", target: "0.95–1.05", delta: `${(pIndex - 1.03) >= 0 ? "+" : ""}${(pIndex - 1.03).toFixed(2)}`, positive: pIndex >= 0.95 && pIndex <= 1.05, icon: BarChart3 },
     ];
-  }, [filters]);
+  }, [filters, t]);
 
   const categoryData = useMemo(() => {
     const cats = filters.categories.length > 0 ? filters.categories : (Object.keys(CATEGORY_LABELS) as ProductCategory[]);
@@ -152,9 +160,9 @@ export default function DashboardView() {
       const total = catProducts.length + compProducts.length;
       const rawShare = total > 0 ? (catProducts.length / total) * 100 : 0;
       const share = +(rawShare * ps.share).toFixed(1);
-      return { name: CATEGORY_LABELS[cat], share, products: catProducts.length, competitors: compProducts.length, cat };
+      return { name: getCategoryLabel(cat, lang), share, products: catProducts.length, competitors: compProducts.length, cat };
     });
-  }, [filters.categories, filters.period]);
+  }, [filters.categories, filters.period, lang]);
 
   const comparisonBrands = filters.competitors.length > 0
     ? COMPETITOR_BRANDS.filter((b) => filters.competitors.includes(b.id)).map((b) => b.name)
@@ -180,7 +188,7 @@ export default function DashboardView() {
       });
       const deltas = Object.values(brandPrices).map((bp) => bp.delta);
       return {
-        id: p.id, name: p.name, category: CATEGORY_LABELS[p.category],
+        id: p.id, name: p.name, category: getCategoryLabel(p.category, lang),
         tsfPrice: adjTsf, brandPrices,
         avgDelta: deltas.length ? +(deltas.reduce((s, d) => s + d, 0) / deltas.length).toFixed(1) : 0,
       };
@@ -244,7 +252,7 @@ export default function DashboardView() {
                   {kpi.positive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                   {kpi.delta}
                 </span>
-                <span className="text-[10px] text-gray-400">Hedef: {kpi.target}</span>
+                <span className="text-[10px] text-gray-400">{t.target} {kpi.target}</span>
               </div>
             </motion.div>
           );
@@ -261,7 +269,7 @@ export default function DashboardView() {
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MapPin size={16} className="text-[#E30613]" />
-              <h3 className="text-sm font-bold">Türkiye Haritası — Şehir Performansı</h3>
+              <h3 className="text-sm font-bold">{t.mapTitle}</h3>
             </div>
             <div className="relative">
               <select
@@ -283,8 +291,8 @@ export default function DashboardView() {
                 const pos = CITY_POS[city.id];
                 if (!pos) return null;
                 const val = getHeatValue(city, heatMetric);
-                const t = heatMax > heatMin ? (val - heatMin) / (heatMax - heatMin) : 0.5;
-                const color = heatColor(t);
+                const heatT = heatMax > heatMin ? (val - heatMin) / (heatMax - heatMin) : 0.5;
+                const color = heatColor(heatT);
                 const isHovered = hoverCity === city.id;
                 const r = city.populationTier === "tier-1" ? 14 : city.populationTier === "tier-2" ? 10 : 7;
                 return (
@@ -297,7 +305,7 @@ export default function DashboardView() {
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedCity(city); }}
-                    aria-label={`${city.name} detaylarını göster`}
+                    aria-label={`${city.name} ${t.showCityDetails}`}
                   >
                     <circle cx={pos.x} cy={pos.y} r={r + 4} fill={color} opacity={0.15} />
                     <circle cx={pos.x} cy={pos.y} r={isHovered ? r + 2 : r} fill={color} stroke="white" strokeWidth="2" className="transition-all duration-150" />
@@ -310,17 +318,17 @@ export default function DashboardView() {
               <div className="absolute top-4 right-4 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 shadow-lg w-52 pointer-events-none z-10">
                 <p className="text-xs font-bold text-[#0E2841] mb-1">{hoveredCityData.name}</p>
                 <div className="space-y-1 text-[11px] text-gray-600">
-                  <div className="flex justify-between"><span>Pazar Payı</span><span className="font-bold text-[#0E2841]">%{hoveredCityData.marketSharePercent}</span></div>
-                  <div className="flex justify-between"><span>Fiyat Endeksi</span><span className="font-bold">{hoveredCityData.avgPriceIndex}</span></div>
-                  <div className="flex justify-between"><span>Bayi Sayısı</span><span className="font-bold">{hoveredCityData.dealerCount}</span></div>
-                  <div className="flex justify-between"><span>Kampanyalar</span><span className="font-bold">{campaigns.filter((c) => c.targetCities.includes(hoveredCityData.id)).length}</span></div>
+                  <div className="flex justify-between"><span>{t.tooltipMarketShare}</span><span className="font-bold text-[#0E2841]">%{hoveredCityData.marketSharePercent}</span></div>
+                  <div className="flex justify-between"><span>{t.tooltipPriceIndex}</span><span className="font-bold">{hoveredCityData.avgPriceIndex}</span></div>
+                  <div className="flex justify-between"><span>{t.tooltipDealerCount}</span><span className="font-bold">{hoveredCityData.dealerCount}</span></div>
+                  <div className="flex justify-between"><span>{t.tooltipCampaigns}</span><span className="font-bold">{campaigns.filter((c) => c.targetCities.includes(hoveredCityData.id)).length}</span></div>
                 </div>
               </div>
             )}
             <div className="flex items-center gap-4 mt-2 px-2">
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#16a34a]" /><span className="text-[10px] text-gray-500">Yüksek</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#f59e0b]" /><span className="text-[10px] text-gray-500">Orta</span></div>
-              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#ef4444]" /><span className="text-[10px] text-gray-500">Düşük</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#16a34a]" /><span className="text-[10px] text-gray-500">{t.legendHigh}</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#f59e0b]" /><span className="text-[10px] text-gray-500">{t.legendMedium}</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#ef4444]" /><span className="text-[10px] text-gray-500">{t.legendLow}</span></div>
               <div className="flex items-center gap-2 ml-auto text-[10px] text-gray-400">
                 <span className="flex items-center gap-1"><span className="w-3.5 h-3.5 rounded-full border-2 border-gray-300" /> Tier-1</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border-2 border-gray-300" /> Tier-2</span>
@@ -339,9 +347,9 @@ export default function DashboardView() {
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="text-sm font-bold flex items-center gap-2">
               <BarChart3 size={16} className="text-[#F5A623]" />
-              Kategori Performansı — Pazar Payı
+              {t.categoryChartTitle}
             </h3>
-            <p className="text-[10px] text-gray-400 mt-0.5">Tıklayarak ürün detayına bakın</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{t.categoryChartHint}</p>
           </div>
           <div className="p-4 h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -349,7 +357,7 @@ export default function DashboardView() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `%${v}`} />
                 <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(val: number) => [`%${val}`, "Pazar Payı"]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Tooltip formatter={(val: number) => [`%${val}`, t.marketShare]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                 <Bar dataKey="share" radius={[0, 6, 6, 0]} barSize={18} className="cursor-pointer" onClick={(_: unknown, idx: number) => setSelectedCategory(categoryData[idx]?.cat as ProductCategory)}>
                   {categoryData.map((_, i) => (
                     <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />
@@ -368,18 +376,18 @@ export default function DashboardView() {
         className="bg-white rounded-xl border border-gray-100 shadow-sm"
       >
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold">Rakip Fiyat Karşılaştırması</h3>
-          <span className="text-[10px] text-gray-400">{productComparison.length} ürün × {comparisonBrands.length} rakip</span>
+          <h3 className="text-sm font-bold">{t.competitorTableTitle}</h3>
+          <span className="text-[10px] text-gray-400">{productComparison.length} × {comparisonBrands.length} {t.competitorTableSubtitle}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
                 {[
-                  { key: "name", label: "Ürün", align: "left" as const },
-                  { key: "tsfPrice", label: "Arçelik TSF", align: "right" as const },
+                  { key: "name", label: t.colProduct, align: "left" as const },
+                  { key: "tsfPrice", label: t.colArcelikTSF, align: "right" as const },
                   ...comparisonBrands.map((b) => ({ key: b, label: b, align: "right" as const })),
-                  { key: "avgDelta", label: "Ort. Fark", align: "right" as const },
+                  { key: "avgDelta", label: t.colAvgDiff, align: "right" as const },
                 ].map((col) => (
                   <th
                     key={col.key}
@@ -394,7 +402,7 @@ export default function DashboardView() {
                     </span>
                   </th>
                 ))}
-                <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Trend</th>
+                <th className="text-center px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{t.colTrend}</th>
               </tr>
             </thead>
             <tbody>
@@ -454,19 +462,19 @@ export default function DashboardView() {
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Package size={18} className="text-[#F5A623]" />
-                  <h3 className="text-lg font-bold">{CATEGORY_LABELS[selectedCategory]} — Ürün Detayları</h3>
+                  <h3 className="text-lg font-bold">{getCategoryLabel(selectedCategory, lang)} — {t.productDetails}</h3>
                 </div>
-                <button onClick={() => setSelectedCategory(null)} className="p-1.5 hover:bg-gray-100 rounded-lg" aria-label="Kapat"><X size={18} /></button>
+                <button onClick={() => setSelectedCategory(null)} className="p-1.5 hover:bg-gray-100 rounded-lg" aria-label={t.closeLabel}><X size={18} /></button>
               </div>
               <div className="overflow-y-auto max-h-[65vh] p-6">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50/50">
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500">Model</th>
-                      <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-gray-500">TSF Fiyat</th>
-                      <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-gray-500">Marj</th>
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500">Enerji</th>
-                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500">Rakip Fiyatları</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500">{t.colModel}</th>
+                      <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-gray-500">{t.colTsfPrice}</th>
+                      <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-gray-500">{t.colMargin}</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500">{t.colEnergy}</th>
+                      <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-gray-500">{t.colCompPrices}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -489,7 +497,7 @@ export default function DashboardView() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-[10px] text-gray-400">Veri yok</span>
+                            <span className="text-[10px] text-gray-400">{t.noData}</span>
                           )}
                         </td>
                       </tr>
@@ -514,44 +522,44 @@ export default function DashboardView() {
           >
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
               <h3 className="text-lg font-bold">{selectedCity.name}</h3>
-              <button onClick={() => setSelectedCity(null)} className="p-1 hover:bg-gray-100 rounded-lg" aria-label="Şehir detayını kapat"><X size={18} /></button>
+              <button onClick={() => setSelectedCity(null)} className="p-1 hover:bg-gray-100 rounded-lg" aria-label={t.closeCityDetail}><X size={18} /></button>
             </div>
             <div className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Pazar Payı</p>
+                  <p className="text-[10px] text-gray-500 uppercase">{t.marketShare}</p>
                   <p className="text-xl font-extrabold text-[#0E2841]">%{selectedCity.marketSharePercent}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Fiyat Endeksi</p>
+                  <p className="text-[10px] text-gray-500 uppercase">{t.cityPriceIndex}</p>
                   <p className="text-xl font-extrabold text-[#0E2841]">{selectedCity.avgPriceIndex}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Bayi Sayısı</p>
+                  <p className="text-[10px] text-gray-500 uppercase">{t.cityDealerCount}</p>
                   <p className="text-xl font-extrabold text-[#0E2841]">{selectedCity.dealerCount}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Segment</p>
+                  <p className="text-[10px] text-gray-500 uppercase">{t.citySegment}</p>
                   <p className="text-xl font-extrabold text-[#0E2841] capitalize">{selectedCity.populationTier.replace("-", " ")}</p>
                 </div>
               </div>
 
               <div>
-                <p className="text-xs font-bold text-gray-700 mb-2">Kategori Bazlı Performans</p>
+                <p className="text-xs font-bold text-gray-700 mb-2">{t.cityCategoryPerf}</p>
                 <div className="space-y-1.5">
-                  {(Object.entries(CATEGORY_LABELS) as [ProductCategory, string][]).map(([cat, label]) => {
+                  {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((cat) => {
                     const catProducts = products.filter((p) => p.category === cat);
                     const avgMargin = catProducts.length ? (catProducts.reduce((s, p) => s + p.marginPercent, 0) / catProducts.length).toFixed(1) : "0";
                     const compCount = competitorPrices.filter((cp) => cp.category === cat).length;
                     const cityWeight = selectedCity.marketSharePercent / 40;
                     return (
                       <div key={cat} className="flex items-center gap-2 text-xs">
-                        <span className="w-28 text-gray-600 truncate">{label}</span>
+                        <span className="w-28 text-gray-600 truncate">{getCategoryLabel(cat, lang)}</span>
                         <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
                           <div className="h-full rounded-full bg-[#E30613]" style={{ width: `${Math.min(100, Number(avgMargin) * cityWeight * 1.5)}%` }} />
                         </div>
                         <span className="text-[10px] font-semibold w-12 text-right text-[#0E2841]">%{avgMargin}</span>
-                        <span className="text-[10px] text-gray-400 w-16 text-right">{compCount} rakip</span>
+                        <span className="text-[10px] text-gray-400 w-16 text-right">{compCount} {t.cityCompetitors}</span>
                       </div>
                     );
                   })}
@@ -559,7 +567,7 @@ export default function DashboardView() {
               </div>
 
               <div>
-                <p className="text-xs font-bold text-gray-700 mb-2">Rakip Gücü</p>
+                <p className="text-xs font-bold text-gray-700 mb-2">{t.cityCompStrength}</p>
                 {selectedCity.competitorStrength.map((cs) => (
                   <div key={cs.brand} className="flex items-center gap-2 mb-1.5">
                     <span className="text-xs text-gray-600 w-20">{cs.brand}</span>
@@ -573,13 +581,13 @@ export default function DashboardView() {
 
               {cityCampaigns.length > 0 && (
                 <div>
-                  <p className="text-xs font-bold text-gray-700 mb-2">Aktif Kampanyalar ({cityCampaigns.length})</p>
+                  <p className="text-xs font-bold text-gray-700 mb-2">{t.cityActiveCampaigns} ({cityCampaigns.length})</p>
                   <div className="space-y-2">
                     {cityCampaigns.map((c) => (
                       <div key={c.id} className="bg-purple-50 rounded-lg p-2.5">
                         <p className="text-xs font-semibold text-purple-800">{c.name}</p>
                         <p className="text-[10px] text-purple-600 mt-0.5">{c.promotionType} — {c.discountDetail}</p>
-                        <p className="text-[10px] text-purple-500 mt-0.5">Etki: Pay {c.projectedImpact.marketShareLift}, Gelir {c.projectedImpact.revenueDelta}</p>
+                        <p className="text-[10px] text-purple-500 mt-0.5">{t.cityImpact} {c.projectedImpact.marketShareLift}, {t.cityRevenue} {c.projectedImpact.revenueDelta}</p>
                       </div>
                     ))}
                   </div>
@@ -588,7 +596,7 @@ export default function DashboardView() {
 
               {cityDealers.length > 0 && (
                 <div>
-                  <p className="text-xs font-bold text-gray-700 mb-2">Bayiler ({cityDealers.length})</p>
+                  <p className="text-xs font-bold text-gray-700 mb-2">{t.cityDealers} ({cityDealers.length})</p>
                   <div className="space-y-1.5">
                     {cityDealers.map((d) => (
                       <div key={d.id} className="flex items-center gap-2 text-xs">
@@ -602,7 +610,7 @@ export default function DashboardView() {
               )}
 
               <div>
-                <p className="text-xs font-bold text-gray-700 mb-1">Sezonsal Patern</p>
+                <p className="text-xs font-bold text-gray-700 mb-1">{t.citySeasonalPattern}</p>
                 <p className="text-xs text-gray-500 leading-relaxed">{selectedCity.seasonalPattern}</p>
               </div>
             </div>

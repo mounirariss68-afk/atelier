@@ -1,8 +1,10 @@
 import { Fragment, useState } from "react";
 import { motion } from "framer-motion";
 import { Package, AlertTriangle, CheckCircle2, XCircle, ShoppingCart, Truck, Clock, ChevronDown, ChevronRight } from "lucide-react";
-import { dealers, products, CATEGORY_LABELS, type ProductCategory } from "@/data/arcelik-seed";
+import { dealers, products, CATEGORY_LABELS, getCategoryLabel, type ProductCategory } from "@/data/arcelik-seed";
 import { useToast } from "@/hooks/use-toast";
+import { useDemoLang } from "../DemoLangContext";
+import { stock } from "../demo-i18n";
 
 const DEALER = dealers[0];
 const fmt = (n: number) => n.toLocaleString("tr-TR");
@@ -31,7 +33,6 @@ function pseudoOptimal(productId: string, catOptimal: number, catProductCount: n
 
 interface CategoryRow {
   cat: ProductCategory;
-  label: string;
   level: number;
   optimal: number;
   status: StockStatus;
@@ -52,48 +53,40 @@ const categoryRows: CategoryRow[] = (Object.keys(CATEGORY_LABELS) as ProductCate
   const catOptimal = OPTIMAL[cat] ?? 10;
   const catProducts = products.filter((p) => p.category === cat);
   const productRows: ProductRow[] = catProducts.map((p) => {
-    const stock = pseudoStock(p.id, catLevel, catOptimal, catProducts.length);
+    const s = pseudoStock(p.id, catLevel, catOptimal, catProducts.length);
     const opt = pseudoOptimal(p.id, catOptimal, catProducts.length);
-    return { id: p.id, modelCode: p.modelCode, name: p.name, stock, optimal: opt, status: getStatus(stock, opt) };
+    return { id: p.id, modelCode: p.modelCode, name: p.name, stock: s, optimal: opt, status: getStatus(s, opt) };
   }).sort((a, b) => {
     const order: Record<StockStatus, number> = { out: 0, low: 1, ok: 2 };
     return order[a.status] - order[b.status];
   });
-  return { cat, label: CATEGORY_LABELS[cat], level: catLevel, optimal: catOptimal, status: getStatus(catLevel, catOptimal), productRows };
+  return { cat, level: catLevel, optimal: catOptimal, status: getStatus(catLevel, catOptimal), productRows };
 }).sort((a, b) => {
   const order: Record<StockStatus, number> = { out: 0, low: 1, ok: 2 };
   return order[a.status] - order[b.status];
 });
 
-const STATUS_ICON: Record<StockStatus, { icon: typeof CheckCircle2; color: string; label: string }> = {
-  ok: { icon: CheckCircle2, color: "text-green-500", label: "Yeterli" },
-  low: { icon: AlertTriangle, color: "text-amber-500", label: "Düşük" },
-  out: { icon: XCircle, color: "text-red-500", label: "Tükendi" },
-};
-
 interface Order {
   id: string;
-  date: string;
-  items: string;
+  dateKey: string;
+  itemsKey: string;
   quantity: number;
   total: number;
-  status: "hazirlaniyor" | "depoda" | "kargoda" | "teslim";
-  deliveryDate: string;
+  statusKey: string;
+  deliveryKey: string;
   step: number;
 }
 
 const ORDERS: Order[] = [
-  { id: "SIP-2026-0501", date: "2 Mayıs 2026", items: "12420 İnverter Klima × 3, BXEU 090 Klima × 2", quantity: 5, total: 97950, status: "hazirlaniyor", deliveryDate: "8 Mayıs 2026", step: 1 },
-  { id: "SIP-2026-0487", date: "28 Nisan 2026", items: "5088 NFK Buzdolabı × 3, 9124 D Çamaşır × 2", quantity: 5, total: 115950, status: "kargoda", deliveryDate: "5 Mayıs 2026", step: 3 },
-  { id: "SIP-2026-0462", date: "22 Nisan 2026", items: "6344 Bulaşık × 4, K 3300 Çay Mak. × 10", quantity: 14, total: 102860, status: "teslim", deliveryDate: "29 Nisan 2026", step: 4 },
+  { id: "SIP-2026-0501", dateKey: "order1Date", itemsKey: "order1Items", quantity: 5, total: 97950, statusKey: "statusPreparing", deliveryKey: "order1Delivery", step: 1 },
+  { id: "SIP-2026-0487", dateKey: "order2Date", itemsKey: "order2Items", quantity: 5, total: 115950, statusKey: "statusInTransitShort", deliveryKey: "order2Delivery", step: 3 },
+  { id: "SIP-2026-0462", dateKey: "order3Date", itemsKey: "order3Items", quantity: 14, total: 102860, statusKey: "statusDeliveredShort", deliveryKey: "order3Delivery", step: 4 },
 ];
 
-const STEPS = ["Sipariş Alındı", "Depodan Çıktı", "Kargoda", "Teslim Edildi"];
-
-function OrderStepper({ currentStep }: { currentStep: number }) {
+function OrderStepper({ currentStep, steps }: { currentStep: number; steps: string[] }) {
   return (
     <div className="flex items-center gap-1 mt-2">
-      {STEPS.map((label, i) => {
+      {steps.map((label, i) => {
         const done = i + 1 <= currentStep;
         const active = i + 1 === currentStep;
         return (
@@ -104,7 +97,7 @@ function OrderStepper({ currentStep }: { currentStep: number }) {
               {done ? "✓" : i + 1}
             </div>
             <span className={`text-[9px] whitespace-nowrap ${done ? "text-[#0E2841] font-semibold" : "text-gray-400"}`}>{label}</span>
-            {i < STEPS.length - 1 && <div className={`flex-1 h-px ${done ? "bg-[#E30613]" : "bg-gray-200"}`} />}
+            {i < steps.length - 1 && <div className={`flex-1 h-px ${done ? "bg-[#E30613]" : "bg-gray-200"}`} />}
           </div>
         );
       })}
@@ -114,27 +107,37 @@ function OrderStepper({ currentStep }: { currentStep: number }) {
 
 export default function StockOrdersView() {
   const { toast } = useToast();
+  const { lang } = useDemoLang();
+  const t = stock[lang];
   const [tab, setTab] = useState<"stock" | "orders">("stock");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const STATUS_ICON: Record<StockStatus, { icon: typeof CheckCircle2; color: string; label: string }> = {
+    ok: { icon: CheckCircle2, color: "text-green-500", label: t.statusSufficient },
+    low: { icon: AlertTriangle, color: "text-amber-500", label: t.statusLow },
+    out: { icon: XCircle, color: "text-red-500", label: t.statusOutOfStock },
+  };
+
+  const STEPS = [t.stepReceived, t.stepLeftWarehouse, t.stepInTransit, t.stepDelivered];
 
   const toggleExpand = (cat: string) => {
     setExpanded((prev) => { const next = new Set(prev); if (next.has(cat)) next.delete(cat); else next.add(cat); return next; });
   };
 
   const handleOrder = (label: string) => {
-    toast({ title: "Sipariş oluşturuldu", description: `${label} için stok talebi gönderildi.` });
+    toast({ title: t.toastOrderCreated, description: `${label}` });
   };
 
   return (
     <div className="space-y-5">
-      <h1 className="text-lg font-bold">Stok & Siparişler</h1>
+      <h1 className="text-lg font-bold">{t.title}</h1>
 
       <div className="flex gap-2">
         <button onClick={() => setTab("stock")} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${tab === "stock" ? "bg-[#E30613] text-white" : "bg-white text-gray-600 border border-gray-200"}`}>
-          <Package size={14} className="inline mr-1.5" />Stok Durumu
+          <Package size={14} className="inline mr-1.5" />{t.tabStock}
         </button>
         <button onClick={() => setTab("orders")} className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${tab === "orders" ? "bg-[#E30613] text-white" : "bg-white text-gray-600 border border-gray-200"}`}>
-          <Truck size={14} className="inline mr-1.5" />Son Siparişler
+          <Truck size={14} className="inline mr-1.5" />{t.tabOrders}
         </button>
       </div>
 
@@ -143,11 +146,11 @@ export default function StockOrdersView() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-100">
-                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500">Ürün / Kategori</th>
-                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">Mevcut Stok</th>
-                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">Optimum</th>
-                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">Durum</th>
-                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">İşlem</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500">{t.colProduct}</th>
+                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">{t.colCurrentStock}</th>
+                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">{t.colOptimum}</th>
+                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">{t.colStatus}</th>
+                <th className="px-4 py-3 text-center text-[11px] font-semibold text-gray-500">{t.colAction}</th>
               </tr>
             </thead>
             <tbody>
@@ -155,6 +158,7 @@ export default function StockOrdersView() {
                 const si = STATUS_ICON[row.status];
                 const Icon = si.icon;
                 const isExpanded = expanded.has(row.cat);
+                const label = getCategoryLabel(row.cat, lang);
                 return (
                   <Fragment key={row.cat}>
                     <tr className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50/50 ${row.status === "low" ? "bg-amber-50/30" : row.status === "out" ? "bg-red-50/30" : ""}`} onClick={() => toggleExpand(row.cat)}>
@@ -162,8 +166,8 @@ export default function StockOrdersView() {
                         <div className="flex items-center gap-2">
                           {isExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                           <div>
-                            <p className="text-xs font-semibold">{row.label}</p>
-                            <p className="text-[10px] text-gray-400">{row.productRows.length} model</p>
+                            <p className="text-xs font-semibold">{label}</p>
+                            <p className="text-[10px] text-gray-400">{row.productRows.length} {t.model}</p>
                           </div>
                         </div>
                       </td>
@@ -179,10 +183,10 @@ export default function StockOrdersView() {
                       <td className="px-4 py-3 text-center">
                         {row.status !== "ok" && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleOrder(row.label); }}
+                            onClick={(e) => { e.stopPropagation(); handleOrder(label); }}
                             className="px-3 py-1.5 text-[11px] font-semibold text-white bg-[#E30613] rounded-lg hover:bg-[#C00511] transition-colors"
                           >
-                            <ShoppingCart size={11} className="inline mr-1" />Sipariş Ver
+                            <ShoppingCart size={11} className="inline mr-1" />{t.placeOrder}
                           </button>
                         )}
                       </td>
@@ -211,7 +215,7 @@ export default function StockOrdersView() {
                                 onClick={() => handleOrder(pr.modelCode)}
                                 className="px-2 py-1 text-[10px] font-semibold text-[#E30613] border border-[#E30613] rounded hover:bg-[#E30613] hover:text-white transition-colors"
                               >
-                                Sipariş
+                                {t.order}
                               </button>
                             )}
                           </td>
@@ -233,19 +237,19 @@ export default function StockOrdersView() {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-xs font-bold text-[#0E2841]">{order.id}</p>
-                  <p className="text-[11px] text-gray-400">{order.date}</p>
+                  <p className="text-[11px] text-gray-400">{t[order.dateKey]}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold">₺{fmt(order.total)}</p>
-                  <p className="text-[10px] text-gray-400">{order.quantity} adet</p>
+                  <p className="text-[10px] text-gray-400">{order.quantity} {t.units}</p>
                 </div>
               </div>
-              <p className="text-xs text-gray-600 mb-2">{order.items}</p>
+              <p className="text-xs text-gray-600 mb-2">{t[order.itemsKey]}</p>
               <div className="flex items-center gap-2 text-[11px] text-gray-500 mb-2">
                 <Clock size={12} />
-                <span>Tahmini teslimat: {order.deliveryDate}</span>
+                <span>{t.estimatedDelivery} {t[order.deliveryKey]}</span>
               </div>
-              <OrderStepper currentStep={order.step} />
+              <OrderStepper currentStep={order.step} steps={STEPS} />
             </div>
           ))}
         </motion.div>

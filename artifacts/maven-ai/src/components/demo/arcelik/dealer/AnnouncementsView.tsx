@@ -1,109 +1,99 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Bell, Tag, DollarSign, GraduationCap, Megaphone, Settings, Eye, EyeOff } from "lucide-react";
+import { useDemoLang } from "../DemoLangContext";
+import { announcements as announcementsI18n } from "../demo-i18n";
 
-interface Announcement {
+type AnnouncementCategoryKey =
+  | "catNewProduct"
+  | "catPriceUpdate"
+  | "catTraining"
+  | "catCampaignNews"
+  | "catPolicyChange";
+
+interface AnnouncementSeed {
   id: number;
-  category: string;
+  categoryKey: AnnouncementCategoryKey;
   categoryColor: string;
-  title: string;
-  body: string;
+  titleKey: string;
+  bodyKey: string;
   date: string;
   read: boolean;
 }
 
-const INITIAL_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 1, category: "Yeni Ürün", categoryColor: "#7c3aed",
-    title: "Grundig Premium Klima G 12420 — Yeni Model Kataloğa Eklendi",
-    body: "UV-C filtreli, A+++ enerji sınıfı Grundig Premium Klima modeli artık sipariş verilebilir durumda. TSF: ₺24.990. Premium tasarımı ile showroom'unuzda öne çıkarın.",
-    date: "2 Mayıs 2026", read: false,
-  },
-  {
-    id: 2, category: "Fiyat Güncellemesi", categoryColor: "#E30613",
-    title: "Buzdolabı ve Çamaşır Makinesi Serilerinde Fiyat Güncellemesi",
-    body: "5088 NFK, 5076 NFK buzdolabı ve 10143 D çamaşır makinesi modellerinde fiyat güncellemesi yapılmıştır. Yeni fiyatlar 1 Mayıs itibarıyla geçerlidir. Fiyat listesi bölümünden güncel fiyatları inceleyebilirsiniz.",
-    date: "1 Mayıs 2026", read: false,
-  },
-  {
-    id: 3, category: "Eğitim", categoryColor: "#0891b2",
-    title: "Online Bayi Eğitimi: Yeni Enerji Verimliliği Mevzuatı",
-    body: "8 Mayıs 2026, Perşembe, 14:00–15:30 arası online eğitim düzenlenecektir. Konu: AB enerji etiketleme değişiklikleri ve müşterilere doğru bilgilendirme. Katılım sertifikası verilecektir.",
-    date: "30 Nisan 2026", read: true,
-  },
-  {
-    id: 4, category: "Kampanya Haberi", categoryColor: "#16a34a",
-    title: "Enerji Verimliliği Kampanyası Başladı — Bayi Materyalleri Hazır",
-    body: "A+++ ürünlerde %12 ek indirim kampanyası başlamıştır. POS materyalleri, afiş görselleri ve SMS şablonları Kampanyalar bölümünde mevcuttur. Vitrinlerinizi güncellemeyi unutmayın.",
-    date: "28 Nisan 2026", read: true,
-  },
-  {
-    id: 5, category: "Politika Değişikliği", categoryColor: "#d97706",
-    title: "Garanti Süresi Güncellemesi — Klima Kategorisi",
-    body: "Tüm Arçelik ve Beko marka klimalarda garanti süresi 3 yıldan 5 yıla çıkarılmıştır. Bu değişiklik 1 Mayıs 2026 ve sonrası satışlar için geçerlidir. Müşterilerinize bu avantajı vurgulayın.",
-    date: "25 Nisan 2026", read: true,
-  },
-  {
-    id: 6, category: "Yeni Ürün", categoryColor: "#7c3aed",
-    title: "Arçelik S 8960 Kablosuz Süpürge — Yeni Renk Seçenekleri",
-    body: "S 8960 kablosuz süpürge modeli artık Gümüş Gri ve Bordo renk seçenekleriyle sipariş edilebilir. Yeni renkler aynı fiyat ve özelliklerle sunulmaktadır.",
-    date: "22 Nisan 2026", read: true,
-  },
-  {
-    id: 7, category: "Eğitim", categoryColor: "#0891b2",
-    title: "Bölgesel Bayi Toplantısı — İstanbul, 15 Mayıs",
-    body: "İstanbul bölgesi bayileri için yüz yüze toplantı düzenlenecektir. Yer: Arçelik Genel Merkezi, Sütlüce. Saat: 10:00–16:00. Konular: Q2 hedefleri, yeni ürün tanıtımları, başarı öyküleri paylaşımı.",
-    date: "20 Nisan 2026", read: true,
-  },
-  {
-    id: 8, category: "Kampanya Haberi", categoryColor: "#16a34a",
-    title: "Banka Taksit Kampanyası Güncellendi — 24 Aya Kadar Faizsiz",
-    body: "Ziraat, Halkbank ve Vakıfbank kartlarına 24 aya kadar faizsiz taksit kampanyası güncellenmiştir. POS cihazlarınızın güncel olduğundan emin olun. Teknik destek için 444 0 888'i arayabilirsiniz.",
-    date: "18 Nisan 2026", read: true,
-  },
+const ANNOUNCEMENT_SEEDS: AnnouncementSeed[] = [
+  { id: 1, categoryKey: "catNewProduct",   categoryColor: "#7c3aed", titleKey: "ann1Title", bodyKey: "ann1Body", date: "2 Mayıs 2026",  read: false },
+  { id: 2, categoryKey: "catPriceUpdate",  categoryColor: "#E30613", titleKey: "ann2Title", bodyKey: "ann2Body", date: "1 Mayıs 2026",  read: false },
+  { id: 3, categoryKey: "catTraining",     categoryColor: "#0891b2", titleKey: "ann3Title", bodyKey: "ann3Body", date: "30 Nisan 2026", read: true  },
+  { id: 4, categoryKey: "catCampaignNews", categoryColor: "#16a34a", titleKey: "ann4Title", bodyKey: "ann4Body", date: "28 Nisan 2026", read: true  },
+  { id: 5, categoryKey: "catPolicyChange", categoryColor: "#d97706", titleKey: "ann5Title", bodyKey: "ann5Body", date: "25 Nisan 2026", read: true  },
+  { id: 6, categoryKey: "catNewProduct",   categoryColor: "#7c3aed", titleKey: "ann6Title", bodyKey: "ann6Body", date: "22 Nisan 2026", read: true  },
+  { id: 7, categoryKey: "catTraining",     categoryColor: "#0891b2", titleKey: "ann7Title", bodyKey: "ann7Body", date: "20 Nisan 2026", read: true  },
+  { id: 8, categoryKey: "catCampaignNews", categoryColor: "#16a34a", titleKey: "ann8Title", bodyKey: "ann8Body", date: "18 Nisan 2026", read: true  },
 ];
 
-const CATEGORY_ICONS: Record<string, typeof Bell> = {
-  "Yeni Ürün": Tag,
-  "Fiyat Güncellemesi": DollarSign,
-  "Eğitim": GraduationCap,
-  "Kampanya Haberi": Megaphone,
-  "Politika Değişikliği": Settings,
+const CATEGORY_ICONS: Record<AnnouncementCategoryKey, typeof Bell> = {
+  catNewProduct: Tag,
+  catPriceUpdate: DollarSign,
+  catTraining: GraduationCap,
+  catCampaignNews: Megaphone,
+  catPolicyChange: Settings,
 };
 
 export default function AnnouncementsView() {
-  const [announcements, setAnnouncements] = useState(INITIAL_ANNOUNCEMENTS);
-  const [filter, setFilter] = useState<string | null>(null);
+  const { lang } = useDemoLang();
+  const t = announcementsI18n[lang];
+
+  const [readMap, setReadMap] = useState<Record<number, boolean>>(() => {
+    const m: Record<number, boolean> = {};
+    ANNOUNCEMENT_SEEDS.forEach((a) => { m[a.id] = a.read; });
+    return m;
+  });
+  const [filter, setFilter] = useState<AnnouncementCategoryKey | null>(null);
 
   const toggleRead = (id: number) => {
-    setAnnouncements((prev) => prev.map((a) => a.id === id ? { ...a, read: !a.read } : a));
+    setReadMap((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const categories = [...new Set(INITIAL_ANNOUNCEMENTS.map((a) => a.category))];
-  const filtered = filter ? announcements.filter((a) => a.category === filter) : announcements;
+  const announcements = useMemo(
+    () => ANNOUNCEMENT_SEEDS.map((a) => ({
+      ...a,
+      read: readMap[a.id],
+      title: t[a.titleKey] ?? a.titleKey,
+      body: t[a.bodyKey] ?? a.bodyKey,
+      categoryLabel: t[a.categoryKey] ?? a.categoryKey,
+    })),
+    [readMap, t],
+  );
+
+  const categoryKeys: AnnouncementCategoryKey[] = useMemo(
+    () => Array.from(new Set(ANNOUNCEMENT_SEEDS.map((a) => a.categoryKey))),
+    [],
+  );
+  const filtered = filter ? announcements.filter((a) => a.categoryKey === filter) : announcements;
   const unreadCount = announcements.filter((a) => !a.read).length;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-lg font-bold">Duyurular</h1>
-          {unreadCount > 0 && <p className="text-xs text-[#E30613] font-semibold">{unreadCount} okunmamış duyuru</p>}
+          <h1 className="text-lg font-bold">{t.title}</h1>
+          {unreadCount > 0 && <p className="text-xs text-[#E30613] font-semibold">{unreadCount} {t.unreadCount}</p>}
         </div>
         <div className="flex gap-1.5 flex-wrap">
           <button
             onClick={() => setFilter(null)}
             className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors ${!filter ? "bg-[#0E2841] text-white" : "bg-white text-gray-600 border border-gray-200"}`}
           >
-            Tümü
+            {t.all}
           </button>
-          {categories.map((cat) => (
+          {categoryKeys.map((catKey) => (
             <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors ${filter === cat ? "bg-[#0E2841] text-white" : "bg-white text-gray-600 border border-gray-200"}`}
+              key={catKey}
+              onClick={() => setFilter(catKey)}
+              className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors ${filter === catKey ? "bg-[#0E2841] text-white" : "bg-white text-gray-600 border border-gray-200"}`}
             >
-              {cat}
+              {t[catKey] ?? catKey}
             </button>
           ))}
         </div>
@@ -111,7 +101,7 @@ export default function AnnouncementsView() {
 
       <div className="space-y-3">
         {filtered.map((a, i) => {
-          const CatIcon = CATEGORY_ICONS[a.category] || Bell;
+          const CatIcon = CATEGORY_ICONS[a.categoryKey] || Bell;
           return (
             <motion.div
               key={a.id}
@@ -125,10 +115,10 @@ export default function AnnouncementsView() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white flex items-center gap-1" style={{ backgroundColor: a.categoryColor }}>
-                      <CatIcon size={9} />{a.category}
+                      <CatIcon size={9} />{a.categoryLabel}
                     </span>
                     <span className="text-[10px] text-gray-400">{a.date}</span>
-                    {!a.read && <span className="text-[9px] font-bold text-[#E30613] bg-red-50 px-1.5 py-0.5 rounded">YENİ</span>}
+                    {!a.read && <span className="text-[9px] font-bold text-[#E30613] bg-red-50 px-1.5 py-0.5 rounded">{t.newBadge}</span>}
                   </div>
                   <h3 className="text-sm font-bold mb-1">{a.title}</h3>
                   <p className="text-xs text-gray-600 leading-relaxed">{a.body}</p>
@@ -136,7 +126,7 @@ export default function AnnouncementsView() {
                 <button
                   onClick={() => toggleRead(a.id)}
                   className="text-gray-400 hover:text-[#0E2841] p-1 flex-shrink-0"
-                  title={a.read ? "Okunmadı olarak işaretle" : "Okundu olarak işaretle"}
+                  title={a.read ? t.markUnread : t.markRead}
                 >
                   {a.read ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>

@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Clock, Tag, ArrowUpDown } from "lucide-react";
-import { products, campaigns, CATEGORY_LABELS, type ProductCategory } from "@/data/arcelik-seed";
+import { products, campaigns, CATEGORY_LABELS, getCategoryLabel, type ProductCategory } from "@/data/arcelik-seed";
+import { useDemoLang } from "../DemoLangContext";
+import { prices } from "../demo-i18n";
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as ProductCategory[];
 
@@ -13,15 +15,17 @@ if (energyCampaign) {
   });
 }
 
-const RECENT_CHANGES: Record<string, { oldPrice: number; date: string }> = {
-  "buz-01": { oldPrice: 24990, date: "1 Mayıs" },
-  "cam-03": { oldPrice: 23990, date: "29 Nisan" },
-  "kli-02": { oldPrice: 20490, date: "30 Nisan" },
+const RECENT_CHANGE_DATA: Record<string, { oldPrice: number; dateKey: string }> = {
+  "buz-01": { oldPrice: 24990, dateKey: "changeDateBuz01" },
+  "cam-03": { oldPrice: 23990, dateKey: "changeDateCam03" },
+  "kli-02": { oldPrice: 20490, dateKey: "changeDateKli02" },
 };
 
 const fmt = (n: number) => n.toLocaleString("tr-TR");
 
 export default function PriceListView() {
+  const { lang } = useDemoLang();
+  const t = prices[lang];
   const [activeTab, setActiveTab] = useState<ProductCategory>("buzdolabi");
   const [search, setSearch] = useState("");
   const [showChanges, setShowChanges] = useState(false);
@@ -54,14 +58,14 @@ export default function PriceListView() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-lg font-bold">Fiyat Listesi</h1>
+        <h1 className="text-lg font-bold">{t.title}</h1>
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Ürün ara..."
+              placeholder={t.search}
               className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-[#E30613]/20 focus:border-[#E30613]"
             />
           </div>
@@ -72,7 +76,7 @@ export default function PriceListView() {
             }`}
           >
             <Clock size={13} />
-            Son Değişiklikler
+            {t.recentChanges}
           </button>
         </div>
       </div>
@@ -86,7 +90,7 @@ export default function PriceListView() {
               activeTab === cat ? "bg-[#E30613] text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"
             }`}
           >
-            {CATEGORY_LABELS[cat]}
+            {getCategoryLabel(cat, lang)}
           </button>
         ))}
       </div>
@@ -97,13 +101,13 @@ export default function PriceListView() {
             <thead>
               <tr className="bg-gray-50/80 border-b border-gray-100">
                 {[
-                  { id: "name", label: "Ürün Adı" },
-                  { id: "model", label: "Model Kodu" },
-                  { id: "tsfPrice", label: "TSF (₺)" },
-                  { id: "dealerCost", label: "Bayi Alış (₺)" },
-                  { id: "margin", label: "Marj (%)" },
-                  { id: "discount", label: "Kampanya" },
-                  { id: "final", label: "Son Fiyat (₺)" },
+                  { id: "name", label: t.colProductName },
+                  { id: "model", label: t.colModelCode },
+                  { id: "tsfPrice", label: t.colTSF },
+                  { id: "dealerCost", label: t.colDealerCost },
+                  { id: "margin", label: t.colMargin },
+                  { id: "discount", label: t.colCampaign },
+                  { id: "final", label: t.colLastPrice },
                 ].map((col) => (
                   <th
                     key={col.id}
@@ -124,7 +128,7 @@ export default function PriceListView() {
               {filtered.map((p) => {
                 const discount = ACTIVE_DISCOUNTS[p.id];
                 const finalPrice = discount ? Math.round(p.tsfPrice * (1 - discount.rate / 100)) : p.tsfPrice;
-                const change = RECENT_CHANGES[p.id];
+                const change = RECENT_CHANGE_DATA[p.id];
                 const hasChange = showChanges && change;
                 return (
                   <tr
@@ -135,20 +139,20 @@ export default function PriceListView() {
                   >
                     <td className="px-4 py-3">
                       <p className="text-xs font-medium">{p.name}</p>
-                      <p className="text-[10px] text-gray-400">{p.energyClass !== "-" ? `Enerji: ${p.energyClass}` : ""}</p>
+                      <p className="text-[10px] text-gray-400">{p.energyClass !== "-" ? `${t.energy} ${p.energyClass}` : ""}</p>
                     </td>
                     <td className="px-4 py-3 text-xs font-mono text-gray-600">{p.modelCode}</td>
                     <td className="px-4 py-3 text-xs font-mono">
                       {hasChange && <span className="line-through text-gray-400 mr-1">₺{fmt(change.oldPrice)}</span>}
                       ₺{fmt(p.tsfPrice)}
-                      {hasChange && <span className="text-[9px] text-amber-600 ml-1">({change.date})</span>}
+                      {hasChange && <span className="text-[9px] text-amber-600 ml-1">({t[change.dateKey]})</span>}
                     </td>
                     <td className="px-4 py-3 text-xs font-mono text-gray-600">₺{fmt(p.dealerCost)}</td>
                     <td className="px-4 py-3 text-xs font-semibold text-green-600">%{p.marginPercent}</td>
                     <td className="px-4 py-3">
                       {discount ? (
                         <span className="text-[10px] font-bold text-white bg-[#E30613] px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-                          <Tag size={9} /> %{discount.rate} KAMPANYA
+                          <Tag size={9} /> %{discount.rate} {t.campaignBadge}
                         </span>
                       ) : (
                         <span className="text-[10px] text-gray-400">—</span>
@@ -168,7 +172,7 @@ export default function PriceListView() {
           </table>
         </div>
         <div className="px-4 py-3 bg-gray-50/50 border-t border-gray-100 text-xs text-gray-500">
-          {filtered.length} ürün gösteriliyor — {CATEGORY_LABELS[activeTab]}
+          {filtered.length} {t.showing} {getCategoryLabel(activeTab, lang)}
         </div>
       </motion.div>
     </div>
