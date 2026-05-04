@@ -1,5 +1,5 @@
 {
-  "id": "ea545d65-8505-4c0a-b97a-e4a3749aaa68",
+  "id": "777653d9-d7a9-40bc-91d9-4386d137f96e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -620,6 +620,19 @@
           "primaryKey": false,
           "notNull": true
         },
+        "data_provenance": {
+          "name": "data_provenance",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual-verified'"
+        },
+        "scraped_at": {
+          "name": "scraped_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
@@ -959,6 +972,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "data_provenance": {
+          "name": "data_provenance",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual-verified'"
+        },
+        "scraped_at": {
+          "name": "scraped_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",

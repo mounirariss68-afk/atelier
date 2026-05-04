@@ -25,6 +25,8 @@ export const arcelikProductsTable = pgTable(
     features: jsonb("features").notNull().$type<string[]>(),
     sourceId: text("source_id").notNull(),
     priceDate: text("price_date").notNull(),
+    dataProvenance: text("data_provenance").notNull().default("manual-verified"),
+    scrapedAt: text("scraped_at"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
@@ -47,6 +49,8 @@ export const arcelikCompetitorPricesTable = pgTable(
     note: text("note").notNull(),
     sourceId: text("source_id").notNull(),
     priceDate: text("price_date").notNull(),
+    dataProvenance: text("data_provenance").notNull().default("manual-verified"),
+    scrapedAt: text("scraped_at"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [

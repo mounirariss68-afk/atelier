@@ -96,6 +96,8 @@ CREATE TABLE "arcelik_competitor_prices" (
 	"note" text NOT NULL,
 	"source_id" text NOT NULL,
 	"price_date" text NOT NULL,
+	"data_provenance" text DEFAULT 'manual-verified' NOT NULL,
+	"scraped_at" text,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -148,6 +150,8 @@ CREATE TABLE "arcelik_products" (
 	"features" jsonb NOT NULL,
 	"source_id" text NOT NULL,
 	"price_date" text NOT NULL,
+	"data_provenance" text DEFAULT 'manual-verified' NOT NULL,
+	"scraped_at" text,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
