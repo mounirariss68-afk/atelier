@@ -10,7 +10,7 @@ import {
   arcelikCalendarTable,
   arcelikKpiBenchmarksTable,
 } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
