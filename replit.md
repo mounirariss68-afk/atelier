@@ -12,6 +12,18 @@ A comprehensive, world-class marketing website for **Maven AI** — a boutique A
 - **Multi-demo routing**: `/demo/:slug/:variant` + `/demo/:slug` dual routes in App.tsx. `getScenario(slug, variant?)` in scenarios/index.ts looks up `${slug}/${variant}` first, then falls back to `slug`.
 - **Arçelik seed data**: `artifacts/maven-ai/src/data/arcelik-seed.ts` — 61 products (7 categories), 64 competitor prices (8 brands), 20 cities, 8 campaigns, 15 dealers, 8 KPI benchmarks, 16 promotional calendar entries. All Turkish.
 - **Arçelik scenario**: `arcelik-fiyat-istihbarati.ts` — 26-event technical cockpit scenario with 6 agents, 5 demo screens, 2 workflows, 2 human checkpoints, 5 KPIs. Registered under both `arcelik-fiyat-istihbarati` and `arcelik-fiyat-istihbarati/teknik`.
+- **Arçelik Business Dashboard** (Task #32): Full enterprise pricing dashboard at `/demo/arcelik-fiyat-istihbarati/dashboard`. Components in `src/components/demo/arcelik/`. Features:
+  - `BusinessDashboard.tsx` — Main shell with sidebar nav (6 views), top chrome (Arçelik branding, notifications, user avatar), global filter bar (cities/categories/competitors/period), AI chat overlay toggle.
+  - `DashboardContext.tsx` — React context for global filter state shared across all views.
+  - `views/DashboardView.tsx` — KPI summary bar (6 animated cards), Turkey SVG heatmap with 20 city markers (color-coded by performance tier), category performance bar chart (Recharts), sortable competitor price table with sparklines, city detail drawer.
+  - `views/CompetitorRadarView.tsx` — Radar chart (Recharts) comparing Arçelik vs selected competitors, category price delta bar chart, competitor detail cards with threat-level badges.
+  - `views/CampaignStudioView.tsx` — 3-tab layout: AI-suggested campaigns (8 from seed), campaign builder form with live projected impact, historical campaigns timeline. Uses useToast for launch confirmations.
+  - `views/SimulatorView.tsx` — What-if pricing simulator: product selector, price slider (-25% to +25%), cascading impact projections (volume/revenue/share/dealer), risk warnings, competitor comparison chart.
+  - `views/CalendarView.tsx` — 12-month Gantt calendar with brand-coded bars, confirmed vs predicted entries, gap analysis with AI suggestions.
+  - `chatIntents.ts` — 32 Turkish intent patterns with regex matching covering market share, margins, competitors, cities, campaigns, products, seasonal, help, greetings.
+  - `AiChat.tsx` — Slide-out chat panel with typing indicator, quick prompts, inline metric/table/campaign-card rendering, dual agent personas.
+  - Wired in `Demo.tsx` with early return: `if (slug === "arcelik-fiyat-istihbarati" && variant === "dashboard") return <BusinessDashboard />;`
+  - Color scheme: Arçelik red #E30613, Maven navy #0E2841, amber #F5A623. All UI in Turkish.
 - **Cross-links**: Navbar (between Industries and Diagnostics — desktop + mobile), Footer (new Marketplace column), Home (teaser section before the Maven Insights banner with a mini realized-vs-expected bar chart), Industries (per-industry "Related tools in the Marketplace" CTA with `?industry=<id>` deep link).
 - **Brief**: `artifacts/maven-ai/docs/marketplace-catalog.md`.
 - **Build gotcha**: `lib/maven-content` is a `composite: true` TS project with a `dist/` output. After adding new exports, the `tsconfig.tsbuildinfo` may keep dist stale and downstream `tsc` will complain about missing exports. The post-merge script clears the buildinfo and rebuilds the package; for local dev, run `rm -f lib/maven-content/tsconfig.tsbuildinfo && pnpm --filter @workspace/maven-content exec tsc -p tsconfig.json`.
