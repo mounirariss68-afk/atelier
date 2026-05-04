@@ -302,7 +302,7 @@ export default function DashboardView() {
             </div>
           </div>
           <div className="relative p-4">
-            <TurkeyMap viewBox="0 0 660 190" className="w-full h-auto">
+            <TurkeyMap viewBox="0 0 650 185" className="w-full h-auto">
               {filteredCities.map((city) => {
                 const pos = CITY_POSITIONS[city.id];
                 if (!pos) return null;
