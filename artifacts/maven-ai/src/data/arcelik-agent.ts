@@ -667,6 +667,120 @@ export function generateDealerAgentTasks(dealerCity: string): AgentTask[] {
   ];
 }
 
+export type AgentStatus = "online" | "processing" | "idle";
+
+export interface SpecializedAgent {
+  id: string;
+  name: string;
+  nameEn: string;
+  type: "price-watch" | "market-analysis" | "campaign-opt" | "stock-mgmt" | "comp-response" | "demand-forecast" | "dealer-perf" | "reg-scan" | "decision-engine";
+  status: AgentStatus;
+  accuracy: number;
+  actionsToday: number;
+  lastAction: string;
+  lastActionEn: string;
+  lastActionTime: string;
+  specializations: string[];
+  specializationsEn: string[];
+  recsGenerated: number;
+  alertsRaised: number;
+}
+
+export function generateSpecializedAgents(): SpecializedAgent[] {
+  return [
+    {
+      id: "sa-01", name: "Fiyat İzleme Ajanı", nameEn: "Price Watch Agent",
+      type: "price-watch", status: "online", accuracy: 96, actionsToday: 8,
+      lastAction: "Haftalık rakip fiyat taraması tamamlandı — 3 fiyat değişikliği tespit edildi",
+      lastActionEn: "Weekly competitor price scan completed — 3 price changes detected",
+      lastActionTime: hoursAgo(1),
+      specializations: ["Rakip fiyat takibi", "Fiyat anomali tespiti", "TSF uyum kontrolü"],
+      specializationsEn: ["Competitor price tracking", "Price anomaly detection", "TSF compliance check"],
+      recsGenerated: 4, alertsRaised: 3,
+    },
+    {
+      id: "sa-02", name: "Pazar Analiz Ajanı", nameEn: "Market Analysis Agent",
+      type: "market-analysis", status: "processing", accuracy: 92, actionsToday: 5,
+      lastAction: "Şehir bazlı pazar payı analizi güncelleniyor",
+      lastActionEn: "Updating city-level market share analysis",
+      lastActionTime: hoursAgo(2),
+      specializations: ["Pazar payı analizi", "Bölgesel performans", "Rekabet yoğunluğu"],
+      specializationsEn: ["Market share analysis", "Regional performance", "Competition intensity"],
+      recsGenerated: 3, alertsRaised: 1,
+    },
+    {
+      id: "sa-03", name: "Kampanya Optimizasyon Ajanı", nameEn: "Campaign Optimization Agent",
+      type: "campaign-opt", status: "online", accuracy: 87, actionsToday: 4,
+      lastAction: "Ramazan kampanyası optimizasyon önerisi hazırlandı",
+      lastActionEn: "Ramadan campaign optimization suggestion prepared",
+      lastActionTime: hoursAgo(5),
+      specializations: ["ROI optimizasyonu", "Hedef kitle analizi", "Bütçe dağılımı"],
+      specializationsEn: ["ROI optimization", "Target audience analysis", "Budget allocation"],
+      recsGenerated: 2, alertsRaised: 1,
+    },
+    {
+      id: "sa-04", name: "Stok Yönetim Ajanı", nameEn: "Stock Management Agent",
+      type: "stock-mgmt", status: "online", accuracy: 94, actionsToday: 6,
+      lastAction: "Günlük stok seviye kontrolü — 3 bölgede klima stoku kritik",
+      lastActionEn: "Daily stock level check — AC stock critical in 3 regions",
+      lastActionTime: hoursAgo(3),
+      specializations: ["Stok seviye takibi", "Sipariş optimizasyonu", "Lojistik planlama"],
+      specializationsEn: ["Stock level monitoring", "Order optimization", "Logistics planning"],
+      recsGenerated: 2, alertsRaised: 2,
+    },
+    {
+      id: "sa-05", name: "Rekabet Müdahale Ajanı", nameEn: "Competitive Response Agent",
+      type: "comp-response", status: "processing", accuracy: 89, actionsToday: 7,
+      lastAction: "Vestel buzdolabı fiyat saldırısına karşı strateji analizi yapılıyor",
+      lastActionEn: "Analyzing counter-strategy for Vestel refrigerator price attack",
+      lastActionTime: hoursAgo(2),
+      specializations: ["Karşı strateji geliştirme", "Fiyat savaşı simülasyonu", "Değer konumlandırma"],
+      specializationsEn: ["Counter-strategy development", "Price war simulation", "Value positioning"],
+      recsGenerated: 5, alertsRaised: 2,
+    },
+    {
+      id: "sa-06", name: "Talep Tahmin Ajanı", nameEn: "Demand Forecast Agent",
+      type: "demand-forecast", status: "online", accuracy: 91, actionsToday: 3,
+      lastAction: "Klima sezon tahmini güncellendi — Mayıs-Eylül projeksiyonu yenilendi",
+      lastActionEn: "AC season forecast updated — May-September projection renewed",
+      lastActionTime: hoursAgo(8),
+      specializations: ["Sezonsal talep modeli", "Anomali tespiti", "Trend analizi"],
+      specializationsEn: ["Seasonal demand model", "Anomaly detection", "Trend analysis"],
+      recsGenerated: 2, alertsRaised: 1,
+    },
+    {
+      id: "sa-07", name: "Bayi Performans Ajanı", nameEn: "Dealer Performance Agent",
+      type: "dealer-perf", status: "online", accuracy: 93, actionsToday: 4,
+      lastAction: "Haftalık bayi uyum skoru güncellendi — 5 bayide uyumsuzluk",
+      lastActionEn: "Weekly dealer compliance score updated — 5 dealers non-compliant",
+      lastActionTime: hoursAgo(10),
+      specializations: ["Bayi uyum takibi", "Performans değerlendirme", "Coaching önerileri"],
+      specializationsEn: ["Dealer compliance tracking", "Performance evaluation", "Coaching recommendations"],
+      recsGenerated: 2, alertsRaised: 1,
+    },
+    {
+      id: "sa-08", name: "Mevzuat Tarama Ajanı", nameEn: "Regulation Scan Agent",
+      type: "reg-scan", status: "idle", accuracy: 88, actionsToday: 1,
+      lastAction: "AB enerji etiketleme mevzuatı güncellendi",
+      lastActionEn: "EU energy labeling regulation updated",
+      lastActionTime: dayAgo(1),
+      specializations: ["Mevzuat değişiklikleri", "Uyumluluk analizi", "Etki değerlendirme"],
+      specializationsEn: ["Regulatory changes", "Compliance analysis", "Impact assessment"],
+      recsGenerated: 1, alertsRaised: 1,
+    },
+    {
+      id: "sa-09", name: "Karar Motoru", nameEn: "Decision Engine",
+      type: "decision-engine", status: "processing", accuracy: 95, actionsToday: 10,
+      lastAction: "Q2 hedef risk analizi — eş zamanlı aksiyon paketi modelleniyor",
+      lastActionEn: "Q2 target risk analysis — simultaneous action package being modeled",
+      lastActionTime: hoursAgo(1),
+      specializations: ["Çoklu senaryo modelleme", "Etki simülasyonu", "Önceliklendirme"],
+      specializationsEn: ["Multi-scenario modeling", "Impact simulation", "Prioritization"],
+      recsGenerated: 6, alertsRaised: 0,
+    },
+  ];
+}
+
 export function generateSimulatorRecommendations() {
   return [
     {

@@ -528,15 +528,27 @@ export async function runPriceScrape(
         .where(eq(arcelikProductsTable.id, p.id));
     }
 
-    const vestelMap = new Map(
-      scraped.vestel.map((s) => [normalizeModelKey(s.modelCode), s]),
-    );
-    const boschMap = new Map(
-      scraped.bosch.map((s) => [normalizeModelKey(s.modelCode), s]),
-    );
-    const samsungMap = new Map(
-      scraped.samsung.map((s) => [normalizeModelKey(s.modelCode), s]),
-    );
+    function buildEnhancedMap(items: ScrapedPrice[]): Map<string, ScrapedPrice> {
+      const map = new Map<string, ScrapedPrice>();
+      for (const s of items) {
+        map.set(normalizeModelKey(s.modelCode), s);
+        const parts = s.name.split(/\s+/);
+        for (let i = 0; i < parts.length; i++) {
+          for (let len = 1; len <= 4 && i + len <= parts.length; len++) {
+            const combo = parts.slice(i, i + len).join(" ");
+            const key = normalizeModelKey(combo);
+            if (key.length >= 4 && /[a-z]/.test(key) && /\d/.test(key) && !map.has(key)) {
+              map.set(key, s);
+            }
+          }
+        }
+      }
+      return map;
+    }
+
+    const vestelMap = buildEnhancedMap(scraped.vestel);
+    const boschMap = buildEnhancedMap(scraped.bosch);
+    const samsungMap = buildEnhancedMap(scraped.samsung);
 
     const productPriceMap = new Map(
       existingProducts.map((p) => [p.id, p.tsfPrice]),

@@ -4,20 +4,21 @@ import {
   Brain, CheckCircle2, XCircle, ChevronDown, ChevronRight,
   AlertTriangle, Clock, ListTodo, Activity, Shield, Zap,
   DollarSign, TrendingUp, Filter, BarChart3,
-  Play, Pause, CheckCheck, Edit3, History,
+  Play, Pause, CheckCheck, Edit3, History, Bot, Cpu,
+  Eye, Target, Package, Users, Scale, Cog,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   generateRecommendations, generateTasks, generateAlerts,
-  generateActivityLog, generateDecisionHistory, PLAYBOOKS,
+  generateActivityLog, generateDecisionHistory, generateSpecializedAgents, PLAYBOOKS,
   type AgentRecommendation, type AgentTask, type AgentAlert,
   type AgentPlaybook, type AgentActivityEntry, type AgentDecisionLog,
-  type DirectorRole, type Severity, type DecisionType,
+  type DirectorRole, type Severity, type DecisionType, type SpecializedAgent, type AgentStatus,
 } from "@/data/arcelik-agent";
 import { useDemoLang } from "../DemoLangContext";
 import { decisions } from "../demo-i18n";
 
-type SubTab = "recommendations" | "tasks" | "alerts" | "playbooks" | "activity" | "history";
+type SubTab = "recommendations" | "tasks" | "alerts" | "playbooks" | "activity" | "history" | "agents";
 const ROLE_COLORS: Record<DirectorRole, string> = {
   pricing: "bg-blue-50 text-blue-700",
   finance: "bg-emerald-50 text-emerald-700",
@@ -473,6 +474,122 @@ function PlaybookView({ playbooks }: { playbooks: AgentPlaybook[] }) {
   );
 }
 
+const AGENT_TYPE_ICONS: Record<string, typeof Brain> = {
+  "price-watch": Eye, "market-analysis": BarChart3, "campaign-opt": Target,
+  "stock-mgmt": Package, "comp-response": Shield, "demand-forecast": TrendingUp,
+  "dealer-perf": Users, "reg-scan": Scale, "decision-engine": Cpu,
+};
+const AGENT_TYPE_COLORS: Record<string, string> = {
+  "price-watch": "text-blue-600 bg-blue-50", "market-analysis": "text-purple-600 bg-purple-50",
+  "campaign-opt": "text-pink-600 bg-pink-50", "stock-mgmt": "text-amber-600 bg-amber-50",
+  "comp-response": "text-red-600 bg-red-50", "demand-forecast": "text-green-600 bg-green-50",
+  "dealer-perf": "text-cyan-600 bg-cyan-50", "reg-scan": "text-gray-600 bg-gray-100",
+  "decision-engine": "text-[#E30613] bg-red-50",
+};
+const STATUS_COLORS: Record<AgentStatus, { dot: string; bg: string; text: string }> = {
+  online: { dot: "bg-green-500", bg: "bg-green-50", text: "text-green-700" },
+  processing: { dot: "bg-amber-500 animate-pulse", bg: "bg-amber-50", text: "text-amber-700" },
+  idle: { dot: "bg-gray-400", bg: "bg-gray-50", text: "text-gray-600" },
+};
+
+function SpecializedAgentsPanel({ agents }: { agents: SpecializedAgent[] }) {
+  const { lang, t, timeAgo } = useDecisionsI18n();
+  const statusLabels: Record<AgentStatus, string> = {
+    online: t.agentOnline, processing: t.agentProcessing, idle: t.agentIdle,
+  };
+  const activeCount = agents.filter(a => a.status !== "idle").length;
+  const avgAccuracy = Math.round(agents.reduce((s, a) => s + a.accuracy, 0) / agents.length);
+  const totalActions = agents.reduce((s, a) => s + a.actionsToday, 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <Bot size={14} className="text-green-500" />
+            <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statActiveAgents}</span>
+          </div>
+          <p className="text-2xl font-extrabold text-[#0E2841]">{activeCount}<span className="text-sm font-medium text-gray-400">/{agents.length}</span></p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <Shield size={14} className="text-blue-500" />
+            <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.agentConfidenceAvg}</span>
+          </div>
+          <p className="text-2xl font-extrabold text-[#0E2841]">%{avgAccuracy}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <Activity size={14} className="text-purple-500" />
+            <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.agentTotalActions}</span>
+          </div>
+          <p className="text-2xl font-extrabold text-[#0E2841]">{totalActions}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {agents.map((agent, i) => {
+          const Icon = AGENT_TYPE_ICONS[agent.type] ?? Brain;
+          const color = AGENT_TYPE_COLORS[agent.type] ?? "text-gray-600 bg-gray-50";
+          const sc = STATUS_COLORS[agent.status];
+          return (
+            <motion.div
+              key={agent.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+            >
+              <div className="p-4">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+                    <Icon size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-bold text-[#0E2841] truncate">{lang === "tr" ? agent.name : agent.nameEn}</h4>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className={`w-2 h-2 rounded-full ${sc.dot}`} />
+                      <span className={`text-[10px] font-bold ${sc.text}`}>{statusLabels[agent.status]}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-extrabold text-[#0E2841]">%{agent.accuracy}</p>
+                    <p className="text-[9px] text-gray-400">{t.agentAccuracy}</p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-2.5 mb-3">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t.agentLastAction}</p>
+                  <p className="text-[11px] text-[#0E2841] leading-snug">{lang === "tr" ? agent.lastAction : agent.lastActionEn}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{timeAgo(agent.lastActionTime)}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {(lang === "tr" ? agent.specializations : agent.specializationsEn).map((s, j) => (
+                    <span key={j} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[9px] rounded-full font-medium">{s}</span>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-4 text-[11px]">
+                  <span className="flex items-center gap-1 text-gray-500">
+                    <Brain size={10} className="text-[#E30613]" /> {agent.recsGenerated} {lang === "tr" ? "öneri" : "recs"}
+                  </span>
+                  <span className="flex items-center gap-1 text-gray-500">
+                    <AlertTriangle size={10} className="text-amber-500" /> {agent.alertsRaised} {lang === "tr" ? "uyarı" : "alerts"}
+                  </span>
+                  <span className="flex items-center gap-1 text-gray-500 ml-auto">
+                    <Zap size={10} className="text-[#F5A623]" /> {agent.actionsToday} {t.agentActionsToday.toLowerCase()}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ActivityLog({ entries }: { entries: AgentActivityEntry[] }) {
   const { timeAgo } = useDecisionsI18n();
   const typeIcons: Record<string, typeof Activity> = {
@@ -534,6 +651,7 @@ export default function AgentDecisionsView() {
   const alerts = useMemo(() => generateAlerts(), []);
   const activityLog = useMemo(() => generateActivityLog(), []);
   const [liveDecisions, setLiveDecisions] = useState<AgentDecisionLog[]>([]);
+  const specializedAgents = useMemo(() => generateSpecializedAgents(), []);
 
   const SEVERITY_ORDER: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
   const filteredRecs = useMemo(() => {
@@ -633,6 +751,7 @@ export default function AgentDecisionsView() {
     { id: "alerts", label: t.subAlerts, icon: AlertTriangle, count: alerts.length },
     { id: "playbooks", label: t.subPlaybooks, icon: Zap, count: PLAYBOOKS.filter((p) => p.status !== "completed").length },
     { id: "history", label: t.subHistory, icon: History, count: allDecisions.length },
+    { id: "agents", label: t.subAgents, icon: Bot, count: specializedAgents.filter(a => a.status !== "idle").length },
     { id: "activity", label: t.subActivity, icon: Activity },
   ];
 
@@ -758,6 +877,7 @@ export default function AgentDecisionsView() {
       {subTab === "tasks" && <TaskQueue tasks={tasks} />}
       {subTab === "alerts" && <AlertTimeline alerts={alerts} />}
       {subTab === "playbooks" && <PlaybookView playbooks={PLAYBOOKS} />}
+      {subTab === "agents" && <SpecializedAgentsPanel agents={specializedAgents} />}
       {subTab === "history" && <DecisionHistoryPanel entries={allDecisions} />}
       {subTab === "activity" && <ActivityLog entries={activityLog} />}
     </div>

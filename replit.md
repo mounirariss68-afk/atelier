@@ -39,4 +39,9 @@ The price scraping system lives in two parallel codebases that must be kept in s
 - Infrastructure fully in place with `scrapeWithPlaywright()` helper, but Akamai anti-bot returns "Access Denied" even with headless Chromium + stealth args. Gracefully falls back to empty array.
 - Future improvement: stealth plugins (playwright-extra) or residential proxies needed.
 
-**Model matching gap:** Baseline data in `arcelik-baseline.json` uses older model codes (e.g., `NF600 EX A++`, `KGN56VIF0N`) that don't match current website products (e.g., `NF52111`, `KGP86AXB0N`). Matching will improve as baseline is refreshed with current product lines.
+**Model matching:** Baseline data in `arcelik-baseline.json` has been updated with real scraped model codes from Vestel (63 products), Bosch (36), Samsung (38). The scraper uses `buildEnhancedMap()` which indexes scraped products by both modelCode and name-extracted tokens for fuzzy matching (45/82 competitors matched). LG and Electrolux remain unmatched (19 entries) due to no scraper coverage.
+
+**New Dashboard Views:**
+- **Product Comparison View** (`ProductComparisonView.tsx`): Card view with expandable product cards showing competitor bar charts, and scatter plot view for price distribution mapping. Search/sort by name, price, delta, competitor count. Full TR/EN i18n.
+- **Market Whitespace View** (`WhitespaceView.tsx`): Bubble chart showing category/tier coverage, tier distribution bar chart, and opportunity cards identifying no-product gaps, price-gap opportunities, and competitor-dominated segments. Full TR/EN i18n.
+- **Specialized AI Agents Panel** (in `AgentDecisionsView.tsx`): New "AI Ajanları" sub-tab showing 9 specialized agents (Price Watch, Market Analysis, Campaign Optimization, Stock Management, Competitive Response, Demand Forecast, Dealer Performance, Regulation Scan, Decision Engine) with real-time status indicators, accuracy metrics, action counts, and specialization tags. Data generated from `generateSpecializedAgents()` in `arcelik-agent.ts`.

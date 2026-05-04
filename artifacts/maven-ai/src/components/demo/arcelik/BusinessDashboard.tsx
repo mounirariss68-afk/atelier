@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard, Radar, Megaphone, SlidersHorizontal,
   CalendarRange, Bot, Bell, LogOut, ChevronLeft, ChevronRight,
-  X, Filter, Brain, AlertTriangle,
+  X, Filter, Brain, AlertTriangle, GitCompareArrows, Crosshair,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
@@ -19,13 +19,17 @@ import CampaignStudioView from "./views/CampaignStudioView";
 import SimulatorView from "./views/SimulatorView";
 import CalendarView from "./views/CalendarView";
 import AgentDecisionsView from "./views/AgentDecisionsView";
+import ProductComparisonView from "./views/ProductComparisonView";
+import WhitespaceView from "./views/WhitespaceView";
 import AiChat from "./AiChat";
 
-type ViewId = "dashboard" | "radar" | "campaign" | "simulator" | "calendar" | "decisions";
+type ViewId = "dashboard" | "radar" | "campaign" | "simulator" | "calendar" | "decisions" | "comparison" | "whitespace";
 
 const NAV_ITEMS: { id: ViewId; icon: typeof LayoutDashboard; badge?: string }[] = [
   { id: "dashboard", icon: LayoutDashboard },
   { id: "decisions", icon: Brain, badge: "AI" },
+  { id: "comparison", icon: GitCompareArrows },
+  { id: "whitespace", icon: Crosshair, badge: "NEW" },
   { id: "radar", icon: Radar },
   { id: "campaign", icon: Megaphone },
   { id: "simulator", icon: SlidersHorizontal },
@@ -35,6 +39,8 @@ const NAV_ITEMS: { id: ViewId; icon: typeof LayoutDashboard; badge?: string }[] 
 const NAV_LABEL_KEYS: Record<ViewId, string> = {
   dashboard: "navDashboard",
   decisions: "navDecisions",
+  comparison: "navComparison",
+  whitespace: "navWhitespace",
   radar: "navRadar",
   campaign: "navCampaign",
   simulator: "navSimulator",
@@ -334,6 +340,8 @@ function Shell() {
           <div className="p-5">
             {view === "dashboard" && <DashboardView />}
             {view === "decisions" && <AgentDecisionsView />}
+            {view === "comparison" && <ProductComparisonView />}
+            {view === "whitespace" && <WhitespaceView />}
             {view === "radar" && <CompetitorRadarView />}
             {view === "campaign" && <CampaignStudioView />}
             {view === "simulator" && <SimulatorView />}
