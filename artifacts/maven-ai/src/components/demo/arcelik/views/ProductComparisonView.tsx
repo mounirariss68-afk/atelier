@@ -70,7 +70,9 @@ function buildArcelikItem(p: ArcelikProduct, lang: "tr" | "en"): ComparisonItem 
     capacity: specs.capacity,
     warrantyYears: specs.warrantyYears,
     historyRefId: p.id,
-    historyRecordType: "arcelik-product",
+    // Must match the value persisted by api-server scraper.ts when
+    // inserting into arcelikPriceHistoryTable (recordType: "product").
+    historyRecordType: "product",
   };
 }
 
@@ -92,7 +94,9 @@ function buildCompetitorItem(c: CompetitorPrice): ComparisonItem {
     capacity: "—",
     warrantyYears: null,
     historyRefId: c.id,
-    historyRecordType: "competitor-price",
+    // Must match the value persisted by api-server scraper.ts when
+    // inserting into arcelikPriceHistoryTable (recordType: "competitor").
+    historyRecordType: "competitor",
   };
 }
 
