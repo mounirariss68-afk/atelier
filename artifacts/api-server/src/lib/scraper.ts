@@ -115,6 +115,23 @@ function parseTurkishPrice(raw: string): number | null {
   return isNaN(num) ? null : Math.round(num);
 }
 
+// LG TV cards glue a discount badge with current+original prices into a
+// single .cell-price string like "%14.29149.999,00 TL174.999,00 TL"; passing
+// that to parseTurkishPrice returns ~46M. Extract every "X.XXX,XX TL" match
+// and return the minimum — the sale/current price is always the lower of the
+// two. Falls back to parseTurkishPrice for clean (single-price) cards.
+function extractLGCurrentPrice(text: string): number | null {
+  const matches = Array.from(
+    text.matchAll(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s*TL/g),
+  );
+  if (matches.length === 0) return parseTurkishPrice(text);
+  const prices = matches
+    .map((m) => parseTurkishPrice(m[1]))
+    .filter((p): p is number => p !== null && p > 1000);
+  if (prices.length === 0) return null;
+  return Math.min(...prices);
+}
+
 function extractFirstTurkishPrice(text: string): number | null {
   const m = text.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s*(?:TL|₺)/);
   if (m) return parseTurkishPrice(m[1]);
@@ -249,6 +266,72 @@ const SAMSUNG_CATEGORIES = [
   "vacuum-cleaners",
   "tvs/all-tvs",
   "monitors/all-monitors",
+] as const;
+
+// LG TR catalog. URLs follow /tr/{topcategory}/{subcategory}/. Cards render as
+// li.c-product-list__item with .c-product-item__sku and .cell-price (the
+// clean current/sale price). Note: the parent .neo-price--price wraps a
+// badge + current + strikethrough into one concatenated text node, so we MUST
+// query .cell-price specifically — never .cell-price OR .neo-price--price,
+// since DOM order would return the dirty parent instead. Discovered via
+// Playwright probe (May 2026).
+// NOTE: LG TR sells refrigerators/washers/dishwashers/klima/TVs but does NOT
+// sell ovens or other cooking appliances on lg.com/tr (every /firin, /ocak,
+// /mikrodalga URL returns 404). The 11 LG competitor entries in baseline cover
+// buzdolabi (3), camasir (3), bulasik (1), tv-elektronik (3), klima (1) — no
+// ovens — so this matches what the LG TR catalog actually offers.
+const LG_CATEGORIES = [
+  "buzdolabi/tuem-buzdolaplar",
+  "buzdolabi/dondurucu-altta-buzdolabi",
+  "buzdolabi/dondurucu-ustte-buzdolabi",
+  "buzdolabi/gardirop-tipi-buzdolabi",
+  "camasir-makinesi/camasir-makineleri",
+  "camasir-makinesi/kurutma-makineleri",
+  "camasir-makinesi/kurutmali-camasir-makineleri",
+  "camasir-makinesi/washtower",
+  "bulasik-makinesi/tum-bulasik-makineleri",
+  "klima/tum-klimalar",
+  "tv-soundbar/oled",
+  "tv-soundbar/oled-evo",
+  "tv-soundbar/qned",
+  "tv-soundbar/qned-evo",
+  "tv-soundbar/nanocell",
+  "tv-by-resolution/4k-tvs",
+] as const;
+
+// Profilo (BSH brand) — listings under profilo.com/tr/tr/category/{tree} use
+// the same product-teaser markup as Bosch (data-testid^="product-teaser-
+// container-for-"). profilo.com.tr returns invalid SSL certs; profilo.com is
+// canonical. Discovered via Playwright probe (May 2026).
+const PROFILO_CATEGORIES = [
+  "beyaz-esya/buzdolabi-ve-derin-dondurucular/buzdolaplari",
+  "beyaz-esya/buzdolabi-ve-derin-dondurucular/derin-dondurucular",
+  "beyaz-esya/camasir-ve-kurutma-makineleri/camasir-makineleri",
+  "beyaz-esya/camasir-ve-kurutma-makineleri/kurutma-makineleri",
+  "beyaz-esya/bulasik-makineleri",
+  "beyaz-esya/firinlar-ocaklar-ve-aspiratorler/firinlar",
+  "beyaz-esya/firinlar-ocaklar-ve-aspiratorler/set-ustu-ocaklar",
+  "beyaz-esya/firinlar-ocaklar-ve-aspiratorler/midi-ve-mikrodalga-firinlar",
+  "ankastre/firinlar",
+  "ankastre/bulasik-makinesi",
+  "ankastre/aspiratorler-davlumbazlar",
+  "elektrikli-supurgeler",
+] as const;
+
+// Grundig (Arçelik-owned) — Hybris article.prd.product-item cards under
+// root-level /{slug} URLs. Same paginator/markup as Arçelik & Beko.
+// Discovered via Playwright probe (May 2026).
+const GRUNDIG_CATEGORIES = [
+  "buzdolabi",
+  "mini-buzdolabi",
+  "camasir-makinesi",
+  "bulasik-makinesi",
+  "ankastre-firin",
+  "ankastre-standart-firin",
+  "buhar-destekli-firin",
+  "az-yagli-pisirici",
+  "pisirici",
+  "kucuk-ev-aletleri",
 ] as const;
 
 /**
@@ -1386,12 +1469,410 @@ async function scrapeN11ProductSpecs(
   return results;
 }
 
+// LG TR scraper. Cards lazy-load on scroll; no explicit "show more"
+// affordance was observed during probing. Bounded scroll loop until the
+// product count stabilises.
+async function scrapeLG(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping LG scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of LG_CATEGORIES) {
+      const url = `https://www.lg.com/tr/${cat}/`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        await page
+          .waitForSelector("li.c-product-list__item", { timeout: 10000 })
+          .catch(() => {});
+
+        const productLocator = page.locator("li.c-product-list__item");
+        let prevCount = 0;
+        let stableScrolls = 0;
+        for (let i = 0; i < 20; i++) {
+          await page.evaluate(() =>
+            window.scrollTo(0, document.body.scrollHeight),
+          );
+          await page.waitForTimeout(700);
+          const count = await productLocator.count();
+          if (count === prevCount) {
+            stableScrolls++;
+            if (stableScrolls >= 2) break;
+          } else {
+            stableScrolls = 0;
+            prevCount = count;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; modelCode: string; priceText: string }[] =
+            [];
+          document.querySelectorAll("li.c-product-list__item").forEach((el) => {
+            const sku =
+              el.querySelector(".c-product-item__sku")?.textContent?.trim() ||
+              "";
+            // Heading text contains the SKU + UI sentinel "Copy model name"
+            // tokens; strip both to get a usable display name.
+            const topText =
+              el
+                .querySelector(".neo-card--top, .neo-card--default")
+                ?.textContent?.trim() || "";
+            const name = topText
+              .replace(sku, "")
+              .replace(/Copy model name.*$/, "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 200);
+            // .cell-price contains ONLY the clean current price. The
+            // parent .neo-price--price concatenates the discount badge,
+            // current price, and strikethrough original price into a single
+            // text node ("%14.29149.999,00 TL174.999,00 TL") which corrupts
+            // parsing — never use it as a fallback.
+            const priceText =
+              el.querySelector(".cell-price")?.textContent?.trim() || "";
+            if (sku && priceText)
+              out.push({ name: name || sku, modelCode: sku, priceText });
+          });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          // TV cards glue a discount badge into .cell-price; use the
+          // multi-price parser so we pick the current (sale) price, not the
+          // bogus concatenation.
+          const price = extractLGCurrentPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode,
+            name: item.name,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        logger.info(
+          { url, domCount: prevCount, accepted: pageAdded },
+          "LG category scraped",
+        );
+      } catch (err) {
+        logger.warn({ url, err }, "LG page scrape failed");
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+// Profilo (BSH brand) — same product-teaser markup as Bosch, routed under
+// /tr/tr/category/. Click-more loop mirrors scrapeBosch since the BSH
+// paginator is identical across brand sites.
+async function scrapeProfilo(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Profilo scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of PROFILO_CATEGORIES) {
+      const url = `https://www.profilo.com/tr/tr/category/${cat}`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        await page
+          .waitForSelector(
+            '[data-testid^="product-teaser-container-for-"]',
+            { timeout: 10000 },
+          )
+          .catch(() => {});
+
+        const productLocator = page.locator(
+          '[data-testid^="product-teaser-container-for-"]',
+        );
+        let prevCount = 0;
+        let stableClicks = 0;
+        for (let i = 0; i < 30; i++) {
+          const btn = page
+            .locator(
+              'button:has-text("Daha fazla görüntüle"), button:has-text("Daha fazla"), [data-testid*="show-more"]',
+            )
+            .first();
+          const visible = await btn.isVisible().catch(() => false);
+          if (!visible) break;
+          const beforeCount = await productLocator.count();
+          await btn.click({ timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(1200);
+          const afterCount = await productLocator.count();
+          if (afterCount === beforeCount) {
+            stableClicks++;
+            if (stableClicks >= 2) break;
+          } else {
+            stableClicks = 0;
+            prevCount = afterCount;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; modelCode: string; priceText: string }[] =
+            [];
+          document
+            .querySelectorAll(
+              '[data-testid^="product-teaser-container-for-"]',
+            )
+            .forEach((el) => {
+              const rawName =
+                el
+                  .querySelector(
+                    '[data-testid="product-teaser-header-headline"]',
+                  )
+                  ?.textContent?.trim() || "";
+              const name =
+                rawName.includes("{") || rawName.includes("@media")
+                  ? ""
+                  : rawName;
+              const modelCode =
+                el
+                  .querySelector('[data-testid="product-code"]')
+                  ?.textContent?.trim() || "";
+              const priceText =
+                el
+                  .querySelector('[data-testid="price-main-price"]')
+                  ?.textContent?.trim() || "";
+              if (modelCode && priceText)
+                out.push({ name, modelCode, priceText });
+            });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          const price = parseTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode,
+            name: item.name || item.modelCode,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        logger.info(
+          { url, domCount: prevCount, accepted: pageAdded },
+          "Profilo category scraped",
+        );
+      } catch (err) {
+        logger.warn({ url, err }, "Profilo page scrape failed");
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+// Grundig (Arçelik-owned) — Hybris article.prd.product-item cards under
+// root-level /{slug}. Uses the same data-gtm-impression payload as Arçelik
+// & Beko which carries name/id/price as canonical JSON. Bounded scroll
+// loop covers any lazy pagination.
+async function scrapeGrundig(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Grundig scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of GRUNDIG_CATEGORIES) {
+      const url = `https://www.grundig.com.tr/${cat}`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        await page
+          .waitForSelector("article.prd.product-item", { timeout: 10000 })
+          .catch(() => {});
+
+        const productLocator = page.locator("article.prd.product-item");
+        let prevCount = 0;
+        let stableScrolls = 0;
+        for (let i = 0; i < 20; i++) {
+          await page.evaluate(() =>
+            window.scrollTo(0, document.body.scrollHeight),
+          );
+          await page.waitForTimeout(700);
+          const count = await productLocator.count();
+          if (count === prevCount) {
+            stableScrolls++;
+            if (stableScrolls >= 2) break;
+          } else {
+            stableScrolls = 0;
+            prevCount = count;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: {
+            name: string;
+            modelCode: string;
+            priceText: string;
+            gtmPrice: string;
+          }[] = [];
+          document
+            .querySelectorAll("article.prd.product-item")
+            .forEach((el) => {
+              const gtmRaw = el.getAttribute("data-gtm-impression") || "";
+              let gtmName = "";
+              let gtmId = "";
+              let gtmPrice = "";
+              try {
+                const gtm = JSON.parse(gtmRaw);
+                gtmName = String(gtm.name || "").trim();
+                gtmId = String(gtm.id || "").trim();
+                gtmPrice = String(gtm.price || "").trim();
+              } catch {
+                // missing/malformed gtm payload — fall back to DOM attrs
+              }
+              const codeAttr =
+                el
+                  .querySelector("[data-product-code]")
+                  ?.getAttribute("data-product-code") ||
+                el.getAttribute("data-product-code") ||
+                "";
+              const nameAttr =
+                el
+                  .querySelector("[data-product-name]")
+                  ?.getAttribute("data-product-name") || "";
+              const priceText =
+                el
+                  .querySelector("span.prc.prc-last")
+                  ?.textContent?.trim() ||
+                el
+                  .querySelector(".prd-price, .prd-footer")
+                  ?.textContent?.trim() ||
+                "";
+              const name = gtmName || nameAttr;
+              const modelCode = gtmId || codeAttr;
+              if (name && (priceText || gtmPrice))
+                out.push({ name, modelCode, priceText, gtmPrice });
+            });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          let price: number | null = null;
+          if (item.gtmPrice) {
+            const n = parseFloat(item.gtmPrice);
+            if (!isNaN(n) && n > 0) price = Math.round(n);
+          }
+          if (price === null) price = extractFirstTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode || item.name.slice(0, 30),
+            name: item.name,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        logger.info(
+          { url, domCount: prevCount, accepted: pageAdded },
+          "Grundig category scraped",
+        );
+      } catch (err) {
+        logger.warn({ url, err }, "Grundig page scrape failed");
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+// Siemens TR (siemens-home.bsh-group.com/tr) is a marketing-only site —
+// /online-satis/* paths are content/feature pages, not product listings.
+// Discovered via Playwright probe (May 2026). Stub returns []; Siemens
+// competitor entries fall through to the Bosch (BSH-shared) match map in
+// runPriceScrape.
+async function scrapeSiemens(): Promise<ScrapedPrice[]> {
+  logger.info(
+    "Siemens TR has no online catalog (marketing-only site) — returning []",
+  );
+  return [];
+}
+
+// Electrolux/AEG TR (electrolux.com.tr, aeg.com.tr) are marketing-only
+// sites — category paths render as content pages with no product cards or
+// prices. Discovered via Playwright probe (May 2026). Stub returns [];
+// competitor prices for Electrolux/AEG remain unmatched until the
+// marketplace pipeline (Tasks #70, #90) supplies them.
+async function scrapeElectrolux(): Promise<ScrapedPrice[]> {
+  logger.info(
+    "Electrolux/AEG TR have no online catalog (marketing-only sites) — returning []",
+  );
+  return [];
+}
+
 type ScraperResults = {
   arcelik: ScrapedPrice[];
   beko: ScrapedPrice[];
   vestel: ScrapedPrice[];
   bosch: ScrapedPrice[];
   samsung: ScrapedPrice[];
+  lg: ScrapedPrice[];
+  siemens: ScrapedPrice[];
+  profilo: ScrapedPrice[];
+  electrolux: ScrapedPrice[];
+  grundig: ScrapedPrice[];
 };
 
 async function runScrapers(): Promise<ScraperResults> {
@@ -1401,6 +1882,11 @@ async function runScrapers(): Promise<ScraperResults> {
     { name: "vestel.com.tr", fn: scrapeVestel },
     { name: "bosch-home.com.tr", fn: scrapeBosch },
     { name: "samsung.com/tr", fn: scrapeSamsung },
+    { name: "lg.com/tr", fn: scrapeLG },
+    { name: "siemens-home.bsh-group.com/tr", fn: scrapeSiemens },
+    { name: "profilo.com", fn: scrapeProfilo },
+    { name: "electrolux.com.tr", fn: scrapeElectrolux },
+    { name: "grundig.com.tr", fn: scrapeGrundig },
   ] as const;
 
   const results: ScraperResults = {
@@ -1409,8 +1895,24 @@ async function runScrapers(): Promise<ScraperResults> {
     vestel: [],
     bosch: [],
     samsung: [],
+    lg: [],
+    siemens: [],
+    profilo: [],
+    electrolux: [],
+    grundig: [],
   };
-  const keys = ["arcelik", "beko", "vestel", "bosch", "samsung"] as const;
+  const keys = [
+    "arcelik",
+    "beko",
+    "vestel",
+    "bosch",
+    "samsung",
+    "lg",
+    "siemens",
+    "profilo",
+    "electrolux",
+    "grundig",
+  ] as const;
 
   // Brand scrapers each open their own Playwright BrowserContext. We batch
   // pairs (concurrency=2) to keep memory bounded under the 10-minute cron
@@ -1826,11 +2328,15 @@ export async function runPriceScrape(
     const bekoMap = new Map(
       scraped.beko.map((s) => [normalizeModelKey(s.modelCode), s]),
     );
+    const grundigMap = new Map(
+      scraped.grundig.map((s) => [normalizeModelKey(s.modelCode), s]),
+    );
 
     for (const p of existingProducts) {
       const match =
         fuzzyMatchScraped(p.modelCode, arcelikMap) ??
-        fuzzyMatchScraped(p.modelCode, bekoMap);
+        fuzzyMatchScraped(p.modelCode, bekoMap) ??
+        fuzzyMatchScraped(p.modelCode, grundigMap);
       if (!match) continue;
 
       matchedProducts++;
@@ -1892,6 +2398,9 @@ export async function runPriceScrape(
     const vestelMap = buildEnhancedMap(scraped.vestel);
     const boschMap = buildEnhancedMap(scraped.bosch);
     const samsungMap = buildEnhancedMap(scraped.samsung);
+    const lgMap = buildEnhancedMap(scraped.lg);
+    const profiloMap = buildEnhancedMap(scraped.profilo);
+    const electroluxMap = buildEnhancedMap(scraped.electrolux);
 
     const productPriceMap = new Map(
       existingProducts.map((p) => [p.id, p.tsfPrice]),
@@ -1902,14 +2411,26 @@ export async function runPriceScrape(
       let match: ScrapedPrice | undefined;
       if (cp.brand === "Vestel" || cp.brand === "Regal")
         match = fuzzyMatchScraped(cp.competitorModel, vestelMap);
-      else if (
-        cp.brand === "Bosch" ||
-        cp.brand === "Siemens" ||
-        cp.brand === "Profilo"
-      )
+      else if (cp.brand === "Bosch")
         match = fuzzyMatchScraped(cp.competitorModel, boschMap);
+      else if (cp.brand === "Profilo")
+        // Prefer the real Profilo catalog; fall back to Bosch (BSH-shared).
+        match =
+          fuzzyMatchScraped(cp.competitorModel, profiloMap) ??
+          fuzzyMatchScraped(cp.competitorModel, boschMap);
+      else if (cp.brand === "Siemens")
+        // Siemens TR has no online catalog; reuse the BSH (Bosch) map and,
+        // failing that, the Profilo map as a last-resort BSH fallback.
+        match =
+          fuzzyMatchScraped(cp.competitorModel, boschMap) ??
+          fuzzyMatchScraped(cp.competitorModel, profiloMap);
       else if (cp.brand === "Samsung")
         match = fuzzyMatchScraped(cp.competitorModel, samsungMap);
+      else if (cp.brand === "LG")
+        match = fuzzyMatchScraped(cp.competitorModel, lgMap);
+      else if (cp.brand === "Electrolux/AEG" || cp.brand === "Electrolux" || cp.brand === "AEG")
+        // electroluxMap is empty until the marketplace pipeline supplies prices.
+        match = fuzzyMatchScraped(cp.competitorModel, electroluxMap);
 
       if (!match) {
         unmatchedCompetitors++;

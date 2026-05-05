@@ -72,6 +72,25 @@ function parseTurkishPrice(raw: string): number | null {
   return isNaN(num) ? null : Math.round(num);
 }
 
+// MUST stay identical to extractLGCurrentPrice in
+// artifacts/api-server/src/lib/scraper.ts. LG TV cards glue a discount badge
+// with current+original prices into a single .cell-price string like
+// "%14.29149.999,00 TL174.999,00 TL"; passing that to parseTurkishPrice
+// returns ~46M. Extract every "X.XXX,XX TL" match and return the minimum —
+// the sale/current price is always the lower of the two. Falls back to
+// parseTurkishPrice for clean (single-price) cards.
+function extractLGCurrentPrice(text: string): number | null {
+  const matches = Array.from(
+    text.matchAll(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s*TL/g),
+  );
+  if (matches.length === 0) return parseTurkishPrice(text);
+  const prices = matches
+    .map((m) => parseTurkishPrice(m[1]))
+    .filter((p): p is number => p !== null && p > 1000);
+  if (prices.length === 0) return null;
+  return Math.min(...prices);
+}
+
 function extractFirstTurkishPrice(text: string): number | null {
   const m = text.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?)\s*(?:TL|₺)/);
   if (m) return parseTurkishPrice(m[1]);
@@ -223,6 +242,61 @@ const SAMSUNG_CATEGORIES = [
   "vacuum-cleaners",
   "tvs/all-tvs",
   "monitors/all-monitors",
+] as const;
+
+// MUST stay identical to LG_CATEGORIES in artifacts/api-server/src/lib/scraper.ts.
+// NOTE: LG TR sells refrigerators/washers/dishwashers/klima/TVs but does NOT
+// sell ovens or other cooking appliances on lg.com/tr (every /firin, /ocak,
+// /mikrodalga URL returns 404). The 11 LG competitor entries in baseline cover
+// buzdolabi (3), camasir (3), bulasik (1), tv-elektronik (3), klima (1) — no
+// ovens — so this matches what the LG TR catalog actually offers.
+const LG_CATEGORIES = [
+  "buzdolabi/tuem-buzdolaplar",
+  "buzdolabi/dondurucu-altta-buzdolabi",
+  "buzdolabi/dondurucu-ustte-buzdolabi",
+  "buzdolabi/gardirop-tipi-buzdolabi",
+  "camasir-makinesi/camasir-makineleri",
+  "camasir-makinesi/kurutma-makineleri",
+  "camasir-makinesi/kurutmali-camasir-makineleri",
+  "camasir-makinesi/washtower",
+  "bulasik-makinesi/tum-bulasik-makineleri",
+  "klima/tum-klimalar",
+  "tv-soundbar/oled",
+  "tv-soundbar/oled-evo",
+  "tv-soundbar/qned",
+  "tv-soundbar/qned-evo",
+  "tv-soundbar/nanocell",
+  "tv-by-resolution/4k-tvs",
+] as const;
+
+// MUST stay identical to PROFILO_CATEGORIES in artifacts/api-server/src/lib/scraper.ts.
+const PROFILO_CATEGORIES = [
+  "beyaz-esya/buzdolabi-ve-derin-dondurucular/buzdolaplari",
+  "beyaz-esya/buzdolabi-ve-derin-dondurucular/derin-dondurucular",
+  "beyaz-esya/camasir-ve-kurutma-makineleri/camasir-makineleri",
+  "beyaz-esya/camasir-ve-kurutma-makineleri/kurutma-makineleri",
+  "beyaz-esya/bulasik-makineleri",
+  "beyaz-esya/firinlar-ocaklar-ve-aspiratorler/firinlar",
+  "beyaz-esya/firinlar-ocaklar-ve-aspiratorler/set-ustu-ocaklar",
+  "beyaz-esya/firinlar-ocaklar-ve-aspiratorler/midi-ve-mikrodalga-firinlar",
+  "ankastre/firinlar",
+  "ankastre/bulasik-makinesi",
+  "ankastre/aspiratorler-davlumbazlar",
+  "elektrikli-supurgeler",
+] as const;
+
+// MUST stay identical to GRUNDIG_CATEGORIES in artifacts/api-server/src/lib/scraper.ts.
+const GRUNDIG_CATEGORIES = [
+  "buzdolabi",
+  "mini-buzdolabi",
+  "camasir-makinesi",
+  "bulasik-makinesi",
+  "ankastre-firin",
+  "ankastre-standart-firin",
+  "buhar-destekli-firin",
+  "az-yagli-pisirici",
+  "pisirici",
+  "kucuk-ev-aletleri",
 ] as const;
 
 function dedupeByModel(items: ScrapedPrice[]): ScrapedPrice[] {
@@ -753,12 +827,337 @@ async function scrapeSamsung(): Promise<ScrapedPrice[]> {
   return dedupeByModel(results);
 }
 
+// MUST stay behaviorally identical to scrapeLG in
+// artifacts/api-server/src/lib/scraper.ts. Uses console.log instead of logger.
+async function scrapeLG(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    console.log("  Skipping LG scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of LG_CATEGORIES) {
+      const url = `https://www.lg.com/tr/${cat}/`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await page
+          .waitForSelector("li.c-product-list__item", { timeout: 10000 })
+          .catch(() => {});
+
+        const productLocator = page.locator("li.c-product-list__item");
+        let prevCount = 0;
+        let stableScrolls = 0;
+        for (let i = 0; i < 20; i++) {
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          await page.waitForTimeout(700);
+          const count = await productLocator.count();
+          if (count === prevCount) {
+            stableScrolls++;
+            if (stableScrolls >= 2) break;
+          } else {
+            stableScrolls = 0;
+            prevCount = count;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; modelCode: string; priceText: string }[] = [];
+          document.querySelectorAll("li.c-product-list__item").forEach((el) => {
+            const sku =
+              el.querySelector(".c-product-item__sku")?.textContent?.trim() || "";
+            const topText =
+              el.querySelector(".neo-card--top, .neo-card--default")?.textContent?.trim() || "";
+            const name = topText
+              .replace(sku, "")
+              .replace(/Copy model name.*$/, "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 200);
+            const priceText =
+              // MUST use .cell-price specifically; the parent
+              // .neo-price--price concatenates the discount badge, current
+              // price, and strikethrough original into one text node which
+              // would corrupt parseTurkishPrice. See scraper.ts for details.
+              el.querySelector(".cell-price")?.textContent?.trim() || "";
+            if (sku && priceText) out.push({ name: name || sku, modelCode: sku, priceText });
+          });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          // TV cards glue a discount badge into .cell-price; use the
+          // multi-price parser so we pick the current (sale) price, not the
+          // bogus concatenation.
+          const price = extractLGCurrentPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode,
+            name: item.name,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        console.log(`    LG ${cat}: ${pageAdded} accepted (${prevCount} on DOM)`);
+      } catch {
+        console.log(`  LG page scrape failed: ${url}`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+// MUST stay behaviorally identical to scrapeProfilo in
+// artifacts/api-server/src/lib/scraper.ts. Uses console.log instead of logger.
+async function scrapeProfilo(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    console.log("  Skipping Profilo scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of PROFILO_CATEGORIES) {
+      const url = `https://www.profilo.com/tr/tr/category/${cat}`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await page
+          .waitForSelector('[data-testid^="product-teaser-container-for-"]', { timeout: 10000 })
+          .catch(() => {});
+
+        const productLocator = page.locator(
+          '[data-testid^="product-teaser-container-for-"]',
+        );
+        let prevCount = 0;
+        let stableClicks = 0;
+        for (let i = 0; i < 30; i++) {
+          const btn = page
+            .locator(
+              'button:has-text("Daha fazla görüntüle"), button:has-text("Daha fazla"), [data-testid*="show-more"]',
+            )
+            .first();
+          const visible = await btn.isVisible().catch(() => false);
+          if (!visible) break;
+          const beforeCount = await productLocator.count();
+          await btn.click({ timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(1200);
+          const afterCount = await productLocator.count();
+          if (afterCount === beforeCount) {
+            stableClicks++;
+            if (stableClicks >= 2) break;
+          } else {
+            stableClicks = 0;
+            prevCount = afterCount;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; modelCode: string; priceText: string }[] = [];
+          document
+            .querySelectorAll('[data-testid^="product-teaser-container-for-"]')
+            .forEach((el) => {
+              const rawName =
+                el
+                  .querySelector('[data-testid="product-teaser-header-headline"]')
+                  ?.textContent?.trim() || "";
+              const name =
+                rawName.includes("{") || rawName.includes("@media") ? "" : rawName;
+              const modelCode =
+                el.querySelector('[data-testid="product-code"]')?.textContent?.trim() || "";
+              const priceText =
+                el.querySelector('[data-testid="price-main-price"]')?.textContent?.trim() || "";
+              if (modelCode && priceText) out.push({ name, modelCode, priceText });
+            });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          const price = parseTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode,
+            name: item.name || item.modelCode,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        console.log(`    Profilo ${cat}: ${pageAdded} accepted (${prevCount} on DOM)`);
+      } catch {
+        console.log(`  Profilo page scrape failed: ${url}`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+// MUST stay behaviorally identical to scrapeGrundig in
+// artifacts/api-server/src/lib/scraper.ts. Uses console.log instead of logger.
+async function scrapeGrundig(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    console.log("  Skipping Grundig scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of GRUNDIG_CATEGORIES) {
+      const url = `https://www.grundig.com.tr/${cat}`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await page
+          .waitForSelector("article.prd.product-item", { timeout: 10000 })
+          .catch(() => {});
+
+        const productLocator = page.locator("article.prd.product-item");
+        let prevCount = 0;
+        let stableScrolls = 0;
+        for (let i = 0; i < 20; i++) {
+          await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+          await page.waitForTimeout(700);
+          const count = await productLocator.count();
+          if (count === prevCount) {
+            stableScrolls++;
+            if (stableScrolls >= 2) break;
+          } else {
+            stableScrolls = 0;
+            prevCount = count;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; modelCode: string; priceText: string; gtmPrice: string }[] = [];
+          document.querySelectorAll("article.prd.product-item").forEach((el) => {
+            const gtmRaw = el.getAttribute("data-gtm-impression") || "";
+            let gtmName = "";
+            let gtmId = "";
+            let gtmPrice = "";
+            try {
+              const gtm = JSON.parse(gtmRaw);
+              gtmName = String(gtm.name || "").trim();
+              gtmId = String(gtm.id || "").trim();
+              gtmPrice = String(gtm.price || "").trim();
+            } catch {
+              // missing/malformed gtm payload — fall back to DOM attrs
+            }
+            const codeAttr =
+              el.querySelector("[data-product-code]")?.getAttribute("data-product-code") ||
+              el.getAttribute("data-product-code") ||
+              "";
+            const nameAttr =
+              el.querySelector("[data-product-name]")?.getAttribute("data-product-name") || "";
+            const priceText =
+              el.querySelector("span.prc.prc-last")?.textContent?.trim() ||
+              el.querySelector(".prd-price, .prd-footer")?.textContent?.trim() ||
+              "";
+            const name = gtmName || nameAttr;
+            const modelCode = gtmId || codeAttr;
+            if (name && (priceText || gtmPrice)) out.push({ name, modelCode, priceText, gtmPrice });
+          });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          let price: number | null = null;
+          if (item.gtmPrice) {
+            const n = parseFloat(item.gtmPrice);
+            if (!isNaN(n) && n > 0) price = Math.round(n);
+          }
+          if (price === null) price = extractFirstTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode || item.name.slice(0, 30),
+            name: item.name,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        console.log(`    Grundig ${cat}: ${pageAdded} accepted (${prevCount} on DOM)`);
+      } catch {
+        console.log(`  Grundig page scrape failed: ${url}`);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+// Siemens TR (siemens-home.bsh-group.com/tr) is a marketing-only site —
+// no online catalog. Stub returns []; Siemens entries fall through to the
+// Bosch (BSH-shared) match map.
+async function scrapeSiemens(): Promise<ScrapedPrice[]> {
+  console.log("  Siemens TR has no online catalog (marketing-only site) — returning []");
+  return [];
+}
+
+// Electrolux/AEG TR (electrolux.com.tr, aeg.com.tr) are marketing-only
+// sites — no online catalog. Stub returns []; competitor prices for
+// Electrolux/AEG remain unmatched until the marketplace pipeline supplies them.
+async function scrapeElectrolux(): Promise<ScrapedPrice[]> {
+  console.log("  Electrolux/AEG TR have no online catalog (marketing-only sites) — returning []");
+  return [];
+}
+
 type ScraperResults = {
   arcelik: ScrapedPrice[];
   beko: ScrapedPrice[];
   vestel: ScrapedPrice[];
   bosch: ScrapedPrice[];
   samsung: ScrapedPrice[];
+  lg: ScrapedPrice[];
+  siemens: ScrapedPrice[];
+  profilo: ScrapedPrice[];
+  electrolux: ScrapedPrice[];
+  grundig: ScrapedPrice[];
 };
 
 async function runScrapers(): Promise<ScraperResults> {
@@ -768,10 +1167,21 @@ async function runScrapers(): Promise<ScraperResults> {
     { name: "vestel.com.tr", fn: scrapeVestel },
     { name: "bosch-home.com.tr", fn: scrapeBosch },
     { name: "samsung.com/tr", fn: scrapeSamsung },
+    { name: "lg.com/tr", fn: scrapeLG },
+    { name: "siemens-home.bsh-group.com/tr", fn: scrapeSiemens },
+    { name: "profilo.com", fn: scrapeProfilo },
+    { name: "electrolux.com.tr", fn: scrapeElectrolux },
+    { name: "grundig.com.tr", fn: scrapeGrundig },
   ] as const;
 
-  const results: ScraperResults = { arcelik: [], beko: [], vestel: [], bosch: [], samsung: [] };
-  const keys = ["arcelik", "beko", "vestel", "bosch", "samsung"] as const;
+  const results: ScraperResults = {
+    arcelik: [], beko: [], vestel: [], bosch: [], samsung: [],
+    lg: [], siemens: [], profilo: [], electrolux: [], grundig: [],
+  };
+  const keys = [
+    "arcelik", "beko", "vestel", "bosch", "samsung",
+    "lg", "siemens", "profilo", "electrolux", "grundig",
+  ] as const;
 
   // Run brand scrapers in pairs (concurrency=2) to keep RAM bounded under
   // the 10-minute cron budget while cutting wall time roughly in half.
@@ -809,13 +1219,15 @@ function applyScrapedPrices(
 
   const arcelikMap = new Map(scraped.arcelik.map((s) => [normalizeModelKey(s.modelCode), s]));
   const bekoMap = new Map(scraped.beko.map((s) => [normalizeModelKey(s.modelCode), s]));
+  const grundigMap = new Map(scraped.grundig.map((s) => [normalizeModelKey(s.modelCode), s]));
 
   const matchedScrapedKeys = new Set<string>();
 
   for (const p of products) {
     const match =
       fuzzyMatchScraped(p.modelCode as string, arcelikMap) ??
-      fuzzyMatchScraped(p.modelCode as string, bekoMap);
+      fuzzyMatchScraped(p.modelCode as string, bekoMap) ??
+      fuzzyMatchScraped(p.modelCode as string, grundigMap);
     if (match) {
       p.tsfPrice = match.price;
       p.dealerCost = Math.round(match.price * (1 - (p.marginPercent as number) / 100));
@@ -833,6 +1245,9 @@ function applyScrapedPrices(
   for (const [key, item] of bekoMap) {
     if (!matchedScrapedKeys.has(key)) unmatched.push(`beko: ${item.name} (${item.modelCode})`);
   }
+  for (const [key, item] of grundigMap) {
+    if (!matchedScrapedKeys.has(key)) unmatched.push(`grundig: ${item.name} (${item.modelCode})`);
+  }
 
   return { updated, unmatched };
 }
@@ -849,6 +1264,9 @@ function applyScrapedCompetitorPrices(
   const vestelMap = new Map(scraped.vestel.map((s) => [normalizeModelKey(s.modelCode), s]));
   const boschMap = new Map(scraped.bosch.map((s) => [normalizeModelKey(s.modelCode), s]));
   const samsungMap = new Map(scraped.samsung.map((s) => [normalizeModelKey(s.modelCode), s]));
+  const lgMap = new Map(scraped.lg.map((s) => [normalizeModelKey(s.modelCode), s]));
+  const profiloMap = new Map(scraped.profilo.map((s) => [normalizeModelKey(s.modelCode), s]));
+  const electroluxMap = new Map(scraped.electrolux.map((s) => [normalizeModelKey(s.modelCode), s]));
   const productPriceMap = new Map(products.map((p) => [p.id as string, p.tsfPrice as number]));
 
   const matchedKeys = new Set<string>();
@@ -857,10 +1275,23 @@ function applyScrapedCompetitorPrices(
     let match: ScrapedPrice | undefined;
     if (cp.brand === "Vestel" || cp.brand === "Regal")
       match = fuzzyMatchScraped(cp.competitorModel as string, vestelMap);
-    else if (cp.brand === "Bosch" || cp.brand === "Siemens" || cp.brand === "Profilo")
+    else if (cp.brand === "Bosch")
       match = fuzzyMatchScraped(cp.competitorModel as string, boschMap);
+    else if (cp.brand === "Profilo")
+      match =
+        fuzzyMatchScraped(cp.competitorModel as string, profiloMap) ??
+        fuzzyMatchScraped(cp.competitorModel as string, boschMap);
+    else if (cp.brand === "Siemens")
+      // Siemens TR has no online catalog; fall through to BSH-shared maps.
+      match =
+        fuzzyMatchScraped(cp.competitorModel as string, boschMap) ??
+        fuzzyMatchScraped(cp.competitorModel as string, profiloMap);
     else if (cp.brand === "Samsung")
       match = fuzzyMatchScraped(cp.competitorModel as string, samsungMap);
+    else if (cp.brand === "LG")
+      match = fuzzyMatchScraped(cp.competitorModel as string, lgMap);
+    else if (cp.brand === "Electrolux/AEG" || cp.brand === "Electrolux" || cp.brand === "AEG")
+      match = fuzzyMatchScraped(cp.competitorModel as string, electroluxMap);
 
     if (match) {
       cp.competitorPrice = match.price;
@@ -885,6 +1316,12 @@ function applyScrapedCompetitorPrices(
   }
   for (const [key, item] of samsungMap) {
     if (!matchedKeys.has(key)) unmatched.push(`samsung: ${item.name} (${item.modelCode})`);
+  }
+  for (const [key, item] of lgMap) {
+    if (!matchedKeys.has(key)) unmatched.push(`lg: ${item.name} (${item.modelCode})`);
+  }
+  for (const [key, item] of profiloMap) {
+    if (!matchedKeys.has(key)) unmatched.push(`profilo: ${item.name} (${item.modelCode})`);
   }
 
   return { updated, unmatched };
