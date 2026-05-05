@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Clock, ChevronDown, User as UserIcon, Activity, Workflow } from "lucide-react";
+import { Check, Clock, ChevronDown, User as UserIcon, Activity, Workflow, Circle } from "lucide-react";
 import { useTasamaDemoLang } from "../DemoLangContext";
 import { clientProcesses, tDict } from "../tasama-i18n";
 import { generateEmployeeProcesses } from "@/data/tasama-agent";
@@ -19,10 +19,50 @@ export default function ProcessesView() {
   const t = tDict(clientProcesses, lang);
   const processes = useMemo(() => generateEmployeeProcesses(CLIENT_ID), []);
 
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const ts = setTimeout(() => setLoading(false), 450);
+    return () => clearTimeout(ts);
+  }, []);
+
   const active = processes.filter((p) => p.steps.some((s) => s.status !== "completed"));
   const completed = processes.filter((p) => p.steps.every((s) => s.status === "completed"));
 
-  const [expandedId, setExpandedId] = useState<string | null>(active[0]?.id ?? null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading && expandedId === null && active[0]) setExpandedId(active[0].id);
+  }, [loading, active, expandedId]);
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-xl font-bold">{t.title}</h1>
+          <p className="text-xs text-gray-500 mt-0.5">{lang === "en" ? "Multi-step workflows orchestrated by your agents" : "سير عمل متعدد الخطوات يديره الوكلاء"}</p>
+        </div>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-4 h-4 tasama-shimmer rounded" />
+          <div className="h-4 w-32 tasama-shimmer rounded" />
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg tasama-shimmer flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 w-1/2 tasama-shimmer rounded" />
+                  <div className="h-2.5 w-1/3 tasama-shimmer rounded" />
+                  <div className="h-2 w-full tasama-shimmer rounded mt-3" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -103,13 +143,7 @@ function ProcessCard({ process, expanded, onToggle }: { process: EmployeeProcess
 
       <AnimatePresence>
         {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden border-t border-gray-100"
-          >
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden border-t border-gray-100">
             <div className="p-5 space-y-5">
               <div>
                 <p className="text-[11px] font-bold uppercase text-gray-400 mb-3 tracking-wide">{lang === "en" ? "Pipeline" : "السير"}</p>
@@ -117,25 +151,33 @@ function ProcessCard({ process, expanded, onToggle }: { process: EmployeeProcess
                   {process.steps.map((step, i) => {
                     const sCol = STEP_STATUS_COLORS[step.status];
                     const isHuman = step.agentId === "human-checkpoint";
+                    const isPending = step.status === "pending";
                     return (
                       <div key={step.id} className="flex items-start gap-3">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold ${sCol.bg} ${sCol.text}`}>
-                          {step.status === "completed" ? <Check size={13} /> : step.status === "active" ? <Clock size={12} /> : i + 1}
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold ${sCol.bg} ${sCol.text} relative`}>
+                          {step.status === "completed" ? (
+                            <Check size={13} />
+                          ) : step.status === "active" ? (
+                            <Clock size={12} />
+                          ) : (
+                            <>
+                              <Circle size={20} className="absolute text-gray-300" strokeWidth={1.5} />
+                              <span className="relative">{i + 1}</span>
+                            </>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <p className="text-xs font-semibold">{lang === "en" ? step.name : step.nameAr}</p>
+                            <p className={`text-xs font-semibold ${isPending ? "text-gray-500" : ""}`}>{lang === "en" ? step.name : step.nameAr}</p>
                             <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${sCol.bg} ${sCol.text}`}>
                               {step.status === "completed" ? t.statusCompleted : step.status === "active" ? t.statusActive : t.statusPending}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 flex-wrap">
                             {isHuman ? (
-                              <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                                <UserIcon size={10} /> {step.agentName}
-                              </span>
+                              <span className="text-[10px] text-gray-500 flex items-center gap-1"><UserIcon size={10} /> {step.agentName}</span>
                             ) : (
-                              <span className="text-[10px] text-[#3B30E0] font-medium">{getAgentName(step.agentId, lang)}</span>
+                              <span className={`text-[10px] font-medium ${isPending ? "text-gray-400" : "text-[#3B30E0]"}`}>{getAgentName(step.agentId, lang)}</span>
                             )}
                             {step.completedAt && (
                               <span className="text-[10px] text-gray-400">· {t.stepCompletedAt} {formatDate(step.completedAt, lang)}</span>
@@ -154,14 +196,12 @@ function ProcessCard({ process, expanded, onToggle }: { process: EmployeeProcess
               {process.activityLog.length > 0 && (
                 <div>
                   <p className="text-[11px] font-bold uppercase text-gray-400 mb-3 tracking-wide">{t.activityLog}</p>
-                  <div className="bg-gray-50 rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                  <div className="bg-gray-50 rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto tasama-scroll">
                     {process.activityLog.map((log, i) => (
                       <div key={i} className="text-[11px] flex items-start gap-2">
                         <span className="text-gray-400 font-mono text-[10px] flex-shrink-0 mt-0.5">{new Date(log.timestamp).toLocaleDateString(lang === "en" ? "en-US" : "ar-SA", { month: "short", day: "numeric" })}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-gray-700">
-                            <span className="text-[#3B30E0] font-semibold">{log.agentName}</span>: {log.description}
-                          </p>
+                          <p className="text-gray-700"><span className="text-[#3B30E0] font-semibold">{log.agentName}</span>: {log.description}</p>
                           <p className="text-[10px] text-gray-500 mt-0.5">→ {log.outcome}</p>
                         </div>
                       </div>

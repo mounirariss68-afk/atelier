@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import {
   Users, CheckCircle2, Wallet, Shield, Inbox, CalendarClock, ChevronRight,
   Brain, ArrowRight, Database, FileEdit, Calculator, ShieldCheck, UserCheck, Send, Banknote, Award, AlertTriangle,
+  AlertCircle, Info, TrendingUp, ShieldAlert,
 } from "lucide-react";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "../DemoLangContext";
@@ -12,11 +13,11 @@ import type { ClientViewId } from "../ClientPortalShell";
 
 const CLIENT_ID = "client-alnakhla";
 
-const INSIGHT_TYPE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
-  "info": { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500" },
-  "action-required": { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" },
-  "opportunity": { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
-  "risk": { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500" },
+const INSIGHT_META: Record<string, { bg: string; text: string; dot: string; icon: typeof AlertCircle; labelKey: "insightAction" | "insightOpportunity" | "insightRisk" | "insightInfo" }> = {
+  "info": { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", icon: Info, labelKey: "insightInfo" },
+  "action-required": { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", icon: AlertCircle, labelKey: "insightAction" },
+  "opportunity": { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", icon: TrendingUp, labelKey: "insightOpportunity" },
+  "risk": { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", icon: ShieldAlert, labelKey: "insightRisk" },
 };
 
 const PIPELINE_ICONS = [Database, FileEdit, Calculator, ShieldCheck, UserCheck, Send, Banknote, Award];
@@ -29,6 +30,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
   const client = data.clients.find((c) => c.id === CLIENT_ID);
   const employees = data.employees.filter((e) => e.clientId === CLIENT_ID);
   const activeEmployees = employees.filter((e) => e.status !== "separated");
+  const separatedCount = employees.length - activeEmployees.length;
   const saudi = activeEmployees.filter((e) => e.isSaudi).length;
   const expat = activeEmployees.length - saudi;
 
@@ -45,40 +47,55 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
 
   const insights = client ? generateClientAgentInsights(CLIENT_ID).slice(0, 4) : [];
 
-  // Empty-state guard: if seed didn't load, surface a clear warning instead of
-  // showing zeroed-out KPIs that look broken to the demo viewer.
   const hasNoEmployees = !client || activeEmployees.length === 0;
 
-  // Today is anchored at 2026-05-05. The current cycle is May 2026 (in-preparation).
-  // April 2026 is the most recent settled cycle, so we render its pipeline as Complete.
   const cutoffDay = client?.payrollCutoffDay ?? 25;
   const NOW = new Date("2026-05-05T00:00:00Z");
-  const cutoffDate = new Date(Date.UTC(2026, 4, cutoffDay)); // May 2026
+  const cutoffDate = new Date(Date.UTC(2026, 4, cutoffDay));
   const settleDate = new Date(Date.UTC(2026, 4, 27));
   const daysToCutoff = Math.max(0, Math.ceil((cutoffDate.getTime() - NOW.getTime()) / 86_400_000));
   const monthShort = (d: Date) => d.toLocaleString(lang === "en" ? "en-US" : "ar-SA", { month: "short", day: "numeric", timeZone: "UTC" });
 
-  // Pipeline reflects the *settled* April 2026 cycle (audit trail of what just shipped).
   const pipelineSteps = [
-    { key: "DataCutoff", labelKey: "stepDataCutoff", agent: "payroll-orchestrator", date: "Apr 25" },
-    { key: "EmployeeUpdates", labelKey: "stepEmployeeUpdates", agent: "document-intelligence", date: "Apr 26" },
-    { key: "Calculations", labelKey: "stepCalculations", agent: "salary-calculation", date: "Apr 27" },
-    { key: "Review", labelKey: "stepReview", agent: "performance-audit", date: "Apr 28" },
-    { key: "Approval", labelKey: "stepApproval", agent: "human-checkpoint", date: "Apr 29" },
-    { key: "BankTransfer", labelKey: "stepBankTransfer", agent: "mudad-bank-transfer", date: "Apr 30" },
-    { key: "MudadFiled", labelKey: "stepMudadFiled", agent: "gosi-compliance", date: "Apr 30" },
-    { key: "Complete", labelKey: "stepComplete", agent: "payroll-orchestrator", date: "May 1" },
-  ] as const;
+    { key: "DataCutoff", labelKey: "stepDataCutoff" as const, friendlyKey: "pipelineStepFriendly_DataCutoff" as const, agent: "payroll-orchestrator", date: "Apr 25" },
+    { key: "EmployeeUpdates", labelKey: "stepEmployeeUpdates" as const, friendlyKey: "pipelineStepFriendly_EmployeeUpdates" as const, agent: "document-intelligence", date: "Apr 26" },
+    { key: "Calculations", labelKey: "stepCalculations" as const, friendlyKey: "pipelineStepFriendly_Calculations" as const, agent: "salary-calculation", date: "Apr 27" },
+    { key: "Review", labelKey: "stepReview" as const, friendlyKey: "pipelineStepFriendly_Review" as const, agent: "performance-audit", date: "Apr 28" },
+    { key: "Approval", labelKey: "stepApproval" as const, friendlyKey: "pipelineStepFriendly_Approval" as const, agent: "human-checkpoint", date: "Apr 29" },
+    { key: "BankTransfer", labelKey: "stepBankTransfer" as const, friendlyKey: "pipelineStepFriendly_BankTransfer" as const, agent: "mudad-bank-transfer", date: "Apr 30" },
+    { key: "MudadFiled", labelKey: "stepMudadFiled" as const, friendlyKey: "pipelineStepFriendly_MudadFiled" as const, agent: "gosi-compliance", date: "Apr 30" },
+    { key: "Complete", labelKey: "stepComplete" as const, friendlyKey: "pipelineStepFriendly_Complete" as const, agent: "payroll-orchestrator", date: "May 1" },
+  ];
 
-  // For the KPIs we report on the most recent *settled* run (April 2026), not May (which is mid-prep).
   const settledRun = runs.find((r) => r.status !== "in-preparation") ?? lastRun;
   const settledPrev = runs.filter((r) => r.status !== "in-preparation")[1];
   const settledGrowth = settledRun && settledPrev ? ((settledRun.totalGross - settledPrev.totalGross) / settledPrev.totalGross) * 100 : monthGrowth;
   const period = settledRun ? `${getMonthName(settledRun.periodMonth, lang)} ${settledRun.periodYear}` : t.kpiPayrollPeriod;
-  const nextPayrollLabel = monthShort(cutoffDate); // e.g. "May 25"
+  const approvedDate = settledRun?.approvedAt
+    ? new Date(settledRun.approvedAt).toLocaleDateString(lang === "en" ? "en-US" : "ar-SA", { month: "short", day: "numeric", year: "numeric" })
+    : "Apr 29, 2026";
+  const nextPayrollLabel = monthShort(cutoffDate);
   const nextPayrollSub = lang === "en"
     ? `Cutoff in ${daysToCutoff}d · settles ${monthShort(settleDate)}`
     : `الإقفال خلال ${daysToCutoff} أيام · التسوية ${monthShort(settleDate)}`;
+
+  const AGENT_TO_VIEW: Record<string, ClientViewId> = {
+    "document-intelligence": "documents",
+    "eosb-provision": "requests",
+    "leave-management": "requests",
+    "compliance-officer": "requests",
+    "salary-calculation": "payroll",
+    "payroll-orchestrator": "payroll",
+    "mudad-bank-transfer": "processes",
+    "gosi-compliance": "processes",
+    "performance-audit": "employees",
+    "saudization": "employees",
+  };
+  const insightCta = (type: string, agent: string): { label: string; target: ClientViewId } | null => {
+    if (type !== "action-required") return null;
+    const target = AGENT_TO_VIEW[agent] ?? "requests";
+    return { label: t.ctaReview, target };
+  };
 
   return (
     <div className="space-y-6">
@@ -103,25 +120,45 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard icon={Users} color="#0F0698" value={String(activeEmployees.length)} label={t.kpiActiveEmployees} sub={`${saudi} • ${expat}`} subTitle={t.kpiActiveEmployeesSub} onClick={() => onNavigate("employees")} delay={0} />
-        <KpiCard icon={CheckCircle2} color="#10B981" value={t.kpiPayrollApproved} label={t.kpiPayrollStatus} sub={period} subTitle="" onClick={() => onNavigate("payroll")} delay={0.05} />
-        <KpiCard icon={Wallet} color="#3B30E0" value={settledRun ? formatSAR(settledRun.totalGross) : "—"} label={t.kpiTotalGross} sub={`${settledGrowth >= 0 ? "+" : ""}${settledGrowth.toFixed(1)}%`} subTitle={t.kpiTotalGrossSub} onClick={() => onNavigate("payroll")} delay={0.1} />
-        <KpiCard icon={Shield} color="#7C3AED" value={settledRun ? formatSAR(settledRun.totalGosiEmployer + settledRun.totalGosiEmployee) : "—"} label={t.kpiGosi} sub="" subTitle={t.kpiGosiSub} onClick={() => onNavigate("processes")} delay={0.15} />
-        <KpiCard icon={Inbox} color="#F59E0B" value={String(openRequests.length)} label={t.kpiPendingRequests} sub="" subTitle={t.kpiPendingRequestsSub} onClick={() => onNavigate("requests")} delay={0.2} />
-        <KpiCard icon={CalendarClock} color="#3B82F6" value={nextPayrollLabel} label={t.kpiNextPayroll} sub={`T-${daysToCutoff}d`} subTitle={nextPayrollSub} onClick={() => onNavigate("payroll")} delay={0.25} />
+      {/* KPI row — horizontal scroll w/ right-edge fade below lg */}
+      <div className="relative -mx-1">
+        <div className="lg:hidden absolute top-0 bottom-0 end-0 w-12 bg-gradient-to-l from-gray-50 to-transparent pointer-events-none z-10" />
+        <div className="flex lg:grid lg:grid-cols-6 gap-3 overflow-x-auto lg:overflow-visible tasama-scroll px-1 pb-1 snap-x snap-mandatory">
+          <KpiCard
+            icon={Users} color="#0F0698"
+            value={String(activeEmployees.length)}
+            label={t.kpiActiveEmployees}
+            sub={separatedCount > 0 ? `${separatedCount} ${t.activeSeparated}` : `${saudi} • ${expat}`}
+            subTitle={t.kpiActiveEmployeesSub}
+            tooltip={t.activeTooltip}
+            onClick={() => onNavigate("employees")} delay={0}
+          />
+          <KpiCard
+            icon={CheckCircle2} color="#10B981"
+            value={t.kpiPayrollApproved}
+            label={t.kpiPayrollStatus}
+            sub={`${t.approvedOn} ${approvedDate}`}
+            subTitle={period}
+            onClick={() => onNavigate("payroll")} delay={0.05}
+          />
+          <KpiCard icon={Wallet} color="#3B30E0" value={settledRun ? formatSAR(settledRun.totalGross) : "—"} label={t.kpiTotalGross} sub={`${settledGrowth >= 0 ? "+" : ""}${settledGrowth.toFixed(1)}%`} subTitle={t.kpiTotalGrossSub} onClick={() => onNavigate("payroll")} delay={0.1} />
+          <KpiCard icon={Shield} color="#7C3AED" value={settledRun ? formatSAR(settledRun.totalGosiEmployer + settledRun.totalGosiEmployee) : "—"} label={t.kpiGosi} sub="" subTitle={t.kpiGosiSub} onClick={() => onNavigate("processes")} delay={0.15} />
+          <KpiCard icon={Inbox} color="#F59E0B" value={String(openRequests.length)} label={t.kpiPendingRequests} sub="" subTitle={t.kpiPendingRequestsSub} onClick={() => onNavigate("requests")} delay={0.2} />
+          <KpiCard icon={CalendarClock} color="#3B82F6" value={nextPayrollLabel} label={t.kpiNextPayroll} sub={`T-${daysToCutoff}d`} subTitle={nextPayrollSub} onClick={() => onNavigate("payroll")} delay={0.25} />
+        </div>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+      {/* Pipeline — emerald wash + CheckCircle2 */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gradient-to-br from-emerald-50/60 via-white to-white rounded-xl border border-emerald-100/80 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-emerald-100/80 flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-sm font-bold flex items-center gap-2">
-              <CheckCircle2 size={15} className="text-[#0F0698]" /> {t.pipelineTitle}
+              <CheckCircle2 size={15} className="text-emerald-600" /> {t.pipelineTitle}
             </h2>
             <p className="text-[11px] text-gray-400 mt-0.5">{t.pipelineSubtitle}</p>
           </div>
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-            {t.pipelineComplete}
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1.5">
+            <CheckCircle2 size={11} /> {t.cycleComplete}
           </span>
         </div>
         <div className="p-5">
@@ -130,16 +167,19 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
               const Icon = PIPELINE_ICONS[i];
               return (
                 <div key={step.key} className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0F0698] to-[#3B30E0] text-white flex items-center justify-center shadow-sm">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-sm relative">
                     <Icon size={16} />
+                    <CheckCircle2 size={11} className="absolute -bottom-0.5 -end-0.5 text-emerald-700 bg-white rounded-full" />
                   </div>
-                  <p className="text-[11px] font-semibold mt-2 leading-tight">{t[step.labelKey]}</p>
-                  <p className="text-[9px] text-gray-400 mt-0.5">{step.date}</p>
-                  <p className="text-[9px] text-[#3B30E0] font-medium mt-0.5 line-clamp-2">
-                    {step.agent === "human-checkpoint"
+                  <p
+                    className="text-[11px] font-semibold mt-2 leading-tight"
+                    title={step.agent === "human-checkpoint"
                       ? (lang === "en" ? "Manager" : "المدير")
                       : getAgentName(step.agent, lang)}
+                  >
+                    {t[step.friendlyKey] || t[step.labelKey]}
                   </p>
+                  <p className="text-[9px] text-gray-400 mt-0.5">{step.date}</p>
                 </div>
               );
             })}
@@ -147,34 +187,65 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
         </div>
       </motion.div>
 
+      {/* AI Insights — legend + lucide tags + tooltips + CTAs */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
           <Brain size={15} className="text-[#0F0698]" />
           <h2 className="text-sm font-bold">{t.insightsTitle}</h2>
           <span className="text-[9px] font-bold bg-[#0F0698] text-white px-1.5 py-0.5 rounded-full">{t.aiPill}</span>
           <span className="text-[10px] text-gray-400 ms-auto">{t.insightsSubtitle}</span>
+        </div>
+        <div className="px-5 py-2.5 border-b border-gray-50 bg-gray-50/60 flex items-center gap-3 flex-wrap text-[10px] text-gray-500">
+          <span className="font-semibold uppercase tracking-wider">{t.legendTitle}:</span>
+          {(["action-required", "info", "opportunity", "risk"] as const).map((k) => {
+            const m = INSIGHT_META[k];
+            const Ic = m.icon;
+            return (
+              <span key={k} className="flex items-center gap-1.5">
+                <Ic size={11} className={m.text} />
+                <span className={`${m.text} font-medium`}>{t[m.labelKey]}</span>
+              </span>
+            );
+          })}
         </div>
         {insights.length === 0 ? (
           <div className="p-6 text-center text-xs text-gray-400">{t.insightsEmpty}</div>
         ) : (
           <div className="divide-y divide-gray-50">
             {insights.map((ins) => {
-              const colors = INSIGHT_TYPE_COLORS[ins.type] ?? INSIGHT_TYPE_COLORS.info;
+              const meta = INSIGHT_META[ins.type] ?? INSIGHT_META.info;
+              const Ic = meta.icon;
+              const cta = insightCta(ins.type, ins.agentSource);
               return (
                 <div key={ins.id} className="px-5 py-3.5 hover:bg-gray-50/50 transition-colors">
                   <div className="flex items-start gap-3">
-                    <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${colors.dot}`} />
+                    <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${meta.dot}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h4 className="text-xs font-semibold text-gray-800">{lang === "en" ? ins.title : ins.titleAr}</h4>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${colors.bg} ${colors.text} uppercase`}>
-                          {ins.type === "action-required" ? (lang === "en" ? "Action" : "إجراء") : ins.type === "opportunity" ? (lang === "en" ? "Opportunity" : "فرصة") : ins.type === "risk" ? (lang === "en" ? "Risk" : "خطر") : (lang === "en" ? "Info" : "معلومة")}
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${meta.bg} ${meta.text} uppercase`}>
+                          <Ic size={9} /> {t[meta.labelKey]}
+                        </span>
+                        <span
+                          className="text-[9px] font-semibold text-gray-500 cursor-help"
+                          title={lang === "en"
+                            ? `Confidence: ${ins.confidence}% — derived by ${getAgentName(ins.agentSource, lang)}`
+                            : `الثقة: ${ins.confidence}% — مستنتجة بواسطة ${getAgentName(ins.agentSource, lang)}`}
+                        >
+                          {ins.confidence}% {t.confidenceLabel}
                         </span>
                       </div>
                       <p className="text-[11px] text-gray-500 leading-relaxed">{lang === "en" ? ins.detail : ins.detailAr}</p>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="text-[10px] text-gray-400">{t.insightAgentLabel}: <span className="text-[#3B30E0] font-medium">{getAgentName(ins.agentSource, lang)}</span></span>
-                        <span className="text-[10px] text-gray-400">{ins.confidence}% {t.confidenceLabel}</span>
+                        {cta ? (
+                          <button
+                            onClick={() => onNavigate(cta.target)}
+                            className={`text-[11px] font-semibold ${meta.text} hover:underline inline-flex items-center gap-1`}
+                          >
+                            {cta.label}
+                          </button>
+                        ) : null}
+                        <span className="text-[10px] text-gray-300">{t.insightAgentLabel}: <span className="text-gray-400 font-medium">{getAgentName(ins.agentSource, lang)}</span></span>
                       </div>
                     </div>
                     <ChevronRight size={14} className="text-gray-300 mt-1 flex-shrink-0 rtl:rotate-180" />
@@ -218,8 +289,8 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
   );
 }
 
-function KpiCard({ icon: Icon, color, value, label, sub, subTitle, onClick, delay }: {
-  icon: typeof Users; color: string; value: string; label: string; sub: string; subTitle: string; onClick: () => void; delay: number;
+function KpiCard({ icon: Icon, color, value, label, sub, subTitle, onClick, delay, tooltip }: {
+  icon: typeof Users; color: string; value: string; label: string; sub: string; subTitle: string; onClick: () => void; delay: number; tooltip?: string;
 }) {
   return (
     <motion.button
@@ -227,7 +298,8 @@ function KpiCard({ icon: Icon, color, value, label, sub, subTitle, onClick, dela
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
       onClick={onClick}
-      className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5 text-left hover:shadow-md transition-shadow"
+      title={tooltip}
+      className="snap-start flex-shrink-0 w-44 lg:w-auto bg-white rounded-xl border border-gray-100 shadow-sm p-3.5 text-left hover:shadow-md hover:border-indigo-200 transition-all"
     >
       <div className="flex items-center justify-between mb-2">
         <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: color + "15" }}>

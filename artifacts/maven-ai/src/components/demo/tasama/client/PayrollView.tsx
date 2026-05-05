@@ -1,10 +1,12 @@
-import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
-import { Download, ArrowUp, ArrowDown, Wallet, ShieldCheck, Banknote, Users, CalendarClock, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Download, ArrowUp, ArrowDown, Wallet, ShieldCheck, Banknote, Users, CalendarClock, Loader2, X, FileText } from "lucide-react";
+import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell } from "recharts";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "../DemoLangContext";
 import { clientPayroll, tDict } from "../tasama-i18n";
-import { formatSAR, getMonthName } from "@/data/tasama-seed";
+import { useToast } from "./ToastContext";
+import { formatSAR, getMonthName, type Payslip, type TasamaEmployee } from "@/data/tasama-seed";
 
 const CLIENT_ID = "client-alnakhla";
 
@@ -12,6 +14,7 @@ export default function PayrollView() {
   const { lang } = useTasamaDemoLang();
   const t = tDict(clientPayroll, lang);
   const data = useTasamaData();
+  const { toast } = useToast();
   const client = data.clients.find((c) => c.id === CLIENT_ID);
 
   const runs = useMemo(
@@ -21,27 +24,18 @@ export default function PayrollView() {
     [data.payrollRuns],
   );
 
-  // Demo "today" anchor: 2026-05-05. Surface the live in-preparation cycle
-  // alongside the (settled) payroll register so the client sees what's next.
   const NOW = new Date("2026-05-05T00:00:00Z");
   const inPrepRun = runs.find((r) => r.status === "in-preparation");
   const cutoffDay = client?.payrollCutoffDay ?? 25;
-  const cutoffDate = inPrepRun
-    ? new Date(Date.UTC(inPrepRun.periodYear, inPrepRun.periodMonth - 1, cutoffDay))
-    : null;
-  const settleDate = inPrepRun
-    ? new Date(Date.UTC(inPrepRun.periodYear, inPrepRun.periodMonth - 1, 27))
-    : null;
-  const daysToCutoff = cutoffDate
-    ? Math.max(0, Math.ceil((cutoffDate.getTime() - NOW.getTime()) / 86_400_000))
-    : 0;
+  const cutoffDate = inPrepRun ? new Date(Date.UTC(inPrepRun.periodYear, inPrepRun.periodMonth - 1, cutoffDay)) : null;
+  const settleDate = inPrepRun ? new Date(Date.UTC(inPrepRun.periodYear, inPrepRun.periodMonth - 1, 27)) : null;
+  const daysToCutoff = cutoffDate ? Math.max(0, Math.ceil((cutoffDate.getTime() - NOW.getTime()) / 86_400_000)) : 0;
   const fmtDate = (d: Date) => d.toLocaleString(lang === "en" ? "en-US" : "ar-SA", { month: "short", day: "numeric", timeZone: "UTC" });
 
-  // Default to the most recent *settled* run (April 2026), not the in-prep May run
   const settledRuns = useMemo(() => runs.filter((r) => r.status !== "in-preparation"), [runs]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(settledRuns[0]?.id ?? runs[0]?.id ?? null);
   const [showVariance, setShowVariance] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [drawerPayslip, setDrawerPayslip] = useState<Payslip | null>(null);
 
   const selectedRun = runs.find((r) => r.id === selectedRunId) ?? runs[0];
   const prevRun = runs[runs.findIndex((r) => r.id === selectedRun?.id) + 1];
@@ -77,21 +71,21 @@ export default function PayrollView() {
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, 6);
 
-  const trend = runs.slice(0, 6).reverse();
-  const trendMax = Math.max(...trend.map((r) => r.totalGross), 1);
+  const currentRunId = inPrepRun?.id ?? runs[0]?.id;
+  const trend = useMemo(() => runs.slice(0, 6).reverse().map((r) => ({
+    id: r.id,
+    label: getMonthName(r.periodMonth, lang).slice(0, 3),
+    gross: r.totalGross,
+    isCurrent: r.id === currentRunId,
+    isSelected: r.id === selectedRun?.id,
+  })), [runs, lang, selectedRun?.id, currentRunId]);
 
-  const download = () => {
-    setToast(t.downloadToast);
-    setTimeout(() => setToast(null), 2000);
-  };
+  const isRtl = lang === "ar";
 
   return (
     <div className="space-y-5">
       {inPrepRun && cutoffDate && settleDate && (
-        <motion.div
-          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-[#0F0698] to-[#3B30E0] text-white rounded-xl p-4 flex items-center gap-4 shadow-sm"
-        >
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-[#0F0698] to-[#3B30E0] text-white rounded-xl p-4 flex items-center gap-4 shadow-sm">
           <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center flex-shrink-0">
             <Loader2 size={18} className="animate-spin" />
           </div>
@@ -102,8 +96,7 @@ export default function PayrollView() {
               </span>
               <p className="text-sm font-bold">
                 {getMonthName(inPrepRun.periodMonth, lang)} {inPrepRun.periodYear}
-                {" "}
-                <span className="text-blue-100 font-normal">· {inPrepRun.employeeCount} {lang === "en" ? "employees" : "موظف"}</span>
+                {" "}<span className="text-blue-100 font-normal">· {inPrepRun.employeeCount} {lang === "en" ? "employees" : "موظف"}</span>
               </p>
             </div>
             <p className="text-[11px] text-blue-100 mt-1">
@@ -126,18 +119,31 @@ export default function PayrollView() {
           <h1 className="text-xl font-bold">{t.title}</h1>
           <p className="text-xs text-gray-500 mt-0.5">{lang === "en" ? "Monthly payroll register" : "سجل الرواتب الشهري"}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-gray-500 uppercase">{t.monthSelector}</span>
-          <select
-            value={selectedRun?.id ?? ""}
-            onChange={(e) => setSelectedRunId(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20"
-          >
-            {runs.map((r) => (
-              <option key={r.id} value={r.id}>{getMonthName(r.periodMonth, lang)} {r.periodYear}</option>
-            ))}
-          </select>
-        </div>
+      </div>
+
+      {/* Period pill row */}
+      <div className="flex items-center gap-2 overflow-x-auto tasama-scroll pb-1 -mx-1 px-1">
+        <span className="text-[11px] font-semibold text-gray-500 uppercase flex-shrink-0">{t.monthSelector}</span>
+        {runs.slice(0, 6).map((r) => {
+          const active = r.id === selectedRun?.id;
+          const isInPrep = r.status === "in-preparation";
+          return (
+            <button
+              key={r.id}
+              onClick={() => setSelectedRunId(r.id)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors border ${
+                active
+                  ? "bg-[#0F0698] text-white border-[#0F0698]"
+                  : isInPrep
+                    ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-[#0F0698] hover:text-[#0F0698]"
+              }`}
+            >
+              {getMonthName(r.periodMonth, lang).slice(0, 3)} {r.periodYear}
+              {isInPrep && <span className="ms-1 text-[9px] opacity-70">●</span>}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -151,18 +157,33 @@ export default function PayrollView() {
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-bold">{t.trendTitle}</h2>
-            <span className="text-[10px] text-gray-400">{t.trendGross}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-[#4f46e5]" /> {t.chartCurrentBadge}
+              </span>
+              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-indigo-200" /> {t.chartTooltipGross}
+              </span>
+            </div>
           </div>
-          <div className="flex items-end gap-3 h-32">
-            {trend.map((r) => (
-              <div key={r.id} className="flex-1 flex flex-col items-center gap-1.5">
-                <span className="text-[9px] text-gray-400">{(r.totalGross / 1000).toFixed(0)}k</span>
-                <div className="w-full bg-blue-50 rounded-t-lg overflow-hidden flex items-end" style={{ height: "100%" }}>
-                  <div className="w-full bg-gradient-to-t from-[#0F0698] to-[#3B30E0] rounded-t-lg transition-all" style={{ height: `${(r.totalGross / trendMax) * 100}%` }} />
-                </div>
-                <span className="text-[10px] font-semibold text-gray-500">{getMonthName(r.periodMonth, lang).slice(0, 3)}</span>
-              </div>
-            ))}
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={trend} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="20%">
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={false} tickLine={false} reversed={isRtl} />
+                <YAxis hide domain={[0, "dataMax + 50000"]} />
+                <Tooltip
+                  cursor={{ fill: "rgba(15, 6, 152, 0.04)" }}
+                  contentStyle={{ borderRadius: 8, border: "1px solid #E5E7EB", fontSize: 11, padding: "6px 10px" }}
+                  formatter={(value: number) => [formatSAR(value), t.chartTooltipGross]}
+                  labelStyle={{ color: "#0F0698", fontWeight: 600 }}
+                />
+                <Bar dataKey="gross" radius={[6, 6, 0, 0]} onClick={(d: { id?: string }) => d.id && setSelectedRunId(d.id)} className="cursor-pointer">
+                  {trend.map((d) => (
+                    <Cell key={d.id} fill={d.isCurrent ? "#4f46e5" : d.isSelected ? "#6366f1" : "#c7d2fe"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </motion.div>
       )}
@@ -178,7 +199,7 @@ export default function PayrollView() {
             </button>
           )}
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto tasama-scroll">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-[10px] font-semibold text-gray-500 uppercase">
               <tr>
@@ -204,7 +225,7 @@ export default function PayrollView() {
                 const statusLabel = p.paymentStatus === "paid" ? t.statusPaid : p.paymentStatus === "rejected" ? t.statusRejected : t.statusPending;
                 const statusColor = p.paymentStatus === "paid" ? "bg-emerald-50 text-emerald-700" : p.paymentStatus === "rejected" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
                 return (
-                  <tr key={p.id} className="border-t border-gray-50 hover:bg-gray-50/60">
+                  <tr key={p.id} onClick={() => setDrawerPayslip(p)} className="border-t border-gray-50 hover:bg-gray-50/60 cursor-pointer">
                     <td className="px-4 py-2.5">
                       <p className="text-xs font-semibold">{lang === "en" ? e.fullNameEn : e.fullNameAr}</p>
                       <p className="text-[10px] text-gray-400">{e.id}</p>
@@ -220,8 +241,8 @@ export default function PayrollView() {
                       <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusColor}`}>{statusLabel}</span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <button onClick={download} className="text-[11px] text-[#0F0698] hover:underline flex items-center gap-1" title={t.download}>
-                        <Download size={12} />
+                      <button onClick={(ev) => { ev.stopPropagation(); setDrawerPayslip(p); }} className="text-[11px] text-[#0F0698] hover:underline flex items-center gap-1" title={t.download}>
+                        <FileText size={12} />
                       </button>
                     </td>
                   </tr>
@@ -272,18 +293,23 @@ export default function PayrollView() {
         </motion.div>
       )}
 
-      {toast && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed bottom-6 start-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-lg z-50">
-          {toast}
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {drawerPayslip && (
+          <PayslipDrawer
+            payslip={drawerPayslip}
+            employee={employees.find((e) => e.id === drawerPayslip.employeeId)}
+            onClose={() => setDrawerPayslip(null)}
+            onDownload={() => toast(t.drawerPdfToast, "info")}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function SummaryCard({ icon: Icon, color, label, value }: { icon: typeof Wallet; color: string; label: string; value: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md hover:border-indigo-200 transition-all">
       <div className="flex items-center gap-2 mb-1.5">
         <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: color + "15" }}>
           <Icon size={14} style={{ color }} />
@@ -292,5 +318,103 @@ function SummaryCard({ icon: Icon, color, label, value }: { icon: typeof Wallet;
       </div>
       <p className="text-lg font-bold">{value}</p>
     </div>
+  );
+}
+
+function PayslipDrawer({ payslip, employee, onClose, onDownload }: { payslip: Payslip; employee?: TasamaEmployee; onClose: () => void; onDownload: () => void }) {
+  const { lang } = useTasamaDemoLang();
+  const t = tDict(clientPayroll, lang);
+  const isRtl = lang === "ar";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const earnings = [
+    { label: t.colBasic, value: payslip.basicSalary },
+    { label: t.colHousing, value: payslip.housingAllowance },
+    { label: t.colTransport, value: payslip.transportAllowance },
+    { label: t.colOvertime, value: payslip.overtime },
+    { label: lang === "en" ? "Bonus" : "مكافأة", value: payslip.bonus },
+    { label: lang === "en" ? "Other allowances" : "بدلات أخرى", value: payslip.otherAllowances },
+    { label: lang === "en" ? "Retro adjustment" : "تسوية بأثر رجعي", value: payslip.retroAdjustment },
+  ].filter((r) => r.value !== 0);
+
+  const deductions = [
+    { label: t.colGosi, value: payslip.gosiEmployeeDeduction },
+    { label: lang === "en" ? "Other deductions" : "خصومات أخرى", value: payslip.otherDeductions },
+  ].filter((r) => r.value !== 0);
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
+      <motion.div
+        initial={{ x: isRtl ? "-100%" : "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: isRtl ? "-100%" : "100%" }}
+        transition={{ type: "spring", damping: 28, stiffness: 280 }}
+        className={`fixed top-0 ${isRtl ? "left-0" : "right-0"} h-full w-[420px] max-w-full bg-white shadow-2xl z-50 overflow-y-auto tasama-scroll flex flex-col`}
+        dir={isRtl ? "rtl" : "ltr"}
+      >
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 z-10">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <FileText size={18} className="text-[#0F0698]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold truncate">{employee ? (lang === "en" ? employee.fullNameEn : employee.fullNameAr) : "—"}</p>
+            <p className="text-[11px] text-gray-500">{getMonthName(payslip.periodMonth, lang)} {payslip.periodYear} · {t.drawerTitle}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg" aria-label="Close"><X size={18} /></button>
+        </div>
+
+        <div className="p-5 space-y-5 flex-1">
+          <div>
+            <p className="text-[11px] font-bold uppercase text-gray-400 mb-2 tracking-wide">{t.drawerEarnings}</p>
+            <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+              {earnings.map((r) => (
+                <div key={r.label} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600">{r.label}</span>
+                  <span className="font-semibold text-gray-800">{formatSAR(r.value)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-200 mt-2">
+                <span className="font-bold uppercase text-gray-600">{t.colGross}</span>
+                <span className="font-bold text-gray-900">{formatSAR(payslip.grossPay)}</span>
+              </div>
+            </div>
+          </div>
+
+          {deductions.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase text-gray-400 mb-2 tracking-wide">{t.drawerDeductions}</p>
+              <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                {deductions.map((r) => (
+                  <div key={r.label} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">{r.label}</span>
+                    <span className="font-semibold text-purple-700">−{formatSAR(r.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100/60 border border-emerald-200 rounded-lg p-4 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase text-emerald-800">{t.drawerNet}</span>
+            <span className="text-xl font-extrabold text-emerald-700">{formatSAR(payslip.netPay)}</span>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4">
+          <button
+            onClick={onDownload}
+            className="w-full px-4 py-2.5 bg-[#0F0698] text-white rounded-lg text-xs font-semibold hover:bg-[#3B30E0] transition-colors flex items-center justify-center gap-2"
+          >
+            <Download size={14} /> {t.drawerDownloadPdf}
+          </button>
+        </div>
+      </motion.div>
+    </>
   );
 }

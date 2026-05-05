@@ -1,43 +1,90 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Upload, FileText, X, Check, AlertTriangle, Brain, ChevronRight, ChevronLeft, FileImage } from "lucide-react";
+import { Search, Upload, FileText, X, Check, AlertTriangle, Brain, ChevronRight, ChevronLeft, ChevronDown, FileImage, Archive, FileCheck2, ScanLine } from "lucide-react";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "../DemoLangContext";
 import { clientDocuments, tDict } from "../tasama-i18n";
+import { useToast } from "./ToastContext";
 import { formatDate, getDocumentTypeLabel, getAgentName, type TasamaDocument, type DocumentType } from "@/data/tasama-seed";
 
 const CLIENT_ID = "client-alnakhla";
 
-const DOC_STATUS_COLORS: Record<string, string> = {
-  digitized: "bg-emerald-50 text-emerald-700",
-  processing: "bg-amber-50 text-amber-700",
-  pending: "bg-blue-50 text-blue-700",
-  rejected: "bg-red-50 text-red-700",
-};
+type SortKey = "date-desc" | "date-asc" | "employee-asc" | "type-asc";
+type GroupKey = "none" | "employee";
+
+const LIFECYCLE_STAGES = [
+  { id: "uploaded", icon: Upload, labelKey: "lifecycleUploaded" as const },
+  { id: "digitized", icon: ScanLine, labelKey: "lifecycleDigitized" as const },
+  { id: "applied", icon: FileCheck2, labelKey: "lifecycleApplied" as const },
+  { id: "archived", icon: Archive, labelKey: "lifecycleArchived" as const },
+];
+
+// All seeded documents are at the "Digitized" stage of the lifecycle.
+const CURRENT_LIFECYCLE_STAGE = 2;
 
 export default function DocumentsView() {
   const { lang } = useTasamaDemoLang();
   const t = tDict(clientDocuments, lang);
   const data = useTasamaData();
+  const { toast } = useToast();
 
   const documents = data.documents.filter((d) => d.clientId === CLIENT_ID);
   const employees = data.employees.filter((e) => e.clientId === CLIENT_ID);
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("date-desc");
+  const [groupKey, setGroupKey] = useState<GroupKey>("none");
   const [selectedDoc, setSelectedDoc] = useState<TasamaDocument | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   const types = useMemo(() => Array.from(new Set(documents.map((d) => d.type))), [documents]);
 
-  const filtered = useMemo(() => documents.filter((d) => {
-    if (filterType !== "all" && d.type !== filterType) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!d.titleEn.toLowerCase().includes(q) && !d.titleAr.includes(search) && !d.referenceNumber.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  }), [documents, filterType, search]);
+  const filtered = useMemo(() => {
+    const list = documents.filter((d) => {
+      if (filterType !== "all" && d.type !== filterType) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (!d.titleEn.toLowerCase().includes(q) && !d.titleAr.includes(search) && !d.referenceNumber.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+    const empName = (id: string | null | undefined) => {
+      if (!id) return "";
+      const e = employees.find((x) => x.id === id);
+      return e ? (lang === "en" ? e.fullNameEn : e.fullNameAr) : "";
+    };
+    return [...list].sort((a, b) => {
+      switch (sortKey) {
+        case "date-asc": return new Date(a.issuedAt).getTime() - new Date(b.issuedAt).getTime();
+        case "employee-asc": return empName(a.employeeId).localeCompare(empName(b.employeeId));
+        case "type-asc": return getDocumentTypeLabel(a.type, lang).localeCompare(getDocumentTypeLabel(b.type, lang));
+        default: return new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime();
+      }
+    });
+  }, [documents, filterType, search, sortKey, lang, employees]);
+
+  const grouped = useMemo(() => {
+    if (groupKey === "none") return [{ key: "all", label: "", items: filtered }];
+    const groups = new Map<string, { key: string; label: string; items: TasamaDocument[] }>();
+    filtered.forEach((d) => {
+      const emp = employees.find((e) => e.id === d.employeeId);
+      const key = d.employeeId ?? "_unassigned";
+      const label = emp ? (lang === "en" ? emp.fullNameEn : emp.fullNameAr) : (lang === "en" ? "Unassigned" : "غير مخصص");
+      const grp = groups.get(key);
+      if (grp) grp.items.push(d);
+      else groups.set(key, { key, label, items: [d] });
+    });
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [filtered, groupKey, employees, lang]);
+
+  const handleQuickDrop = (files: FileList | null) => {
+    setIsDragging(false);
+    if (!files || files.length === 0) return;
+    toast(`${files.length} ${t.quickDropToast}`, "info");
+  };
 
   return (
     <div className="space-y-5">
@@ -51,60 +98,162 @@ export default function DocumentsView() {
         </button>
       </div>
 
+      {/* Quick drop zone */}
+      <div
+        ref={dropRef}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={(e) => { e.preventDefault(); if (!dropRef.current?.contains(e.relatedTarget as Node)) setIsDragging(false); }}
+        onDrop={(e) => { e.preventDefault(); handleQuickDrop(e.dataTransfer.files); }}
+        className={`border-2 border-dashed rounded-xl p-5 text-center transition-colors ${
+          isDragging ? "border-[#0F0698] bg-blue-50/60" : "border-gray-200 bg-gray-50/40 hover:border-[#0F0698]/40 hover:bg-blue-50/20"
+        }`}
+      >
+        <div className="flex items-center justify-center gap-3 text-sm">
+          <Upload size={18} className="text-[#0F0698]" />
+          <p className="font-semibold text-gray-700">{t.quickDropTitle}</p>
+          <span className="text-xs text-gray-400">— {t.quickDropSub}</span>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
           <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchPlaceholder} className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20 focus:border-[#0F0698]" />
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-gray-500 uppercase">{t.filterType}</span>
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white">
-            <option value="all">{t.filterAll}</option>
-            {types.map((tp) => <option key={tp} value={tp}>{getDocumentTypeLabel(tp, lang)}</option>)}
-          </select>
-        </div>
+        <DocsSelect label={t.filterType} value={filterType} onChange={setFilterType} options={[{ value: "all", label: t.filterAll }, ...types.map((tp) => ({ value: tp, label: getDocumentTypeLabel(tp, lang) }))]} />
+        <DocsSelect label={t.sortBy} value={sortKey} onChange={(v) => setSortKey(v as SortKey)} options={[
+          { value: "date-desc", label: t.sortNewest },
+          { value: "date-asc", label: t.sortOldest },
+          { value: "employee-asc", label: t.sortEmployee },
+          { value: "type-asc", label: t.sortDocType },
+        ]} />
+        <DocsSelect label={t.groupBy} value={groupKey} onChange={(v) => setGroupKey(v as GroupKey)} options={[
+          { value: "none", label: t.groupNone },
+          { value: "employee", label: t.groupEmployee },
+        ]} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.length === 0 && (
-          <div className="col-span-full bg-white rounded-xl border border-gray-100 p-8 text-center text-xs text-gray-400">{t.noDocuments}</div>
-        )}
-        {filtered.map((d) => {
-          const emp = employees.find((e) => e.id === d.employeeId);
-          const conf = Math.round(d.overallConfidence * 100);
-          return (
-            <motion.button
-              key={d.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={() => setSelectedDoc(d)}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-start hover:shadow-md hover:border-blue-200 transition-all"
-            >
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <FileText size={16} className="text-[#0F0698]" />
+      {grouped.length === 0 || (grouped.length === 1 && grouped[0].items.length === 0) ? (
+        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-xs text-gray-400">{t.noDocuments}</div>
+      ) : (
+        <div className="space-y-5">
+          {grouped.map((g) => (
+            <div key={g.key}>
+              {groupKey !== "none" && g.label && (
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-[11px] font-bold uppercase text-gray-500 tracking-wide">{g.label}</h3>
+                  <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{g.items.length}</span>
                 </div>
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${DOC_STATUS_COLORS.digitized}`}>{t.statusDigitized}</span>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {g.items.map((d) => {
+                  const emp = employees.find((e) => e.id === d.employeeId);
+                  const conf = Math.round(d.overallConfidence * 100);
+                  const stage = CURRENT_LIFECYCLE_STAGE;
+                  return (
+                    <motion.button
+                      key={d.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      onClick={() => setSelectedDoc(d)}
+                      className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-start hover:shadow-md hover:border-blue-200 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                          <FileText size={16} className="text-[#0F0698]" />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Brain size={10} className="text-[#3B30E0]" />
+                          <span className={`text-[10px] font-bold ${conf >= 90 ? "text-emerald-600" : conf >= 75 ? "text-amber-600" : "text-red-600"}`}>{conf}%</span>
+                        </div>
+                      </div>
+                      <p className="text-xs font-bold mb-1 line-clamp-2">{lang === "en" ? d.titleEn : d.titleAr}</p>
+                      <p className="text-[10px] text-gray-400 mb-2">{getDocumentTypeLabel(d.type, lang)} · {d.referenceNumber}</p>
+                      {emp && <p className="text-[11px] text-gray-600 mb-3">{lang === "en" ? emp.fullNameEn : emp.fullNameAr}</p>}
+
+                      {/* Lifecycle stepper */}
+                      <div className="mt-3 pt-3 border-t border-gray-50">
+                        <div className="flex items-center gap-1">
+                          {LIFECYCLE_STAGES.map((s, i) => {
+                            const StIcon = s.icon;
+                            const idx = i + 1;
+                            const reached = idx <= stage;
+                            const current = idx === stage;
+                            return (
+                              <div key={s.id} className="flex items-center flex-1 last:flex-none">
+                                <div
+                                  className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                                    reached
+                                      ? current
+                                        ? "bg-[#0F0698] text-white ring-2 ring-blue-200"
+                                        : "bg-emerald-100 text-emerald-700"
+                                      : "bg-gray-100 text-gray-300"
+                                  }`}
+                                  title={t[s.labelKey]}
+                                >
+                                  {reached && !current ? <Check size={11} /> : <StIcon size={10} />}
+                                </div>
+                                {i < LIFECYCLE_STAGES.length - 1 && (
+                                  <div className={`flex-1 h-0.5 mx-0.5 ${idx < stage ? "bg-emerald-200" : "bg-gray-100"}`} />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span className="text-[9px] text-gray-400">{formatDate(d.issuedAt, lang)}</span>
+                          <span className="text-[9px] font-semibold text-[#0F0698]">{t[LIFECYCLE_STAGES[stage - 1]?.labelKey ?? "lifecycleDigitized"]}</span>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
-              <p className="text-xs font-bold mb-1 line-clamp-2">{lang === "en" ? d.titleEn : d.titleAr}</p>
-              <p className="text-[10px] text-gray-400 mb-2">{getDocumentTypeLabel(d.type, lang)} · {d.referenceNumber}</p>
-              {emp && <p className="text-[11px] text-gray-600 mb-2">{lang === "en" ? emp.fullNameEn : emp.fullNameAr}</p>}
-              <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-50">
-                <span className="text-[10px] text-gray-400">{formatDate(d.issuedAt, lang)}</span>
-                <div className="flex items-center gap-1">
-                  <Brain size={10} className="text-[#3B30E0]" />
-                  <span className={`text-[10px] font-bold ${conf >= 90 ? "text-emerald-600" : conf >= 75 ? "text-amber-600" : "text-red-600"}`}>{conf}%</span>
-                </div>
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <AnimatePresence>
         {selectedDoc && <SplitViewer doc={selectedDoc} onClose={() => setSelectedDoc(null)} />}
         {uploadOpen && <UploadWizard onClose={() => setUploadOpen(false)} />}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function DocsSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.value === value)?.label ?? value;
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("mousedown", onClick); window.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] font-semibold text-gray-500 uppercase">{label}</span>
+      <div ref={ref} className="relative">
+        <button type="button" onClick={() => setOpen(!open)} className="text-xs border border-gray-200 rounded-lg ps-3 pe-2 py-1.5 bg-white hover:border-[#0F0698]/40 flex items-center gap-1.5 min-w-[120px] justify-between focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
+          <span className="text-gray-700">{current}</span>
+          <ChevronDown size={12} className={`text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        <AnimatePresence>
+          {open && (
+            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.12 }} className="absolute top-full mt-1 start-0 min-w-full bg-white border border-gray-100 rounded-lg shadow-lg z-30 overflow-hidden max-h-64 overflow-y-auto tasama-scroll">
+              {options.map((o) => (
+                <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }} className={`w-full text-start text-xs px-3 py-2 hover:bg-blue-50 ${value === o.value ? "bg-blue-50/60 text-[#0F0698] font-semibold" : "text-gray-700"}`}>
+                  {o.label}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -146,25 +295,25 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
   const { lang } = useTasamaDemoLang();
   const t = tDict(clientDocuments, lang);
   const isRtl = lang === "ar";
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast } = useToast();
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const overall = Math.round(doc.overallConfidence * 100);
   const fields = Object.entries(doc.extractedFields);
 
-  const apply = () => {
-    setToast(t.splitViewerToast);
-    setTimeout(() => { setToast(null); onClose(); }, 1500);
-  };
+  const apply = () => { toast(t.splitViewerToast, "success"); onClose(); };
 
   return (
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ duration: 0.2 }}
+        initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.2 }}
         className="fixed inset-4 md:inset-8 bg-white rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden"
         dir={isRtl ? "rtl" : "ltr"}
       >
@@ -180,13 +329,11 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
             <Brain size={14} className="text-[#0F0698]" />
             <span className="text-[11px] font-semibold text-[#0F0698]">{t.splitViewerOverall}: <span className={`font-bold ${overall >= 90 ? "text-emerald-700" : overall >= 75 ? "text-amber-700" : "text-red-700"}`}>{overall}%</span></span>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg" aria-label={t.splitViewerCancel}>
-            <X size={18} />
-          </button>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg" aria-label={t.splitViewerCancel}><X size={18} /></button>
         </div>
 
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 divide-x divide-gray-100 rtl:divide-x-reverse">
-          <div className="overflow-y-auto bg-gray-50 p-6">
+          <div className="overflow-y-auto tasama-scroll bg-gray-50 p-6">
             <p className="text-[10px] text-gray-400 uppercase font-semibold mb-3">{t.splitViewerOriginal}</p>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-md mx-auto" style={{ minHeight: "500px" }}>
               <div className="border-b border-gray-200 pb-4 mb-4 text-center">
@@ -211,12 +358,11 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
             </div>
           </div>
 
-          <div className="overflow-y-auto p-6">
+          <div className="overflow-y-auto tasama-scroll p-6">
             <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-blue-50/60 border border-blue-100">
               <Brain size={14} className="text-[#0F0698]" />
               <p className="text-[11px] text-[#0F0698] font-semibold">{t.splitViewerExtractedBy}</p>
             </div>
-
             <div className="space-y-2.5">
               {fields.map(([k, v]) => {
                 const conf = Math.round(v.confidence * 100);
@@ -228,15 +374,9 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
                   <div key={k} className="bg-white border border-gray-100 rounded-lg p-3 hover:border-blue-200 transition-colors">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-[11px] font-semibold text-gray-600">{label}</span>
-                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full border ${confColor}`}>
-                        {conf}% {confLabel}
-                      </span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full border ${confColor}`}>{conf}% {confLabel}</span>
                     </div>
-                    <input
-                      value={editedFields[k] ?? v.value}
-                      onChange={(e) => setEditedFields((p) => ({ ...p, [k]: e.target.value }))}
-                      className="w-full text-xs font-semibold text-gray-800 bg-transparent border-none focus:outline-none focus:ring-0 px-0"
-                    />
+                    <input value={editedFields[k] ?? v.value} onChange={(e) => setEditedFields((p) => ({ ...p, [k]: e.target.value }))} className="w-full text-xs font-semibold text-gray-800 bg-transparent border-none focus:outline-none focus:ring-0 px-0" />
                   </div>
                 );
               })}
@@ -246,16 +386,8 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
 
         <div className="flex-shrink-0 px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50">
           <button onClick={onClose} className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg">{t.splitViewerCancel}</button>
-          <button onClick={apply} className="px-4 py-2 text-xs font-semibold bg-[#0F0698] text-white hover:bg-[#3B30E0] rounded-lg flex items-center gap-1.5">
-            <Check size={13} /> {t.splitViewerApply}
-          </button>
+          <button onClick={apply} className="px-4 py-2 text-xs font-semibold bg-[#0F0698] text-white hover:bg-[#3B30E0] rounded-lg flex items-center gap-1.5"><Check size={13} /> {t.splitViewerApply}</button>
         </div>
-
-        {toast && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="absolute bottom-20 start-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-lg">
-            {toast}
-          </motion.div>
-        )}
       </motion.div>
     </>
   );
@@ -283,21 +415,25 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
   const [done, setDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const ACCEPT_MIME = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
-  const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+  const MAX_BYTES = 10 * 1024 * 1024;
 
   const validateAndSetFile = (f: File | null | undefined) => {
     setFileError(null);
     if (!f) return;
     if (!ACCEPT_MIME.includes(f.type) && !/\.(pdf|png|jpe?g)$/i.test(f.name)) {
       setFileError(lang === "en" ? "Only PDF, PNG, or JPG files are accepted." : "يُقبل فقط PDF أو PNG أو JPG.");
-      setFile(null);
-      return;
+      setFile(null); return;
     }
     if (f.size > MAX_BYTES) {
       setFileError(lang === "en" ? "File too large (max 10 MB)." : "الملف كبير جدًا (الحد 10 ميجابايت).");
-      setFile(null);
-      return;
+      setFile(null); return;
     }
     setFile(f);
   };
@@ -309,23 +445,18 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
       setProcessing(true);
       setTimeout(() => { setProcessing(false); setDone(true); }, 1800);
       setTimeout(() => onClose(), 3500);
-    } else {
-      setStep(step + 1);
-    }
+    } else setStep(step + 1);
   };
 
   const NextIcon = isRtl ? ChevronLeft : ChevronRight;
   const BackIcon = isRtl ? ChevronRight : ChevronLeft;
-
   const employee = employees.find((e) => e.id === employeeId);
 
   return (
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
         className="fixed inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 top-1/2 -translate-y-1/2 md:w-[520px] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden"
         dir={isRtl ? "rtl" : "ltr"}
       >
@@ -334,7 +465,6 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
           <p className="text-sm font-bold flex-1">{t.uploadButton}</p>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={16} /></button>
         </div>
-
         <div className="px-5 py-2 border-b border-gray-100 flex items-center gap-2">
           {[t.uploadStep1, t.uploadStep2, t.uploadStep3, t.uploadStep4].map((label, i) => (
             <div key={i} className="flex items-center gap-2 flex-1">
@@ -346,7 +476,6 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-
         <div className="p-5 min-h-[260px]">
           {processing ? (
             <div className="flex flex-col items-center justify-center py-10">
@@ -356,9 +485,7 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
             </div>
           ) : done ? (
             <div className="flex flex-col items-center justify-center py-10">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mb-3">
-                <Check size={22} className="text-emerald-700" />
-              </div>
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mb-3"><Check size={22} className="text-emerald-700" /></div>
               <p className="text-sm font-semibold text-emerald-700">{t.uploadDone}</p>
             </div>
           ) : step === 1 ? (
@@ -373,36 +500,20 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
             <div>
               <label className="text-[11px] font-semibold text-gray-500 uppercase mb-2 block">{t.uploadEmployeePicker}</label>
               <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{lang === "en" ? e.fullNameEn : e.fullNameAr} ({e.id})</option>
-                ))}
+                {employees.map((e) => <option key={e.id} value={e.id}>{lang === "en" ? e.fullNameEn : e.fullNameAr} ({e.id})</option>)}
               </select>
             </div>
           ) : step === 3 ? (
             <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-                className="hidden"
-                onChange={(e) => validateAndSetFile(e.target.files?.[0])}
-                aria-label={t.uploadDropzone}
-              />
+              <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" className="hidden" onChange={(e) => validateAndSetFile(e.target.files?.[0])} aria-label={t.uploadDropzone} />
               <div
-                role="button"
-                tabIndex={0}
+                role="button" tabIndex={0}
                 onClick={() => fileInputRef.current?.click()}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputRef.current?.click(); } }}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                  validateAndSetFile(e.dataTransfer.files?.[0]);
-                }}
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                  isDragging ? "border-[#0F0698] bg-blue-50" : "border-gray-200 hover:border-[#0F0698]"
-                }`}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); validateAndSetFile(e.dataTransfer.files?.[0]); }}
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${isDragging ? "border-[#0F0698] bg-blue-50" : "border-gray-200 hover:border-[#0F0698]"}`}
               >
                 <FileImage size={32} className="text-gray-300 mx-auto mb-3" />
                 <p className="text-sm font-semibold text-gray-600">{t.uploadDropzone}</p>
@@ -412,20 +523,13 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
                     <FileText size={12} className="text-[#0F0698]" />
                     <span className="text-[11px] font-semibold text-[#0F0698]">{file.name}</span>
                     <span className="text-[10px] text-gray-500">({formatBytes(file.size)})</span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                      className="ms-1 text-gray-400 hover:text-red-600"
-                      aria-label={lang === "en" ? "Remove file" : "إزالة الملف"}
-                    >
-                      <X size={12} />
-                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="ms-1 text-gray-400 hover:text-red-600" aria-label={lang === "en" ? "Remove file" : "إزالة الملف"}><X size={12} /></button>
                   </div>
                 )}
               </div>
               {fileError && (
                 <div className="mt-3 flex items-start gap-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-                  <span>{fileError}</span>
+                  <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" /><span>{fileError}</span>
                 </div>
               )}
             </div>
@@ -437,7 +541,6 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
             </div>
           )}
         </div>
-
         {!processing && !done && (
           <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50">
             <button onClick={() => step > 1 ? setStep(step - 1) : onClose()} className="px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-1">

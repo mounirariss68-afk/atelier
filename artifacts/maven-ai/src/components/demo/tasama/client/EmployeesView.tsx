@@ -1,16 +1,25 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X, Download, FileText, ChevronRight, User as UserIcon, AlertTriangle } from "lucide-react";
+import { Search, X, Download, FileText, ChevronRight, ChevronDown, AlertTriangle } from "lucide-react";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "../DemoLangContext";
 import { clientEmployees as t18n, tDict } from "../tasama-i18n";
+import { useToast } from "./ToastContext";
 import {
-  formatSAR, formatPercent, formatDate, getEmployeeStatusLabel, getDepartmentLabel,
+  formatSAR, formatDate, getEmployeeStatusLabel, getDepartmentLabel,
   getNationalityLabel, getMonthName, computeGosi,
   type TasamaEmployee, type EmployeeStatus,
 } from "@/data/tasama-seed";
+import type { ClientViewId } from "../ClientPortalShell";
 
 const CLIENT_ID = "client-alnakhla";
+
+const NATIONALITY_CODE: Record<string, string> = {
+  saudi: "SA", indian: "IN", pakistani: "PK", egyptian: "EG", filipino: "PH",
+  american: "US", jordanian: "JO", syrian: "SY", yemeni: "YE", sudanese: "SD",
+  bangladeshi: "BD", nepali: "NP", british: "GB", lebanese: "LB",
+};
+const natCode = (n: string) => NATIONALITY_CODE[n] ?? n.slice(0, 2).toUpperCase();
 
 const STATUS_COLORS: Record<EmployeeStatus, { bg: string; text: string }> = {
   active: { bg: "bg-emerald-50", text: "text-emerald-700" },
@@ -20,10 +29,11 @@ const STATUS_COLORS: Record<EmployeeStatus, { bg: string; text: string }> = {
   onboarding: { bg: "bg-purple-50", text: "text-purple-700" },
 };
 
-export default function EmployeesView() {
+export default function EmployeesView({ onNavigate }: { onNavigate?: (v: ClientViewId) => void } = {}) {
   const { lang } = useTasamaDemoLang();
   const t = tDict(t18n, lang);
   const data = useTasamaData();
+  const { toast } = useToast();
   const employees = data.employees.filter((e) => e.clientId === CLIENT_ID);
 
   const [search, setSearch] = useState("");
@@ -51,6 +61,37 @@ export default function EmployeesView() {
 
   const selected = selectedId ? employees.find((e) => e.id === selectedId) : null;
 
+  const handleExport = () => {
+    const sc = data.salaryComponents;
+    const headers = ["ID", "Name (EN)", "Name (AR)", "Department", "Position", "Nationality", "Saudi", "Hire Date", "Status", "Basic Salary"];
+    const rows = filtered.map((e) => {
+      const sal = sc.find((s) => s.employeeId === e.id);
+      return [
+        e.id,
+        `"${e.fullNameEn.replace(/"/g, '""')}"`,
+        `"${e.fullNameAr.replace(/"/g, '""')}"`,
+        getDepartmentLabel(e.department, "en"),
+        `"${e.role.replace(/"/g, '""')}"`,
+        getNationalityLabel(e.nationality, "en"),
+        e.isSaudi ? "Yes" : "No",
+        e.hireDate,
+        getEmployeeStatusLabel(e.status, "en"),
+        sal ? sal.basicSalary.toString() : "",
+      ].join(",");
+    });
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `alnakhla-employees-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast(t.exportToast, "success");
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-end justify-between flex-wrap gap-3">
@@ -58,21 +99,44 @@ export default function EmployeesView() {
           <h1 className="text-xl font-bold">{t.title}</h1>
           <p className="text-xs text-gray-500 mt-0.5">{filtered.length} {t.countSuffix}</p>
         </div>
-        <div className="relative">
-          <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t.searchPlaceholder}
-            className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20 focus:border-[#0F0698]"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.searchPlaceholder}
+              className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-56 md:w-64 focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20 focus:border-[#0F0698]"
+            />
+          </div>
+          <button
+            onClick={handleExport}
+            className="px-3 py-2 text-xs font-semibold text-[#0F0698] border border-[#0F0698]/30 rounded-lg hover:bg-blue-50 flex items-center gap-1.5 transition-colors"
+          >
+            <Download size={13} /> <span className="hidden md:inline">{t.exportCsv}</span>
+          </button>
         </div>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <FilterSelect label={t.filterDepartment} value={department} onChange={setDepartment} options={[{ value: "all", label: t.filterAll }, ...departments.map((d) => ({ value: d, label: getDepartmentLabel(d, lang) }))]} />
-        <FilterSelect label={t.filterNationality} value={nationality} onChange={(v) => setNationality(v as "all" | "saudi" | "non-saudi")} options={[{ value: "all", label: t.filterAll }, { value: "saudi", label: t.natSaudi }, { value: "non-saudi", label: t.natNonSaudi }]} />
-        <FilterSelect label={t.filterStatus} value={status} onChange={setStatus} options={[{ value: "all", label: t.filterAll }, ...statuses.map((s) => ({ value: s, label: getEmployeeStatusLabel(s as EmployeeStatus, lang) }))]} />
+        <CustomSelect
+          label={t.filterDepartment}
+          value={department}
+          onChange={setDepartment}
+          options={[{ value: "all", label: t.filterAll }, ...departments.map((d) => ({ value: d, label: getDepartmentLabel(d, lang) }))]}
+        />
+        <CustomSelect
+          label={t.filterNationality}
+          value={nationality}
+          onChange={(v) => setNationality(v as "all" | "saudi" | "non-saudi")}
+          options={[{ value: "all", label: t.filterAll }, { value: "saudi", label: t.natSaudi }, { value: "non-saudi", label: t.natNonSaudi }]}
+        />
+        <CustomSelect
+          label={t.filterStatus}
+          value={status}
+          onChange={setStatus}
+          options={[{ value: "all", label: t.filterAll }, ...statuses.map((s) => ({ value: s, label: getEmployeeStatusLabel(s as EmployeeStatus, lang) }))]}
+        />
       </div>
 
       {employees.length === 0 && (
@@ -92,7 +156,7 @@ export default function EmployeesView() {
       )}
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto tasama-scroll">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-[11px] font-semibold text-gray-500 uppercase">
               <tr>
@@ -112,6 +176,7 @@ export default function EmployeesView() {
               {filtered.map((e) => {
                 const sc = data.salaryComponents.find((s) => s.employeeId === e.id);
                 const sCol = STATUS_COLORS[e.status] ?? STATUS_COLORS.active;
+                const isSeparated = e.status === "separated";
                 return (
                   <tr key={e.id} onClick={() => setSelectedId(e.id)} className="border-t border-gray-50 hover:bg-gray-50/60 cursor-pointer">
                     <td className="px-4 py-3 text-[11px] text-gray-500 font-mono">{e.id}</td>
@@ -122,7 +187,15 @@ export default function EmployeesView() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-gray-800 truncate">{lang === "en" ? e.fullNameEn : e.fullNameAr}</p>
-                          <p className="text-[10px] text-gray-400">{e.isSaudi ? t.saudiPill : t.nonSaudiPill} · {getNationalityLabel(e.nationality, lang)}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span
+                              className={`text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded-md font-mono ${e.isSaudi ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}
+                              title={e.isSaudi ? t.saudiPill : t.nonSaudiPill}
+                            >
+                              {natCode(e.nationality)}
+                            </span>
+                            <span className="text-[10px] text-gray-400 truncate">{getNationalityLabel(e.nationality, lang)}</span>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -131,9 +204,19 @@ export default function EmployeesView() {
                     <td className="px-4 py-3 text-xs text-gray-600">{formatDate(e.hireDate, lang)}</td>
                     <td className="px-4 py-3 text-xs text-gray-700 font-semibold text-end">{sc ? formatSAR(sc.basicSalary) : "—"}</td>
                     <td className="px-4 py-3">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${sCol.bg} ${sCol.text}`}>
-                        {getEmployeeStatusLabel(e.status, lang)}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${sCol.bg} ${sCol.text}`}>
+                          {getEmployeeStatusLabel(e.status, lang)}
+                        </span>
+                        {isSeparated && (
+                          <button
+                            onClick={(ev) => { ev.stopPropagation(); onNavigate ? onNavigate("requests") : setSelectedId(e.id); }}
+                            className="text-[10px] text-[#0F0698] font-semibold hover:underline rtl:rotate-0"
+                          >
+                            {t.viewSettlement}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -150,13 +233,65 @@ export default function EmployeesView() {
   );
 }
 
-function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+function CustomSelect({ label, value, onChange, options }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.value === value)?.label ?? value;
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
     <div className="flex items-center gap-2">
       <span className="text-[11px] font-semibold text-gray-500 uppercase">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="text-xs border border-gray-200 rounded-lg ps-3 pe-2 py-1.5 bg-white hover:border-[#0F0698]/40 transition-colors flex items-center gap-1.5 min-w-[120px] justify-between focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20"
+        >
+          <span className="text-gray-700">{current}</span>
+          <ChevronDown size={12} className={`text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.12 }}
+              className="absolute top-full mt-1 start-0 min-w-full bg-white border border-gray-100 rounded-lg shadow-lg z-30 overflow-hidden max-h-64 overflow-y-auto tasama-scroll"
+            >
+              {options.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => { onChange(o.value); setOpen(false); }}
+                  className={`w-full text-start text-xs px-3 py-2 hover:bg-blue-50 ${value === o.value ? "bg-blue-50/60 text-[#0F0698] font-semibold" : "text-gray-700"}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -177,6 +312,12 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
   const docs = data.documents.filter((d) => d.employeeId === employee.id).slice(0, 4);
   const gosi = sc ? computeGosi(sc.basicSalary + sc.housingAllowance, employee.isSaudi) : null;
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
@@ -185,7 +326,7 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
         animate={{ x: 0 }}
         exit={{ x: isRtl ? "-100%" : "100%" }}
         transition={{ type: "spring", damping: 28, stiffness: 280 }}
-        className={`fixed top-0 ${isRtl ? "left-0" : "right-0"} h-full w-[480px] max-w-full bg-white shadow-2xl z-50 overflow-y-auto`}
+        className={`fixed top-0 ${isRtl ? "left-0" : "right-0"} h-full w-[480px] max-w-full bg-white shadow-2xl z-50 overflow-y-auto tasama-scroll`}
         dir={isRtl ? "rtl" : "ltr"}
       >
         <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 z-10">
