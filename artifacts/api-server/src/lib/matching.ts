@@ -375,7 +375,20 @@ export async function rebuildEquivalences(
     }
   }
 
-  // Reset stale matches before re-matching; upsert preserves them otherwise.
+  // If no matches were produced this run (e.g. scrape drift, parser regression,
+  // empty marketplace snapshot), preserve the previous links and equivalences
+  // rather than wiping them — a single bad run shouldn't blow away every
+  // product↔competitor linkage in the system. The next successful run will
+  // overwrite naturally.
+  if (created.length === 0) {
+    return { scanned: marketplaceRecords.length, created: 0, avgConfidence: 0 };
+  }
+
+  // Reset stale links on marketplace_prices for sources we own, then replace
+  // ALL marketplace-sourced equivalences (not just this run) so that older
+  // matches built before brand normalization or against stale marketplace rows
+  // are flushed and rebuilt from the freshest 7-day snapshot. Only reached
+  // when we have new matches ready to take their place.
   await db
     .update(arcelikMarketplacePricesTable)
     .set({ arcelikProductId: null, matchConfidence: null })
@@ -386,23 +399,6 @@ export async function rebuildEquivalences(
       ),
     );
 
-  if (created.length === 0) {
-    await db
-      .delete(arcelikProductEquivalencesTable)
-      .where(
-        or(
-          ...MARKETPLACE_SOURCES.map((m) =>
-            like(arcelikProductEquivalencesTable.source, `${m}/%`),
-          ),
-        ),
-      );
-    return { scanned: marketplaceRecords.length, created: 0, avgConfidence: 0 };
-  }
-
-  // Replace ALL marketplace-sourced equivalences (not just this run) so that
-  // older matches built before brand normalization or against stale marketplace
-  // rows are flushed and rebuilt from the freshest 7-day snapshot. Both n11
-  // and trendyol live in this table; only flush rows we own.
   await db
     .delete(arcelikProductEquivalencesTable)
     .where(
