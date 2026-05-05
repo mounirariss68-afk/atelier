@@ -1194,10 +1194,22 @@ async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
     locale: "tr-TR",
     viewport: { width: 1366, height: 900 },
+    timezoneId: "Europe/Istanbul",
     extraHTTPHeaders: {
       "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
     },
   });
+
+  // Trendyol geo-detects non-TR IPs (Replit egress is GB) and redirects /sr
+  // requests to /en/select-country, which renders zero product cards. Pre-seed
+  // the storefront cookies so the request lands on the Türkiye storefront
+  // directly. Without these cookies the scrape returns 0 products even though
+  // the underlying selectors (a.product-card[id]) are unchanged.
+  await context.addCookies([
+    { name: "storefrontId", value: "1", domain: ".trendyol.com", path: "/" },
+    { name: "countryCode", value: "TR", domain: ".trendyol.com", path: "/" },
+    { name: "language", value: "tr", domain: ".trendyol.com", path: "/" },
+  ]);
 
   try {
     for (const def of categoryDefs) {
