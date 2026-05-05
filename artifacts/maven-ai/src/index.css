@@ -233,6 +233,15 @@
   animation: shimmer 1.4s infinite;
 }
 
+/* Tasama Operations Dashboard — LIVE pulse */
+@keyframes tasama-live-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+.tasama-live-pulse {
+  animation: tasama-live-pulse 2s ease-in-out infinite;
+}
+
 /* Prose styles for article content */
 .article-content h2 { color: #0E2841; font-weight: 700; font-size: 1.5rem; margin-top: 2rem; margin-bottom: 0.75rem; }
 .article-content h3 { color: #156082; font-weight: 600; font-size: 1.2rem; margin-top: 1.5rem; margin-bottom: 0.5rem; }

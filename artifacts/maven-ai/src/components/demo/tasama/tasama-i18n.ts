@@ -818,6 +818,17 @@ export const shell: Dict = {
   sevMedium: { en: "Medium", ar: "متوسط" },
   sevLow: { en: "Low", ar: "منخفض" },
   loading: { en: "Loading workspace…", ar: "جارٍ تحميل مساحة العمل…" },
+  // Context switcher (top of sidebar)
+  ctxOperations: { en: "Operations", ar: "العمليات" },
+  ctxClientPortal: { en: "Client Portal", ar: "بوابة العميل" },
+  ctxAgentOps: { en: "Agent Ops", ar: "عمليات الوكلاء" },
+  ctxSwitcherHint: { en: "Switch workspace", ar: "تبديل مساحة العمل" },
+  // FAB
+  fabAskAi: { en: "Ask AI Assistant", ar: "اسأل المساعد الذكي" },
+  // Header pending count
+  pendingApprovals: { en: "pending approvals", ar: "موافقات معلّقة" },
+  // Manager identity initials (for avatar)
+  managerInitials: { en: "FA", ar: "ف" },
 };
 
 // ─── Operations Dashboard ────────────────────────────────────────────────
@@ -852,6 +863,98 @@ export const operations: Dict = {
   today: { en: "Due today", ar: "مستحق اليوم" },
   overdue: { en: "Overdue", ar: "متأخر" },
   emptyAlerts: { en: "No active alerts.", ar: "لا توجد تنبيهات نشطة." },
+  // FIX 1 — Critical alerts banner
+  criticalAlertsBanner: { en: "Needs attention", ar: "يحتاج انتباهك" },
+  dismiss: { en: "Dismiss", ar: "إخفاء" },
+  reviewArrow: { en: "Review →", ar: "مراجعة ←" },
+  // FIX 2 — Pending decisions chip + tooltip
+  confidenceTooltipHigh: { en: "High confidence — agents agree the recommendation is sound.", ar: "ثقة مرتفعة — يتفق الوكلاء على سلامة التوصية." },
+  confidenceTooltipMid: { en: "Moderate confidence — review reasoning before approving.", ar: "ثقة متوسطة — راجع المنطق قبل الاعتماد." },
+  confidenceTooltipLow: { en: "Low confidence — needs human judgement.", ar: "ثقة منخفضة — تحتاج إلى حكم بشري." },
+  // FIX 3 — Activity feed
+  activityShowEarlier: { en: "Show earlier events →", ar: "عرض الأحداث السابقة ←" },
+  activityShowLess: { en: "Show less", ar: "عرض أقل" },
+  activityBucketLastHour: { en: "Last hour", ar: "آخر ساعة" },
+  activityBucketToday: { en: "Today", ar: "اليوم" },
+  activityBucketYesterday: { en: "Yesterday", ar: "الأمس" },
+  activityBucketEarlier: { en: "Earlier this week", ar: "في وقت سابق هذا الأسبوع" },
+  // FIX 4 — KPI trends + split sections
+  kpiSectionAtAGlance: { en: "At a glance", ar: "نظرة عامة" },
+  kpiSectionThisMonth: { en: "This month at a glance", ar: "نظرة على هذا الشهر" },
+  kpiSectionPerformance: { en: "Decision performance", ar: "أداء القرارات" },
+  trendVsMar: { en: "vs Mar", ar: "مقابل مارس" },
+  trendVsLastWeek: { en: "vs last week", ar: "مقابل الأسبوع الماضي" },
+  trendUnchanged: { en: "no change", ar: "لا تغيير" },
+  // FIX 5 — Pipeline rail
+  cyclesTitle: { en: "Payroll cycles: in preparation", ar: "دورات الرواتب: قيد التحضير" },
+  cyclesAsOf: { en: "as of May 5, 2026", ar: "حتى 5 مايو 2026" },
+  pipelineIngest: { en: "Ingest", ar: "الاستلام" },
+  pipelineCalculate: { en: "Calculate", ar: "الاحتساب" },
+  pipelineApprove: { en: "Approve", ar: "الاعتماد" },
+  pipelineFile: { en: "File", ar: "التقديم" },
+  pipelineSettle: { en: "Settle", ar: "التسوية" },
+  pipelineCutoff: { en: "Cutoff", ar: "الإقفال" },
+  pipelineSettleDate: { en: "Settle", ar: "التسوية" },
+  pipelineDaysLeft: { en: "left", ar: "متبقٍ" },
+  // FIX 6 — Process efficiency
+  processEffTitle: { en: "Process efficiency: this month", ar: "كفاءة العمليات: هذا الشهر" },
+  // FIX 8 — Operations digest cleanup
+  digestSubtitle: { en: "May 5, 2026 — daily snapshot", ar: "5 مايو 2026 — لقطة يومية" },
+  // FIX 9 — Calendar formatting
+  calendarTitle: { en: "Regulatory calendar", ar: "التقويم التنظيمي" },
+  calendarHint: { en: "Next 6 events across all clients", ar: "أقرب 6 أحداث عبر العملاء" },
+  // Live agent activity (FIX 3)
+  activityTitle: { en: "Live agent activity", ar: "نشاط الوكلاء المباشر" },
+  activitySubtitle: { en: "Real-time decisions and outputs from your AI fleet", ar: "قرارات ومخرجات لحظية من أسطول الوكلاء" },
+  activityReview: { en: "Review →", ar: "مراجعة ←" },
+  // FIX 1 — banner counts + sign-off CTA
+  signOffArrow: { en: "Sign off →", ar: "اعتماد ←" },
+  alertCountSingular: { en: "alert", ar: "تنبيه" },
+  alertCountPlural: { en: "alerts", ar: "تنبيهات" },
+  // FIX 4 — KPI sub-labels and split cards
+  kpiClientsSubEmployees: { en: "employees", ar: "موظفًا" },
+  kpiOpenOpenWord: { en: "open", ar: "مفتوحة" },
+  kpiOpenOverdueWord: { en: "overdue", ar: "متأخرة" },
+  kpiUpcomingDeadlinesCard: { en: "Upcoming Deadlines (90d)", ar: "مواعيد قادمة (90 يومًا)" },
+  kpiUpcomingDeadlinesSub: { en: "across all clients", ar: "عبر جميع العملاء" },
+  kpiDocAccuracyLabel: { en: "Doc Extraction Accuracy", ar: "دقة استخراج الوثائق" },
+  kpiDocAccuracySub: { en: "agent-validated extractions", ar: "استخراجات مُعتمدة من الوكلاء" },
+  kpiAutomationLabel: { en: "Automation Rate", ar: "معدل الأتمتة" },
+  kpiAutomationSub: { en: "of decisions auto-handled", ar: "من القرارات تلقائيًا" },
+  // FIX 5 — status chips + open client CTA
+  statusAwaitingData: { en: "Awaiting data", ar: "بانتظار البيانات" },
+  statusCalculating: { en: "Calculating", ar: "قيد الاحتساب" },
+  statusAwaitingApproval: { en: "Awaiting approval", ar: "بانتظار الاعتماد" },
+  statusFiling: { en: "Filing", ar: "قيد التقديم" },
+  statusSettling: { en: "Settling", ar: "قيد التسوية" },
+  openClientCta: { en: "Open client portfolio →", ar: "فتح محفظة العميل ←" },
+  // FIX 6 — process efficiency
+  processApprovalRate: { en: "Approval rate", ar: "معدل الموافقة" },
+  processHumanTouch: { en: "Human touchpoints", ar: "نقاط بشرية" },
+  processAvgDecision: { en: "Avg decision time", ar: "متوسط زمن القرار" },
+  processSubManager: { en: "manager role", ar: "للمدير" },
+  processSubAvgCycle: { en: "avg per cycle", ar: "متوسط لكل دورة" },
+  approvalBreakdownAuto: { en: "Auto-approved", ar: "اعتماد تلقائي" },
+  approvalBreakdownModified: { en: "Modified then approved", ar: "اعتماد بعد تعديل" },
+  approvalBreakdownRejected: { en: "Rejected", ar: "مرفوض" },
+  targetDecisionTime: { en: "Target: ≤20m ✓", ar: "الهدف: ≤20د ✓" },
+  targetHumanTouch: { en: "Target: ≤12 ✓", ar: "الهدف: ≤12 ✓" },
+  // FIX 8 — digest narrative bullets
+  digestBulletStaged: {
+    en: "May 2026 cycle dependencies pre-staged across all three clients; calculations begin May 21.",
+    ar: "تم تجهيز تبعيات دورة مايو 2026 لجميع العملاء الثلاثة؛ تبدأ الحسابات في 21 مايو.",
+  },
+  digestBulletNextAction: {
+    en: "Next mandatory action: Compliance Officer e-signature on Vertex Q1 Saudization confirmation by 15 May.",
+    ar: "الإجراء الإلزامي التالي: التوقيع الإلكتروني لمسؤول الامتثال على تأكيد سعودة فيرتكس Q1 بحلول 15 مايو.",
+  },
+  // Sidebar alerts (de-emphasized)
+  sidebarAlertsTitle: { en: "All alerts", ar: "كل التنبيهات" },
+  sidebarAlertsHint: { en: "Full list — banner above shows critical.", ar: "القائمة الكاملة — الشريط أعلاه يعرض الحرجة." },
+  // Empty states
+  emptyRecs: { en: "No pending recommendations.", ar: "لا توجد توصيات معلّقة." },
+  emptyCalendar: { en: "No upcoming events.", ar: "لا توجد مواعيد قادمة." },
+  emptyAlertsList: { en: "No alerts.", ar: "لا توجد تنبيهات." },
 };
 
 // ─── Agent Performance Management (flagship) ─────────────────────────────
