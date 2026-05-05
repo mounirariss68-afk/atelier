@@ -192,32 +192,50 @@ const BEKO_CATEGORIES = [
   "kucuk-ev-aletleri",
 ] as const;
 
+// Vestel uses canonical /{slug}-c-{id} URLs. Plain slug pages either redirect
+// or render limited inventory — only the -c-{id} routes show the full
+// catalog. Discovered via Playwright crawl of the homepage navigation
+// (May 2026).
 const VESTEL_CATEGORIES = [
-  "buzdolabi",
-  "camasir-makinesi",
-  "bulasik-makineleri",
-  "kurutma-makineleri",
-  "ankastre-firin",
-  "ankastre-bulasik-makinesi",
-  "set-ustu-ocak",
-  "mikrodalga-firin",
-  "klima",
-  "aspirator",
-  "elektrikli-supurge",
-  "televizyon",
+  "buzdolabi-c-13",
+  "camasir-makineleri-c-14",
+  "bulasik-makineleri-c-11",
+  "kurutma-makineleri-c-16",
+  "kurutmali-camasir-makinesi-c-59",
+  "derin-dondurucular-c-15",
+  "ankastre-buzdolabi-c-1312",
+  "ankastre-firinlar-c-30",
+  "ankastre-bulasik-makineleri-c-28",
+  "ankastre-ocaklar-c-32",
+  "ankastre-davlumbazlar-c-29",
+  "ankastre-mikrodalga-firinlar-c-31",
+  "ankastre-setler-c-33",
+  "solo-firin-c-20",
+  "mini-firin-c-18",
+  "mikrodalga-firin-c-17",
+  "set-ustu-ocak-c-19",
+  "aspiratorler-c-10",
+  "elektrikli-supurgeler-c-34",
+  "robot-supurge-c-1110",
+  "klimalar-c-40",
+  "televizyonlar-c-26",
 ] as const;
 
+// All 11 top-level Bosch product categories under /tr/category/{slug}.
+// Discovered via Playwright crawl of the homepage navigation (May 2026).
+// Excludes /kampanyalar (promo) and /oyuncaklar (toys).
 const BOSCH_CATEGORIES = [
   "buzdolaplari-derin-dondurucular",
-  "camasir-makineleri",
-  "kurutucular",
+  "camasir-ve-kurutma-makineleri",
   "bulasik-makineleri",
-  "firinlar",
-  "ocaklar",
-  "davlumbazlar",
-  "mikrodalga",
+  "pisirme-grubu",
+  "ankastre-urunler",
+  "mutfak-aletleri",
+  "mutfak-makineleri",
   "kahve-makineleri",
-  "kucuk-ev-aletleri",
+  "elektrikli-supurgeler",
+  "klimalar",
+  "su-sebilleri-ve-su-aritma",
 ] as const;
 
 const SAMSUNG_CATEGORIES = [
