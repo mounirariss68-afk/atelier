@@ -1044,6 +1044,15 @@ export default function AgentDecisionsView() {
                       </>
                     )}
                   </div>
+                  {m.source === "baseline" && m.fallbackReason && (
+                    <div
+                      className="text-[9px] text-amber-200/80 leading-tight"
+                      title={m.fallbackReason}
+                    >
+                      {lang === "tr" ? "Sebep: " : "Reason: "}
+                      <span className="font-mono">{m.fallbackReason}</span>
+                    </div>
+                  )}
                   <button
                     onClick={() => handleRunAgent(at)}
                     disabled={isLoading || runAllLoading}
