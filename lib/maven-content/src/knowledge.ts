@@ -56,9 +56,10 @@ export type MarketplaceClass =
   | "knowledge-decision-copilot"
   | "risk-compliance-agent"
   | "sovereign-data-steward"
-  | "pricing-intelligence";
+  | "pricing-intelligence"
+  | "shared-services-agent";
 
-export type MarketplaceHorizontal = "pmo" | "supply-chain" | "fpa";
+export type MarketplaceHorizontal = "pmo" | "supply-chain" | "fpa" | "hr-payroll";
 
 export type MarketplaceStatus = "live" | "coming-soon";
 
@@ -453,12 +454,21 @@ export const marketplaceClasses: MarketplaceClassMeta[] = [
       ar: "مراقبة أسعار تنافسية آنية وتحسين مبني على الطلب وإنشاء حملات وتنسيق مع الوكلاء لمصنّعي السلع الاستهلاكية.",
     },
   },
+  {
+    id: "shared-services-agent",
+    title: { en: "Shared Services Agent", ar: "وكيل الخدمات المشتركة" },
+    description: {
+      en: "End-to-end agent platforms for BPOs and shared-services centres — payroll, HR ops, finance back-office — with regulator-grade audit trails and human checkpoints.",
+      ar: "منصات وكلاء شاملة لمراكز الخدمات المشتركة وشركات التعهيد — الرواتب والموارد البشرية والمالية الخلفية — مع مسارات تدقيق تنظيمية ونقاط مراجعة بشرية.",
+    },
+  },
 ];
 
 export const marketplaceHorizontals: MarketplaceHorizontalMeta[] = [
   { id: "pmo", title: { en: "PMO", ar: "مكتب إدارة المشاريع" } },
   { id: "supply-chain", title: { en: "Supply Chain", ar: "سلسلة التوريد" } },
   { id: "fpa", title: { en: "FP&A", ar: "التخطيط والتحليل المالي" } },
+  { id: "hr-payroll", title: { en: "HR & Payroll", ar: "الموارد البشرية والرواتب" } },
 ];
 
 // Raw catalogue without `agentCast` — we attach the cast at module load
@@ -1341,6 +1351,104 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
         description: { en: "Dealer-facing portal with price lists, campaigns, targets, stock management, and a conversational assistant — what Arçelik's 3,000+ exclusive dealers see.", ar: "بوابة للوكلاء تشمل قوائم الأسعار والحملات والأهداف وإدارة المخزون ومساعد محادثة — ما يراه أكثر من 3,000 وكيل حصري." },
         icon: "Users",
         route: "bayi",
+      },
+    ],
+  },
+  {
+    id: "tasama-payroll-hub",
+    slug: "tasama-payroll-hub",
+    title: { en: "Payroll Intelligence Hub", ar: "مركز ذكاء الرواتب" },
+    class: "shared-services-agent",
+    industries: ["financial-services", "public-sector"],
+    horizontals: ["hr-payroll", "fpa"],
+    buyer: { en: "Head of Shared Services / CFO", ar: "رئيس الخدمات المشتركة / المدير المالي" },
+    pitch: {
+      en: "Ten autonomous agents orchestrate end-to-end payroll for your clients — from document ingestion through GOSI filing and Mudad transfers — with human checkpoints where trust matters.",
+      ar: "عشرة وكلاء ذاتيون ينسقون مسيّرات الرواتب من البداية إلى النهاية — من استلام الوثائق حتى تقديم التأمينات وتحويلات مُدد — مع نقاط مراجعة بشرية حيث تهم الثقة.",
+    },
+    longDescription: [
+      {
+        en: "Saudi payroll is uniquely complex: GOSI contributions split between Saudi annuity tracks and OHRP-only expat tracks, EOSB provisions accruing under Article 84, Mudad wage protection submissions, Saudization band monitoring under Nitaqat, Iqama renewals, and dozens of edge cases per pay cycle. For BPOs running shared-services payroll across multiple clients, the manual workload compounds — and a single missed GOSI filing or Mudad rejection cascades into compliance penalties and client churn.",
+        ar: "الرواتب في المملكة العربية السعودية معقدة بشكل فريد: اشتراكات التأمينات الاجتماعية المقسمة بين مسارات تقاعد السعوديين ومسارات OHRP للوافدين، ومخصصات نهاية الخدمة وفق المادة 84، وتقديمات حماية الأجور عبر مُدد، ومراقبة نطاقات السعودة، وتجديدات الإقامة، وعشرات الحالات الاستثنائية في كل دورة. بالنسبة لشركات التعهيد التي تدير الرواتب المشتركة عبر عدة عملاء، يتراكم العبء اليدوي — وأي تقديم فائت للتأمينات أو رفض من مُدد يتسبب في غرامات امتثال وفقدان عملاء.",
+      },
+      {
+        en: "The Payroll Intelligence Hub deploys ten specialised agents — Document Intelligence, Salary Calculation, GOSI Compliance, Mudad Bank Transfer, EOSB Provision, Leave Management, Saudization Monitor, Performance & Audit, Client Communications, and an Orchestrator that coordinates them — gated by three human checkpoints: the Payroll Manager who approves each run, the Finance Controller who signs off settlements, and the Compliance Officer who authorises every regulatory submission. Each agent's output is auditable, every decision is logged, and confidence scores are calibrated so reviewers know exactly when to trust the agent and when to drill in.",
+        ar: "ينشر مركز ذكاء الرواتب عشرة وكلاء متخصصين — ذكاء الوثائق، وحساب الرواتب، وامتثال التأمينات، وتحويلات مُدد البنكية، ومخصصات نهاية الخدمة، وإدارة الإجازات، ومراقب السعودة، والأداء والتدقيق، واتصالات العملاء، ومنسّق ينسق بينهم جميعاً — تحت رقابة ثلاث نقاط مراجعة بشرية: مدير الرواتب الذي يعتمد كل دورة، والمراقب المالي الذي يوقع على التسويات، وضابط الامتثال الذي يجيز كل تقديم تنظيمي. مخرجات كل وكيل قابلة للتدقيق، وكل قرار موثّق، ودرجات الثقة معايرة بحيث يعرف المراجعون متى يثقون بالوكيل ومتى يتعمقون.",
+      },
+      {
+        en: "Three perspectives bring the platform to life. The Digital Team experience shows the 10-agent topology processing a live monthly cycle for three demo clients — Al-Nakhla Construction (18 employees), Luma Retail (14), and Vertex Tech (10) — with full event traces and agent performance scorecards. The Client Portal lets each client upload documents, track their employees, and see AI-generated insights specific to their roster. The Manager Dashboard gives the Tasama operations team agent performance management, decision analytics, the regulatory calendar, and a what-if simulator for headcount, salary, and compliance scenarios.",
+        ar: "ثلاث منظورات تُحيي المنصة. تجربة الفريق الرقمي تُظهر مخطط الوكلاء العشرة وهو يعالج دورة شهرية حية لثلاثة عملاء تجريبيين — النخلة للمقاولات (18 موظفاً)، ولوما للتجزئة (14)، وفيرتكس للتقنية (10) — مع مسارات أحداث كاملة وبطاقات أداء الوكلاء. بوابة العميل تتيح لكل عميل تحميل الوثائق وتتبع موظفيه ورؤية رؤى مولّدة بالذكاء الاصطناعي خاصة بقائمته. لوحة المدير تمنح فريق عمليات تسامة إدارة أداء الوكلاء وتحليلات القرارات والتقويم التنظيمي ومحاكي ماذا-لو لسيناريوهات أعداد الموظفين والرواتب والامتثال.",
+      },
+    ],
+    screens: [
+      {
+        title: { en: "Agent Orchestration", ar: "تنسيق الوكلاء" },
+        caption: { en: "Watch 10 specialised agents coordinate a monthly payroll cycle in real time, with full audit trail and human checkpoints.", ar: "شاهد 10 وكلاء متخصصين ينسقون دورة رواتب شهرية في الوقت الفعلي، مع مسار تدقيق كامل ونقاط مراجعة بشرية." },
+      },
+      {
+        title: { en: "Document Intelligence", ar: "ذكاء الوثائق" },
+        caption: { en: "Upload employment contracts, termination letters, and HR documents — the Document Intelligence Agent extracts structured data with field-level confidence scores.", ar: "حمّل عقود العمل ورسائل إنهاء الخدمة ووثائق الموارد البشرية — يستخرج وكيل ذكاء الوثائق البيانات المهيكلة مع درجات ثقة على مستوى الحقل." },
+      },
+      {
+        title: { en: "GOSI & Mudad Compliance", ar: "امتثال التأمينات ومُدد" },
+        caption: { en: "Automated GOSI contribution calculations, filing generation, and Mudad wage protection submissions with regulatory deadline tracking.", ar: "حساب آلي لاشتراكات التأمينات وإنشاء التقديمات وإرسال حماية الأجور عبر مُدد مع تتبع المواعيد التنظيمية." },
+      },
+      {
+        title: { en: "Agent Performance Management", ar: "إدارة أداء الوكلاء" },
+        caption: { en: "Monitor each agent's accuracy, speed, autonomy, and confidence calibration. Track human override rates and identify performance drift before it impacts operations.", ar: "راقب دقة كل وكيل وسرعته واستقلاليته ومعايرة ثقته. تتبع معدلات تجاوز البشر وحدد انحراف الأداء قبل أن يؤثر على العمليات." },
+      },
+      {
+        title: { en: "Payroll Simulator", ar: "محاكي الرواتب" },
+        caption: { en: "Model headcount changes, salary adjustments, and compliance scenarios. See instant impact on GOSI costs, Saudization ratios, and total payroll.", ar: "نمذج تغييرات أعداد الموظفين وتعديلات الرواتب وسيناريوهات الامتثال. شاهد التأثير الفوري على تكاليف التأمينات ونسب السعودة وإجمالي الرواتب." },
+      },
+    ],
+    dataModel: {
+      inputs: [
+        { en: "Employee master records (42 employees across 3 clients)", ar: "السجلات الرئيسية للموظفين (42 موظفاً عبر 3 عملاء)" },
+        { en: "Employment contracts and HR letters (PDF, bilingual EN/AR)", ar: "عقود العمل ورسائل الموارد البشرية (PDF، ثنائية اللغة)" },
+        { en: "Bank details and IBAN numbers, leave requests and attendance data", ar: "بيانات البنك وأرقام الآيبان وطلبات الإجازات وبيانات الحضور" },
+        { en: "Client company profiles, Saudization ratios, regulatory calendar", ar: "ملفات الشركات العميلة ونسب السعودة والتقويم التنظيمي" },
+      ],
+      internal: [
+        { en: "GOSI contribution calculation engine (Saudi annuity + OHRP)", ar: "محرك حساب اشتراكات التأمينات (تقاعد السعوديين + OHRP)" },
+        { en: "EOSB provision and settlement formulas (Article 84 Saudi Labor Law)", ar: "صيغ مخصصات وتسوية نهاية الخدمة (المادة 84 من نظام العمل السعودي)" },
+        { en: "Saudization ratio monitoring (Nitaqat band classification)", ar: "مراقبة نسب السعودة (تصنيف نطاقات نطاقات)" },
+        { en: "Agent performance scoring model and document extraction confidence model", ar: "نموذج تسجيل أداء الوكلاء ونموذج ثقة استخراج الوثائق" },
+      ],
+      outputs: [
+        { en: "Monthly payslips with full gross-to-net breakdown", ar: "كشوف رواتب شهرية مع تفصيل كامل من الإجمالي للصافي" },
+        { en: "GOSI monthly filing files and Mudad wage protection submissions", ar: "ملفات تقديم التأمينات الشهرية وتقديمات حماية الأجور عبر مُدد" },
+        { en: "Final settlement statements (EOSB + leave encashment + remaining salary)", ar: "كشوف التسوية النهائية (نهاية الخدمة + صرف الإجازات + الراتب المتبقي)" },
+        { en: "Regulatory compliance reports and agent performance scorecards", ar: "تقارير الامتثال التنظيمي وبطاقات أداء الوكلاء" },
+      ],
+    },
+    status: "live",
+    accent: "#0D9488",
+    icon: "Wallet",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Agent Operations", ar: "عمليات الوكلاء" },
+        audience: { en: "Digital Team", ar: "الفريق الرقمي" },
+        description: { en: "Watch the 10-agent payroll pipeline process a monthly cycle end-to-end.", ar: "شاهد خط أنابيب الرواتب المكون من 10 وكلاء يعالج دورة شهرية كاملة." },
+        icon: "Bot",
+        route: "teknik",
+      },
+      {
+        id: "client",
+        label: { en: "Client Portal", ar: "بوابة العميل" },
+        audience: { en: "Tasama Clients", ar: "عملاء تسامة" },
+        description: { en: "Upload documents, track employees, and monitor your payroll — with AI agent insights throughout.", ar: "حمّل الوثائق، وتابع الموظفين، وراقب رواتبك — مع رؤى الوكلاء الذكية في كل خطوة." },
+        icon: "Building2",
+        route: "client",
+      },
+      {
+        id: "manager",
+        label: { en: "Operations Dashboard", ar: "لوحة العمليات" },
+        audience: { en: "Payroll Managers", ar: "مديرو الرواتب" },
+        description: { en: "Manage agent performance, approve recommendations, run compliance checks, and simulate scenarios.", ar: "أدِر أداء الوكلاء، ووافق على التوصيات، ونفّذ فحوصات الامتثال، وحاكِ السيناريوهات." },
+        icon: "LayoutDashboard",
+        route: "manager",
       },
     ],
   },

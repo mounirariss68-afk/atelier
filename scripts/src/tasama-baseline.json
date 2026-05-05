@@ -1,0 +1,1472 @@
+{
+  "asOfDate": "2026-04-30",
+  "narrativePeriod": "2026-04",
+  "clients": [
+    {
+      "id": "client-alnakhla",
+      "legalNameEn": "Al-Nakhla Construction Co.",
+      "legalNameAr": "شركة النخلة للمقاولات",
+      "industry": "construction",
+      "employeeCount": 18,
+      "saudiCount": 11,
+      "expatCount": 7,
+      "saudizationBand": "green-low",
+      "saudizationPercent": 61.1,
+      "monthlyPayrollGross": 228000,
+      "contactName": "Saad Al-Hammadi",
+      "contactEmail": "saad.alhammadi@alnakhla.sa",
+      "activeEvents": [
+        "Mohammad Al-Ghamdi separation — 12-year veteran, EOSB SAR 166,250",
+        "Ahmed Al-Rashidi promotion retroactive adjustment (2 months)",
+        "Aisha Al-Harbi maternity leave starts May 15"
+      ],
+      "onboardedAt": "2022-03-01"
+    },
+    {
+      "id": "client-luma",
+      "legalNameEn": "Luma Retail Group",
+      "legalNameAr": "مجموعة لوما للتجزئة",
+      "industry": "retail",
+      "employeeCount": 14,
+      "saudiCount": 11,
+      "expatCount": 3,
+      "saudizationBand": "green-mid",
+      "saudizationPercent": 78.6,
+      "monthlyPayrollGross": 142000,
+      "contactName": "Maha Al-Suwaidi",
+      "contactEmail": "maha.alsuwaidi@lumaretail.sa",
+      "activeEvents": [
+        "Khalid Al-Otaibi probation month 2 of 3",
+        "Onboarding documents being processed"
+      ],
+      "onboardedAt": "2023-06-15"
+    },
+    {
+      "id": "client-vertex",
+      "legalNameEn": "Vertex Tech Solutions",
+      "legalNameAr": "فيرتكس للحلول التقنية",
+      "industry": "technology",
+      "employeeCount": 10,
+      "saudiCount": 5,
+      "expatCount": 5,
+      "saudizationBand": "yellow",
+      "saudizationPercent": 50,
+      "monthlyPayrollGross": 168000,
+      "contactName": "Faisal Al-Tamimi",
+      "contactEmail": "faisal.altamimi@vertex-tech.sa",
+      "activeEvents": [
+        "Noura Al-Salem salary increase pending Finance Controller approval",
+        "Sarah Johnson Q1 performance bonus issued",
+        "Saudization Yellow band — action plan required"
+      ],
+      "onboardedAt": "2021-09-10"
+    }
+  ],
+  "namedEmployees": [
+    {
+      "id": "emp-alnakhla-001",
+      "clientId": "client-alnakhla",
+      "fullNameEn": "Ahmed Al-Rashidi",
+      "fullNameAr": "أحمد الرشيدي",
+      "nationality": "saudi",
+      "isSaudi": true,
+      "role": "Project Manager",
+      "roleAr": "مدير مشروع",
+      "department": "engineering",
+      "hireDate": "2019-03-15",
+      "yearsOfService": 7.1,
+      "status": "active",
+      "contractType": "unlimited",
+      "nationalId": "1098765001",
+      "iqamaNumber": null,
+      "iban": "SA0310000001234567890001",
+      "bankName": "Al Rajhi Bank",
+      "email": "ahmed.alrashidi@alnakhla.sa",
+      "phone": "+966-501100001",
+      "basicSalary": 18000,
+      "housingAllowance": 4500,
+      "transportAllowance": 1800,
+      "otherAllowances": [
+        {
+          "label": "Site Allowance",
+          "labelAr": "بدل موقع",
+          "amount": 800
+        }
+      ],
+      "storyTags": [
+        "promotion",
+        "retroactive-adjustment"
+      ],
+      "notes": "Promoted from Senior Engineer to Project Manager on 2026-03-01 — retroactive adjustment of SAR 4,600 covers Feb and Mar 2026."
+    },
+    {
+      "id": "emp-luma-001",
+      "clientId": "client-luma",
+      "fullNameEn": "Fatima Al-Zahrani",
+      "fullNameAr": "فاطمة الزهراني",
+      "nationality": "saudi",
+      "isSaudi": true,
+      "role": "Store Manager",
+      "roleAr": "مديرة فرع",
+      "department": "retail",
+      "hireDate": "2022-04-10",
+      "yearsOfService": 4.1,
+      "status": "active",
+      "contractType": "unlimited",
+      "nationalId": "1054321002",
+      "iqamaNumber": null,
+      "iban": "SA1110000001234567890002",
+      "bankName": "Saudi National Bank",
+      "email": "fatima.alzahrani@lumaretail.sa",
+      "phone": "+966-501100002",
+      "basicSalary": 12000,
+      "housingAllowance": 3000,
+      "transportAllowance": 1200,
+      "otherAllowances": [],
+      "storyTags": [
+        "annual-leave-request",
+        "vacation-salary-advance"
+      ],
+      "notes": "21-day annual leave approved starting 2026-05-10. Vacation salary advance SAR 11,200 paid in April payroll."
+    },
+    {
+      "id": "emp-alnakhla-002",
+      "clientId": "client-alnakhla",
+      "fullNameEn": "Rajesh Kumar",
+      "fullNameAr": "راجيش كومار",
+      "nationality": "indian",
+      "isSaudi": false,
+      "role": "Civil Engineer",
+      "roleAr": "مهندس مدني",
+      "department": "engineering",
+      "hireDate": "2023-04-01",
+      "yearsOfService": 3.1,
+      "status": "active",
+      "contractType": "limited",
+      "nationalId": null,
+      "iqamaNumber": "2123456003",
+      "iban": "SA0310000001234567890003",
+      "bankName": "Al Rajhi Bank",
+      "email": "rajesh.kumar@alnakhla.sa",
+      "phone": "+966-501100003",
+      "basicSalary": 10000,
+      "housingAllowance": 2500,
+      "transportAllowance": 1000,
+      "otherAllowances": [
+        {
+          "label": "Air Ticket Provision",
+          "labelAr": "بدل تذكرة طيران",
+          "amount": 250
+        }
+      ],
+      "storyTags": [
+        "contract-renewal-due",
+        "iqama-renewal-pending"
+      ],
+      "notes": "2-year contract expires 2026-06-30 — renewal letter prepared. Iqama renewal due 2026-07-15."
+    },
+    {
+      "id": "emp-vertex-001",
+      "clientId": "client-vertex",
+      "fullNameEn": "Noura Al-Salem",
+      "fullNameAr": "نورة السالم",
+      "nationality": "saudi",
+      "isSaudi": true,
+      "role": "Software Developer",
+      "roleAr": "مطورة برمجيات",
+      "department": "engineering",
+      "hireDate": "2024-04-01",
+      "yearsOfService": 2.1,
+      "status": "active",
+      "contractType": "unlimited",
+      "nationalId": "1054321004",
+      "iqamaNumber": null,
+      "iban": "SA1110000001234567890004",
+      "bankName": "Saudi National Bank",
+      "email": "noura.alsalem@vertex-tech.sa",
+      "phone": "+966-501100004",
+      "basicSalary": 15000,
+      "housingAllowance": 3750,
+      "transportAllowance": 1500,
+      "otherAllowances": [
+        {
+          "label": "Remote Work",
+          "labelAr": "بدل عمل عن بعد",
+          "amount": 500
+        }
+      ],
+      "storyTags": [
+        "salary-increase-pending",
+        "retroactive-calculation"
+      ],
+      "notes": "Salary increase from SAR 15,000 to SAR 17,000 (effective 2026-05-01) pending Finance Controller approval. Retroactive recalculation needed."
+    },
+    {
+      "id": "emp-alnakhla-003",
+      "clientId": "client-alnakhla",
+      "fullNameEn": "Mohammad Al-Ghamdi",
+      "fullNameAr": "محمد الغامدي",
+      "nationality": "saudi",
+      "isSaudi": true,
+      "role": "Site Supervisor",
+      "roleAr": "مشرف موقع",
+      "department": "construction",
+      "hireDate": "2014-04-15",
+      "yearsOfService": 12,
+      "status": "separated",
+      "contractType": "unlimited",
+      "nationalId": "1098765005",
+      "iqamaNumber": null,
+      "iban": "SA0310000001234567890005",
+      "bankName": "Al Rajhi Bank",
+      "email": "mohammad.alghamdi@alnakhla.sa",
+      "phone": "+966-501100005",
+      "basicSalary": 14000,
+      "housingAllowance": 3500,
+      "transportAllowance": 1200,
+      "otherAllowances": [
+        {
+          "label": "Site Allowance",
+          "labelAr": "بدل موقع",
+          "amount": 1000
+        }
+      ],
+      "storyTags": [
+        "separation",
+        "veteran",
+        "eosb-major"
+      ],
+      "notes": "Mutual agreement separation effective 2026-04-30. Total settlement SAR 196,450 (EOSB 166,250 + leave encashment 10,500 + remaining April salary 19,700)."
+    },
+    {
+      "id": "emp-vertex-002",
+      "clientId": "client-vertex",
+      "fullNameEn": "Sarah Johnson",
+      "fullNameAr": "سارة جونسون",
+      "nationality": "american",
+      "isSaudi": false,
+      "role": "Chief Technology Officer",
+      "roleAr": "الرئيسة التنفيذية للتقنية",
+      "department": "executive",
+      "hireDate": "2021-04-01",
+      "yearsOfService": 5.1,
+      "status": "active",
+      "contractType": "limited",
+      "nationalId": null,
+      "iqamaNumber": "2567890006",
+      "iban": "SA1110000001234567890006",
+      "bankName": "Banque Saudi Fransi",
+      "email": "sarah.johnson@vertex-tech.sa",
+      "phone": "+966-501100006",
+      "basicSalary": 25000,
+      "housingAllowance": 6250,
+      "transportAllowance": 2500,
+      "otherAllowances": [
+        {
+          "label": "Executive Allowance",
+          "labelAr": "بدل تنفيذي",
+          "amount": 4000
+        }
+      ],
+      "storyTags": [
+        "performance-bonus",
+        "executive"
+      ],
+      "notes": "Q1 2026 performance bonus SAR 15,000 issued in April payroll."
+    },
+    {
+      "id": "emp-luma-002",
+      "clientId": "client-luma",
+      "fullNameEn": "Khalid Al-Otaibi",
+      "fullNameAr": "خالد العتيبي",
+      "nationality": "saudi",
+      "isSaudi": true,
+      "role": "Sales Associate",
+      "roleAr": "مساعد مبيعات",
+      "department": "retail",
+      "hireDate": "2026-03-01",
+      "yearsOfService": 0.2,
+      "status": "probation",
+      "contractType": "probation",
+      "nationalId": "1054321007",
+      "iqamaNumber": null,
+      "iban": "SA1110000001234567890007",
+      "bankName": "Saudi National Bank",
+      "email": "khalid.alotaibi@lumaretail.sa",
+      "phone": "+966-501100007",
+      "basicSalary": 5000,
+      "housingAllowance": 1250,
+      "transportAllowance": 500,
+      "otherAllowances": [],
+      "storyTags": [
+        "probation",
+        "onboarding",
+        "gosi-registration-pending"
+      ],
+      "notes": "Probation month 2 of 3 — ends 2026-05-30. Employment contract being digitized; GOSI registration pending."
+    },
+    {
+      "id": "emp-alnakhla-004",
+      "clientId": "client-alnakhla",
+      "fullNameEn": "Aisha Al-Harbi",
+      "fullNameAr": "عائشة الحربي",
+      "nationality": "saudi",
+      "isSaudi": true,
+      "role": "HR Coordinator",
+      "roleAr": "منسقة موارد بشرية",
+      "department": "hr",
+      "hireDate": "2020-04-15",
+      "yearsOfService": 6,
+      "status": "active",
+      "contractType": "unlimited",
+      "nationalId": "1054321008",
+      "iqamaNumber": null,
+      "iban": "SA0310000001234567890008",
+      "bankName": "Al Rajhi Bank",
+      "email": "aisha.alharbi@alnakhla.sa",
+      "phone": "+966-501100008",
+      "basicSalary": 11000,
+      "housingAllowance": 2750,
+      "transportAllowance": 1100,
+      "otherAllowances": [],
+      "storyTags": [
+        "maternity-leave-upcoming"
+      ],
+      "notes": "70-day paid maternity leave starts 2026-05-15 — payroll impact SAR 11,000/month."
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-001",
+      "clientId": "client-luma",
+      "employeeId": "emp-luma-002",
+      "type": "employment-contract",
+      "titleEn": "Employment Contract — Khalid Al-Otaibi",
+      "titleAr": "عقد عمل — خالد العتيبي",
+      "referenceNumber": "LMR-HR-2026-0301",
+      "issuedAt": "2026-03-01",
+      "signedByName": "Maha Al-Suwaidi",
+      "signedByTitle": "Operations Director",
+      "filename": "employment-contract-khalid-alotaibi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Khalid Al-Otaibi",
+          "confidence": 0.99
+        },
+        "national_id": {
+          "value": "1054321007",
+          "confidence": 0.98
+        },
+        "position": {
+          "value": "Sales Associate",
+          "confidence": 0.98
+        },
+        "contract_type": {
+          "value": "probation-90-days",
+          "confidence": 0.97
+        },
+        "monthly_basic_sar": {
+          "value": "5000",
+          "confidence": 0.99
+        },
+        "start_date": {
+          "value": "2026-03-01",
+          "confidence": 0.99
+        },
+        "law_reference": {
+          "value": "Article 53-54 KSA Labour Law",
+          "confidence": 0.95
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-002",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-003",
+      "type": "termination-letter",
+      "titleEn": "Mutual Termination — Mohammad Al-Ghamdi",
+      "titleAr": "إنهاء بالتراضي — محمد الغامدي",
+      "referenceNumber": "ANK-HR-2026-0410",
+      "issuedAt": "2026-04-10",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "termination-mohammad-alghamdi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Mohammad Al-Ghamdi",
+          "confidence": 0.99
+        },
+        "national_id": {
+          "value": "1098765005",
+          "confidence": 0.98
+        },
+        "last_working_day": {
+          "value": "2026-04-30",
+          "confidence": 0.99
+        },
+        "separation_type": {
+          "value": "mutual-agreement",
+          "confidence": 0.97
+        },
+        "law_reference": {
+          "value": "Article 74 KSA Labour Law",
+          "confidence": 0.96
+        },
+        "notice_period_served": {
+          "value": "30 days",
+          "confidence": 0.98
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-003",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-001",
+      "type": "promotion-letter",
+      "titleEn": "Promotion to Project Manager — Ahmed Al-Rashidi",
+      "titleAr": "ترقية إلى مدير مشروع — أحمد الرشيدي",
+      "referenceNumber": "ANK-HR-2026-0301",
+      "issuedAt": "2026-03-01",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "promotion-ahmed-alrashidi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Ahmed Al-Rashidi",
+          "confidence": 0.99
+        },
+        "current_position": {
+          "value": "Senior Engineer",
+          "confidence": 0.98
+        },
+        "new_position": {
+          "value": "Project Manager",
+          "confidence": 0.99
+        },
+        "effective_date": {
+          "value": "2026-03-01",
+          "confidence": 0.99
+        },
+        "previous_basic_sar": {
+          "value": "15700",
+          "confidence": 0.96
+        },
+        "new_basic_sar": {
+          "value": "18000",
+          "confidence": 0.99
+        },
+        "retroactive_amount_sar": {
+          "value": "4600",
+          "confidence": 0.95
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-004",
+      "clientId": "client-vertex",
+      "employeeId": "emp-vertex-001",
+      "type": "salary-increase-letter",
+      "titleEn": "Salary Increase — Noura Al-Salem",
+      "titleAr": "زيادة راتب — نورة السالم",
+      "referenceNumber": "VTX-HR-2026-0420",
+      "issuedAt": "2026-04-20",
+      "signedByName": "Faisal Al-Tamimi",
+      "signedByTitle": "CEO",
+      "filename": "salary-increase-noura-alsalem.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Noura Al-Salem",
+          "confidence": 0.99
+        },
+        "current_basic_sar": {
+          "value": "15000",
+          "confidence": 0.99
+        },
+        "new_basic_sar": {
+          "value": "17000",
+          "confidence": 0.99
+        },
+        "increase_percent": {
+          "value": "13.3",
+          "confidence": 0.97
+        },
+        "effective_date": {
+          "value": "2026-05-01",
+          "confidence": 0.99
+        },
+        "approval_status": {
+          "value": "pending Finance Controller approval",
+          "confidence": 0.93
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-005",
+      "clientId": "client-vertex",
+      "employeeId": "emp-vertex-002",
+      "type": "bonus-letter",
+      "titleEn": "Q1 2026 Performance Bonus — Sarah Johnson",
+      "titleAr": "حافز أداء الربع الأول 2026 — سارة جونسون",
+      "referenceNumber": "VTX-FIN-2026-Q1-01",
+      "issuedAt": "2026-04-15",
+      "signedByName": "Faisal Al-Tamimi",
+      "signedByTitle": "CEO",
+      "filename": "bonus-sarah-johnson.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Sarah Johnson",
+          "confidence": 0.99
+        },
+        "bonus_amount_sar": {
+          "value": "15000",
+          "confidence": 0.99
+        },
+        "bonus_period": {
+          "value": "Q1 2026",
+          "confidence": 0.98
+        },
+        "payment_month": {
+          "value": "April 2026",
+          "confidence": 0.97
+        },
+        "performance_rating": {
+          "value": "Exceeds Expectations",
+          "confidence": 0.95
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-006",
+      "clientId": "client-luma",
+      "employeeId": "emp-luma-001",
+      "type": "performance-review",
+      "titleEn": "Q1 2026 Performance Review — Fatima Al-Zahrani",
+      "titleAr": "تقييم الأداء للربع الأول 2026 — فاطمة الزهراني",
+      "referenceNumber": "LMR-HR-2026-PR-04",
+      "issuedAt": "2026-04-08",
+      "signedByName": "Maha Al-Suwaidi",
+      "signedByTitle": "Operations Director",
+      "filename": "performance-review-fatima-alzahrani.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Fatima Al-Zahrani",
+          "confidence": 0.99
+        },
+        "performance_rating": {
+          "value": "Exceeds Expectations (4.6 / 5.0)",
+          "confidence": 0.96
+        },
+        "goals_met": {
+          "value": "9 of 10",
+          "confidence": 0.95
+        },
+        "competencies_average": {
+          "value": "4.5 / 5.0",
+          "confidence": 0.94
+        },
+        "promotion_recommended": {
+          "value": "Yes — District Manager track",
+          "confidence": 0.93
+        }
+      },
+      "overallConfidence": 0.96
+    },
+    {
+      "id": "doc-007",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-002",
+      "type": "contract-renewal",
+      "titleEn": "Contract Renewal — Rajesh Kumar (2-year extension)",
+      "titleAr": "تجديد عقد — راجيش كومار (تمديد سنتين)",
+      "referenceNumber": "ANK-HR-2026-0418",
+      "issuedAt": "2026-04-18",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "contract-renewal-rajesh-kumar.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Rajesh Kumar",
+          "confidence": 0.99
+        },
+        "iqama_number": {
+          "value": "2123456003",
+          "confidence": 0.98
+        },
+        "current_contract_end": {
+          "value": "2026-06-30",
+          "confidence": 0.97
+        },
+        "renewal_term_years": {
+          "value": "2",
+          "confidence": 0.99
+        },
+        "new_contract_end": {
+          "value": "2028-06-30",
+          "confidence": 0.97
+        },
+        "monthly_basic_sar": {
+          "value": "10000",
+          "confidence": 0.99
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-008",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-004",
+      "type": "maternity-leave-approval",
+      "titleEn": "Maternity Leave Approval — Aisha Al-Harbi",
+      "titleAr": "اعتماد إجازة أمومة — عائشة الحربي",
+      "referenceNumber": "ANK-HR-2026-0422",
+      "issuedAt": "2026-04-22",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "maternity-aisha-alharbi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Aisha Al-Harbi",
+          "confidence": 0.99
+        },
+        "leave_start_date": {
+          "value": "2026-05-15",
+          "confidence": 0.99
+        },
+        "leave_duration_days": {
+          "value": "70",
+          "confidence": 0.99
+        },
+        "expected_return_date": {
+          "value": "2026-07-24",
+          "confidence": 0.97
+        },
+        "leave_type": {
+          "value": "paid-maternity",
+          "confidence": 0.99
+        },
+        "law_reference": {
+          "value": "Article 151 KSA Labour Law",
+          "confidence": 0.96
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-009",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-001",
+      "type": "salary-certificate",
+      "titleEn": "Salary Certificate — Ahmed Al-Rashidi",
+      "titleAr": "شهادة راتب — أحمد الرشيدي",
+      "referenceNumber": "ANK-HR-2026-0425",
+      "issuedAt": "2026-04-25",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "salary-cert-ahmed-alrashidi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Ahmed Al-Rashidi",
+          "confidence": 0.99
+        },
+        "national_id": {
+          "value": "1098765001",
+          "confidence": 0.98
+        },
+        "monthly_basic_sar": {
+          "value": "18000",
+          "confidence": 0.99
+        },
+        "monthly_total_sar": {
+          "value": "25100",
+          "confidence": 0.97
+        },
+        "purpose": {
+          "value": "bank loan application",
+          "confidence": 0.95
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-010",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-003",
+      "type": "experience-letter",
+      "titleEn": "Experience Letter — Mohammad Al-Ghamdi",
+      "titleAr": "شهادة خبرة — محمد الغامدي",
+      "referenceNumber": "ANK-HR-2026-0428",
+      "issuedAt": "2026-04-28",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "experience-letter-mohammad-alghamdi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Mohammad Al-Ghamdi",
+          "confidence": 0.99
+        },
+        "employment_start": {
+          "value": "2014-04-15",
+          "confidence": 0.98
+        },
+        "employment_end": {
+          "value": "2026-04-30",
+          "confidence": 0.99
+        },
+        "total_service_years": {
+          "value": "12.0",
+          "confidence": 0.99
+        },
+        "final_position": {
+          "value": "Site Supervisor",
+          "confidence": 0.98
+        },
+        "duties_summary": {
+          "value": "Oversaw 14 active sites; managed crew of 22; SAR 12M annual scope",
+          "confidence": 0.93
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-011",
+      "clientId": "client-luma",
+      "employeeId": "emp-luma-002",
+      "type": "gosi-registration",
+      "titleEn": "GOSI Registration Confirmation — Khalid Al-Otaibi",
+      "titleAr": "تأكيد تسجيل التأمينات — خالد العتيبي",
+      "referenceNumber": "GOSI-LMR-2026-03-NEW-007",
+      "issuedAt": "2026-03-12",
+      "signedByName": "GOSI System (Auto)",
+      "signedByTitle": "Electronic Confirmation",
+      "filename": "gosi-registration-khalid-alotaibi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Khalid Al-Otaibi",
+          "confidence": 0.99
+        },
+        "gosi_subscription_number": {
+          "value": "G-2026-LMR-007",
+          "confidence": 0.99
+        },
+        "registration_date": {
+          "value": "2026-03-12",
+          "confidence": 0.99
+        },
+        "monthly_contribution_sar": {
+          "value": "775",
+          "confidence": 0.97
+        },
+        "first_filing_period": {
+          "value": "2026-03",
+          "confidence": 0.98
+        }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-012",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-003",
+      "type": "final-settlement",
+      "titleEn": "Final Settlement Statement — Mohammad Al-Ghamdi",
+      "titleAr": "كشف التسوية النهائية — محمد الغامدي",
+      "referenceNumber": "ANK-FIN-2026-0430",
+      "issuedAt": "2026-04-30",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "final-settlement-mohammad-alghamdi.pdf",
+      "extractedFields": {
+        "employee_name": {
+          "value": "Mohammad Al-Ghamdi",
+          "confidence": 0.99
+        },
+        "years_of_service": {
+          "value": "12.0",
+          "confidence": 0.99
+        },
+        "last_basic_plus_housing_sar": {
+          "value": "17500",
+          "confidence": 0.99
+        },
+        "eosb_amount_sar": {
+          "value": "166250",
+          "confidence": 0.99
+        },
+        "leave_encashment_sar": {
+          "value": "10500",
+          "confidence": 0.97
+        },
+        "remaining_salary_sar": {
+          "value": "19700",
+          "confidence": 0.96
+        },
+        "total_settlement_sar": {
+          "value": "196450",
+          "confidence": 0.99
+        }
+      },
+      "overallConfidence": 0.98
+    }
+  ],
+  "serviceRequests": [
+    {
+      "id": "sr-001",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-002",
+      "type": "iqama-renewal",
+      "titleEn": "Iqama Renewal — Rajesh Kumar",
+      "titleAr": "تجديد إقامة — راجيش كومار",
+      "description": "Iqama 2123456003 expires 2026-07-15, requires renewal",
+      "descriptionAr": "الإقامة 2123456003 تنتهي في 2026-07-15، تتطلب التجديد",
+      "status": "in-progress",
+      "priority": "high",
+      "requestedBy": "Saad Al-Hammadi",
+      "requestedAt": "2026-04-18",
+      "assignedAgent": "client-communications",
+      "completedAt": null,
+      "payload": {
+        "expiry_date": "2026-07-15",
+        "renewal_period_years": 1
+      },
+      "slaTargetHours": 168
+    },
+    {
+      "id": "sr-002",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-003",
+      "type": "exit-request",
+      "titleEn": "Final Settlement Processing — Mohammad Al-Ghamdi",
+      "titleAr": "معالجة التسوية النهائية — محمد الغامدي",
+      "description": "Process mutual termination final settlement (EOSB SAR 166,250)",
+      "descriptionAr": "معالجة التسوية النهائية للإنهاء بالتراضي (مكافأة نهاية الخدمة 166,250 ريال)",
+      "status": "in-review",
+      "priority": "critical",
+      "requestedBy": "Saad Al-Hammadi",
+      "requestedAt": "2026-04-10",
+      "assignedAgent": "eosb-provision",
+      "completedAt": null,
+      "payload": {
+        "last_working_day": "2026-04-30",
+        "estimated_total": 196450
+      },
+      "slaTargetHours": 240
+    },
+    {
+      "id": "sr-003",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-001",
+      "type": "promotion-request",
+      "titleEn": "Retroactive Promotion Adjustment — Ahmed Al-Rashidi",
+      "titleAr": "تسوية ترقية بأثر رجعي — أحمد الرشيدي",
+      "description": "Calculate and apply 2-month retroactive adjustment for Senior Engineer → Project Manager promotion (Feb-Mar 2026)",
+      "descriptionAr": "احتساب وتطبيق تسوية بأثر رجعي لشهرين للترقية من مهندس أول إلى مدير مشروع (فبراير-مارس 2026)",
+      "status": "in-progress",
+      "priority": "high",
+      "requestedBy": "Saad Al-Hammadi",
+      "requestedAt": "2026-03-05",
+      "assignedAgent": "salary-calculation",
+      "completedAt": null,
+      "payload": {
+        "retroactive_months": 2,
+        "retroactive_amount_sar": 4600
+      },
+      "slaTargetHours": 96
+    },
+    {
+      "id": "sr-004",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-001",
+      "type": "salary-certificate",
+      "titleEn": "Salary Certificate — Ahmed Al-Rashidi (bank loan)",
+      "titleAr": "شهادة راتب — أحمد الرشيدي (قرض بنكي)",
+      "description": "Salary certificate for Al Rajhi Bank personal loan application",
+      "descriptionAr": "شهادة راتب لتقديم طلب قرض شخصي لدى مصرف الراجحي",
+      "status": "completed",
+      "priority": "low",
+      "requestedBy": "Ahmed Al-Rashidi",
+      "requestedAt": "2026-04-22",
+      "assignedAgent": "client-communications",
+      "completedAt": "2026-04-25",
+      "payload": {
+        "purpose": "bank-loan-application"
+      },
+      "slaTargetHours": 48
+    },
+    {
+      "id": "sr-005",
+      "clientId": "client-vertex",
+      "employeeId": "emp-vertex-001",
+      "type": "promotion-request",
+      "titleEn": "Salary Increase Approval — Noura Al-Salem",
+      "titleAr": "اعتماد زيادة راتب — نورة السالم",
+      "description": "Approve salary increase from SAR 15,000 to SAR 17,000 (13.3%)",
+      "descriptionAr": "اعتماد زيادة الراتب من 15,000 إلى 17,000 ريال (13.3%)",
+      "status": "in-review",
+      "priority": "medium",
+      "requestedBy": "Faisal Al-Tamimi",
+      "requestedAt": "2026-04-20",
+      "assignedAgent": "salary-calculation",
+      "completedAt": null,
+      "payload": {
+        "current_basic_sar": 15000,
+        "new_basic_sar": 17000,
+        "effective_date": "2026-05-01"
+      },
+      "slaTargetHours": 120
+    },
+    {
+      "id": "sr-006",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-004",
+      "type": "leave-request",
+      "titleEn": "Maternity Leave Confirmation — Aisha Al-Harbi",
+      "titleAr": "تأكيد إجازة أمومة — عائشة الحربي",
+      "description": "70-day paid maternity leave starting 2026-05-15",
+      "descriptionAr": "إجازة أمومة مدفوعة 70 يومًا تبدأ في 2026-05-15",
+      "status": "completed",
+      "priority": "medium",
+      "requestedBy": "Aisha Al-Harbi",
+      "requestedAt": "2026-04-15",
+      "assignedAgent": "leave-management",
+      "completedAt": "2026-04-22",
+      "payload": {
+        "leave_type": "maternity",
+        "days": 70,
+        "start_date": "2026-05-15"
+      },
+      "slaTargetHours": 72
+    },
+    {
+      "id": "sr-007",
+      "clientId": "client-luma",
+      "employeeId": "emp-luma-001",
+      "type": "leave-request",
+      "titleEn": "Annual Leave + Vacation Salary Advance — Fatima Al-Zahrani",
+      "titleAr": "إجازة سنوية وسلفة الإجازة — فاطمة الزهراني",
+      "description": "21-day annual leave starting 2026-05-10; vacation salary advance SAR 11,200",
+      "descriptionAr": "إجازة سنوية 21 يومًا تبدأ في 2026-05-10؛ سلفة الإجازة 11,200 ريال",
+      "status": "completed",
+      "priority": "low",
+      "requestedBy": "Fatima Al-Zahrani",
+      "requestedAt": "2026-04-12",
+      "assignedAgent": "leave-management",
+      "completedAt": "2026-04-18",
+      "payload": {
+        "leave_type": "annual",
+        "days": 21,
+        "advance_sar": 11200
+      },
+      "slaTargetHours": 48
+    },
+    {
+      "id": "sr-008",
+      "clientId": "client-luma",
+      "employeeId": "emp-luma-002",
+      "type": "data-correction",
+      "titleEn": "GOSI Registration — Khalid Al-Otaibi",
+      "titleAr": "تسجيل التأمينات — خالد العتيبي",
+      "description": "Complete GOSI subscription registration for new probation hire",
+      "descriptionAr": "إكمال تسجيل اشتراك التأمينات للموظف الجديد على التجربة",
+      "status": "completed",
+      "priority": "high",
+      "requestedBy": "Maha Al-Suwaidi",
+      "requestedAt": "2026-03-05",
+      "assignedAgent": "gosi-compliance",
+      "completedAt": "2026-03-12",
+      "payload": {
+        "registered_at": "2026-03-12"
+      },
+      "slaTargetHours": 360
+    },
+    {
+      "id": "sr-009",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-002",
+      "type": "experience-letter",
+      "titleEn": "Contract Renewal Letter — Rajesh Kumar",
+      "titleAr": "خطاب تجديد عقد — راجيش كومار",
+      "description": "Issue 2-year contract renewal letter to Rajesh Kumar",
+      "descriptionAr": "إصدار خطاب تجديد عقد لمدة سنتين لراجيش كومار",
+      "status": "completed",
+      "priority": "medium",
+      "requestedBy": "Saad Al-Hammadi",
+      "requestedAt": "2026-04-15",
+      "assignedAgent": "client-communications",
+      "completedAt": "2026-04-18",
+      "payload": {
+        "renewal_term_years": 2
+      },
+      "slaTargetHours": 96
+    },
+    {
+      "id": "sr-010",
+      "clientId": "client-vertex",
+      "employeeId": null,
+      "type": "data-correction",
+      "titleEn": "Saudization Action Plan — Yellow Band Recovery",
+      "titleAr": "خطة عمل السعودة — التعافي من النطاق الأصفر",
+      "description": "Develop and submit Saudization action plan to exit Yellow band",
+      "descriptionAr": "تطوير وتقديم خطة عمل السعودة للخروج من النطاق الأصفر",
+      "status": "in-progress",
+      "priority": "critical",
+      "requestedBy": "Faisal Al-Tamimi",
+      "requestedAt": "2026-04-05",
+      "assignedAgent": "saudization-monitor",
+      "completedAt": null,
+      "payload": {
+        "current_band": "yellow",
+        "target_band": "green-low"
+      },
+      "slaTargetHours": 168
+    },
+    {
+      "id": "sr-011",
+      "clientId": "client-vertex",
+      "employeeId": "emp-vertex-002",
+      "type": "advance-request",
+      "titleEn": "Q1 Performance Bonus Disbursement — Sarah Johnson",
+      "titleAr": "صرف مكافأة أداء الربع الأول — سارة جونسون",
+      "description": "Process SAR 15,000 Q1 2026 performance bonus in April payroll",
+      "descriptionAr": "صرف مكافأة أداء الربع الأول 2026 بمبلغ 15,000 ريال ضمن رواتب أبريل",
+      "status": "completed",
+      "priority": "medium",
+      "requestedBy": "Faisal Al-Tamimi",
+      "requestedAt": "2026-04-15",
+      "assignedAgent": "salary-calculation",
+      "completedAt": "2026-04-25",
+      "payload": {
+        "bonus_sar": 15000,
+        "period": "Q1-2026"
+      },
+      "slaTargetHours": 168
+    },
+    {
+      "id": "sr-012",
+      "clientId": "client-alnakhla",
+      "employeeId": null,
+      "type": "training-nomination",
+      "titleEn": "HRDF Tamheer Nominations — 3 Saudi Engineers",
+      "titleAr": "ترشيحات تمهير من صندوق تنمية الموارد البشرية — 3 مهندسين سعوديين",
+      "description": "Nominate 3 Saudi engineers for HRDF Tamheer programme",
+      "descriptionAr": "ترشيح 3 مهندسين سعوديين لبرنامج تمهير من صندوق تنمية الموارد البشرية",
+      "status": "submitted",
+      "priority": "low",
+      "requestedBy": "Saad Al-Hammadi",
+      "requestedAt": "2026-04-26",
+      "assignedAgent": null,
+      "completedAt": null,
+      "payload": {
+        "program": "HRDF Tamheer",
+        "candidates": 3
+      },
+      "slaTargetHours": 240
+    },
+    {
+      "id": "sr-013",
+      "clientId": "client-vertex",
+      "employeeId": "emp-vertex-005",
+      "type": "data-correction",
+      "titleEn": "GOSI Wage Base Correction — Mohammad Al-Saud",
+      "titleAr": "تصحيح أجر التأمينات — محمد آل سعود",
+      "description": "Employee promoted in March; GOSI base needs retroactive recalculation from effective date.",
+      "descriptionAr": "تمت ترقية الموظف في مارس؛ يحتاج أساس التأمينات إلى إعادة حساب بأثر رجعي من تاريخ السريان.",
+      "status": "submitted",
+      "priority": "medium",
+      "requestedBy": "Layla Khoury",
+      "requestedAt": "2026-04-22",
+      "assignedAgent": "gosi-compliance",
+      "completedAt": null,
+      "payload": {
+        "effective_date": "2026-03-01",
+        "delta_sar": 1200
+      },
+      "slaTargetHours": 72
+    },
+    {
+      "id": "sr-014",
+      "clientId": "client-luma",
+      "employeeId": null,
+      "type": "training-nomination",
+      "titleEn": "HRDF Doroob Programme Subscription Renewal",
+      "titleAr": "تجديد اشتراك برنامج دروب لتنمية الموارد البشرية",
+      "description": "Annual Doroob subscription expires May 2026; renew for all 6 Saudi staff.",
+      "descriptionAr": "ينتهي اشتراك دروب السنوي في مايو 2026؛ يلزم التجديد لجميع الموظفين السعوديين الستة.",
+      "status": "in-progress",
+      "priority": "medium",
+      "requestedBy": "Reem Al-Qahtani",
+      "requestedAt": "2026-04-15",
+      "assignedAgent": "client-communications",
+      "completedAt": null,
+      "payload": {
+        "subscriber_count": 6,
+        "fee_per_seat_sar": 1500
+      },
+      "slaTargetHours": 240
+    },
+    {
+      "id": "sr-015",
+      "clientId": "client-vertex",
+      "employeeId": "emp-vertex-002",
+      "type": "leave-request",
+      "titleEn": "Hajj Leave Approval — Abdullah Al-Mutairi",
+      "titleAr": "الموافقة على إجازة الحج — عبدالله المطيري",
+      "description": "10-day paid Hajj leave requested for Dhul Hijjah 2026 (June 14-23).",
+      "descriptionAr": "طلب إجازة حج مدفوعة الأجر لمدة 10 أيام لذي الحجة 2026 (14-23 يونيو).",
+      "status": "submitted",
+      "priority": "low",
+      "requestedBy": "Layla Khoury",
+      "requestedAt": "2026-04-25",
+      "assignedAgent": "leave-management",
+      "completedAt": null,
+      "payload": {
+        "leave_start": "2026-06-14",
+        "leave_end": "2026-06-23",
+        "leave_type": "hajj"
+      },
+      "slaTargetHours": 336
+    }
+  ],
+  "regulatoryCalendar": [
+    {
+      "id": "cal-001",
+      "eventType": "gosi-filing",
+      "nameEn": "GOSI April 2026 Filing",
+      "nameAr": "تقديم التأمينات لشهر أبريل 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-05-15",
+      "type": "upcoming",
+      "descriptionEn": "Monthly GOSI contribution filing for all 3 clients via online portal.",
+      "descriptionAr": "تقديم اشتراكات التأمينات الشهرية لجميع العملاء الثلاثة عبر البوابة الإلكترونية.",
+      "referenceNumber": "GOSI-APR-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-002",
+      "eventType": "mudad-submission",
+      "nameEn": "Mudad WPS April 2026 Submission",
+      "nameAr": "تقديم حماية الأجور (مُدد) لشهر أبريل 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-04-27",
+      "type": "upcoming",
+      "descriptionEn": "Mudad WPS file submission for April salaries — 42 employees.",
+      "descriptionAr": "تقديم ملف حماية الأجور (مُدد) لرواتب أبريل — 42 موظفًا.",
+      "referenceNumber": "MUD-APR-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-003",
+      "eventType": "iqama-renewal",
+      "nameEn": "Iqama Renewal — Rajesh Kumar",
+      "nameAr": "تجديد إقامة — راجيش كومار",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-002",
+      "dueDate": "2026-07-15",
+      "type": "upcoming",
+      "descriptionEn": "1-year Iqama renewal via Absher portal.",
+      "descriptionAr": "تجديد الإقامة لمدة سنة عبر بوابة أبشر.",
+      "referenceNumber": "IQM-2123456003",
+      "completedAt": null
+    },
+    {
+      "id": "cal-004",
+      "eventType": "saudization-review",
+      "nameEn": "Q2 2026 Nitaqat Review",
+      "nameAr": "مراجعة نطاقات الربع الثاني 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-07-01",
+      "type": "upcoming",
+      "descriptionEn": "Quarterly Nitaqat band review for all clients (Vertex Tech in Yellow band).",
+      "descriptionAr": "مراجعة فصلية لنطاقات السعودة لجميع العملاء (فيرتكس في النطاق الأصفر).",
+      "referenceNumber": "NIT-Q2-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-005",
+      "eventType": "wps-deadline",
+      "nameEn": "WPS April Compliance Deadline",
+      "nameAr": "موعد الامتثال لحماية الأجور أبريل",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-05-07",
+      "type": "upcoming",
+      "descriptionEn": "Salaries must be paid within 7 days of period end per KSA Labour Law.",
+      "descriptionAr": "يجب صرف الرواتب خلال 7 أيام من نهاية الفترة وفقًا لنظام العمل السعودي.",
+      "referenceNumber": "WPS-APR-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-006",
+      "eventType": "contract-renewal",
+      "nameEn": "Contract Renewal Effective — Rajesh Kumar",
+      "nameAr": "بدء سريان تجديد العقد — راجيش كومار",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-002",
+      "dueDate": "2026-07-01",
+      "type": "upcoming",
+      "descriptionEn": "2-year contract renewal effective date.",
+      "descriptionAr": "تاريخ سريان تجديد العقد لمدة سنتين.",
+      "referenceNumber": "ANK-HR-2026-0418",
+      "completedAt": null
+    },
+    {
+      "id": "cal-007",
+      "eventType": "leave-event",
+      "nameEn": "Maternity Leave Start — Aisha Al-Harbi",
+      "nameAr": "بدء إجازة الأمومة — عائشة الحربي",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-004",
+      "dueDate": "2026-05-15",
+      "type": "upcoming",
+      "descriptionEn": "70-day paid maternity leave begins.",
+      "descriptionAr": "تبدأ إجازة الأمومة المدفوعة لمدة 70 يومًا.",
+      "referenceNumber": "ANK-HR-2026-0422",
+      "completedAt": null
+    },
+    {
+      "id": "cal-008",
+      "eventType": "leave-event",
+      "nameEn": "Annual Leave Start — Fatima Al-Zahrani",
+      "nameAr": "بدء الإجازة السنوية — فاطمة الزهراني",
+      "clientId": "client-luma",
+      "employeeId": "emp-luma-001",
+      "dueDate": "2026-05-10",
+      "type": "upcoming",
+      "descriptionEn": "21-day annual leave begins.",
+      "descriptionAr": "تبدأ الإجازة السنوية لمدة 21 يومًا.",
+      "referenceNumber": "LMR-HR-2026-0418",
+      "completedAt": null
+    },
+    {
+      "id": "cal-009",
+      "eventType": "gosi-filing",
+      "nameEn": "GOSI March 2026 Filing",
+      "nameAr": "تقديم التأمينات لشهر مارس 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-04-15",
+      "type": "filed",
+      "descriptionEn": "Filed 12 Apr 2026 — 3 days ahead of deadline. SAR 53,720 total contribution.",
+      "descriptionAr": "تم التقديم في 12 أبريل 2026 — قبل الموعد بثلاثة أيام. إجمالي الاشتراك 53,720 ريال.",
+      "referenceNumber": "GOSI-MAR-2026",
+      "completedAt": "2026-04-12"
+    },
+    {
+      "id": "cal-010",
+      "eventType": "mudad-submission",
+      "nameEn": "Mudad March 2026 Submission",
+      "nameAr": "تقديم مُدد لشهر مارس 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-03-27",
+      "type": "filed",
+      "descriptionEn": "Settled 27 Mar 2026 — 0 rejections.",
+      "descriptionAr": "تمت التسوية في 27 مارس 2026 — صفر مرفوضات.",
+      "referenceNumber": "MUD-MAR-2026",
+      "completedAt": "2026-03-27"
+    },
+    {
+      "id": "cal-011",
+      "eventType": "saudization-review",
+      "nameEn": "Q1 2026 Nitaqat Review",
+      "nameAr": "مراجعة نطاقات الربع الأول 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-04-01",
+      "type": "filed",
+      "descriptionEn": "Q1 review completed — Vertex Tech moved from Green-Low to Yellow band.",
+      "descriptionAr": "اكتملت مراجعة الربع الأول — انتقلت فيرتكس من أخضر منخفض إلى النطاق الأصفر.",
+      "referenceNumber": "NIT-Q1-2026",
+      "completedAt": "2026-04-01"
+    },
+    {
+      "id": "cal-012",
+      "eventType": "tax-event",
+      "nameEn": "Zakat Annual Filing — Saudi-owned Clients",
+      "nameAr": "تقديم الزكاة السنوي — العملاء المملوكون سعوديًا",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-06-30",
+      "type": "upcoming",
+      "descriptionEn": "Annual Zakat filing deadline for Saudi-owned client entities.",
+      "descriptionAr": "الموعد النهائي لتقديم الزكاة السنوي للكيانات المملوكة سعوديًا.",
+      "referenceNumber": "ZKT-2025",
+      "completedAt": null
+    },
+    {
+      "id": "cal-013",
+      "eventType": "gosi-filing",
+      "nameEn": "GOSI May 2026 Filing",
+      "nameAr": "تقديم التأمينات لشهر مايو 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-06-15",
+      "type": "upcoming",
+      "descriptionEn": "Monthly GOSI contribution filing.",
+      "descriptionAr": "تقديم اشتراكات التأمينات الشهرية.",
+      "referenceNumber": "GOSI-MAY-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-014",
+      "eventType": "mudad-submission",
+      "nameEn": "Mudad WPS May 2026 Submission",
+      "nameAr": "تقديم حماية الأجور لشهر مايو 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-05-27",
+      "type": "upcoming",
+      "descriptionEn": "WPS submission for May salaries.",
+      "descriptionAr": "تقديم حماية الأجور لرواتب مايو.",
+      "referenceNumber": "MUD-MAY-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-015",
+      "eventType": "gosi-filing",
+      "nameEn": "GOSI June 2026 Filing",
+      "nameAr": "تقديم التأمينات لشهر يونيو 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-07-15",
+      "type": "upcoming",
+      "descriptionEn": "Monthly GOSI filing for June payroll.",
+      "descriptionAr": "تقديم اشتراكات التأمينات الشهرية لرواتب يونيو.",
+      "referenceNumber": "GOSI-JUN-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-016",
+      "eventType": "mudad-submission",
+      "nameEn": "Mudad WPS June 2026 Submission",
+      "nameAr": "تقديم حماية الأجور لشهر يونيو 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-06-27",
+      "type": "upcoming",
+      "descriptionEn": "WPS submission for June salaries.",
+      "descriptionAr": "تقديم حماية الأجور لرواتب يونيو.",
+      "referenceNumber": "MUD-JUN-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-017",
+      "eventType": "public-holiday",
+      "nameEn": "Eid Al-Adha 2026 Public Holiday",
+      "nameAr": "إجازة عيد الأضحى 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-06-26",
+      "type": "upcoming",
+      "descriptionEn": "4-day national holiday — payroll cycle adjusted.",
+      "descriptionAr": "إجازة وطنية لمدة 4 أيام — تم تعديل دورة الرواتب.",
+      "referenceNumber": "HOL-EID-ADHA-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-018",
+      "eventType": "leave-event",
+      "nameEn": "Hajj Leave Window — Abdullah Al-Mutairi",
+      "nameAr": "فترة إجازة الحج — عبدالله المطيري",
+      "clientId": "client-vertex",
+      "employeeId": "emp-vertex-002",
+      "dueDate": "2026-06-14",
+      "type": "upcoming",
+      "descriptionEn": "10-day paid Hajj leave starts.",
+      "descriptionAr": "تبدأ إجازة الحج المدفوعة لمدة 10 أيام.",
+      "referenceNumber": "LV-HAJJ-VTX-002",
+      "completedAt": null
+    },
+    {
+      "id": "cal-019",
+      "eventType": "iqama-renewal",
+      "nameEn": "Iqama Expiry Window — 4 Vertex Expats",
+      "nameAr": "نافذة انتهاء الإقامات — 4 موظفين أجانب في فيرتكس",
+      "clientId": "client-vertex",
+      "employeeId": null,
+      "dueDate": "2026-08-31",
+      "type": "upcoming",
+      "descriptionEn": "4 iqamas expire in Aug — start renewals 60 days prior.",
+      "descriptionAr": "تنتهي 4 إقامات في أغسطس — يجب البدء في التجديد قبل 60 يومًا.",
+      "referenceNumber": "IQM-VTX-AUG-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-020",
+      "eventType": "saudization-review",
+      "nameEn": "Q3 2026 Nitaqat Review",
+      "nameAr": "مراجعة نطاقات للربع الثالث 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-10-01",
+      "type": "upcoming",
+      "descriptionEn": "Quarterly Saudization band recalculation.",
+      "descriptionAr": "إعادة احتساب نطاقات السعودة الربع سنوية.",
+      "referenceNumber": "NTQ-Q3-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-021",
+      "eventType": "gosi-filing",
+      "nameEn": "GOSI February 2026 Filing",
+      "nameAr": "تقديم التأمينات لشهر فبراير 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-03-15",
+      "type": "completed",
+      "descriptionEn": "February GOSI filing — completed on schedule.",
+      "descriptionAr": "تم تقديم تأمينات فبراير في الموعد.",
+      "referenceNumber": "GOSI-FEB-2026",
+      "completedAt": "2026-03-12"
+    },
+    {
+      "id": "cal-022",
+      "eventType": "mudad-submission",
+      "nameEn": "Mudad WPS February 2026 Submission",
+      "nameAr": "تقديم حماية الأجور لشهر فبراير 2026",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-02-27",
+      "type": "completed",
+      "descriptionEn": "February WPS submission — completed.",
+      "descriptionAr": "تم تقديم حماية الأجور لشهر فبراير.",
+      "referenceNumber": "MUD-FEB-2026",
+      "completedAt": "2026-02-26"
+    },
+    {
+      "id": "cal-023",
+      "eventType": "wps-deadline",
+      "nameEn": "WPS May Compliance Deadline",
+      "nameAr": "الموعد النهائي لامتثال حماية الأجور لشهر مايو",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-06-07",
+      "type": "upcoming",
+      "descriptionEn": "WPS May payroll must reach Mudad by deadline.",
+      "descriptionAr": "يجب أن تصل رواتب مايو إلى مُدد قبل الموعد النهائي.",
+      "referenceNumber": "WPS-MAY-2026",
+      "completedAt": null
+    },
+    {
+      "id": "cal-024",
+      "eventType": "contract-renewal",
+      "nameEn": "Q3 Contract Renewals — 6 Employees",
+      "nameAr": "تجديدات العقود للربع الثالث — 6 موظفين",
+      "clientId": null,
+      "employeeId": null,
+      "dueDate": "2026-09-30",
+      "type": "upcoming",
+      "descriptionEn": "6 fixed-term contracts come up for renewal in Q3.",
+      "descriptionAr": "يحين تجديد 6 عقود محددة المدة في الربع الثالث.",
+      "referenceNumber": "CTR-Q3-RENEW",
+      "completedAt": null
+    }
+  ]
+}
