@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer,
@@ -213,6 +213,7 @@ interface CityOpportunity {
 
 function scoreCities(cities: CityData[]): CityOpportunity[] {
   const popWeight: Record<CityData["populationTier"], number> = { "tier-1": 100, "tier-2": 65, "tier-3": 35 };
+  const maxDealerCount = Math.max(1, ...cities.map(c => c.dealerCount));
   return cities
     .map(city => {
       const popScore = popWeight[city.populationTier];
@@ -220,14 +221,27 @@ function scoreCities(cities: CityData[]): CityOpportunity[] {
       const compMax = city.competitorStrength.length > 0
         ? Math.max(...city.competitorStrength.map(c => c.strength))
         : 0;
-      const score = Math.round((shareGap * 0.5 + popScore * 0.35 + compMax * 0.15));
-      const level: CityOpportunity["level"] = score >= 80 ? "high" : score >= 60 ? "mid" : "low";
+      const dealerScore = Math.round((city.dealerCount / maxDealerCount) * 100);
+      const score = Math.round(
+        shareGap * 0.4 + popScore * 0.3 + compMax * 0.1 + dealerScore * 0.2,
+      );
+      const level: CityOpportunity["level"] = score >= 70 ? "high" : score >= 55 ? "mid" : "low";
       return { city, score, level };
     })
     .sort((a, b) => b.score - a.score);
 }
 
-function OpportunityCard({ opp, lang }: { opp: GapOpportunity; lang: "tr" | "en" }) {
+function OpportunityCard({
+  opp,
+  lang,
+  isActive,
+  onSelect,
+}: {
+  opp: GapOpportunity;
+  lang: "tr" | "en";
+  isActive: boolean;
+  onSelect: () => void;
+}) {
   const t = whitespace[lang];
   const typeConfig = {
     "no-product": { icon: Target, color: "text-red-600", bg: "bg-red-50", border: "border-red-200", label: t.gapNoProduct },
@@ -238,10 +252,14 @@ function OpportunityCard({ opp, lang }: { opp: GapOpportunity; lang: "tr" | "en"
   const Icon = cfg.icon;
 
   return (
-    <motion.div
+    <motion.button
+      type="button"
+      onClick={onSelect}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4`}
+      className={`w-full text-left rounded-xl border ${cfg.border} ${cfg.bg} p-4 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#0E2841]/40 ${
+        isActive ? "ring-2 ring-[#0E2841] ring-offset-1" : ""
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -283,7 +301,7 @@ function OpportunityCard({ opp, lang }: { opp: GapOpportunity; lang: "tr" | "en"
           </div>
         )}
       </div>
-    </motion.div>
+    </motion.button>
   );
 }
 
@@ -307,6 +325,12 @@ export default function WhitespaceView() {
   const [selectedCat, setSelectedCat] = useState<ProductCategory | "all">("all");
   const [selectedCell, setSelectedCell] = useState<{ cat: ProductCategory; tier: PriceTier } | null>(null);
   const [hoveredCity, setHoveredCity] = useState<string | null>(null);
+  const matrixRef = useRef<HTMLDivElement | null>(null);
+
+  const selectGapAndScroll = (cat: ProductCategory, tier: PriceTier) => {
+    setSelectedCell({ cat, tier });
+    matrixRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const opportunities = useMemo(
     () => findWhitespaceOpportunities(products, competitorPrices, lang),
@@ -433,7 +457,7 @@ export default function WhitespaceView() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div ref={matrixRef} className="grid grid-cols-1 lg:grid-cols-3 gap-4 scroll-mt-4">
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-start justify-between mb-3">
             <div>
@@ -783,7 +807,13 @@ export default function WhitespaceView() {
         </h3>
         <div className="space-y-3">
           {filteredOpps.map(opp => (
-            <OpportunityCard key={opp.id} opp={opp} lang={lang} />
+            <OpportunityCard
+              key={opp.id}
+              opp={opp}
+              lang={lang}
+              isActive={selectedCell?.cat === opp.category && selectedCell?.tier === opp.tier}
+              onSelect={() => selectGapAndScroll(opp.category, opp.tier)}
+            />
           ))}
         </div>
         {filteredOpps.length === 0 && (
