@@ -44,6 +44,42 @@ export function useMarketplacePriceSummary() {
   });
 }
 
+export interface MarketplacePriceHistoryRow {
+  id: number;
+  marketplace: string;
+  marketplaceProductId: string;
+  brand: string;
+  category: string;
+  price: number;
+  previousPrice: number | null;
+  priceChangePercent: number | null;
+  arcelikProductId: string | null;
+  scrapeRunId: string;
+  recordedAt: string;
+}
+
+async function fetchMarketplacePriceHistory(
+  sinceDays: number,
+): Promise<MarketplacePriceHistoryRow[]> {
+  const qs = new URLSearchParams({
+    sinceDays: String(sinceDays),
+    limit: "10000",
+  });
+  const res = await fetch(`/api/arcelik/marketplace-prices/history?${qs}`);
+  if (!res.ok) throw new Error("Failed to fetch marketplace price history");
+  const rows = (await res.json()) as MarketplacePriceHistoryRow[];
+  return rows.map((r) => ({ ...r, price: Number(r.price) }));
+}
+
+export function useMarketplacePriceHistory(sinceDays: number) {
+  return useQuery<MarketplacePriceHistoryRow[]>({
+    queryKey: ["arcelik", "marketplace-price-history", sinceDays],
+    queryFn: () => fetchMarketplacePriceHistory(sinceDays),
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+}
+
 export function aggregateByMarketplace(
   rows: MarketplacePriceSummaryRow[],
 ): MarketplacePriceBreakdown[] {

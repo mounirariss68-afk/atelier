@@ -23,6 +23,7 @@ import { useScrapeStatus } from "@/hooks/useScrapeStatus";
 import { usePriceHistory, usePriceHistorySummary } from "@/hooks/usePriceHistory";
 import {
   useMarketplacePriceSummary,
+  useMarketplacePriceHistory,
   aggregateByMarketplace,
 } from "@/hooks/useMarketplacePrices";
 import { TurkeyMap, CITY_POSITIONS } from "../TurkeyMap";
@@ -139,6 +140,12 @@ export default function DashboardView() {
   const { data: priceHistory } = usePriceHistory();
   const { data: priceHistorySummary } = usePriceHistorySummary();
   const { data: marketplacePriceRows, isLoading: marketplacePricesLoading } = useMarketplacePriceSummary();
+  const periodDays =
+    filters.period === "this-week" ? 7
+    : filters.period === "this-month" ? 30
+    : filters.period === "3-months" ? 90
+    : 180;
+  const { data: marketplaceHistoryRows } = useMarketplacePriceHistory(periodDays);
   const selectedMarketplace = filters.marketplace;
   const marketplaceBreakdowns = useMemo(() => {
     const allRows = marketplacePriceRows ?? [];
@@ -360,6 +367,60 @@ export default function DashboardView() {
     return dealers.filter((d) => d.city === selectedCity.id);
   }, [selectedCity]);
 
+  const compareMarketplaceData = useMemo(() => {
+    const rows = marketplaceHistoryRows ?? [];
+    if (rows.length === 0) return [];
+    const cats = filters.categories.length > 0
+      ? (filters.categories as string[])
+      : (Object.keys(CATEGORY_LABELS) as string[]);
+    type Bucket = { sum: number; count: number; min: number; max: number };
+    const byCatMp = new Map<string, Map<string, Bucket>>();
+    for (const r of rows) {
+      const cat = String(r.category ?? "");
+      if (!cats.includes(cat)) continue;
+      const mp = String(r.marketplace ?? "").toLowerCase();
+      if (!mp) continue;
+      const inner = byCatMp.get(cat) ?? new Map<string, Bucket>();
+      const prev = inner.get(mp) ?? { sum: 0, count: 0, min: Infinity, max: 0 };
+      prev.sum += r.price;
+      prev.count += 1;
+      if (r.price > 0 && r.price < prev.min) prev.min = r.price;
+      if (r.price > prev.max) prev.max = r.price;
+      inner.set(mp, prev);
+      byCatMp.set(cat, inner);
+    }
+    return cats
+      .filter((cat) => byCatMp.has(cat))
+      .map((cat) => {
+        const inner = byCatMp.get(cat)!;
+        const row: Record<string, number | string> = {
+          category: getCategoryLabel(cat as ProductCategory, lang),
+          categoryKey: cat,
+        };
+        for (const mp of MARKETPLACE_ORDER) {
+          const b = inner.get(mp);
+          if (b && b.count > 0) {
+            row[`${mp}_avg`] = Math.round(b.sum / b.count);
+            row[`${mp}_min`] = b.min === Infinity ? 0 : b.min;
+            row[`${mp}_max`] = b.max;
+            row[`${mp}_count`] = b.count;
+          } else {
+            row[`${mp}_avg`] = 0;
+            row[`${mp}_min`] = 0;
+            row[`${mp}_max`] = 0;
+            row[`${mp}_count`] = 0;
+          }
+        }
+        return row;
+      });
+  }, [marketplaceHistoryRows, filters.categories, lang]);
+
+  const MARKETPLACE_HEX: Record<string, string> = {
+    n11: "#a855f7",
+    trendyol: "#f97316",
+    hepsiburada: "#ef4444",
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -552,6 +613,88 @@ export default function DashboardView() {
           </div>
         </motion.div>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+        data-testid="compare-marketplaces-card"
+        className="bg-white rounded-xl border border-gray-100 shadow-sm"
+      >
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <BarChart3 size={16} className="text-[#0E2841]" />
+              {t.compareMarketplacesTitle}
+            </h3>
+            <p className="text-[10px] text-gray-400 mt-0.5">{t.compareMarketplacesHint}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {MARKETPLACE_ORDER.map((mp) => {
+              const dim = selectedMarketplace !== "all" && selectedMarketplace !== mp;
+              return (
+                <div key={mp} className={`flex items-center gap-1.5 text-[11px] ${dim ? "opacity-40" : ""}`}>
+                  <span
+                    className="w-3 h-3 rounded-sm"
+                    style={{ background: MARKETPLACE_HEX[mp] }}
+                  />
+                  <span className="font-semibold text-gray-700">{marketplaceLabel(mp, t)}</span>
+                </div>
+              );
+            })}
+            {selectedMarketplace !== "all" && (
+              <span className="text-[10px] text-gray-400 italic">
+                {t.compareMarketplacesHighlighted}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="p-4 min-h-[300px]">
+          {compareMarketplaceData.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <BarChart3 size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">{t.compareMarketplacesNoData}</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={compareMarketplaceData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="category" tick={{ fontSize: 11 }} interval={0} angle={-12} textAnchor="end" height={60} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatTRY(Number(v), lang)} width={80} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  formatter={(val: number, name: string, item: { payload?: Record<string, number> }) => {
+                    const mp = name.toLowerCase();
+                    const payload = item?.payload ?? {};
+                    const min = Number(payload[`${mp}_min`] ?? 0);
+                    const max = Number(payload[`${mp}_max`] ?? 0);
+                    const count = Number(payload[`${mp}_count`] ?? 0);
+                    return [
+                      `${formatTRY(Number(val), lang)} · ${t.compareMarketplacesMin} ${formatTRY(min, lang)} / ${t.compareMarketplacesMax} ${formatTRY(max, lang)} · ${count} ${t.compareMarketplacesProducts}`,
+                      marketplaceLabel(name, t),
+                    ];
+                  }}
+                />
+                {MARKETPLACE_ORDER.map((mp) => {
+                  const isHighlight = selectedMarketplace === "all" || selectedMarketplace === mp;
+                  return (
+                    <Bar
+                      key={mp}
+                      dataKey={`${mp}_avg`}
+                      name={mp}
+                      fill={MARKETPLACE_HEX[mp]}
+                      fillOpacity={isHighlight ? 1 : 0.25}
+                      stroke={selectedMarketplace === mp ? "#0E2841" : undefined}
+                      strokeWidth={selectedMarketplace === mp ? 1.5 : 0}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  );
+                })}
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
