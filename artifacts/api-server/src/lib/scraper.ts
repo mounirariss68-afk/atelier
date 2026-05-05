@@ -435,6 +435,135 @@ async function closePlaywrightBrowser(): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Türkiye storefront hints
+//
+// Trendyol broke when our Replit egress (GB IP) was geo-detected and bounced
+// to /en/select-country. Other Turkish marketplaces and brand sites can adopt
+// the same behaviour at any time. These two helpers give every scraper a
+// uniform opt-in defence and a uniform diagnostic when the defence fails.
+//
+// `newTurkiyeContext`: creates a BrowserContext pre-loaded with TR locale,
+// Europe/Istanbul timezone, Turkish Accept-Language, and (for any opt-in
+// domain) a generous union of country/locale cookies that cover the names
+// observed in the wild on Turkish marketplaces and brand sites. Sites that
+// don't recognise a particular cookie name silently ignore it.
+//
+// `warnIfNonTurkiyeUrl`: inspects `page.url()` after navigation and emits a
+// structured warning when the final URL is on a country-picker page, has a
+// non-TR locale path prefix, or has been redirected off the expected host.
+// This makes geo-routing regressions diagnosable from logs alone — no need
+// to reproduce the GB-egress condition manually.
+// ---------------------------------------------------------------------------
+
+async function newTurkiyeContext(
+  browser: Browser,
+  opts: {
+    cookieDomains?: string[];
+    userAgent?: string;
+    viewport?: { width: number; height: number };
+  } = {},
+): Promise<BrowserContext> {
+  const context = await browser.newContext({
+    userAgent:
+      opts.userAgent ??
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    timezoneId: "Europe/Istanbul",
+    viewport: opts.viewport ?? { width: 1366, height: 900 },
+    extraHTTPHeaders: {
+      "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
+    },
+  });
+
+  const domains = opts.cookieDomains ?? [];
+  if (domains.length > 0) {
+    const cookies: Array<{
+      name: string;
+      value: string;
+      domain: string;
+      path: string;
+    }> = [];
+    for (const bare of domains) {
+      const dot = bare.startsWith(".") ? bare : `.${bare}`;
+      // Generic country/locale cookies covering the cookie-name variants we
+      // have observed across Turkish marketplaces and brand sites (Trendyol,
+      // N11, Samsung, etc). Setting a small union is intentional — sites
+      // that don't recognise a given name simply ignore it, and the helper
+      // stays useful for new domains without additional code changes.
+      const generic: Array<{ name: string; value: string }> = [
+        { name: "countryCode", value: "TR" },
+        { name: "country_code", value: "TR" },
+        { name: "country_codes", value: "tr" },
+        { name: "country_region", value: "TR" },
+        { name: "language", value: "tr" },
+        { name: "locale", value: "tr-TR" },
+      ];
+      for (const c of generic) {
+        cookies.push({ ...c, domain: dot, path: "/" });
+      }
+      // Trendyol-specific: storefrontId is the actual lever that bypasses
+      // the /en/select-country redirect — countryCode alone is not enough.
+      if (bare.endsWith("trendyol.com")) {
+        cookies.push({
+          name: "storefrontId",
+          value: "1",
+          domain: dot,
+          path: "/",
+        });
+      }
+    }
+    await context.addCookies(cookies);
+  }
+  return context;
+}
+
+const TURKIYE_GEO_PICKER_RE = /select[-_]country|country[-_]selector|country-picker/i;
+const TURKIYE_NON_TR_LOCALE_PREFIX_RE =
+  /^\/(en|ar|de|fr|es|it|ru|zh|ja|ko|pt|nl|pl|cs|sv|fi|da|no|el|hu|ro|bg|uk|he|fa)(\/|$)/i;
+
+function warnIfNonTurkiyeUrl(
+  page: Page,
+  ctx: { brand: string; expectedHost: string; requestedUrl: string },
+): boolean {
+  const finalUrl = page.url();
+  let host = "";
+  let pathname = "";
+  try {
+    const u = new URL(finalUrl);
+    host = u.host;
+    pathname = u.pathname;
+  } catch {
+    // Unparseable URL — leave host/pathname empty and fall through. The
+    // mismatch checks below are no-ops on empty strings, so we only warn
+    // when we actually have evidence of a geo-redirect.
+  }
+
+  const hasGeoPicker = TURKIYE_GEO_PICKER_RE.test(pathname);
+  const hasNonTrLocale = TURKIYE_NON_TR_LOCALE_PREFIX_RE.test(pathname);
+  const hostMismatch = host !== "" && !host.includes(ctx.expectedHost);
+
+  if (hasGeoPicker || hasNonTrLocale || hostMismatch) {
+    const reason = hasGeoPicker
+      ? "geo-picker-redirect"
+      : hasNonTrLocale
+        ? "non-tr-locale-prefix"
+        : "host-mismatch";
+    logger.warn(
+      {
+        brand: ctx.brand,
+        requestedUrl: ctx.requestedUrl,
+        finalUrl,
+        expectedHost: ctx.expectedHost,
+        reason,
+      },
+      `${ctx.brand} scrape landed on a non-Türkiye URL — site may have added geo-routing; check storefront hints in newTurkiyeContext()`,
+    );
+    return true;
+  }
+  return false;
+}
+
 async function scrapeWithPlaywright(
   baseUrl: string,
   categories: string[],
@@ -447,10 +576,18 @@ async function scrapeWithPlaywright(
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    locale: "tr-TR",
+  // Derive the cookie domain from the baseUrl so any opt-in brand site
+  // (arcelik.com.tr, beko.com.tr, etc.) gets the Türkiye storefront cookies
+  // automatically. Strip the leading "www." so cookies attach to the eTLD+1.
+  const baseHost = (() => {
+    try {
+      return new URL(baseUrl).host.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  })();
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: baseHost ? [baseHost] : [],
   });
 
   try {
@@ -459,6 +596,13 @@ async function scrapeWithPlaywright(
       const page: Page = await context.newPage();
       try {
         await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+        if (baseHost) {
+          warnIfNonTurkiyeUrl(page, {
+            brand: brandLabel,
+            expectedHost: baseHost,
+            requestedUrl: url,
+          });
+        }
         await page
           .waitForSelector(
             ".product-card, .product-item, [data-product-id], .product-list",
@@ -588,11 +732,8 @@ async function scrapeVestel(): Promise<ScrapedPrice[]> {
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["vestel.com.tr"],
   });
 
   try {
@@ -603,6 +744,11 @@ async function scrapeVestel(): Promise<ScrapedPrice[]> {
         await page.goto(url, {
           waitUntil: "domcontentloaded",
           timeout: 30000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "Vestel",
+          expectedHost: "vestel.com.tr",
+          requestedUrl: url,
         });
         await page
           .waitForSelector(".product-list-item-wrap", { timeout: 10000 })
@@ -706,11 +852,8 @@ async function scrapeBosch(): Promise<ScrapedPrice[]> {
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["bosch-home.com.tr"],
   });
 
   try {
@@ -721,6 +864,11 @@ async function scrapeBosch(): Promise<ScrapedPrice[]> {
         await page.goto(url, {
           waitUntil: "domcontentloaded",
           timeout: 30000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "Bosch",
+          expectedHost: "bosch-home.com.tr",
+          requestedUrl: url,
         });
         await page
           .waitForSelector(
@@ -835,29 +983,9 @@ async function scrapeSamsung(): Promise<ScrapedPrice[]> {
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
-    extraHTTPHeaders: {
-      "Accept-Language": "tr-TR,tr;q=0.9",
-    },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["samsung.com"],
   });
-  await context.addCookies([
-    {
-      name: "country_codes",
-      value: "tr",
-      domain: ".samsung.com",
-      path: "/",
-    },
-    {
-      name: "country_region",
-      value: "TR",
-      domain: ".samsung.com",
-      path: "/",
-    },
-  ]);
 
   try {
     for (const cat of SAMSUNG_CATEGORIES) {
@@ -867,6 +995,11 @@ async function scrapeSamsung(): Promise<ScrapedPrice[]> {
         await page.goto(url, {
           waitUntil: "domcontentloaded",
           timeout: 30000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "Samsung",
+          expectedHost: "samsung.com",
+          requestedUrl: url,
         });
 
         // Scroll to trigger lazy-loaded product cards
@@ -1037,11 +1170,8 @@ async function scrapeN11(): Promise<ScrapedMarketplaceProduct[]> {
   const results: ScrapedMarketplaceProduct[] = [];
   const seenIds = new Set<string>();
 
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["n11.com"],
   });
 
   try {
@@ -1056,6 +1186,11 @@ async function scrapeN11(): Promise<ScrapedMarketplaceProduct[]> {
           await page.goto(url, {
             waitUntil: "domcontentloaded",
             timeout: 30000,
+          });
+          warnIfNonTurkiyeUrl(page, {
+            brand: "N11",
+            expectedHost: "n11.com",
+            requestedUrl: url,
           });
           // N11 uses Vue, products render after networkidle + scroll
           await page
@@ -1189,27 +1324,15 @@ async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
   const results: ScrapedMarketplaceProduct[] = [];
   const seenIds = new Set<string>();
 
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
-    timezoneId: "Europe/Istanbul",
-    extraHTTPHeaders: {
-      "Accept-Language": "tr-TR,tr;q=0.9,en;q=0.8",
-    },
-  });
-
   // Trendyol geo-detects non-TR IPs (Replit egress is GB) and redirects /sr
-  // requests to /en/select-country, which renders zero product cards. Pre-seed
-  // the storefront cookies so the request lands on the Türkiye storefront
-  // directly. Without these cookies the scrape returns 0 products even though
-  // the underlying selectors (a.product-card[id]) are unchanged.
-  await context.addCookies([
-    { name: "storefrontId", value: "1", domain: ".trendyol.com", path: "/" },
-    { name: "countryCode", value: "TR", domain: ".trendyol.com", path: "/" },
-    { name: "language", value: "tr", domain: ".trendyol.com", path: "/" },
-  ]);
+  // requests to /en/select-country, which renders zero product cards. The
+  // shared `newTurkiyeContext` helper pre-seeds storefrontId / countryCode /
+  // language cookies on .trendyol.com so the request lands on the Türkiye
+  // storefront directly. Without these cookies the scrape returns 0 products
+  // even though the underlying selectors (a.product-card[id]) are unchanged.
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["trendyol.com"],
+  });
 
   try {
     for (const def of categoryDefs) {
@@ -1224,6 +1347,11 @@ async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
           await page.goto(url, {
             waitUntil: "domcontentloaded",
             timeout: 30000,
+          });
+          warnIfNonTurkiyeUrl(page, {
+            brand: "Trendyol",
+            expectedHost: "trendyol.com",
+            requestedUrl: url,
           });
           await page
             .waitForSelector("a.product-card[id]", { timeout: 12000 })
@@ -1430,11 +1558,8 @@ async function scrapeN11ProductSpecs(
   const targets = productUrls.slice(0, maxProducts);
   const results: ScrapedSpecRow[] = [];
 
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["n11.com"],
   });
 
   try {
@@ -1444,6 +1569,11 @@ async function scrapeN11ProductSpecs(
         await page.goto(target.productUrl, {
           waitUntil: "domcontentloaded",
           timeout: 25000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "N11 PDP",
+          expectedHost: "n11.com",
+          requestedUrl: target.productUrl,
         });
         await page
           .waitForSelector(".attribute-list .attribute-item", { timeout: 8000 })
@@ -1510,11 +1640,8 @@ async function scrapeLG(): Promise<ScrapedPrice[]> {
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["lg.com"],
   });
 
   try {
@@ -1525,6 +1652,11 @@ async function scrapeLG(): Promise<ScrapedPrice[]> {
         await page.goto(url, {
           waitUntil: "domcontentloaded",
           timeout: 30000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "LG",
+          expectedHost: "lg.com",
+          requestedUrl: url,
         });
         await page
           .waitForSelector("li.c-product-list__item", { timeout: 10000 })
@@ -1624,11 +1756,8 @@ async function scrapeProfilo(): Promise<ScrapedPrice[]> {
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["profilo.com"],
   });
 
   try {
@@ -1639,6 +1768,11 @@ async function scrapeProfilo(): Promise<ScrapedPrice[]> {
         await page.goto(url, {
           waitUntil: "domcontentloaded",
           timeout: 30000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "Profilo",
+          expectedHost: "profilo.com",
+          requestedUrl: url,
         });
         await page
           .waitForSelector(
@@ -1747,11 +1881,8 @@ async function scrapeGrundig(): Promise<ScrapedPrice[]> {
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["grundig.com.tr"],
   });
 
   try {
@@ -1762,6 +1893,11 @@ async function scrapeGrundig(): Promise<ScrapedPrice[]> {
         await page.goto(url, {
           waitUntil: "domcontentloaded",
           timeout: 30000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "Grundig",
+          expectedHost: "grundig.com.tr",
+          requestedUrl: url,
         });
         await page
           .waitForSelector("article.prd.product-item", { timeout: 10000 })
@@ -1881,11 +2017,8 @@ async function scrapeSiemens(): Promise<ScrapedPrice[]> {
   }
 
   const results: ScrapedPrice[] = [];
-  const context: BrowserContext = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    locale: "tr-TR",
-    viewport: { width: 1366, height: 900 },
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["siemens-home.bsh-group.com"],
   });
 
   try {
@@ -1896,6 +2029,11 @@ async function scrapeSiemens(): Promise<ScrapedPrice[]> {
         await page.goto(url, {
           waitUntil: "domcontentloaded",
           timeout: 30000,
+        });
+        warnIfNonTurkiyeUrl(page, {
+          brand: "Siemens",
+          expectedHost: "siemens-home.bsh-group.com",
+          requestedUrl: url,
         });
         await page
           .waitForSelector(
