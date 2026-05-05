@@ -1833,6 +1833,146 @@ async function scrapeN11ProductSpecs(
   return results;
 }
 
+// Hepsiburada PDP spec extractor. Mirrors scrapeN11ProductSpecs but targets
+// the Hepsiburada product-information markup: a `<table data-test-id=
+// "product-information-content">` with `<tr><th>Key</th><td>Value</td></tr>`
+// rows. Some PDPs collapse the table behind a "Daha fazla göster" / "Tüm
+// özellikler" toggle, so we click any visible toggle before extraction.
+// Falls back to scanning generic spec tables/dl pairs so that PDPs which
+// switched markup variants still surface key/value pairs.
+async function scrapeHepsiburadaProductSpecs(
+  productUrls: { marketplaceProductId: string; productUrl: string }[],
+  maxProducts = 60,
+): Promise<ScrapedSpecRow[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info(
+      "Skipping Hepsiburada spec extraction (Playwright not available)",
+    );
+    return [];
+  }
+  if (productUrls.length === 0) return [];
+
+  const targets = productUrls.slice(0, maxProducts);
+  const results: ScrapedSpecRow[] = [];
+
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["hepsiburada.com"],
+  });
+
+  try {
+    for (const target of targets) {
+      const page: Page = await context.newPage();
+      try {
+        // Hepsiburada PDPs (like the listing pages) never settle networkidle
+        // because of analytics beacons; use `commit` + DCL + a short wait so
+        // the React tree has time to mount the spec table before we query.
+        await page.goto(target.productUrl, {
+          waitUntil: "commit",
+          timeout: 30000,
+        });
+        await page
+          .waitForLoadState("domcontentloaded", { timeout: 30000 })
+          .catch(() => {});
+        await page.waitForTimeout(2500);
+        warnIfNonTurkiyeUrl(page, {
+          brand: "Hepsiburada PDP",
+          expectedHost: "hepsiburada.com",
+          requestedUrl: target.productUrl,
+        });
+        // Scroll the page so the lazily-mounted spec section enters view.
+        await page.evaluate(async () => {
+          for (let i = 0; i < 8; i++) {
+            window.scrollBy(0, 900);
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        });
+        await page.waitForTimeout(500);
+        // Collapsed-table toggle: click any visible "Tüm özellikler" / "Daha
+        // fazla göster" affordance so the full row set is in DOM. Tolerant
+        // of label variations across PDP layouts.
+        for (const sel of [
+          'button:has-text("Tüm özellikler")',
+          'button:has-text("Tüm Özellikler")',
+          'button:has-text("Daha fazla göster")',
+          'button:has-text("Daha fazla")',
+          '[data-test-id="show-more-product-information"]',
+        ]) {
+          const btn = page.locator(sel).first();
+          if (await btn.isVisible().catch(() => false)) {
+            await btn.click({ timeout: 3000 }).catch(() => {});
+            await page.waitForTimeout(400);
+          }
+        }
+        await page
+          .waitForSelector(
+            '[data-test-id="product-information-content"], table.data-list, [data-test-id="product-information"] table',
+            { timeout: 8000 },
+          )
+          .catch(() => {});
+
+        const rawSpecs = await page.evaluate(() => {
+          const out: Record<string, string> = {};
+          const addPair = (k: string | undefined, v: string | undefined) => {
+            const key = (k || "").replace(/\s+/g, " ").trim();
+            const val = (v || "").replace(/\s+/g, " ").trim();
+            if (key && val && !out[key]) out[key] = val;
+          };
+          // Primary: hepsiburada product-information table.
+          document
+            .querySelectorAll(
+              '[data-test-id="product-information-content"] tr, table.data-list tr, [data-test-id="product-information"] table tr',
+            )
+            .forEach((tr) => {
+              const th = tr.querySelector("th");
+              const td = tr.querySelector("td");
+              if (th && td) {
+                addPair(th.textContent ?? "", td.textContent ?? "");
+              }
+            });
+          // Fallback: definition lists with dt/dd pairs.
+          document
+            .querySelectorAll(
+              '[data-test-id="product-information-content"] dl, dl[data-test-id*="product-information"]',
+            )
+            .forEach((dl) => {
+              const dts = dl.querySelectorAll("dt");
+              const dds = dl.querySelectorAll("dd");
+              const n = Math.min(dts.length, dds.length);
+              for (let i = 0; i < n; i++) {
+                addPair(dts[i].textContent ?? "", dds[i].textContent ?? "");
+              }
+            });
+          return out;
+        });
+
+        if (Object.keys(rawSpecs).length > 0) {
+          results.push({
+            marketplace: "hepsiburada",
+            marketplaceProductId: target.marketplaceProductId,
+            ...parseSpecRow(rawSpecs),
+          });
+        }
+      } catch (err) {
+        logger.warn(
+          { url: target.productUrl, err },
+          "Hepsiburada spec extraction failed for product",
+        );
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  logger.info(
+    { extracted: results.length, attempted: targets.length },
+    "Hepsiburada spec extraction completed",
+  );
+  return results;
+}
+
 // LG TR scraper. Cards lazy-load on scroll; no explicit "show more"
 // affordance was observed during probing. Bounded scroll loop until the
 // product count stabilises.
@@ -2867,6 +3007,156 @@ export async function runPriceScrape(
         }
       } catch (err) {
         logger.error({ err }, "N11 spec extraction failed");
+      }
+    }
+
+    if (hepsiburadaItems.length > 0) {
+      try {
+        const existingSpecRows = await db
+          .select({
+            marketplaceProductId: arcelikProductSpecsTable.marketplaceProductId,
+            extractedAt: arcelikProductSpecsTable.extractedAt,
+          })
+          .from(arcelikProductSpecsTable)
+          .where(eq(arcelikProductSpecsTable.marketplace, "hepsiburada"));
+        const existingSpecMap = new Map(
+          existingSpecRows.map((r) => [
+            r.marketplaceProductId,
+            r.extractedAt?.getTime() ?? 0,
+          ]),
+        );
+        const ARCELIK_FAMILY = new Set([
+          "arcelik",
+          "arçelik",
+          "beko",
+          "grundig",
+          "altus",
+        ]);
+        const isArcelikFamily = (brand: string): boolean =>
+          ARCELIK_FAMILY.has(
+            brand
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/ı/g, "i")
+              .trim(),
+          );
+        const eligible = hepsiburadaItems
+          .filter((it) => it.productUrl)
+          .map((it) => ({
+            it,
+            extractedAt:
+              existingSpecMap.get(it.marketplaceProductId) ?? -1,
+            arcelikFamily: isArcelikFamily(it.brand),
+          }))
+          // Sort: Arcelik-family first (calibrates pricing baseline),
+          // then uncovered (extractedAt = -1), then oldest-extracted.
+          .sort((a, b) => {
+            if (a.arcelikFamily !== b.arcelikFamily) {
+              return a.arcelikFamily ? -1 : 1;
+            }
+            return a.extractedAt - b.extractedAt;
+          });
+        const targets = eligible
+          .slice(0, SPEC_CAP_PER_RUN)
+          .map((e) => ({
+            marketplaceProductId: e.it.marketplaceProductId,
+            productUrl: e.it.productUrl,
+          }));
+        const newCount = eligible.filter((e) => e.extractedAt < 0).length;
+        logger.info(
+          {
+            cap: SPEC_CAP_PER_RUN,
+            queued: targets.length,
+            uncoveredInQueue: Math.min(newCount, SPEC_CAP_PER_RUN),
+            totalUncovered: newCount,
+          },
+          "Queuing Hepsiburada PDPs for spec extraction (uncovered prioritized)",
+        );
+        const specs = await scrapeHepsiburadaProductSpecs(
+          targets,
+          SPEC_CAP_PER_RUN,
+        );
+        if (specs.length > 0) {
+          const specMpIds = Array.from(
+            new Set(specs.map((s) => s.marketplaceProductId)),
+          );
+          const ids = specMpIds.length === 0
+            ? []
+            : await db
+                .select({
+                  id: arcelikMarketplacePricesTable.id,
+                  marketplace: arcelikMarketplacePricesTable.marketplace,
+                  marketplaceProductId:
+                    arcelikMarketplacePricesTable.marketplaceProductId,
+                })
+                .from(arcelikMarketplacePricesTable)
+                .where(
+                  and(
+                    eq(
+                      arcelikMarketplacePricesTable.marketplace,
+                      "hepsiburada",
+                    ),
+                    inArray(
+                      arcelikMarketplacePricesTable.marketplaceProductId,
+                      specMpIds,
+                    ),
+                  ),
+                );
+          const idMap = new Map(
+            ids.map((r) => [`${r.marketplace}:${r.marketplaceProductId}`, r.id]),
+          );
+          const specRows = specs
+            .map((s) => {
+              const fk = idMap.get(`${s.marketplace}:${s.marketplaceProductId}`);
+              if (!fk) return null;
+              return {
+                marketplacePriceId: fk,
+                marketplace: s.marketplace,
+                marketplaceProductId: s.marketplaceProductId,
+                capacityLiters: s.capacityLiters,
+                capacityKg: s.capacityKg,
+                energyClass: s.energyClass,
+                productType: s.productType,
+                widthCm: s.widthCm,
+                heightCm: s.heightCm,
+                depthCm: s.depthCm,
+                noiseLevelDb: s.noiseLevelDb,
+                spinRpm: s.spinRpm,
+                rawSpecs: s.rawSpecs,
+              };
+            })
+            .filter((r): r is NonNullable<typeof r> => r !== null);
+          for (let i = 0; i < specRows.length; i += 50) {
+            await db
+              .insert(arcelikProductSpecsTable)
+              .values(specRows.slice(i, i + 50))
+              .onConflictDoUpdate({
+                target: [
+                  arcelikProductSpecsTable.marketplace,
+                  arcelikProductSpecsTable.marketplaceProductId,
+                ],
+                set: {
+                  marketplacePriceId: sql`excluded.marketplace_price_id`,
+                  capacityLiters: sql`excluded.capacity_liters`,
+                  capacityKg: sql`excluded.capacity_kg`,
+                  energyClass: sql`excluded.energy_class`,
+                  productType: sql`excluded.product_type`,
+                  widthCm: sql`excluded.width_cm`,
+                  heightCm: sql`excluded.height_cm`,
+                  depthCm: sql`excluded.depth_cm`,
+                  noiseLevelDb: sql`excluded.noise_level_db`,
+                  spinRpm: sql`excluded.spin_rpm`,
+                  rawSpecs: sql`excluded.raw_specs`,
+                  extractedAt: sql`now()`,
+                },
+              });
+          }
+          specsExtracted += specRows.length;
+          scrapedCounts.specs = (scrapedCounts.specs ?? 0) + specRows.length;
+        }
+      } catch (err) {
+        logger.error({ err }, "Hepsiburada spec extraction failed");
       }
     }
 
