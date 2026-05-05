@@ -1470,6 +1470,186 @@ async function scrapeTrendyol(): Promise<ScrapedMarketplaceProduct[]> {
   return results;
 }
 
+async function scrapeHepsiburada(): Promise<ScrapedMarketplaceProduct[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Hepsiburada scrape (Playwright not available)");
+    return [];
+  }
+
+  // Hepsiburada listing pages are React/SSR with heavy lazy-load: cards only
+  // mount once their slot scrolls into view. The search endpoint /ara?q={q}
+  // mirrors the iOS/Android app's behaviour and stays stable across category
+  // taxonomy reshuffles, so we mirror the Trendyol approach (search + per-
+  // category title-keyword gate) rather than relying on -c-{id} category
+  // slugs, which Hepsiburada periodically renumbers. Pagination is via
+  // ?sayfa={n}; maxPages is an upper bound and the inner loop terminates
+  // early once a page yields no new product IDs.
+  const categoryDefs = [
+    { query: "buzdolabi", category: "buzdolabi", maxPages: 12 },
+    { query: "camasir makinesi", category: "camasir", maxPages: 12 },
+    { query: "bulasik makinesi", category: "bulasik", maxPages: 10 },
+    { query: "ankastre firin", category: "firin", maxPages: 10 },
+    { query: "klima", category: "klima", maxPages: 10 },
+    { query: "kurutma makinesi", category: "kurutma", maxPages: 8 },
+    { query: "kucuk ev aletleri", category: "kucuk-ev", maxPages: 8 },
+  ];
+
+  // Same per-category gate used for Trendyol — search results bleed into
+  // accessories/cross-sells, so require at least one category-specific
+  // keyword in the listing title before accepting it.
+  const TITLE_KEYWORDS: Record<string, string[]> = {
+    buzdolabi: ["buzdolab", "no frost", "no-frost", "kombi dolap", "side by side", "dondurucu"],
+    camasir: ["camasir makinesi", "camaşır makines", "camasir mak"],
+    bulasik: ["bulasik makinesi", "bulaşık makines", "bulasik mak"],
+    firin: ["firin", "fırın", "ankastre", "ocak", "set ustu", "set üstü"],
+    klima: ["klima", "split", "btu"],
+    kurutma: ["kurutma makinesi", "kurutucu"],
+    "kucuk-ev": [],
+  };
+  const titleMatchesCategory = (title: string, category: string): boolean => {
+    const kws = TITLE_KEYWORDS[category];
+    if (!kws || kws.length === 0) return true;
+    const norm = title
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ı/g, "i");
+    return kws.some((kw) => norm.includes(kw));
+  };
+
+  const results: ScrapedMarketplaceProduct[] = [];
+  const seenIds = new Set<string>();
+
+  const context: BrowserContext = await newTurkiyeContext(browser, {
+    cookieDomains: ["hepsiburada.com"],
+  });
+
+  try {
+    for (const def of categoryDefs) {
+      for (let pg = 1; pg <= def.maxPages; pg++) {
+        const q = encodeURIComponent(def.query);
+        const url =
+          pg === 1
+            ? `https://www.hepsiburada.com/ara?q=${q}`
+            : `https://www.hepsiburada.com/ara?q=${q}&sayfa=${pg}`;
+        const page: Page = await context.newPage();
+        try {
+          // Hepsiburada's networkidle never settles (analytics beacons keep
+          // firing). Use `commit` + explicit DCL + a generous post-DCL wait
+          // so the React tree mounts before we scroll. Without the wait the
+          // first scrollBy fires before the SPA's router-level redirect from
+          // `/ara` to its rendered shell finishes, which destroys the eval
+          // context.
+          await page.goto(url, { waitUntil: "commit", timeout: 30000 });
+          await page
+            .waitForLoadState("domcontentloaded", { timeout: 30000 })
+            .catch(() => {});
+          await page.waitForTimeout(6000);
+          warnIfNonTurkiyeUrl(page, {
+            brand: "Hepsiburada",
+            expectedHost: "hepsiburada.com",
+            requestedUrl: url,
+          });
+          // Cards lazy-load on scroll; Hepsiburada renders ~24-30 per page
+          // but only mounts cards whose slot has been scrolled into view.
+          // Scroll the full page top-to-bottom-to-top to force-mount every
+          // card before extraction.
+          await page.evaluate(async () => {
+            for (let i = 0; i < 30; i++) {
+              window.scrollBy(0, 1000);
+              await new Promise((r) => setTimeout(r, 300));
+            }
+            window.scrollTo(0, 0);
+          });
+          await page.waitForTimeout(1500);
+
+          const items = await page.evaluate(() => {
+            const out: {
+              id: string;
+              href: string;
+              title: string;
+              priceText: string;
+            }[] = [];
+            const seen = new Set<string>();
+            // Product anchors all carry a `-p-HB...` segment in href; the
+            // inner data-test-id="final-price-N" element holds the discounted
+            // current price (Hepsiburada's `final` price is post-Sepete-özel
+            // discount, matching what shoppers actually pay).
+            document
+              .querySelectorAll('a[href*="-p-HB"]')
+              .forEach((el) => {
+                const href = (el as HTMLAnchorElement).href || "";
+                const m = href.match(/-p-([A-Z0-9]+)/);
+                if (!m) return;
+                const id = m[1];
+                if (seen.has(id)) return;
+                const title =
+                  el.getAttribute("title") ||
+                  (el as HTMLElement).innerText?.split("\n")[0] ||
+                  "";
+                if (!title) return;
+                // Walk up to the nearest card root that contains the price.
+                let scope: Element | null = el;
+                let priceText = "";
+                for (let k = 0; k < 6 && scope; k++) {
+                  const priceEl = scope.querySelector(
+                    '[data-test-id^="final-price-"]',
+                  );
+                  if (priceEl) {
+                    priceText = (priceEl as HTMLElement).innerText?.trim() || "";
+                    break;
+                  }
+                  scope = scope.parentElement;
+                }
+                if (!priceText) return;
+                seen.add(id);
+                out.push({ id, href, title: title.trim(), priceText });
+              });
+            return out;
+          });
+
+          let pageAdded = 0;
+          for (const it of items) {
+            if (seenIds.has(it.id)) continue;
+            if (!titleMatchesCategory(it.title, def.category)) continue;
+            const price = parseTurkishPrice(it.priceText);
+            if (!price || price < 500) continue;
+            seenIds.add(it.id);
+            results.push({
+              marketplace: "hepsiburada",
+              marketplaceProductId: it.id,
+              productUrl: it.href,
+              brand: extractBrandFromTitle(it.title),
+              title: it.title,
+              category: def.category,
+              price,
+              capacityLiters: extractCapacityLitersFromTitle(it.title),
+              capacityKg: extractCapacityKgFromTitle(it.title),
+              energyClass: extractEnergyClassFromTitle(it.title),
+              scrapedAt: new Date().toISOString(),
+            });
+            pageAdded++;
+          }
+          logger.info(
+            { url, pageAdded, totalSoFar: results.length },
+            "Hepsiburada page scraped",
+          );
+          if (pageAdded === 0 && pg > 1) break;
+        } catch (err) {
+          logger.warn({ url, err }, "Hepsiburada page scrape failed");
+        } finally {
+          await page.close();
+        }
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return results;
+}
+
 interface ScrapedSpecRow {
   marketplace: string;
   marketplaceProductId: string;
@@ -2385,9 +2565,37 @@ export async function runPriceScrape(
       scrapedCounts.trendyol = 0;
     }
 
+    let hepsiburadaItems: ScrapedMarketplaceProduct[] = [];
+    try {
+      logger.info("Scraping hepsiburada.com (marketplace)...");
+      hepsiburadaItems = await scrapeHepsiburada();
+      scrapedCounts.hepsiburada = hepsiburadaItems.length;
+
+      const hbByCat = new Map<string, number>();
+      for (const it of hepsiburadaItems) {
+        hbByCat.set(it.category, (hbByCat.get(it.category) ?? 0) + 1);
+      }
+      const hbExpectedCats = ["buzdolabi", "camasir", "bulasik", "firin", "klima", "kurutma", "kucuk-ev"];
+      const hbEmpty = hbExpectedCats.filter((c) => (hbByCat.get(c) ?? 0) === 0);
+      if (hbEmpty.length > 0) {
+        logger.warn(
+          { emptyCategories: hbEmpty, perCategory: Object.fromEntries(hbByCat) },
+          "Hepsiburada category drift: one or more expected categories returned 0 items — selectors may have changed",
+        );
+      }
+      logger.info(
+        { count: hepsiburadaItems.length },
+        "hepsiburada.com: marketplace products scraped",
+      );
+    } catch (err) {
+      logger.error({ err }, "hepsiburada.com: scrape failed");
+      scrapedCounts.hepsiburada = 0;
+    }
+
     const marketplaceItems: ScrapedMarketplaceProduct[] = [
       ...n11Items,
       ...trendyolItems,
+      ...hepsiburadaItems,
     ];
 
     if (marketplaceItems.length > 0) {
@@ -2432,7 +2640,12 @@ export async function runPriceScrape(
           });
       }
       logger.info(
-        { inserted: insertRows.length, n11: n11Items.length, trendyol: trendyolItems.length },
+        {
+          inserted: insertRows.length,
+          n11: n11Items.length,
+          trendyol: trendyolItems.length,
+          hepsiburada: hepsiburadaItems.length,
+        },
         "Marketplace prices stored",
       );
 
