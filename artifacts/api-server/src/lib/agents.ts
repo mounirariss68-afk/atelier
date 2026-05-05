@@ -151,11 +151,28 @@ export interface ArcelikContext {
 }
 
 let _ctxCache: { value: ArcelikContext; at: number } | null = null;
+// In-flight promise so that concurrent first calls (e.g. /agent/run-all
+// fanning out to four runners) share a single DB fetch instead of issuing
+// four parallel context loads before the cache is populated.
+let _ctxInflight: Promise<ArcelikContext> | null = null;
 const CTX_TTL_MS = 30_000;
 
 export async function buildArcelikContext(): Promise<ArcelikContext> {
   const now = Date.now();
   if (_ctxCache && now - _ctxCache.at < CTX_TTL_MS) return _ctxCache.value;
+  if (_ctxInflight) return _ctxInflight;
+  _ctxInflight = (async () => {
+    try {
+      return await _buildArcelikContextUncached();
+    } finally {
+      _ctxInflight = null;
+    }
+  })();
+  return _ctxInflight;
+}
+
+async function _buildArcelikContextUncached(): Promise<ArcelikContext> {
+  const now = Date.now();
 
   // Window price history to the last 90 days and cap rows defensively, so we
   // bound LLM-context size even on noisy scrape periods.
