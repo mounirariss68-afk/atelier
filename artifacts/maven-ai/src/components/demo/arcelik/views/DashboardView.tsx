@@ -144,16 +144,27 @@ export default function DashboardView() {
 
   const priceHistoryMap = useMemo(() => {
     if (!priceHistory || priceHistory.length === 0) return {};
-    const map: Record<string, number[]> = {};
+    const periodDays =
+      filters.period === "this-week" ? 7
+      : filters.period === "this-month" ? 30
+      : filters.period === "3-months" ? 90
+      : 180;
+    const cutoff = Date.now() - periodDays * 24 * 60 * 60 * 1000;
+    const map: Record<string, Array<{ time: number; price: number }>> = {};
     priceHistory
       .filter(r => r.recordType === "product")
       .forEach(record => {
+        const time = new Date(record.recordedAt).getTime();
+        if (time < cutoff) return;
         if (!map[record.referenceId]) map[record.referenceId] = [];
-        map[record.referenceId].push(record.price);
+        map[record.referenceId].push({ time, price: record.price });
       });
-    Object.values(map).forEach(arr => arr.reverse());
-    return map;
-  }, [priceHistory]);
+    const out: Record<string, number[]> = {};
+    Object.entries(map).forEach(([id, arr]) => {
+      out[id] = arr.sort((a, b) => a.time - b.time).map((p) => p.price);
+    });
+    return out;
+  }, [priceHistory, filters.period]);
 
   const summaryStats = useMemo(() => {
     if (!priceHistorySummary || priceHistorySummary.length === 0) return null;

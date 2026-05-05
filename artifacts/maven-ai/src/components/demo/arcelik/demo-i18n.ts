@@ -328,6 +328,12 @@ export const radar: I18n = {
     priceTrendTitle: "Fiyat Trend Grafiği",
     reducedBy: "fiyatında düşüş",
     raisedBy: "fiyatında artış",
+    range7d: "Son 7 Gün",
+    range30d: "Son 30 Gün",
+    range90d: "Son 90 Gün",
+    rangeAll: "Tümü",
+    rangeLabel: "Aralık:",
+    noTrendData: "Seçili aralık için veri bulunamadı.",
   },
   en: {
     dimPrice: "Price Competitiveness",
@@ -374,6 +380,12 @@ export const radar: I18n = {
     priceTrendTitle: "Price Trend Chart",
     reducedBy: "price reduced by",
     raisedBy: "price raised by",
+    range7d: "Last 7 Days",
+    range30d: "Last 30 Days",
+    range90d: "Last 90 Days",
+    rangeAll: "All",
+    rangeLabel: "Range:",
+    noTrendData: "No data available for the selected range.",
   },
 };
 

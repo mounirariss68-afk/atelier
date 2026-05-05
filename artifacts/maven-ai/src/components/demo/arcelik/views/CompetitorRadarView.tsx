@@ -56,6 +56,14 @@ export default function CompetitorRadarView() {
   const { data: priceHistory } = usePriceHistory();
   const [selectedBrands, setSelectedBrands] = useState<string[]>(["Vestel", "Bosch"]);
   const [detailBrand, setDetailBrand] = useState<string | null>(null);
+  const [trendRange, setTrendRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
+
+  const RANGE_OPTIONS: { key: "7d" | "30d" | "90d" | "all"; label: string }[] = [
+    { key: "7d", label: t.range7d },
+    { key: "30d", label: t.range30d },
+    { key: "90d", label: t.range90d },
+    { key: "all", label: t.rangeAll },
+  ];
 
   const RADAR_DIMS = [
     { key: "price", label: t.dimPrice },
@@ -144,10 +152,14 @@ export default function CompetitorRadarView() {
   const trendChartData = useMemo(() => {
     if (!priceHistory || priceHistory.length === 0) return [];
     const brandFilter = new Set(selectedBrands);
+    const rangeDays = trendRange === "7d" ? 7 : trendRange === "30d" ? 30 : trendRange === "90d" ? 90 : null;
+    const cutoff = rangeDays !== null ? Date.now() - rangeDays * 24 * 60 * 60 * 1000 : null;
     const dateMap: Record<string, Record<string, { total: number; count: number }>> = {};
     priceHistory.forEach(record => {
       const displayBrand = record.recordType === "product" ? "Arçelik" : record.brand;
       if (displayBrand !== "Arçelik" && !brandFilter.has(displayBrand)) return;
+      const recordTime = new Date(record.recordedAt).getTime();
+      if (cutoff !== null && recordTime < cutoff) return;
       const dayKey = new Date(record.recordedAt).toISOString().split("T")[0];
       if (!dateMap[dayKey]) dateMap[dayKey] = {};
       if (!dateMap[dayKey][displayBrand]) dateMap[dayKey][displayBrand] = { total: 0, count: 0 };
@@ -167,7 +179,9 @@ export default function CompetitorRadarView() {
         });
         return row;
       });
-  }, [priceHistory, selectedBrands, lang]);
+  }, [priceHistory, selectedBrands, lang, trendRange]);
+
+  const hasAnyHistory = !!priceHistory && priceHistory.length > 0;
 
   return (
     <div className="space-y-6">
@@ -252,31 +266,59 @@ export default function CompetitorRadarView() {
         </motion.div>
       </div>
 
-      {trendChartData.length > 0 && (
+      {hasAnyHistory && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
           className="bg-white rounded-xl border border-gray-100 shadow-sm p-5"
         >
-          <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-            <TrendingUp size={16} className="text-[#E30613]" />
-            {t.priceTrendTitle}
-          </h3>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendChartData} margin={{ left: 5, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₺${(v / 1000).toFixed(0)}K`} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: number) => [`₺${v.toLocaleString("tr-TR")}`, ""]} />
-                <Line type="monotone" dataKey="Arçelik" stroke="#E30613" strokeWidth={2} dot={false} />
-                {selectedBrands.map((b) => (
-                  <Line key={b} type="monotone" dataKey={b} stroke={BRAND_COLORS[b] || "#6B7280"} strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <TrendingUp size={16} className="text-[#E30613]" />
+              {t.priceTrendTitle}
+            </h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-gray-500 font-medium">{t.rangeLabel}</span>
+              <div className="inline-flex items-center bg-gray-50 border border-gray-200 rounded-full p-0.5" role="group" aria-label={t.rangeLabel}>
+                {RANGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setTrendRange(opt.key)}
+                    aria-pressed={trendRange === opt.key}
+                    className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
+                      trendRange === opt.key
+                        ? "bg-[#0E2841] text-white shadow-sm"
+                        : "text-gray-600 hover:text-[#0E2841]"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
                 ))}
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </LineChart>
-            </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+          <div className="h-[300px]">
+            {trendChartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-gray-400">
+                {t.noTrendData}
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendChartData} margin={{ left: 5, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₺${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: number) => [`₺${v.toLocaleString("tr-TR")}`, ""]} />
+                  <Line type="monotone" dataKey="Arçelik" stroke="#E30613" strokeWidth={2} dot={false} />
+                  {selectedBrands.map((b) => (
+                    <Line key={b} type="monotone" dataKey={b} stroke={BRAND_COLORS[b] || "#6B7280"} strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                  ))}
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </motion.div>
       )}
