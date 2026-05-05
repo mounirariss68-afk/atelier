@@ -243,6 +243,10 @@ export const dashboard: I18n = {
     compareMarketplacesProducts: "ürün",
     compareMarketplacesNoData: "Bu filtreler için pazar yeri verisi yok.",
     compareMarketplacesHighlighted: "Seçilen pazar yeri vurgulandı",
+    priceTrendTitle: "Pazar Yeri Fiyat Trendi",
+    priceTrendHint: "Seçili dönem için günlük ortalama fiyat (pazar yeri başına)",
+    priceTrendNoData: "Bu filtreler için trend verisi yok.",
+    priceTrendAvg: "Günlük Ort.",
   },
   en: {
     heatMarketShare: "Market Share",
@@ -369,6 +373,10 @@ export const dashboard: I18n = {
     compareMarketplacesProducts: "products",
     compareMarketplacesNoData: "No marketplace data for these filters.",
     compareMarketplacesHighlighted: "Selected marketplace highlighted",
+    priceTrendTitle: "Marketplace Price Trend",
+    priceTrendHint: "Daily average price per marketplace over the selected period",
+    priceTrendNoData: "No trend data for these filters.",
+    priceTrendAvg: "Daily Avg.",
   },
 };
 

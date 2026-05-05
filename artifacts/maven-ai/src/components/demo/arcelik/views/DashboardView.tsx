@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
+  LineChart, Line,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, MapPin, ArrowUpDown, X, ChevronDown,
@@ -421,6 +422,50 @@ export default function DashboardView() {
     hepsiburada: "#ef4444",
   };
 
+  const priceTrendData = useMemo(() => {
+    const rows = marketplaceHistoryRows ?? [];
+    if (rows.length === 0) return [] as Array<Record<string, number | string>>;
+    const cats = filters.categories.length > 0
+      ? (filters.categories as string[])
+      : (Object.keys(CATEGORY_LABELS) as string[]);
+    const byDateMp = new Map<string, Map<string, { sum: number; count: number }>>();
+    for (const r of rows) {
+      const cat = String(r.category ?? "");
+      if (!cats.includes(cat)) continue;
+      const mp = String(r.marketplace ?? "").toLowerCase();
+      if (!mp) continue;
+      const recorded = new Date(r.recordedAt);
+      if (isNaN(recorded.getTime())) continue;
+      const dateKey = `${recorded.getUTCFullYear()}-${String(recorded.getUTCMonth() + 1).padStart(2, "0")}-${String(recorded.getUTCDate()).padStart(2, "0")}`;
+      const inner = byDateMp.get(dateKey) ?? new Map<string, { sum: number; count: number }>();
+      const prev = inner.get(mp) ?? { sum: 0, count: 0 };
+      prev.sum += r.price;
+      prev.count += 1;
+      inner.set(mp, prev);
+      byDateMp.set(dateKey, inner);
+    }
+    const sortedDates = [...byDateMp.keys()].sort();
+    return sortedDates.map((date) => {
+      const inner = byDateMp.get(date)!;
+      const row: Record<string, number | string> = { date };
+      for (const mp of MARKETPLACE_ORDER) {
+        const b = inner.get(mp);
+        if (b && b.count > 0) row[mp] = Math.round(b.sum / b.count);
+      }
+      return row;
+    });
+  }, [marketplaceHistoryRows, filters.categories]);
+
+  const formatTrendDate = (value: string) => {
+    const d = new Date(`${value}T00:00:00Z`);
+    if (isNaN(d.getTime())) return value;
+    return new Intl.DateTimeFormat(lang === "tr" ? "tr-TR" : "en-US", {
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(d);
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -691,6 +736,96 @@ export default function DashboardView() {
                   );
                 })}
               </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.47 }}
+        data-testid="marketplace-price-trend-card"
+        className="bg-white rounded-xl border border-gray-100 shadow-sm"
+      >
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <TrendingUp size={16} className="text-[#0E2841]" />
+              {t.priceTrendTitle}
+            </h3>
+            <p className="text-[10px] text-gray-400 mt-0.5">{t.priceTrendHint}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {MARKETPLACE_ORDER.map((mp) => {
+              const dim = selectedMarketplace !== "all" && selectedMarketplace !== mp;
+              return (
+                <div key={mp} className={`flex items-center gap-1.5 text-[11px] ${dim ? "opacity-40" : ""}`}>
+                  <span
+                    className="w-3 h-3 rounded-sm"
+                    style={{ background: MARKETPLACE_HEX[mp] }}
+                  />
+                  <span className="font-semibold text-gray-700">{marketplaceLabel(mp, t)}</span>
+                </div>
+              );
+            })}
+            {selectedMarketplace !== "all" && (
+              <span className="text-[10px] text-gray-400 italic">
+                {t.compareMarketplacesHighlighted}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="p-4 min-h-[300px]">
+          {priceTrendData.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <TrendingUp size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">{t.priceTrendNoData}</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={priceTrendData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={formatTrendDate}
+                  minTickGap={24}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) => formatTRY(Number(v), lang)}
+                  width={80}
+                  domain={["auto", "auto"]}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  labelFormatter={(label: string) => formatTrendDate(label)}
+                  formatter={(val: number, name: string) => [
+                    `${formatTRY(Number(val), lang)} · ${t.priceTrendAvg}`,
+                    marketplaceLabel(name, t),
+                  ]}
+                />
+                {MARKETPLACE_ORDER.map((mp) => {
+                  const isHighlight = selectedMarketplace === "all" || selectedMarketplace === mp;
+                  const isSelected = selectedMarketplace === mp;
+                  return (
+                    <Line
+                      key={mp}
+                      type="monotone"
+                      dataKey={mp}
+                      name={mp}
+                      stroke={MARKETPLACE_HEX[mp]}
+                      strokeOpacity={isHighlight ? 1 : 0.2}
+                      strokeWidth={isSelected ? 3 : 2}
+                      dot={false}
+                      activeDot={{ r: isSelected ? 5 : 4 }}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  );
+                })}
+              </LineChart>
             </ResponsiveContainer>
           )}
         </div>
