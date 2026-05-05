@@ -40,16 +40,9 @@ export default function AgentOpsShell() {
           {isAr ? "العودة" : "Back"}
         </Link>
         <div className="h-5 w-px bg-slate-600" />
-        <div className="flex items-center gap-3">
-          <img
-            src={`${import.meta.env.BASE_URL}tasama-logo-light.png`}
-            alt="Tasama · Business Services · تسامي لخدمات الأعمال"
-            className="h-10 w-auto object-contain flex-shrink-0"
-          />
-          <div className="leading-tight">
-            <h1 className="text-xs font-bold">{isAr ? "عمليات الوكلاء" : "Agent Operations"}</h1>
-            <p className="text-[10px] text-slate-400">{isAr ? "الفريق الرقمي" : "Digital Team"}</p>
-          </div>
+        <div className="leading-tight">
+          <h1 className="text-xs font-bold">{isAr ? "عمليات الوكلاء" : "Agent Operations"}</h1>
+          <p className="text-[10px] text-slate-400">{isAr ? "الفريق الرقمي" : "Digital Team"}</p>
         </div>
         <div className="flex-1" />
         <button
