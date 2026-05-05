@@ -34,6 +34,12 @@ export interface AgentImpact {
   revenue: string;
   margin: string;
   share: string;
+  /**
+   * Optional expected volume impact (e.g., "-150 units", "+80 units", "~0 units").
+   * Required for the price-elasticity agent so recommendations are explicit
+   * about the demand-side trade-off; other agents may omit it.
+   */
+  volume?: string;
 }
 
 export interface AgentRecommendation {
@@ -334,6 +340,7 @@ const RawRecommendationSchema = z.object({
     revenue: z.string().min(1),
     margin: z.string().min(1),
     share: z.string().min(1),
+    volume: z.string().min(1).optional(),
   }),
   recommendedAction: z.string().min(1),
   alternatives: z.array(z.string()).min(1).max(5),
@@ -724,12 +731,89 @@ function buildElasticityContext(ctx: ArcelikContext) {
     })),
   }));
 
-  return { categories, premiumGaps, priceMoves };
+  // Volume proxy: we don't have first-class unit-sales data, but each dealer
+  // carries a monthly target, current period progress, and a productMix
+  // (category-share %). Weighting dealer KPIs by mix gives an estimated
+  // per-category demand signal that's grounded in real seeded data.
+  const demandByCategory = new Map<
+    string,
+    { weightedProgress: number; weightedTarget: number; dealers: number }
+  >();
+  for (const d of ctx.dealers) {
+    for (const [cat, sharePct] of Object.entries(d.productMix)) {
+      const w = sharePct / 100;
+      const e = demandByCategory.get(cat) ?? {
+        weightedProgress: 0,
+        weightedTarget: 0,
+        dealers: 0,
+      };
+      e.weightedProgress += d.currentProgress * w;
+      e.weightedTarget += d.monthlySalesTarget * w;
+      e.dealers += 1;
+      demandByCategory.set(cat, e);
+    }
+  }
+  const categoryDemand = [...demandByCategory.entries()].map(([category, v]) => ({
+    category,
+    estimatedUnitsSold: Math.round(v.weightedProgress),
+    estimatedTarget: Math.round(v.weightedTarget),
+    sellThroughPercent:
+      v.weightedTarget > 0 ? Math.round((v.weightedProgress / v.weightedTarget) * 100) : null,
+    dealersWithCategory: v.dealers,
+  }));
+
+  // Pair the volume proxy with recent price-move direction to surface a
+  // directional sensitivity signal (price-up + strong sell-through suggests
+  // low elasticity; price-up + weak sell-through suggests elasticity risk).
+  const sensitivitySignals = categoryDemand.map((d) => {
+    const moves = priceMoves.find((m) => m.category === d.category);
+    const direction =
+      !moves || moves.moves90d === 0
+        ? "no-recent-moves"
+        : moves.increases > moves.decreases
+          ? "up"
+          : moves.decreases > moves.increases
+            ? "down"
+            : "mixed";
+    let inference = "insufficient signal";
+    if (d.sellThroughPercent != null && moves && moves.moves90d > 0) {
+      if (direction === "up" && d.sellThroughPercent >= 70)
+        inference = "demand absorbed recent price increases (low elasticity)";
+      else if (direction === "down" && d.sellThroughPercent < 70)
+        inference = "price cuts didn't fully restore demand (saturation or weak signal)";
+      else if (direction === "up" && d.sellThroughPercent < 70)
+        inference = "price increases coincide with weak demand (elasticity risk)";
+      else if (direction === "down" && d.sellThroughPercent >= 70)
+        inference = "price cuts coincide with strong sell-through (responsive demand)";
+      else inference = "neutral";
+    }
+    return {
+      category: d.category,
+      sellThroughPercent: d.sellThroughPercent,
+      estimatedUnitsSold: d.estimatedUnitsSold,
+      recentPriceDirection: direction,
+      avgRecentMovePercent: moves?.avgMovePercent ?? 0,
+      inference,
+    };
+  });
+
+  return { categories, premiumGaps, priceMoves, categoryDemand, sensitivitySignals };
 }
 
 function baselineElasticity(ctx: ArcelikContext, language: "tr" | "en"): RawRecommendation[] {
-  const { categories, premiumGaps } = buildElasticityContext(ctx);
+  const { categories, premiumGaps, sensitivitySignals } = buildElasticityContext(ctx);
   if (premiumGaps.length === 0) {
+    const demandSummary =
+      sensitivitySignals.length > 0
+        ? sensitivitySignals
+            .map(
+              (s) =>
+                `${s.category}: sell-through ${s.sellThroughPercent ?? "—"}% / ${s.recentPriceDirection}`,
+            )
+            .join(" | ")
+        : language === "tr"
+          ? "talep proxy verisi yok"
+          : "no demand proxy available";
     return [
       {
         type: "elasticity-monitor",
@@ -749,13 +833,15 @@ function baselineElasticity(ctx: ArcelikContext, language: "tr" | "en"): RawReco
               language === "tr" ? "Mevcut konumlandırma rekabetçi." : "Current positioning is competitive.",
           },
           {
-            source: language === "tr" ? "İzleme Önerisi" : "Monitoring Recommendation",
-            observation:
-              language === "tr" ? "Aylık esneklik ölçümünü sürdür." : "Continue monthly elasticity measurement.",
-            conclusion: language === "tr" ? "Yeniden değerlendirme: 30 gün." : "Re-evaluate in 30 days.",
+            source: language === "tr" ? "Talep Proxy (Bayi KPI)" : "Demand Proxy (Dealer KPI)",
+            observation: demandSummary,
+            conclusion:
+              language === "tr"
+                ? "Hacim sinyali stabil; agresif fiyat hareketi gerekmiyor."
+                : "Volume signal is stable; no aggressive price move warranted.",
           },
         ],
-        impact: { revenue: "+₺0M", margin: "+0.0%", share: "+0.0pp" },
+        impact: { revenue: "+₺0M", margin: "+0.0%", share: "+0.0pp", volume: "~0 units" },
         recommendedAction:
           language === "tr" ? "Mevcut fiyatlamayı koru, 30 gün sonra yeniden değerlendir." : "Hold current pricing; re-evaluate in 30 days.",
         alternatives: [language === "tr" ? "Test pazarında %2 artış denemesi" : "A/B test 2% lift in one city"],
@@ -765,6 +851,21 @@ function baselineElasticity(ctx: ArcelikContext, language: "tr" | "en"): RawReco
   const top = premiumGaps[0];
   const cat = top.category;
   const matching = premiumGaps.filter((g) => g.category === cat);
+  const signal = sensitivitySignals.find((s) => s.category === cat);
+  // Estimate volume impact from the proxy: assume a 3% price lift produces a
+  // proportional volume impact scaled by the observed inference. With no signal
+  // we report ~0; with strong sell-through (low elasticity) we expect minimal
+  // volume drag; with weak sell-through (elasticity risk) we expect some loss.
+  const baseUnits = signal?.estimatedUnitsSold ?? 0;
+  let expectedVolumeUnits = 0;
+  if (baseUnits > 0 && signal) {
+    if (signal.inference.includes("low elasticity")) expectedVolumeUnits = -Math.round(baseUnits * 0.01);
+    else if (signal.inference.includes("elasticity risk")) expectedVolumeUnits = -Math.round(baseUnits * 0.05);
+    else expectedVolumeUnits = -Math.round(baseUnits * 0.02);
+  }
+  const volumeStr =
+    expectedVolumeUnits === 0 ? "~0 units" : `${expectedVolumeUnits > 0 ? "+" : ""}${expectedVolumeUnits} units`;
+
   return [
     {
       type: "price-elasticity-lift",
@@ -774,8 +875,8 @@ function baselineElasticity(ctx: ArcelikContext, language: "tr" | "en"): RawReco
           : `Pricing-up opportunity in ${cat} segment`,
       summary:
         language === "tr"
-          ? `${matching.length} ${cat} ürününde ${top.brand} ortalama %${Math.round(matching.reduce((s, m) => s + m.gapPercent, 0) / matching.length)} daha pahalı. Düşük talep esnekliği varsayımıyla %3-5 fiyat artışı denemeye değer.`
-          : `${matching.length} ${cat} SKUs show ${top.brand} priced ${Math.round(matching.reduce((s, m) => s + m.gapPercent, 0) / matching.length)}% higher on average. Low demand elasticity supports a 3-5% price increase pilot.`,
+          ? `${matching.length} ${cat} ürününde ${top.brand} ortalama %${Math.round(matching.reduce((s, m) => s + m.gapPercent, 0) / matching.length)} daha pahalı. Bayi KPI proxy'si ${signal?.sellThroughPercent ?? "—"}% sell-through gösteriyor (${signal?.inference ?? "yetersiz sinyal"}); aşamalı %3 artış denemeye değer.`
+          : `${matching.length} ${cat} SKUs show ${top.brand} priced ${Math.round(matching.reduce((s, m) => s + m.gapPercent, 0) / matching.length)}% higher on average. Dealer-KPI proxy shows ${signal?.sellThroughPercent ?? "—"}% sell-through (${signal?.inference ?? "insufficient signal"}); a phased 3% lift is worth piloting.`,
       targetRole: "pricing",
       severity: "medium",
       confidence: 80,
@@ -790,13 +891,15 @@ function baselineElasticity(ctx: ArcelikContext, language: "tr" | "en"): RawReco
             language === "tr" ? "Üst segmentte fiyat alanı mevcut." : "Headroom exists in the upper segment.",
         },
         {
-          source: language === "tr" ? "Esneklik Heuristic" : "Elasticity Heuristic",
+          source: language === "tr" ? "Talep Proxy + Fiyat Hareketi" : "Demand Proxy + Price Move",
           observation:
             language === "tr"
-              ? `${cat} kategorisinde tüketici kalite-odaklı; tarihsel esneklik 0.3-0.6 aralığında.`
-              : `${cat} category buyers are quality-led; historical elasticity in 0.3-0.6 band.`,
+              ? `${cat}: tahmini ${signal?.estimatedUnitsSold ?? 0} birim, sell-through %${signal?.sellThroughPercent ?? "—"}, son 90g fiyat yönü: ${signal?.recentPriceDirection ?? "veri yok"} (avg ${signal?.avgRecentMovePercent ?? 0}%).`
+              : `${cat}: ~${signal?.estimatedUnitsSold ?? 0} units estimated, sell-through ${signal?.sellThroughPercent ?? "—"}%, 90d price direction: ${signal?.recentPriceDirection ?? "no data"} (avg ${signal?.avgRecentMovePercent ?? 0}%).`,
           conclusion:
-            language === "tr" ? "Hacim etkisi sınırlı, marj kazancı net." : "Volume impact limited, margin gain net positive.",
+            language === "tr"
+              ? `Çıkarım: ${signal?.inference ?? "yetersiz sinyal"}.`
+              : `Inference: ${signal?.inference ?? "insufficient signal"}.`,
         },
         {
           source: language === "tr" ? "Risk Notu" : "Risk Note",
@@ -806,7 +909,7 @@ function baselineElasticity(ctx: ArcelikContext, language: "tr" | "en"): RawReco
             language === "tr" ? "Aşamalı 3% + 2% (60 gün arayla)." : "Stagger 3% + 2% (60-day gap).",
         },
       ],
-      impact: { revenue: "+₺6M", margin: "+1.0%", share: "-0.1pp" },
+      impact: { revenue: "+₺6M", margin: "+1.0%", share: "-0.1pp", volume: volumeStr },
       recommendedAction:
         language === "tr"
           ? `${cat} kategorisinde üst segmente %3 fiyat artışı uygula; 30 gün hacim takibi sonrası %2 ek artış değerlendir.`
@@ -1504,7 +1607,11 @@ export async function runCompetitiveResponseAgent(opts: RunOptions = {}): Promis
 export async function runPriceElasticityAgent(opts: RunOptions = {}): Promise<AgentRunResult> {
   const ctx = await buildArcelikContext();
   const data = buildElasticityContext(ctx);
-  const role = `You are the Price Elasticity Agent for Arçelik. You identify pricing-up opportunities (where Arçelik is significantly under premium competitors like Bosch with low elasticity) and pricing-down necessities. You quantify margin lift potential and recommend phased adjustments.`;
+  const role = `You are the Price Elasticity Agent for Arçelik. You identify pricing-up opportunities (where Arçelik is significantly under premium competitors like Bosch with low elasticity) and pricing-down necessities. You quantify margin lift potential and recommend phased adjustments.
+
+IMPORTANT — grounding rules for this agent:
+- Use the provided "sensitivitySignals" array (price-move direction × dealer-KPI sell-through) as your primary basis for any elasticity claim. Do NOT invent elasticity coefficients or bands; cite only the inference labels and sell-through numbers actually present in the data.
+- When you emit "impact", include an explicit "volume" field describing expected unit-volume impact in the form "+N units", "-N units", or "~0 units". Base it on the estimatedUnitsSold for the affected category. If no demand signal is available, set volume to "~0 units" and lower confidence accordingly.`;
   return runAgent("price-elasticity", role, data, baselineElasticity, ctx, opts);
 }
 

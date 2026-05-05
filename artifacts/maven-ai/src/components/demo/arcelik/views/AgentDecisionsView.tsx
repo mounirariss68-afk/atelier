@@ -119,7 +119,7 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
   const [expanded, setExpanded] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
   const [modifyNote, setModifyNote] = useState("");
-  const { t, sevLabels, roleLabels, timeAgo } = useDecisionsI18n();
+  const { lang, t, sevLabels, roleLabels, timeAgo } = useDecisionsI18n();
 
   return (
     <motion.div
@@ -161,6 +161,14 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
                 <p className="text-[9px] text-gray-400">{t.marketShareLabel}</p>
               </div>
             </div>
+            {rec.impact.volume && (
+              <div className="mt-2 flex items-center justify-between bg-amber-50 border border-amber-100 rounded-lg px-2 py-1">
+                <span className="text-[10px] text-amber-700 font-semibold">
+                  {lang === "tr" ? "Beklenen Hacim Etkisi" : "Expected Volume Impact"}
+                </span>
+                <span className="text-[11px] font-bold text-amber-900">{rec.impact.volume}</span>
+              </div>
+            )}
 
             <div className="mt-3 p-3 bg-[#0E2841]/5 rounded-lg">
               <p className="text-[10px] font-bold text-[#0E2841] mb-0.5 flex items-center gap-1"><Zap size={10} /> {t.suggestedAction}</p>

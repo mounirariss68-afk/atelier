@@ -41,7 +41,7 @@ export interface AgentRecommendation {
   severity: Severity;
   confidence: number;
   reasoning: ReasoningStep[];
-  impact: { revenue: string; margin: string; share: string };
+  impact: { revenue: string; margin: string; share: string; volume?: string };
   recommendedAction: string;
   alternatives: string[];
   status: RecommendationStatus;
