@@ -139,11 +139,18 @@ export default function DashboardView() {
   const { data: priceHistory } = usePriceHistory();
   const { data: priceHistorySummary } = usePriceHistorySummary();
   const { data: marketplacePriceRows, isLoading: marketplacePricesLoading } = useMarketplacePriceSummary();
+  const selectedMarketplace = filters.marketplace;
   const marketplaceBreakdowns = useMemo(() => {
-    const rows = marketplacePriceRows ?? [];
+    const allRows = marketplacePriceRows ?? [];
+    const rows = selectedMarketplace === "all"
+      ? allRows
+      : allRows.filter((r) => String(r.marketplace ?? "").toLowerCase() === selectedMarketplace);
     const aggregated = aggregateByMarketplace(rows);
     const byId = new Map(aggregated.map((b) => [b.marketplace.toLowerCase(), b]));
-    const ordered = MARKETPLACE_ORDER.map((id) => {
+    const visibleIds = selectedMarketplace === "all"
+      ? MARKETPLACE_ORDER
+      : MARKETPLACE_ORDER.filter((id) => id === selectedMarketplace);
+    const ordered = visibleIds.map((id) => {
       const found = byId.get(id);
       byId.delete(id);
       return (
@@ -158,9 +165,9 @@ export default function DashboardView() {
         }
       );
     });
-    const extras = [...byId.values()];
+    const extras = selectedMarketplace === "all" ? [...byId.values()] : [];
     return [...ordered, ...extras];
-  }, [marketplacePriceRows]);
+  }, [marketplacePriceRows, selectedMarketplace]);
   const HEAT_LABELS: Record<HeatMetric, string> = {
     share: t.heatMarketShare,
     price: t.heatPriceIndex,
@@ -200,6 +207,11 @@ export default function DashboardView() {
     return cities.filter((c) => filters.cities.includes(c.id));
   }, [filters.cities]);
 
+  const matchesMarketplace = (source: string | undefined | null) => {
+    if (selectedMarketplace === "all") return true;
+    return String(source ?? "").toLowerCase().includes(selectedMarketplace);
+  };
+
   const priceHistoryMap = useMemo(() => {
     if (!priceHistory || priceHistory.length === 0) return {};
     const periodDays =
@@ -210,7 +222,7 @@ export default function DashboardView() {
     const cutoff = Date.now() - periodDays * 24 * 60 * 60 * 1000;
     const map: Record<string, Array<{ time: number; price: number }>> = {};
     priceHistory
-      .filter(r => r.recordType === "product")
+      .filter((r) => r.recordType === "product" && matchesMarketplace(r.source))
       .forEach(record => {
         const time = new Date(record.recordedAt).getTime();
         if (time < cutoff) return;
@@ -222,7 +234,7 @@ export default function DashboardView() {
       out[id] = arr.sort((a, b) => a.time - b.time).map((p) => p.price);
     });
     return out;
-  }, [priceHistory, filters.period]);
+  }, [priceHistory, filters.period, selectedMarketplace]);
 
   const summaryStats = useMemo(() => {
     if (!priceHistorySummary || priceHistorySummary.length === 0) return null;
@@ -815,7 +827,9 @@ export default function DashboardView() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-red-700">{t.scrapeHealthAlertTitle}</p>
               <ul className="mt-1.5 space-y-1">
-                {scrapeStatus.scrapeHealth.alerts.map((a) => {
+                {scrapeStatus.scrapeHealth.alerts
+                  .filter((a) => selectedMarketplace === "all" || String(a.marketplace ?? "").toLowerCase() === selectedMarketplace)
+                  .map((a) => {
                   const msg =
                     a.reason === "zero"
                       ? t.scrapeHealthAlertZero.replace("{baseline}", String(a.baselineAvg))
@@ -934,7 +948,10 @@ export default function DashboardView() {
         </div>
         {marketplacePricesLoading && !marketplacePriceRows ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="marketplace-prices-loading">
-            {MARKETPLACE_ORDER.map((id) => {
+            {(selectedMarketplace === "all"
+              ? MARKETPLACE_ORDER
+              : MARKETPLACE_ORDER.filter((id) => id === selectedMarketplace)
+            ).map((id) => {
               const c = marketplaceColor(id);
               return (
                 <div key={id} className={`rounded-lg border ${c.border} ${c.bg} p-3 animate-pulse`}>

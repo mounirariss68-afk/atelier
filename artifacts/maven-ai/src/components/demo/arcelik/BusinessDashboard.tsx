@@ -8,7 +8,7 @@ import {
   ArrowLeftRight, TrendingUp, TrendingDown, CheckCheck,
 } from "lucide-react";
 import Logo from "@/components/Logo";
-import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
+import { DashboardProvider, useDashboardFilters, type Period, type MarketplaceFilter } from "./DashboardContext";
 import { COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel, getCityName, type ProductCategory } from "@/data/arcelik-seed";
 import { useArcelikData } from "@/hooks/useArcelikData";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -56,6 +56,13 @@ const PERIOD_LABEL_KEYS: Record<Period, string> = {
   "3-months": "period3Months",
   "6-months": "period6Months",
 };
+
+const MARKETPLACE_FILTER_OPTIONS: { id: MarketplaceFilter; labelKey: string }[] = [
+  { id: "all", labelKey: "marketplaceAll" },
+  { id: "n11", labelKey: "marketplaceN11" },
+  { id: "trendyol", labelKey: "marketplaceTrendyol" },
+  { id: "hepsiburada", labelKey: "marketplaceHepsiburada" },
+];
 
 function Shell() {
   const [view, setView] = useState<ViewId>("dashboard");
@@ -389,6 +396,31 @@ function Shell() {
                 <button onClick={() => update({ competitors: [] })} className="hover:text-orange-900" aria-label={t.clearCompetitorFilter}><X size={10} /></button>
               </span>
             )}
+            <div className="h-4 w-px bg-gray-200" />
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+              {t.marketplaceLabel}
+            </span>
+            <div className="flex items-center gap-1" data-testid="marketplace-filter">
+              {MARKETPLACE_FILTER_OPTIONS.map((opt) => {
+                const active = filters.marketplace === opt.id;
+                const label = t[opt.labelKey] ?? opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => update({ marketplace: opt.id })}
+                    data-testid={`marketplace-filter-${opt.id}`}
+                    aria-pressed={active}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                      active
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {filtersOpen && (

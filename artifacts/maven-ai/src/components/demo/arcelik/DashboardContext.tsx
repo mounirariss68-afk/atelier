@@ -2,12 +2,14 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import type { ProductCategory } from "@/data/arcelik-seed";
 
 export type Period = "this-week" | "this-month" | "3-months" | "6-months";
+export type MarketplaceFilter = "all" | "n11" | "trendyol" | "hepsiburada";
 
 interface Filters {
   cities: string[];
   categories: ProductCategory[];
   competitors: string[];
   period: Period;
+  marketplace: MarketplaceFilter;
 }
 
 interface DashboardContextValue {
@@ -25,6 +27,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     categories: [],
     competitors: [],
     period: "this-month",
+    marketplace: "all",
   });
 
   return (
