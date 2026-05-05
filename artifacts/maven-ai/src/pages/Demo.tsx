@@ -3,7 +3,6 @@ import { ArrowLeft } from "lucide-react";
 import DemoExperience from "@/components/demo/DemoExperience";
 import BusinessDashboard from "@/components/demo/arcelik/BusinessDashboard";
 import DealerPortal from "@/components/demo/arcelik/DealerPortal";
-import AgentOpsShell from "@/components/demo/tasama/AgentOpsShell";
 import ClientPortalShell from "@/components/demo/tasama/ClientPortalShell";
 import ManagerDashboardShell from "@/components/demo/tasama/ManagerDashboardShell";
 import { TasamaDemoLangProvider } from "@/components/demo/tasama/DemoLangContext";
@@ -32,16 +31,6 @@ export default function Demo() {
       <ArcelikDataProvider variant="dealer">
         <DealerPortal />
       </ArcelikDataProvider>
-    );
-  }
-
-  if (slug === "tasama-payroll-hub" && variant === "teknik") {
-    return (
-      <TasamaDemoLangProvider>
-        <TasamaDataProvider variant="teknik">
-          <AgentOpsShell />
-        </TasamaDataProvider>
-      </TasamaDemoLangProvider>
     );
   }
 

@@ -20,6 +20,7 @@ import knowledgeConcierge from "./enterprise-knowledge-concierge";
 import tenderResponse from "./tender-response-studio";
 import arcelikTeknik from "./arcelik-fiyat-istihbarati";
 import personalAgent from "./maven-personal-agent";
+import tasamaPayrollHub from "./tasama-payroll-hub";
 
 const SCENARIOS: Record<string, Scenario> = {
   "value-realization": valueRealization,
@@ -35,6 +36,8 @@ const SCENARIOS: Record<string, Scenario> = {
   "arcelik-fiyat-istihbarati": arcelikTeknik,
   "arcelik-fiyat-istihbarati/teknik": arcelikTeknik,
   "maven-personal-agent": personalAgent,
+  "tasama-payroll-hub": tasamaPayrollHub,
+  "tasama-payroll-hub/teknik": tasamaPayrollHub,
 };
 
 export function getScenario(slug: string, variant?: string): Scenario | undefined {
