@@ -1,4 +1,3 @@
-import * as cheerio from "cheerio";
 import {
   db,
   arcelikProductsTable,
@@ -138,6 +137,117 @@ function extractModelTokens(model: string): string[] {
     .filter((t) => t.length >= 2);
 }
 
+// ---------------------------------------------------------------------------
+// Shared brand-site category lists. Mirrored exactly in scripts/src/seed-arcelik.ts
+// so seed-time and runtime scrapes walk the same catalogs. Categories that 404
+// for a given brand are skipped silently by the per-page try/catch — keeping
+// candidate lists generous is intentional so adding categories does not require
+// risk-free verification of every slug on every site.
+// ---------------------------------------------------------------------------
+const ARCELIK_CATEGORIES = [
+  "buzdolabi",
+  "no-frost-buzdolabi",
+  "gardirop-tipi-buzdolabi",
+  "side-by-side-buzdolabi",
+  "mini-buzdolabi",
+  "camasir-makinesi",
+  "kurutma-makinesi",
+  "kurutmali-camasir-makinesi",
+  "bulasik-makinesi",
+  "ankastre-firinlar",
+  "ankastre-bulasik-makinesi",
+  "ankastre-buzdolabi",
+  "ankastre-set",
+  "klima",
+  "aspirator",
+  "set-ustu-ocak",
+  "mikrodalga-firin",
+  "elektrikli-supurge",
+  "televizyon",
+  "kucuk-ev-aletleri",
+] as const;
+
+// Beko shares the Hybris taxonomy with Arçelik, with a couple of slug
+// variations. We list its own array so divergence is explicit rather than
+// implied by a `.slice()` from Arçelik's list.
+const BEKO_CATEGORIES = [
+  "buzdolabi",
+  "no-frost-buzdolabi",
+  "side-by-side-buzdolabi",
+  "mini-buzdolabi",
+  "camasir-makinesi",
+  "kurutma-makinesi",
+  "kurutmali-camasir-makinesi",
+  "bulasik-makinesi",
+  "ankastre-firinlar",
+  "ankastre-bulasik-makinesi",
+  "ankastre-buzdolabi",
+  "ankastre-set",
+  "klima",
+  "aspirator",
+  "set-ustu-ocak",
+  "mikrodalga-firin",
+  "elektrikli-supurge",
+  "televizyon",
+  "kucuk-ev-aletleri",
+] as const;
+
+const VESTEL_CATEGORIES = [
+  "buzdolabi",
+  "camasir-makinesi",
+  "bulasik-makineleri",
+  "kurutma-makineleri",
+  "ankastre-firin",
+  "ankastre-bulasik-makinesi",
+  "set-ustu-ocak",
+  "mikrodalga-firin",
+  "klima",
+  "aspirator",
+  "elektrikli-supurge",
+  "televizyon",
+] as const;
+
+const BOSCH_CATEGORIES = [
+  "buzdolaplari-derin-dondurucular",
+  "camasir-makineleri",
+  "kurutucular",
+  "bulasik-makineleri",
+  "firinlar",
+  "ocaklar",
+  "davlumbazlar",
+  "mikrodalga",
+  "kahve-makineleri",
+  "kucuk-ev-aletleri",
+] as const;
+
+const SAMSUNG_CATEGORIES = [
+  "refrigerators/all-refrigerators",
+  "washers-and-dryers/all-washers-and-dryers",
+  "dishwashers/all-dishwashers",
+  "cooking-appliances/ovens",
+  "cooking-appliances/hobs",
+  "cooking-appliances/hoods",
+  "microwave-ovens",
+  "vacuum-cleaners",
+  "tvs/all-tvs",
+  "monitors/all-monitors",
+] as const;
+
+/**
+ * Dedupe scraped prices within a brand by normalized model code. The same
+ * SKU can appear in multiple categories (e.g. a no-frost fridge is in both
+ * `/buzdolabi` and `/no-frost-buzdolabi`); we keep the first occurrence so
+ * downstream matching does not double-count the brand's catalog size.
+ */
+function dedupeByModel(items: ScrapedPrice[]): ScrapedPrice[] {
+  const seen = new Map<string, ScrapedPrice>();
+  for (const item of items) {
+    const key = normalizeModelKey(item.modelCode);
+    if (key && !seen.has(key)) seen.set(key, item);
+  }
+  return [...seen.values()];
+}
+
 function fuzzyMatchScraped(
   baselineModel: string,
   scrapedMap: Map<string, ScrapedPrice>,
@@ -156,32 +266,6 @@ function fuzzyMatchScraped(
   return undefined;
 }
 
-async function fetchPage(
-  url: string,
-  extraHeaders?: Record<string, string>,
-): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        "Accept-Language": "tr-TR,tr;q=0.9",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        ...extraHeaders,
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) {
-      logger.warn({ url, status: res.status }, "fetchPage non-OK response");
-      return null;
-    }
-    return await res.text();
-  } catch (err) {
-    logger.warn({ url, err }, "fetchPage error");
-    return null;
-  }
-}
 
 let _pwBrowser: Browser | null = null;
 
@@ -353,147 +437,461 @@ async function scrapeWithPlaywright(
 }
 
 async function scrapeArcelik(): Promise<ScrapedPrice[]> {
-  return scrapeWithPlaywright(
+  const items = await scrapeWithPlaywright(
     "https://www.arcelik.com.tr",
-    ["buzdolabi", "camasir-makinesi", "bulasik-makinesi", "ankastre-firinlar", "klima"],
+    [...ARCELIK_CATEGORIES],
     "Arçelik",
   );
+  return dedupeByModel(items);
 }
 
 async function scrapeBeko(): Promise<ScrapedPrice[]> {
-  return scrapeWithPlaywright(
+  const items = await scrapeWithPlaywright(
     "https://www.beko.com.tr",
-    ["buzdolabi", "camasir-makinesi", "bulasik-makinesi"],
+    [...BEKO_CATEGORIES],
     "Beko",
   );
+  return dedupeByModel(items);
 }
 
+/**
+ * Vestel category pages render a small initial set and stream more via
+ * scroll-triggered AJAX. We use Playwright to scroll the page in a bounded
+ * loop until the product count stabilises (no new items after a scroll), then
+ * read the full DOM. Cap iterations at 25 so a runaway category cannot stall
+ * the daily scrape.
+ */
 async function scrapeVestel(): Promise<ScrapedPrice[]> {
-  const categories = ["buzdolabi", "camasir-makinesi", "bulasik-makineleri"];
-  const results: ScrapedPrice[] = [];
-  for (const cat of categories) {
-    const url = `https://www.vestel.com.tr/${cat}`;
-    const html = await fetchPage(url);
-    if (!html) continue;
-    const $ = cheerio.load(html);
-    $(".product-list-item-wrap").each((_, el) => {
-      const name = $(el).find(".product-title").first().text().trim();
-      const priceRaw = $(el).find(".product-price-helper").first().text().trim();
-      const price = extractFirstTurkishPrice(priceRaw);
-      if (name && price && price > 1000) {
-        const modelMatch = name.match(
-          /\b([A-Z]{2,5}\d{3,5}[A-Z0-9]*(?:\s+[A-Z]{1,3})?)\b/i,
-        );
-        const dataId =
-          $(el).attr("data-product-id") ||
-          $(el).find("[data-product-id]").first().attr("data-product-id") ||
-          "";
-        results.push({
-          modelCode: dataId || (modelMatch ? modelMatch[1].trim().toUpperCase() : name.slice(0, 30)),
-          name,
-          price,
-          sourceUrl: url,
-          scrapedAt: new Date().toISOString(),
-        });
-      }
-    });
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Vestel scrape (Playwright not available)");
+    return [];
   }
-  return results;
-}
 
-async function scrapeBosch(): Promise<ScrapedPrice[]> {
-  const categories = [
-    "buzdolaplari-derin-dondurucular",
-    "camasir-makineleri",
-    "bulasik-makineleri",
-  ];
   const results: ScrapedPrice[] = [];
-  for (const cat of categories) {
-    const url = `https://www.bosch-home.com.tr/tr/category/${cat}`;
-    const html = await fetchPage(url);
-    if (!html) continue;
-    const $ = cheerio.load(html);
-    $('[data-testid^="product-teaser-container-for-"]').each((_, el) => {
-      const rawName = $(el)
-        .find('[data-testid="product-teaser-header-headline"]')
-        .first()
-        .text()
-        .trim();
-      const name =
-        rawName.includes("{") || rawName.includes("@media") ? "" : rawName;
-      const modelCode = $(el)
-        .find('[data-testid="product-code"]')
-        .first()
-        .text()
-        .trim();
-      const priceText = $(el)
-        .find('[data-testid="price-main-price"]')
-        .first()
-        .text()
-        .trim();
-      const price = parseTurkishPrice(priceText);
-      if (modelCode && price && price > 1000) {
-        results.push({
-          modelCode,
-          name: name || modelCode,
-          price,
-          sourceUrl: url,
-          scrapedAt: new Date().toISOString(),
-        });
-      }
-    });
-  }
-  return results;
-}
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
 
-async function scrapeSamsung(): Promise<ScrapedPrice[]> {
-  const categories = [
-    "refrigerators/all-refrigerators",
-    "washers-and-dryers/all-washers-and-dryers",
-    "dishwashers/all-dishwashers",
-  ];
-  const results: ScrapedPrice[] = [];
-  for (const cat of categories) {
-    const url = `https://www.samsung.com/tr/${cat}/`;
-    const html = await fetchPage(url, {
-      Cookie: "country_codes=tr; country_region=TR",
-    });
-    if (!html) continue;
-    const $ = cheerio.load(html);
-    $('script[type="application/ld+json"]').each((_, el) => {
+  try {
+    for (const cat of VESTEL_CATEGORIES) {
+      const url = `https://www.vestel.com.tr/${cat}`;
+      const page: Page = await context.newPage();
       try {
-        const data = JSON.parse($(el).html() || "");
-        if (data["@type"] !== "ItemList" || !data.itemListElement) return;
-        for (const entry of data.itemListElement) {
-          const item = entry.item || entry;
-          const name = item.name;
-          const rawPrice = item.offers?.price;
-          const price =
-            typeof rawPrice === "number"
-              ? Math.round(rawPrice)
-              : parseTurkishPrice(String(rawPrice || ""));
-          if (!name || !price || price < 1000) continue;
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        await page
+          .waitForSelector(".product-list-item-wrap", { timeout: 10000 })
+          .catch(() => {});
 
-          let modelCode = item.sku || item.productID || item.model || "";
-          if (!modelCode && item.url) {
-            const slug = String(item.url).split("/").filter(Boolean).pop() || "";
-            const codeMatch = slug.match(/[-]([a-z]{2}\d{2,}[a-z0-9]*)\/?$/i);
-            modelCode = codeMatch ? codeMatch[1].toUpperCase() : "";
+        // Scroll-loop: stop once two consecutive scrolls add nothing.
+        let prevCount = 0;
+        let stableScrolls = 0;
+        for (let i = 0; i < 25; i++) {
+          await page.evaluate(() =>
+            window.scrollTo(0, document.body.scrollHeight),
+          );
+          await page.waitForTimeout(800);
+          const count = await page
+            .locator(".product-list-item-wrap")
+            .count();
+          if (count === prevCount) {
+            stableScrolls++;
+            if (stableScrolls >= 2) break;
+          } else {
+            stableScrolls = 0;
+            prevCount = count;
           }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; priceText: string; modelCode: string }[] =
+            [];
+          document
+            .querySelectorAll(".product-list-item-wrap")
+            .forEach((el) => {
+              const name =
+                el
+                  .querySelector(".product-title, .product-name, h3")
+                  ?.textContent?.trim() || "";
+              const priceText =
+                el
+                  .querySelector(
+                    ".product-price-helper, .product-price, .price",
+                  )
+                  ?.textContent?.trim() || "";
+              const modelCode =
+                el.getAttribute("data-product-id") ||
+                el
+                  .querySelector("[data-product-id]")
+                  ?.getAttribute("data-product-id") ||
+                "";
+              if (name && priceText) out.push({ name, priceText, modelCode });
+            });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          const price = extractFirstTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          const modelMatch = item.name.match(
+            /\b([A-Z]{2,5}\d{3,5}[A-Z0-9]*(?:\s+[A-Z]{1,3})?)\b/i,
+          );
           results.push({
-            modelCode: modelCode || name.slice(0, 30),
-            name,
+            modelCode:
+              item.modelCode ||
+              (modelMatch
+                ? modelMatch[1].trim().toUpperCase()
+                : item.name.slice(0, 30)),
+            name: item.name,
             price,
             sourceUrl: url,
             scrapedAt: new Date().toISOString(),
           });
+          pageAdded++;
         }
-      } catch {
-        // skip malformed JSON-LD blocks
+        logger.info(
+          { url, domCount: prevCount, accepted: pageAdded },
+          "Vestel category scraped",
+        );
+      } catch (err) {
+        logger.warn({ url, err }, "Vestel page scrape failed");
+      } finally {
+        await page.close();
       }
-    });
+    }
+  } finally {
+    await context.close();
   }
-  return results;
+
+  return dedupeByModel(results);
+}
+
+/**
+ * Bosch category pages render an initial 12 products and reveal more via a
+ * "Daha fazla görüntüle" button. We click the button in a bounded loop until
+ * it disappears or two consecutive clicks add no new products. Cap at 30
+ * clicks so a malfunctioning button cannot stall the cycle.
+ */
+async function scrapeBosch(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Bosch scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of BOSCH_CATEGORIES) {
+      const url = `https://www.bosch-home.com.tr/tr/category/${cat}`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        await page
+          .waitForSelector(
+            '[data-testid^="product-teaser-container-for-"]',
+            { timeout: 10000 },
+          )
+          .catch(() => {});
+
+        // Click-more loop. Bosch labels the load-more affordance "Daha fazla
+        // görüntüle" but defensively we also match plain "Daha fazla" and any
+        // [data-testid*="show-more"] button in case the locale string drifts.
+        const productLocator = page.locator(
+          '[data-testid^="product-teaser-container-for-"]',
+        );
+        let prevCount = 0;
+        let stableClicks = 0;
+        for (let i = 0; i < 30; i++) {
+          const btn = page
+            .locator(
+              'button:has-text("Daha fazla görüntüle"), button:has-text("Daha fazla"), [data-testid*="show-more"]',
+            )
+            .first();
+          const visible = await btn.isVisible().catch(() => false);
+          if (!visible) break;
+          const beforeCount = await productLocator.count();
+          await btn.click({ timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(1200);
+          const afterCount = await productLocator.count();
+          if (afterCount === beforeCount) {
+            stableClicks++;
+            if (stableClicks >= 2) break;
+          } else {
+            stableClicks = 0;
+            prevCount = afterCount;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; modelCode: string; priceText: string }[] =
+            [];
+          document
+            .querySelectorAll(
+              '[data-testid^="product-teaser-container-for-"]',
+            )
+            .forEach((el) => {
+              const rawName =
+                el
+                  .querySelector(
+                    '[data-testid="product-teaser-header-headline"]',
+                  )
+                  ?.textContent?.trim() || "";
+              const name =
+                rawName.includes("{") || rawName.includes("@media")
+                  ? ""
+                  : rawName;
+              const modelCode =
+                el
+                  .querySelector('[data-testid="product-code"]')
+                  ?.textContent?.trim() || "";
+              const priceText =
+                el
+                  .querySelector('[data-testid="price-main-price"]')
+                  ?.textContent?.trim() || "";
+              if (modelCode && priceText)
+                out.push({ name, modelCode, priceText });
+            });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          const price = parseTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode,
+            name: item.name || item.modelCode,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        logger.info(
+          { url, domCount: prevCount, accepted: pageAdded },
+          "Bosch category scraped",
+        );
+      } catch (err) {
+        logger.warn({ url, err }, "Bosch page scrape failed");
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+/**
+ * Samsung TR category pages embed product data in JSON-LD ItemList blocks
+ * (capped at ~18 per page) AND render the full catalog as React-driven DOM
+ * cards. We use Playwright to read both: scroll to trigger lazy-loading,
+ * collect from JSON-LD first (richest data: SKU + price), then walk DOM
+ * cards to capture anything beyond the JSON-LD truncation.
+ */
+async function scrapeSamsung(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Samsung scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+    extraHTTPHeaders: {
+      "Accept-Language": "tr-TR,tr;q=0.9",
+    },
+  });
+  await context.addCookies([
+    {
+      name: "country_codes",
+      value: "tr",
+      domain: ".samsung.com",
+      path: "/",
+    },
+    {
+      name: "country_region",
+      value: "TR",
+      domain: ".samsung.com",
+      path: "/",
+    },
+  ]);
+
+  try {
+    for (const cat of SAMSUNG_CATEGORIES) {
+      const url = `https://www.samsung.com/tr/${cat}/`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+
+        // Scroll to trigger lazy-loaded product cards
+        for (let i = 0; i < 12; i++) {
+          await page.evaluate(() =>
+            window.scrollTo(0, document.body.scrollHeight),
+          );
+          await page.waitForTimeout(500);
+        }
+
+        // Click any "Daha fazla" / "Show more" affordance if present
+        for (let i = 0; i < 8; i++) {
+          const btn = page
+            .locator(
+              'button:has-text("Daha fazla"), button:has-text("Show more"), button:has-text("Daha Fazla")',
+            )
+            .first();
+          const visible = await btn.isVisible().catch(() => false);
+          if (!visible) break;
+          await btn.click({ timeout: 4000 }).catch(() => {});
+          await page.waitForTimeout(900);
+        }
+
+        const items = await page.evaluate(() => {
+          const out: {
+            name: string;
+            modelCode: string;
+            priceText: string;
+          }[] = [];
+          const seenSku = new Set<string>();
+
+          // Pass 1: JSON-LD ItemList (richest source: canonical SKU + price)
+          document
+            .querySelectorAll('script[type="application/ld+json"]')
+            .forEach((el) => {
+              try {
+                const data = JSON.parse(el.textContent || "");
+                if (
+                  data["@type"] !== "ItemList" ||
+                  !Array.isArray(data.itemListElement)
+                )
+                  return;
+                for (const entry of data.itemListElement) {
+                  const item = entry.item || entry;
+                  const name = String(item.name || "").trim();
+                  const rawPrice = item.offers?.price;
+                  const priceText =
+                    typeof rawPrice === "number"
+                      ? String(rawPrice)
+                      : String(rawPrice || "");
+                  let modelCode = String(
+                    item.sku || item.productID || item.model || "",
+                  );
+                  if (!modelCode && item.url) {
+                    const slug =
+                      String(item.url).split("/").filter(Boolean).pop() || "";
+                    const codeMatch = slug.match(
+                      /[-]([a-z]{2}\d{2,}[a-z0-9]*)\/?$/i,
+                    );
+                    modelCode = codeMatch ? codeMatch[1].toUpperCase() : "";
+                  }
+                  if (!name || !priceText) continue;
+                  const dedupeKey = (modelCode || name).toLowerCase();
+                  if (seenSku.has(dedupeKey)) continue;
+                  seenSku.add(dedupeKey);
+                  out.push({
+                    name,
+                    modelCode: modelCode || name.slice(0, 30),
+                    priceText,
+                  });
+                }
+              } catch {
+                // skip malformed JSON-LD blocks
+              }
+            });
+
+          // Pass 2: DOM product cards. Samsung has shipped multiple card
+          // markup variants over the years; query a generous union and rely
+          // on dedupeKey to avoid duplicates.
+          document
+            .querySelectorAll(
+              '[data-modelid], [data-model-code], .product-card-v2, .product__item, .product-list__item, .pd-comparison-card',
+            )
+            .forEach((el) => {
+              const sku =
+                el.getAttribute("data-modelid") ||
+                el.getAttribute("data-model-code") ||
+                el.getAttribute("data-pd-modelcode") ||
+                "";
+              const name =
+                el
+                  .querySelector(
+                    '.product-card__title, .product__title, h3, .pd-comparison-card__title',
+                  )
+                  ?.textContent?.trim() || "";
+              const priceText =
+                el
+                  .querySelector(
+                    '.product-card__price, .product__price, .pd-comparison-card__price, [class*="price"]',
+                  )
+                  ?.textContent?.trim() || "";
+              if (!sku || !name || !priceText) return;
+              const dedupeKey = sku.toLowerCase();
+              if (seenSku.has(dedupeKey)) return;
+              seenSku.add(dedupeKey);
+              out.push({ name, modelCode: sku, priceText });
+            });
+
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          let price: number | null = null;
+          // JSON-LD prices arrive as plain numeric strings; parseFloat handles
+          // them. Fallback to Turkish-localised parsing for DOM-card text.
+          const directNum = parseFloat(item.priceText);
+          if (!isNaN(directNum) && directNum > 1000) price = Math.round(directNum);
+          if (price === null) price = extractFirstTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode || item.name.slice(0, 30),
+            name: item.name,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        logger.info(
+          { url, accepted: pageAdded },
+          "Samsung category scraped",
+        );
+      } catch (err) {
+        logger.warn({ url, err }, "Samsung page scrape failed");
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
 }
 
 async function scrapeN11(): Promise<ScrapedMarketplaceProduct[]> {
@@ -996,18 +1394,24 @@ async function runScrapers(): Promise<ScraperResults> {
   };
   const keys = ["arcelik", "beko", "vestel", "bosch", "samsung"] as const;
 
-  for (let i = 0; i < scrapers.length; i++) {
-    const s = scrapers[i];
-    logger.info(`Scraping ${s.name}...`);
-    try {
-      const scraped = await s.fn();
-      results[keys[i]] = scraped;
-      logger.info(`${s.name}: ${scraped.length} products found`);
-    } catch (err) {
-      logger.error(
-        { err },
-        `${s.name}: scrape failed`,
-      );
+  // Brand scrapers each open their own Playwright BrowserContext. We batch
+  // pairs (concurrency=2) to keep memory bounded under the 10-minute cron
+  // budget while still cutting wall time roughly in half versus serial.
+  const CONCURRENCY = 2;
+  for (let i = 0; i < scrapers.length; i += CONCURRENCY) {
+    const batch = scrapers.slice(i, i + CONCURRENCY);
+    for (const s of batch) logger.info(`Scraping ${s.name}...`);
+    const settled = await Promise.allSettled(batch.map((s) => s.fn()));
+    for (let j = 0; j < batch.length; j++) {
+      const idx = i + j;
+      const s = batch[j];
+      const outcome = settled[j];
+      if (outcome.status === "fulfilled") {
+        results[keys[idx]] = outcome.value;
+        logger.info(`${s.name}: ${outcome.value.length} products found`);
+      } else {
+        logger.error({ err: outcome.reason }, `${s.name}: scrape failed`);
+      }
     }
   }
 
