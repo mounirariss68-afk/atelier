@@ -85,18 +85,20 @@ export default function DemoKitTasama() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/40">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-        <Link href="/marketplace/tasama-payroll-hub" className="inline-flex items-center gap-1.5 text-sm text-[#1E3A8A] hover:text-[#2563EB] mb-6">
+        <Link href="/marketplace/tasama-payroll-hub" className="inline-flex items-center gap-1.5 text-sm text-[#0F0698] hover:text-[#3B30E0] mb-6">
           <ArrowLeft size={14} /> Back to Tasama Payroll Hub
         </Link>
 
-        <header className="bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white rounded-2xl p-8 shadow-lg mb-8">
+        <header className="bg-gradient-to-br from-[#0F0698] to-[#3B30E0] text-white rounded-2xl p-8 shadow-lg mb-8">
           <div className="flex items-start justify-between gap-6 flex-wrap">
             <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-xl bg-white/15 flex items-center justify-center backdrop-blur-sm">
-                <img src={`${baseUrl}tasama-logo-transparent.png`} alt="Tasama" className="w-10 h-10 object-contain" />
-              </div>
+              <img
+                src={`${baseUrl}tasama-logo-light.png`}
+                alt="Tasama · Business Services · تسامي لخدمات الأعمال"
+                className="h-12 w-auto object-contain flex-shrink-0"
+              />
               <div>
-                <p className="text-xs font-bold tracking-widest text-blue-100 uppercase">Tasama · Demo Kit</p>
+                <p className="text-xs font-bold tracking-widest text-blue-100 uppercase">Demo Kit</p>
                 <h1 className="text-2xl sm:text-3xl font-bold mt-1">Sample HR &amp; Payroll Documents</h1>
                 <p className="text-sm text-blue-100 mt-2 max-w-2xl">
                   15 sample Saudi-payroll PDFs — payslips, offer letters, leave requests, contracts, EOSB statements,
@@ -107,7 +109,7 @@ export default function DemoKitTasama() {
             <button
               onClick={downloadZip}
               disabled={zipping}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#1E3A8A] font-bold text-sm hover:bg-blue-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-[#0F0698] font-bold text-sm hover:bg-blue-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
             >
               <Package size={16} />
               {zipping ? "Preparing zip…" : "Download all (.zip)"}
@@ -119,7 +121,7 @@ export default function DemoKitTasama() {
           {Object.entries(groupedByClient).map(([client, docs]) => (
             <section key={client}>
               <h2 className="text-base font-bold text-slate-700 mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-5 bg-[#2563EB] rounded-full" />
+                <span className="w-1.5 h-5 bg-[#3B30E0] rounded-full" />
                 {client}
                 <span className="text-xs font-normal text-slate-400">({docs.length} documents)</span>
               </h2>
@@ -130,14 +132,14 @@ export default function DemoKitTasama() {
                     href={docHref(d.filename)}
                     target="_blank"
                     rel="noreferrer"
-                    className="group bg-white border border-slate-200 hover:border-[#2563EB] rounded-xl p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-all"
+                    className="group bg-white border border-slate-200 hover:border-[#3B30E0] rounded-xl p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-all"
                   >
                     <div className="w-10 h-10 rounded-lg bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <FileText size={18} className="text-[#1E3A8A]" />
+                      <FileText size={18} className="text-[#0F0698]" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-xs font-bold uppercase tracking-wide text-[#2563EB]">{d.type}</p>
+                        <p className="text-xs font-bold uppercase tracking-wide text-[#3B30E0]">{d.type}</p>
                         {d.isNew && (
                           <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">New</span>
                         )}
@@ -145,7 +147,7 @@ export default function DemoKitTasama() {
                       <p className="text-sm font-semibold text-slate-800 mt-0.5 truncate">{d.titleEn}</p>
                       <p className="text-xs text-slate-500 mt-0.5 truncate" dir="rtl">{d.titleAr}</p>
                     </div>
-                    <Download size={16} className="text-slate-300 group-hover:text-[#2563EB] flex-shrink-0 mt-1" />
+                    <Download size={16} className="text-slate-300 group-hover:text-[#3B30E0] flex-shrink-0 mt-1" />
                   </a>
                 ))}
               </div>

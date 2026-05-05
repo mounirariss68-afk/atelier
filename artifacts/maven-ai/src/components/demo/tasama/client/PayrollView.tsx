@@ -90,7 +90,7 @@ export default function PayrollView() {
       {inPrepRun && cutoffDate && settleDate && (
         <motion.div
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] text-white rounded-xl p-4 flex items-center gap-4 shadow-sm"
+          className="bg-gradient-to-r from-[#0F0698] to-[#3B30E0] text-white rounded-xl p-4 flex items-center gap-4 shadow-sm"
         >
           <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center flex-shrink-0">
             <Loader2 size={18} className="animate-spin" />
@@ -131,7 +131,7 @@ export default function PayrollView() {
           <select
             value={selectedRun?.id ?? ""}
             onChange={(e) => setSelectedRunId(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20"
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20"
           >
             {runs.map((r) => (
               <option key={r.id} value={r.id}>{getMonthName(r.periodMonth, lang)} {r.periodYear}</option>
@@ -141,7 +141,7 @@ export default function PayrollView() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryCard icon={Wallet} color="#1E3A8A" label={t.summaryGross} value={formatSAR(totals.gross)} />
+        <SummaryCard icon={Wallet} color="#0F0698" label={t.summaryGross} value={formatSAR(totals.gross)} />
         <SummaryCard icon={ShieldCheck} color="#7C3AED" label={t.summaryDeductions} value={formatSAR(totals.deductions)} />
         <SummaryCard icon={Banknote} color="#10B981" label={t.summaryNet} value={formatSAR(totals.net)} />
         <SummaryCard icon={Users} color="#3B82F6" label={t.summaryEmployees} value={String(payslips.length)} />
@@ -158,7 +158,7 @@ export default function PayrollView() {
               <div key={r.id} className="flex-1 flex flex-col items-center gap-1.5">
                 <span className="text-[9px] text-gray-400">{(r.totalGross / 1000).toFixed(0)}k</span>
                 <div className="w-full bg-blue-50 rounded-t-lg overflow-hidden flex items-end" style={{ height: "100%" }}>
-                  <div className="w-full bg-gradient-to-t from-[#1E3A8A] to-[#2563EB] rounded-t-lg transition-all" style={{ height: `${(r.totalGross / trendMax) * 100}%` }} />
+                  <div className="w-full bg-gradient-to-t from-[#0F0698] to-[#3B30E0] rounded-t-lg transition-all" style={{ height: `${(r.totalGross / trendMax) * 100}%` }} />
                 </div>
                 <span className="text-[10px] font-semibold text-gray-500">{getMonthName(r.periodMonth, lang).slice(0, 3)}</span>
               </div>
@@ -173,7 +173,7 @@ export default function PayrollView() {
             {selectedRun ? `${getMonthName(selectedRun.periodMonth, lang)} ${selectedRun.periodYear}` : ""} · {payslips.length} {lang === "en" ? "payslips" : "كشف"}
           </h2>
           {prevRun && (
-            <button onClick={() => setShowVariance(!showVariance)} className="text-[11px] font-semibold text-[#1E3A8A] hover:underline">
+            <button onClick={() => setShowVariance(!showVariance)} className="text-[11px] font-semibold text-[#0F0698] hover:underline">
               {showVariance ? t.hideVariance : t.showVariance}
             </button>
           )}
@@ -220,7 +220,7 @@ export default function PayrollView() {
                       <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusColor}`}>{statusLabel}</span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <button onClick={download} className="text-[11px] text-[#1E3A8A] hover:underline flex items-center gap-1" title={t.download}>
+                      <button onClick={download} className="text-[11px] text-[#0F0698] hover:underline flex items-center gap-1" title={t.download}>
                         <Download size={12} />
                       </button>
                     </td>

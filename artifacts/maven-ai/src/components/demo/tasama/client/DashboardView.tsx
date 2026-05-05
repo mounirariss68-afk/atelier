@@ -104,9 +104,9 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard icon={Users} color="#1E3A8A" value={String(activeEmployees.length)} label={t.kpiActiveEmployees} sub={`${saudi} • ${expat}`} subTitle={t.kpiActiveEmployeesSub} onClick={() => onNavigate("employees")} delay={0} />
+        <KpiCard icon={Users} color="#0F0698" value={String(activeEmployees.length)} label={t.kpiActiveEmployees} sub={`${saudi} • ${expat}`} subTitle={t.kpiActiveEmployeesSub} onClick={() => onNavigate("employees")} delay={0} />
         <KpiCard icon={CheckCircle2} color="#10B981" value={t.kpiPayrollApproved} label={t.kpiPayrollStatus} sub={period} subTitle="" onClick={() => onNavigate("payroll")} delay={0.05} />
-        <KpiCard icon={Wallet} color="#2563EB" value={settledRun ? formatSAR(settledRun.totalGross) : "—"} label={t.kpiTotalGross} sub={`${settledGrowth >= 0 ? "+" : ""}${settledGrowth.toFixed(1)}%`} subTitle={t.kpiTotalGrossSub} onClick={() => onNavigate("payroll")} delay={0.1} />
+        <KpiCard icon={Wallet} color="#3B30E0" value={settledRun ? formatSAR(settledRun.totalGross) : "—"} label={t.kpiTotalGross} sub={`${settledGrowth >= 0 ? "+" : ""}${settledGrowth.toFixed(1)}%`} subTitle={t.kpiTotalGrossSub} onClick={() => onNavigate("payroll")} delay={0.1} />
         <KpiCard icon={Shield} color="#7C3AED" value={settledRun ? formatSAR(settledRun.totalGosiEmployer + settledRun.totalGosiEmployee) : "—"} label={t.kpiGosi} sub="" subTitle={t.kpiGosiSub} onClick={() => onNavigate("processes")} delay={0.15} />
         <KpiCard icon={Inbox} color="#F59E0B" value={String(openRequests.length)} label={t.kpiPendingRequests} sub="" subTitle={t.kpiPendingRequestsSub} onClick={() => onNavigate("requests")} delay={0.2} />
         <KpiCard icon={CalendarClock} color="#3B82F6" value={nextPayrollLabel} label={t.kpiNextPayroll} sub={`T-${daysToCutoff}d`} subTitle={nextPayrollSub} onClick={() => onNavigate("payroll")} delay={0.25} />
@@ -116,7 +116,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold flex items-center gap-2">
-              <CheckCircle2 size={15} className="text-[#1E3A8A]" /> {t.pipelineTitle}
+              <CheckCircle2 size={15} className="text-[#0F0698]" /> {t.pipelineTitle}
             </h2>
             <p className="text-[11px] text-gray-400 mt-0.5">{t.pipelineSubtitle}</p>
           </div>
@@ -130,12 +130,12 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
               const Icon = PIPELINE_ICONS[i];
               return (
                 <div key={step.key} className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shadow-sm">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0F0698] to-[#3B30E0] text-white flex items-center justify-center shadow-sm">
                     <Icon size={16} />
                   </div>
                   <p className="text-[11px] font-semibold mt-2 leading-tight">{t[step.labelKey]}</p>
                   <p className="text-[9px] text-gray-400 mt-0.5">{step.date}</p>
-                  <p className="text-[9px] text-[#2563EB] font-medium mt-0.5 line-clamp-2">
+                  <p className="text-[9px] text-[#3B30E0] font-medium mt-0.5 line-clamp-2">
                     {step.agent === "human-checkpoint"
                       ? (lang === "en" ? "Manager" : "المدير")
                       : getAgentName(step.agent, lang)}
@@ -149,9 +149,9 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-          <Brain size={15} className="text-[#1E3A8A]" />
+          <Brain size={15} className="text-[#0F0698]" />
           <h2 className="text-sm font-bold">{t.insightsTitle}</h2>
-          <span className="text-[9px] font-bold bg-[#1E3A8A] text-white px-1.5 py-0.5 rounded-full">{t.aiPill}</span>
+          <span className="text-[9px] font-bold bg-[#0F0698] text-white px-1.5 py-0.5 rounded-full">{t.aiPill}</span>
           <span className="text-[10px] text-gray-400 ms-auto">{t.insightsSubtitle}</span>
         </div>
         {insights.length === 0 ? (
@@ -173,7 +173,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
                       </div>
                       <p className="text-[11px] text-gray-500 leading-relaxed">{lang === "en" ? ins.detail : ins.detailAr}</p>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="text-[10px] text-gray-400">{t.insightAgentLabel}: <span className="text-[#2563EB] font-medium">{getAgentName(ins.agentSource, lang)}</span></span>
+                        <span className="text-[10px] text-gray-400">{t.insightAgentLabel}: <span className="text-[#3B30E0] font-medium">{getAgentName(ins.agentSource, lang)}</span></span>
                         <span className="text-[10px] text-gray-400">{ins.confidence}% {t.confidenceLabel}</span>
                       </div>
                     </div>
@@ -189,7 +189,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-bold">{t.activityTitle}</h2>
-          <button onClick={() => onNavigate("processes")} className="text-xs text-[#1E3A8A] font-semibold hover:underline flex items-center gap-1">
+          <button onClick={() => onNavigate("processes")} className="text-xs text-[#0F0698] font-semibold hover:underline flex items-center gap-1">
             {t.activityViewAll} <ArrowRight size={12} className="rtl:rotate-180" />
           </button>
         </div>
@@ -205,7 +205,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-700">{a.text}</p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="text-[10px] text-[#2563EB] font-medium">{getAgentName(a.agent, lang)}</span>
+                  <span className="text-[10px] text-[#3B30E0] font-medium">{getAgentName(a.agent, lang)}</span>
                   <span className="text-[10px] text-gray-400">·</span>
                   <span className="text-[10px] text-gray-400">{a.time}</span>
                 </div>
@@ -239,7 +239,7 @@ function KpiCard({ icon: Icon, color, value, label, sub, subTitle, onClick, dela
       <p className="text-[11px] text-gray-500 mt-0.5">{label}</p>
       {(sub || subTitle) && (
         <p className="text-[10px] text-gray-400 mt-1.5 truncate" title={subTitle}>
-          {sub && <span className="text-[#2563EB] font-semibold me-1">{sub}</span>}
+          {sub && <span className="text-[#3B30E0] font-semibold me-1">{sub}</span>}
           {subTitle}
         </p>
       )}

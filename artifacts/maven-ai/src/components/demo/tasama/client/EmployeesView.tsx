@@ -64,7 +64,7 @@ export default function EmployeesView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20 focus:border-[#1E3A8A]"
+            className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20 focus:border-[#0F0698]"
           />
         </div>
       </div>
@@ -117,7 +117,7 @@ export default function EmployeesView() {
                     <td className="px-4 py-3 text-[11px] text-gray-500 font-mono">{e.id}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-[10px] font-bold text-[#1E3A8A] flex-shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-[10px] font-bold text-[#0F0698] flex-shrink-0">
                           {(lang === "en" ? e.fullNameEn : e.fullNameAr).split(" ").slice(0, 2).map((p) => p[0]).join("")}
                         </div>
                         <div className="min-w-0">
@@ -154,7 +154,7 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
   return (
     <div className="flex items-center gap-2">
       <span className="text-[11px] font-semibold text-gray-500 uppercase">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -189,7 +189,7 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
         dir={isRtl ? "rtl" : "ltr"}
       >
         <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 z-10">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center font-bold">
+          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#0F0698] to-[#3B30E0] text-white flex items-center justify-center font-bold">
             {(lang === "en" ? employee.fullNameEn : employee.fullNameAr).split(" ").slice(0, 2).map((p) => p[0]).join("")}
           </div>
           <div className="flex-1 min-w-0">
@@ -254,7 +254,7 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
                       <p className="text-xs font-semibold">{getMonthName(p.periodMonth, lang)} {p.periodYear}</p>
                       <p className="text-[10px] text-gray-400">{lang === "en" ? "Net" : "الصافي"} {formatSAR(p.netPay)} · {lang === "en" ? "Gross" : "الإجمالي"} {formatSAR(p.grossPay)}</p>
                     </div>
-                    <button className="text-[11px] text-[#1E3A8A] font-semibold hover:underline flex items-center gap-1">
+                    <button className="text-[11px] text-[#0F0698] font-semibold hover:underline flex items-center gap-1">
                       <Download size={11} /> {t.payslipDownload}
                     </button>
                   </div>
@@ -268,7 +268,7 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
               <div className="space-y-1.5">
                 {docs.map((d) => (
                   <div key={d.id} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-                    <FileText size={14} className="text-[#2563EB]" />
+                    <FileText size={14} className="text-[#3B30E0]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold truncate">{lang === "en" ? d.titleEn : d.titleAr}</p>
                       <p className="text-[10px] text-gray-400">{formatDate(d.issuedAt, lang)} · {d.referenceNumber}</p>

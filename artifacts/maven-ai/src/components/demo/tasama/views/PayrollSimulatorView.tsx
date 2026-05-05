@@ -126,7 +126,7 @@ export default function PayrollSimulatorView() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <SlidersHorizontal size={20} className="text-[#1E3A8A]" />
+          <SlidersHorizontal size={20} className="text-[#0F0698]" />
           {t("title", simulator)}
         </h2>
         <p className="text-sm text-gray-500 mt-1">{t("subtitle", simulator)}</p>
@@ -140,7 +140,7 @@ export default function PayrollSimulatorView() {
               key={m}
               onClick={() => setMode(m)}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                mode === m ? "bg-white text-[#1E3A8A] shadow-sm" : "text-gray-600"
+                mode === m ? "bg-white text-[#0F0698] shadow-sm" : "text-gray-600"
               }`}
             >
               {t(m === "headcount" ? "modeHeadcount" : m === "salary" ? "modeSalary" : "modeCompliance", simulator)}
@@ -150,7 +150,7 @@ export default function PayrollSimulatorView() {
         <button
           onClick={aiOptimize}
           disabled={aiOptimizing}
-          className="px-4 py-2 bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] text-white rounded-xl text-xs font-bold shadow-sm hover:shadow-md flex items-center gap-2 disabled:opacity-60"
+          className="px-4 py-2 bg-gradient-to-r from-[#0F0698] to-[#3B30E0] text-white rounded-xl text-xs font-bold shadow-sm hover:shadow-md flex items-center gap-2 disabled:opacity-60"
         >
           <Sparkles size={14} className={aiOptimizing ? "animate-spin" : ""} />
           {aiOptimizing ? t("optimizing", simulator) : t("aiOptimize", simulator)}
@@ -233,7 +233,7 @@ export default function PayrollSimulatorView() {
 
         {/* Results */}
         <div className="lg:col-span-2 space-y-5">
-          <div className="bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] rounded-2xl p-6 text-white shadow-lg">
+          <div className="bg-gradient-to-br from-[#0F0698] to-[#3B30E0] rounded-2xl p-6 text-white shadow-lg">
             <div className="flex items-center gap-2 mb-4">
               <Play size={14} />
               <h3 className="text-sm font-bold uppercase tracking-wider">{t("results", simulator)}</h3>
@@ -296,7 +296,7 @@ export default function PayrollSimulatorView() {
                   <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} unit="%" domain={[0, 100]} />
                   <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                  <Bar yAxisId="left" dataKey="gross" fill="#1E3A8A" radius={[4, 4, 0, 0]} barSize={36} name={isAr ? "إجمالي شهري" : "Monthly gross"} />
+                  <Bar yAxisId="left" dataKey="gross" fill="#0F0698" radius={[4, 4, 0, 0]} barSize={36} name={isAr ? "إجمالي شهري" : "Monthly gross"} />
                   <Bar yAxisId="right" dataKey="sa" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={36} name={isAr ? "السعودة %" : "Saudization %"} />
                 </BarChart>
               </ResponsiveContainer>
@@ -310,7 +310,7 @@ export default function PayrollSimulatorView() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-              <Brain size={14} className="text-[#1E3A8A]" />
+              <Brain size={14} className="text-[#0F0698]" />
               {t("aiRecsTitle", simulator)}
             </h3>
             <p className="text-[11px] text-gray-500 mt-0.5">{t("aiRecsHint", simulator)}</p>
@@ -321,26 +321,26 @@ export default function PayrollSimulatorView() {
           {aiRecs.map((r) => (
             <motion.div
               key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="border border-gray-100 rounded-xl p-4 hover:border-[#1E3A8A]/30 hover:shadow-sm transition-all"
+              className="border border-gray-100 rounded-xl p-4 hover:border-[#0F0698]/30 hover:shadow-sm transition-all"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-gray-900 leading-snug">{r.title}</p>
                   <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed line-clamp-3">{r.description}</p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-[#1E3A8A] font-bold flex-shrink-0">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-[#0F0698] font-bold flex-shrink-0">
                   {r.confidence}%
                 </span>
               </div>
               <p className="text-[11px] text-gray-700 mt-3 bg-gray-50 rounded-md px-2 py-1.5">
-                <span className="text-[#1E3A8A] font-bold">{isAr ? "الأثر:" : "Impact:"} </span>
+                <span className="text-[#0F0698] font-bold">{isAr ? "الأثر:" : "Impact:"} </span>
                 {r.impact}
               </p>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                 <span className="text-[10px] text-gray-400">{r.agentSource}</span>
                 <button
                   onClick={() => loadRec(r)}
-                  className="text-xs text-[#1E3A8A] font-bold hover:underline flex items-center gap-1"
+                  className="text-xs text-[#0F0698] font-bold hover:underline flex items-center gap-1"
                 >
                   {t("loadScenario", simulator)} <ArrowRight size={11} className="rtl:rotate-180" />
                 </button>
@@ -358,14 +358,14 @@ function Slider({ label, value, setValue, min, max, step = 1, suffix = "", icon,
   min: number; max: number; step?: number; suffix?: string; icon: React.ReactNode;
   accent: "teal" | "amber" | "red" | "purple";
 }) {
-  const accentClass = accent === "teal" ? "accent-[#1E3A8A]" : accent === "amber" ? "accent-amber-500" : accent === "red" ? "accent-red-500" : "accent-purple-500";
+  const accentClass = accent === "teal" ? "accent-[#0F0698]" : accent === "amber" ? "accent-amber-500" : accent === "red" ? "accent-red-500" : "accent-purple-500";
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <label className="text-[11px] font-semibold text-gray-700 flex items-center gap-1.5">
           <span className="text-gray-400">{icon}</span>{label}
         </label>
-        <span className="text-xs font-bold text-[#1E3A8A] tabular-nums">{value}{suffix}</span>
+        <span className="text-xs font-bold text-[#0F0698] tabular-nums">{value}{suffix}</span>
       </div>
       <input
         type="range" min={min} max={max} step={step} value={value}

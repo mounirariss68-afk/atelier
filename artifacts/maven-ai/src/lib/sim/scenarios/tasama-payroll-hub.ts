@@ -20,7 +20,7 @@ import type { Scenario } from "../types";
 const scenario: Scenario = {
   slug: "tasama-payroll-hub",
   toolTitle: { en: "Tasama Payroll Hub", ar: "منصة تَسَامى للرواتب" },
-  accent: "#2563EB",
+  accent: "#3B30E0",
   description: {
     en: "End-to-end monthly payroll cycle for 3 client companies (42 employees): digitize HR documents, update employee records, calculate gross-to-net, process EOSB and leave, file GOSI and Mudad, prepare bank transfers, and run the compliance audit — with three human checkpoints.",
     ar: "دورة رواتب شهرية متكاملة لثلاث شركات عميلة (42 موظفاً): رقمنة وثائق الموارد البشرية، تحديث سجلات الموظفين، احتساب الإجمالي والصافي، معالجة مكافأة نهاية الخدمة والإجازات، إيداع ملفات التأمينات الاجتماعية ونظام مُدد، تجهيز التحويلات البنكية، وتدقيق الامتثال — مع ثلاث نقاط موافقة بشرية.",
@@ -39,7 +39,7 @@ const scenario: Scenario = {
         ar: "يخطّط الدورة الشهرية ويوزّع المهام على الوكلاء المتخصصين ويراقب نقاط الموافقة البشرية.",
       },
       kind: "orchestrator",
-      color: "#2563EB",
+      color: "#3B30E0",
     },
     {
       id: "doc-intelligence",
@@ -59,7 +59,7 @@ const scenario: Scenario = {
         ar: "يطبّق التغييرات المستخرجة على الملف الرئيسي للموظفين: المنصب، الراتب، الحالة، التسويات بأثر رجعي.",
       },
       kind: "compiler",
-      color: "#2563EB",
+      color: "#3B30E0",
     },
     {
       id: "salary-calc",

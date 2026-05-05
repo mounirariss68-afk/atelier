@@ -46,7 +46,7 @@ export default function DocumentsView() {
           <h1 className="text-xl font-bold">{t.title}</h1>
           <p className="text-xs text-gray-500 mt-0.5">{filtered.length} {t.countSuffix}</p>
         </div>
-        <button onClick={() => setUploadOpen(true)} className="px-4 py-2 bg-[#1E3A8A] text-white rounded-lg text-sm font-semibold hover:bg-[#2563EB] transition-colors flex items-center gap-2">
+        <button onClick={() => setUploadOpen(true)} className="px-4 py-2 bg-[#0F0698] text-white rounded-lg text-sm font-semibold hover:bg-[#3B30E0] transition-colors flex items-center gap-2">
           <Upload size={14} /> {t.uploadButton}
         </button>
       </div>
@@ -54,7 +54,7 @@ export default function DocumentsView() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
           <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchPlaceholder} className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20 focus:border-[#1E3A8A]" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchPlaceholder} className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20 focus:border-[#0F0698]" />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold text-gray-500 uppercase">{t.filterType}</span>
@@ -82,7 +82,7 @@ export default function DocumentsView() {
             >
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <FileText size={16} className="text-[#1E3A8A]" />
+                  <FileText size={16} className="text-[#0F0698]" />
                 </div>
                 <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${DOC_STATUS_COLORS.digitized}`}>{t.statusDigitized}</span>
               </div>
@@ -92,7 +92,7 @@ export default function DocumentsView() {
               <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-50">
                 <span className="text-[10px] text-gray-400">{formatDate(d.issuedAt, lang)}</span>
                 <div className="flex items-center gap-1">
-                  <Brain size={10} className="text-[#2563EB]" />
+                  <Brain size={10} className="text-[#3B30E0]" />
                   <span className={`text-[10px] font-bold ${conf >= 90 ? "text-emerald-600" : conf >= 75 ? "text-amber-600" : "text-red-600"}`}>{conf}%</span>
                 </div>
               </div>
@@ -170,15 +170,15 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
       >
         <div className="flex-shrink-0 px-5 py-3 border-b border-gray-100 flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-            <FileText size={16} className="text-[#1E3A8A]" />
+            <FileText size={16} className="text-[#0F0698]" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold truncate">{lang === "en" ? doc.titleEn : doc.titleAr}</p>
             <p className="text-[11px] text-gray-400">{doc.referenceNumber} · {formatDate(doc.issuedAt, lang)}</p>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50">
-            <Brain size={14} className="text-[#1E3A8A]" />
-            <span className="text-[11px] font-semibold text-[#1E3A8A]">{t.splitViewerOverall}: <span className={`font-bold ${overall >= 90 ? "text-emerald-700" : overall >= 75 ? "text-amber-700" : "text-red-700"}`}>{overall}%</span></span>
+            <Brain size={14} className="text-[#0F0698]" />
+            <span className="text-[11px] font-semibold text-[#0F0698]">{t.splitViewerOverall}: <span className={`font-bold ${overall >= 90 ? "text-emerald-700" : overall >= 75 ? "text-amber-700" : "text-red-700"}`}>{overall}%</span></span>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg" aria-label={t.splitViewerCancel}>
             <X size={18} />
@@ -190,7 +190,7 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
             <p className="text-[10px] text-gray-400 uppercase font-semibold mb-3">{t.splitViewerOriginal}</p>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-md mx-auto" style={{ minHeight: "500px" }}>
               <div className="border-b border-gray-200 pb-4 mb-4 text-center">
-                <p className="text-xs font-bold text-[#1E3A8A]">AL-NAKHLA CONSTRUCTION CO.</p>
+                <p className="text-xs font-bold text-[#0F0698]">AL-NAKHLA CONSTRUCTION CO.</p>
                 <p className="text-[10px] text-gray-500 mt-1">شركة النخلة للمقاولات</p>
               </div>
               <div className="space-y-3 text-[11px] leading-relaxed text-gray-700">
@@ -213,8 +213,8 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
 
           <div className="overflow-y-auto p-6">
             <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-blue-50/60 border border-blue-100">
-              <Brain size={14} className="text-[#1E3A8A]" />
-              <p className="text-[11px] text-[#1E3A8A] font-semibold">{t.splitViewerExtractedBy}</p>
+              <Brain size={14} className="text-[#0F0698]" />
+              <p className="text-[11px] text-[#0F0698] font-semibold">{t.splitViewerExtractedBy}</p>
             </div>
 
             <div className="space-y-2.5">
@@ -246,7 +246,7 @@ function SplitViewer({ doc, onClose }: { doc: TasamaDocument; onClose: () => voi
 
         <div className="flex-shrink-0 px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50">
           <button onClick={onClose} className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg">{t.splitViewerCancel}</button>
-          <button onClick={apply} className="px-4 py-2 text-xs font-semibold bg-[#1E3A8A] text-white hover:bg-[#2563EB] rounded-lg flex items-center gap-1.5">
+          <button onClick={apply} className="px-4 py-2 text-xs font-semibold bg-[#0F0698] text-white hover:bg-[#3B30E0] rounded-lg flex items-center gap-1.5">
             <Check size={13} /> {t.splitViewerApply}
           </button>
         </div>
@@ -330,7 +330,7 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
         dir={isRtl ? "rtl" : "ltr"}
       >
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
-          <Upload size={16} className="text-[#1E3A8A]" />
+          <Upload size={16} className="text-[#0F0698]" />
           <p className="text-sm font-bold flex-1">{t.uploadButton}</p>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={16} /></button>
         </div>
@@ -338,11 +338,11 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
         <div className="px-5 py-2 border-b border-gray-100 flex items-center gap-2">
           {[t.uploadStep1, t.uploadStep2, t.uploadStep3, t.uploadStep4].map((label, i) => (
             <div key={i} className="flex items-center gap-2 flex-1">
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${step > i ? "bg-[#1E3A8A] text-white" : step === i + 1 ? "bg-blue-100 text-[#1E3A8A]" : "bg-gray-100 text-gray-400"}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${step > i ? "bg-[#0F0698] text-white" : step === i + 1 ? "bg-blue-100 text-[#0F0698]" : "bg-gray-100 text-gray-400"}`}>
                 {step > i ? <Check size={11} /> : i + 1}
               </div>
-              <span className={`text-[10px] font-semibold ${step === i + 1 ? "text-[#1E3A8A]" : "text-gray-400"} hidden md:inline truncate`}>{label}</span>
-              {i < 3 && <div className={`flex-1 h-px ${step > i + 1 ? "bg-[#1E3A8A]" : "bg-gray-100"}`} />}
+              <span className={`text-[10px] font-semibold ${step === i + 1 ? "text-[#0F0698]" : "text-gray-400"} hidden md:inline truncate`}>{label}</span>
+              {i < 3 && <div className={`flex-1 h-px ${step > i + 1 ? "bg-[#0F0698]" : "bg-gray-100"}`} />}
             </div>
           ))}
         </div>
@@ -350,7 +350,7 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
         <div className="p-5 min-h-[260px]">
           {processing ? (
             <div className="flex flex-col items-center justify-center py-10">
-              <div className="w-12 h-12 border-3 border-[#1E3A8A] border-t-transparent rounded-full animate-spin mb-3" />
+              <div className="w-12 h-12 border-3 border-[#0F0698] border-t-transparent rounded-full animate-spin mb-3" />
               <p className="text-sm font-semibold">{t.uploadProcessing}</p>
               <p className="text-[11px] text-gray-400 mt-1">{getAgentName("document-intelligence", lang)}</p>
             </div>
@@ -364,7 +364,7 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
           ) : step === 1 ? (
             <div className="grid grid-cols-2 gap-2">
               {UPLOAD_DOC_TYPES.map((dt) => (
-                <button key={dt} onClick={() => setDocType(dt)} className={`text-start p-3 rounded-lg border text-xs font-semibold transition-colors ${docType === dt ? "border-[#1E3A8A] bg-blue-50 text-[#1E3A8A]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                <button key={dt} onClick={() => setDocType(dt)} className={`text-start p-3 rounded-lg border text-xs font-semibold transition-colors ${docType === dt ? "border-[#0F0698] bg-blue-50 text-[#0F0698]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
                   {getDocumentTypeLabel(dt, lang)}
                 </button>
               ))}
@@ -372,7 +372,7 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
           ) : step === 2 ? (
             <div>
               <label className="text-[11px] font-semibold text-gray-500 uppercase mb-2 block">{t.uploadEmployeePicker}</label>
-              <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20">
+              <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
                 {employees.map((e) => (
                   <option key={e.id} value={e.id}>{lang === "en" ? e.fullNameEn : e.fullNameAr} ({e.id})</option>
                 ))}
@@ -401,7 +401,7 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
                   validateAndSetFile(e.dataTransfer.files?.[0]);
                 }}
                 className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                  isDragging ? "border-[#1E3A8A] bg-blue-50" : "border-gray-200 hover:border-[#1E3A8A]"
+                  isDragging ? "border-[#0F0698] bg-blue-50" : "border-gray-200 hover:border-[#0F0698]"
                 }`}
               >
                 <FileImage size={32} className="text-gray-300 mx-auto mb-3" />
@@ -409,8 +409,8 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
                 <p className="text-[11px] text-gray-400 mt-1">{t.uploadDropzoneSupported}</p>
                 {file && (
                   <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg">
-                    <FileText size={12} className="text-[#1E3A8A]" />
-                    <span className="text-[11px] font-semibold text-[#1E3A8A]">{file.name}</span>
+                    <FileText size={12} className="text-[#0F0698]" />
+                    <span className="text-[11px] font-semibold text-[#0F0698]">{file.name}</span>
                     <span className="text-[10px] text-gray-500">({formatBytes(file.size)})</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
@@ -443,7 +443,7 @@ function UploadWizard({ onClose }: { onClose: () => void }) {
             <button onClick={() => step > 1 ? setStep(step - 1) : onClose()} className="px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-1">
               <BackIcon size={13} /> {step > 1 ? t.uploadBackButton : t.uploadCancelButton}
             </button>
-            <button onClick={next} disabled={step === 3 && !file} className="px-4 py-2 text-xs font-semibold bg-[#1E3A8A] text-white hover:bg-[#2563EB] rounded-lg flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
+            <button onClick={next} disabled={step === 3 && !file} className="px-4 py-2 text-xs font-semibold bg-[#0F0698] text-white hover:bg-[#3B30E0] rounded-lg flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
               {step === 4 ? t.uploadConfirmButton : t.uploadNextButton} <NextIcon size={13} />
             </button>
           </div>

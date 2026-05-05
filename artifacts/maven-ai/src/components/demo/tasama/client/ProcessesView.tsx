@@ -33,7 +33,7 @@ export default function ProcessesView() {
 
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <Workflow size={15} className="text-[#1E3A8A]" />
+          <Workflow size={15} className="text-[#0F0698]" />
           <h2 className="text-sm font-bold">{t.sectionActive}</h2>
           <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{active.length}</span>
         </div>
@@ -94,7 +94,7 @@ function ProcessCard({ process, expanded, onToggle }: { process: EmployeeProcess
               <span className="text-[10px] font-semibold text-gray-500 ms-auto">{completedSteps}/{totalSteps}</span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div className={`h-full ${allDone ? "bg-emerald-500" : "bg-gradient-to-r from-[#1E3A8A] to-[#2563EB]"} transition-all`} style={{ width: `${pct}%` }} />
+              <div className={`h-full ${allDone ? "bg-emerald-500" : "bg-gradient-to-r from-[#0F0698] to-[#3B30E0]"} transition-all`} style={{ width: `${pct}%` }} />
             </div>
           </div>
           <ChevronDown size={16} className={`text-gray-400 mt-2 flex-shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -135,7 +135,7 @@ function ProcessCard({ process, expanded, onToggle }: { process: EmployeeProcess
                                 <UserIcon size={10} /> {step.agentName}
                               </span>
                             ) : (
-                              <span className="text-[10px] text-[#2563EB] font-medium">{getAgentName(step.agentId, lang)}</span>
+                              <span className="text-[10px] text-[#3B30E0] font-medium">{getAgentName(step.agentId, lang)}</span>
                             )}
                             {step.completedAt && (
                               <span className="text-[10px] text-gray-400">· {t.stepCompletedAt} {formatDate(step.completedAt, lang)}</span>
@@ -160,7 +160,7 @@ function ProcessCard({ process, expanded, onToggle }: { process: EmployeeProcess
                         <span className="text-gray-400 font-mono text-[10px] flex-shrink-0 mt-0.5">{new Date(log.timestamp).toLocaleDateString(lang === "en" ? "en-US" : "ar-SA", { month: "short", day: "numeric" })}</span>
                         <div className="flex-1 min-w-0">
                           <p className="text-gray-700">
-                            <span className="text-[#2563EB] font-semibold">{log.agentName}</span>: {log.description}
+                            <span className="text-[#3B30E0] font-semibold">{log.agentName}</span>: {log.description}
                           </p>
                           <p className="text-[10px] text-gray-500 mt-0.5">→ {log.outcome}</p>
                         </div>

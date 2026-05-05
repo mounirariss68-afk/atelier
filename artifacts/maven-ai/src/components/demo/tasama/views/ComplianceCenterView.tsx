@@ -68,7 +68,7 @@ export default function ComplianceCenterView() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <ShieldCheck size={20} className="text-[#1E3A8A]" />
+          <ShieldCheck size={20} className="text-[#0F0698]" />
           {t("title", compliance)}
         </h2>
         <p className="text-sm text-gray-500 mt-1">{t("subtitle", compliance)}</p>
@@ -100,7 +100,7 @@ export default function ComplianceCenterView() {
         </div>
         <div className="ml-auto flex items-center gap-3 text-[11px]">
           <span className="flex items-center gap-1.5 text-gray-600"><span className="w-3 h-3 rounded bg-emerald-400" /> {t("legendFiled", compliance)}</span>
-          <span className="flex items-center gap-1.5 text-gray-600"><span className="w-3 h-3 rounded bg-[#1E3A8A]" /> {t("legendUpcoming", compliance)}</span>
+          <span className="flex items-center gap-1.5 text-gray-600"><span className="w-3 h-3 rounded bg-[#0F0698]" /> {t("legendUpcoming", compliance)}</span>
           <span className="flex items-center gap-1.5 text-gray-600"><span className="w-3 h-3 rounded bg-amber-400" /> {t("legendCluster", compliance)}</span>
         </div>
       </div>
@@ -153,7 +153,7 @@ export default function ComplianceCenterView() {
                       {bucket.upcoming.slice(0, 2).map((e) => (
                         <button
                           key={e.id} onClick={() => setSelected(e)}
-                          className="text-start bg-[#1E3A8A] hover:bg-[#2563EB] rounded px-1.5 py-1 text-[9px] text-white font-semibold truncate"
+                          className="text-start bg-[#0F0698] hover:bg-[#3B30E0] rounded px-1.5 py-1 text-[9px] text-white font-semibold truncate"
                           title={getCalendarEventName(e, lang)}
                         >
                           ⏰ {getCalendarEventName(e, lang).slice(0, 14)}
@@ -200,7 +200,7 @@ export default function ComplianceCenterView() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <CalendarRange size={18} className="text-[#1E3A8A]" />
+                  <CalendarRange size={18} className="text-[#0F0698]" />
                   <h3 className="text-base font-bold text-gray-900">{t("detailsTitle", compliance)}</h3>
                 </div>
                 <button onClick={() => setSelected(null)} className="p-1 text-gray-400 hover:text-gray-600">
@@ -231,7 +231,7 @@ export default function ComplianceCenterView() {
                 </div>
                 <div className="pt-3">
                   <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${
-                    selected.type === "filed" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-[#1E3A8A]"
+                    selected.type === "filed" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-[#0F0698]"
                   }`}>
                     {selected.type === "filed" ? t("filed", compliance) : t("upcoming", compliance)}
                   </span>
@@ -239,7 +239,7 @@ export default function ComplianceCenterView() {
               </div>
               <button
                 onClick={() => setSelected(null)}
-                className="w-full mt-5 px-4 py-2 bg-[#1E3A8A] text-white rounded-lg text-sm font-bold hover:bg-[#2563EB]"
+                className="w-full mt-5 px-4 py-2 bg-[#0F0698] text-white rounded-lg text-sm font-bold hover:bg-[#3B30E0]"
               >
                 {t("closeBtn", compliance)}
               </button>
@@ -253,7 +253,7 @@ export default function ComplianceCenterView() {
 
 function Card({ icon, label, value, sub, accent }: { icon: React.ReactNode; label: string; value: string; sub?: string; accent: "emerald" | "teal" | "amber" | "purple" }) {
   const c = accent === "emerald" ? "bg-emerald-50 text-emerald-700" :
-    accent === "teal" ? "bg-blue-50 text-[#1E3A8A]" :
+    accent === "teal" ? "bg-blue-50 text-[#0F0698]" :
     accent === "amber" ? "bg-amber-50 text-amber-700" :
     "bg-purple-50 text-purple-700";
   return (

@@ -87,14 +87,18 @@ function ShellInner() {
       >
         {/* Logo */}
         <div className="h-16 px-4 flex items-center gap-3 border-b border-gray-100">
-          <div className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img src={`${import.meta.env.BASE_URL}tasama-logo-transparent.png`} alt="Tasama" className="w-7 h-7 object-contain" />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#1E3A8A]">Tasama · تَسَامى</p>
-              <p className="text-[10px] text-gray-500 truncate">Business Services · تسامي لخدمات الأعمال</p>
-            </div>
+          {collapsed ? (
+            <img
+              src={`${import.meta.env.BASE_URL}tasama-logo-dark.png`}
+              alt="Tasama"
+              className="h-7 w-auto object-contain flex-shrink-0"
+            />
+          ) : (
+            <img
+              src={`${import.meta.env.BASE_URL}tasama-logo-dark.png`}
+              alt="Tasama · Business Services · تسامي لخدمات الأعمال"
+              className="h-10 w-auto object-contain"
+            />
           )}
         </div>
 
@@ -107,7 +111,7 @@ function ShellInner() {
                 key={item.key}
                 onClick={() => setView(item.key)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-colors relative ${
-                  active ? "bg-[#1E3A8A] text-white shadow-sm" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  active ? "bg-[#0F0698] text-white shadow-sm" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
                 title={collapsed ? t(item.labelKey, shell) : undefined}
               >
@@ -116,7 +120,7 @@ function ShellInner() {
                 {!collapsed && item.badge && (
                   <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-extrabold ${
                     item.badge === "AI"
-                      ? (active ? "bg-white text-[#1E3A8A]" : "bg-blue-100 text-[#1E3A8A]")
+                      ? (active ? "bg-white text-[#0F0698]" : "bg-blue-100 text-[#0F0698]")
                       : (active ? "bg-amber-300 text-amber-900" : "bg-amber-100 text-amber-700")
                   }`}>
                     {item.badge === "AI" ? t("aiBadge", shell) : t("newBadge", shell)}
@@ -131,7 +135,7 @@ function ShellInner() {
 
           <button
             onClick={() => setChatOpen(true)}
-            className="w-full mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] hover:shadow-md transition-shadow"
+            className="w-full mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[#0F0698] to-[#3B30E0] hover:shadow-md transition-shadow"
             title={collapsed ? t("aiAssistant", shell) : undefined}
           >
             <Sparkles size={18} className="flex-shrink-0" />
@@ -143,7 +147,7 @@ function ShellInner() {
         <div className="px-3 py-3 border-t border-gray-100 space-y-2">
           <Link
             href="/demo/tasama-payroll-hub/client"
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-50 hover:text-[#1E3A8A]"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-50 hover:text-[#0F0698]"
             title={collapsed ? t("switchToClient", shell) : undefined}
           >
             <ArrowLeftRight size={14} className="flex-shrink-0" />
@@ -163,7 +167,7 @@ function ShellInner() {
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Header */}
         <header className="h-16 bg-white border-b border-gray-100 flex items-center px-6 gap-4 sticky top-0 z-20">
-          <Link href="/marketplace/tasama-payroll-hub" className="text-gray-500 hover:text-[#1E3A8A] flex items-center gap-1.5 text-xs font-medium">
+          <Link href="/marketplace/tasama-payroll-hub" className="text-gray-500 hover:text-[#0F0698] flex items-center gap-1.5 text-xs font-medium">
             <ArrowLeft size={14} className="rtl:rotate-180" />
             {t("back", shell)}
           </Link>
@@ -221,7 +225,7 @@ function ShellInner() {
                   </div>
                   <button
                     onClick={() => { setNotifOpen(false); setView("operations"); }}
-                    className="w-full px-4 py-2.5 text-[11px] font-bold text-[#1E3A8A] hover:bg-blue-50 border-t border-gray-100"
+                    className="w-full px-4 py-2.5 text-[11px] font-bold text-[#0F0698] hover:bg-blue-50 border-t border-gray-100"
                   >
                     {t("seeAllAlerts", shell)}
                   </button>
@@ -240,7 +244,7 @@ function ShellInner() {
 
           {/* User chip */}
           <div className="flex items-center gap-2.5 ps-3 border-s border-gray-200">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] flex items-center justify-center text-white text-xs font-extrabold">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0F0698] to-[#3B30E0] flex items-center justify-center text-white text-xs font-extrabold">
               {isAr ? "ف" : "FA"}
             </div>
             <div className="hidden md:block min-w-0">
@@ -266,7 +270,7 @@ function ShellInner() {
                   key={p}
                   onClick={() => update({ period: p })}
                   className={`px-3 py-1 rounded-md text-[11px] font-bold transition-colors ${
-                    active ? "bg-white text-[#1E3A8A] shadow-sm" : "text-gray-600 hover:text-gray-900"
+                    active ? "bg-white text-[#0F0698] shadow-sm" : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
                   {t(labelKey, shell)}
@@ -306,10 +310,10 @@ function ShellInner() {
           </div>
 
           <div className="ml-auto flex items-center gap-3 text-[11px] text-gray-500">
-            <span><span className="font-bold text-[#1E3A8A]">{pendingCount}</span> {isAr ? "موافقات معلّقة" : "pending approvals"}</span>
+            <span><span className="font-bold text-[#0F0698]">{pendingCount}</span> {isAr ? "موافقات معلّقة" : "pending approvals"}</span>
             <button
               onClick={() => setChatOpen(true)}
-              className="flex items-center gap-1.5 text-[#1E3A8A] font-bold hover:underline"
+              className="flex items-center gap-1.5 text-[#0F0698] font-bold hover:underline"
             >
               <MessageSquare size={11} />
               {t("aiAssistant", shell)}

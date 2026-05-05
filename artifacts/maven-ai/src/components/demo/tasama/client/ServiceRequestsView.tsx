@@ -60,7 +60,7 @@ export default function ServiceRequestsView() {
           <h1 className="text-xl font-bold">{t.title}</h1>
           <p className="text-xs text-gray-500 mt-0.5">{active.length} {t.openSuffix}</p>
         </div>
-        <button onClick={() => setCreateOpen(true)} className="px-4 py-2 bg-[#1E3A8A] text-white rounded-lg text-sm font-semibold hover:bg-[#2563EB] transition-colors flex items-center gap-2">
+        <button onClick={() => setCreateOpen(true)} className="px-4 py-2 bg-[#0F0698] text-white rounded-lg text-sm font-semibold hover:bg-[#3B30E0] transition-colors flex items-center gap-2">
           <Plus size={14} /> {t.newRequest}
         </button>
       </div>
@@ -109,7 +109,7 @@ export default function ServiceRequestsView() {
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
                         {emp && <span className="text-[10px] text-gray-400">{lang === "en" ? emp.fullNameEn : emp.fullNameAr}</span>}
                         <span className="text-[10px] text-gray-400">{formatDate(r.requestedAt, lang)}</span>
-                        {r.assignedAgent && <span className="text-[10px] text-[#2563EB] font-medium">{getAgentName(r.assignedAgent, lang)}</span>}
+                        {r.assignedAgent && <span className="text-[10px] text-[#3B30E0] font-medium">{getAgentName(r.assignedAgent, lang)}</span>}
                         <span className={`text-[10px] font-semibold flex items-center gap-1 ms-auto ${overdue ? "text-red-600" : "text-gray-500"}`}>
                           <Clock size={10} />
                           {overdue ? t.slaOverdue : `${slaHours}h ${t.slaRemaining}`}
@@ -224,7 +224,7 @@ function RequestDetail({ request, onClose }: { request: ServiceRequest; onClose:
             <div className="space-y-3 relative ms-2 ps-4 border-s-2 border-gray-100">
               {events.map((e) => (
                 <div key={e.key} className="relative">
-                  <div className={`absolute -start-[22px] top-0.5 w-3 h-3 rounded-full ${e.done ? "bg-[#1E3A8A]" : "bg-gray-200"}`} />
+                  <div className={`absolute -start-[22px] top-0.5 w-3 h-3 rounded-full ${e.done ? "bg-[#0F0698]" : "bg-gray-200"}`} />
                   <p className={`text-xs ${e.done ? "font-semibold text-gray-800" : "text-gray-400"}`}>{e.label}</p>
                   {e.time && e.done && <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(e.time, lang)}</p>}
                 </div>
@@ -235,7 +235,7 @@ function RequestDetail({ request, onClose }: { request: ServiceRequest; onClose:
           {request.status === "completed" && (
             <div>
               <p className="text-[11px] font-bold uppercase text-gray-400 mb-2 tracking-wide">{t.detailOutput}</p>
-              <button className="w-full px-4 py-3 border border-[#1E3A8A] text-[#1E3A8A] hover:bg-blue-50 rounded-lg text-xs font-semibold flex items-center justify-center gap-2">
+              <button className="w-full px-4 py-3 border border-[#0F0698] text-[#0F0698] hover:bg-blue-50 rounded-lg text-xs font-semibold flex items-center justify-center gap-2">
                 <Download size={13} /> {t.detailDownload}
               </button>
             </div>
@@ -269,23 +269,23 @@ function CreateForm({ onClose, onSubmit }: { onClose: () => void; onSubmit: () =
         dir={isRtl ? "rtl" : "ltr"}
       >
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-          <Plus size={16} className="text-[#1E3A8A]" />
+          <Plus size={16} className="text-[#0F0698]" />
           <p className="text-sm font-bold flex-1">{t.newRequest}</p>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={16} /></button>
         </div>
         <div className="p-5 space-y-3">
           <Field label={t.formType}>
-            <select value={type} onChange={(e) => setType(e.target.value as RequestType)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20">
+            <select value={type} onChange={(e) => setType(e.target.value as RequestType)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
               {REQUEST_TYPES.map((rt) => <option key={rt} value={rt}>{getRequestTypeLabel(rt, lang)}</option>)}
             </select>
           </Field>
           <Field label={t.formEmployee}>
-            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20">
+            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
               {employees.map((e) => <option key={e.id} value={e.id}>{lang === "en" ? e.fullNameEn : e.fullNameAr}</option>)}
             </select>
           </Field>
           <Field label={t.formPriority}>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20">
+            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20">
               <option value="low">{lang === "en" ? "Low" : "منخفض"}</option>
               <option value="medium">{t.priorityNormal}</option>
               <option value="high">{lang === "en" ? "High" : "عالٍ"}</option>
@@ -293,12 +293,12 @@ function CreateForm({ onClose, onSubmit }: { onClose: () => void; onSubmit: () =
             </select>
           </Field>
           <Field label={t.formNotes}>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20" />
           </Field>
         </div>
         <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2 bg-gray-50">
           <button onClick={onClose} className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg">{t.formCancel}</button>
-          <button onClick={onSubmit} className="px-4 py-2 text-xs font-semibold bg-[#1E3A8A] text-white hover:bg-[#2563EB] rounded-lg flex items-center gap-1.5">
+          <button onClick={onSubmit} className="px-4 py-2 text-xs font-semibold bg-[#0F0698] text-white hover:bg-[#3B30E0] rounded-lg flex items-center gap-1.5">
             {t.formSubmit} <ArrowRight size={13} className="rtl:rotate-180" />
           </button>
         </div>

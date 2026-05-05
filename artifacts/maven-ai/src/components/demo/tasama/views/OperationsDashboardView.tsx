@@ -17,8 +17,8 @@ import {
 } from "@/data/tasama-seed";
 
 const TYPE_COLORS: Record<string, string> = {
-  extraction: "#1E3A8A",
-  calculation: "#2563EB",
+  extraction: "#0F0698",
+  calculation: "#3B30E0",
   filing: "#059669",
   transfer: "#0891B2",
   monitoring: "#F59E0B",
@@ -95,7 +95,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
       {/* Operations digest hero */}
       <motion.div
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#3B82F6] text-white rounded-2xl p-6 shadow-lg"
+        className="bg-gradient-to-br from-[#0F0698] via-[#3B30E0] to-[#3B82F6] text-white rounded-2xl p-6 shadow-lg"
       >
         <div className="flex items-center justify-between">
           <div className="text-[10px] uppercase tracking-widest text-blue-100 font-bold">{t("digest", operations)}</div>
@@ -126,7 +126,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
       {cycleStatus.length > 0 && cycleStatus.some((r) => r.inPrep) && (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
-            <CalendarClock size={16} className="text-[#1E3A8A]" />
+            <CalendarClock size={16} className="text-[#0F0698]" />
             <h3 className="text-sm font-bold text-gray-900">{isAr ? "دورات الرواتب — قيد التحضير" : "Payroll cycles — in preparation"}</h3>
             <span className="text-[10px] text-gray-400 ms-auto">{isAr ? "محدّث 5 مايو 2026" : "as of May 5, 2026"}</span>
           </div>
@@ -140,14 +140,14 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
                       <p className="text-xs font-bold text-gray-900 truncate">{isAr ? client.legalNameAr : client.legalNameEn}</p>
                       <p className="text-[10px] text-gray-500 mt-0.5">{inPrep!.employeeCount} {isAr ? "موظفًا" : "employees"} · {formatSAR(inPrep!.totalGross)}</p>
                     </div>
-                    <Loader2 size={14} className={`flex-shrink-0 animate-spin ${urgent ? "text-orange-600" : "text-[#2563EB]"}`} />
+                    <Loader2 size={14} className={`flex-shrink-0 animate-spin ${urgent ? "text-orange-600" : "text-[#3B30E0]"}`} />
                   </div>
                   <div className="mt-3 flex items-center justify-between">
                     <div className="text-[10px] text-gray-600">
                       <p>{isAr ? "إقفال" : "Cutoff"} <span className="font-bold text-gray-900">{dateFmt(cutoff)}</span></p>
                       <p className="mt-0.5">{isAr ? "تسوية" : "Settle"} <span className="font-bold text-gray-900">{dateFmt(settle)}</span></p>
                     </div>
-                    <div className={`text-end ${urgent ? "text-orange-700" : "text-[#1E3A8A]"}`}>
+                    <div className={`text-end ${urgent ? "text-orange-700" : "text-[#0F0698]"}`}>
                       <p className="text-[9px] font-bold uppercase tracking-wider">{isAr ? "متبقٍ" : "left"}</p>
                       <p className="text-xl font-extrabold leading-none">T-{days}d</p>
                     </div>
@@ -172,7 +172,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Activity size={16} className="text-[#1E3A8A]" />
+                <Activity size={16} className="text-[#0F0698]" />
                 {t("agentActivity", operations)}
               </h3>
               <p className="text-[11px] text-gray-500 mt-0.5">{t("agentActivityHint", operations)}</p>
@@ -242,7 +242,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
                 <h3 className="text-sm font-bold text-gray-900">{t("pendingDecisionsTitle", operations)}</h3>
                 <p className="text-[10px] text-gray-500 mt-0.5">{t("pendingDecisionsHint", operations)}</p>
               </div>
-              <button onClick={() => onOpenView?.("approvals")} className="text-[10px] text-[#1E3A8A] font-bold hover:underline flex items-center gap-1">
+              <button onClick={() => onOpenView?.("approvals")} className="text-[10px] text-[#0F0698] font-bold hover:underline flex items-center gap-1">
                 {t("reviewAll", operations)}
               </button>
             </div>
@@ -269,7 +269,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <CalendarRange size={14} className="text-[#1E3A8A]" />
+                <CalendarRange size={14} className="text-[#0F0698]" />
                 {t("upcomingTitle", operations)}
               </h3>
               <p className="text-[10px] text-gray-500 mt-0.5">{t("upcomingHint", operations)}</p>
@@ -302,7 +302,7 @@ function Kpi({ icon, label, value, sub }: { icon: React.ReactNode; label: string
       className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm"
     >
       <div className="flex items-center gap-2 text-gray-500">
-        <span className="w-7 h-7 rounded-lg bg-blue-50 text-[#1E3A8A] flex items-center justify-center">{icon}</span>
+        <span className="w-7 h-7 rounded-lg bg-blue-50 text-[#0F0698] flex items-center justify-center">{icon}</span>
         <span className="text-[10px] uppercase tracking-wider font-semibold">{label}</span>
       </div>
       <div className="text-xl font-extrabold text-gray-900 mt-2">{value}</div>
@@ -316,10 +316,10 @@ function SaudiSplit({ saudi, expat, ratio, t }: { saudi: number; expat: number; 
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
       <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-semibold text-gray-500">
         <span>{t("saudiSplit", operations)} / {t("expatSplit", operations)}</span>
-        <span className="text-[#1E3A8A] font-extrabold">{ratio.toFixed(1)}%</span>
+        <span className="text-[#0F0698] font-extrabold">{ratio.toFixed(1)}%</span>
       </div>
       <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden flex">
-        <div className="bg-[#1E3A8A] h-full" style={{ width: `${ratio}%` }} />
+        <div className="bg-[#0F0698] h-full" style={{ width: `${ratio}%` }} />
         <div className="bg-amber-400 h-full" style={{ width: `${100 - ratio}%` }} />
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px]">

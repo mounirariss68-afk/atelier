@@ -49,7 +49,7 @@ export default function ClientPortalShell() {
   }, [isRtl]);
 
   const notifications = [
-    { id: 1, type: "payroll", text: t.notif1, time: t.notif1Time, dot: "bg-[#2563EB]" },
+    { id: 1, type: "payroll", text: t.notif1, time: t.notif1Time, dot: "bg-[#3B30E0]" },
     { id: 2, type: "document", text: t.notif2, time: t.notif2Time, dot: "bg-blue-500" },
     { id: 3, type: "compliance", text: t.notif3, time: t.notif3Time, dot: "bg-amber-500" },
     { id: 4, type: "process", text: t.notif4, time: t.notif4Time, dot: "bg-purple-500" },
@@ -60,15 +60,13 @@ export default function ClientPortalShell() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 text-gray-800" dir={isRtl ? "rtl" : "ltr"}>
-      <header className="flex-shrink-0 h-14 bg-[#1E3A8A] text-white flex items-center px-4 gap-4 z-30 relative">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img src={`${import.meta.env.BASE_URL}tasama-logo-transparent.png`} alt="Tasama" className="w-7 h-7 object-contain" />
-          </div>
-          <div className="hidden sm:block leading-tight">
-            <p className="text-[11px] font-bold tracking-wide">TASAMA · تَسَامى</p>
-            <p className="text-[9px] text-blue-100">Business Services · تسامي لخدمات الأعمال</p>
-          </div>
+      <header className="flex-shrink-0 h-16 bg-[#0F0698] text-white flex items-center px-4 gap-4 z-30 relative">
+        <div className="flex items-center flex-shrink-0">
+          <img
+            src={`${import.meta.env.BASE_URL}tasama-logo-light.png`}
+            alt="Tasama · Business Services · تسامي لخدمات الأعمال"
+            className="h-10 w-auto object-contain"
+          />
         </div>
         <div className="h-6 w-px bg-white/20" />
         <div className="flex-1 flex items-center gap-3 min-w-0">
@@ -95,8 +93,8 @@ export default function ClientPortalShell() {
             <MessageCircle size={18} />
           </button>
           <div className="flex items-center bg-white/10 rounded-full p-0.5 ms-1">
-            <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#1E3A8A]" : "text-white/60 hover:text-white"}`}>EN</button>
-            <button onClick={() => setLang("ar")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "ar" ? "bg-white text-[#1E3A8A]" : "text-white/60 hover:text-white"}`}>AR</button>
+            <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0F0698]" : "text-white/60 hover:text-white"}`}>EN</button>
+            <button onClick={() => setLang("ar")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "ar" ? "bg-white text-[#0F0698]" : "text-white/60 hover:text-white"}`}>AR</button>
           </div>
           <Link href="/demo/tasama-payroll-hub/manager" className="text-xs text-blue-100 hover:text-white flex items-center gap-1 ms-1" title={t.switchToManager}>
             <ArrowLeftRight size={14} />
@@ -153,7 +151,7 @@ export default function ClientPortalShell() {
                 key={item.id}
                 onClick={() => setView(item.id)}
                 className={`px-4 py-3 flex items-center gap-3 text-[13px] font-medium border-s-[3px] transition-colors ${
-                  active ? "border-[#1E3A8A] text-[#1E3A8A] bg-blue-50/60" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                  active ? "border-[#0F0698] text-[#0F0698] bg-blue-50/60" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"
                 }`}
               >
                 <Icon size={18} />
@@ -164,7 +162,7 @@ export default function ClientPortalShell() {
           <div className="mt-auto border-t border-gray-100">
             <button
               onClick={() => setChatOpen(true)}
-              className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-semibold border-s-[3px] border-transparent text-[#1E3A8A] hover:bg-blue-50/40 transition-colors"
+              className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-semibold border-s-[3px] border-transparent text-[#0F0698] hover:bg-blue-50/40 transition-colors"
             >
               <MessageCircle size={18} />
               {t.aiAssistant}

@@ -16,7 +16,7 @@ interface Message {
   timestamp: Date;
 }
 
-const CHART_COLORS = ["#1E3A8A", "#2563EB", "#3B82F6", "#60A5FA", "#F59E0B", "#DC2626"];
+const CHART_COLORS = ["#0F0698", "#3B30E0", "#3B82F6", "#60A5FA", "#F59E0B", "#DC2626"];
 
 export default function ManagerChat({ onClose }: { onClose: () => void }) {
   const { lang } = useTasamaDemoLang();
@@ -73,7 +73,7 @@ export default function ManagerChat({ onClose }: { onClose: () => void }) {
   function agentBadge(agent: ChatResponse["agent"]) {
     if (agent === "compliance") return { label: t("roleCompliance", aiChat), icon: <Shield size={14} />, bg: "bg-emerald-600" };
     if (agent === "payroll") return { label: t("rolePayroll", aiChat), icon: <Wallet size={14} />, bg: "bg-amber-600" };
-    return { label: t("roleAnalyst", aiChat), icon: <Bot size={14} />, bg: "bg-[#1E3A8A]" };
+    return { label: t("roleAnalyst", aiChat), icon: <Bot size={14} />, bg: "bg-[#0F0698]" };
   }
 
   return (
@@ -87,7 +87,7 @@ export default function ManagerChat({ onClose }: { onClose: () => void }) {
         isAr ? "left-0 border-r" : "right-0 border-l"
       }`}
     >
-      <div className="flex-shrink-0 h-14 bg-[#1E3A8A] text-white flex items-center px-4 gap-3">
+      <div className="flex-shrink-0 h-14 bg-[#0F0698] text-white flex items-center px-4 gap-3">
         <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
           <Sparkles size={16} />
         </div>
@@ -117,7 +117,7 @@ export default function ManagerChat({ onClose }: { onClose: () => void }) {
                 <div
                   className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                     msg.role === "user"
-                      ? "bg-[#1E3A8A] text-white rounded-br-md"
+                      ? "bg-[#0F0698] text-white rounded-br-md"
                       : "bg-white text-gray-800 rounded-bl-md border border-gray-200"
                   }`}
                 >
@@ -125,7 +125,7 @@ export default function ManagerChat({ onClose }: { onClose: () => void }) {
                 </div>
 
                 {msg.response?.type === "metric" && msg.response.data && (
-                  <div className="mt-2 bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] rounded-xl p-3 text-white">
+                  <div className="mt-2 bg-gradient-to-r from-[#0F0698] to-[#3B30E0] rounded-xl p-3 text-white">
                     <div className="flex items-center justify-between">
                       <span className="text-lg font-extrabold">{String(msg.response.data.value)}</span>
                       {msg.response.data.trend === "up" ? (
@@ -178,7 +178,7 @@ export default function ManagerChat({ onClose }: { onClose: () => void }) {
                               <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                               <YAxis tick={{ fontSize: 9 }} width={35} />
                               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                              <Line type="monotone" dataKey="value" stroke="#1E3A8A" strokeWidth={2} dot={{ r: 3, fill: "#1E3A8A" }} />
+                              <Line type="monotone" dataKey="value" stroke="#0F0698" strokeWidth={2} dot={{ r: 3, fill: "#0F0698" }} />
                             </LineChart>
                           ) : (
                             <BarChart data={cData} margin={{ left: 0, right: 5 }}>
@@ -211,7 +211,7 @@ export default function ManagerChat({ onClose }: { onClose: () => void }) {
 
         {typing && (
           <div className="flex gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#1E3A8A] flex-shrink-0 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-[#0F0698] flex-shrink-0 flex items-center justify-center">
               <Bot size={14} className="text-white" />
             </div>
             <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-md px-4 py-3">
@@ -244,12 +244,12 @@ export default function ManagerChat({ onClose }: { onClose: () => void }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t("placeholder", aiChat)}
-            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20 focus:border-[#1E3A8A]"
+            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F0698]/20 focus:border-[#0F0698]"
           />
           <button
             onClick={() => handleSend()}
             disabled={!input.trim()}
-            className="w-10 h-10 rounded-xl bg-[#1E3A8A] text-white flex items-center justify-center hover:bg-[#2563EB] transition-colors disabled:opacity-40"
+            className="w-10 h-10 rounded-xl bg-[#0F0698] text-white flex items-center justify-center hover:bg-[#3B30E0] transition-colors disabled:opacity-40"
             aria-label="Send"
           >
             <Send size={16} />
