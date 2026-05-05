@@ -318,6 +318,24 @@ const PROFILO_CATEGORIES = [
   "elektrikli-supurgeler",
 ] as const;
 
+// Siemens TR (siemens-home.bsh-group.com) — same BSH React-rendered
+// product-teaser markup as Bosch and Profilo, routed under /tr/tr/category/.
+// Real catalog confirmed via Playwright probe (May 2026 re-probe): the
+// /urunler/* path is marketing-only, but /tr/tr/category/* renders 12+
+// product-teaser cards with full SKUs and prices, identical to Bosch.
+const SIEMENS_CATEGORIES = [
+  "buzdolaplari-ve-derin-dondurucular",
+  "buzdolaplari-ve-derin-dondurucular/ankastre-buzdolaplari-ve-derin-dondurucular",
+  "buzdolaplari-ve-derin-dondurucular/solo-buzdolaplari-ve-derin-dondurucular",
+  "yikama-ve-utuleme-grubu/camasir-makineleri",
+  "yikama-ve-utuleme-grubu/kurutma-makineleri",
+  "yikama-ve-utuleme-grubu/kurutmali-camasir-makineleri",
+  "bulasik-makineleri",
+  "bulasik-makineleri/ankastre-bulasik-makineleri",
+  "bulasik-makineleri/solo-bulasik-makineleri",
+  "pisirme-grubu",
+] as const;
+
 // Grundig (Arçelik-owned) — Hybris article.prd.product-item cards under
 // root-level /{slug} URLs. Same paginator/markup as Arçelik & Beko.
 // Discovered via Playwright probe (May 2026).
@@ -1838,26 +1856,172 @@ async function scrapeGrundig(): Promise<ScrapedPrice[]> {
   return dedupeByModel(results);
 }
 
-// Siemens TR (siemens-home.bsh-group.com/tr) is a marketing-only site —
-// /online-satis/* paths are content/feature pages, not product listings.
-// Discovered via Playwright probe (May 2026). Stub returns []; Siemens
-// competitor entries fall through to the Bosch (BSH-shared) match map in
-// runPriceScrape.
+// Siemens TR (siemens-home.bsh-group.com) — BSH React product-teaser
+// markup, identical to Bosch and Profilo. The /urunler/* path is
+// marketing-only, but /tr/tr/category/* is the real catalog (confirmed
+// May 2026 re-probe: 12 product-teasers per page on /buzdolaplari-ve-derin-
+// dondurucular). Mirrors scrapeBosch click-more behavior.
 async function scrapeSiemens(): Promise<ScrapedPrice[]> {
+  const browser = await getPlaywrightBrowser();
+  if (!browser) {
+    logger.info("Skipping Siemens scrape (Playwright not available)");
+    return [];
+  }
+
+  const results: ScrapedPrice[] = [];
+  const context: BrowserContext = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+    locale: "tr-TR",
+    viewport: { width: 1366, height: 900 },
+  });
+
+  try {
+    for (const cat of SIEMENS_CATEGORIES) {
+      const url = `https://www.siemens-home.bsh-group.com/tr/tr/category/${cat}`;
+      const page: Page = await context.newPage();
+      try {
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+        await page
+          .waitForSelector(
+            '[data-testid^="product-teaser-container-for-"]',
+            { timeout: 10000 },
+          )
+          .catch(() => {});
+
+        const productLocator = page.locator(
+          '[data-testid^="product-teaser-container-for-"]',
+        );
+        let prevCount = 0;
+        let stableClicks = 0;
+        for (let i = 0; i < 30; i++) {
+          const btn = page
+            .locator(
+              'button:has-text("Daha fazla görüntüle"), button:has-text("Daha fazla"), [data-testid*="show-more"]',
+            )
+            .first();
+          const visible = await btn.isVisible().catch(() => false);
+          if (!visible) break;
+          const beforeCount = await productLocator.count();
+          await btn.click({ timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(1200);
+          const afterCount = await productLocator.count();
+          if (afterCount === beforeCount) {
+            stableClicks++;
+            if (stableClicks >= 2) break;
+          } else {
+            stableClicks = 0;
+            prevCount = afterCount;
+          }
+        }
+
+        const items = await page.evaluate(() => {
+          const out: { name: string; modelCode: string; priceText: string }[] =
+            [];
+          document
+            .querySelectorAll(
+              '[data-testid^="product-teaser-container-for-"]',
+            )
+            .forEach((el) => {
+              const rawName =
+                el
+                  .querySelector(
+                    '[data-testid="product-teaser-header-headline"]',
+                  )
+                  ?.textContent?.trim() || "";
+              const name =
+                rawName.includes("{") || rawName.includes("@media")
+                  ? ""
+                  : rawName;
+              const modelCode =
+                el
+                  .querySelector('[data-testid="product-code"]')
+                  ?.textContent?.trim() || "";
+              const priceText =
+                el
+                  .querySelector('[data-testid="price-main-price"]')
+                  ?.textContent?.trim() || "";
+              if (modelCode && priceText)
+                out.push({ name, modelCode, priceText });
+            });
+          return out;
+        });
+
+        let pageAdded = 0;
+        for (const item of items) {
+          const price = parseTurkishPrice(item.priceText);
+          if (!price || price <= 1000) continue;
+          results.push({
+            modelCode: item.modelCode,
+            name: item.name || item.modelCode,
+            price,
+            sourceUrl: url,
+            scrapedAt: new Date().toISOString(),
+          });
+          pageAdded++;
+        }
+        logger.info(
+          { url, domCount: prevCount, accepted: pageAdded },
+          "Siemens category scraped",
+        );
+      } catch (err) {
+        logger.warn({ url, err }, "Siemens page scrape failed");
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+
+  return dedupeByModel(results);
+}
+
+// Electrolux/AEG TR (electrolux.com.tr, aeg.com.tr) — both Electrolux Group
+// brand sites are marketing-only in TR: /buzdolabi/, /bulasik-makineleri/,
+// /camasir-makineleri/ paths return 404 or render only inspiration content
+// for built-in (ankastre) appliances under /kitchen/*/, with no product
+// cards or prices. Confirmed via Playwright probe May 2026. Stubs return [];
+// competitor entries for these brands remain unmatched until a marketplace
+// scraping service (with paid stealth) is added.
+async function scrapeElectrolux(): Promise<ScrapedPrice[]> {
   logger.info(
-    "Siemens TR has no online catalog (marketing-only site) — returning []",
+    "Electrolux TR has no online catalog (marketing-only site) — returning []",
   );
   return [];
 }
 
-// Electrolux/AEG TR (electrolux.com.tr, aeg.com.tr) are marketing-only
-// sites — category paths render as content pages with no product cards or
-// prices. Discovered via Playwright probe (May 2026). Stub returns [];
-// competitor prices for Electrolux/AEG remain unmatched until the
-// marketplace pipeline (Tasks #70, #90) supplies them.
-async function scrapeElectrolux(): Promise<ScrapedPrice[]> {
+async function scrapeAEG(): Promise<ScrapedPrice[]> {
   logger.info(
-    "Electrolux/AEG TR have no online catalog (marketing-only sites) — returning []",
+    "AEG TR has no online catalog (marketing-only site) — returning []",
+  );
+  return [];
+}
+
+// Regal TR (regal.com.tr) — site is permanently slow/blocked from this
+// environment: page.goto times out at 25s+ on every attempt (May 2026
+// probe). Vestel-Regal share parent company (Vestel Beyaz Eşya), so Regal
+// competitor entries continue to fall through to the vestelMap in
+// runPriceScrape — same as before. Stub returns []; direct Regal scraping
+// is blocked.
+async function scrapeRegal(): Promise<ScrapedPrice[]> {
+  logger.info(
+    "Regal TR scraping blocked (site times out from this env) — returning []",
+  );
+  return [];
+}
+
+// Teknosa marketplace (teknosa.com) — Akamai/anti-bot returns HTTP 403 on
+// every Playwright request from this environment, even with cookie warmup
+// and realistic Sec-Ch-Ua headers (May 2026 probe: 4/4 URLs returned 403).
+// Marketplace coverage continues via n11.com and trendyol.com, which work.
+// Stub returns []; Teknosa would require a paid stealth scraping service.
+async function scrapeTeknosa(): Promise<ScrapedMarketplaceProduct[]> {
+  logger.info(
+    "Teknosa scraping blocked (Akamai 403 from this env) — returning []",
   );
   return [];
 }
@@ -1872,6 +2036,8 @@ type ScraperResults = {
   siemens: ScrapedPrice[];
   profilo: ScrapedPrice[];
   electrolux: ScrapedPrice[];
+  aeg: ScrapedPrice[];
+  regal: ScrapedPrice[];
   grundig: ScrapedPrice[];
 };
 
@@ -1886,6 +2052,8 @@ async function runScrapers(): Promise<ScraperResults> {
     { name: "siemens-home.bsh-group.com/tr", fn: scrapeSiemens },
     { name: "profilo.com", fn: scrapeProfilo },
     { name: "electrolux.com.tr", fn: scrapeElectrolux },
+    { name: "aeg.com.tr", fn: scrapeAEG },
+    { name: "regal.com.tr", fn: scrapeRegal },
     { name: "grundig.com.tr", fn: scrapeGrundig },
   ] as const;
 
@@ -1899,6 +2067,8 @@ async function runScrapers(): Promise<ScraperResults> {
     siemens: [],
     profilo: [],
     electrolux: [],
+    aeg: [],
+    regal: [],
     grundig: [],
   };
   const keys = [
@@ -1911,6 +2081,8 @@ async function runScrapers(): Promise<ScraperResults> {
     "siemens",
     "profilo",
     "electrolux",
+    "aeg",
+    "regal",
     "grundig",
   ] as const;
 
@@ -2400,7 +2572,10 @@ export async function runPriceScrape(
     const samsungMap = buildEnhancedMap(scraped.samsung);
     const lgMap = buildEnhancedMap(scraped.lg);
     const profiloMap = buildEnhancedMap(scraped.profilo);
+    const siemensMap = buildEnhancedMap(scraped.siemens);
     const electroluxMap = buildEnhancedMap(scraped.electrolux);
+    const aegMap = buildEnhancedMap(scraped.aeg);
+    const regalMap = buildEnhancedMap(scraped.regal);
 
     const productPriceMap = new Map(
       existingProducts.map((p) => [p.id, p.tsfPrice]),
@@ -2409,8 +2584,14 @@ export async function runPriceScrape(
     let unmatchedCompetitors = 0;
     for (const cp of existingCompetitors) {
       let match: ScrapedPrice | undefined;
-      if (cp.brand === "Vestel" || cp.brand === "Regal")
+      if (cp.brand === "Vestel")
         match = fuzzyMatchScraped(cp.competitorModel, vestelMap);
+      else if (cp.brand === "Regal")
+        // Regal scraper is blocked; Regal shares parent (Vestel Beyaz Eşya)
+        // with Vestel, so fall back to the Vestel catalog.
+        match =
+          fuzzyMatchScraped(cp.competitorModel, regalMap) ??
+          fuzzyMatchScraped(cp.competitorModel, vestelMap);
       else if (cp.brand === "Bosch")
         match = fuzzyMatchScraped(cp.competitorModel, boschMap);
       else if (cp.brand === "Profilo")
@@ -2419,9 +2600,10 @@ export async function runPriceScrape(
           fuzzyMatchScraped(cp.competitorModel, profiloMap) ??
           fuzzyMatchScraped(cp.competitorModel, boschMap);
       else if (cp.brand === "Siemens")
-        // Siemens TR has no online catalog; reuse the BSH (Bosch) map and,
-        // failing that, the Profilo map as a last-resort BSH fallback.
+        // Prefer the real Siemens catalog; fall back to Bosch (BSH-shared)
+        // and Profilo as last-resort BSH fallback.
         match =
+          fuzzyMatchScraped(cp.competitorModel, siemensMap) ??
           fuzzyMatchScraped(cp.competitorModel, boschMap) ??
           fuzzyMatchScraped(cp.competitorModel, profiloMap);
       else if (cp.brand === "Samsung")
@@ -2429,8 +2611,12 @@ export async function runPriceScrape(
       else if (cp.brand === "LG")
         match = fuzzyMatchScraped(cp.competitorModel, lgMap);
       else if (cp.brand === "Electrolux/AEG" || cp.brand === "Electrolux" || cp.brand === "AEG")
-        // electroluxMap is empty until the marketplace pipeline supplies prices.
-        match = fuzzyMatchScraped(cp.competitorModel, electroluxMap);
+        // Electrolux/AEG scrapers are stubs (sites are marketing-only);
+        // these maps stay empty until the marketplace pipeline supplies
+        // prices. Try AEG-specific first, then Electrolux as a Group fallback.
+        match =
+          fuzzyMatchScraped(cp.competitorModel, aegMap) ??
+          fuzzyMatchScraped(cp.competitorModel, electroluxMap);
 
       if (!match) {
         unmatchedCompetitors++;
