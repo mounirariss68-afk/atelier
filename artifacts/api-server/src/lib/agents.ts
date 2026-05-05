@@ -1030,9 +1030,13 @@ function buildCannibalizationContext(ctx: ArcelikContext) {
     // to energy-class only, but that keeps the dimension list honest.
     const overlap = featureOverlap(sorted[0], sorted[sorted.length - 1]);
 
-    // Surface the bucket if EITHER price spread is tight OR feature overlap
-    // is high — both are independent cannibalization signals.
-    if ((spread < 18 || overlap.score >= 60) && arr.length >= 2) {
+    // Spec: cannibalization risk requires BOTH a tight price band (<15%
+    // proximity between cheapest and most-expensive in the bucket) AND
+    // meaningful feature overlap (>=50% on the matched dimensions). Either
+    // alone is not enough — close prices on differentiated SKUs is healthy
+    // tiering, and similar specs at very different prices is intentional
+    // good/better/best laddering.
+    if (spread < 15 && overlap.score >= 50 && arr.length >= 2) {
       const [cat, sub] = key.split(":");
       overlaps.push({
         category: cat,
@@ -1078,8 +1082,8 @@ function baselineCannibalization(ctx: ArcelikContext, language: "tr" | "en"): Ra
             : "No Cannibalization Risk Detected",
         summary:
           language === "tr"
-            ? "Alt-kategoriler içinde fiyat aralığı sağlıklı (>%18). Portföyde belirgin yamyamlık sinyali yok."
-            : "Sub-categories show healthy price spread (>18%). No material cannibalization signal.",
+            ? "Alt-kategorilerde dar fiyat bandı (<%15) ile yüksek özellik örtüşmesi (>=%50) birlikte görülen ürün yok. Yapısal yamyamlık sinyali yok."
+            : "No sub-category combines a tight price band (<15%) with high feature overlap (>=50%). No structural cannibalization signal.",
         targetRole: "pricing",
         severity: "low",
         confidence: 75,
@@ -1088,8 +1092,8 @@ function baselineCannibalization(ctx: ArcelikContext, language: "tr" | "en"): Ra
             source: language === "tr" ? "Portföy Spread Analizi" : "Portfolio Spread Analysis",
             observation:
               language === "tr"
-                ? `${ctx.products.length} ürün incelendi; tüm alt-kategorilerde min-max yayılım %18'in üstünde.`
-                : `${ctx.products.length} SKUs reviewed; all sub-categories have min-max spread above 18%.`,
+                ? `${ctx.products.length} ürün incelendi; hiçbir alt-kategoride dar fiyat bandı (<%15) + yüksek özellik örtüşmesi (>=%50) eşzamanlı değil.`
+                : `${ctx.products.length} SKUs reviewed; no sub-category simultaneously shows tight price band (<15%) and high feature overlap (>=50%).`,
             conclusion:
               language === "tr" ? "Yapısal yamyamlık riski düşük." : "Structural cannibalization risk is low.",
           },
