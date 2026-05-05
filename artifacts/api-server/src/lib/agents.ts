@@ -498,24 +498,38 @@ function postProcess(
   language: "tr" | "en",
 ): AgentRecommendation[] {
   const ts = new Date().toISOString();
-  return raw.map((r, i) => ({
-    id: `${agentType}-${source === "baseline" ? "bl" : "ai"}-${Date.now()}-${i}`,
-    type: r.type,
-    agentType,
-    title: r.title,
-    summary: r.summary,
-    targetRole: r.targetRole,
-    severity: r.severity,
-    confidence: Math.round(r.confidence),
-    reasoning: r.reasoning,
-    impact: r.impact,
-    recommendedAction: r.recommendedAction,
-    alternatives: r.alternatives,
-    status: "pending" as const,
-    createdAt: ts,
-    source,
-    language,
-  }));
+  return raw.map((r, i) => {
+    // Enforce contract: price-elasticity recs MUST carry an explicit
+    // `impact.volume`. The shared zod schema keeps it optional so other
+    // agents aren't forced to emit it, but for elasticity the demand-side
+    // trade-off is the whole point — if the LLM forgets, we backfill a
+    // safe default and lower confidence so reviewers know the volume
+    // estimate isn't model-derived.
+    let impact = r.impact;
+    let confidence = Math.round(r.confidence);
+    if (agentType === "price-elasticity" && !impact.volume) {
+      impact = { ...impact, volume: "~0 units (not specified by model)" };
+      confidence = Math.min(confidence, 60);
+    }
+    return {
+      id: `${agentType}-${source === "baseline" ? "bl" : "ai"}-${Date.now()}-${i}`,
+      type: r.type,
+      agentType,
+      title: r.title,
+      summary: r.summary,
+      targetRole: r.targetRole,
+      severity: r.severity,
+      confidence,
+      reasoning: r.reasoning,
+      impact,
+      recommendedAction: r.recommendedAction,
+      alternatives: r.alternatives,
+      status: "pending" as const,
+      createdAt: ts,
+      source,
+      language,
+    };
+  });
 }
 
 // ---------- Agent: Competitive Response ----------
