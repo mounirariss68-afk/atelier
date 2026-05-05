@@ -1,210 +1,202 @@
-// Foundation placeholder shell for the Client Portal demo experience.
-// Renders the per-client roster, salary roll, documents, and service requests
-// driven by the /api/tasama endpoints. The full immersive client portal
-// experience will be built in a downstream task.
-
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
+import { Link } from "wouter";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Home, Users, FileText, Inbox, Wallet, Workflow, Bell, MessageCircle,
+  LogOut, X, ArrowLeftRight, Building2,
+} from "lucide-react";
+import DashboardView from "./client/DashboardView";
+import EmployeesView from "./client/EmployeesView";
+import DocumentsView from "./client/DocumentsView";
+import ServiceRequestsView from "./client/ServiceRequestsView";
+import PayrollView from "./client/PayrollView";
+import ProcessesView from "./client/ProcessesView";
+import ClientChat from "./client/ClientChat";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "./DemoLangContext";
-import {
-  formatSAR,
-  formatPercent,
-  getDepartmentLabel,
-  getEmployeeStatusLabel,
-  getNationalityLabel,
-  getRequestTypeLabel,
-  getDocumentTypeLabel,
-  getSaudizationBandLabel,
-  type DocumentType,
-  type RequestType,
-} from "@/data/tasama-seed";
-import { Building2, Users, Wallet, CalendarDays, FileText, ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
+import { clientShell, tDict } from "./tasama-i18n";
+import { getSaudizationBandLabel, formatPercent, formatDate, SAUDIZATION_BAND_COLOR } from "@/data/tasama-seed";
+
+export type ClientViewId = "dashboard" | "employees" | "documents" | "requests" | "payroll" | "processes";
+
+const NAV_ITEMS: { id: ClientViewId; labelKey: "navDashboard" | "navEmployees" | "navDocuments" | "navRequests" | "navPayroll" | "navProcesses"; icon: typeof Home }[] = [
+  { id: "dashboard", labelKey: "navDashboard", icon: Home },
+  { id: "employees", labelKey: "navEmployees", icon: Users },
+  { id: "documents", labelKey: "navDocuments", icon: FileText },
+  { id: "requests", labelKey: "navRequests", icon: Inbox },
+  { id: "payroll", labelKey: "navPayroll", icon: Wallet },
+  { id: "processes", labelKey: "navProcesses", icon: Workflow },
+];
+
+const CLIENT_ID = "client-alnakhla";
 
 export default function ClientPortalShell() {
   const { lang, setLang } = useTasamaDemoLang();
+  const t = tDict(clientShell, lang);
+  const isRtl = lang === "ar";
   const data = useTasamaData();
-  const [clientId, setClientId] = useState<string>(data.clients[0]?.id ?? "");
-  const isAr = lang === "ar";
+  const client = data.clients.find((c) => c.id === CLIENT_ID);
 
-  const client = data.clients.find((c) => c.id === clientId);
-  const employees = useMemo(() => data.employees.filter((e) => e.clientId === clientId), [data.employees, clientId]);
-  const documents = useMemo(() => data.documents.filter((d) => d.clientId === clientId), [data.documents, clientId]);
-  const requests = useMemo(() => data.serviceRequests.filter((r) => r.clientId === clientId), [data.serviceRequests, clientId]);
-  const lastRun = useMemo(
-    () =>
-      data.payrollRuns
-        .filter((r) => r.clientId === clientId)
-        .sort((a, b) => (b.periodYear - a.periodYear) * 12 + (b.periodMonth - a.periodMonth))[0],
-    [data.payrollRuns, clientId],
-  );
+  const [view, setView] = useState<ClientViewId>("dashboard");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
-  if (!client) {
-    return <div className="min-h-screen flex items-center justify-center text-slate-400">No client data</div>;
-  }
+  useEffect(() => {
+    document.documentElement.dir = isRtl ? "rtl" : "ltr";
+    return () => {
+      document.documentElement.dir = "ltr";
+    };
+  }, [isRtl]);
+
+  const notifications = [
+    { id: 1, type: "payroll", text: t.notif1, time: t.notif1Time, dot: "bg-[#0D9488]" },
+    { id: 2, type: "document", text: t.notif2, time: t.notif2Time, dot: "bg-blue-500" },
+    { id: 3, type: "compliance", text: t.notif3, time: t.notif3Time, dot: "bg-amber-500" },
+    { id: 4, type: "process", text: t.notif4, time: t.notif4Time, dot: "bg-purple-500" },
+    { id: 5, type: "alert", text: t.notif5, time: t.notif5Time, dot: "bg-red-500" },
+  ];
+
+  const bandColor = client ? SAUDIZATION_BAND_COLOR[client.saudizationBand] : "#10B981";
 
   return (
-    <div dir={isAr ? "rtl" : "ltr"} className="min-h-screen bg-gray-50">
-      <header className="h-14 bg-[#0F766E] flex items-center px-5 gap-4 text-white">
-        <Link href="/marketplace/tasama-payroll-hub" className="text-teal-100 hover:text-white flex items-center gap-1.5 text-xs">
-          <ArrowLeft size={14} className="rtl:rotate-180" />
-          {isAr ? "العودة" : "Back"}
-        </Link>
-        <div className="h-5 w-px bg-teal-400" />
-        <Building2 size={18} />
-        <h1 className="text-sm font-bold">{isAr ? "بوابة العميل" : "Client Portal"}</h1>
-        <div className="flex-1" />
-        <select
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-          className="text-xs bg-[#0E6B66] border border-teal-400 rounded px-2 py-1 text-white"
-        >
-          {data.clients.map((c) => (
-            <option key={c.id} value={c.id} className="text-black">{isAr ? c.legalNameAr : c.legalNameEn}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => setLang(lang === "en" ? "ar" : "en")}
-          className="text-xs px-3 py-1 rounded-full bg-teal-700 hover:bg-teal-600 transition-colors"
-        >
-          {lang === "en" ? "العربية" : "English"}
-        </button>
+    <div className="h-screen flex flex-col bg-gray-50 text-gray-800" dir={isRtl ? "rtl" : "ltr"}>
+      <header className="flex-shrink-0 h-14 bg-[#0F766E] text-white flex items-center px-4 gap-4 z-30 relative">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center text-white font-bold text-sm">
+            <Building2 size={16} />
+          </div>
+          <div className="hidden sm:block leading-tight">
+            <p className="text-[11px] font-bold tracking-wide">TASAMA</p>
+            <p className="text-[10px] font-semibold text-teal-100">{t.portalName}</p>
+          </div>
+        </div>
+        <div className="h-6 w-px bg-white/20" />
+        <div className="flex-1 flex items-center gap-3 min-w-0">
+          <div className="min-w-0">
+            <p className="text-sm font-bold truncate">{client ? (lang === "en" ? client.legalNameEn : client.legalNameAr) : t.companyName}</p>
+            <p className="text-[11px] text-teal-100">{t.industry}{client ? ` · ${client.employeeCount} ${lang === "en" ? "employees" : "موظف"}` : ""}</p>
+          </div>
+          {client && (
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0" style={{ backgroundColor: bandColor + "30", color: "#FFF" }}>
+              {t.bandLabel}: {getSaudizationBandLabel(client.saudizationBand, lang)} · {formatPercent(client.saudizationPercent, 0)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="relative">
+            <button onClick={() => setNotifOpen(!notifOpen)} className="relative p-2 hover:bg-white/10 rounded-lg transition-colors" aria-label={t.notifications}>
+              <Bell size={18} />
+              {notifications.length > 0 && (
+                <span className="absolute top-0.5 end-0.5 w-4 h-4 rounded-full bg-red-500 text-[9px] font-bold flex items-center justify-center">{notifications.length}</span>
+              )}
+            </button>
+          </div>
+          <button onClick={() => setChatOpen(true)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title={t.aiAssistant} aria-label={t.aiAssistant}>
+            <MessageCircle size={18} />
+          </button>
+          <div className="flex items-center bg-white/10 rounded-full p-0.5 ms-1">
+            <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0F766E]" : "text-white/60 hover:text-white"}`}>EN</button>
+            <button onClick={() => setLang("ar")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "ar" ? "bg-white text-[#0F766E]" : "text-white/60 hover:text-white"}`}>AR</button>
+          </div>
+          <Link href="/demo/tasama-payroll-hub/manager" className="text-xs text-teal-100 hover:text-white flex items-center gap-1 ms-1" title={t.switchToManager}>
+            <ArrowLeftRight size={14} />
+            <span className="hidden md:inline">{t.switchToManager}</span>
+          </Link>
+          <Link href="/marketplace/tasama-payroll-hub" className="text-xs text-teal-100 hover:text-white flex items-center gap-1">
+            <LogOut size={14} />
+            <span className="hidden md:inline">{t.logout}</span>
+          </Link>
+        </div>
+
+        <AnimatePresence>
+          {notifOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="absolute top-12 end-20 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 text-gray-700 overflow-hidden"
+              >
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <p className="text-sm font-bold">{t.notifications}</p>
+                  <button onClick={() => setNotifOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>
+                </div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-xs text-gray-400">{t.notifEmpty}</div>
+                  ) : notifications.map((n) => (
+                    <div key={n.id} className="px-4 py-3 hover:bg-gray-50/50 cursor-pointer">
+                      <div className="flex items-start gap-2">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${n.dot}`} />
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-700">{n.text}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{n.time}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 space-y-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="text-xs text-gray-500 uppercase tracking-wider">{isAr ? "العميل" : "Client"}</div>
-          <h2 className="text-xl font-bold text-gray-900 mt-1">{isAr ? client.legalNameAr : client.legalNameEn}</h2>
-          <div className="text-xs text-gray-500 mt-1">
-            {isAr ? "نطاق السعودة:" : "Saudization band:"} {getSaudizationBandLabel(client.saudizationBand as never, lang)} ({formatPercent(client.saudizationPercent)})
+      <div className="flex-1 flex min-h-0">
+        <nav className="flex-shrink-0 w-52 bg-white border-e border-gray-200 flex flex-col">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = view === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setView(item.id)}
+                className={`px-4 py-3 flex items-center gap-3 text-[13px] font-medium border-s-[3px] transition-colors ${
+                  active ? "border-[#0F766E] text-[#0F766E] bg-teal-50/60" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"
+                }`}
+              >
+                <Icon size={18} />
+                {t[item.labelKey]}
+              </button>
+            );
+          })}
+          <div className="mt-auto border-t border-gray-100">
+            <button
+              onClick={() => setChatOpen(true)}
+              className="w-full px-4 py-3 flex items-center gap-3 text-[13px] font-semibold border-s-[3px] border-transparent text-[#0F766E] hover:bg-teal-50/40 transition-colors"
+            >
+              <MessageCircle size={18} />
+              {t.aiAssistant}
+            </button>
+            {client && (
+              <div className="px-4 py-3 border-t border-gray-100 text-[10px] text-gray-400">
+                <p>{t.contractSince}</p>
+                <p className="text-gray-600 font-semibold mt-0.5">{formatDate(client.onboardedAt, lang)}</p>
+              </div>
+            )}
           </div>
-        </div>
+        </nav>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Stat icon={<Users size={18} />} label={isAr ? "إجمالي الموظفين" : "Total employees"} value={`${employees.length}`} sub={`${employees.filter((e) => e.isSaudi).length} ${isAr ? "سعودي" : "Saudi"} • ${employees.filter((e) => !e.isSaudi).length} ${isAr ? "وافد" : "expat"}`} />
-          <Stat icon={<Wallet size={18} />} label={isAr ? "إجمالي الراتب الشهري" : "Monthly gross"} value={formatSAR(client.monthlyPayrollGross)} sub={isAr ? "آخر دورة" : `Last cycle: ${lastRun ? `${lastRun.periodMonth}/${lastRun.periodYear}` : "—"}`} />
-          <Stat icon={<FileText size={18} />} label={isAr ? "وثائق نشطة" : "Documents"} value={`${documents.length}`} sub={isAr ? "ثنائية اللغة" : "Bilingual EN/AR"} />
-          <Stat icon={<CalendarDays size={18} />} label={isAr ? "طلبات نشطة" : "Active requests"} value={`${requests.filter((r) => r.status !== "completed" && r.status !== "rejected").length}`} sub={`${requests.filter((r) => r.status === "completed").length} ${isAr ? "مكتمل" : "completed"}`} />
-        </div>
-
-        {/* Employees */}
-        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <h3 className="px-5 py-3 text-sm font-bold border-b border-gray-200">{isAr ? "الموظفون" : "Employees"}</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr className="text-[11px] uppercase text-gray-500">
-                  <th className="text-start p-3">{isAr ? "الاسم" : "Name"}</th>
-                  <th className="text-start p-3">{isAr ? "المنصب" : "Role"}</th>
-                  <th className="text-start p-3">{isAr ? "الجنسية" : "Nationality"}</th>
-                  <th className="text-start p-3">{isAr ? "القسم" : "Department"}</th>
-                  <th className="text-start p-3">{isAr ? "سنوات الخدمة" : "Years"}</th>
-                  <th className="text-start p-3">{isAr ? "الحالة" : "Status"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.slice(0, 12).map((e) => (
-                  <tr key={e.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="p-3 font-medium">{isAr ? e.fullNameAr : e.fullNameEn}</td>
-                    <td className="p-3 text-gray-600">{isAr ? e.roleAr : e.role}</td>
-                    <td className="p-3 text-gray-600">{getNationalityLabel(e.nationality, lang)}</td>
-                    <td className="p-3 text-gray-600">{getDepartmentLabel(e.department, lang)}</td>
-                    <td className="p-3 text-gray-600">{e.yearsOfService.toFixed(1)}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 text-[11px] rounded-full bg-teal-50 text-[#0F766E]">
-                        {getEmployeeStatusLabel(e.status as never, lang)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto p-6">
+            <AnimatePresence mode="wait">
+              <motion.div key={view} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                {view === "dashboard" && <DashboardView onNavigate={setView} />}
+                {view === "employees" && <EmployeesView />}
+                {view === "documents" && <DocumentsView />}
+                {view === "requests" && <ServiceRequestsView />}
+                {view === "payroll" && <PayrollView />}
+                {view === "processes" && <ProcessesView />}
+              </motion.div>
+            </AnimatePresence>
           </div>
-          {employees.length > 12 && (
-            <div className="p-3 text-[11px] text-gray-400 text-center border-t border-gray-100">
-              {isAr ? `${employees.length - 12} موظفًا إضافيًا` : `+${employees.length - 12} more employees`}
-            </div>
-          )}
-        </section>
-
-        {/* Documents + Requests */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <h3 className="px-5 py-3 text-sm font-bold border-b border-gray-200">{isAr ? "الوثائق" : "Documents"}</h3>
-            <div className="divide-y divide-gray-100">
-              {documents.map((d) => (
-                <a
-                  key={d.id}
-                  href={`/api/tasama/documents/${d.id}/file`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block p-4 hover:bg-gray-50"
-                >
-                  <div className="text-xs text-[#0F766E] font-semibold uppercase tracking-wider">
-                    {getDocumentTypeLabel(d.type as DocumentType, lang)}
-                  </div>
-                  <div className="text-sm text-gray-900 mt-0.5">{isAr ? d.titleAr : d.titleEn}</div>
-                  <div className="text-[11px] text-gray-500 mt-0.5">
-                    {d.referenceNumber} • {d.issuedAt} • {(d.overallConfidence * 100).toFixed(1)}% confidence
-                  </div>
-                </a>
-              ))}
-              {documents.length === 0 && <div className="p-4 text-sm text-gray-400 text-center">{isAr ? "لا توجد وثائق" : "No documents"}</div>}
-            </div>
-          </section>
-
-          <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <h3 className="px-5 py-3 text-sm font-bold border-b border-gray-200">{isAr ? "طلبات الخدمة" : "Service requests"}</h3>
-            <div className="divide-y divide-gray-100">
-              {requests.map((r) => (
-                <div key={r.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs text-[#0F766E] font-semibold uppercase tracking-wider">
-                        {getRequestTypeLabel(r.type as RequestType, lang)}
-                      </div>
-                      <div className="text-sm text-gray-900 mt-0.5 truncate">{isAr ? r.titleAr : r.titleEn}</div>
-                      <div className="text-[11px] text-gray-500 mt-0.5">{r.requestedAt} • {r.requestedBy}</div>
-                    </div>
-                    <span
-                      className={`shrink-0 px-2 py-0.5 text-[11px] rounded-full ${
-                        r.status === "completed"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : r.status === "rejected"
-                          ? "bg-red-50 text-red-700"
-                          : "bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {r.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {requests.length === 0 && <div className="p-4 text-sm text-gray-400 text-center">{isAr ? "لا توجد طلبات" : "No requests"}</div>}
-            </div>
-          </section>
-        </div>
-
-        <p className="text-[11px] text-gray-400 text-center pt-4 border-t border-gray-200">
-          {isAr
-            ? "هذا هو الأساس التقني لبوابة العميل. التجربة التفاعلية الكاملة قيد البناء."
-            : "Foundation shell for the Client Portal. The full immersive experience is being built in downstream tasks."}
-        </p>
-      </main>
-    </div>
-  );
-}
-
-function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-center gap-2 text-gray-500">
-        <span className="text-[#0F766E]">{icon}</span>
-        <span className="text-[11px] uppercase tracking-wider">{label}</span>
+        </main>
       </div>
-      <div className="text-xl font-bold text-gray-900 mt-2">{value}</div>
-      <div className="text-[11px] text-gray-500 mt-0.5">{sub}</div>
+
+      <AnimatePresence>
+        {chatOpen && <ClientChat onClose={() => setChatOpen(false)} />}
+      </AnimatePresence>
     </div>
   );
 }

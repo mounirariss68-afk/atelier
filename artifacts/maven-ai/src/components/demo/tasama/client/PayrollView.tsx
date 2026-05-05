@@ -1,0 +1,243 @@
+import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import { Download, ArrowUp, ArrowDown, Wallet, ShieldCheck, Banknote, Users } from "lucide-react";
+import { useTasamaData } from "@/hooks/useTasamaData";
+import { useTasamaDemoLang } from "../DemoLangContext";
+import { clientPayroll, tDict } from "../tasama-i18n";
+import { formatSAR, getMonthName } from "@/data/tasama-seed";
+
+const CLIENT_ID = "client-alnakhla";
+
+export default function PayrollView() {
+  const { lang } = useTasamaDemoLang();
+  const t = tDict(clientPayroll, lang);
+  const data = useTasamaData();
+
+  const runs = useMemo(
+    () => data.payrollRuns
+      .filter((r) => r.clientId === CLIENT_ID)
+      .sort((a, b) => (b.periodYear * 12 + b.periodMonth) - (a.periodYear * 12 + a.periodMonth)),
+    [data.payrollRuns],
+  );
+
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(runs[0]?.id ?? null);
+  const [showVariance, setShowVariance] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const selectedRun = runs.find((r) => r.id === selectedRunId) ?? runs[0];
+  const prevRun = runs[runs.findIndex((r) => r.id === selectedRun?.id) + 1];
+
+  const payslips = useMemo(
+    () => (selectedRun ? data.payslips.filter((p) => p.runId === selectedRun.id) : []),
+    [selectedRun, data.payslips],
+  );
+  const employees = data.employees.filter((e) => e.clientId === CLIENT_ID);
+
+  const totals = payslips.reduce(
+    (acc, p) => ({
+      basic: acc.basic + p.basicSalary,
+      housing: acc.housing + p.housingAllowance,
+      transport: acc.transport + p.transportAllowance,
+      other: acc.other + p.otherAllowances + p.bonus + p.retroAdjustment,
+      overtime: acc.overtime + p.overtime,
+      gross: acc.gross + p.grossPay,
+      gosi: acc.gosi + p.gosiEmployeeDeduction,
+      deductions: acc.deductions + p.gosiEmployeeDeduction + p.otherDeductions,
+      net: acc.net + p.netPay,
+    }),
+    { basic: 0, housing: 0, transport: 0, other: 0, overtime: 0, gross: 0, gosi: 0, deductions: 0, net: 0 },
+  );
+
+  const variance = payslips
+    .map((p) => {
+      const prevP = prevRun ? data.payslips.find((x) => x.runId === prevRun.id && x.employeeId === p.employeeId) : null;
+      const delta = prevP ? p.grossPay - prevP.grossPay : 0;
+      return { p, delta };
+    })
+    .filter((v) => Math.abs(v.delta) > 1)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 6);
+
+  const trend = runs.slice(0, 6).reverse();
+  const trendMax = Math.max(...trend.map((r) => r.totalGross), 1);
+
+  const download = () => {
+    setToast(t.downloadToast);
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold">{t.title}</h1>
+          <p className="text-xs text-gray-500 mt-0.5">{lang === "en" ? "Monthly payroll register" : "سجل الرواتب الشهري"}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-gray-500 uppercase">{t.monthSelector}</span>
+          <select
+            value={selectedRun?.id ?? ""}
+            onChange={(e) => setSelectedRunId(e.target.value)}
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]/20"
+          >
+            {runs.map((r) => (
+              <option key={r.id} value={r.id}>{getMonthName(r.periodMonth, lang)} {r.periodYear}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <SummaryCard icon={Wallet} color="#0F766E" label={t.summaryGross} value={formatSAR(totals.gross)} />
+        <SummaryCard icon={ShieldCheck} color="#7C3AED" label={t.summaryDeductions} value={formatSAR(totals.deductions)} />
+        <SummaryCard icon={Banknote} color="#10B981" label={t.summaryNet} value={formatSAR(totals.net)} />
+        <SummaryCard icon={Users} color="#3B82F6" label={t.summaryEmployees} value={String(payslips.length)} />
+      </div>
+
+      {trend.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold">{t.trendTitle}</h2>
+            <span className="text-[10px] text-gray-400">{t.trendGross}</span>
+          </div>
+          <div className="flex items-end gap-3 h-32">
+            {trend.map((r) => (
+              <div key={r.id} className="flex-1 flex flex-col items-center gap-1.5">
+                <span className="text-[9px] text-gray-400">{(r.totalGross / 1000).toFixed(0)}k</span>
+                <div className="w-full bg-teal-50 rounded-t-lg overflow-hidden flex items-end" style={{ height: "100%" }}>
+                  <div className="w-full bg-gradient-to-t from-[#0F766E] to-[#0D9488] rounded-t-lg transition-all" style={{ height: `${(r.totalGross / trendMax) * 100}%` }} />
+                </div>
+                <span className="text-[10px] font-semibold text-gray-500">{getMonthName(r.periodMonth, lang).slice(0, 3)}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-sm font-bold">
+            {selectedRun ? `${getMonthName(selectedRun.periodMonth, lang)} ${selectedRun.periodYear}` : ""} · {payslips.length} {lang === "en" ? "payslips" : "كشف"}
+          </h2>
+          {prevRun && (
+            <button onClick={() => setShowVariance(!showVariance)} className="text-[11px] font-semibold text-[#0F766E] hover:underline">
+              {showVariance ? t.hideVariance : t.showVariance}
+            </button>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-[10px] font-semibold text-gray-500 uppercase">
+              <tr>
+                <th className="text-start px-4 py-2.5">{t.colName}</th>
+                <th className="text-end px-3 py-2.5">{t.colBasic}</th>
+                <th className="text-end px-3 py-2.5">{t.colHousing}</th>
+                <th className="text-end px-3 py-2.5">{t.colTransport}</th>
+                <th className="text-end px-3 py-2.5">{t.colOvertime}</th>
+                <th className="text-end px-3 py-2.5">{t.colGross}</th>
+                <th className="text-end px-3 py-2.5">{t.colGosi}</th>
+                <th className="text-end px-3 py-2.5 font-bold text-gray-700">{t.colNet}</th>
+                <th className="text-start px-3 py-2.5">{t.colStatus}</th>
+                <th className="px-3 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {payslips.length === 0 && (
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-xs text-gray-400">{t.noPayslips}</td></tr>
+              )}
+              {payslips.map((p) => {
+                const e = employees.find((x) => x.id === p.employeeId);
+                if (!e) return null;
+                const statusLabel = p.paymentStatus === "paid" ? t.statusPaid : p.paymentStatus === "rejected" ? t.statusRejected : t.statusPending;
+                const statusColor = p.paymentStatus === "paid" ? "bg-emerald-50 text-emerald-700" : p.paymentStatus === "rejected" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
+                return (
+                  <tr key={p.id} className="border-t border-gray-50 hover:bg-gray-50/60">
+                    <td className="px-4 py-2.5">
+                      <p className="text-xs font-semibold">{lang === "en" ? e.fullNameEn : e.fullNameAr}</p>
+                      <p className="text-[10px] text-gray-400">{e.id}</p>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-end">{formatSAR(p.basicSalary)}</td>
+                    <td className="px-3 py-2.5 text-xs text-end">{formatSAR(p.housingAllowance)}</td>
+                    <td className="px-3 py-2.5 text-xs text-end">{formatSAR(p.transportAllowance)}</td>
+                    <td className="px-3 py-2.5 text-xs text-end">{p.overtime > 0 ? formatSAR(p.overtime) : "—"}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold text-end">{formatSAR(p.grossPay)}</td>
+                    <td className="px-3 py-2.5 text-xs text-end text-purple-600">−{formatSAR(p.gosiEmployeeDeduction)}</td>
+                    <td className="px-3 py-2.5 text-xs font-bold text-end text-emerald-700">{formatSAR(p.netPay)}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusColor}`}>{statusLabel}</span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={download} className="text-[11px] text-[#0F766E] hover:underline flex items-center gap-1" title={t.download}>
+                        <Download size={12} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {payslips.length > 0 && (
+                <tr className="border-t-2 border-gray-200 bg-gray-50">
+                  <td className="px-4 py-3 text-xs font-bold uppercase text-gray-600">{t.totalsRow}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-end">{formatSAR(totals.basic)}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-end">{formatSAR(totals.housing)}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-end">{formatSAR(totals.transport)}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-end">{formatSAR(totals.overtime)}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-end">{formatSAR(totals.gross)}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-end text-purple-600">−{formatSAR(totals.gosi)}</td>
+                  <td className="px-3 py-3 text-xs font-bold text-end text-emerald-700">{formatSAR(totals.net)}</td>
+                  <td colSpan={2}></td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
+
+      {showVariance && variance.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-bold mb-3">{t.varianceTitle}</h2>
+          <div className="space-y-2">
+            {variance.map(({ p, delta }) => {
+              const e = employees.find((x) => x.id === p.employeeId);
+              if (!e) return null;
+              const up = delta > 0;
+              return (
+                <div key={p.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold truncate">{lang === "en" ? e.fullNameEn : e.fullNameAr}</p>
+                    <p className="text-[10px] text-gray-400">
+                      {p.bonus > 0 ? (lang === "en" ? "Performance bonus" : "مكافأة أداء") : p.overtime > 0 ? (lang === "en" ? "Overtime hours" : "ساعات إضافية") : p.retroAdjustment !== 0 ? (lang === "en" ? "Retro adjustment" : "تسوية بأثر رجعي") : (lang === "en" ? "Salary adjustment" : "تعديل راتب")}
+                    </p>
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs font-bold ${up ? "text-emerald-600" : "text-red-600"}`}>
+                    {up ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                    {formatSAR(Math.abs(delta))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {toast && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed bottom-6 start-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-lg z-50">
+          {toast}
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+function SummaryCard({ icon: Icon, color, label, value }: { icon: typeof Wallet; color: string; label: string; value: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: color + "15" }}>
+          <Icon size={14} style={{ color }} />
+        </div>
+        <p className="text-[11px] text-gray-500 font-semibold uppercase">{label}</p>
+      </div>
+      <p className="text-lg font-bold">{value}</p>
+    </div>
+  );
+}
