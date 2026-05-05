@@ -1,6 +1,7 @@
-import { FileText, Table2, Grid3x3, ListChecks } from "lucide-react";
-import type { SimState, WorkspaceWidget } from "@/lib/sim/types";
+import { FileText, Table2, Grid3x3, ListChecks, Users, ArrowRight } from "lucide-react";
+import type { BiText, SimState, WorkspaceWidget } from "@/lib/sim/types";
 import { useLang, tStr } from "@/lib/lang";
+import { useToast } from "@/hooks/use-toast";
 
 const KIND_ICON = {
   doc: FileText,
@@ -38,14 +39,66 @@ export default function WorkspaceTab({ state }: { state: SimState }) {
 
 function Widget({ widget }: { widget: WorkspaceWidget }) {
   const { lang } = useLang();
+  const { toast } = useToast();
   const Icon = KIND_ICON[widget.kind] ?? FileText;
+
+  // Special case: april-status — render as a 3-card client status row,
+  // spanning the full grid width. Skips the standard wrapper for a richer layout.
+  if (widget.id === "april-status" && widget.kind === "metric-grid") {
+    return (
+      <section className="bg-white border border-gray-200 rounded-xl overflow-hidden lg:col-span-2">
+        <div className="px-4 py-3 border-b border-gray-100 bg-[#F8F9FA] flex items-center gap-2">
+          <Users size={14} className="text-[#156082]" />
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841]">
+            {tStr(widget.title, lang)}
+          </p>
+        </div>
+        <div className="p-4 grid sm:grid-cols-3 gap-3">
+          {widget.rows.slice(1).map((row, i) => (
+            <ClientStatusCard
+              key={i}
+              name={row[0]}
+              count={row[1]}
+              status={row[2]}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 bg-[#F8F9FA] flex items-center gap-2">
         <Icon size={14} className="text-[#156082]" />
-        <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841]">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841] flex-1">
           {tStr(widget.title, lang)}
         </p>
+        {widget.id === "pending-changes" && widget.kind === "table" && (
+          <button
+            type="button"
+            onClick={() =>
+              toast({
+                title: tStr(
+                  {
+                    en: "Bulk approval requires Payroll Manager authentication.",
+                    ar: "يتطلّب الاعتماد الجماعي مصادقة مدير الرواتب.",
+                  },
+                  lang,
+                ),
+              })
+            }
+            className="text-[10px] font-bold uppercase tracking-widest text-[#196B24] hover:bg-[#196B24]/10 px-2.5 py-1 rounded border border-[#196B24]/40"
+          >
+            {tStr(
+              {
+                en: `Bulk Approve (${Math.max(0, widget.rows.length - 1)})`,
+                ar: `اعتماد جماعي (${Math.max(0, widget.rows.length - 1)})`,
+              },
+              lang,
+            )}
+          </button>
+        )}
       </div>
       <div className="p-4">
         {widget.kind === "doc" && (
@@ -71,6 +124,35 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
                         {tStr(c, lang)}
                       </td>
                     ))}
+                    {widget.id === "pending-changes" && (
+                      <td className="px-2 py-1.5 border-b border-gray-100 text-end">
+                        {i === 0 ? (
+                          <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">
+                            {tStr({ en: "Action", ar: "إجراء" }, lang)}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toast({
+                                title: tStr(
+                                  {
+                                    en: "Opening employee record…",
+                                    ar: "جارٍ فتح سجل الموظف…",
+                                  },
+                                  lang,
+                                ),
+                                description: tStr(row[0] ?? { en: "Item", ar: "عنصر" }, lang),
+                              })
+                            }
+                            className="text-[11px] font-semibold text-[#156082] hover:text-[#0E2841] inline-flex items-center gap-1 hover:underline"
+                          >
+                            {tStr({ en: "Review", ar: "مراجعة" }, lang)}
+                            <ArrowRight size={11} className="rtl:rotate-180" />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -110,6 +192,41 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
           </ul>
         )}
       </div>
+
     </section>
+  );
+}
+
+function ClientStatusCard({
+  name,
+  count,
+  status,
+}: {
+  name?: BiText;
+  count?: BiText;
+  status?: BiText;
+}) {
+  const { lang } = useLang();
+  return (
+    <div className="rounded-lg border border-gray-200 p-4 bg-white">
+      <p className="text-sm font-bold text-[#0E2841] leading-snug">
+        {name ? tStr(name, lang) : "—"}
+      </p>
+      <div className="mt-3 flex items-baseline gap-2">
+        <p className="text-2xl font-extrabold text-[#0E2841] tabular-nums">
+          {count ? tStr(count, lang) : "0"}
+        </p>
+        <p className="text-[10px] uppercase tracking-widest text-gray-500">
+          {tStr({ en: "employees", ar: "موظف" }, lang)}
+        </p>
+      </div>
+      {status && (
+        <div className="mt-3">
+          <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+            {tStr(status, lang)}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

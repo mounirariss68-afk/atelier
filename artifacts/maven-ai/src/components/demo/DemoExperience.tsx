@@ -15,7 +15,7 @@ import {
   Target,
   ScrollText,
   Gauge,
-  Radio,
+  AlertTriangle,
 } from "lucide-react";
 import { useScenarioEngine } from "@/lib/sim/engine";
 import { useLang, tStr } from "@/lib/lang";
@@ -45,6 +45,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
   const { lang, dir, setLang } = useLang();
   const engine = useScenarioEngine(scenario);
   const [tab, setTab] = useState<TabId>("overview");
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const { state } = engine;
 
   const progress = scenario.events.length
@@ -58,13 +59,17 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
     "awaiting-human": { en: "Awaiting human", ar: "بانتظار الإنسان" },
     complete: { en: "Complete", ar: "اكتمل" },
   };
+  // Status pill mapping per spec: IDLE grey, RUNNING amber (pulsing),
+  // PAUSED amber (no pulse), AWAITING-HUMAN red (treated as Error in
+  // the legend), COMPLETE green.
   const statusColor: Record<string, string> = {
-    idle: "#666",
-    playing: "#196B24",
+    idle: "#7C8A99",
+    playing: "#F5A623",
     paused: "#F5A623",
     "awaiting-human": "#D9534F",
-    complete: "#156082",
+    complete: "#196B24",
   };
+  const statusPulses = state.status === "playing";
 
   return (
     <div
@@ -98,7 +103,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
             }}
           >
             <span
-              className="w-1.5 h-1.5 rounded-full"
+              className={`w-1.5 h-1.5 rounded-full ${statusPulses ? "animate-pulse" : ""}`}
               style={{ background: statusColor[state.status] }}
             />
             {tStr(statusLabel[state.status], lang)}
@@ -107,14 +112,24 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
             type="button"
             onClick={() => setLang(lang === "en" ? "ar" : "en")}
             className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"
-            title="Toggle language"
+            title={tStr(
+              {
+                en: lang === "en"
+                  ? "Switch to Arabic (RTL layout)"
+                  : "Switch to English (LTR layout)",
+                ar: lang === "en"
+                  ? "التبديل إلى العربية (تخطيط من اليمين إلى اليسار)"
+                  : "التبديل إلى الإنجليزية (تخطيط من اليسار إلى اليمين)",
+              },
+              lang,
+            )}
           >
             <Globe size={14} />
             {lang === "en" ? "AR" : "EN"}
           </button>
           <button
             type="button"
-            onClick={engine.reset}
+            onClick={() => setShowResetConfirm(true)}
             className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"
             title={tStr({ en: "Reset demo", ar: "إعادة العرض" }, lang)}
           >
@@ -130,13 +145,13 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
             {tStr({ en: "Exit", ar: "خروج" }, lang)}
           </Link>
         </div>
-        {/* Progress bar */}
+        {/* Progress bar — blue while running, green at 100% */}
         <div className="h-0.5 bg-black/30">
           <div
             className="h-full transition-all duration-300"
             style={{
               width: `${progress}%`,
-              background: scenario.accent,
+              background: progress >= 100 ? "#196B24" : "#156082",
             }}
           />
         </div>
@@ -165,33 +180,16 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
               </button>
             );
           })}
-          <div className="mt-auto p-4 border-t border-gray-100">
-            <div className="flex items-center gap-2 text-[10px] text-gray-500">
-              <Gauge size={12} />
-              <span>
-                {tStr({ en: "Speed", ar: "السرعة" }, lang)}: {state.speedMs}ms
-              </span>
-            </div>
-            <input
-              type="range"
-              min={300}
-              max={3000}
-              step={100}
-              value={state.speedMs}
-              onChange={(e) => engine.setSpeed(Number(e.target.value))}
-              className="w-full mt-2"
-            />
-          </div>
         </nav>
 
-        {/* Content area */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        {/* Content area — extra bottom padding so the sticky bar never overlaps */}
+        <div className="flex-1 min-w-0 overflow-y-auto" style={{ paddingBottom: 72 }}>
           <div className="max-w-7xl mx-auto p-5 space-y-5">
             {/* Cockpit always at the top */}
             <AgentCockpit scenario={scenario} state={state} />
             <div>
               {tab === "overview" && <OverviewTab scenario={scenario} />}
-              {tab === "inbox" && <LiveInboxTab state={state} />}
+              {tab === "inbox" && <LiveInboxTab state={state} scenario={scenario} />}
               {tab === "workflows" && <WorkflowsTab scenario={scenario} />}
               {tab === "workspace" && <WorkspaceTab state={state} />}
               {tab === "kpis" && <KpisTab state={state} />}
@@ -201,8 +199,18 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
         </div>
       </div>
 
-      {/* Bottom tick controls */}
-      <footer className="flex-shrink-0 h-14 bg-white border-t border-gray-200 px-4 flex items-center gap-2">
+      {/* Sticky bottom tick bar */}
+      <footer
+        className="bg-white border-t border-gray-200 px-4 flex items-center gap-2 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]"
+        style={{
+          position: "fixed",
+          insetInlineStart: 0,
+          insetInlineEnd: 0,
+          bottom: 0,
+          height: 56,
+          zIndex: 40,
+        }}
+      >
         <button
           type="button"
           onClick={engine.play}
@@ -243,6 +251,22 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
           <RotateCcw size={14} />
           {tStr({ en: "Rewind", ar: "تراجع" }, lang)}
         </button>
+        {/* Speed slider — between Rewind and Simulate Exception */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200">
+          <Gauge size={12} className="text-gray-500" />
+          <span className="text-[10px] text-gray-500 font-mono whitespace-nowrap">
+            {tStr({ en: "Speed", ar: "السرعة" }, lang)}: {state.speedMs}ms
+          </span>
+          <input
+            type="range"
+            min={300}
+            max={3000}
+            step={100}
+            value={state.speedMs}
+            onChange={(e) => engine.setSpeed(Number(e.target.value))}
+            className="w-28"
+          />
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -253,12 +277,12 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
               kind: "think",
               agentId: orchestrator?.id,
               label: {
-                en: "Inbound signal — re-evaluating priorities",
-                ar: "إشارة واردة — إعادة تقييم الأولويات",
+                en: "Exception simulated — re-evaluating priorities",
+                ar: "تمت محاكاة استثناء — إعادة تقييم الأولويات",
               },
               detail: {
-                en: "User injected a live event. The orchestrator absorbs it into its working context without restarting the run.",
-                ar: "أدخل المستخدم حدثاً مباشراً. يستوعبه المنسّق ضمن السياق العامل دون إعادة التشغيل.",
+                en: "User simulated an exception. The orchestrator absorbs it into its working context without restarting the run.",
+                ar: "حاكى المستخدم استثناءً. يستوعبه المنسّق ضمن السياق العامل دون إعادة التشغيل.",
               },
             });
           }}
@@ -266,14 +290,14 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
           className="px-3 py-2 rounded-lg border border-[#F5A623]/50 text-[#5A3000] bg-[#F5A623]/10 hover:bg-[#F5A623]/20 text-sm inline-flex items-center gap-2 disabled:opacity-40"
           title={tStr(
             {
-              en: "Inject a live event into the running cockpit",
-              ar: "أدخل حدثاً مباشراً إلى قمرة التشغيل",
+              en: "Inject a synthetic exception (e.g. an unexpected document or compliance flag) to see how the orchestrator reacts in real time.",
+              ar: "أدخِل استثناءً اصطناعياً (مثل وثيقة غير متوقعة أو تنبيه امتثال) لمشاهدة كيفية تفاعل المنسّق في الوقت الفعلي.",
             },
             lang,
           )}
         >
-          <Radio size={14} />
-          {tStr({ en: "Inject event", ar: "أدخل حدثاً" }, lang)}
+          <AlertTriangle size={14} />
+          {tStr({ en: "Simulate Exception", ar: "محاكاة استثناء" }, lang)}
         </button>
         <div className="flex-1" />
         <p className="text-xs text-gray-500">
@@ -287,6 +311,53 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
         onResolve={engine.resolveCheckpoint}
         onDismiss={engine.pause}
       />
+
+      {/* Reset confirmation modal */}
+      {showResetConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowResetConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <p className="text-lg font-bold text-[#0E2841] mb-2">
+              {tStr({ en: "Reset Demo?", ar: "إعادة العرض؟" }, lang)}
+            </p>
+            <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+              {tStr(
+                {
+                  en: "This will rewind the cockpit to step 0 and discard the current run trace. Pre-seeded history (previous runs, KPIs at start) is kept.",
+                  ar: "سيؤدي ذلك إلى إعادة القمرة إلى الخطوة 0 وحذف سجل الدورة الحالية. سيتم الاحتفاظ بالتاريخ المعبأ مسبقاً (الدورات السابقة والمؤشرات الأولية).",
+                },
+                lang,
+              )}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                {tStr({ en: "Cancel", ar: "إلغاء" }, lang)}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  engine.reset();
+                  setShowResetConfirm(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-[#D9534F] text-white text-sm font-bold hover:bg-[#B83A36]"
+              >
+                {tStr({ en: "Reset", ar: "إعادة" }, lang)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -194,6 +194,7 @@ const scenario: Scenario = {
     {
       id: "payroll-manager",
       human: { en: "Payroll Manager", ar: "مدير الرواتب" },
+      afterAgentId: "salary-calc",
       question: {
         en: "Approve the calculated payroll for April 2026?",
         ar: "هل توافق على الرواتب المحتسبة لشهر أبريل 2026؟",
@@ -221,6 +222,7 @@ const scenario: Scenario = {
     {
       id: "finance-controller",
       human: { en: "Finance Controller", ar: "المراقب المالي" },
+      afterAgentId: "bank-transfer",
       question: {
         en: "Approve bank transfer file for SAR 487,250?",
         ar: "هل توافق على ملف التحويلات البنكية بقيمة 487,250 ريال؟",
@@ -248,6 +250,7 @@ const scenario: Scenario = {
     {
       id: "compliance-officer",
       human: { en: "Compliance Officer", ar: "مسؤول الامتثال" },
+      afterAgentId: "compliance-audit",
       question: {
         en: "Approve GOSI and Mudad submissions for April?",
         ar: "هل توافق على إيداعات التأمينات الاجتماعية ونظام مُدد لشهر أبريل؟",
@@ -293,12 +296,27 @@ const scenario: Scenario = {
         { agentId: "doc-intelligence", label: { en: "Digitize HR documents", ar: "رقمنة وثائق الموارد البشرية" } },
         { agentId: "employee-records", label: { en: "Update employee records", ar: "تحديث سجلات الموظفين" } },
         { agentId: "salary-calc", label: { en: "Calculate payroll", ar: "احتساب الرواتب" } },
+        {
+          kind: "checkpoint",
+          human: { en: "Payroll Manager", ar: "مدير الرواتب" },
+          label: { en: "Payroll Manager Approval", ar: "موافقة مدير الرواتب" },
+        },
         { agentId: "leave-attendance", label: { en: "Validate leave & attendance", ar: "التحقق من الإجازات والحضور" } },
         { agentId: "eosb-provisions", label: { en: "Compute EOSB provisions", ar: "احتساب مخصصات نهاية الخدمة" } },
         { agentId: "gosi-compliance", label: { en: "Generate GOSI file", ar: "إنشاء ملف التأمينات" } },
         { agentId: "mudad-filing", label: { en: "Prepare Mudad file", ar: "تجهيز ملف نظام مُدد" } },
         { agentId: "bank-transfer", label: { en: "Prepare bank transfers", ar: "تجهيز التحويلات البنكية" } },
+        {
+          kind: "checkpoint",
+          human: { en: "Finance Controller", ar: "المراقب المالي" },
+          label: { en: "Finance Controller Sign-off", ar: "اعتماد المراقب المالي" },
+        },
         { agentId: "compliance-audit", label: { en: "Run compliance audit", ar: "تنفيذ تدقيق الامتثال" } },
+        {
+          kind: "checkpoint",
+          human: { en: "Compliance Officer", ar: "مسؤول الامتثال" },
+          label: { en: "Compliance Officer Authorisation", ar: "تفويض مسؤول الامتثال" },
+        },
       ],
     },
     {
@@ -316,6 +334,11 @@ const scenario: Scenario = {
         { agentId: "doc-intelligence", label: { en: "Digitize termination letter", ar: "رقمنة خطاب إنهاء الخدمة" } },
         { agentId: "employee-records", label: { en: "Set status to Notice Period", ar: "تعيين الحالة كفترة إشعار" } },
         { agentId: "eosb-provisions", label: { en: "Calculate EOSB", ar: "احتساب مكافأة نهاية الخدمة" } },
+        {
+          kind: "checkpoint",
+          human: { en: "Finance Controller", ar: "المراقب المالي" },
+          label: { en: "Finance Controller Sign-off", ar: "اعتماد المراقب المالي" },
+        },
         { agentId: "salary-calc", label: { en: "Compute final settlement", ar: "احتساب التسوية النهائية" } },
         { agentId: "leave-attendance", label: { en: "Process leave encashment", ar: "معالجة بدل الإجازات" } },
         { agentId: "bank-transfer", label: { en: "Prepare settlement transfer", ar: "تجهيز تحويل التسوية" } },
@@ -324,16 +347,53 @@ const scenario: Scenario = {
     },
   ],
   kpis: [
-    { id: "payroll-accuracy", label: { en: "Payroll Accuracy", ar: "دقة الرواتب" }, initial: "99.7%" },
-    { id: "sla-compliance", label: { en: "SLA Compliance", ar: "الالتزام باتفاقية الخدمة" }, initial: "96.2%" },
-    { id: "gosi-filing-rate", label: { en: "GOSI Filing Rate", ar: "نسبة إيداع التأمينات" }, initial: "100%" },
-    { id: "avg-processing-time", label: { en: "Avg Processing Time", ar: "متوسط زمن المعالجة" }, initial: "4.2 hrs" },
-    { id: "exception-rate", label: { en: "Exception Rate", ar: "نسبة الاستثناءات" }, initial: "2.1%" },
-    { id: "mudad-compliance", label: { en: "Mudad Compliance", ar: "الالتزام بنظام مُدد" }, initial: "98.5%" },
+    {
+      id: "payroll-accuracy",
+      label: { en: "Payroll Accuracy", ar: "دقة الرواتب" },
+      initial: "99.7%",
+      initialDelta: "+0.2%",
+      improvementDirection: "up",
+    },
+    {
+      id: "sla-compliance",
+      label: { en: "SLA Compliance", ar: "الالتزام باتفاقية الخدمة" },
+      initial: "96.2%",
+      initialDelta: "-1.1%",
+      improvementDirection: "up",
+    },
+    {
+      id: "gosi-filing-rate",
+      label: { en: "GOSI Filing Rate", ar: "نسبة إيداع التأمينات" },
+      initial: "100%",
+      initialDelta: "0.0%",
+      improvementDirection: "neutral",
+    },
+    {
+      id: "avg-processing-time",
+      label: { en: "Avg Processing Time", ar: "متوسط زمن المعالجة" },
+      initial: "4.2 hrs",
+      initialDelta: "+0.3 hrs",
+      improvementDirection: "down",
+    },
+    {
+      id: "exception-rate",
+      label: { en: "Exception Rate", ar: "نسبة الاستثناءات" },
+      initial: "2.1%",
+      initialDelta: "-0.4%",
+      improvementDirection: "down",
+    },
+    {
+      id: "mudad-compliance",
+      label: { en: "Mudad Compliance", ar: "الالتزام بنظام مُدد" },
+      initial: "98.5%",
+      initialDelta: "+0.5%",
+      improvementDirection: "up",
+    },
   ],
   initialInbox: [
     {
       id: "inbox-monthly-cycle",
+      agentId: "payroll-orchestrator",
       source: { en: "Automated Scheduler", ar: "الجدولة الآلية" },
       subject: {
         en: "Monthly Payroll Cycle — April 2026",
@@ -345,9 +405,12 @@ const scenario: Scenario = {
       },
       receivedAt: "May 1, 08:00",
       status: "new",
+      severity: "new",
+      action: "start-run",
     },
     {
       id: "inbox-gosi-deadline",
+      agentId: "gosi-compliance",
       source: { en: "GOSI Compliance Agent", ar: "وكيل التزام التأمينات" },
       subject: {
         en: "GOSI Filing Deadline — May 15",
@@ -359,9 +422,12 @@ const scenario: Scenario = {
       },
       receivedAt: "May 1, 08:02",
       status: "new",
+      severity: "warning",
+      action: "view-calendar",
     },
     {
       id: "inbox-new-documents",
+      agentId: "doc-intelligence",
       source: { en: "Document Intelligence Agent", ar: "وكيل ذكاء الوثائق" },
       subject: {
         en: "New Documents Received — 4 Documents",
@@ -373,9 +439,12 @@ const scenario: Scenario = {
       },
       receivedAt: "May 1, 07:45",
       status: "new",
+      severity: "info",
+      action: "review-docs",
     },
     {
       id: "inbox-saudization-alert",
+      agentId: "compliance-audit",
       source: { en: "Compliance & Audit Agent", ar: "وكيل الامتثال والتدقيق" },
       subject: {
         en: "Saudization Alert — Vertex Tech",
@@ -388,6 +457,8 @@ const scenario: Scenario = {
       receivedAt: "May 1, 07:30",
       status: "new",
       accent: "#DC2626",
+      severity: "critical",
+      action: "view-report",
     },
   ],
   initialWorkspace: [
@@ -1100,6 +1171,171 @@ const scenario: Scenario = {
       },
     },
   ],
+  readyToRun: {
+    title: { en: "Ready to Run — 3 clients queued", ar: "جاهز للتشغيل — 3 عملاء في الطابور" },
+    rows: [
+      [
+        { en: "Client", ar: "العميل" },
+        { en: "Employees", ar: "الموظفون" },
+        { en: "Cutoff Day", ar: "يوم الإقفال" },
+      ],
+      [
+        { en: "Al-Nakhla Construction", ar: "النخلة للمقاولات" },
+        { en: "18", ar: "18" },
+        { en: "25", ar: "25" },
+      ],
+      [
+        { en: "Luma Retail Group", ar: "مجموعة لوما للتجزئة" },
+        { en: "14", ar: "14" },
+        { en: "22", ar: "22" },
+      ],
+      [
+        { en: "Vertex Tech Solutions", ar: "فيرتكس لحلول التقنية" },
+        { en: "10", ar: "10" },
+        { en: "28", ar: "28" },
+      ],
+    ],
+    triggerNote: {
+      en: "Trigger: May 5, 2026 — mid-cycle prep. April fully settled and paid. May cycle in preparation.",
+      ar: "المحفّز: 5 مايو 2026 — تحضير منتصف الدورة. اكتملت أبريل ودُفعت. مايو قيد التحضير.",
+    },
+  },
+  previousRun: {
+    label: {
+      en: "Previous Run — April 2026 (Completed)",
+      ar: "الدورة السابقة — أبريل 2026 (مكتملة)",
+    },
+    currentLabel: {
+      en: "Current Run — May 2026 (In Progress)",
+      ar: "الدورة الحالية — مايو 2026 (قيد التنفيذ)",
+    },
+    entries: [
+      {
+        id: "p01",
+        kind: "think",
+        agentId: "payroll-orchestrator",
+        label: {
+          en: "Cycle initiated — April 2026",
+          ar: "تم بدء الدورة — أبريل 2026",
+        },
+        detail: {
+          en: "Apr 1, 08:00 — 3 clients, 41 employees scheduled. 5 pending changes detected.",
+          ar: "1 أبريل 08:00 — 3 عملاء، 41 موظفاً مُجدول. تم اكتشاف 5 تغييرات معلّقة.",
+        },
+      },
+      {
+        id: "p02",
+        kind: "tool-call",
+        agentId: "doc-intelligence",
+        toolName: "digitize_document",
+        label: { en: "3 documents digitized", ar: "تمت رقمنة 3 وثائق" },
+        detail: {
+          en: "Apr 1, 08:14 — 1 promotion, 1 salary adjustment, 1 leave request. Average confidence 98%.",
+          ar: "1 أبريل 08:14 — ترقية واحدة، تعديل راتب، طلب إجازة. الثقة 98% في المتوسط.",
+        },
+      },
+      {
+        id: "p03",
+        kind: "tool-call",
+        agentId: "employee-records",
+        label: { en: "Employee record changes applied", ar: "تطبيق تغييرات سجلات الموظفين" },
+        detail: {
+          en: "Apr 1, 08:31 — 5 records updated across 3 clients. No conflicts.",
+          ar: "1 أبريل 08:31 — تم تحديث 5 سجلات لدى 3 عملاء. لا توجد تعارضات.",
+        },
+      },
+      {
+        id: "p04",
+        kind: "tool-call",
+        agentId: "salary-calc",
+        toolName: "calculate_payroll",
+        label: { en: "April payroll calculated — SAR 462,800", ar: "احتساب رواتب أبريل — 462,800 ريال" },
+        detail: {
+          en: "Apr 1, 09:48 — 41 employees gross-to-net. 1 minor rounding correction auto-applied.",
+          ar: "1 أبريل 09:48 — 41 موظفاً من الإجمالي إلى الصافي. تم تصحيح تقريب بسيط آلياً.",
+        },
+      },
+      {
+        id: "p05",
+        kind: "decision",
+        label: {
+          en: "Payroll Manager Review — Approved by Ahmed Al-Rashidi",
+          ar: "مراجعة مدير الرواتب — معتمدة من أحمد الرشيدي",
+        },
+        detail: {
+          en: "Apr 1, 11:02 — Approved all (recommended). No exceptions raised.",
+          ar: "1 أبريل 11:02 — اعتُمد الكل (موصى به). لا توجد استثناءات.",
+        },
+      },
+      {
+        id: "p06",
+        kind: "tool-call",
+        agentId: "gosi-compliance",
+        toolName: "generate_gosi_file",
+        label: { en: "GOSI + Mudad files generated", ar: "تم إنشاء ملفات التأمينات ونظام مُدد" },
+        detail: {
+          en: "Apr 2, 09:34 — GOSI 41 employees (employer SAR 30,250, employee SAR 18,030); Mudad 41 transactions, SAR 462,800. Mudad v3.2 compliant.",
+          ar: "2 أبريل 09:34 — التأمينات: 41 موظفاً (صاحب العمل 30,250 ريال، الموظفون 18,030 ريال)؛ مُدد: 41 عملية بقيمة 462,800 ريال. متوافق مع إصدار 3.2.",
+        },
+      },
+      {
+        id: "p07",
+        kind: "tool-call",
+        agentId: "bank-transfer",
+        toolName: "prepare_bank_transfers",
+        label: { en: "Bank transfer file prepared — 41 transfers", ar: "تجهيز ملف التحويلات البنكية — 41 تحويلاً" },
+        detail: {
+          en: "Apr 2, 10:05 — 4 banks. All IBANs validated.",
+          ar: "2 أبريل 10:05 — 4 بنوك. تم التحقق من جميع أرقام الآيبان.",
+        },
+      },
+      {
+        id: "p08",
+        kind: "decision",
+        label: {
+          en: "Finance Controller Sign-off — Approved by Sara Al-Otaibi",
+          ar: "اعتماد المراقب المالي — معتمدة من سارة العتيبي",
+        },
+        detail: {
+          en: "Apr 2, 11:48 — Approved all. SAR 462,800 released to banks.",
+          ar: "2 أبريل 11:48 — اعتُمد الكل. تم إصدار 462,800 ريال للبنوك.",
+        },
+      },
+      {
+        id: "p09",
+        kind: "tool-call",
+        agentId: "compliance-audit",
+        toolName: "run_compliance_check",
+        label: { en: "Compliance & Saudization audit complete", ar: "اكتمل تدقيق الامتثال والتوطين" },
+        detail: {
+          en: "Apr 2, 14:20 — All 3 clients within Nitaqat. No labour-law flags.",
+          ar: "2 أبريل 14:20 — جميع العملاء الثلاثة ضمن نطاقات. لا توجد تنبيهات نظام العمل.",
+        },
+      },
+      {
+        id: "p10",
+        kind: "decision",
+        label: {
+          en: "Compliance Officer Authorisation — Approved by Khalid Al-Zahrani",
+          ar: "تفويض مسؤول الامتثال — معتمد من خالد الزهراني",
+        },
+        detail: {
+          en: "Apr 2, 15:10 — Approved both GOSI and Mudad submissions. All 3 clients within Nitaqat.",
+          ar: "2 أبريل 15:10 — اعتُمدت إيداعات التأمينات ونظام مُدد كلاهما. جميع العملاء الثلاثة ضمن نطاقات.",
+        },
+      },
+      {
+        id: "p11",
+        kind: "complete",
+        agentId: "payroll-orchestrator",
+        label: { en: "April 2026 cycle complete", ar: "اكتملت دورة أبريل 2026" },
+        detail: {
+          en: "Apr 2, 15:18 — Cycle closed. Audit trail archived. No outstanding items.",
+          ar: "2 أبريل 15:18 — أُغلقت الدورة. تم أرشفة سجل التدقيق. لا توجد بنود معلّقة.",
+        },
+      },
+    ],
+  },
 };
 
 export default scenario;

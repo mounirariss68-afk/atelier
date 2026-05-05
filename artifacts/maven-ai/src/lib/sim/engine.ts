@@ -25,6 +25,8 @@ function initialState(scenario: Scenario): SimState {
     label: k.label,
     value: k.initial,
     source: k.source,
+    delta: k.initialDelta,
+    improvementDirection: k.improvementDirection,
   }));
   return {
     status: "idle",
@@ -223,6 +225,7 @@ export function useScenarioEngine(scenario: Scenario): EngineApi {
         id: `${cp.id}-resolved-${Date.now()}`,
         kind: "decision",
         agentId: undefined,
+        checkpointId: cp.id,
         label: {
           en: `Human resolved "${cp.question.en}" → ${option?.label.en ?? optionId}`,
           ar: `حسم الإنسان "${cp.question.ar}" → ${option?.label.ar ?? optionId}`,

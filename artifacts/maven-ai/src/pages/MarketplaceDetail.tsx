@@ -498,7 +498,12 @@ export default function MarketplaceDetail() {
                           </span>
                           <span className="text-sm text-gray-800 leading-snug">
                             <span className="font-bold text-[#0E2841]">
-                              {tStr(agentNameById(s.agentId), lang)}
+                              {s.kind === "checkpoint"
+                                ? tStr(
+                                    s.human ?? { en: "Human checkpoint", ar: "نقطة بشرية" },
+                                    lang,
+                                  )
+                                : tStr(agentNameById(s.agentId ?? ""), lang)}
                             </span>{" "}
                             — {tStr(s.label, lang)}
                           </span>

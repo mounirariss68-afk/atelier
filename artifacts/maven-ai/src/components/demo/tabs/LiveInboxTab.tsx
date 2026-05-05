@@ -1,6 +1,22 @@
-import { Inbox, Mail, AlertCircle, CheckCircle2, Clock } from "lucide-react";
-import type { InboxItem, SimState } from "@/lib/sim/types";
+import {
+  Inbox,
+  Mail,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Info,
+  ArrowRight,
+} from "lucide-react";
+import type {
+  InboxActionKind,
+  InboxItem,
+  InboxSeverity,
+  Scenario,
+  SimState,
+} from "@/lib/sim/types";
 import { useLang, tStr } from "@/lib/lang";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_META = {
   new: { icon: Mail, color: "#156082", label: { en: "New", ar: "جديد" } },
@@ -21,7 +37,38 @@ const STATUS_META = {
   },
 } as const;
 
-export default function LiveInboxTab({ state }: { state: SimState }) {
+const SEVERITY_META: Record<
+  InboxSeverity,
+  { color: string; label: { en: string; ar: string }; icon: typeof AlertCircle }
+> = {
+  critical: {
+    color: "#D9534F",
+    label: { en: "Critical", ar: "حرج" },
+    icon: AlertCircle,
+  },
+  warning: {
+    color: "#F5A623",
+    label: { en: "Warning", ar: "تحذير" },
+    icon: AlertTriangle,
+  },
+  info: { color: "#156082", label: { en: "Info", ar: "معلومات" }, icon: Info },
+  new: { color: "#7C8A99", label: { en: "New", ar: "جديد" }, icon: Mail },
+};
+
+const ACTION_LABEL: Record<InboxActionKind, { en: string; ar: string }> = {
+  "start-run": { en: "Start run", ar: "بدء التشغيل" },
+  "view-calendar": { en: "View calendar", ar: "عرض التقويم" },
+  "review-docs": { en: "Review documents", ar: "مراجعة الوثائق" },
+  "view-report": { en: "View report", ar: "عرض التقرير" },
+};
+
+export default function LiveInboxTab({
+  state,
+  scenario,
+}: {
+  state: SimState;
+  scenario?: Scenario;
+}) {
   const { lang } = useLang();
   if (state.inbox.length === 0) {
     return (
@@ -42,19 +89,40 @@ export default function LiveInboxTab({ state }: { state: SimState }) {
   return (
     <div className="space-y-3">
       {state.inbox.map((item) => (
-        <InboxRow key={item.id} item={item} />
+        <InboxRow key={item.id} item={item} scenario={scenario} />
       ))}
     </div>
   );
 }
 
-function InboxRow({ item }: { item: InboxItem }) {
+function InboxRow({ item, scenario }: { item: InboxItem; scenario?: Scenario }) {
   const { lang } = useLang();
+  const { toast } = useToast();
   const meta = STATUS_META[item.status];
   const Icon = meta.icon;
+
+  const agent =
+    item.agentId && scenario
+      ? scenario.agents.find((a) => a.id === item.agentId)
+      : undefined;
+
+  const severity = item.severity;
+  const sevMeta = severity ? SEVERITY_META[severity] : null;
+
+  const action = item.action;
+  const actionLabel = action ? ACTION_LABEL[action] : null;
+
+  const handleAction = () => {
+    if (!actionLabel) return;
+    toast({
+      title: tStr({ en: "Opening…", ar: "جارٍ الفتح…" }, lang),
+      description: tStr(actionLabel, lang),
+    });
+  };
+
   return (
     <div
-      className="bg-white border border-gray-200 rounded-xl p-4 flex gap-4 hover:border-gray-300 transition-colors"
+      className="group bg-white border border-gray-200 rounded-xl p-4 flex gap-4 hover:border-gray-300 transition-colors"
       style={item.accent ? { borderLeft: `3px solid ${item.accent}` } : undefined}
     >
       <div
@@ -72,17 +140,51 @@ function InboxRow({ item }: { item: InboxItem }) {
             {item.receivedAt}
           </span>
         </div>
-        <p className="text-xs text-gray-500 mb-2">{tStr(item.source, lang)}</p>
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          {agent && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-600">
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ background: agent.color }}
+              />
+              {tStr(agent.name, lang)}
+            </span>
+          )}
+          {agent && (
+            <span className="text-gray-300">·</span>
+          )}
+          <p className="text-xs text-gray-500">{tStr(item.source, lang)}</p>
+        </div>
         <p className="text-sm text-gray-700 leading-relaxed line-clamp-2">
           {tStr(item.preview, lang)}
         </p>
-        <div className="mt-2">
-          <span
-            className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
-            style={{ backgroundColor: meta.color + "1A", color: meta.color }}
-          >
-            {tStr(meta.label, lang)}
-          </span>
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          {sevMeta ? (
+            <span
+              className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: sevMeta.color + "1A", color: sevMeta.color }}
+            >
+              <sevMeta.icon size={10} />
+              {tStr(sevMeta.label, lang)}
+            </span>
+          ) : (
+            <span
+              className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: meta.color + "1A", color: meta.color }}
+            >
+              {tStr(meta.label, lang)}
+            </span>
+          )}
+          {actionLabel && (
+            <button
+              type="button"
+              onClick={handleAction}
+              className="ms-auto text-[11px] font-semibold text-[#156082] hover:text-white hover:bg-[#156082] inline-flex items-center gap-1 px-2.5 py-1 rounded border border-[#156082]/40 transition-colors md:opacity-0 md:group-hover:opacity-100"
+            >
+              {tStr(actionLabel, lang)}
+              <ArrowRight size={12} className="rtl:rotate-180" />
+            </button>
+          )}
         </div>
       </div>
     </div>

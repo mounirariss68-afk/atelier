@@ -1,4 +1,13 @@
-import { Brain, Wrench, GitBranch, ArrowRight, UserCheck, CheckCircle2, Sparkles, Download } from "lucide-react";
+import {
+  Brain,
+  Wrench,
+  GitBranch,
+  ArrowRight,
+  UserCheck,
+  CheckCircle2,
+  Sparkles,
+  Download,
+} from "lucide-react";
 import type { Scenario, SimEvent, SimState } from "@/lib/sim/types";
 import type { EngineApi } from "@/lib/sim/engine";
 import { useLang, tStr } from "@/lib/lang";
@@ -26,6 +35,8 @@ export default function AuditLogTab({
   engine?: EngineApi;
 }) {
   const { lang } = useLang();
+  const previousRun = scenario.previousRun;
+  const liveCount = state.trace.length;
 
   function downloadAudit() {
     if (!engine) return;
@@ -45,15 +56,30 @@ export default function AuditLogTab({
     <button
       type="button"
       onClick={downloadAudit}
-      disabled={state.trace.length === 0}
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0E2841] text-white text-xs font-bold hover:bg-[#156082] disabled:opacity-40"
+      disabled={liveCount === 0}
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0E2841] text-white text-xs font-bold hover:bg-[#156082] disabled:opacity-40 disabled:cursor-not-allowed"
+      title={
+        liveCount === 0
+          ? tStr(
+              {
+                en: "Run the simulation first to generate an audit trail for download.",
+                ar: "شغّل المحاكاة أولاً لإنشاء سجل تدقيق قابل للتحميل.",
+              },
+              lang,
+            )
+          : undefined
+      }
     >
       <Download size={12} />
-      {tStr({ en: "Download audit trail (JSON)", ar: "تحميل سجل التدقيق (JSON)" }, lang)}
+      {tStr(
+        { en: "Download audit trail (JSON)", ar: "تحميل سجل التدقيق (JSON)" },
+        lang,
+      )}
     </button>
   ) : null;
 
-  if (state.trace.length === 0) {
+  // Empty state — no live entries AND no previous run.
+  if (liveCount === 0 && (!previousRun || previousRun.entries.length === 0)) {
     return (
       <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-500">
         <p className="text-sm mb-4">
@@ -69,23 +95,67 @@ export default function AuditLogTab({
       </div>
     );
   }
+
   const agentName = (id?: string) =>
     id ? scenario.agents.find((a) => a.id === id)?.name ?? { en: id, ar: id } : null;
   const agentColor = (id?: string) =>
     (id && scenario.agents.find((a) => a.id === id)?.color) || "#156082";
+
+  const totalForCount = liveCount + (previousRun?.entries.length ?? 0);
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
           {tStr(
-            { en: `${state.trace.length} entries`, ar: `${state.trace.length} إدخالاً` },
+            {
+              en: `${totalForCount} entries`,
+              ar: `${totalForCount} إدخالاً`,
+            },
             lang,
           )}
         </p>
         {downloadButton}
       </div>
       <div className="max-h-[640px] overflow-y-auto divide-y divide-gray-100">
+        {previousRun && previousRun.entries.length > 0 && (
+          <>
+            <SectionSeparator
+              label={previousRun.label}
+              tone="muted"
+            />
+            {previousRun.entries.map((ev, i) => (
+              <Row
+                key={`prev-${ev.id}`}
+                ev={ev}
+                index={i + 1}
+                agent={agentName(ev.agentId)}
+                color={agentColor(ev.agentId)}
+                muted
+              />
+            ))}
+            <SectionSeparator
+              label={
+                previousRun.currentLabel ?? {
+                  en: "Current Run (In Progress)",
+                  ar: "الدورة الحالية (قيد التنفيذ)",
+                }
+              }
+              tone="active"
+            />
+            {liveCount === 0 && (
+              <p className="px-4 py-4 text-xs text-gray-500 italic">
+                {tStr(
+                  {
+                    en: "No current-run entries yet. Press Play to begin.",
+                    ar: "لا توجد إدخالات للدورة الحالية بعد. اضغط تشغيل للبدء.",
+                  },
+                  lang,
+                )}
+              </p>
+            )}
+          </>
+        )}
         {state.trace.map((ev, i) => (
           <Row
             key={ev.id}
@@ -100,21 +170,53 @@ export default function AuditLogTab({
   );
 }
 
+function SectionSeparator({
+  label,
+  tone,
+}: {
+  label: { en: string; ar: string };
+  tone: "muted" | "active";
+}) {
+  const { lang } = useLang();
+  return (
+    <div
+      className="px-4 py-2"
+      style={{
+        background: tone === "muted" ? "#F8F9FA" : "#FEF7E5",
+      }}
+    >
+      <p
+        className="text-[10px] uppercase tracking-widest font-bold italic"
+        style={{
+          color: tone === "muted" ? "#7C8A99" : "#5A3000",
+        }}
+      >
+        {tStr(label, lang)}
+      </p>
+    </div>
+  );
+}
+
 function Row({
   ev,
   index,
   agent,
   color,
+  muted = false,
 }: {
   ev: SimEvent;
   index: number;
   agent: { en: string; ar: string } | null;
   color: string;
+  muted?: boolean;
 }) {
   const { lang } = useLang();
   const Icon = ICON_FOR[ev.kind] ?? Sparkles;
   return (
-    <div className="px-4 py-3 flex gap-3">
+    <div
+      className="px-4 py-3 flex gap-3"
+      style={muted ? { opacity: 0.72, background: "#FAFBFC" } : undefined}
+    >
       <span className="w-8 text-[10px] text-gray-400 font-mono pt-1">#{index}</span>
       <div
         className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"

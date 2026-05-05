@@ -1,6 +1,6 @@
-import { Zap, ArrowRight } from "lucide-react";
-import type { Scenario } from "@/lib/sim/types";
-import { useLang, tStr } from "@/lib/lang";
+import { Zap, ArrowRight, UserCheck } from "lucide-react";
+import type { Scenario, WorkflowStepDef } from "@/lib/sim/types";
+import { useLang, tStr, type Lang } from "@/lib/lang";
 
 export default function WorkflowsTab({ scenario }: { scenario: Scenario }) {
   const { lang } = useLang();
@@ -37,23 +37,7 @@ export default function WorkflowsTab({ scenario }: { scenario: Scenario }) {
           <ol className="flex flex-wrap items-stretch gap-2">
             {w.steps.map((s, i) => (
               <li key={i} className="flex items-center gap-2">
-                <div
-                  className="px-3 py-2 rounded-lg border bg-white"
-                  style={{
-                    borderColor: agentColor(s.agentId) + "55",
-                    backgroundColor: agentColor(s.agentId) + "0D",
-                  }}
-                >
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-widest"
-                    style={{ color: agentColor(s.agentId) }}
-                  >
-                    {tStr(agentName(s.agentId), lang)}
-                  </p>
-                  <p className="text-xs text-[#0E2841] mt-0.5">
-                    {tStr(s.label, lang)}
-                  </p>
-                </div>
+                {renderStep(s, agentName, agentColor, lang)}
                 {i < w.steps.length - 1 && (
                   <ArrowRight
                     size={14}
@@ -65,6 +49,50 @@ export default function WorkflowsTab({ scenario }: { scenario: Scenario }) {
           </ol>
         </section>
       ))}
+    </div>
+  );
+}
+
+function renderStep(
+  s: WorkflowStepDef,
+  agentName: (id: string) => { en: string; ar: string },
+  agentColor: (id: string) => string,
+  lang: Lang,
+) {
+  if (s.kind === "checkpoint") {
+    return (
+      <div
+        className="px-3 py-2 rounded-lg bg-[#FEF7E5]"
+        style={{
+          border: "1.5px dashed #F5A623",
+        }}
+      >
+        <div className="flex items-center gap-1.5">
+          <UserCheck size={11} className="text-[#F5A623]" />
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A3000]">
+            {s.human ? tStr(s.human, lang) : tStr({ en: "Human", ar: "إنسان" }, lang)}
+          </p>
+        </div>
+        <p className="text-xs text-[#0E2841] mt-0.5">{tStr(s.label, lang)}</p>
+      </div>
+    );
+  }
+  const id = s.agentId ?? "";
+  return (
+    <div
+      className="px-3 py-2 rounded-lg border bg-white"
+      style={{
+        borderColor: agentColor(id) + "55",
+        backgroundColor: agentColor(id) + "0D",
+      }}
+    >
+      <p
+        className="text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: agentColor(id) }}
+      >
+        {tStr(agentName(id), lang)}
+      </p>
+      <p className="text-xs text-[#0E2841] mt-0.5">{tStr(s.label, lang)}</p>
     </div>
   );
 }

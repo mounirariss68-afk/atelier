@@ -84,7 +84,7 @@ export default function OverviewTab({ scenario }: Props) {
 
         <Card
           icon={<Target size={16} className="text-[#156082]" />}
-          title={{ en: "KPIs in this demo", ar: "مؤشرات الأداء" }}
+          title={{ en: "Performance Metrics", ar: "مؤشرات الأداء" }}
           count={scenario.kpis.length}
         >
           <ul className="space-y-2">
