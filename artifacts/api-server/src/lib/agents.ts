@@ -1184,44 +1184,8 @@ function buildDealerContext(ctx: ArcelikContext) {
 }
 
 function baselineDealer(ctx: ArcelikContext, language: "tr" | "en"): RawRecommendation[] {
-  const { lowCompliance, underperforming, stockGaps, totalDealers } = buildDealerContext(ctx);
-  if (lowCompliance.length === 0 && underperforming.length === 0 && stockGaps.length === 0) {
-    return [
-      {
-        type: "dealer-healthy",
-        title: language === "tr" ? "Bayi Ağı Sağlıklı" : "Dealer Network Healthy",
-        summary:
-          language === "tr"
-            ? `${totalDealers} bayinin tamamı uyum (>80) ve hedef ilerlemesi (>%70) eşiklerinin üstünde.`
-            : `All ${totalDealers} dealers above compliance (>80) and target progress (>70%) thresholds.`,
-        targetRole: "marketing",
-        severity: "low",
-        confidence: 78,
-        reasoning: [
-          {
-            source: language === "tr" ? "Bayi KPI Taraması" : "Dealer KPI Scan",
-            observation:
-              language === "tr"
-                ? `${totalDealers} bayide uyum ve hedef metrikleri eşiğin üstünde.`
-                : `${totalDealers} dealers all above compliance + target thresholds.`,
-            conclusion:
-              language === "tr" ? "Operasyonel müdahaleye gerek yok." : "No operational intervention required.",
-          },
-          {
-            source: language === "tr" ? "Sürdürme Notu" : "Sustain Note",
-            observation:
-              language === "tr" ? "Mevcut coaching programı çalışıyor." : "Current coaching program is effective.",
-            conclusion:
-              language === "tr" ? "Devam et, çeyreklik gözden geçir." : "Continue, review quarterly.",
-          },
-        ],
-        impact: { revenue: "+₺0M", margin: "+0.0%", share: "+0.0pp" },
-        recommendedAction:
-          language === "tr" ? "Mevcut programı sürdür, çeyreklik review yap." : "Sustain current program, quarterly review.",
-        alternatives: [language === "tr" ? "Üst performansçıları örnek olay olarak yay" : "Spotlight top performers as case studies"],
-      },
-    ];
-  }
+  const { lowCompliance, underperforming, stockGaps, challengingCities, totalDealers } =
+    buildDealerContext(ctx);
   const recs: RawRecommendation[] = [];
   if (lowCompliance.length > 0) {
     const sample = lowCompliance.slice(0, 3);
@@ -1309,7 +1273,152 @@ function baselineDealer(ctx: ArcelikContext, language: "tr" | "en"): RawRecommen
           : ["Temporary target revision", "Field rep assignment"],
     });
   }
-  return recs.length > 0 ? recs : baselineDealer({ ...ctx, dealers: [] }, language);
+  if (stockGaps.length > 0) {
+    const sample = stockGaps.slice(0, 3);
+    const totalLowCategories = stockGaps.reduce(
+      (s, g) => s + g.lowStockCategories.length,
+      0,
+    );
+    recs.push({
+      type: "dealer-stock-gap",
+      title:
+        language === "tr"
+          ? `${stockGaps.length} bayide kritik stok açığı`
+          : `${stockGaps.length} dealers with critical stock gaps`,
+      summary:
+        language === "tr"
+          ? `${stockGaps.length} bayide en az bir kategoride stok 5 adetin altında (toplam ${totalLowCategories} kategori). Örnek: ${sample.map((s) => `${s.dealer} (${s.lowStockCategories.join(", ")})`).join(" | ")}.`
+          : `${stockGaps.length} dealers have at least one category below 5 units (${totalLowCategories} categories total). Example: ${sample.map((s) => `${s.dealer} (${s.lowStockCategories.join(", ")})`).join(" | ")}.`,
+      targetRole: "marketing",
+      severity: "high",
+      confidence: 80,
+      reasoning: [
+        {
+          source: language === "tr" ? "Stok Tarama" : "Stock Scan",
+          observation: sample
+            .map((s) => `${s.dealer} (${s.city}, ${s.tier}): ${s.lowStockCategories.join(", ")}`)
+            .join(" | "),
+          conclusion:
+            language === "tr"
+              ? "Açık satış kaybı riski."
+              : "Direct lost-sale risk.",
+        },
+        {
+          source: language === "tr" ? "Lokal Rekabet" : "Local Competition",
+          observation: sample
+            .map((s) =>
+              s.topLocalCompetitor
+                ? `${s.city}: ${s.topLocalCompetitor.brand} (güç ${s.topLocalCompetitor.strength})`
+                : `${s.city}: rakip verisi yok`,
+            )
+            .join(" | "),
+          conclusion:
+            language === "tr"
+              ? "Boş raf rakibe pay aktarır."
+              : "Empty shelves transfer share to local competitors.",
+        },
+      ],
+      impact: { revenue: "+₺3M", margin: "+0.0%", share: "+0.2pp" },
+      recommendedAction:
+        language === "tr"
+          ? `İlgili ${stockGaps.length} bayiye 72 saat içinde öncelikli sevkiyat planla; eksik kategorilerde minimum stok eşiğini 10 adete çıkar.`
+          : `Schedule priority replenishment to the ${stockGaps.length} affected dealers within 72h; raise min-stock threshold to 10 units in the affected categories.`,
+      alternatives:
+        language === "tr"
+          ? ["Komşu bayiden çapraz transfer", "Kategori bazlı yedek stok kuralı"]
+          : ["Cross-dealer transfer from neighbouring stores", "Category-level safety-stock rule"],
+    });
+  }
+  if (challengingCities.length > 0) {
+    const sample = challengingCities.slice(0, 3);
+    recs.push({
+      type: "dealer-market-defense",
+      title:
+        language === "tr"
+          ? `${challengingCities.length} şehirde yapısal pazar zayıflığı`
+          : `${challengingCities.length} cities show structural market weakness`,
+      summary:
+        language === "tr"
+          ? `${challengingCities.length} şehir ya pazar payı düşük (<%30) ya da güçlü yerel rakip (≥7) ile karşı karşıya. En zayıf: ${sample.map((c) => `${c.name} (%${Math.round(c.marketSharePercent)}, ${c.topCompetitor?.brand ?? "-"})`).join(" | ")}.`
+          : `${challengingCities.length} cities show share <30% or a strong local competitor (≥7). Weakest: ${sample.map((c) => `${c.name} (${Math.round(c.marketSharePercent)}%, ${c.topCompetitor?.brand ?? "-"})`).join(" | ")}.`,
+      targetRole: "marketing",
+      severity: "medium",
+      confidence: 76,
+      reasoning: [
+        {
+          source: language === "tr" ? "Şehir Pazar Payı" : "City Market Share",
+          observation: sample
+            .map((c) => `${c.name}: pay %${Math.round(c.marketSharePercent)}, bayi ${c.dealerCount}`)
+            .join(" | "),
+          conclusion:
+            language === "tr"
+              ? "Bayi sayısına rağmen kolektif altta kalma."
+              : "Collective underperformance despite dealer presence.",
+        },
+        {
+          source: language === "tr" ? "Yerel Rakip Gücü" : "Local Competitor Strength",
+          observation: sample
+            .map((c) =>
+              c.topCompetitor
+                ? `${c.name}: ${c.topCompetitor.brand} (güç ${c.topCompetitor.strength})`
+                : `${c.name}: rakip yok`,
+            )
+            .join(" | "),
+          conclusion:
+            language === "tr"
+              ? "Marka konumu güçlendirilmeli."
+              : "Brand positioning needs reinforcement.",
+        },
+      ],
+      impact: { revenue: "+₺5M", margin: "+0.0%", share: "+0.4pp" },
+      recommendedAction:
+        language === "tr"
+          ? `Bu şehirlerde 8 haftalık koordineli POS yatırımı + yerel kampanya başlat; bayi-başına aylık görsel denetim uygula.`
+          : `Launch an 8-week coordinated POS investment + local campaign in these cities; introduce monthly per-dealer visual audits.`,
+      alternatives:
+        language === "tr"
+          ? ["Bölgesel marka elçisi atama", "Sadece en zayıf 2 şehirde pilot"]
+          : ["Assign regional brand ambassadors", "Pilot in the weakest 2 cities only"],
+    });
+  }
+  if (recs.length > 0) return recs;
+  return [
+    {
+      type: "dealer-healthy",
+      title: language === "tr" ? "Bayi Ağı Sağlıklı" : "Dealer Network Healthy",
+      summary:
+        language === "tr"
+          ? `${totalDealers} bayinin tamamı uyum (>80), hedef ilerlemesi (>%70), stok ve şehir göstergeleri açısından eşiklerin üstünde.`
+          : `All ${totalDealers} dealers are above compliance (>80), target progress (>70%), stock, and city-level thresholds.`,
+      targetRole: "marketing",
+      severity: "low",
+      confidence: 78,
+      reasoning: [
+        {
+          source: language === "tr" ? "Bayi KPI Taraması" : "Dealer KPI Scan",
+          observation:
+            language === "tr"
+              ? `${totalDealers} bayide uyum, hedef, stok ve şehir-pay metrikleri eşiğin üstünde.`
+              : `${totalDealers} dealers above compliance, target, stock, and city-share thresholds.`,
+          conclusion:
+            language === "tr" ? "Operasyonel müdahaleye gerek yok." : "No operational intervention required.",
+        },
+        {
+          source: language === "tr" ? "Sürdürme Notu" : "Sustain Note",
+          observation:
+            language === "tr" ? "Mevcut coaching programı çalışıyor." : "Current coaching program is effective.",
+          conclusion:
+            language === "tr" ? "Devam et, çeyreklik gözden geçir." : "Continue, review quarterly.",
+        },
+      ],
+      impact: { revenue: "+₺0M", margin: "+0.0%", share: "+0.0pp" },
+      recommendedAction:
+        language === "tr" ? "Mevcut programı sürdür, çeyreklik review yap." : "Sustain current program, quarterly review.",
+      alternatives: [
+        language === "tr" ? "Üst performansçıları örnek olay olarak yay" : "Spotlight top performers as case studies",
+      ],
+    },
+  ];
 }
 
 // ---------- Public agent runners ----------
