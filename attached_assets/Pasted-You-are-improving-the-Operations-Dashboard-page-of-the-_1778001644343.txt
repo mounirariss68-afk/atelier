@@ -1,0 +1,325 @@
+You are improving the Operations Dashboard page of the Payroll Intelligence Hub manager interface (the file that renders the `/demo/tasama-payroll-hub/manager` route). This is a React/JSX dashboard used by Tasama's payroll operations team to manage cross-client payroll for three demo clients: Al-Nakhla Construction Co., Luma Retail Group, and Vertex Tech Solutions.
+
+ 
+
+Do NOT change any of the underlying data, demo logic, routing, or the other two interfaces (Agent Operations and Client Portal). Only modify the manager Operations Dashboard view. Preserve the existing brand colours (primary blue #2E4DA7, dark navy #1F3864, background white/light grey).
+
+ 
+
+Implement all of the following improvements in order. Each is self-contained — implement them all.
+
+ 
+
+---
+
+ 
+
+## FIX 1 — Critical Alerts: Move overdue/urgent alerts above the fold
+
+ 
+
+Currently the Critical Alerts panel is a right sidebar that only appears after scrolling past the Live Agent Activity feed. Fix this:
+
+ 
+
+- Add a dismissible alert banner strip immediately below the filter bar and above the "Operations Dashboard" heading.
+
+- The banner should iterate over the existing critical alerts data and display each one as a compact row.
+
+- Colour-code by severity using a left border:
+
+ - Red (#DC2626) for status = "overdue"
+
+ - Amber (#D97706) for deadlines within 7 days
+
+ - Yellow (#CA8A04) for deadlines 7–30 days away
+
+- Each alert row must include a small CTA button on the right (e.g. "Review →" or "Sign off →") that navigates to the relevant section or opens the approval queue.
+
+- Each banner row should have an individual × dismiss button that hides that specific alert for the session.
+
+- The existing Critical Alerts sidebar panel can remain but should be de-emphasised since alerts are now surfaced above the fold.
+
+ 
+
+---
+
+ 
+
+## FIX 2 — Pending Decisions: Add role attribution and confidence tooltip
+
+ 
+
+In the Pending Decisions sidebar panel:
+
+ 
+
+- Add a small ⓘ icon next to the "Recommendations awaiting human approval" subtitle. On hover, show a tooltip that reads: "Confidence score reflects the AI's certainty based on data completeness, contract match, and regulatory consistency."
+
+- On each pending decision item, add a small role chip below the decision title showing who needs to act. Use these mappings:
+
+ - "Final settlement — Mohammad Al-Ghamdi" → "Finance Controller"
+
+ - "Salary increase — Noura Al-Salem" → "Payroll Manager"
+
+ - "Vertex Tech — Yellow band recovery plan" → "Compliance Officer"
+
+ - "Approve April 2026 GOSI filing — all 3 clients" → "Compliance Officer"
+
+- Style the role chip as a small pill: light grey background (#F3F4F6), dark grey text, 11px font.
+
+- Confidence badge colour thresholds: ≥95% = green (#16A34A), 80–94% = amber (#D97706), <80% = red (#DC2626).
+
+ 
+
+---
+
+ 
+
+## FIX 3 — Live Agent Activity Feed: Fix inner scroll, add timestamps and status colours
+
+ 
+
+The feed currently uses a fixed-height scrollable inner container (scroll-within-scroll antipattern). Fix this:
+
+ 
+
+- Remove the fixed height + overflow-y scroll wrapper from the feed. Instead render all 16 events naturally and add a "Show earlier events →" button at the bottom that expands to show older entries. Initially show the 8 most recent events.
+
+- Add absolute timestamps: each event currently shows a relative label like "9h". Keep the relative label but add the full datetime as a tooltip on hover (e.g. "5 May 2026, 08:14").
+
+- Colour-code the left-side dot/indicator by event status:
+
+ - Red dot = action required (any event whose subtitle contains "awaiting", "pending", or "approval")
+
+ - Green dot = successful completion (subtitles containing "0 rejections", "0 mismatches", "within tolerance", "healthy")
+
+ - Blue dot = informational / in-progress (everything else)
+
+- On any event whose subtitle contains "awaiting" or "pending", add a small "Review →" inline link at the end of the subtitle text that links to the Approval Queue nav item.
+
+ 
+
+---
+
+ 
+
+## FIX 4 — KPI Cards: Add trend deltas and fix conflated metrics
+
+ 
+
+The four KPI cards at the top of the main content area currently have no trend context. Fix this:
+
+ 
+
+- Add a trend indicator to each card as a small line below the primary value. Format: "▲ 2.1% vs last month" in green for positive trends, "▼ 1.3% vs last month" in red for negative trends. Use these demo values:
+
+ - Active Clients: "▲ 0 new this month" (neutral, grey)
+
+ - Monthly Gross Processed: "▲ 3.2% vs last month" (green)
+
+ - Open Service Requests: "▼ 2 fewer than last month" (green, because fewer is better)
+
+ - Avg Doc Extraction: "▲ 0.4% vs last month" (green)
+
+ 
+
+- The "Open Service Requests" card currently shows "19 Upcoming deadlines (90d)" as a sub-label — this is a different metric. Move the upcoming deadlines count out of that card's sub-label. Instead show "9 open · 2 overdue" as the sub-label (with "overdue" in red), and add a separate fifth mini-stat chip to the right of the four cards (or as a narrow fifth card) labelled "Upcoming Deadlines (90d)" with value "19".
+
+ 
+
+- Split the "Avg Doc Extraction" card into two cards:
+
+ - Card 1: "Doc Extraction Accuracy" — 97.9% — sub-label "Above 95% threshold" (green)
+
+ - Card 2: "Automation Rate" — 95.2% — sub-label "▲ 1.1% vs last month" (green)
+
+ - This means the KPI row becomes a 2-row grid of 3+3 cards or a scrollable 6-card row — use whichever fits the layout better.
+
+ 
+
+---
+
+ 
+
+## FIX 5 — Payroll Cycle Cards: Add pipeline stage indicator and status chip
+
+ 
+
+Each of the three payroll cycle cards (Al-Nakhla, Luma Retail, Vertex Tech) currently only shows cutoff date, settle date, and a T-minus countdown. Improve them:
+
+ 
+
+- Replace the ambiguous spinning circle icon at the top-right of each card with an explicit status chip. Use these demo values:
+
+ - Al-Nakhla Construction Co. → "Awaiting Manager Approval" (amber background #FEF3C7, amber text #92400E)
+
+ - Luma Retail Group → "In Calculation" (blue background #EFF6FF, blue text #1D4ED8)
+
+ - Vertex Tech Solutions → "Documents Processing" (purple background #F5F3FF, purple text #6D28D9)
+
+ 
+
+- Add a 5-step mini progress rail below the client name/employee count line. The steps are: Ingest → Calculate → Approve → File → Settle. Highlight completed steps in brand blue (#2E4DA7), the current step in amber, and future steps in light grey. Use these demo states:
+
+ - Al-Nakhla: Ingest ✓, Calculate ✓, Approve (current), File, Settle
+
+ - Luma Retail: Ingest ✓, Calculate (current), Approve, File, Settle
+
+ - Vertex Tech: Ingest (current), Calculate, Approve, File, Settle
+
+ 
+
+- Make each card clearly clickable (add cursor-pointer, a subtle hover shadow) — clicking should navigate to the Client Portfolio view for that client, or scroll to the relevant section.
+
+ 
+
+---
+
+ 
+
+## FIX 6 — Secondary Metrics Row: Add labels, section title, and benchmarks
+
+ 
+
+The row containing Saudi/Expats, Approval Rate, Human Touchpoints, and Avg Decision Time currently has no section context. Fix this:
+
+ 
+
+- Add a section title above this row: "Process Efficiency — This Month" in the same style as "Payroll cycles — in preparation" (small icon + grey label).
+
+ 
+
+- Saudi/Expats card: Add a proper inline legend directly on the bar. Use a two-tone stacked bar. Below the bar, render two small labelled chips side by side: a dark-blue chip "● 27 Saudi (64.3%)" and a yellow chip "● 15 Expat (35.7%)".
+
+ 
+
+- Approval Rate card: Add a clear breakdown below "71.4%". Show three sub-rows in smaller text:
+
+ - "✓ Auto-approved: 57.1%"
+
+ - "✎ Modified then approved: 14.3%"
+
+ - "✗ Rejected: 14.3%"
+
+ 
+
+- Avg Decision Time card: Add a benchmark line below "18m" that reads "Target: ≤20m ✓" in green text (since 18m is within target).
+
+ 
+
+- Human Touchpoints card: Add a benchmark line below "9 avg per cycle" that reads "Target: ≤12 ✓" in green text.
+
+ 
+
+---
+
+ 
+
+## FIX 7 — Filter Bar: Make the Role dropdown a meaningful view switch
+
+ 
+
+Currently the Role dropdown (All roles / Payroll Manager / Finance Controller / Compliance Officer) does not change the dashboard content. Implement role-based view filtering:
+
+ 
+
+- Replace the plain `<select>` Role dropdown with a segmented button group (pill-style toggle): [All] [Payroll Manager] [Finance Controller] [Compliance Officer].
+
+- When "Payroll Manager" is selected:
+
+ - Highlight Pending Decisions items that require the Payroll Manager (Salary increase — Noura Al-Salem).
+
+ - In the Critical Alerts banner, surface only alerts tagged for this role.
+
+ - In the Live Feed, bold/highlight events tagged with "Payroll Manager".
+
+- When "Finance Controller" is selected:
+
+ - Surface the Mohammad Al-Ghamdi final settlement alert prominently.
+
+ - Filter Pending Decisions to show only Finance Controller items.
+
+- When "Compliance Officer" is selected:
+
+ - Surface GOSI filing and Mudad WPS alerts prominently.
+
+ - Filter Pending Decisions to show only Compliance Officer items.
+
+- "All roles" shows the full unfiltered view (current behaviour).
+
+- The segmented control should use the brand blue (#2E4DA7) for the active segment with white text, and white/light grey for inactive segments.
+
+ 
+
+---
+
+ 
+
+## FIX 8 — Operations Digest Banner: Differentiate from KPI cards, remove duplication
+
+ 
+
+The blue gradient Operations Digest banner currently duplicates data shown in the KPI cards below. Fix this:
+
+ 
+
+- Remove "Average document extraction confidence: 97.9%" and "Total GOSI contribution this month: SAR 76,518" from the Digest bullet list — these are already in the KPI cards.
+
+- Replace those two bullets with narrative cycle-state information:
+
+ - "May 2026 cycle pre-staged — 3 dependencies flagged (Noura increase, Fatima leave, Aisha maternity)."
+
+ - "Next mandatory action: Compliance Officer e-signature on GOSI April 2026 filing by 15 May."
+
+- Keep the "3 clients, 42 employees, SAR 560,532 processed for April 2026" headline as-is.
+
+- Keep "9 open service requests across all clients" and "All 10 specialist agents healthy this cycle."
+
+- Keep "19 regulatory deadlines in the next 90 days."
+
+ 
+
+---
+
+ 
+
+## FIX 9 — Regulatory Calendar: Improve date formatting and add visual urgency
+
+ 
+
+In the Regulatory Calendar sidebar panel:
+
+ 
+
+- Change all date displays from ISO format ("2026-04-27") to a human-friendly format ("27 Apr 2026").
+
+- Make the relative time label ("2 days away", "Overdue") the PRIMARY text (larger, heavier weight) and the absolute date the secondary text (smaller, lighter).
+
+- Add a coloured left border to each calendar row:
+
+ - Red for "Overdue"
+
+ - Amber for ≤7 days away
+
+ - Yellow for 8–30 days away
+
+ - Grey for >30 days away
+
+- Add a small category icon before each event name:
+
+ - 🏦 for Mudad / WPS events
+
+ - 📋 for GOSI events
+
+ - 🌴 for Leave events
+
+ - ✅ for Compliance deadlines
+
+ 
+
+---
+
+ 
+
+## FIX 10 — Navigation: Remove

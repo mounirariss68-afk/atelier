@@ -1,0 +1,65 @@
+ 
+## FIX 10 — Navigation: Remove duplicate AI Assistant entry point
+ 
+Currently "AI Assistant" appears both as a full-width nav item in the left sidebar AND as a button in the top-right filter bar. Fix this:
+ 
+- Remove the "AI Assistant" button from the top-right filter bar area entirely.
+- Keep the AI Assistant item in the left sidebar nav.
+- Instead, add a floating action button (FAB) in the bottom-right corner of the main content area: a round button with a sparkle/AI icon and the label "Ask AI". This is the global UX convention for overlay assistants.
+- The FAB should have the brand blue background (#2E4DA7) with a white icon. On hover it expands to show "Ask AI Assistant" text.
+- Clicking the FAB triggers the same action as clicking the sidebar AI Assistant nav item.
+ 
+---
+ 
+## FIX 11 — Context Switcher: Elevate "Switch to Client Portal"
+ 
+Currently "Switch to Client Portal" is a small link at the very bottom of the left sidebar. Fix this:
+ 
+- Remove the "Switch to Client Portal" link from the sidebar bottom.
+- Add a context switcher pill at the TOP of the sidebar, immediately below the Tasama logo, with three tabs: [Operations] [Client Portal] [Agent Ops].
+- The active view ("Operations") should be highlighted in brand blue with white text.
+- The inactive tabs should be white/light grey background with dark text.
+- "Client Portal" tab navigates to `/demo/tasama-payroll-hub/client`.
+- "Agent Ops" tab navigates to `/demo/tasama-payroll-hub` (the agent operations interface).
+- The switcher should be full-width within the sidebar with equal-width tabs.
+ 
+---
+ 
+## FIX 12 — RTL/Arabic Support
+ 
+The language toggle button ("العربية") exists in the top bar. Ensure it properly activates RTL mode:
+ 
+- When "العربية" is clicked, toggle a class `dir="rtl"` on the root `<html>` element (or the top-level layout wrapper).
+- Flip the sidebar to the right side of the layout.
+- Mirror all directional icons: chevrons, arrows, and progress indicators should flip.
+- The T-minus countdown labels (T-20d, T-17d, T-23d) should remain readable in RTL context.
+- The two-tone Saudi/Expats bar should read right-to-left.
+- The button label should toggle between "العربية" (when in English) and "English" (when in Arabic).
+- Note: Full Arabic string translation is NOT required for the demo — just structural RTL mirroring is sufficient.
+ 
+---
+ 
+## FIX 13 — Typography & Polish
+ 
+Apply these final polish changes throughout the Operations Dashboard:
+ 
+1. Page subtitle: Increase the "Cross-client payroll health, AI agent activity, and upcoming regulatory deadlines." subtitle font size from its current small/muted size to 14px with colour #4B5563 (medium grey) so it reads clearly without competing with the H1.
+ 
+2. LIVE indicator: Add a CSS pulse animation to the green dot next to "LIVE" in the Live Agent Activity feed header. Use a simple `@keyframes pulse` that scales the dot from 1 to 1.4 and back, with a 2s infinite loop.
+ 
+3. Section header style: Change all section headers that use an em dash (e.g. "Payroll cycles — in preparation") to use a colon+subtitle pattern: "Payroll Cycles: In Preparation". Apply the same pattern to "Live agent activity" → "Live Agent Activity" and "Process Efficiency — This Month" → "Process Efficiency: This Month".
+ 
+4. "NEW" badge on Payroll Simulator: Change the badge colour from bright amber/yellow to a softer indigo (#6366F1 background, white text) to align with the brand palette.
+ 
+5. Section dividers: Add a subtle 1px divider (#E5E7EB) between major sections (after the KPI cards row, after the Payroll Cycles section, after the Process Efficiency row) to improve visual grouping.
+ 
+---
+ 
+## GENERAL CONSTRAINTS
+ 
+- Do not change any data values, agent names, client names, employee counts, SAR figures, or dates — all are demo data that must stay exactly as-is.
+- Do not modify any other page/route (Agent Operations interface or Client Portal).
+- Do not remove any existing sections — only enhance them.
+- All new interactive elements (tooltips, FAB, role switcher, dismiss buttons) should work without any backend calls — use local React state only.
+- Maintain full responsiveness — the dashboard should not break at 1280px wide viewport.
+- Preserve all existing Tailwind (or CSS) class conventions already used in the codebase.

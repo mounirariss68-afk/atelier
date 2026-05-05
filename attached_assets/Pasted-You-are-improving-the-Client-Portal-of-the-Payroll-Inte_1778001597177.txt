@@ -1,0 +1,391 @@
+You are improving the Client Portal of the Payroll Intelligence Hub demo app.
+
+ 
+
+Tech stack: React + TypeScript + Vite + Tailwind CSS + Lucide React icons + React Router.
+
+The client portal lives at the route /demo/tasama-payroll-hub/client.
+
+ 
+
+Do NOT change any data, business logic, routing structure, or the other two interfaces (Agent Operations and Manager Dashboard). Only make the UI/UX changes described below. Work through each section in order. After all changes are applied, confirm what was changed.
+
+ 
+
+---
+
+ 
+
+## SECTION 1 — HEADER (Global, affects all portal views)
+
+ 
+
+### 1A — Remove "Manager Dashboard" link from client portal header
+
+The header currently shows a "Manager Dashboard" link that routes to /demo/tasama-payroll-hub/manager. This is an internal-only link and should not appear in the client-facing portal. Remove it entirely from the client portal header component. The "Log out" link can remain.
+
+ 
+
+### 1B — Add logged-in user identity to the header
+
+Add a small user identity indicator to the right side of the header (to the left of the Log out link). Display a circular avatar with the user's initials (e.g. "AA" for Al-Nakhla Admin) in a white/10 background, and next to it show the display name in small white text ("Al-Nakhla Admin") with a sub-label of their role ("HR Manager"). Use the existing header text sizing conventions (text-xs, text-blue-100).
+
+ 
+
+### 1C — Relocate and redesign the Saudization badge
+
+Move the "SAUDIZATION: GREEN-LOW · 61%" pill out of the center of the header. Place it directly beneath the company name and employee count in the header's left section, as a secondary status line. Style it as a small inline tag: green dot + "Green-Low · 61%" in text-[11px] text-blue-100, without the bold "SAUDIZATION:" prefix (that can be a tooltip on hover).
+
+ 
+
+### 1D — Improve the EN/AR language toggle
+
+Replace the two separate EN and AR buttons with a single toggle button that shows a globe icon (Lucide `Globe` icon, size 14) followed by the active locale label. Clicking it switches between EN and AR. Keep the same visual style (white/10 background, rounded). Add a `dir="rtl"` attribute to the `<html>` element when AR is active and remove it when EN is active, so the layout direction flips correctly.
+
+ 
+
+### 1E — Log out confirmation
+
+Wrap the Log out click handler with a `window.confirm("Are you sure you want to log out?")` check. Only proceed with the logout navigation if the user confirms.
+
+ 
+
+---
+
+ 
+
+## SECTION 2 — DASHBOARD PAGE
+
+ 
+
+### 2A — Fix the KPI card overflow
+
+The 6 KPI stat cards currently overflow horizontally without a scroll affordance. Change the cards container from a static flex row to a horizontally scrollable row with a visible scroll indicator on smaller viewports. On wide viewports (lg and above) show all 6 cards. On smaller viewports, allow horizontal scroll with `overflow-x-auto` and add a subtle right-fade gradient overlay (`pointer-events-none absolute right-0 inset-y-0 w-12 bg-gradient-to-l from-white to-transparent`) so users know there is more content to the right.
+
+ 
+
+### 2B — Fix the employee count mismatch
+
+The header shows "18 employees" and the "Active Employees" KPI card shows "17". Update the Active Employees card to show two lines: the primary number "17" (large) and a secondary line "1 separated" in text-xs text-amber-600 below the "Active Employees" label. Add a tooltip on hover: "17 active · 1 separated (Mohammad Al-Ghamdi)". Do not change the header count — "18 employees" in the header is correct as total headcount.
+
+ 
+
+### 2C — Add hover affordance to KPI cards
+
+Each KPI card already has a `>` chevron. Add a `hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer` class to each card's wrapper so they clearly signal interactivity on hover. The existing click/navigation behaviour should remain unchanged.
+
+ 
+
+### 2D — Add approval timestamp to Payroll Status card
+
+The "Approved" KPI card currently shows "April 2026" as a sub-label. Update it to show "Approved Apr 29, 2026" (using the same approval date already present in the pipeline data) so the approval date is explicit.
+
+ 
+
+### 2E — Make "CYCLE COMPLETE" more prominent
+
+In the April Payroll Pipeline section, "CYCLE COMPLETE" is currently a small teal text label in the top-right corner. Replace it with a small filled badge: rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1 with a ✓ checkmark icon (Lucide `CheckCircle2`, size 13) to its left. Also add a subtle `bg-emerald-50 border border-emerald-100 rounded-xl` background wash to the entire pipeline card when the cycle status is "complete".
+
+ 
+
+### 2F — Replace agent names with client-friendly labels in the pipeline
+
+In the payroll pipeline step rows, the sub-labels currently show internal agent names (e.g. "Payroll Orchestrator", "Document Intelligence Agent", "Salary Calculation Agent"). Replace each with a business-friendly label and move the agent name to a tooltip (title attribute or Tailwind tooltip pattern):
+
+- "Payroll Orchestrator" → "Automated Processing"
+
+- "Document Intelligence Agent" → "Document Processing"
+
+- "Salary Calculation Agent" → "Salary Calculation"
+
+- "Performance & Audit Agent" → "Review & Audit"
+
+- "Manager" → "Manager Approval" (no change needed, already friendly)
+
+- "Mudad Bank Transfer Agent" → "Bank Transfer"
+
+- "GOSI Compliance Agent" → "GOSI Filing"
+
+Keep the original agent name as a `title` tooltip attribute so it remains discoverable.
+
+ 
+
+---
+
+ 
+
+## SECTION 3 — AI INSIGHTS PANEL (Dashboard page)
+
+ 
+
+### 3A — Add a colour legend
+
+Above the first insight row, add a compact legend bar. It should be a single flex row of three items: an orange dot + "Action required", a blue dot + "For your information", a green dot + "Opportunity". Use text-xs text-gray-500. Place it right-aligned within the panel header row, replacing the current "Personalized intelligence from your agents" subtitle (which can move into a tooltip on the "AI" badge).
+
+ 
+
+### 3B — Visually distinguish Action vs Info vs Opportunity tags
+
+- ACTION tag: change to bg-red-600 text-white font-semibold with a Lucide `AlertCircle` icon (size 11) to the left
+
+- INFO tag: change to bg-blue-100 text-blue-700 font-medium with a Lucide `Info` icon (size 11) to the left
+
+- OPPORTUNITY tag: change to bg-emerald-100 text-emerald-700 font-medium with a Lucide `TrendingUp` icon (size 11) to the left
+
+ 
+
+### 3C — Add confidence score tooltip
+
+Wrap each confidence score (e.g. "99% confidence") in a tooltip. On hover, show: "The agent analysed [N] documents and calculation rules to reach this conclusion. Scores above 95% are considered verified." Use a simple Tailwind tooltip pattern (group/group-hover with absolute positioning) or a `title` attribute. Style the score text as `text-xs font-medium` with a subtle underline dotted style to indicate it is hoverable.
+
+ 
+
+### 3D — Add inline CTA buttons to Action-type insights
+
+For each insight row where the tag is "ACTION", add a small CTA button at the bottom-right of the row. Use the existing insight data to determine the right action:
+
+- For insights about document uploads: show a button "Upload Document →" that navigates to the Documents tab
+
+- For insights about pending approvals / settlements: show a button "View Request →" that navigates to the Service Requests tab
+
+- For insights about contract renewals: show a button "View in Documents →" that navigates to the Documents tab
+
+Style these as: text-xs font-medium text-indigo-600 hover:text-indigo-800 underline cursor-pointer. Place them on a new line below the source/confidence row.
+
+ 
+
+### 3E — Make source agent labels non-hyperlink styled
+
+The "Source: EOSB Provision Agent" labels are currently styled as links (blue, underlined) but are not clickable. Change them to plain text: text-xs text-gray-400 (no underline, no link colour). This prevents the broken-expectation of an unclickable link.
+
+ 
+
+---
+
+ 
+
+## SECTION 4 — EMPLOYEES PAGE
+
+ 
+
+### 4A — Replace native selects with styled custom dropdowns
+
+The Department, Nationality, and Status filter controls currently use native `<select>` elements which look inconsistent with the design system. Replace them with a styled select using Tailwind: `border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 appearance-none cursor-pointer pr-8` and add a custom dropdown arrow using a relative wrapper with a Lucide `ChevronDown` icon (size 14, text-gray-400) absolutely positioned on the right.
+
+ 
+
+### 4B — Add nationality colour coding to employee rows
+
+Add a small nationality indicator to each employee row. After the employee name and nationality sub-label (e.g. "Saudi · Saudi"), add a pill badge:
+
+- Saudi employees: `bg-green-50 text-green-700 text-[10px] font-medium px-1.5 py-0.5 rounded` with label "SA"
+
+- Non-Saudi employees: `bg-blue-50 text-blue-700 text-[10px] font-medium px-1.5 py-0.5 rounded` with their nationality code (e.g. "IN" for Indian)
+
+ 
+
+### 4C — Add quick action to Separated employees
+
+For any employee row where status is "SEPARATED", add a small "View Settlement →" link on the right side of the row (before the status badge) that navigates to the Service Requests page. Style it as text-xs text-indigo-600 hover:underline.
+
+ 
+
+### 4D — Add Export button
+
+Add a secondary "Export" button to the top-right of the Employees page header, alongside any existing controls. Use a Lucide `Download` icon with label "Export". On click, trigger a CSV export of the visible employee data (name, employee number, department, position, hire date, basic salary, status). Use a client-side Blob download (no server needed).
+
+ 
+
+---
+
+ 
+
+## SECTION 5 — DOCUMENTS PAGE
+
+ 
+
+### 5A — Add document lifecycle status to each card
+
+Each document card currently only shows "DIGITIZED". Add a lifecycle status row at the bottom of each card showing the current stage as a mini stepper: Uploaded → Digitized → Applied → Archived. Highlight the current stage in indigo, with previous stages in gray-400 and future stages in gray-200. Use tiny text (text-[9px]) and dots connected by a thin line. All current demo documents should show "Digitized" as the current stage (index 1 of 4).
+
+ 
+
+### 5B — Add drag-and-drop upload zone
+
+Below the search/filter bar and above the document grid, add a drag-and-drop upload zone. Style it as a dashed border rounded-xl (border-2 border-dashed border-gray-300 hover:border-indigo-400 transition-colors) with a Lucide `UploadCloud` icon (size 28, text-gray-400), the text "Drag documents here to upload", and a sub-label "Supports PDF, DOCX, JPG · Max 20MB" in text-xs text-gray-400. Add `dragover` and `drop` event listeners that change the border to indigo and show a brief "File received" toast notification (a simple fixed bottom-right toast that auto-dismisses after 3 seconds). Wire the existing "Upload Document" button to also accept file input via a hidden `<input type="file">`.
+
+ 
+
+### 5C — Add sort and group controls
+
+Add two controls to the filter row: a "Sort by" styled select (options: Date ↓, Date ↑, Employee Name, Document Type) and a "Group by" toggle button (None / Employee). When "Group by Employee" is active, group the document cards under employee name subheadings. When "Sort by Date ↓" the cards should appear newest first.
+
+ 
+
+---
+
+ 
+
+## SECTION 6 — SERVICE REQUESTS PAGE
+
+ 
+
+### 6A — Add resolution guidance to overdue items
+
+For each service request row that shows "OVERDUE", add a collapsible "What to do" section. Toggle it with a small `ChevronDown` / `ChevronUp` icon to the right of the OVERDUE badge. When expanded, show a two-column layout: "Waiting on Tasama" and "Waiting on you" with bullet points that are hardcoded per request type:
+
+- Iqama Renewal: Tasama side: "GOSI deregistration prepared" · Client side: "Upload renewed Iqama copy in Documents"
+
+- Final Settlement: Tasama side: "EOSB calculated, Mudad transfer ready" · Client side: "Finance Controller must approve in the approval queue"
+
+- Retroactive Adjustment: Tasama side: "Adjustment calculated" · Client side: "Confirm approval of retroactive amount"
+
+Style the expanded section as bg-amber-50 border-t border-amber-100 px-4 py-3 text-sm.
+
+ 
+
+### 6B — Improve the "New Request" button with a dropdown
+
+Replace the single "+ New Request" button with a split button: the main label "+ New Request" opens a dropdown menu listing common request types with icons:
+
+- 📄 Salary Certificate
+
+- 🔄 Iqama / Visa Renewal
+
+- 📋 HRDF Tamheer Nomination
+
+- 💰 Final Settlement
+
+- ✏️ Salary Adjustment
+
+- 📝 Other
+
+Each option should set the request type in the new request form/modal. The dropdown should use absolute positioning below the button, with a white bg, shadow-lg, rounded-xl, z-50, and close on outside click (use a useEffect click-outside listener).
+
+ 
+
+---
+
+ 
+
+## SECTION 7 — PAYROLL PAGE
+
+ 
+
+### 7A — Fix the 6-month trend chart
+
+The 6-month trend chart area currently renders empty (no bars/lines visible despite axis labels being present). Identify the chart component and fix the rendering issue. If no charting library is currently installed, install `recharts` (run `npm install recharts`) and re-implement the chart as a Recharts `BarChart` or `LineChart` using the payroll data already present in the component (Dec–May monthly gross values visible in the axis labels: 222k, 221k, 221k, 222k, 226k, 202k). The chart should show:
+
+- A bar or area chart with the monthly gross totals
+
+- The current month bar highlighted in indigo-600, others in indigo-200
+
+- A tooltip showing the exact SAR amount on hover
+
+- Responsive container that fills the available width
+
+ 
+
+### 7B — Make the period selector more prominent
+
+The "PERIOD: April 2026 [dropdown]" control is currently small and right-aligned in the section header. Redesign it as a horizontal tab/pill row below the "Payroll — Monthly payroll register" heading, showing the last 6 periods (Nov 2025, Dec 2025, Jan 2026, Feb 2026, Mar 2026, Apr 2026) as clickable pills. The active period should be indigo-600 text-white. This replaces the dropdown control.
+
+ 
+
+### 7C — Add payslip row click-through
+
+Make each employee row in the payslip table clickable. On click, open a slide-over panel (fixed right-side drawer, width w-96, with a backdrop overlay) showing the full payslip for that employee. The drawer should contain:
+
+- Employee name, number, and role at the top
+
+- A breakdown table: Basic, Housing, Transport, Overtime, Gross, GOSI (Emp), Net
+
+- An "Download Payslip PDF" button (can be a placeholder that shows a toast "PDF download coming soon")
+
+- A close button (X) at the top right
+
+Animate the drawer in from the right using a CSS transition (translate-x-full → translate-x-0). The download icon already present on each row should also trigger this drawer rather than a direct download.
+
+ 
+
+---
+
+ 
+
+## SECTION 8 — PROCESSES PAGE
+
+ 
+
+### 8A — Fix the blank loading state
+
+The Processes page currently renders a blank white screen for a noticeable moment before content appears. Add a skeleton loading state that shows immediately while data resolves. The skeleton should mirror the process card layout: a grey shimmer rectangle for the process card header (h-16 w-full), followed by 5 skeleton rows for pipeline steps (h-10 each, with a circle on the left and two lines of text). Use a CSS animation: `@keyframes shimmer { from { background-position: -200% 0 } to { background-position: 200% 0 } }` with `background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)` and `background-size: 200% 100%`. Show this skeleton for a minimum of 400ms even if data resolves faster (to prevent a flash).
+
+ 
+
+### 8B — Consistent step icon treatment
+
+In the pipeline steps, completed steps use a green checkmark circle icon and active steps use an amber clock icon. However, pending steps (steps 7, 8 — Mudad final WPS transfer and Issue experience letter) use plain number badges. Replace the plain number badges on all pending steps with a consistent Lucide `Circle` icon in text-gray-300, with the step number displayed inside it (or just alongside it in text-xs text-gray-400). This creates a visually consistent Completed (✓ green) → Active (⏱ amber) → Pending (○ gray) progression.
+
+ 
+
+---
+
+ 
+
+## SECTION 9 — AI ASSISTANT
+
+ 
+
+### 9A — Elevate the AI Assistant to a floating action button
+
+Remove the "AI Assistant" item from the sidebar navigation. Instead, add a persistent floating action button (FAB) fixed to the bottom-right corner of the viewport (fixed bottom-6 right-6 z-50). The FAB should be a circle (w-14 h-14) with a gradient background (bg-gradient-to-br from-indigo-600 to-purple-600), a white Lucide `MessageCircle` icon (size 22), and a subtle pulse animation ring to draw attention. On hover, expand the FAB to show a pill shape with the label "AI Assistant" using a CSS width transition. Clicking it should trigger the same behaviour as the current AI Assistant sidebar button (open the chat panel, whatever that currently does).
+
+ 
+
+### 9B — Fix "Client since" sidebar metadata
+
+The "Client since / Mar 1, 2022" text is currently formatted as a navigation item in the sidebar, giving it incorrect visual prominence. Move it to the very bottom of the sidebar as a non-interactive footer label. Style it as: text-[10px] text-gray-400 px-4 pb-3 mt-auto (pushed to bottom with mt-auto). Remove any link or button wrapper around it.
+
+ 
+
+---
+
+ 
+
+## SECTION 10 — SHARED / GLOBAL
+
+ 
+
+### 10A — Custom styled scrollbar for the sidebar
+
+Add a global CSS rule for the sidebar's overflow-y-auto container: thin scrollbar (scrollbar-width: thin in Firefox; ::-webkit-scrollbar { width: 4px } in Chrome) with a light gray track and indigo thumb.
+
+ 
+
+### 10B — Toast notification system
+
+Several of the above improvements (drag-and-drop upload, payslip PDF download, CSV export) trigger toast notifications. Implement a simple toast system if one doesn't already exist: a React context (ToastContext) with a `useToast()` hook that provides a `showToast(message, type)` function. Render toasts as fixed bottom-right stack (fixed bottom-6 right-6 flex flex-col gap-2 z-50), each with a coloured left border (green for success, red for error, blue for info), auto-dismiss after 3 seconds, and a slide-up entrance animation.
+
+ 
+
+---
+
+ 
+
+## IMPLEMENTATION NOTES
+
+ 
+
+- Do not install any new UI component library (no shadcn, no MUI, no Chakra). Use Tailwind utility classes only.
+
+- The one allowed new dependency is `recharts` for the chart fix in Section 7A. Install it with `npm install recharts`.
+
+- All data used in the improvements (employee names, amounts, dates, agent names) should come from the existing data constants/objects already in the codebase — do not hardcode new data, just reference what is already there.
+
+- All new interactive elements (dropdowns, drawers, tooltips) must close on Escape key press and outside click.
+
+- Maintain full responsiveness — test that nothing breaks at 768px viewport width.
+
+- Use Lucide React for all new icons (already installed). Import each icon individually.
+
+- Preserve all existing TypeScript types. Add new types/interfaces where needed.

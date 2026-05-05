@@ -1,0 +1,575 @@
+You are improving the Agent Operations Interface (the "teknik" / Digital Team view) of the
+
+Tasama Payroll Intelligence Hub demo. The interface is a Maven AI interactive demo built in
+
+this Replit project. The entry point is the route /demo/tasama-payroll-hub/teknik.
+
+ 
+
+The interface has 6 navigation tabs (Overview, Live inbox, Workflows, Workspace, KPIs,
+
+Audit log) and an "Agent Cockpit" panel that simulates 10 autonomous payroll agents running
+
+a monthly payroll cycle. A bottom control bar has Play / Pause / Step / Rewind / Inject event
+
+buttons and a step counter (Step 0 / 40).
+
+ 
+
+Please implement ALL of the following UI/UX improvements. Do not change any business logic,
+
+demo data, agent names, event sequences, or routing. Only change presentation, layout, and
+
+interaction patterns.
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 1 — AGENT COCKPIT LAYOUT
+
+────────────────────────────────────────────
+
+ 
+
+1. PRE-RUN SUMMARY STATE
+
+  Before Play is pressed, the large empty right panel of the cockpit shows nothing.
+
+  Replace this blank area with a "Ready to Run" summary card that displays:
+
+  - Status badge: "● READY — 3 clients queued"
+
+  - A compact table: Client | Employees | Cutoff Day
+
+    Al-Nakhla Construction | 18 | Day 25
+
+    Luma Retail Group      | 14 | Day 22
+
+    Vertex Tech Solutions  | 10 | Day 28
+
+  - Trigger context: "May 5, 2026 — April fully settled. May cycle in preparation."
+
+  - A hint text: "Press Play to begin the simulation"
+
+  When Play is pressed, this card should fade out and the live event stream should
+
+  take over the right panel as it does today.
+
+ 
+
+2. ORCHESTRATOR VISUAL HIERARCHY
+
+  The Payroll Orchestrator is the master coordinator agent. In the left agent list
+
+  of the cockpit, visually distinguish it from the 9 specialist agents:
+
+  - Give it a slightly larger card height and a distinct left border
+
+    (use amber/gold: #F59E0B)
+
+  - Add a small label "ORCHESTRATOR" in uppercase, 9px, above its name
+
+  - Add a subtle separator line below it before the specialist agents begin
+
+  - The 9 specialist agents below it should have a small left-indent (8px) to
+
+    visually suggest they report to the Orchestrator
+
+ 
+
+3. HUMAN CHECKPOINT INDICATORS
+
+  The platform has 3 human checkpoints gated by: Payroll Manager, Finance
+
+  Controller, and Compliance Officer. These are currently completely invisible.
+
+  Insert 3 visual "checkpoint" dividers into the agent list at these positions:
+
+  - After Salary Calculation Agent → "⏸ Payroll Manager Review" (amber pill)
+
+  - After Bank Transfer Agent → "⏸ Finance Controller Sign-off" (amber pill)
+
+  - After Compliance & Audit Agent → "⏸ Compliance Officer Authorisation" (amber pill)
+
+  Style each as a full-width amber/orange pill row with a person icon, bold label,
+
+  and the text "Human checkpoint" in small grey text beneath it.
+
+  These dividers should be visible at all times (idle and running states).
+
+ 
+
+4. AGENT STATUS LEGEND
+
+  Add a small legend row at the top of the cockpit panel (right of "AGENT COCKPIT"
+
+  header, left of the "0 / 40 events" counter) showing:
+
+  ● Idle  ● Active  ● Complete  ● Error
+
+  Use colours: grey (#6B7280) / blue (#3B82F6) / green (#10B981) / red (#EF4444)
+
+  These colours must match whatever status dot colours are applied to agents
+
+  during the simulation run.
+
+ 
+
+5. FIX AGENT NAME TRUNCATION
+
+  "Document Intelligence Agent" and "Leave & Attendance Agent" are truncated
+
+  with ellipsis in the agent list cards. Fix the card layout so all 10 agent
+
+  names display in full without truncation. If needed, allow the name to wrap
+
+  to a second line rather than truncate.
+
+ 
+
+6. RUN PROGRESS BAR
+
+  Below the "0 / 40 events" counter in the cockpit header, add a thin horizontal
+
+  progress bar (height: 4px, colour: #3B82F6) that fills proportionally as events
+
+  fire during the simulation (e.g., at event 20 it is 50% filled). Show a
+
+  percentage label next to it: "50% complete". When idle, the bar is empty.
+
+  When complete (40/40), fill it green (#10B981).
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 2 — NAVIGATION & CONTROLS
+
+────────────────────────────────────────────
+
+ 
+
+7. MOVE SPEED SLIDER TO CONTROL BAR
+
+  The "Speed: 1400ms" slider is currently in the left sidebar navigation.
+
+  Move it to the bottom control bar, placed between the "Rewind" button and
+
+  the "Inject event" button. Label it "Speed" with the current ms value shown.
+
+  Remove it from the sidebar entirely.
+
+ 
+
+8. STICKY BOTTOM CONTROL BAR
+
+  The Play / Pause / Step / Rewind / Inject event bar is currently only visible
+
+  when the user scrolls to the bottom of the page. Make this bar position: fixed
+
+  at the bottom of the viewport (z-index above all content) so it is always
+
+  visible regardless of scroll position. Ensure it does not overlap the page
+
+  content — add matching bottom padding to the main content area.
+
+ 
+
+9. RENAME "INJECT EVENT" BUTTON
+
+  Rename the "Inject event" button to "Simulate Exception".
+
+  Add a tooltip on hover that reads: "Inject a live exception into the running
+
+  simulation (e.g. Mudad rejection, GOSI mismatch)".
+
+  The button's existing functionality must remain unchanged.
+
+ 
+
+10. RESET CONFIRMATION DIALOG
+
+   The "Reset demo" button in the header currently executes immediately.
+
+   Add a confirmation modal/dialog before it executes. The dialog should say:
+
+   Title: "Reset Demo?"
+
+   Body: "This will clear the current run and return to Step 0. Any in-progress
+
+   simulation will be lost."
+
+   Buttons: "Cancel" (secondary) and "Reset" (destructive/red).
+
+   Only proceed with the reset if the user clicks "Reset".
+
+ 
+
+11. STATUS PILL UPGRADE
+
+   The "● IDLE" status indicator in the top-right header is small and monochrome.
+
+   Make it a more prominent pill/badge with colour-coded states:
+
+   - IDLE: grey background (#374151), white text
+
+   - RUNNING: amber background (#D97706), white text, with a pulsing animation
+
+   - COMPLETE: green background (#059669), white text
+
+   - ERROR: red background (#DC2626), white text
+
+   Increase the pill font size to 12px and add 6px horizontal padding.
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 3 — LIVE INBOX TAB
+
+────────────────────────────────────────────
+
+ 
+
+12. SEVERITY BADGES ON INBOX ITEMS
+
+   Replace the generic "NEW" badge on all inbox items with severity-coded badges:
+
+   - Items from the Compliance & Audit Agent about Saudization → "CRITICAL"
+
+     (red background #DC2626, white text)
+
+   - Items about deadlines (GOSI Filing Deadline) → "WARNING"
+
+     (amber background #D97706, white text)
+
+   - Items about new documents received → "INFO"
+
+     (blue background #2563EB, white text)
+
+   - All other items → keep a neutral "NEW" badge but style it in grey
+
+   The badge replaces (does not duplicate) the existing "NEW" badge.
+
+ 
+
+13. INLINE ACTION BUTTONS ON INBOX ITEMS
+
+   Each inbox item is currently read-only. Add contextual action buttons
+
+   that appear on hover (or are always visible on mobile):
+
+   - "Monthly Payroll Cycle" item → button "Start Run"
+
+   - "GOSI Filing Deadline" item → button "View Calendar"
+
+   - "New Documents Received" item → button "Review Docs"
+
+   - "Saudization Alert" item → button "View Report"
+
+   Style buttons as small outlined pills (border: 1px solid currentColor,
+
+   border-radius: 6px, padding: 2px 10px, font-size: 12px).
+
+   Buttons can be non-functional (show a brief toast "Opening…" on click)
+
+   since this is a demo.
+
+ 
+
+14. AGENT ATTRIBUTION COLOUR DOTS
+
+   The agent attribution line under each inbox message title (e.g.
+
+   "GOSI Compliance Agent") currently appears as plain grey text.
+
+   Prefix each agent attribution with the same coloured dot used in the
+
+   Agent Cockpit for that agent. This creates visual consistency between
+
+   the inbox and the cockpit.
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 4 — WORKFLOWS TAB
+
+────────────────────────────────────────────
+
+ 
+
+15. ADD HUMAN CHECKPOINT NODES TO WORKFLOW DIAGRAMS
+
+   Both workflow diagrams (Monthly Payroll Cycle and Employee Separation)
+
+   are missing human checkpoint nodes. Add them as visually distinct steps:
+
+ 
+
+   In "Monthly Payroll Cycle", insert these checkpoint nodes between agents:
+
+   - Between "Salary Calculation Agent" and "Leave & Attendance Agent":
+
+     → Add node: "👤 Payroll Manager Approval" (amber box, dashed border)
+
+   - Between "Bank Transfer Agent" and "Compliance & Audit Agent":
+
+     → Add node: "👤 Finance Controller Sign-off" (amber box, dashed border)
+
+   - After "Compliance & Audit Agent" as the final step:
+
+     → Add node: "👤 Compliance Officer Authorisation" (amber box, dashed border)
+
+ 
+
+   In "Employee Separation" workflow, insert:
+
+   - After "Calculate EOSB" (EOSB Provisions Agent):
+
+     → Add node: "👤 Finance Controller Sign-off" (amber box, dashed border)
+
+ 
+
+   Style: amber/orange border (#F59E0B), white background, amber text,
+
+   same size as agent boxes but with a dashed border instead of solid.
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 5 — WORKSPACE TAB
+
+────────────────────────────────────────────
+
+ 
+
+16. FIX CLIENT STATUS CARDS
+
+   The "April Processing Status" section uses a confusing key-value grid.
+
+   Replace it with 3 clean client cards displayed in a row. Each card shows:
+
+   - Client name as card heading (bold, 14px)
+
+   - "18 employees" (or 14, 10) as a sub-label
+
+   - Status badge: "Queued" (grey pill)
+
+   Style consistently with the rest of the UI (rounded corners, border,
+
+   subtle shadow).
+
+ 
+
+17. ADD ACTION BUTTONS TO PENDING EMPLOYEE CHANGES TABLE
+
+   The "Pending Employee Changes" table has 6 rows all showing "Pending"
+
+   with no actions. Add a "Review →" link/button in each row (rightmost column).
+
+   The button can show a non-functional toast "Opening employee record…" on click.
+
+   Also add a "Bulk Approve (6)" button above the table header, styled as a
+
+   primary action button. It can show a toast "Bulk approval requires Payroll
+
+   Manager authentication" on click.
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 6 — KPIs TAB
+
+────────────────────────────────────────────
+
+ 
+
+18. ADD TREND INDICATORS TO KPI CARDS
+
+   Each KPI card currently shows a bare number. Add trend data to each:
+
+   - Payroll Accuracy 99.7%  → ↑ +0.2% vs last month (green)
+
+   - SLA Compliance 96.2%    → ↓ -1.1% vs last month (red)
+
+   - GOSI Filing Rate 100%   → → No change (grey)
+
+   - Avg Processing Time 4.2 hrs → ↑ +0.3 hrs vs last month (red, because higher is worse)
+
+   - Exception Rate 2.1%     → ↓ -0.4% vs last month (green, because lower is better)
+
+   - Mudad Compliance 98.5%  → ↑ +0.5% vs last month (green)
+
+   Style: small arrow icon + percentage delta in 11px text below the main number.
+
+   Green = improvement (#10B981), Red = regression (#EF4444), Grey = no change (#6B7280).
+
+ 
+
+19. RENAME KPI SECTION HEADER
+
+   The section header "KPIS IN THIS DEMO" should be renamed to
+
+   "Performance Metrics — April 2026".
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 7 — AUDIT LOG TAB
+
+────────────────────────────────────────────
+
+ 
+
+20. PRE-SEED AUDIT LOG WITH LAST RUN DATA
+
+   The audit log is currently empty until Play is pressed. Pre-populate it
+
+   with a seeded "previous run" showing the completed April 2026 payroll cycle.
+
+   Add at least 8 representative log entries in the same format the simulation
+
+   uses, for example:
+
+   - [08:01:03] Payroll Orchestrator — Monthly cycle initiated for April 2026.
+
+     3 clients, 42 employees.
+
+   - [08:01:15] Document Intelligence Agent — Digitized 4 HR documents.
+
+     1 termination, 1 promotion, 1 salary increase, 1 bonus letter.
+
+   - [08:02:44] Employee Records Agent — Applied 4 record changes to master file.
+
+   - [08:04:11] Salary Calculation Agent — Computed gross-to-net for 42 employees.
+
+     Total gross: SAR 478,200. Exceptions: 3.
+
+   - [08:06:30] ⏸ CHECKPOINT — Payroll Manager Review. Approved by: Ahmed Al-Rashidi.
+
+   - [08:09:55] GOSI Compliance Agent — GOSI file generated. 42 contributions.
+
+     0 errors.
+
+   - [08:11:20] Mudad Filing Agent — Mudad WPS file prepared. 42 transfers queued.
+
+   - [08:14:05] Bank Transfer Agent — Batch file prepared. SAR 429,020 net payroll.
+
+   - [08:16:30] ⏸ CHECKPOINT — Finance Controller Sign-off. Approved by: Sara Al-Otaibi.
+
+   - [08:18:44] Compliance & Audit Agent — Audit complete. Saudization: 67% (Green).
+
+     0 Iqama expirations within 30 days.
+
+   - [08:19:01] ⏸ CHECKPOINT — Compliance Officer Authorisation.
+
+     Approved by: Khalid Al-Zahrani.
+
+   - [08:19:15] Payroll Orchestrator — April 2026 cycle complete.
+
+     Duration: 18m 12s. Status: ✓ SUCCESS.
+
+   These entries should be shown immediately when the Audit Log tab is opened
+
+   (before any run). They represent the "previous cycle" history.
+
+   Add a small header above them: "Previous Run — April 2026 (Completed)"
+
+   in grey italic text.
+
+   When the user presses Play and the new simulation fires, NEW entries should
+
+   append BELOW a separator: "Current Run — May 2026 (In Progress)".
+
+ 
+
+21. DISABLE DOWNLOAD BUTTON WHEN LOG IS EMPTY (CURRENT RUN)
+
+   The "Download audit trail (JSON)" button should be disabled/greyed when
+
+   the CURRENT run has no entries yet (Step 0). It should only become active
+
+   after at least one event fires in the current simulation.
+
+   The pre-seeded April entries do not activate it — only live simulation events do.
+
+   Add a tooltip on the disabled state: "Run the simulation first to generate
+
+   an audit trail for download."
+
+ 
+
+────────────────────────────────────────────
+
+SECTION 8 — OVERVIEW TAB
+
+────────────────────────────────────────────
+
+ 
+
+22. RENAME "KPIS IN THIS DEMO" SECTION ON OVERVIEW
+
+   On the Overview tab, the section labelled "KPIS IN THIS DEMO" should
+
+   also be renamed to "Performance Metrics".
+
+ 
+
+────────────────────────────────────────────
+
+GENERAL / GLOBAL
+
+────────────────────────────────────────────
+
+ 
+
+23. TYPOGRAPHY SIZE IN COCKPIT
+
+   The agent description text inside each agent card in the cockpit is
+
+   approximately 11-12px and is difficult to read. Increase it to 13px.
+
+ 
+
+24. AR TOGGLE TOOLTIP
+
+   Add a tooltip to the "AR" language toggle button in the header:
+
+   "Switch to Arabic (RTL layout)"
+
+ 
+
+────────────────────────────────────────────
+
+CONSTRAINTS
+
+────────────────────────────────────────────
+
+- Do NOT change any agent names, descriptions, event data, KPI values,
+
+ client names, employee names, or simulation logic.
+
+- Do NOT change any routes or URL structure.
+
+- Do NOT break the existing Play / Pause / Step / Rewind simulation mechanics.
+
+- Preserve all existing demo data exactly as-is.
+
+- Keep the existing dark navy (#0F172A or similar) cockpit colour scheme.
+
+- All new colours should be consistent with the existing blue/amber/green/red
+
+ semantic palette already present in the app.
+
+- Changes should be mobile-friendly where applicable.
+
+- After implementing all changes, verify that pressing Play still correctly
+
+ animates through all 40 events and the audit log correctly appends new
+
+ entries under the "Current Run" separator.
