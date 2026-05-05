@@ -16,6 +16,7 @@ import InsightDetail from "@/pages/InsightDetail";
 import Industries from "@/pages/Industries";
 import Marketplace from "@/pages/Marketplace";
 import MarketplaceDetail from "@/pages/MarketplaceDetail";
+import PersonalAgentConcept from "@/pages/PersonalAgentConcept";
 import Demo from "@/pages/Demo";
 import Contact from "@/pages/Contact";
 import AssessmentsIndex from "@/pages/assessments/AssessmentsIndex";
@@ -76,6 +77,7 @@ function Router() {
           <Route path="/marketplace/ev-battery-health-agent">{() => <Redirect to="/marketplace" />}</Route>
           <Route path="/marketplace/fpa-rolling-forecast">{() => <Redirect to="/marketplace" />}</Route>
           <Route path="/marketplace/:slug" component={MarketplaceDetail} />
+          <Route path="/personal-agent/concept" component={PersonalAgentConcept} />
           <Route path="/contact" component={Contact} />
           <Route path="/assessments" component={AssessmentsIndex} />
           <Route path="/assessments/team/:token" component={TeamAssessment} />

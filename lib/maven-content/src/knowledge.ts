@@ -57,7 +57,8 @@ export type MarketplaceClass =
   | "risk-compliance-agent"
   | "sovereign-data-steward"
   | "pricing-intelligence"
-  | "shared-services-agent";
+  | "shared-services-agent"
+  | "personal-agent";
 
 export type MarketplaceHorizontal = "pmo" | "supply-chain" | "fpa" | "hr-payroll";
 
@@ -67,6 +68,12 @@ export type MarketplaceStatus = "live" | "coming-soon";
 export interface BiText {
   en: string;
   ar: string;
+  /**
+   * Optional Turkish translation. Added for the Personal Agent surface and
+   * any future tools that need full TR coverage. Missing TR falls back to EN
+   * via the lang helper so existing EN/AR content keeps working unchanged.
+   */
+  tr?: string;
 }
 
 export interface MarketplaceScreen {
@@ -460,6 +467,19 @@ export const marketplaceClasses: MarketplaceClassMeta[] = [
     description: {
       en: "End-to-end agent platforms for BPOs and shared-services centres — payroll, HR ops, finance back-office — with regulator-grade audit trails and human checkpoints.",
       ar: "منصات وكلاء شاملة لمراكز الخدمات المشتركة وشركات التعهيد — الرواتب والموارد البشرية والمالية الخلفية — مع مسارات تدقيق تنظيمية ونقاط مراجعة بشرية.",
+    },
+  },
+  {
+    id: "personal-agent",
+    title: {
+      en: "Workforce / Personal Agent",
+      ar: "وكيل القوى العاملة / المساعد الشخصي",
+      tr: "İşgücü / Kişisel Ajan",
+    },
+    description: {
+      en: "An always-on, per-employee AI agent that learns each person's job and personal life, stores it in an employee-owned Personal Context Graph, and acts autonomously under a glass-box trust model.",
+      ar: "مساعد ذكاء اصطناعي شخصي لكل موظف يتعلّم عمله وحياته الشخصية، ويخزّنها في رسم سياق شخصي مملوك للموظف، ويعمل ذاتياً ضمن نموذج ثقة زجاجي شفّاف.",
+      tr: "Her çalışana özel, her zaman açık bir yapay zekâ ajanı: kişinin işini ve kişisel yaşamını öğrenir, çalışana ait Kişisel Bağlam Grafiği'nde saklar ve cam-kutu güven modeli altında özerk biçimde hareket eder.",
     },
   },
 ];
@@ -1369,10 +1389,10 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     longDescription: [
       {
         en: "Saudi payroll is uniquely complex: GOSI contributions split between Saudi annuity tracks and OHRP-only expat tracks, EOSB provisions accruing under Article 84, Mudad wage protection submissions, Saudization band monitoring under Nitaqat, Iqama renewals, and dozens of edge cases per pay cycle. For BPOs running shared-services payroll across multiple clients, the manual workload compounds — and a single missed GOSI filing or Mudad rejection cascades into compliance penalties and client churn.",
-        ar: "الرواتب في المملكة العربية السعودية معقدة بشكل فريد: اشتراكات التأمينات الاجتماعية المقسمة بين مسارات تقاعد السعوديين ومسارات OHRP للوافدين، ومخصصات نهاية الخدمة وفق المادة 84، وتقديمات حماية الأجور عبر مُدد، ومراقبة نطاقات السعودة، وتجديدات الإقامة، وعشرات الحالات الاستثنائية في كل دورة. بالنسبة لشركات التعهيد التي تدير الرواتب المشتركة عبر عدة عملاء، يتراكم العبء اليدوي — وأي تقديم فائت للتأمينات أو رفض من مُدد يتسبب في غرامات امتثال وفقدان عملاء.",
+        ar: "الرواتب في المملكة العربية السعودية معقدة بشكل فريد: اشتراكات التأمينات الاجتماعية المقسمة بين مسارات تقاعد السعوديين ومسارات OHRP للوافدين، ومخصصات نهاية الخدمة وفق المادة 84، وتقديمات حماية الأجور عبر مُدد، ومراقب نطاقات السعودة، وتجديدات الإقامة، وعشرات الحالات الاستثنائية في كل دورة. بالنسبة لشركات التعهيد التي تدير الرواتب المشتركة عبر عدة عملاء، يتراكم العبء اليدوي — وأي تقديم فائت للتأمينات أو رفض من مُدد يتسبب في غرامات امتثال وفقدان عملاء.",
       },
       {
-        en: "The Payroll Intelligence Hub deploys ten specialised agents — Document Intelligence, Salary Calculation, GOSI Compliance, Mudad Bank Transfer, EOSB Provision, Leave Management, Saudization Monitor, Performance & Audit, Client Communications, and an Orchestrator that coordinates them — gated by three human checkpoints: the Payroll Manager who approves each run, the Finance Controller who signs off settlements, and the Compliance Officer who authorises every regulatory submission. Each agent's output is auditable, every decision is logged, and confidence scores are calibrated so reviewers know exactly when to trust the agent and when to drill in.",
+        en: "The Payroll Intelligence Hub deploys ten specialised agents — Document Intelligence, Salary Calculation, GOSI Compliance, Mudad Bank Transfer, EOSB Provision, Leave Management, Saudization Monitor, Performance & Audit, Client Communications, and an Orchestrator that coordinates them — gated by three human checkpoints: the Payroll Manager who approves each run, the Finance Controller who signs off settlements, and the Compliance Officer who authorises every regulatory submission. Each agents output is auditable, every decision is logged, and confidence scores are calibrated so reviewers know exactly when to trust the agent and when to drill in.",
         ar: "ينشر مركز ذكاء الرواتب عشرة وكلاء متخصصين — ذكاء الوثائق، وحساب الرواتب، وامتثال التأمينات، وتحويلات مُدد البنكية، ومخصصات نهاية الخدمة، وإدارة الإجازات، ومراقب السعودة، والأداء والتدقيق، واتصالات العملاء، ومنسّق ينسق بينهم جميعاً — تحت رقابة ثلاث نقاط مراجعة بشرية: مدير الرواتب الذي يعتمد كل دورة، والمراقب المالي الذي يوقع على التسويات، وضابط الامتثال الذي يجيز كل تقديم تنظيمي. مخرجات كل وكيل قابلة للتدقيق، وكل قرار موثّق، ودرجات الثقة معايرة بحيث يعرف المراجعون متى يثقون بالوكيل ومتى يتعمقون.",
       },
       {
@@ -1381,77 +1401,190 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
       },
     ],
     screens: [
-      {
-        title: { en: "Agent Orchestration", ar: "تنسيق الوكلاء" },
-        caption: { en: "Watch 10 specialised agents coordinate a monthly payroll cycle in real time, with full audit trail and human checkpoints.", ar: "شاهد 10 وكلاء متخصصين ينسقون دورة رواتب شهرية في الوقت الفعلي، مع مسار تدقيق كامل ونقاط مراجعة بشرية." },
-      },
-      {
-        title: { en: "Document Intelligence", ar: "ذكاء الوثائق" },
-        caption: { en: "Upload employment contracts, termination letters, and HR documents — the Document Intelligence Agent extracts structured data with field-level confidence scores.", ar: "حمّل عقود العمل ورسائل إنهاء الخدمة ووثائق الموارد البشرية — يستخرج وكيل ذكاء الوثائق البيانات المهيكلة مع درجات ثقة على مستوى الحقل." },
-      },
-      {
-        title: { en: "GOSI & Mudad Compliance", ar: "امتثال التأمينات ومُدد" },
-        caption: { en: "Automated GOSI contribution calculations, filing generation, and Mudad wage protection submissions with regulatory deadline tracking.", ar: "حساب آلي لاشتراكات التأمينات وإنشاء التقديمات وإرسال حماية الأجور عبر مُدد مع تتبع المواعيد التنظيمية." },
-      },
-      {
-        title: { en: "Agent Performance Management", ar: "إدارة أداء الوكلاء" },
-        caption: { en: "Monitor each agent's accuracy, speed, autonomy, and confidence calibration. Track human override rates and identify performance drift before it impacts operations.", ar: "راقب دقة كل وكيل وسرعته واستقلاليته ومعايرة ثقته. تتبع معدلات تجاوز البشر وحدد انحراف الأداء قبل أن يؤثر على العمليات." },
-      },
-      {
-        title: { en: "Payroll Simulator", ar: "محاكي الرواتب" },
-        caption: { en: "Model headcount changes, salary adjustments, and compliance scenarios. See instant impact on GOSI costs, Saudization ratios, and total payroll.", ar: "نمذج تغييرات أعداد الموظفين وتعديلات الرواتب وسيناريوهات الامتثال. شاهد التأثير الفوري على تكاليف التأمينات ونسب السعودة وإجمالي الرواتب." },
-      },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "Employee master records (42 employees across 3 clients)", ar: "السجلات الرئيسية للموظفين (42 موظفاً عبر 3 عملاء)" },
-        { en: "Employment contracts and HR letters (PDF, bilingual EN/AR)", ar: "عقود العمل ورسائل الموارد البشرية (PDF، ثنائية اللغة)" },
-        { en: "Bank details and IBAN numbers, leave requests and attendance data", ar: "بيانات البنك وأرقام الآيبان وطلبات الإجازات وبيانات الحضور" },
-        { en: "Client company profiles, Saudization ratios, regulatory calendar", ar: "ملفات الشركات العميلة ونسب السعودة والتقويم التنظيمي" },
+        {
+          title: { en: "Agent Orchestration", ar: "تنسيق الوكلاء" },
+          caption: { en: "Watch 10 specialised agents coordinate a monthly payroll cycle in real time, with full audit trail and human checkpoints.", ar: "شاهد 10 وكلاء متخصصين ينسقون دورة رواتب شهرية في الوقت الفعلي، مع مسار تدقيق كامل ونقاط مراجعة بشرية." },
+        },
+        {
+          title: { en: "Document Intelligence", ar: "ذكاء الوثائق" },
+          caption: { en: "Upload employment contracts, termination letters, and HR documents — the Document Intelligence Agent extracts structured data with field-level confidence scores.", ar: "حمّل عقود العمل ورسائل إنهاء الخدمة ووثائق الموارد البشرية — يستخرج وكيل ذكاء الوثائق البيانات المهيكلة مع درجات ثقة على مستوى الحقل." },
+        },
+        {
+          title: { en: "GOSI & Mudad Compliance", ar: "امتثال التأمينات ومُدد" },
+          caption: { en: "Automated GOSI contribution calculations, filing generation, and Mudad wage protection submissions with regulatory deadline tracking.", ar: "حساب آلي لاشتراكات التأمينات وإنشاء التقديمات وإرسال حماية الأجور عبر مُدد مع تتبع المواعيد التنظيمية." },
+        },
+        {
+          title: { en: "Agent Performance Management", ar: "إدارة أداء الوكلاء" },
+          caption: { en: "Monitor each agent's accuracy, speed, autonomy, and confidence calibration. Track human override rates and identify performance drift before it impacts operations.", ar: "راقب دقة كل وكيل وسرعته واستقلاليته ومعايرة ثقته. تتبع معدلات تجاوز البشر وحدد انحراف الأداء قبل أن يؤثر على العمليات." },
+        },
+        {
+          title: { en: "Payroll Simulator", ar: "محاكي الرواتب" },
+          caption: { en: "Model headcount changes, salary adjustments, and compliance scenarios. See instant impact on GOSI costs, Saudization ratios, and total payroll.", ar: "نمذج تغييرات أعداد الموظفين وتعديلات الرواتب وسيناريوهات الامتثال. شاهد التأثير الفوري على تكاليف التأمينات ونسب السعودة وإجمالي الرواتب." },
+        },
       ],
-      internal: [
-        { en: "GOSI contribution calculation engine (Saudi annuity + OHRP)", ar: "محرك حساب اشتراكات التأمينات (تقاعد السعوديين + OHRP)" },
-        { en: "EOSB provision and settlement formulas (Article 84 Saudi Labor Law)", ar: "صيغ مخصصات وتسوية نهاية الخدمة (المادة 84 من نظام العمل السعودي)" },
-        { en: "Saudization ratio monitoring (Nitaqat band classification)", ar: "مراقبة نسب السعودة (تصنيف نطاقات نطاقات)" },
-        { en: "Agent performance scoring model and document extraction confidence model", ar: "نموذج تسجيل أداء الوكلاء ونموذج ثقة استخراج الوثائق" },
-      ],
-      outputs: [
-        { en: "Monthly payslips with full gross-to-net breakdown", ar: "كشوف رواتب شهرية مع تفصيل كامل من الإجمالي للصافي" },
-        { en: "GOSI monthly filing files and Mudad wage protection submissions", ar: "ملفات تقديم التأمينات الشهرية وتقديمات حماية الأجور عبر مُدد" },
-        { en: "Final settlement statements (EOSB + leave encashment + remaining salary)", ar: "كشوف التسوية النهائية (نهاية الخدمة + صرف الإجازات + الراتب المتبقي)" },
-        { en: "Regulatory compliance reports and agent performance scorecards", ar: "تقارير الامتثال التنظيمي وبطاقات أداء الوكلاء" },
+      dataModel: {
+        inputs: [
+          { en: "Employee master records (42 employees across 3 clients)", ar: "السجلات الرئيسية للموظفين (42 موظفاً عبر 3 عملاء)" },
+          { en: "Employment contracts and HR letters (PDF, bilingual EN/AR)", ar: "عقود العمل ورسائل الموارد البشرية (PDF، ثنائية اللغة)" },
+          { en: "Bank details and IBAN numbers, leave requests and attendance data", ar: "بيانات البنك وأرقام الآيبان وطلبات الإجازات وبيانات الحضور" },
+          { en: "Client company profiles, Saudization ratios, regulatory calendar", ar: "ملفات الشركات العميلة ونسب السعودة والتقويم التنظيمي" },
+        ],
+        internal: [
+          { en: "GOSI contribution calculation engine (Saudi annuity + OHRP)", ar: "محرك حساب اشتراكات التأمينات (تقاعد السعوديين + OHRP)" },
+          { en: "EOSB provision and settlement formulas (Article 84 Saudi Labor Law)", ar: "صيغ مخصصات وتسوية نهاية الخدمة (المادة 84 من نظام العمل السعودي)" },
+          { en: "Saudization ratio monitoring (Nitaqat band classification)", ar: "مراقبة نسب السعودة (تصنيف نطاقات نطاقات)" },
+          { en: "Agent performance scoring model and document extraction confidence model", ar: "نموذج تسجيل أداء الوكلاء ونموذج ثقة استخراج الوثائق" },
+        ],
+        outputs: [
+          { en: "Monthly payslips with full gross-to-net breakdown", ar: "كشوف رواتب شهرية مع تفصيل كامل من الإجمالي للصافي" },
+          { en: "GOSI monthly filing files and Mudad wage protection submissions", ar: "ملفات تقديم التأمينات الشهرية وتقديمات حماية الأجور عبر مُدد" },
+          { en: "Final settlement statements (EOSB + leave encashment + remaining salary)", ar: "كشوف التسوية النهائية (نهاية الخدمة + صرف الإجازات + الراتب المتبقي)" },
+          { en: "Regulatory compliance reports and agent performance scorecards", ar: "تقارير الامتثال التنظيمي وبطاقات أداء الوكلاء" },
+        ],
+      },
+      status: "live",
+      accent: "#0D9488",
+      icon: "Wallet",
+      demoVariants: [
+        {
+          id: "teknik",
+          label: { en: "Agent Operations", ar: "عمليات الوكلاء" },
+          audience: { en: "Digital Team", ar: "الفريق الرقمي" },
+          description: { en: "Watch the 10-agent payroll pipeline process a monthly cycle end-to-end.", ar: "شاهد خط أنابيب الرواتب المكون من 10 وكلاء يعالج دورة شهرية كاملة." },
+          icon: "Bot",
+          route: "teknik",
+        },
+        {
+          id: "client",
+          label: { en: "Client Portal", ar: "بوابة العميل" },
+          audience: { en: "Tasama Clients", ar: "عملاء تسامة" },
+          description: { en: "Upload documents, track employees, and monitor your payroll — with AI agent insights throughout.", ar: "حمّل الوثائق، وتابع الموظفين، وراقب رواتبك — مع رؤى الوكلاء الذكية في كل خطوة." },
+          icon: "Building2",
+          route: "client",
+        },
+        {
+          id: "manager",
+          label: { en: "Operations Dashboard", ar: "لوحة العمليات" },
+          audience: { en: "Payroll Managers", ar: "مديرو الرواتب" },
+          description: { en: "Manage agent performance, approve recommendations, run compliance checks, and simulate scenarios.", ar: "أدِر أداء الوكلاء، ووافق على التوصيات، ونفّذ فحوصات الامتثال، وحاكِ السيناريوهات." },
+          icon: "LayoutDashboard",
+          route: "manager",
+        },
       ],
     },
-    status: "live",
-    accent: "#0D9488",
-    icon: "Wallet",
-    demoVariants: [
-      {
-        id: "teknik",
-        label: { en: "Agent Operations", ar: "عمليات الوكلاء" },
-        audience: { en: "Digital Team", ar: "الفريق الرقمي" },
-        description: { en: "Watch the 10-agent payroll pipeline process a monthly cycle end-to-end.", ar: "شاهد خط أنابيب الرواتب المكون من 10 وكلاء يعالج دورة شهرية كاملة." },
-        icon: "Bot",
-        route: "teknik",
+  // ── Maven Personal Agent ────────────────────────────────────────────────
+    // Per-employee AI agent with an employee-owned Personal Context Graph.
+    // Two killer demos: the Cockpit (chat + workspace + glass-box) and
+    // the Mind (interactive PCG visualisation with time scrubber).
+    {
+      id: "maven-personal-agent",
+      slug: "maven-personal-agent",
+      title: {
+        en: "Maven Personal Agent",
+        ar: "مساعد Maven الشخصي",
+        tr: "Maven Kişisel Ajan",
       },
-      {
-        id: "client",
-        label: { en: "Client Portal", ar: "بوابة العميل" },
-        audience: { en: "Tasama Clients", ar: "عملاء تسامة" },
-        description: { en: "Upload documents, track employees, and monitor your payroll — with AI agent insights throughout.", ar: "حمّل الوثائق، وتابع الموظفين، وراقب رواتبك — مع رؤى الوكلاء الذكية في كل خطوة." },
-        icon: "Building2",
-        route: "client",
+      class: "personal-agent",
+      industries: ["financial-services", "telecom", "retail-consumer", "public-sector"],
+      horizontals: ["pmo"],
+      buyer: {
+        en: "CHRO, CIO, CDO — and ultimately every employee",
+        ar: "الرئيس التنفيذي للموارد البشرية، الرئيس التنفيذي للمعلومات، الرئيس التنفيذي للبيانات — والموظف نفسه في النهاية",
+        tr: "İK Direktörü, Bilgi Direktörü, Veri Direktörü — ve nihayetinde her çalışan",
       },
-      {
-        id: "manager",
-        label: { en: "Operations Dashboard", ar: "لوحة العمليات" },
-        audience: { en: "Payroll Managers", ar: "مديرو الرواتب" },
-        description: { en: "Manage agent performance, approve recommendations, run compliance checks, and simulate scenarios.", ar: "أدِر أداء الوكلاء، ووافق على التوصيات، ونفّذ فحوصات الامتثال، وحاكِ السيناريوهات." },
-        icon: "LayoutDashboard",
-        route: "manager",
+      pitch: {
+        en: "An always-on AI agent for every employee. Learns the job and the person, stores it in a Personal Context Graph the employee owns and can port between employers, and acts autonomously under a glass-box trust model.",
+        ar: "مساعد ذكاء اصطناعي دائم العمل لكل موظف. يتعلّم العمل والشخص، يخزّن المعرفة في رسم سياق شخصي يملكه الموظف وينقله بين أصحاب العمل، ويعمل ذاتياً ضمن نموذج ثقة زجاجي شفّاف.",
+        tr: "Her çalışana özel, her zaman açık bir yapay zekâ ajanı. İşi ve kişiyi öğrenir, çalışanın sahip olduğu ve işverenler arasında taşıyabildiği Kişisel Bağlam Grafiği'nde saklar ve cam-kutu güven modeli altında özerk biçimde hareket eder.",
       },
-    ],
-  },
+      longDescription: [
+        {
+          en: "Today every AI assistant — Cedric, Microsoft 365 Copilot Memory, ChatGPT Memory — locks the employee's accumulated context inside the vendor's or employer's silo. When the employee changes tools or jobs, they start over. The Personal Agent inverts this: the Personal Context Graph (PCG) is owned by the employee, scoped to work and personal life with a clean privacy boundary, and exportable as JSON-LD on demand. The employer pays for work-scope access, not for the memory itself.",
+          ar: "اليوم، كل مساعد ذكاء اصطناعي — سيدريك، ذاكرة Microsoft 365 Copilot، ذاكرة ChatGPT — يحبس السياق المتراكم للموظف داخل صومعة المورد أو صاحب العمل. عند تغيير الأداة أو الوظيفة يبدأ الموظف من الصفر. يقلب المساعد الشخصي هذا: رسم السياق الشخصي مملوك للموظف، مفصول بين العمل والحياة الخاصة بحدود خصوصية واضحة، وقابل للتصدير كـ JSON-LD عند الطلب. يدفع صاحب العمل مقابل وصول نطاق العمل لا مقابل الذاكرة نفسها.",
+          tr: "Bugün her yapay zekâ asistanı — Cedric, Microsoft 365 Copilot Memory, ChatGPT Memory — çalışanın biriktirdiği bağlamı satıcının veya işverenin silosunda kilitler. Çalışan araç veya iş değiştirince sıfırdan başlar. Kişisel Ajan bunu tersine çevirir: Kişisel Bağlam Grafiği (PCG) çalışana aittir, iş ve kişisel yaşam arasında net bir gizlilik sınırıyla ayrılır ve istek üzerine JSON-LD olarak dışa aktarılabilir. İşveren bellek için değil, iş-kapsamı erişim için öder.",
+        },
+        {
+          en: "Every assistant answer is grounded in the exact PCG nodes that informed it, surfaced live in a Glass-box rail. Every autonomous action drops a receipt: what was done, which nodes informed the decision, the confidence, the time saved, and a one-click undo. This is the antidote to the surveillance and black-box anxiety that plagues enterprise AI today.",
+          ar: "كل إجابة من المساعد مؤصّلة في عقد الرسم نفسها التي استُخدمت لتوليدها، وتُعرض مباشرة في شريط الصندوق الزجاجي. كل إجراء آلي يترك إيصالاً: ما تمّ، أي عقد استُند إليها، الثقة، الوقت الموفّر، وزر تراجع واحد. هذا هو الترياق لقلق المراقبة والصندوق الأسود الذي يثقل الذكاء الاصطناعي المؤسسي اليوم.",
+          tr: "Her asistan yanıtı, onu bilgilendiren tam PCG düğümlerine dayalıdır ve canlı olarak Cam-kutu şeridinde görünür. Her özerk eylem bir makbuz bırakır: ne yapıldı, hangi düğümler kararı bilgilendirdi, güven, kazanılan zaman ve tek-tıkla geri al. Bu, kurumsal yapay zekâyı bugün rahatsız eden gözetim ve kara-kutu kaygısının panzehiridir.",
+        },
+        {
+          en: "The Personal Agent is one agent for the whole person. It can draft your offer letter and remember your daughter's recital. The employee owns personal-scope autonomy at all times; the employer sees only aggregate work-scope outcomes — never raw observations or chat content. Two demos make this concrete: the Cockpit (the agent's chat + workspace + glass-box receipts) and the Mind (the live PCG with a Day-1-to-Year-1 time scrubber).",
+          ar: "المساعد الشخصي وكيل واحد للشخص بأكمله. يمكنه صياغة خطاب عرضك وتذكّر حفلة ابنتك. يملك الموظف الاستقلالية الشخصية دوماً؛ يرى صاحب العمل النتائج المجمّعة لنطاق العمل فقط — لا الملاحظات الخام ولا محتوى الدردشة. عرضان تفاعليان يجعلان ذلك ملموساً: القمرة (دردشة + مساحة عمل + إيصالات شفّافة) والعقل (رسم السياق الحي مع شريط زمني من اليوم الأول إلى السنة الأولى).",
+          tr: "Kişisel Ajan, tüm insan için tek bir ajandır. Teklif mektubunuzu yazabilir ve kızınızın konserini hatırlayabilir. Çalışan kişisel-kapsam özerkliğine her zaman sahiptir; işveren yalnızca toplu iş-kapsamı sonuçları görür — ham gözlemleri veya sohbet içeriğini asla görmez. İki demo bunu somutlaştırır: Kokpit (ajanın sohbeti + çalışma alanı + cam-kutu makbuzları) ve Zihin (Gün-1'den Yıl-1'e zaman kaydırıcılı canlı PCG).",
+        },
+      ],
+      screens: [
+        {
+          title: { en: "The Cockpit — chat, workspace, glass-box rail", ar: "القمرة — دردشة ومساحة عمل وشريط زجاجي", tr: "Kokpit — sohbet, çalışma alanı, cam-kutu şeridi" },
+          caption: { en: "Three-pane assistant UI: real Claude chat (grounded in the PCG), four workspace modules (learnings, pending approvals, in-progress tasks, personal nudges), and a live Context-used rail that shows exactly which graph nodes the agent consulted.", ar: "واجهة مساعد بثلاث لوحات: دردشة كلود حقيقية (مؤصّلة في الرسم)، أربع وحدات في مساحة العمل (التعلّمات، انتظار الموافقة، قيد التنفيذ، تنبيهات شخصية)، وشريط السياق المستخدم الحي الذي يُظهر العقد التي استشارها المساعد.", tr: "Üç panelli asistan arayüzü: gerçek Claude sohbeti (PCG'ye dayalı), dört çalışma alanı modülü (öğrenmeler, bekleyen onaylar, sürmekte olan görevler, kişisel hatırlatmalar) ve ajanın hangi grafik düğümlerine danıştığını gösteren canlı Kullanılan Bağlam şeridi." },
+        },
+        {
+          title: { en: "The Mind — Personal Context Graph", ar: "العقل — رسم السياق الشخصي", tr: "Zihin — Kişisel Bağlam Grafiği" },
+          caption: { en: "Constellation-style force-directed graph. Categories cluster (Role, Skills, Relationships, Preferences, Personal, Projects, Tools). Time scrubber animates Day 1 → Year 1. Click a node to see what was learned, when, source, confidence, and how the agent has used it.", ar: "رسم قوة مجموعات على شكل كوكبات. تتجمّع الفئات (الدور، المهارات، العلاقات، التفضيلات، الشخصي، المشاريع، الأدوات). شريط زمني يحرّك من اليوم الأول إلى السنة الأولى. انقر عقدة لترى ماذا تعلّم المساعد ومتى ومن أي مصدر وبأي ثقة وكيف استخدمها.", tr: "Takım-yıldız tarzı kuvvet-yönlendirmeli grafik. Kategoriler kümelenir (Rol, Beceriler, İlişkiler, Tercihler, Kişisel, Projeler, Araçlar). Zaman kaydırıcısı Gün 1 → Yıl 1 animasyonu yapar. Bir düğüme tıklayarak neyin, ne zaman, hangi kaynaktan, hangi güvenle öğrenildiğini ve ajanın bunu nasıl kullandığını görün." },
+        },
+        {
+          title: { en: "Glass-box receipts and one-click undo", ar: "إيصالات شفّافة وزر تراجع واحد", tr: "Cam-kutu makbuzları ve tek-tıkla geri alma" },
+          caption: { en: "Every autonomous action — a sent follow-up, a booked slot, a drafted offer letter — drops a receipt that lists the PCG nodes consulted, the autonomy level, the time saved, and an Undo button. No black boxes.", ar: "كل إجراء آلي — متابعة أُرسلت، موعد حُجز، خطاب عرض صيغ — يترك إيصالاً يذكر عقد الرسم المستشارة ومستوى الاستقلالية والوقت الموفّر وزر تراجع. لا صناديق سوداء.", tr: "Her özerk eylem — gönderilen bir takip, ayrılan bir randevu, taslağı çıkarılan bir teklif mektubu — danışılan PCG düğümlerini, özerklik seviyesini, kazanılan zamanı ve bir Geri-al düğmesini listeleyen bir makbuz bırakır. Kara kutu yok." },
+        },
+        {
+          title: { en: "Privacy scope toggle (Work / Personal / Both)", ar: "مفتاح نطاق الخصوصية (عمل / شخصي / كلاهما)", tr: "Gizlilik kapsamı düğmesi (İş / Kişisel / Her ikisi)" },
+          caption: { en: "Toggling Personal off fades all personal-scope nodes from the Mind — the exact slice the employer would ever see in production. The employee owns the personal scope at all autonomy levels.", ar: "إيقاف شخصي يُلاشي كل العقد ذات النطاق الشخصي من العقل — الشريحة الوحيدة التي قد يراها صاحب العمل في الإنتاج. يملك الموظف النطاق الشخصي في كل مستويات الاستقلالية.", tr: "Kişisel'i kapatmak Zihin'deki tüm kişisel-kapsam düğümlerini soldurur — işverenin üretimde göreceği tek dilim. Çalışan, kişisel kapsama tüm özerklik düzeylerinde sahiptir." },
+        },
+        {
+          title: { en: "Export my graph (employee-owned, portable)", ar: "تصدير رسمي (مملوك للموظف وقابل للنقل)", tr: "Grafiğimi dışa aktar (çalışana ait, taşınabilir)" },
+          caption: { en: "One click exports the PCG as JSON-LD — the employee's portable memory wallet. When they change jobs, the graph leaves with them; the new employer can import the work-scope subset they sign for.", ar: "نقرة واحدة تصدّر الرسم بصيغة JSON-LD — محفظة الذاكرة المحمولة للموظف. عند تغيير الوظيفة يأخذ الموظف الرسم معه؛ يستطيع صاحب العمل الجديد استيراد شريحة العمل التي يوقّع عليها.", tr: "Tek tık PCG'yi JSON-LD olarak dışa aktarır — çalışanın taşınabilir bellek cüzdanı. İş değiştirdiğinde grafik onunla gider; yeni işveren imzaladığı iş-kapsamı alt kümesini içe aktarabilir." },
+        },
+      ],
+      dataModel: {
+        inputs: [
+          { en: "Calendar, email, chat, meeting transcripts, doc edits, ATS / CRM activity (read-only by scope)", ar: "تقويم، بريد، دردشة، نسخ اجتماعات، تعديلات وثائق، نشاط ATS/CRM (قراءة فقط بحسب النطاق)", tr: "Takvim, e-posta, sohbet, toplantı transkriptleri, doküman düzenlemeleri, ATS / CRM etkinliği (kapsama göre salt okunur)" },
+          { en: "Employee corrections and explicit teach-me snippets", ar: "تصحيحات الموظف ومقاطع تعليم صريحة", tr: "Çalışan düzeltmeleri ve açık öğretici parçalar" },
+          { en: "Per-capability autonomy policy (employee for personal scope; manager for work scope)", ar: "سياسة استقلالية لكل قدرة (الموظف للنطاق الشخصي؛ المدير للعمل)", tr: "Yetenek başına özerklik politikası (kişisel kapsam için çalışan; iş kapsamı için yönetici)" },
+        ],
+        internal: [
+          { en: "Personal Context Graph: nodes (entity / preference / skill / relationship / personal / project / tool / domain) and edges with confidence + decay", ar: "رسم السياق الشخصي: عقد (كيان/تفضيل/مهارة/علاقة/شخصي/مشروع/أداة/مجال) ورؤوس بثقة وانحلال", tr: "Kişisel Bağlam Grafiği: düğümler (varlık / tercih / beceri / ilişki / kişisel / proje / araç / alan) ve güven + zayıflama ile kenarlar" },
+          { en: "Per-node provenance log: source, learnedAt, lastUsedAt, useCount, scope (work/personal)", ar: "سجل أصل لكل عقدة: المصدر، تاريخ التعلّم، آخر استخدام، عدّاد الاستخدام، النطاق (عمل/شخصي)", tr: "Düğüm başına köken günlüğü: kaynak, öğrenildiği zaman, son kullanım, kullanım sayısı, kapsam (iş/kişisel)" },
+          { en: "Glass-box receipt for every autonomous action — undoable", ar: "إيصال شفّاف لكل إجراء آلي — قابل للتراجع", tr: "Her özerk eylem için cam-kutu makbuzu — geri alınabilir" },
+        ],
+        outputs: [
+          { en: "Drafts (emails, follow-ups, offer letters, FAQs, briefs) for human approval or autonomous send", ar: "مسودات (بريد، متابعات، خطابات عرض، أسئلة شائعة، موجزات) لموافقة بشرية أو إرسال آلي", tr: "Taslaklar (e-postalar, takipler, teklif mektupları, SSS'ler, brifingler) insan onayı veya özerk gönderim için" },
+          { en: "Personal nudges (cross-life: book the florist, draft the toast, block calendar)", ar: "تنبيهات شخصية (عبر الحياة: حجز محل الزهور، صياغة الكلمة، حجز التقويم)", tr: "Kişisel hatırlatmalar (yaşamlar arası: çiçekçiyi ayırt, konuşmayı taslakla, takvimi blokla)" },
+          { en: "Aggregate manager-observability metrics (hours saved, automated task types, satisfaction)", ar: "مقاييس مرئية للمدير مجمّعة (الساعات الموفّرة، أنواع المهام الآلية، الرضا)", tr: "Toplu yönetici-gözlemlenebilirlik metrikleri (kazanılan saatler, otomatik görev türleri, memnuniyet)" },
+          { en: "Portable PCG export (JSON-LD) — employee-owned, free at any time", ar: "تصدير رسم محمول (JSON-LD) — مملوك للموظف، مجاني في أي وقت", tr: "Taşınabilir PCG dışa aktarımı (JSON-LD) — çalışana ait, her zaman ücretsiz" },
+        ],
+      },
+      status: "live",
+      accent: "#a78bfa",
+      icon: "BrainCircuit",
+      relatedService: "agentic-ai-transformation",
+      demoVariants: [
+        {
+          id: "cockpit",
+          label: { en: "Open the Cockpit", ar: "افتح القمرة", tr: "Kokpit'i aç" },
+          audience: { en: "Day-in-the-life of the agent in action", ar: "يوم في حياة المساعد أثناء العمل", tr: "Ajanın iş başındaki bir günü" },
+          description: {
+            en: "Chat + workspace + glass-box rail. Switch persona (Sales · HR) and language (EN · AR · TR) up top. Approve a drafted follow-up, watch the receipt land with the PCG citations and undo button, then ask the chat a question and see exactly which nodes were consulted.",
+            ar: "دردشة + مساحة عمل + شريط زجاجي. بدّل الشخصية (مبيعات · موارد بشرية) واللغة (EN · AR · TR) من الأعلى. وافق على متابعة مصاغة، شاهد الإيصال يصل مع استشهادات الرسم وزر التراجع، ثم اسأل الدردشة وشاهد أي عقد تم استشارتها.",
+            tr: "Sohbet + çalışma alanı + cam-kutu şeridi. Üstten kişiyi (Satış · İK) ve dili (EN · AR · TR) değiştirin. Hazırlanmış bir takibi onaylayın, makbuzun PCG atıfları ve geri-al düğmesiyle düştüğünü izleyin, ardından sohbete bir soru sorun ve hangi düğümlerin danışıldığını tam olarak görün.",
+          },
+          icon: "MessageSquare",
+          route: "cockpit",
+        },
+        {
+          id: "mind",
+          label: { en: "Open the Mind", ar: "افتح العقل", tr: "Zihni aç" },
+          audience: { en: "Watch a PCG grow from Day 1 to Year 1", ar: "شاهد الرسم ينمو من اليوم الأول إلى السنة الأولى", tr: "Bir PCG'nin Gün 1'den Yıl 1'e büyümesini izleyin" },
+          description: {
+            en: "Force-directed PCG with category constellations. Drag the time scrubber Day 1 → Year 1 and watch nodes/edges fade in. Click any node for provenance and how the agent has been using it. Toggle Work / Personal / Both to see the privacy boundary. Export the graph as JSON-LD.",
+            ar: "رسم قوة مجموعات بـ كوكبات الفئات. اسحب شريط الزمن من اليوم الأول إلى السنة الأولى وشاهد العقد والرؤوس تظهر تباعاً. انقر أي عقدة لمعرفة الأصل وكيف يستخدمها المساعد. بدّل عمل/شخصي/كلاهما لرؤية حدود الخصوصية. صدّر الرسم بصيغة JSON-LD.",
+            tr: "Kategori takım-yıldızlarıyla kuvvet-yönlendirmeli PCG. Zaman kaydırıcısını Gün 1 → Yıl 1 sürükleyin ve düğümlerin/kenarların görünmesini izleyin. Köken ve ajanın nasıl kullandığını görmek için herhangi bir düğüme tıklayın. Gizlilik sınırını görmek için İş / Kişisel / Her ikisi'ni değiştirin. Grafiği JSON-LD olarak dışa aktarın.",
+          },
+          icon: "BrainCircuit",
+          route: "mind",
+        },
+      ],
+    },
 ];
 
 // Attach the agent cast for each tool so the consumer-facing

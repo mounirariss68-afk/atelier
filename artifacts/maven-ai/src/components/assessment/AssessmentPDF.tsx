@@ -31,7 +31,7 @@ interface PDFArgs {
   result: ScoreResult;
   profile: { name: string; company: string; role: string; country: string };
   memo: string;
-  lang: "en" | "ar";
+  lang: import("@/lib/lang").Lang;
   publicId: string;
 }
 
@@ -317,7 +317,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
           <Text style={[styles.h3, { color: "#92400E", marginTop: 0 }]}>
             {t({ en: "What a vendor will not tell you", ar: "ما لن يخبرك به مزود" })}
           </Text>
-          <Text style={[styles.bullet, { color: "#78350F" }]}>{(def.antiVendor[lang]?.[0] ?? def.antiVendor.en[0] ?? "")}</Text>
+          <Text style={[styles.bullet, { color: "#78350F" }]}>{(def.antiVendor[lang === "ar" ? "ar" : "en"]?.[0] ?? def.antiVendor.en[0] ?? "")}</Text>
         </View>
 
         <Text style={[styles.h2, dirStyle, { marginTop: 18 }]}>{t({ en: "Signed by the partnership", ar: "موقعة من الشركاء" })}</Text>

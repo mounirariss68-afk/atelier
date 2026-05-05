@@ -100,7 +100,11 @@ export default function AssessmentResults() {
     .join(" · ");
   const productivityFte = +(result.costOfInaction.ebitDeltaUsd / 250_000).toFixed(1);
   const sovereignSpecific = result.recommendations.roadmap6m;
-  const antiVendorMessage = (def.antiVendor[lang]?.[0] ?? def.antiVendor.en[0] ?? "");
+  // The assessment library's lookup tables only define EN/AR. Fall TR users
+  // back to EN here so we don't break indexing — TR support for the
+  // diagnostic suite itself is a follow-up task tracked separately.
+  const assessmentLang: "en" | "ar" = lang === "ar" ? "ar" : "en";
+  const antiVendorMessage = (def.antiVendor[assessmentLang]?.[0] ?? def.antiVendor.en[0] ?? "");
 
   const downloadPdf = async () => {
     setDownloading(true);
@@ -111,7 +115,7 @@ export default function AssessmentResults() {
           result={result}
           profile={data.profile}
           memo={data.memo ?? ""}
-          lang={lang}
+          lang={assessmentLang}
           publicId={data.publicId}
         />,
       ).toBlob();
@@ -455,7 +459,7 @@ export default function AssessmentResults() {
               {heatmap && heatmap.ready && heatmap.dimensions && heatmap.respondents && heatmap.variance && (
                 <div className="mt-6">
                   <h4 className="text-lg font-bold text-[#0E2841] mb-3">{t({ en: "Stakeholder alignment", ar: "مواءمة أصحاب المصلحة" })}</h4>
-                  <Heatmap dimensions={heatmap.dimensions} respondents={heatmap.respondents} variance={heatmap.variance} lang={lang} />
+                  <Heatmap dimensions={heatmap.dimensions} respondents={heatmap.respondents} variance={heatmap.variance} lang={assessmentLang} />
                 </div>
               )}
             </div>
@@ -528,7 +532,7 @@ export default function AssessmentResults() {
           defaultName={data.profile.name}
           defaultEmail={data.profile.email}
           defaultCompany={data.profile.company}
-          lang={lang}
+          lang={assessmentLang}
           onDone={() => setBookingDone(true)}
         />
       )}
@@ -581,7 +585,7 @@ function BookingModal({
   defaultName: string;
   defaultEmail: string;
   defaultCompany: string;
-  lang: "en" | "ar";
+  lang: import("@/lib/lang").Lang;
   onDone: () => void;
 }) {
   const t = (s: { en: string; ar: string }) => tStr(s, lang);
@@ -602,7 +606,9 @@ function BookingModal({
         company,
         preferredTime,
         message,
-        language: lang,
+        // bookCall is a server DTO that only accepts the legacy EN/AR
+        // Language. Collapse the additive "tr" UI surface to "en" here.
+        language: lang === "tr" ? "en" : lang,
       });
       onDone();
     } finally {

@@ -7,6 +7,8 @@ import AgentOpsShell from "@/components/demo/tasama/AgentOpsShell";
 import ClientPortalShell from "@/components/demo/tasama/ClientPortalShell";
 import ManagerDashboardShell from "@/components/demo/tasama/ManagerDashboardShell";
 import { TasamaDemoLangProvider } from "@/components/demo/tasama/DemoLangContext";
+import Cockpit from "@/components/demo/personal-agent/Cockpit";
+import Mind from "@/components/demo/personal-agent/Mind";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLang, tStr } from "@/lib/lang";
 import { ArcelikDataProvider } from "@/hooks/useArcelikData";
@@ -61,6 +63,16 @@ export default function Demo() {
         </TasamaDataProvider>
       </TasamaDemoLangProvider>
     );
+  }
+
+  // Maven Personal Agent has two purpose-built demos that bypass the generic
+  // scenario engine because they need a chat surface and a graph viz that
+  // don't fit DemoExperience's "agent trace + workspace widgets" template.
+  if (slug === "maven-personal-agent" && variant === "cockpit") {
+    return <Cockpit />;
+  }
+  if (slug === "maven-personal-agent" && variant === "mind") {
+    return <Mind />;
   }
 
   const scenario = getScenario(slug, variant);

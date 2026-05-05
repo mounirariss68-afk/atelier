@@ -24,6 +24,7 @@ export const REGISTERED_DEMO_SLUGS: readonly string[] = [
   "enterprise-knowledge-concierge",
   "arcelik-fiyat-istihbarati",
   "tasama-payroll-hub",
+  "maven-personal-agent",
 ] as const;
 
 export const REGISTERED_DEMO_SLUG_SET: ReadonlySet<string> = new Set(

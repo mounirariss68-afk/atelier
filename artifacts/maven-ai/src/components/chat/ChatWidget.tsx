@@ -75,7 +75,10 @@ const SESSION_KEY = "maven-ai-chat-open";
 export default function ChatWidget() {
   const { lang, dir } = useLang();
   const t = (s: { en: string; ar: string }) => tStr(s, lang);
-  const { messages, status, send, reset, abort, retry, canRetry } = useChatStream(lang);
+  // The chat backend's intent matcher only knows EN/AR — fall TR users back
+  // to EN so the chat works correctly while the rest of the chrome stays in TR.
+  const chatLang: "en" | "ar" = lang === "ar" ? "ar" : "en";
+  const { messages, status, send, reset, abort, retry, canRetry } = useChatStream(chatLang);
   const [open, setOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem(SESSION_KEY) === "1";

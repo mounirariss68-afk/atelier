@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-type Lang = "en" | "ar";
+export type Lang = "en" | "ar" | "tr";
 
 interface LangContextValue {
   lang: Lang;
@@ -16,11 +16,15 @@ const LangContext = createContext<LangContextValue>({
 
 const KEY = "maven-ai-lang";
 
+function isLang(v: unknown): v is Lang {
+  return v === "en" || v === "ar" || v === "tr";
+}
+
 export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     if (typeof window === "undefined") return "en";
     const v = window.localStorage.getItem(KEY);
-    return v === "ar" ? "ar" : "en";
+    return isLang(v) ? v : "en";
   });
 
   useEffect(() => {
@@ -41,6 +45,14 @@ export function useLang(): LangContextValue {
   return useContext(LangContext);
 }
 
-export function tStr(s: { en: string; ar: string }, lang: Lang): string {
-  return s[lang] ?? s.en;
+/**
+ * Translate a multilingual string. The shared content library currently
+ * carries `{ en, ar }` everywhere; the new Personal Agent surface adds an
+ * optional `tr` field. Missing TR (or any missing key) silently falls
+ * back to English so existing EN/AR-only data keeps working.
+ */
+export function tStr(s: { en: string; ar: string; tr?: string }, lang: Lang): string {
+  if (lang === "tr") return s.tr ?? s.en;
+  if (lang === "ar") return s.ar ?? s.en;
+  return s.en;
 }

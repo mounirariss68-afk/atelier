@@ -104,7 +104,12 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
   }, [def.slug, useCases.length]);
 
   useEffect(() => {
-    setProfile((p) => ({ ...p, language: lang }));
+    // ProfileInput.language predates TR support and only knows "en" | "ar".
+    // Coerce TR users to EN for the assessment profile until the wizard's
+    // copy/scoring is localized — keeps the rest of the chrome in TR while
+    // the assessment itself remains a bilingual EN/AR product.
+    const profileLang = lang === "ar" ? "ar" : "en";
+    setProfile((p) => ({ ...p, language: profileLang }));
   }, [lang]);
 
   useEffect(() => {

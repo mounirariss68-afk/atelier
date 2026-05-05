@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, ChatSuggestion } from "@workspace/api-client-react";
+import type { Lang } from "@/lib/lang";
+
+// The chat backend currently understands only EN/AR. The website-wide
+// `Lang` adds an additive `"tr"` for the new Personal Agent surface; for
+// the public chat widget we transparently fall back TR -> EN so the rest
+// of the app keeps compiling and the user still gets a coherent reply.
+type ChatLang = "en" | "ar";
+function narrowLang(l: Lang): ChatLang {
+  return l === "tr" ? "en" : l;
+}
 
 export interface ChatStreamMessage {
   role: "user" | "assistant";
@@ -27,11 +37,11 @@ const TRANSCRIPT_VERSION = 1;
 
 interface PersistedTranscript {
   v: number;
-  lang: "en" | "ar";
+  lang: ChatLang;
   messages: ChatStreamMessage[];
 }
 
-function loadTranscript(language: "en" | "ar"): ChatStreamMessage[] {
+function loadTranscript(language: ChatLang): ChatStreamMessage[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.sessionStorage.getItem(TRANSCRIPT_KEY);
@@ -46,7 +56,7 @@ function loadTranscript(language: "en" | "ar"): ChatStreamMessage[] {
   }
 }
 
-function saveTranscript(language: "en" | "ar", messages: ChatStreamMessage[]): void {
+function saveTranscript(language: ChatLang, messages: ChatStreamMessage[]): void {
   if (typeof window === "undefined") return;
   try {
     if (messages.length === 0) {
@@ -146,12 +156,17 @@ function makeSSEParser(onEvent: (e: ServerEvent) => void): (chunk: string) => vo
   };
 }
 
-export function useChatStream(language: "en" | "ar"): UseChatStreamResult {
+export function useChatStream(languageInput: Lang): UseChatStreamResult {
+  // The chat backend (and the persisted transcript schema) only understand
+  // EN/AR. We narrow once at the boundary so every downstream reference —
+  // sessionStorage, COPY indexing, fetch payload — stays statically valid
+  // even as the rest of the app gains TR support.
+  const language: ChatLang = narrowLang(languageInput);
   const [messages, setMessages] = useState<ChatStreamMessage[]>(() => loadTranscript(language));
   const [status, setStatus] = useState<"idle" | "streaming" | "error">("idle");
   const abortRef = useRef<AbortController | null>(null);
   const lastUserMessageRef = useRef<string | null>(null);
-  const lastLanguageRef = useRef<"en" | "ar">(language);
+  const lastLanguageRef = useRef<ChatLang>(language);
 
   // Persist transcript to sessionStorage on every change so a refresh keeps
   // the conversation visible (per-tab, cleared when the tab closes).

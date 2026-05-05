@@ -17,6 +17,10 @@ import {
   Headphones,
   Database,
   BookOpen,
+  Brain,
+  MessageSquare,
+  Eye,
+  Wallet,
   Play,
   Network,
   Zap,
@@ -51,7 +55,39 @@ const ICONS: Record<string, LucideIcon> = {
   Headphones,
   Database,
   BookOpen,
+  Brain,
+  MessageSquare,
+  BrainCircuit: Brain,
 };
+
+// "Why we built it this way" — three killer angles strip rendered on the
+// Maven Personal Agent detail page only. Lives at module scope so the JSX
+// inside the component stays scannable.
+const PERSONAL_AGENT_ANGLES: {
+  icon: LucideIcon;
+  badge: { en: string; ar: string; tr?: string };
+  title: { en: string; ar: string; tr?: string };
+  body: { en: string; ar: string; tr?: string };
+}[] = [
+  {
+    icon: Wallet,
+    badge: { en: "Employee-owned", ar: "مملوك للموظف", tr: "Çalışana ait" },
+    title: { en: "Your Personal Context Graph belongs to you, not the vendor.", ar: "رسم سياقك الشخصي ملكك أنت، لا المورّد.", tr: "Kişisel Bağlam Grafiğiniz size aittir, satıcıya değil." },
+    body: { en: "Cedric, M365 Copilot Memory and ChatGPT Memory all lock the employee's accumulated context inside the vendor's silo. We invert this: the PCG is portable as JSON-LD on demand and travels with the employee between jobs. The employer pays for work-scope access, never for the memory itself.", ar: "سيدريك وذاكرة M365 Copilot وذاكرة ChatGPT جميعها تحبس السياق المتراكم للموظف داخل صومعة المورّد. نقلب هذا: الرسم قابل للتصدير كـ JSON-LD متى شئت ويسافر مع الموظف بين الوظائف. يدفع صاحب العمل مقابل وصول نطاق العمل، لا مقابل الذاكرة نفسها.", tr: "Cedric, M365 Copilot Memory ve ChatGPT Memory çalışanın biriktirdiği bağlamı satıcının silosunda kilitler. Bunu tersine çeviriyoruz: PCG istek üzerine JSON-LD olarak taşınabilir ve çalışanla birlikte işler arasında gider. İşveren bellek için değil, iş-kapsamı erişim için öder." },
+  },
+  {
+    icon: Eye,
+    badge: { en: "Glass-box trust", ar: "ثقة شفّافة", tr: "Cam-kutu güveni" },
+    title: { en: "Every answer cites its nodes. Every action drops a receipt with one-click undo.", ar: "كل إجابة تستشهد بعقدها. كل إجراء يترك إيصالاً مع زر تراجع واحد.", tr: "Her cevap kaynağındaki düğümleri gösterir. Her eylem, tek-tıkla geri-al içeren bir makbuz bırakır." },
+    body: { en: "The Cockpit's right-hand rail is non-negotiable. The same nodes the retriever picked appear under the chat reply, and every autonomous action — sent follow-up, booked slot, drafted offer — drops a receipt listing the cited nodes, autonomy level, and time saved. Black-box anxiety is the #1 reason enterprise pilots stall; we removed it from the product, not from the policy.", ar: "الشريط الأيمن في القمرة غير قابل للتفاوض. نفس العقد التي اختارها المسترجع تظهر أسفل ردّ الدردشة، وكل إجراء آلي — متابعة مرسلة، موعد محجوز، عرض مصاغ — يترك إيصالاً يذكر العقد المستشهَد بها ومستوى الاستقلالية والوقت الموفّر. قلق الصندوق الأسود السبب الأول لتعطّل التجارب المؤسسية؛ أزلناه من المنتج لا من السياسة.", tr: "Kokpit'in sağ şeridi pazarlık konusu değildir. Getiricinin seçtiği aynı düğümler sohbet cevabının altında görünür ve her özerk eylem — gönderilen takip, ayrılan slot, taslak teklif — atıf yapılan düğümleri, özerklik seviyesini ve kazanılan zamanı listeleyen bir makbuz bırakır. Kara-kutu kaygısı kurumsal pilotların durmasının 1 numaralı sebebi; bunu üründen kaldırdık, politikadan değil." },
+  },
+  {
+    icon: Brain,
+    badge: { en: "Cross-life agent", ar: "مساعد عبر الحياة", tr: "Yaşamlar arası ajan" },
+    title: { en: "One agent for the whole person. Drafts an offer letter. Remembers the recital.", ar: "مساعد واحد للشخص بأكمله. يصوغ خطاب العرض. يتذكّر حفلة الابنة.", tr: "Tek insan için tek ajan. Teklif mektubu yazar. Konseri hatırlar." },
+    body: { en: "The fragmentation of work and personal AI today is artificial — the human is one person. Atlas can prep the ACME QBR and block the calendar for a daughter's recital because both signals already live in the PCG. The privacy boundary is by scope (Work / Personal), not by vendor. Toggle Personal off and you see exactly the slice the employer would ever access.", ar: "تجزئة الذكاء الاصطناعي للعمل والحياة الشخصية اليوم مصطنعة — الإنسان واحد. أطلس يُجهّز عرض ACME QBR ويحجز تقويم حفلة ابنة الموظف لأن كلتا الإشارتين موجودتان في الرسم. حدود الخصوصية بالنطاق (عمل/شخصي) لا بالمورّد. أوقف 'شخصي' ترى الشريحة التي قد يصل إليها صاحب العمل تماماً.", tr: "Bugünkü iş ve kişisel yapay zekâ ayrımı yapaydır — insan bir kişidir. Atlas hem ACME QBR'yi hazırlayabilir hem de bir kızın konseri için takvimi bloklayabilir çünkü her iki sinyal de zaten PCG'dedir. Gizlilik sınırı kapsama göredir (İş / Kişisel), satıcıya göre değil. Kişisel'i kapatın ve işverenin erişebileceği tam dilimi görün." },
+  },
+];
 
 const COPY = {
   back: { en: "Back to Marketplace", ar: "العودة إلى السوق" },
@@ -262,6 +298,88 @@ export default function MarketplaceDetail() {
               </p>
             ))}
           </div>
+
+          {/* Personal-agent-only: "Why we built it this way" + concept doc link.
+              Conditional because the three killer angles only make sense for
+              a tool whose differentiator is its memory/trust model. */}
+          {tool.slug === "maven-personal-agent" && (
+            <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-8 rounded-2xl bg-gradient-to-br from-[#a78bfa]/10 via-white to-[#0F9ED5]/5 border border-[#a78bfa]/20">
+              <div className="flex items-start gap-3 mb-5">
+                <div className="w-9 h-9 rounded-lg bg-[#a78bfa]/15 flex items-center justify-center flex-shrink-0">
+                  <Sparkles size={16} className="text-[#a78bfa]" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#a78bfa] mb-1">
+                    {tStr({ en: "Why we built it this way", ar: "لماذا بنيناه هكذا", tr: "Neden böyle inşa ettik" }, lang)}
+                  </p>
+                  <p className="text-sm text-gray-700 leading-relaxed max-w-3xl">
+                    {tStr(
+                      {
+                        en: "Three product decisions we will not compromise on, and the reasons each one matters more than the spec sheet says.",
+                        ar: "ثلاثة قرارات منتج لن نتنازل عنها، وسبب أهمية كلٍّ منها أكثر مما تقوله ورقة المواصفات.",
+                        tr: "Taviz vermeyeceğimiz üç ürün kararı ve her birinin neden teknik özet sayfasından daha önemli olduğu.",
+                      },
+                      lang,
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4">
+                {PERSONAL_AGENT_ANGLES.map((a, i) => {
+                  const Icon = a.icon;
+                  return (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 10 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.07, duration: 0.35 }}
+                      className="bg-white rounded-2xl border border-gray-200 p-5 flex flex-col"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#a78bfa]/15 flex items-center justify-center">
+                          <Icon size={14} className="text-[#a78bfa]" />
+                        </div>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-[#a78bfa]">
+                          {tStr(a.badge, lang)}
+                        </span>
+                      </div>
+                      <h4 className="text-base font-extrabold text-[#0E2841] mb-2 leading-snug">
+                        {tStr(a.title, lang)}
+                      </h4>
+                      <p className="text-sm text-gray-700 leading-relaxed">
+                        {tStr(a.body, lang)}
+                      </p>
+                    </motion.div>
+                  );
+                })}
+              </div>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href="/personal-agent/concept"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#0E2841] text-white font-bold text-xs hover:bg-[#091828]"
+                >
+                  <BookOpen size={12} />
+                  {tStr({ en: "Read the concept & research doc", ar: "اقرأ وثيقة المفهوم والبحث", tr: "Konsept ve araştırma belgesini okuyun" }, lang)}
+                  <ArrowRight size={12} className="rtl:rotate-180" />
+                </Link>
+                <Link
+                  href="/demo/maven-personal-agent/cockpit"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#a78bfa] text-[#0E2841] font-bold text-xs hover:bg-[#c4b5fd]"
+                >
+                  <MessageSquare size={12} />
+                  {tStr({ en: "Open the Cockpit", ar: "افتح القمرة", tr: "Kokpit'i aç" }, lang)}
+                </Link>
+                <Link
+                  href="/demo/maven-personal-agent/mind"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#0E2841]/30 text-[#0E2841] font-bold text-xs hover:bg-[#0E2841] hover:text-white"
+                >
+                  <Brain size={12} />
+                  {tStr({ en: "Open the Mind", ar: "افتح العقل", tr: "Zihni aç" }, lang)}
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

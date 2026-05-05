@@ -9,7 +9,7 @@ interface Props {
   dimensions: { id: string; title: { en: string; ar: string } }[];
   respondents: Respondent[];
   variance: Record<string, number>;
-  lang: "en" | "ar";
+  lang: import("@/lib/lang").Lang;
 }
 
 const cellColor = (v: number) => {
@@ -32,7 +32,7 @@ export default function Heatmap({ dimensions, respondents, variance, lang }: Pro
             {dimensions.map((d) => (
               <th key={d.id} className="text-xs font-semibold text-gray-500 px-2 py-2 align-bottom">
                 <div className="rotate-[-30deg] origin-bottom-left whitespace-nowrap inline-block">
-                  {d.title[lang] || d.title.en}
+                  {d.title[lang === "ar" ? "ar" : "en"] || d.title.en}
                 </div>
               </th>
             ))}

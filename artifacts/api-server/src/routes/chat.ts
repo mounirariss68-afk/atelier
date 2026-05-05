@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { ChatBody } from "@workspace/api-zod";
@@ -421,6 +422,153 @@ router.post("/", async (req: Request, res: Response) => {
     logger.error({ err }, "Chat stream error");
     try {
       sseWrite(res, { type: "error", message: "The assistant is unavailable right now." });
+      res.end();
+    } catch {
+      // already closed
+    }
+  } finally {
+    clearInterval(heartbeat);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// /api/chat/personal-agent
+//
+// Dedicated streaming endpoint for the Maven Personal Agent Cockpit demo.
+// The client sends its own grounded system prompt (built from the persona's
+// PCG nodes) plus the messages, and the server streams the reply back.
+//
+// Why a separate endpoint:
+//   - The website chat hard-codes a Maven-marketing system prompt and uses
+//     the suggestion-strip protocol; the personal-agent persona has a
+//     different voice, citation contract, and "no SUGGESTIONS link" rule.
+//   - Keeping the website's chat schema (api-zod's ChatBody) untouched.
+//
+// Same rate limiter, same SSE wire format, same provider fallback chain.
+// ---------------------------------------------------------------------------
+const PersonalAgentBody = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8000),
+      }),
+    )
+    .min(1)
+    .max(20),
+  language: z.enum(["en", "ar", "tr"]).default("en"),
+  systemPrompt: z.string().min(20).max(20000),
+});
+
+router.post("/personal-agent", async (req: Request, res: Response) => {
+  const ip = (req.ip || req.socket.remoteAddress || "unknown").toString();
+  const rl = rateLimitOk(ip);
+  if (!rl.ok) {
+    const minutes = Math.ceil(rl.retryAfterSeconds / 60);
+    res.status(429).json({
+      error: `You've hit the demo chat limit for now — please try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+      retryAfterSeconds: rl.retryAfterSeconds,
+    });
+    return;
+  }
+
+  const parsed = PersonalAgentBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid personal-agent chat request" });
+    return;
+  }
+  const { messages, systemPrompt, language } = parsed.data;
+
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      // socket closed
+    }
+  }, 15_000);
+  heartbeat.unref?.();
+
+  let clientAborted = false;
+  const upstreamAbort = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      clientAborted = true;
+      upstreamAbort.abort();
+    }
+  });
+
+  const filter = makeTokenFilter((safe) => {
+    sseWrite(res, { type: "token", token: safe });
+  });
+
+  const startedAt = Date.now();
+  let fullText = "";
+  let provider: "anthropic" | "openai" | "fallback" = "anthropic";
+
+  try {
+    const onTok = (t: string) => {
+      if (!clientAborted) filter.push(t);
+    };
+
+    const anthResult = await streamFromAnthropic(systemPrompt, messages, onTok, upstreamAbort.signal).catch((err) => {
+      logger.warn({ err }, "Personal-agent: Anthropic stream failed; falling back");
+      return null;
+    });
+
+    if (anthResult) {
+      fullText = anthResult.fullText;
+    } else if (clientAborted) {
+      provider = "anthropic";
+    } else {
+      provider = "openai";
+      const oaResult = await streamFromOpenAI(systemPrompt, messages, onTok, upstreamAbort.signal).catch((err) => {
+        logger.warn({ err }, "Personal-agent: OpenAI stream failed");
+        return null;
+      });
+      if (oaResult) {
+        fullText = oaResult.fullText;
+      } else if (!clientAborted) {
+        provider = "fallback";
+        const offline =
+          language === "ar"
+            ? "المساعد الشخصي غير متاح حالياً، لذا لا أستطيع توليد إجابة. يمكنك تصفّح الموافقات المعلّقة في مساحة العمل."
+            : language === "tr"
+              ? "Kişisel ajan şu anda çevrimdışı, bu yüzden bir yanıt üretemiyorum. Çalışma alanındaki bekleyen onayları gözden geçirebilirsiniz."
+              : "The personal agent is offline right now, so I can't generate an answer. You can still review the pending approvals in the workspace.";
+        fullText = `${offline}\n<<<SUGGESTIONS>>>{"items":[]}<<<END>>>`;
+        onTok(fullText);
+      }
+    }
+
+    filter.flush();
+
+    if (!res.writableEnded) {
+      sseWrite(res, { type: "done", suggestions: [] });
+      res.end();
+    }
+    logger.info(
+      {
+        endpoint: "personal-agent",
+        provider,
+        durationMs: Date.now() - startedAt,
+        msgCount: messages.length,
+        replyChars: fullText.length,
+        lang: language,
+        clientAborted,
+      },
+      "Personal-agent chat reply complete",
+    );
+  } catch (err) {
+    logger.error({ err }, "Personal-agent chat stream error");
+    try {
+      sseWrite(res, { type: "error", message: "The personal agent is unavailable right now." });
       res.end();
     } catch {
       // already closed

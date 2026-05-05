@@ -84,6 +84,9 @@ function readQueryFilter(qs: string, key: string, allowed: string[]): string {
 export default function Marketplace() {
   const search = useSearch();
   const { lang, dir } = useLang();
+  // ToolCard predates TR support and only knows EN/AR; coerce TR users to EN
+  // for the card chrome until ToolCard's copy is localized.
+  const cardLang: "en" | "ar" = lang === "ar" ? "ar" : "en";
 
   const allClasses: ClassFilter[] = ["all", ...marketplaceClasses.map((c) => c.id)];
   const allIndustries: IndustryFilter[] = ["all", ...industriesIndex.map((i) => i.id)];
@@ -261,7 +264,7 @@ export default function Marketplace() {
                     <ToolCard
                       key={t.id}
                       tool={t}
-                      lang={lang}
+                      lang={cardLang}
                       idx={i}
                       featured
                       industryTitle={industryTitle}
@@ -276,7 +279,7 @@ export default function Marketplace() {
                     <ToolCard
                       key={t.id}
                       tool={t}
-                      lang={lang}
+                      lang={cardLang}
                       idx={i}
                       industryTitle={industryTitle}
                     />
@@ -299,7 +302,7 @@ function ToolCard({
   industryTitle,
 }: {
   tool: (typeof marketplaceTools)[number];
-  lang: "en" | "ar";
+  lang: import("@/lib/lang").Lang;
   idx: number;
   featured?: boolean;
   industryTitle: (id: string) => string;
