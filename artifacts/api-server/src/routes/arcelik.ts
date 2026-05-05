@@ -21,6 +21,11 @@ import { logger } from "../lib/logger";
 import { runPriceScrape, isScrapeRunning } from "../lib/scraper";
 import { getSchedulerStatus } from "../lib/scheduler";
 import {
+  evaluateScrapeRunHealth,
+  loadHealthThresholdConfig,
+} from "../lib/scrape-health";
+import { MARKETPLACE_SOURCES } from "../lib/marketplace-sources";
+import {
   runCompetitiveResponseAgent,
   runPriceElasticityAgent,
   runCannibalizationAgent,
@@ -760,6 +765,36 @@ router.get("/scrape-status", async (_req, res) => {
 
     const scheduler = getSchedulerStatus();
 
+    // Compute a fresh health verdict against the current baseline rather than
+    // trusting the persisted column alone. This means runs from before this
+    // feature shipped (healthStatus null) still show up correctly, and lets
+    // operators tweak SCRAPE_HEALTH_* env vars without waiting for the next
+    // scrape to re-evaluate.
+    let scrapeHealth = null as null | {
+      status: "healthy" | "unhealthy";
+      alerts: Awaited<ReturnType<typeof evaluateScrapeRunHealth>>["alerts"];
+      runId: string;
+      evaluatedAt: Date | null;
+      thresholdFraction: number;
+      baselineWindowDays: number;
+      monitoredMarketplaces: string[];
+    };
+    if (lastCompleted) {
+      const counts = (lastCompleted.scrapedCounts ?? {}) as Record<string, number>;
+      const health = await evaluateScrapeRunHealth(counts, {
+        excludeRunId: lastCompleted.id,
+      });
+      scrapeHealth = {
+        status: health.status,
+        alerts: health.alerts,
+        runId: lastCompleted.id,
+        evaluatedAt: lastCompleted.completedAt,
+        thresholdFraction: health.thresholdFraction,
+        baselineWindowDays: health.baselineWindowDays,
+        monitoredMarketplaces: health.evaluatedMarketplaces,
+      };
+    }
+
     res.json({
       scheduler,
       scrapeInProgress: isScrapeRunning(),
@@ -767,10 +802,69 @@ router.get("/scrape-status", async (_req, res) => {
       recentRuns: recentLogs,
       products: productLastUpdated[0] ?? null,
       competitors: competitorLastUpdated[0] ?? null,
+      scrapeHealth,
     });
   } catch (err) {
     logger.error({ err }, "Failed to fetch scrape status");
     res.status(500).json({ error: "Failed to fetch scrape status" });
+  }
+});
+
+// Dedicated health endpoint that an external monitor (uptime check, k8s
+// liveness probe, etc.) can poll without parsing the larger /scrape-status
+// payload. Returns 200 healthy / 503 unhealthy / 200 unknown so a simple
+// HTTP check can page on a regression. Re-evaluates against current data
+// rather than relying on what was stored at run time, so threshold/env
+// changes take effect immediately.
+router.get("/scrape-health", async (_req, res) => {
+  try {
+    const lastCompleted = await db
+      .select()
+      .from(arcelikScrapeLogsTable)
+      .where(eq(arcelikScrapeLogsTable.status, "completed"))
+      .orderBy(desc(arcelikScrapeLogsTable.startedAt))
+      .limit(1);
+
+    const last = lastCompleted[0];
+    if (!last) {
+      res.status(200).json({
+        status: "unknown",
+        reason: "no completed scrape runs yet",
+        monitoredMarketplaces: [...MARKETPLACE_SOURCES],
+      });
+      return;
+    }
+
+    const counts = (last.scrapedCounts ?? {}) as Record<string, number>;
+    const health = await evaluateScrapeRunHealth(counts, {
+      excludeRunId: last.id,
+    });
+
+    const lastRunStartMs = last.startedAt
+      ? new Date(last.startedAt).getTime()
+      : 0;
+    const ageHours = lastRunStartMs
+      ? Math.round((Date.now() - lastRunStartMs) / (1000 * 60 * 60))
+      : null;
+
+    const httpStatus = health.status === "unhealthy" ? 503 : 200;
+    res.status(httpStatus).json({
+      status: health.status,
+      runId: last.id,
+      runStartedAt: last.startedAt,
+      runCompletedAt: last.completedAt,
+      runAgeHours: ageHours,
+      alerts: health.alerts,
+      thresholdFraction: health.thresholdFraction,
+      baselineWindowDays: health.baselineWindowDays,
+      monitoredMarketplaces: health.evaluatedMarketplaces,
+      perMarketplaceCounts: Object.fromEntries(
+        health.evaluatedMarketplaces.map((mp) => [mp, counts[mp] ?? 0]),
+      ),
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to evaluate scrape health");
+    res.status(500).json({ error: "Failed to evaluate scrape health" });
   }
 });
 

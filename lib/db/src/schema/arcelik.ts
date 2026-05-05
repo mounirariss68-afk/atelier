@@ -290,6 +290,15 @@ export const arcelikMarketplacePriceHistoryTable = pgTable(
   ],
 );
 
+export interface MarketplaceHealthAlert {
+  marketplace: string;
+  currentCount: number;
+  baselineAvg: number;
+  baselineSamples: number;
+  dropPercent: number;
+  reason: "zero" | "below_threshold";
+}
+
 export const arcelikScrapeLogsTable = pgTable(
   "arcelik_scrape_logs",
   {
@@ -304,9 +313,16 @@ export const arcelikScrapeLogsTable = pgTable(
     totalProducts: integer("total_products"),
     totalCompetitors: integer("total_competitors"),
     errorMessage: text("error_message"),
+    // 'healthy' when all monitored marketplaces met the baseline threshold
+    // for this run; 'unhealthy' when one or more dropped to 0 or below the
+    // configured fraction of the rolling baseline. Null on runs that
+    // pre-date the health check or were never evaluated.
+    healthStatus: text("health_status"),
+    healthAlerts: jsonb("health_alerts").$type<MarketplaceHealthAlert[]>(),
   },
   (t) => [
     index("idx_scrape_logs_status").on(t.status),
     index("idx_scrape_logs_started").on(t.startedAt),
+    index("idx_scrape_logs_health").on(t.healthStatus),
   ],
 );

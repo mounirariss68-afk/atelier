@@ -1,5 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 
+export interface MarketplaceHealthAlert {
+  marketplace: string;
+  currentCount: number;
+  baselineAvg: number;
+  baselineSamples: number;
+  dropPercent: number;
+  reason: "zero" | "below_threshold";
+}
+
+export interface ScrapeHealth {
+  status: "healthy" | "unhealthy" | "unknown";
+  alerts: MarketplaceHealthAlert[];
+  runId: string;
+  evaluatedAt: string | null;
+  thresholdFraction: number;
+  baselineWindowDays: number;
+  monitoredMarketplaces: string[];
+}
+
 export interface ScrapeStatus {
   scheduler: {
     running: boolean;
@@ -17,6 +36,8 @@ export interface ScrapeStatus {
     matchedCompetitors: number;
     totalProducts: number;
     totalCompetitors: number;
+    healthStatus?: "healthy" | "unhealthy" | null;
+    healthAlerts?: MarketplaceHealthAlert[] | null;
   } | null;
   recentRuns: Array<{
     id: string;
@@ -37,6 +58,7 @@ export interface ScrapeStatus {
     autoScrapedCount: string;
     totalCount: string;
   } | null;
+  scrapeHealth: ScrapeHealth | null;
 }
 
 async function fetchScrapeStatus(): Promise<ScrapeStatus> {

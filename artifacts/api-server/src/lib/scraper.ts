@@ -13,6 +13,12 @@ import { execSync } from "child_process";
 import { logger } from "./logger";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { rebuildEquivalences } from "./matching";
+import {
+  evaluateScrapeRunHealth,
+  formatHealthSummary,
+  logHealthEvaluation,
+} from "./scrape-health";
+import { sendEmail } from "./email";
 
 interface ScrapedPrice {
   modelCode: string;
@@ -2859,6 +2865,46 @@ export async function runPriceScrape(
       );
     }
 
+    // Evaluate marketplace scraper health against the rolling baseline of
+    // prior runs. excludeRunId ensures the in-progress run (already inserted
+    // as 'running') is not part of its own baseline.
+    const health = await evaluateScrapeRunHealth(scrapedCounts, {
+      excludeRunId: runId,
+    });
+    logHealthEvaluation(runId, health);
+
+    if (health.status === "unhealthy") {
+      // Best-effort email; sendEmail no-ops when RESEND_API_KEY is unset and
+      // logs the regression there too. We do NOT throw on email failure —
+      // the run itself completed successfully, the alert is a side channel.
+      const summary = formatHealthSummary(health);
+      const alertEmail =
+        process.env["SCRAPE_ALERT_EMAIL"] ?? process.env["ADMIN_EMAIL"];
+      if (alertEmail) {
+        const html = `
+          <p><strong>${summary}</strong></p>
+          <p>Run: ${runId}</p>
+          <p>Threshold: ${Math.round(health.thresholdFraction * 100)}% of last ${health.baselineWindowDays}d average.</p>
+          <ul>
+            ${health.alerts
+              .map(
+                (a) =>
+                  `<li><strong>${a.marketplace}</strong>: this run produced ${a.currentCount}, baseline avg ${a.baselineAvg} (${a.baselineSamples} prior samples), drop ${a.dropPercent}% — reason: ${a.reason}</li>`,
+              )
+              .join("")}
+          </ul>
+          <p>Investigate selectors / category drift in <code>artifacts/api-server/src/lib/scraper.ts</code>.</p>
+        `;
+        sendEmail({
+          to: alertEmail,
+          subject: `[Maven AI] ${summary}`,
+          html,
+        }).catch((err) => {
+          logger.warn({ err, runId }, "Failed to send scrape health alert email");
+        });
+      }
+    }
+
     // Persist the final telemetry AFTER the equivalence rebuild so the
     // scrape_logs row reflects equivalences created in this run.
     const completedAt = new Date();
@@ -2873,6 +2919,8 @@ export async function runPriceScrape(
         matchedCompetitors,
         totalProducts: existingProducts.length,
         totalCompetitors: existingCompetitors.length,
+        healthStatus: health.status,
+        healthAlerts: health.alerts,
       })
       .where(eq(arcelikScrapeLogsTable.id, runId));
 

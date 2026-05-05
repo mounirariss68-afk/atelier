@@ -743,6 +743,44 @@ export default function DashboardView() {
         </div>
       )}
 
+      {scrapeStatus?.scrapeHealth?.status === "unhealthy" && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          role="alert"
+          data-testid="scrape-health-alert"
+          className="bg-red-50 border border-red-200 rounded-xl px-5 py-3 shadow-sm"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangleIcon size={18} className="text-red-600 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-red-700">{t.scrapeHealthAlertTitle}</p>
+              <ul className="mt-1.5 space-y-1">
+                {scrapeStatus.scrapeHealth.alerts.map((a) => {
+                  const msg =
+                    a.reason === "zero"
+                      ? t.scrapeHealthAlertZero.replace("{baseline}", String(a.baselineAvg))
+                      : t.scrapeHealthAlertDrop
+                          .replace("{count}", String(a.currentCount))
+                          .replace("{baseline}", String(a.baselineAvg))
+                          .replace("{drop}", String(a.dropPercent));
+                  return (
+                    <li key={a.marketplace} className="text-xs text-red-700">
+                      <span className="font-semibold uppercase tracking-wide">
+                        {a.marketplace}
+                      </span>{" "}
+                      <span className="text-red-600">{msg}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-[11px] text-red-500 mt-1.5">{t.scrapeHealthAlertHint}</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {scrapeStatus && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -754,6 +792,15 @@ export default function DashboardView() {
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${scrapeStatus.scheduler.running ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
               <span className="text-xs font-semibold text-[#0E2841]">{t.autoScrapeActive}</span>
+              {scrapeStatus.scrapeHealth?.status === "healthy" && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"
+                  data-testid="scrape-health-ok-badge"
+                >
+                  <CheckCircle2 size={10} />
+                  {t.scrapeHealthHealthy}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Clock size={12} />
