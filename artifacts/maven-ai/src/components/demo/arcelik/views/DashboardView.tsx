@@ -21,6 +21,10 @@ import {
 import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 import { useScrapeStatus } from "@/hooks/useScrapeStatus";
 import { usePriceHistory, usePriceHistorySummary } from "@/hooks/usePriceHistory";
+import {
+  useMarketplacePriceSummary,
+  aggregateByMarketplace,
+} from "@/hooks/useMarketplacePrices";
 import { TurkeyMap, CITY_POSITIONS } from "../TurkeyMap";
 import { generateRecommendations, generateAlerts } from "@/data/arcelik-agent";
 
@@ -95,6 +99,37 @@ function Sparkline({ data, color = "#6B7280" }: { data: number[]; color?: string
 const CAT_COLORS = ["#E30613", "#0E2841", "#F5A623", "#16a34a", "#7c3aed", "#0891b2", "#db2777"];
 const COMPARISON_BRANDS = ["Vestel", "Bosch", "Samsung", "Profilo"];
 
+function marketplaceLabel(id: string, t: Record<string, string>): string {
+  const key = id.toLowerCase();
+  if (key === "n11") return t.marketplaceN11 ?? "n11";
+  if (key === "trendyol") return t.marketplaceTrendyol ?? "Trendyol";
+  if (key === "hepsiburada") return t.marketplaceHepsiburada ?? "Hepsiburada";
+  return id;
+}
+
+const MARKETPLACE_ORDER = ["n11", "trendyol", "hepsiburada"] as const;
+const MARKETPLACE_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  n11: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-800", dot: "bg-purple-500" },
+  trendyol: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-800", dot: "bg-orange-500" },
+  hepsiburada: { bg: "bg-red-50", border: "border-red-200", text: "text-red-800", dot: "bg-red-500" },
+};
+const MARKETPLACE_FALLBACK_COLOR = { bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-800", dot: "bg-gray-500" };
+function marketplaceColor(id: string) {
+  return MARKETPLACE_COLORS[id.toLowerCase()] ?? MARKETPLACE_FALLBACK_COLOR;
+}
+
+function formatTRY(value: number, lang: string): string {
+  try {
+    return new Intl.NumberFormat(lang === "tr" ? "tr-TR" : "en-US", {
+      style: "currency",
+      currency: "TRY",
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return `₺${Math.round(value).toLocaleString()}`;
+  }
+}
+
 export default function DashboardView() {
   const { filters } = useDashboardFilters();
   const { lang } = useDemoLang();
@@ -103,6 +138,29 @@ export default function DashboardView() {
   const { data: scrapeStatus } = useScrapeStatus();
   const { data: priceHistory } = usePriceHistory();
   const { data: priceHistorySummary } = usePriceHistorySummary();
+  const { data: marketplacePriceRows, isLoading: marketplacePricesLoading } = useMarketplacePriceSummary();
+  const marketplaceBreakdowns = useMemo(() => {
+    const rows = marketplacePriceRows ?? [];
+    const aggregated = aggregateByMarketplace(rows);
+    const byId = new Map(aggregated.map((b) => [b.marketplace.toLowerCase(), b]));
+    const ordered = MARKETPLACE_ORDER.map((id) => {
+      const found = byId.get(id);
+      byId.delete(id);
+      return (
+        found ?? {
+          marketplace: id,
+          productCount: 0,
+          brandCount: 0,
+          categoryCount: 0,
+          minPrice: 0,
+          maxPrice: 0,
+          avgPrice: 0,
+        }
+      );
+    });
+    const extras = [...byId.values()];
+    return [...ordered, ...extras];
+  }, [marketplacePriceRows]);
   const HEAT_LABELS: Record<HeatMetric, string> = {
     share: t.heatMarketShare,
     price: t.heatPriceIndex,
@@ -768,7 +826,7 @@ export default function DashboardView() {
                   return (
                     <li key={a.marketplace} className="text-xs text-red-700">
                       <span className="font-semibold uppercase tracking-wide">
-                        {a.marketplace}
+                        {marketplaceLabel(a.marketplace, t)}
                       </span>{" "}
                       <span className="text-red-600">{msg}</span>
                     </li>
@@ -855,6 +913,103 @@ export default function DashboardView() {
           </div>
         </motion.div>
       )}
+
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.58 }}
+        data-testid="marketplace-prices-card"
+        className="bg-white rounded-xl border border-gray-100 shadow-sm p-5"
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-2">
+              <DollarSign size={16} className="text-[#F5A623]" />
+              {t.marketplacePricesTitle}
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {t.marketplacePricesSubtitle}
+            </p>
+          </div>
+        </div>
+        {marketplacePricesLoading && !marketplacePriceRows ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="marketplace-prices-loading">
+            {MARKETPLACE_ORDER.map((id) => {
+              const c = marketplaceColor(id);
+              return (
+                <div key={id} className={`rounded-lg border ${c.border} ${c.bg} p-3 animate-pulse`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`w-2 h-2 rounded-full ${c.dot}`} />
+                    <span className={`text-xs font-bold ${c.text}`}>{marketplaceLabel(id, t)}</span>
+                  </div>
+                  <div className="h-7 bg-white/60 rounded w-20 mb-2" />
+                  <div className="h-3 bg-white/60 rounded w-32 mb-3" />
+                  <div className="h-3 bg-white/60 rounded w-full mb-1.5" />
+                  <div className="h-3 bg-white/60 rounded w-3/4" />
+                </div>
+              );
+            })}
+          </div>
+        ) : marketplaceBreakdowns.every((b) => b.productCount === 0) ? (
+          <p className="text-xs text-gray-400 italic">{t.marketplacePricesNoData}</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {marketplaceBreakdowns.map((b) => {
+              const c = marketplaceColor(b.marketplace);
+              const empty = b.productCount === 0;
+              return (
+                <div
+                  key={b.marketplace}
+                  data-testid={`marketplace-card-${b.marketplace}`}
+                  className={`rounded-lg border ${c.border} ${c.bg} p-3`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`w-2 h-2 rounded-full ${c.dot}`} />
+                    <span className={`text-xs font-bold ${c.text}`}>
+                      {marketplaceLabel(b.marketplace, t)}
+                    </span>
+                  </div>
+                  {empty ? (
+                    <p className="text-[11px] text-gray-500 italic">
+                      {t.marketplacePricesEmpty}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-1.5 mb-1.5">
+                        <span className={`text-2xl font-bold ${c.text}`}>
+                          {b.productCount.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          {t.marketplaceSkuCount}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-500 mb-2">
+                        <span>{b.brandCount} {t.marketplaceBrandCount}</span>
+                        <span>·</span>
+                        <span>{b.categoryCount} {t.marketplaceCategoryCount}</span>
+                      </div>
+                      <div className="border-t border-white/60 pt-2 space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-gray-500">{t.marketplaceAvgPrice}</span>
+                          <span className={`font-semibold ${c.text}`}>
+                            {formatTRY(b.avgPrice, lang)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-gray-500">{t.marketplacePriceRange}</span>
+                          <span className="font-medium text-gray-700">
+                            {formatTRY(b.minPrice, lang)} – {formatTRY(b.maxPrice, lang)}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0 }}
