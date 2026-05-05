@@ -659,6 +659,168 @@ export const insights = [
 <li>للمشكلات العامة برعاية قوية، قاوم رغبة الإفراط في الهندسة.</li>
 </ul>
     `,
+    contentTr: `
+<h2>Maven'in Bakış Açısı</h2>
+<p>Maven AI sonuçları tek bir yoldan değil, birbirini tamamlayan iki yoldan teslim eder. <strong>Proje öncülüğünde</strong> çalışmalar — strateji, büyük ölçekli dönüşüm, özel inşa — bir rayda yer alır. Marketplace'imizden ürünleştirilmiş ajan ve araçların <strong>varlık öncülüğünde</strong> benimsenmesi diğer rayda durur. Her iki ray da aynı varış noktasında birleşir: kurum içinde ölçülebilir bir işin sahibi olan, gerçekten üretimde çalışan AI.</p>
+<p>Bunların müşterinin rastgele seçtiği eşdeğer seçenekler olduğunu düşünmüyoruz. Doğru yol duruma bağlıdır: bütçe zarfı, üst düzey sponsorluk, aciliyet, AI ve veri olgunluğu, risk iştahı ve altta yatan sorunun jenerik mi yoksa özel mi olduğu. Çoğu çalışma sonunda ikisini harmanlar — ve güvenilir bir danışman, karşısındaki müşteriye hangi sıralamanın uyduğu konusunda dürüst olmalıdır.</p>
+<blockquote>Sorun özel, sponsor üst düzey ve işletim modelinin değişmesi gerekiyorsa proje öncülüğünde teslim sonuç verir. Sorun sektörde paylaşılıyorsa, değer süresi baskısı yüksekse ve cevap icat edilmek yerine yapılandırılabiliyorsa varlık öncülüğünde teslim sonuç verir.</blockquote>
+<h2>Araştırmaların Söylediği</h2>
+<p>Kurumsal AI teslimi üzerine yayımlanmış kanıtlar, firmalar arasında alışılmadık ölçüde tutarlıdır. Üç bulgu bakış açımızı şekillendiriyor:</p>
+<ul>
+<li><strong>Pilotların çoğu üretime ulaşmıyor.</strong> MIT NANDA'nın 2025 <em>State of AI in Business</em> raporu, kurumsal GenAI pilotlarının %95'inin ölçülebilir bir K/Z etkisi sağlamadığını; entegre sistemlerin yalnızca yaklaşık %5'inin anlamlı değer ürettiğini ortaya koyuyor (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>).</li>
+<li><strong>Darboğaz modellerde değil, teslimattadır.</strong> BCG'nin <em>Where's the Value in AI?</em> çalışması, şirketlerin yalnızca %26'sının pilotları aşıp ölçekte değer üretebildiğini, yalnızca %4'ünün ise elit sınırda olduğunu gösteriyor (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>).</li>
+<li><strong>Ürünleştirme getirileri katlar.</strong> McKinsey'in <em>State of AI</em> anketi, AI'a en yüksek FAVÖK etkisini atfeden kuruluşların izole pilotlar yürütenler değil, iş akışlarını yeniden tasarlayan ve yetenekleri kullanım alanları arasında yeniden kullananlar olduğunu buluyor (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>).</li>
+</ul>
+<p>Bu bulgulardan iki farklı pazar ortaya çıkıyor. Gartner'in "ajansal AI" üzerine analizleri bunu, paketlenmiş ajanların giderek raftan ulaşılabilir hale geldiği bir sonraki platform geçişi olarak ele alıyor (<a href="https://www.gartner.com/en/articles/intelligent-agent-in-ai" target="_blank" rel="noopener noreferrer">Gartner, 2024–2025</a>). Aynı zamanda EY'nin <em>AI Pulse Survey</em> çalışması, büyük kurumların veri, regülasyon ve işletim modeli bağlamı gerçekten özel olduğu için özel dönüşüm programları sipariş etmeye devam ettiğini gösteriyor (<a href="https://www.ey.com/en_us/insights/ai/ai-pulse-survey-results" target="_blank" rel="noopener noreferrer">EY, 2024</a>). Dürüst okuma şudur: her iki teslim biçimi de kalıcıdır ve müşterilerin aralarında seçim yapmak için bir çerçeveye ihtiyacı vardır.</p>
+<h2>İki Yolun Tanımı</h2>
+<h3>Proje Öncülüğünde</h3>
+<p>Belirli bir kuruluşun içinde belirli bir sonuca odaklanmış özel bir çalışma. Maven; kıdemli ortaklarını, mühendislerini ve (yararlı olduğunda) Maven Insights yedek gücünü müşterinin ortamına getirerek daha önce var olmayan bir AI yeteneğini tasarlar, kurar ve işletir. Tipik şekiller: ajansal dönüşüm programları, AI destekli SDLC ve eski sistem modernizasyonu, veri ve yönetişim temelleri ve AI Ürün Stüdyosu'nda 90 günlük MVP'ler. Proje öncülüğünde çalışma; sorun özelse, veri hassas veya egemen ise, işletim modelinin değişmesi gerekiyorsa veya müşteri uçtan uca sorumlu bir partner istiyorsa uygundur.</p>
+<h3>Varlık Öncülüğünde</h3>
+<p>Marketplace'ten ürünleştirilmiş bir ajan veya aracın benimsenmesi ve yapılandırılması. Fikri mülkiyet önceden inşa edilmiştir; iş, onu müşterinin verisine, süreçlerine ve yönetişim duruşuna uyarlamaktır. Tipik şekiller: Değer Gerçekleştirme Aracı, PMO Teslim Yardımcı Pilotu, Tedarik Müzakere Ajanı, Müşteri Hizmetleri Kovanı, Egemen Veri Bekçisi. Varlık öncülüğünde teslim; sorun sektörde paylaşılıyorsa, değer süresi baskısı yüksekse, bütçe kısıtlıysa veya müşteri küçük başlayıp daha büyük bir çalışmaya bağlanmadan önce değer kanıtlamak istiyorsa uygundur.</p>
+<h2>Karar Çerçevesi</h2>
+<p>Müşterilere hangi yolun en uygun olduğu konusunda öneride bulunmak için beş faktör kullanıyoruz. Tek başına hiçbiri belirleyici değildir; önemli olan kombinasyondur.</p>
+<div class="overflow-x-auto my-6">
+<table class="min-w-full border border-gray-200 text-sm">
+<thead class="bg-[#0E2841] text-white">
+<tr>
+<th class="text-left p-3 font-bold">Faktör</th>
+<th class="text-left p-3 font-bold">Proje Öncülüğüne Yaklaş…</th>
+<th class="text-left p-3 font-bold">Varlık Öncülüğüne Yaklaş…</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-t border-gray-200">
+<td class="p-3 font-semibold text-[#0E2841]">Sorun özgüllüğü</td>
+<td class="p-3 text-gray-700">Sorun kuruluşunuza, düzenleyicinize veya coğrafyanıza özeldir.</td>
+<td class="p-3 text-gray-700">Sorun sektörde paylaşılıyor ve büyük ölçüde zaten çözülmüş.</td>
+</tr>
+<tr class="border-t border-gray-200 bg-gray-50">
+<td class="p-3 font-semibold text-[#0E2841]">Sponsorluk ve yetki</td>
+<td class="p-3 text-gray-700">Sonucun sahibi bir C-seviyesi sponsor ve işletim modelini değiştirebiliyor.</td>
+<td class="p-3 text-gray-700">Bütçesi olan bir fonksiyon başkanı, ekibinin elinde çalışan bir araç istiyor.</td>
+</tr>
+<tr class="border-t border-gray-200">
+<td class="p-3 font-semibold text-[#0E2841]">Değer süresi</td>
+<td class="p-3 text-gray-700">Üretim MVP'sine 12–26 hafta kabul edilebilir.</td>
+<td class="p-3 text-gray-700">İlk faydalı çıktı için haftalar gerekiyor; iş gerekçesini canlı tutmak için.</td>
+</tr>
+<tr class="border-t border-gray-200 bg-gray-50">
+<td class="p-3 font-semibold text-[#0E2841]">AI ve veri olgunluğu</td>
+<td class="p-3 text-gray-700">Veri temelleri veya yönetişim, çalışmanın bir parçası olarak inşa veya yeniden inşa edilmeli.</td>
+<td class="p-3 text-gray-700">Veri ve yönetişim, ürünleştirilmiş bir ajanı bağlamak için yeterince iyi.</td>
+</tr>
+<tr class="border-t border-gray-200">
+<td class="p-3 font-semibold text-[#0E2841]">Risk ve fikri mülkiyet iştahı</td>
+<td class="p-3 text-gray-700">Özel fikri mülkiyet, egemen dağıtım veya savunulabilir bir hendek istiyorsunuz.</td>
+<td class="p-3 text-gray-700">Paylaşılan fikri mülkiyeti benimseyip kendi bağlamınıza yapılandırmaktan rahatsınız.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Üç veya daha fazla faktörün aynı yöne eğilmesi genellikle net bir sinyaldir. Gerçekten bölünmüş bir tablo — ikiye iki ve bir faktör eşikte — genellikle yazı tura atmayı değil, <em>harmanlanmış</em> bir girişi işaret eder.</p>
+<h2>Seçimi Keskinleştiren İki Eksen</h2>
+<p>Yukarıdaki beş faktör pratikte, neredeyse her müşteriyle tahtaya çizdiğimiz iki eksene indirgenir: <strong>Sorun Özgüllüğü</strong> (jenerik ↔ özel) ve <strong>AI Olgunluğu ve Sponsorluk</strong> (düşük ↔ yüksek). Dört çeyrek bir başlangıç önerisi sunar:</p>
+<div class="my-8 not-prose">
+  <div class="relative bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+    <div class="text-center text-[11px] font-bold uppercase tracking-widest text-[#0E2841] mb-3">Sorun Özgüllüğü →</div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="rounded-lg border-2 border-[#F5A623] bg-[#F5A623]/5 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#F5A623] mb-1">Jenerik · Düşük olgunluk</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Varlık öncülüğünde başla</div>
+        <div class="text-xs text-gray-600">Bir Marketplace aracı yapılandır, değeri kanıtla, iç güveni inşa et.</div>
+      </div>
+      <div class="rounded-lg border-2 border-[#156082] bg-[#156082]/5 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#156082] mb-1">Özel · Düşük olgunluk</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Proje öncülüğünde keşif</div>
+        <div class="text-xs text-gray-600">Gerçek sorunu adlandıran ve temelleri yeniden inşa eden, kıdemli liderliğinde çalışma.</div>
+      </div>
+      <div class="rounded-lg border-2 border-[#F5A623] bg-[#F5A623]/10 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#F5A623] mb-1">Jenerik · Yüksek olgunluk</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Ölçekte varlık öncülüğünde</div>
+        <div class="text-xs text-gray-600">Ürünleştirilmiş ajanı iş birimleri arasında yay; tasarruflarla bir sonraki adımı finanse et.</div>
+      </div>
+      <div class="rounded-lg border-2 border-[#156082] bg-[#156082]/10 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#156082] mb-1">Özel · Yüksek olgunluk</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Proje öncülüğünde dönüşüm</div>
+        <div class="text-xs text-gray-600">Özel inşa artı onu hayata geçirecek değişim yönetimi kası.</div>
+      </div>
+    </div>
+    <div class="text-center text-[11px] font-bold uppercase tracking-widest text-[#0E2841] mt-3">↑ AI Olgunluğu ve Sponsorluk</div>
+  </div>
+</div>
+<h2>Pratikte Gördüğümüz Harmanlama Desenleri</h2>
+<p>Maven'in uzun süreli neredeyse her ilişkisi sonunda iki yolu harmanlar. İlginç soru sıralamadır. Üç desen tekrar eder:</p>
+<h3>Desen 1 — Varlık Pilotu → Proje Ölçeği</h3>
+<div class="my-5 not-prose">
+  <div class="flex flex-col sm:flex-row items-stretch gap-2 text-xs">
+    <div class="flex-1 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-3">
+      <div class="font-bold text-[#F5A623] uppercase tracking-wider text-[10px] mb-1">Varlık</div>
+      <div class="text-[#0E2841] font-semibold">Tek ekipte Marketplace ajanı</div>
+      <div class="text-gray-600 mt-1">8–12 hafta · fonksiyon başkanı bütçesi</div>
+    </div>
+    <div class="flex items-center justify-center text-[#0E2841] font-bold">→</div>
+    <div class="flex-1 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-3">
+      <div class="font-bold text-[#156082] uppercase tracking-wider text-[10px] mb-1">Proje</div>
+      <div class="text-[#0E2841] font-semibold">C-seviyesi sponsorluğu açıldı</div>
+      <div class="text-gray-600 mt-1">İşletim modeli ajan etrafında yeniden tasarlandı</div>
+    </div>
+  </div>
+</div>
+<p>Bir fonksiyon başkanı Marketplace'ten bir ajan benimser (örneğin PMO Teslim Yardımcı Pilotu veya Tedarik Müzakere Ajanı), 8–12 hafta içinde tek bir ekipte değeri kanıtlar ve bu kanıtı, işletim modelini ajan etrafında yeniden tasarlayan proje öncülüğünde bir dönüşüm için C-seviyesi sponsorluğunu açmak amacıyla kullanır. Varlık kamadır; proje ölçeklemedir.</p>
+<h3>Desen 2 — Proje Keşfi → Varlık Yaygınlaştırması</h3>
+<div class="my-5 not-prose">
+  <div class="flex flex-col sm:flex-row items-stretch gap-2 text-xs">
+    <div class="flex-1 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-3">
+      <div class="font-bold text-[#156082] uppercase tracking-wider text-[10px] mb-1">Proje</div>
+      <div class="text-[#0E2841] font-semibold">Değer-örneği sprinti + temeller</div>
+      <div class="text-gray-600 mt-1">5–6 aday kullanım alanını ortaya çıkarır</div>
+    </div>
+    <div class="flex items-center justify-center text-[#0E2841] font-bold">→</div>
+    <div class="flex-1 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-3">
+      <div class="font-bold text-[#F5A623] uppercase tracking-wider text-[10px] mb-1">Varlık × N</div>
+      <div class="text-[#0E2841] font-semibold">Marketplace araçları fonksiyonlara yayıldı</div>
+      <div class="text-gray-600 mt-1">2'si proje öncülüğünde kalır; gerisi düşük maliyetle yapılandırılır</div>
+    </div>
+  </div>
+</div>
+<p>Bir C-seviyesi sponsor proje öncülüğünde bir keşif sipariş eder — genellikle bir değer-örneği sprinti artı veri ve yönetişim temelleri inşası — ve keşif beş veya altı kullanım alanını ortaya çıkarır. İkisi gerçekten özeldir ve proje öncülüğünde kalır; gerisi mevcut Marketplace araçlarının tam şeklindedir ve varlık öncülüğünde, çok daha hızlı ve çok daha düşük maliyetle yaygınlaştırılır.</p>
+<h3>Desen 3 — Paralel Raylar</h3>
+<div class="my-5 not-prose">
+  <div class="space-y-2 text-xs">
+    <div class="flex items-stretch gap-2">
+      <div class="w-20 sm:w-28 flex-shrink-0 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-2 flex items-center justify-center font-bold text-[10px] uppercase tracking-wider text-[#156082]">Proje rayı</div>
+      <div class="flex-1 rounded-lg bg-[#156082]/5 border border-[#156082]/30 p-3 text-[#0E2841]">Veri temelinin yeniden inşası + bir öncü özel ajan</div>
+      <div class="flex items-center px-1 text-[#196B24] font-bold">⇢</div>
+      <div class="flex-1 rounded-lg bg-[#196B24]/10 border border-[#196B24]/40 p-3 text-[#0E2841] font-semibold">Akımlar birleşir — ajanlar yönetilen veriyi tüketir</div>
+    </div>
+    <div class="flex items-stretch gap-2">
+      <div class="w-20 sm:w-28 flex-shrink-0 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-2 flex items-center justify-center font-bold text-[10px] uppercase tracking-wider text-[#F5A623]">Varlık rayı</div>
+      <div class="flex-1 rounded-lg bg-[#F5A623]/5 border border-[#F5A623]/30 p-3 text-[#0E2841]">3–4 Marketplace aracı komşu fonksiyonlara iner, görünür değer akar</div>
+      <div class="flex items-center px-1 text-transparent">⇢</div>
+      <div class="flex-1 rounded-lg bg-transparent border border-transparent p-3"></div>
+    </div>
+  </div>
+</div>
+<p>Daha büyük müşteriler her iki yolu da ilk günden paralel yürütür: veri temelini ve bir öncü ajanı yeniden inşa eden proje öncülüğünde bir program, bunun yanında temel çalışma olgunlaşırken görünür değerin akmasını sağlamak için komşu fonksiyonlarda inen üç veya dört varlık öncülüğünde araç. İki akım, temel devreye girip ürünleştirilmiş ajanlar yeni yönetilen veriyi tüketmeye başladıkça birleşir.</p>
+<h2>Dürüst Ödünleşimler</h2>
+<p>Her yolun müşteriye neye mal olduğu konusunda açık olmaya çalışıyoruz.</p>
+<ul>
+<li><strong>Maliyet.</strong> Proje öncülüğünde teslim ilk gün sonuç başına daha pahalıdır; varlık öncülüğünde teslim sonuç başına daha ucuzdur ancak katalog büyüdükçe yapılandırma ve entegrasyon maliyeti birikir.</li>
+<li><strong>Değer süresi.</strong> Varlık öncülüğünde teslim genellikle ilk faydalı çıktıyı haftalar içinde verir; proje öncülüğünde aylar içinde. Bazı sorunlarda haftalar yapısal olarak imkânsızdır — veri hazır değildir.</li>
+<li><strong>Özelleştirme.</strong> Proje öncülüğünde teslim, müşteriye tam olarak şekillendirilmiş fikri mülkiyet üretir; varlık öncülüğünde teslim, sektöre şekillendirilmiş ve müşteriye yapılandırılmış fikri mülkiyet üretir. Yapılandırmanın sınırları vardır.</li>
+<li><strong>Değişim yönetimi yükü.</strong> Proje öncülüğünde teslim, genellikle işletim modelini yeniden bağladığı için daha ağır değişim yönetimi yükü taşır; varlık öncülüğünde teslim, mevcut bir sürece indiği için daha hafif (ama sıfır olmayan) değişim yönetimi yükü taşır.</li>
+<li><strong>Fikri mülkiyet sahipliği.</strong> Proje öncülüğünde teslim genellikle müşteriye ait fikri mülkiyet üretir; varlık öncülüğünde teslim fikri mülkiyeti Maven'de bırakır (müşteri kataloğun sürekli iyileştirilmesinden faydalanır). Egemen ve hava boşluklu dağıtımlar her iki yolda da mevcuttur.</li>
+</ul>
+<h2>Bu, Müşteriyle Yapılan Konuşma İçin Ne Anlama Gelir</h2>
+<p>Müşteri için pratik sonuç şudur: ilk konuşma "proje mi yoksa araç mı istiyorsunuz?" olmamalıdır — "beş faktörde neredesiniz ve önümüzdeki 6–18 ay için harman nasıl görünür?" olmalıdır. Maven için pratik sonuç şudur: kısa vadede proje öncülüğünde bir çalışma daha kazançlı olsa bile varlık öncülüğünde yolu önermeye istekli olmalıyız ve <em>neredeyse</em> uygun bir Marketplace aracı bulunsa bile proje öncülüğünde yolu önermeye istekli olmalıyız. Bu konudaki güvenilirlik, bu bakış açısının tüm anlamıdır.</p>
+<h2>Tavsiyeler</h2>
+<ul>
+<li>Yeni bir AI girişimini kapsamadan önce beş faktörlü karar merceğini uygulayın. Varsayılan sıralama ("önce bir strateji projesi yaparız, sonra araçları çözeriz") sorunun aslında jenerik olup olmadığını öğrenmenin en pahalı yoludur.</li>
+<li>Marketplace'i bir tedarik kataloğu olarak değil, bir portföy olarak ele alın. Bir aracı benimseyin, ondan öğrenin ve bu öğrenmenin proje öncülüğünde sonraki adımı şekillendirmesine izin verin.</li>
+<li>Veri temelleri zayıf olan özel sorunlarda proje öncülüğünde keşfi atlamayın. Bozuk veriyle varlık öncülüğünde teslim, hizmet verdiğimiz Körfez kurumlarında en sık gördüğümüz başarısızlık biçimidir.</li>
+<li>Güçlü sponsorluğu olan jenerik sorunlarda aşırı mühendislik dürtüsüne direnin. Bu çeyrek üretime giren yapılandırılmış bir Marketplace aracı, gelecek yıl inen özel bir inşadan daha iyidir.</li>
+</ul>
+    `,
     content: `
 <h2>Maven's Point of View</h2>
 <p>Maven AI delivers outcomes through two complementary paths, not one. <strong>Project-led</strong> engagements — strategy work, large-scale transformation, custom builds — sit on one rail. <strong>Asset-led</strong> adoption of productized agents and tools from our Marketplace sits on the other. Both rails converge on the same destination: AI that is actually in production, owning measurable work inside the enterprise.</p>
