@@ -50,12 +50,23 @@ type HorizontalFilter = "all" | (typeof marketplaceHorizontals)[number]["id"];
 const COPY = {
   eyebrow: { en: "Marketplace", ar: "السوق" },
   title: {
-    en: "What good looks like — interactive demos and detail pages.",
-    ar: "كيف يبدو الجيد — عروض تفاعلية وصفحات تفصيلية.",
+    en: "What good looks like — the asset-led path to outcomes.",
+    ar: "كيف يبدو الجيد — المسار القائم على الأصول للوصول إلى النتائج.",
   },
   intro: {
-    en: "MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact. The Marketplace is our answer — a working scoreboard the CFO can take home and a detail page for every demo class we deliver.",
-    ar: "وجدت دراسة MIT NANDA أن 95% من تجارب الذكاء التوليدي المؤسسية لا تحقق أثراً مالياً قابلاً للقياس. السوق هو إجابتنا — لوحة قياس فعلية يأخذها المدير المالي معه إلى المنزل، وصفحة تفصيلية لكل فئة عرض نقدّمها.",
+    en: "This is Maven's asset-led path: productized agents you can adopt, configure, and run — instead of commissioning a custom build. MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact; productized assets close the gap by shipping in weeks, not quarters. When the problem is bespoke and the operating model has to change, the project-led path through our services is the right starting point — most engagements blend the two.",
+    ar: "هذا هو مسار مافن القائم على الأصول: وكلاء جاهزون للاعتماد والتهيئة والتشغيل — بدلاً من تكليف ببناء مخصص. وجدت دراسة MIT NANDA أن 95% من تجارب الذكاء التوليدي المؤسسية لا تحقق أثراً مالياً قابلاً للقياس؛ الأصول الجاهزة تسد الفجوة بالتسليم خلال أسابيع لا أرباع. عندما تكون المشكلة مخصصة ويتطلب الأمر تغيير نموذج التشغيل، فإن المسار القائم على المشاريع عبر خدماتنا هو نقطة البداية الصحيحة — ومعظم الارتباطات تمزج بين المسارين.",
+    tr: "Bu, Maven'in varlık öncülüğündeki yoludur: özel bir geliştirme yaptırmak yerine benimseyebileceğiniz, yapılandırabileceğiniz ve çalıştırabileceğiniz ürünleştirilmiş ajanlar. MIT NANDA, kurumsal GenAI pilotlarının %95'inin ölçülebilir P&L etkisi sağlamadığını ortaya koyuyor; ürünleştirilmiş varlıklar, çeyreklerde değil haftalarda devreye girerek bu boşluğu kapatıyor. Sorun kendine özgü olduğunda ve operasyon modelinin değişmesi gerektiğinde, hizmetlerimiz aracılığıyla proje öncülüğündeki yol doğru başlangıç noktasıdır — çoğu çalışma her ikisini de harmanlar.",
+  },
+  servicesLink: {
+    en: "Project-led services",
+    ar: "الخدمات القائمة على المشاريع",
+    tr: "Proje öncülüğündeki hizmetler",
+  },
+  povLink: {
+    en: "Read the Two Paths POV",
+    ar: "اقرأ منظور المسارين",
+    tr: "İki Yol bakış açısını okuyun",
   },
   classLabel: { en: "Class", ar: "الفئة" },
   industryLabel: { en: "Industry", ar: "القطاع" },
@@ -146,6 +157,14 @@ export default function Marketplace() {
           <p className="text-lg sm:text-xl text-gray-300 max-w-3xl leading-relaxed">
             {tStr(COPY.intro, lang)}
           </p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            <Link href="/services" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+              {tStr(COPY.servicesLink, lang)} <ArrowRight size={14} />
+            </Link>
+            <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+              {tStr(COPY.povLink, lang)} <ArrowRight size={14} />
+            </Link>
+          </div>
         </div>
       </section>
 

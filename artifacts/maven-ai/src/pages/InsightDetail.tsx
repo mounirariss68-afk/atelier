@@ -1,7 +1,8 @@
 import { useRoute, Link } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowRight, ArrowLeft, Clock, Calendar, User, Tag } from "lucide-react";
-import { insights } from "@/data/content";
+import { insights, insightTitle, insightSummary, insightContent } from "@/data/content";
+import { useLang } from "@/lib/lang";
 
 const categoryColors: Record<string, string> = {
   "Agentic AI": "#156082",
@@ -12,6 +13,7 @@ const categoryColors: Record<string, string> = {
 
 export default function InsightDetail() {
   const [, params] = useRoute("/insights/:slug");
+  const { lang, dir } = useLang();
   const insight = insights.find((i) => i.slug === params?.slug);
 
   if (!insight) {
@@ -28,8 +30,12 @@ export default function InsightDetail() {
   const related = insights.filter((i) => i.id !== insight.id && (i.category === insight.category || i.tags.some((t) => insight.tags.includes(t)))).slice(0, 3);
   const catColor = categoryColors[insight.category] || "#156082";
 
+  const localizedTitle = insightTitle(insight, lang);
+  const localizedSummary = insightSummary(insight, lang);
+  const localizedContent = insightContent(insight, lang);
+
   return (
-    <div className="pt-20">
+    <div className="pt-20" dir={dir}>
       {/* Hero */}
       <section className="bg-[#0E2841] py-16 relative overflow-hidden">
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -52,9 +58,9 @@ export default function InsightDetail() {
                 animate={{ opacity: 1, y: 0 }}
                 className="text-3xl sm:text-4xl font-extrabold text-white leading-tight mb-5"
               >
-                {insight.title}
+                {localizedTitle}
               </motion.h1>
-              <p className="text-gray-300 text-lg leading-relaxed mb-7">{insight.summary}</p>
+              <p className="text-gray-300 text-lg leading-relaxed mb-7">{localizedSummary}</p>
               <div className="flex flex-wrap items-center gap-6 text-sm text-gray-400">
                 <span className="flex items-center gap-2"><User size={14} /> {insight.author}</span>
                 <span className="flex items-center gap-2"><Calendar size={14} /> {insight.date}</span>
@@ -65,7 +71,7 @@ export default function InsightDetail() {
               <div className="rounded-xl overflow-hidden h-52 bg-[#156082] relative">
                 <img
                   src={insight.coverImage}
-                  alt={insight.title}
+                  alt={localizedTitle}
                   className="w-full h-full object-cover opacity-80"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
@@ -83,7 +89,7 @@ export default function InsightDetail() {
             <div className="lg:col-span-8">
               <div
                 className="article-content max-w-none"
-                dangerouslySetInnerHTML={{ __html: insight.content }}
+                dangerouslySetInnerHTML={{ __html: localizedContent }}
               />
 
               {/* Tags */}
@@ -154,11 +160,11 @@ export default function InsightDetail() {
                 >
                   <Link href={`/insights/${rel.slug}`}>
                     <div className="h-36 bg-[#0E2841] relative overflow-hidden">
-                      <img src={rel.coverImage} alt={rel.title} className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      <img src={rel.coverImage} alt={insightTitle(rel, lang)} className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     </div>
                     <div className="p-5">
                       <span className="text-xs font-semibold" style={{ color: categoryColors[rel.category] || "#156082" }}>{rel.category}</span>
-                      <h3 className="font-bold text-[#0E2841] text-sm mt-1.5 mb-2 leading-snug group-hover:text-[#156082] transition-colors line-clamp-2">{rel.title}</h3>
+                      <h3 className="font-bold text-[#0E2841] text-sm mt-1.5 mb-2 leading-snug group-hover:text-[#156082] transition-colors line-clamp-2">{insightTitle(rel, lang)}</h3>
                       <span className="text-xs text-gray-400">{rel.readTime}</span>
                     </div>
                   </Link>

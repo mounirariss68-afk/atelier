@@ -2,12 +2,14 @@ import { useState, useMemo } from "react";
 import { Link, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { Search, Filter, ArrowRight } from "lucide-react";
-import { insights } from "@/data/content";
+import { insights, insightTitle, insightSummary } from "@/data/content";
+import { useLang } from "@/lib/lang";
 
 const categories = ["All", "Agentic AI", "Data & Governance", "Legacy Modernization", "Industry Trends"];
 const types = ["All Types", "Report", "Research Report", "Perspective", "Opinion", "Thought Leadership", "Technical Brief"];
 
 export default function Insights() {
+  const { lang, dir } = useLang();
   const search = useSearch();
   const params = new URLSearchParams(search);
   const initialCategory = params.get("category") || "All";
@@ -20,10 +22,12 @@ export default function Insights() {
     return insights.filter((insight) => {
       const matchCat = activeCategory === "All" || insight.category === activeCategory;
       const matchType = activeType === "All Types" || insight.type === activeType;
-      const matchQuery = !query || insight.title.toLowerCase().includes(query.toLowerCase()) || insight.summary.toLowerCase().includes(query.toLowerCase());
+      const t = insightTitle(insight, lang).toLowerCase();
+      const s = insightSummary(insight, lang).toLowerCase();
+      const matchQuery = !query || t.includes(query.toLowerCase()) || s.includes(query.toLowerCase());
       return matchCat && matchType && matchQuery;
     });
-  }, [activeCategory, activeType, query]);
+  }, [activeCategory, activeType, query, lang]);
 
   const featured = insights.filter((i) => i.featured)[0];
 
@@ -35,7 +39,7 @@ export default function Insights() {
   };
 
   return (
-    <div className="pt-20">
+    <div className="pt-20" dir={dir}>
       {/* Hero */}
       <section className="bg-[#0E2841] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -59,7 +63,7 @@ export default function Insights() {
                 <div className="lg:col-span-2 h-72 lg:h-full bg-[#0E2841] relative overflow-hidden">
                   <img
                     src={featured.coverImage}
-                    alt={featured.title}
+                    alt={insightTitle(featured, lang)}
                     className="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                   />
@@ -72,8 +76,8 @@ export default function Insights() {
                     </span>
                     <span className="text-xs text-gray-400">{featured.category} · {featured.date}</span>
                   </div>
-                  <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4 group-hover:text-[#156082] transition-colors leading-snug">{featured.title}</h2>
-                  <p className="text-gray-600 mb-6 leading-relaxed">{featured.summary}</p>
+                  <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4 group-hover:text-[#156082] transition-colors leading-snug">{insightTitle(featured, lang)}</h2>
+                  <p className="text-gray-600 mb-6 leading-relaxed">{insightSummary(featured, lang)}</p>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">{featured.author}</p>
@@ -156,7 +160,7 @@ export default function Insights() {
                     <div className="h-44 bg-[#0E2841] relative overflow-hidden">
                       <img
                         src={insight.coverImage}
-                        alt={insight.title}
+                        alt={insightTitle(insight, lang)}
                         className="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
@@ -177,9 +181,9 @@ export default function Insights() {
                         <span className="text-xs text-gray-400">{insight.date}</span>
                       </div>
                       <h3 className="font-bold text-[#0E2841] text-sm leading-snug mb-2 group-hover:text-[#156082] transition-colors line-clamp-3">
-                        {insight.title}
+                        {insightTitle(insight, lang)}
                       </h3>
-                      <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-2">{insight.summary}</p>
+                      <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-2">{insightSummary(insight, lang)}</p>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">{insight.readTime}</span>
                         <span className="text-xs font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">

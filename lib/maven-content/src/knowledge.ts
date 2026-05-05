@@ -291,6 +291,14 @@ export const insights: InsightEntry[] = [
     summary:
       "Why lean, senior-delivery AI firms consistently outperform Tier-1 competitors on the dimension that matters most: time from contract to working software in production.",
   },
+  {
+    slug: "two-paths-to-outcomes",
+    title: "Two Paths to Outcomes: Project-Led and Asset-Led AI Delivery",
+    category: "Agentic AI",
+    type: "Perspective",
+    summary:
+      "Maven's POV on how clients should choose between custom transformation engagements (project-led) and productized agents from the Marketplace (asset-led) — with a decision framework drawn from BCG, MIT, McKinsey, Gartner and EY research, and the blending patterns most engagements actually follow.",
+  },
 ];
 
 // Source assessment metadata from the canonical @workspace/assessments

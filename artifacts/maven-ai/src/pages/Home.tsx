@@ -1,8 +1,93 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote, ExternalLink } from "lucide-react";
+import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote, ExternalLink, Briefcase, Package, GitMerge } from "lucide-react";
 import { stats, services, insights, industries, SITE_SOURCES } from "@/data/content";
 import PartnerLogos from "@/components/PartnerLogos";
+import TwoPathsDiagram from "@/components/TwoPathsDiagram";
+import { useLang, tStr } from "@/lib/lang";
+
+const TWO_PATHS_COPY = {
+  eyebrow: { en: "Our POV", ar: "وجهة نظرنا", tr: "Bakış Açımız" },
+  title: {
+    en: "Two paths to outcomes — project-led and asset-led.",
+    ar: "مساران للوصول إلى النتائج — قائم على المشاريع وقائم على الأصول.",
+    tr: "Sonuçlara giden iki yol — proje öncülüğünde ve varlık öncülüğünde.",
+  },
+  introA: {
+    en: "Maven works two rails to the same destination.",
+    ar: "تعمل مافن على مسارين للوصول إلى نفس الوجهة.",
+    tr: "Maven aynı hedefe iki rayda çalışır.",
+  },
+  introProject: {
+    en: "Project-led engagements when the problem is bespoke and the operating model has to change.",
+    ar: "ارتباطات قائمة على المشاريع عندما تكون المشكلة فريدة ويجب تغيير نموذج التشغيل.",
+    tr: "Sorun kendine özgü olduğunda ve operasyon modelinin değişmesi gerektiğinde proje öncülüğündeki çalışmalar.",
+  },
+  introAsset: {
+    en: "Asset-led adoption of productized agents from our Marketplace when the problem is shared across the industry and time-to-value matters more than custom IP.",
+    ar: "اعتماد قائم على الأصول لوكلاء جاهزين من سوقنا عندما تكون المشكلة مشتركة عبر القطاع ويكون الوقت اللازم لتحقيق القيمة أهم من الملكية الفكرية المخصصة.",
+    tr: "Sorun sektör genelinde ortak olduğunda ve değer süresi özel IP'den daha önemli olduğunda Marketplace'imizdeki ürünleştirilmiş ajanların varlık öncülüğünde benimsenmesi.",
+  },
+  introBlend: {
+    en: "Most engagements blend the two.",
+    ar: "معظم الارتباطات تمزج بين المسارين.",
+    tr: "Çoğu çalışma her ikisini harmanlar.",
+  },
+  framework: {
+    en: "The decision lens — five factors",
+    ar: "عدسة القرار — خمسة عوامل",
+    tr: "Karar merceği — beş faktör",
+  },
+  cardProject: { en: "Project-led", ar: "قائم على المشاريع", tr: "Proje öncülüğünde" },
+  cardAsset: { en: "Asset-led", ar: "قائم على الأصول", tr: "Varlık öncülüğünde" },
+  cardBlended: { en: "Blended", ar: "مدمج", tr: "Harmanlanmış" },
+  cardProjectDesc: {
+    en: "Bespoke transformation, AI-driven SDLC, data & governance foundations, sovereign on-prem builds. Senior partners on every call.",
+    ar: "تحول مخصص، ودورة حياة تطوير البرمجيات المدفوعة بالذكاء الاصطناعي، وأسس البيانات والحوكمة، وعمليات بناء سيادية محلية. شركاء كبار في كل مكالمة.",
+    tr: "Özel dönüşüm, AI öncülüğündeki SDLC, veri & yönetişim temelleri, sovereign on-prem geliştirmeleri. Her görüşmede kıdemli ortaklar.",
+  },
+  cardAssetDesc: {
+    en: "Productized agents from the Marketplace — adopt, configure, run. Faster time-to-value when a configured asset beats a custom build.",
+    ar: "وكلاء جاهزون من السوق — اعتماد وتهيئة وتشغيل. وقت أسرع لتحقيق القيمة عندما يتفوق الأصل المهيأ على البناء المخصص.",
+    tr: "Marketplace'ten ürünleştirilmiş ajanlar — benimseyin, yapılandırın, çalıştırın. Yapılandırılmış bir varlık özel bir geliştirmeyi geçtiğinde daha hızlı değer süresi.",
+  },
+  cardBlendedDesc: {
+    en: "Asset pilot to project scale. Project discovery to asset rollout. Parallel rails on larger programmes.",
+    ar: "من تجربة الأصول إلى نطاق المشاريع. من اكتشاف المشاريع إلى نشر الأصول. مسارات متوازية للبرامج الأكبر.",
+    tr: "Varlık pilotundan proje ölçeğine. Proje keşfinden varlık dağıtımına. Daha büyük programlarda paralel raylar.",
+  },
+  ctaServices: { en: "Explore services", ar: "استكشف الخدمات", tr: "Hizmetleri keşfedin" },
+  ctaMarketplace: { en: "Browse the Marketplace", ar: "تصفح السوق", tr: "Marketplace'e göz atın" },
+  ctaPov: { en: "Read the POV", ar: "اقرأ المنظور", tr: "Bakış açısını okuyun" },
+};
+
+const DECISION_FACTORS = [
+  {
+    label: { en: "Problem specificity", ar: "خصوصية المشكلة", tr: "Sorun özgünlüğü" },
+    project: { en: "Bespoke", ar: "فريدة", tr: "Kendine özgü" },
+    asset: { en: "Industry-shared", ar: "مشتركة في القطاع", tr: "Sektörde ortak" },
+  },
+  {
+    label: { en: "Sponsorship & mandate", ar: "الرعاية والتفويض", tr: "Sponsorluk & yetki" },
+    project: { en: "C-suite, model change", ar: "تنفيذي، تغيير النموذج", tr: "C-suite, model değişikliği" },
+    asset: { en: "Function head, budget", ar: "رئيس وظيفي، ميزانية", tr: "Fonksiyon başkanı, bütçe" },
+  },
+  {
+    label: { en: "Time-to-value", ar: "الوقت لتحقيق القيمة", tr: "Değer süresi" },
+    project: { en: "12–26 weeks OK", ar: "12–26 أسبوع مقبول", tr: "12–26 hafta uygun" },
+    asset: { en: "Weeks required", ar: "أسابيع مطلوبة", tr: "Haftalar gerekli" },
+  },
+  {
+    label: { en: "AI & data maturity", ar: "نضج الذكاء الاصطناعي والبيانات", tr: "AI & veri olgunluğu" },
+    project: { en: "Foundations needed", ar: "تحتاج إلى أسس", tr: "Temeller gerekli" },
+    asset: { en: "Plug-in ready", ar: "جاهز للتوصيل", tr: "Tak-çalıştır hazır" },
+  },
+  {
+    label: { en: "Risk & IP appetite", ar: "شهية المخاطر والملكية الفكرية", tr: "Risk & IP iştahı" },
+    project: { en: "Exclusive IP, sovereign", ar: "ملكية حصرية، سيادية", tr: "Özel IP, sovereign" },
+    asset: { en: "Shared IP, configured", ar: "ملكية مشتركة، مهيأة", tr: "Ortak IP, yapılandırılmış" },
+  },
+];
 
 const mounirHeadshot = "/images/founder-mounir.png";
 
@@ -20,6 +105,7 @@ function AnimatedCounter({ value }: { value: string }) {
 }
 
 export default function Home() {
+  const { lang } = useLang();
   const featuredInsights = insights.filter((i) => i.featured).slice(0, 3);
 
   return (
@@ -249,6 +335,108 @@ export default function Home() {
                 Learn more about our approach <ArrowRight size={16} />
               </Link>
             </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── TWO PATHS POV ── */}
+      <section className="py-24 bg-gradient-to-b from-white to-[#F8F9FA] border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center max-w-3xl mx-auto mb-12"
+          >
+            <div className="section-divider mx-auto" />
+            <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white bg-[#0E2841] mb-4">
+              {tStr(TWO_PATHS_COPY.eyebrow, lang)}
+            </span>
+            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5 leading-tight">
+              {tStr(TWO_PATHS_COPY.title, lang)}
+            </h2>
+            <p className="text-lg text-gray-600 leading-relaxed">
+              {tStr(TWO_PATHS_COPY.introA, lang)}{" "}
+              <strong className="text-[#156082]">{tStr(TWO_PATHS_COPY.introProject, lang)}</strong>{" "}
+              <strong className="text-[#F5A623]">{tStr(TWO_PATHS_COPY.introAsset, lang)}</strong>{" "}
+              {tStr(TWO_PATHS_COPY.introBlend, lang)}
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            <TwoPathsDiagram />
+          </motion.div>
+
+          {/* Decision lens — five factors */}
+          <div className="mt-14 max-w-5xl mx-auto">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#0E2841] mb-4 text-center">
+              {tStr(TWO_PATHS_COPY.framework, lang)}
+            </p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {DECISION_FACTORS.map((f, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.06, duration: 0.4 }}
+                  className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm"
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841] mb-3 leading-snug">
+                    {tStr(f.label, lang)}
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#156082] flex-shrink-0" />
+                      <span className="text-xs text-gray-700 leading-snug">{tStr(f.project, lang)}</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#F5A623] flex-shrink-0" />
+                      <span className="text-xs text-gray-700 leading-snug">{tStr(f.asset, lang)}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-5 mt-12 max-w-5xl mx-auto">
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <Briefcase size={16} className="text-[#156082]" />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#156082]">{tStr(TWO_PATHS_COPY.cardProject, lang)}</span>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardProjectDesc, lang)}</p>
+              <Link href="/services" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#156082] hover:text-[#0E2841]">
+                {tStr(TWO_PATHS_COPY.ctaServices, lang)} <ArrowRight size={14} />
+              </Link>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <Package size={16} className="text-[#F5A623]" />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#F5A623]">{tStr(TWO_PATHS_COPY.cardAsset, lang)}</span>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardAssetDesc, lang)}</p>
+              <Link href="/marketplace" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#F5A623] hover:text-[#d4622a]">
+                {tStr(TWO_PATHS_COPY.ctaMarketplace, lang)} <ArrowRight size={14} />
+              </Link>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <GitMerge size={16} className="text-[#196B24]" />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#196B24]">{tStr(TWO_PATHS_COPY.cardBlended, lang)}</span>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardBlendedDesc, lang)}</p>
+              <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#196B24] hover:text-[#0E2841]">
+                {tStr(TWO_PATHS_COPY.ctaPov, lang)} <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
         </div>
       </section>

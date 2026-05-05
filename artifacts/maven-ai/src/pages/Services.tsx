@@ -1,19 +1,42 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Brain, Code2, Database, Rocket, ArrowRight } from "lucide-react";
+import { Brain, Code2, Database, Rocket, ArrowRight, Package } from "lucide-react";
 import { services } from "@/data/content";
+import { useLang, tStr } from "@/lib/lang";
+
+const COPY = {
+  eyebrow: { en: "Our Services", ar: "خدماتنا", tr: "Hizmetlerimiz" },
+  title: {
+    en: "Services — the project-led path to outcomes.",
+    ar: "الخدمات — المسار القائم على المشاريع للوصول إلى النتائج.",
+    tr: "Hizmetler — sonuçlara giden proje öncülüğündeki yol.",
+  },
+  introA: {
+    en: "This is Maven's project-led path: custom transformation engagements when the problem is bespoke, the sponsor is senior, and the operating model has to change. Four value propositions, each a stand-alone offer, often blended together.",
+    ar: "هذا هو مسار مافن القائم على المشاريع: ارتباطات تحول مخصصة عندما تكون المشكلة فريدة والراعي على المستوى التنفيذي ويجب تغيير نموذج التشغيل. أربعة عروض قيمة، كل منها مستقل، وغالباً ما تُدمج معاً.",
+    tr: "Bu, Maven'in proje öncülüğündeki yoludur: sorun kendine özgü olduğunda, sponsor üst düzey olduğunda ve operasyon modelinin değişmesi gerektiğinde özel dönüşüm çalışmaları. Her biri bağımsız bir teklif olan ve sıkça birlikte sunulan dört değer önermesi.",
+  },
+  introB: {
+    en: "When the problem is shared across the industry and configuration beats invention, start with the asset-led Marketplace instead — most engagements blend the two.",
+    ar: "عندما تكون المشكلة مشتركة عبر القطاع وتتفوق التهيئة على الابتكار، ابدأ بدلاً من ذلك بالسوق القائم على الأصول — ومعظم الارتباطات تمزج بين المسارين.",
+    tr: "Sorun sektör genelinde ortak olduğunda ve yapılandırma yeniden icattan üstün geldiğinde, bunun yerine varlık öncülüğündeki Marketplace ile başlayın — çoğu çalışma her ikisini de harmanlar.",
+  },
+  marketplaceLink: { en: "asset-led Marketplace", ar: "السوق القائم على الأصول", tr: "varlık öncülüğündeki Marketplace" },
+  povLink: { en: "Read the POV", ar: "اقرأ المنظور", tr: "Bakış açısını okuyun" },
+};
 
 const serviceIcons: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
   Brain, Code2, Database, Rocket,
 };
 
 export default function Services() {
+  const { lang, dir } = useLang();
   return (
-    <div className="pt-20">
+    <div className="pt-20" dir={dir}>
       <section className="bg-[#0E2841] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">
-            Our Services
+            {tStr(COPY.eyebrow, lang)}
           </motion.span>
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
@@ -21,11 +44,19 @@ export default function Services() {
             transition={{ delay: 0.1 }}
             className="text-5xl font-extrabold text-white mt-3 mb-5 max-w-3xl leading-tight"
           >
-            Four value propositions built for what clients need to ship.
+            {tStr(COPY.title, lang)}
           </motion.h1>
-          <p className="text-xl text-gray-300 max-w-2xl">
-            Each offering stands alone, sells together. Most engagements begin with one and expand into two or three as the relationship matures.
+          <p className="text-xl text-gray-300 max-w-3xl leading-relaxed">
+            {tStr(COPY.introA, lang)} {tStr(COPY.introB, lang)}
           </p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            <Link href="/marketplace" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+              <Package size={14} /> {tStr(COPY.marketplaceLink, lang)} <ArrowRight size={14} />
+            </Link>
+            <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+              {tStr(COPY.povLink, lang)} <ArrowRight size={14} />
+            </Link>
+          </div>
         </div>
       </section>
 

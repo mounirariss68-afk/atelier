@@ -4,6 +4,13 @@ import { Link } from "wouter";
 import { ArrowRight, Linkedin, MapPin, Quote } from "lucide-react";
 import { founders } from "@/data/content";
 import OperatingModelDiagram from "@/components/OperatingModelDiagram";
+import { useLang, tStr } from "@/lib/lang";
+
+const TWO_PATHS_PARAGRAPH = {
+  en: "Practically, that conviction shows up as two paths to outcomes. A project-led path for bespoke transformation, AI-driven SDLC, and data & governance foundations — and an asset-led path through our Marketplace of productized agents when the problem is shared across the industry and time-to-value matters more than custom IP. Most engagements blend the two; the decision framework is published in our Two Paths POV.",
+  ar: "عملياً، تتجلى هذه القناعة في مسارين للوصول إلى النتائج. مسار قائم على المشاريع للتحول المخصص ودورة حياة تطوير البرمجيات المدفوعة بالذكاء الاصطناعي وأسس البيانات والحوكمة — ومسار قائم على الأصول عبر سوقنا من الوكلاء الجاهزين عندما تكون المشكلة مشتركة عبر القطاع ويكون الوقت اللازم لتحقيق القيمة أهم من الملكية الفكرية المخصصة. معظم الارتباطات تمزج بين المسارين، ويُنشر إطار القرار في منظور المسارين لدينا.",
+  tr: "Pratikte bu kanaat, sonuçlara giden iki yol olarak ortaya çıkar. Özel dönüşüm, yapay zekâ öncülüğündeki SDLC ve veri & yönetişim temelleri için proje öncülüğündeki yol — ve sorun sektör genelinde ortak olduğunda ve değer süresi özel IP'den daha önemli olduğunda Marketplace'imizdeki ürünleştirilmiş ajanlar aracılığıyla varlık öncülüğündeki yol. Çoğu çalışma her ikisini harmanlar; karar çerçevesi İki Yol bakış açımızda yayımlanmıştır.",
+};
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -33,8 +40,9 @@ function FounderPhoto({ src, name }: { src: string; name: string }) {
 }
 
 export default function About() {
+  const { lang, dir } = useLang();
   return (
-    <div className="pt-20">
+    <div className="pt-20" dir={dir}>
       {/* Hero */}
       <section className="bg-[#0E2841] py-24 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
@@ -84,6 +92,12 @@ export default function About() {
                 </p>
                 <p>
                   We are a sister company of Maven Insights, one of the GCC's leading management consulting firms, giving us access to a 200+ consultant bench, deep regional client relationships, and the change management and organizational capability that pure AI firms typically lack.
+                </p>
+                <p>{tStr(TWO_PATHS_PARAGRAPH, lang)}</p>
+                <p className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                  <Link href="/services" className="text-[#156082] font-semibold hover:underline">→ {tStr({ en: "Services (project-led)", ar: "الخدمات (قائم على المشاريع)", tr: "Hizmetler (proje öncülüğünde)" }, lang)}</Link>
+                  <Link href="/marketplace" className="text-[#F5A623] font-semibold hover:underline">→ {tStr({ en: "Marketplace (asset-led)", ar: "السوق (قائم على الأصول)", tr: "Marketplace (varlık öncülüğünde)" }, lang)}</Link>
+                  <Link href="/insights/two-paths-to-outcomes" className="text-[#0E2841] font-semibold hover:underline">→ {tStr({ en: "Two Paths POV", ar: "منظور المسارين", tr: "İki Yol bakış açısı" }, lang)}</Link>
                 </p>
               </div>
             </div>

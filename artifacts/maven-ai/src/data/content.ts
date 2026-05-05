@@ -224,6 +224,24 @@ export const services = [
   },
 ];
 
+type InsightLang = "en" | "ar" | "tr";
+type InsightLike = { title: string; summary: string; content: string; titleAr?: string; titleTr?: string; summaryAr?: string; summaryTr?: string; contentAr?: string; contentTr?: string };
+export function insightTitle(i: InsightLike, lang: InsightLang): string {
+  if (lang === "ar") return i.titleAr ?? i.title;
+  if (lang === "tr") return i.titleTr ?? i.title;
+  return i.title;
+}
+export function insightSummary(i: InsightLike, lang: InsightLang): string {
+  if (lang === "ar") return i.summaryAr ?? i.summary;
+  if (lang === "tr") return i.summaryTr ?? i.summary;
+  return i.summary;
+}
+export function insightContent(i: InsightLike, lang: InsightLang): string {
+  if (lang === "ar") return i.contentAr ?? i.content;
+  if (lang === "tr") return i.contentTr ?? i.content;
+  return i.content;
+}
+
 export const insights = [
   {
     id: "the-agentic-enterprise",
@@ -561,6 +579,246 @@ export const insights = [
 <li>Architect for sovereignty from day one. Retrofitting sovereign architecture onto a system originally designed for public cloud is significantly more expensive and disruptive than building sovereign-first. The security architecture must be the starting point, not a constraint applied after the fact.</li>
 <li>Invest in open-weight model evaluation before selecting a model. The sovereign AI model landscape is evolving rapidly. A systematic evaluation of available open-weight models against your specific use case — including Arabic language performance, instruction-following quality, and hardware requirements — is worth the time before committing to an architecture.</li>
 <li>Plan the observability infrastructure as carefully as the AI infrastructure. The audit and governance requirements of sovereign environments are as complex as the technical requirements. Organizations that invest equally in both are the ones that pass security reviews and build institutional confidence in the system.</li>
+</ul>
+    `,
+  },
+  {
+    id: "two-paths-to-outcomes",
+    slug: "two-paths-to-outcomes",
+    title: "Two Paths to Outcomes: Project-Led and Asset-Led AI Delivery",
+    titleAr: "مساران للوصول إلى النتائج: تسليم الذكاء الاصطناعي القائم على المشاريع والقائم على الأصول",
+    titleTr: "Sonuçlara Giden İki Yol: Proje Öncülüğünde ve Varlık Öncülüğünde AI Teslimi",
+    category: "Agentic AI",
+    type: "Perspective",
+    date: "May 2026",
+    readTime: "17 min read",
+    author: "Mounir Aris, Senior Partner",
+    coverImage: "/images/report-9.png",
+    summary: "Maven's POV on how clients should choose between custom transformation engagements (project-led) and productized agents from the Marketplace (asset-led) — with a decision framework drawn from BCG, MIT, McKinsey, Gartner and EY research, and the blending patterns most engagements actually follow.",
+    summaryAr: "وجهة نظر مافن حول كيفية اختيار العملاء بين ارتباطات التحول المخصصة (القائمة على المشاريع) والوكلاء الجاهزين من السوق (القائمة على الأصول) — مع إطار قرار مستمد من أبحاث BCG وMIT وMcKinsey وGartner وEY، وأنماط الدمج التي تتبعها معظم الارتباطات فعلياً.",
+    summaryTr: "Müşterilerin özel dönüşüm çalışmaları (proje öncülüğünde) ile Marketplace'ten ürünleştirilmiş ajanlar (varlık öncülüğünde) arasında nasıl seçim yapması gerektiğine dair Maven'in bakış açısı — BCG, MIT, McKinsey, Gartner ve EY araştırmalarından alınan bir karar çerçevesi ve çoğu çalışmanın gerçekte izlediği harmanlama desenleri ile.",
+    featured: true,
+    tags: ["Agentic AI", "Operating Model", "Strategy", "GCC"],
+    contentAr: `
+<h2>وجهة نظر مافن</h2>
+<p>تقدم مافن للذكاء الاصطناعي النتائج عبر مسارين متكاملين، لا مسار واحد. <strong>الارتباطات القائمة على المشاريع</strong> — العمل الاستراتيجي والتحول واسع النطاق وعمليات البناء المخصصة — تقع على أحد المسارين. <strong>الاعتماد القائم على الأصول</strong> للوكلاء والأدوات الجاهزة من سوقنا يقع على الآخر. كلا المسارين يلتقيان عند الوجهة ذاتها: ذكاء اصطناعي يعمل فعلياً في الإنتاج ويمتلك عملاً قابلاً للقياس داخل المؤسسة.</p>
+<p>لا نعتقد أن هذين خيارين متكافئين يختار العميل بينهما عشوائياً. المسار الصحيح يعتمد على الموقف: حجم الميزانية، والرعاية التنفيذية، والإلحاح، ونضج الذكاء الاصطناعي والبيانات، وشهية المخاطر، وما إذا كانت المشكلة الأساسية عامة أم مخصصة. معظم الارتباطات في النهاية تمزج المسارين — والمستشار الموثوق ينبغي أن يكون صريحاً بشأن التسلسل المناسب للعميل أمامه.</p>
+<blockquote>القائم على المشاريع يثمر عندما تكون المشكلة فريدة والراعي تنفيذياً ونموذج التشغيل مضطراً للتغير. القائم على الأصول يثمر عندما تكون المشكلة مشتركة عبر القطاع وضغط الوقت لتحقيق القيمة شديداً والإجابة قابلة للتهيئة لا للابتكار من الصفر.</blockquote>
+<h2>ماذا تقول الأبحاث فعلاً</h2>
+<p>الأدلة المنشورة حول تسليم الذكاء الاصطناعي المؤسسي متسقة بشكل لافت عبر الشركات. ثلاثة نتائج تشكل وجهة نظرنا:</p>
+<ul>
+<li><strong>معظم التجارب لا تصل إلى الإنتاج.</strong> تجد دراسة MIT NANDA لعام 2025 أن 95% من تجارب الذكاء التوليدي المؤسسية لا تحقق أثراً مالياً قابلاً للقياس؛ فقط ~5% من الأنظمة المتكاملة تولد قيمة ذات معنى (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>).</li>
+<li><strong>عنق الزجاجة هو التسليم وليس النماذج.</strong> دراسة BCG <em>Where's the Value in AI?</em> تجد أن 26% فقط من الشركات تجاوزت التجارب لتوليد قيمة على نطاق واسع، و4% فقط في النخبة (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>).</li>
+<li><strong>الإنتاج الجاهز يضاعف العوائد.</strong> استطلاع McKinsey <em>State of AI</em> يجد أن المؤسسات التي تنسب أكبر أثر EBIT للذكاء الاصطناعي أعادت تصميم سير العمل وأعادت استخدام القدرات عبر حالات الاستخدام (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>).</li>
+</ul>
+<p>سوقان مختلفان ينبثقان من هذه النتائج. تغطية Gartner لـ"الذكاء الاصطناعي الوكيل" تتعامل معه كتحول منصة قادم مع توفر وكلاء جاهزين بشكل متزايد (<a href="https://www.gartner.com/en/articles/intelligent-agent-in-ai" target="_blank" rel="noopener noreferrer">Gartner, 2024–2025</a>). في الوقت ذاته، استطلاع EY <em>AI Pulse</em> يُظهر أن المؤسسات الكبرى تواصل تكليف برامج تحول مخصصة لأن سياق بياناتها وتنظيمها وتشغيلها فريد بحق (<a href="https://www.ey.com/en_us/insights/ai/ai-pulse-survey-results" target="_blank" rel="noopener noreferrer">EY, 2024</a>).</p>
+<h2>المساران، تعريفاً</h2>
+<h3>القائم على المشاريع</h3>
+<p>ارتباط مخصص محدد النطاق لتحقيق نتيجة بعينها داخل مؤسسة بعينها. تجلب مافن شركاء كبار ومهندسين ومن مافن إنسايتس عند الحاجة لتصميم وبناء وتشغيل قدرة ذكاء اصطناعي لم تكن موجودة من قبل. أشكال نموذجية: برامج التحول الوكيلة، ودورة حياة تطوير البرمجيات المدفوعة بالذكاء الاصطناعي وتحديث الأنظمة القديمة، وأسس البيانات والحوكمة، وMVP لمدة 90 يوماً في استوديو منتجات الذكاء الاصطناعي.</p>
+<h3>القائم على الأصول</h3>
+<p>اعتماد وتهيئة وكيل أو أداة جاهزة من السوق. الملكية الفكرية مبنية مسبقاً؛ العمل هو ملاءمتها لبيانات العميل وعملياته ووضع الحوكمة لديه. أشكال نموذجية: أداة تحقيق القيمة، وكوبايلوت تسليم PMO، ووكيل تفاوض المشتريات، وخلية رعاية العملاء، وحارس البيانات السيادي.</p>
+<h2>إطار القرار</h2>
+<p>نستخدم خمسة عوامل لإرشاد العملاء حول المسار الأنسب. لا أحد منها حاسم بمفرده؛ التركيبة هي ما يهم.</p>
+<ul>
+<li><strong>خصوصية المشكلة:</strong> فريدة → قائم على المشاريع؛ مشتركة في القطاع → قائم على الأصول.</li>
+<li><strong>الرعاية والتفويض:</strong> راعٍ تنفيذي وتغيير نموذج التشغيل → قائم على المشاريع؛ رئيس وظيفي بميزانية → قائم على الأصول.</li>
+<li><strong>الوقت لتحقيق القيمة:</strong> 12–26 أسبوعاً مقبول → قائم على المشاريع؛ أسابيع مطلوبة → قائم على الأصول.</li>
+<li><strong>نضج الذكاء الاصطناعي والبيانات:</strong> الأسس بحاجة إلى بناء → قائم على المشاريع؛ جاهزة للتوصيل → قائم على الأصول.</li>
+<li><strong>شهية المخاطر والملكية الفكرية:</strong> ملكية حصرية وسيادية → قائم على المشاريع؛ ملكية مشتركة ومهيأة → قائم على الأصول.</li>
+</ul>
+<p>ثلاثة عوامل أو أكثر تميل في الاتجاه ذاته إشارة واضحة عادةً. الصورة المنقسمة فعلاً عادةً ما تشير إلى دخول <em>مدمج</em>، لا إلى رمي عملة.</p>
+<h2>محوران يصقلان الاختيار</h2>
+<p>تنطوي العوامل الخمسة عملياً على محورين نرسمهما على السبورة مع كل عميل تقريباً: <strong>خصوصية المشكلة</strong> (عام ↔ مخصص) و<strong>نضج الذكاء الاصطناعي والرعاية</strong> (منخفض ↔ عالٍ). الأرباع الأربعة تعطي توصية انطلاق:</p>
+<ul>
+<li><strong>عام · نضج منخفض:</strong> ابدأ بالقائم على الأصول. هيّئ أداة من السوق وأثبت القيمة وابنِ الثقة الداخلية.</li>
+<li><strong>عام · نضج عالٍ:</strong> القائم على الأصول على نطاق واسع. وزّع الوكيل عبر وحدات الأعمال واستخدم الوفورات لتمويل الخطوة التالية.</li>
+<li><strong>مخصص · نضج منخفض:</strong> اكتشاف قائم على المشاريع أولاً. ارتباط قصير بقيادة كبار يسمي المشكلة الحقيقية ويعيد بناء الأسس اللازمة.</li>
+<li><strong>مخصص · نضج عالٍ:</strong> تحول قائم على المشاريع. لدى العميل الرعاية والبيانات؛ ما ينقص هو بناء مخصص وعضلة إدارة التغيير.</li>
+</ul>
+<h2>أنماط الدمج التي نراها عملياً</h2>
+<p>تقريباً كل علاقة طويلة الأمد مع مافن تمزج المسارين في النهاية. السؤال المثير هو التسلسل. ثلاثة أنماط متكررة:</p>
+<h3>النمط 1 — تجربة أصول → نطاق مشروع</h3>
+<p>يعتمد رئيس وظيفي وكيلاً من السوق (مثل كوبايلوت تسليم PMO أو وكيل تفاوض المشتريات)، يثبت القيمة داخل فريق واحد في 8–12 أسبوعاً، ويستخدم هذا الدليل لإطلاق رعاية تنفيذية لتحول قائم على المشاريع يعيد هندسة نموذج التشغيل حول الوكيل.</p>
+<h3>النمط 2 — اكتشاف مشروع → نشر أصول</h3>
+<p>يكلف راعٍ تنفيذي اكتشافاً قائماً على المشاريع — عادةً سرعة حالة قيمة وبناء أسس بيانات وحوكمة — ويُظهر الاكتشاف خمس إلى ست حالات استخدام. اثنتان مخصصتان بحق وتبقيان قائمتين على المشاريع؛ والباقي بشكل أدوات سوق موجودة وتُنشر قائمة على الأصول بسرعة أكبر بكثير وتكلفة أقل.</p>
+<h3>النمط 3 — مساران متوازيان</h3>
+<p>يدير العملاء الأكبر كلا المسارين بالتوازي من اليوم الأول: برنامج قائم على المشاريع يعيد بناء أساس البيانات ووكيل رئيسي مخصص، بينما تنزل ثلاث أو أربع أدوات قائمة على الأصول في وظائف مجاورة لإبقاء قيمة مرئية تتدفق بينما تنضج أعمال الأساس.</p>
+<h2>المقايضات الصادقة</h2>
+<ul>
+<li><strong>التكلفة.</strong> القائم على المشاريع أغلى لكل نتيجة في اليوم الأول؛ القائم على الأصول أرخص لكل نتيجة لكنه يراكم تكلفة تهيئة وتكامل مع نمو الكتالوج.</li>
+<li><strong>الوقت لتحقيق القيمة.</strong> القائم على الأصول يقدم نتيجة أولى مفيدة في أسابيع؛ القائم على المشاريع في أشهر.</li>
+<li><strong>التخصيص.</strong> القائم على المشاريع ينتج ملكية فكرية مشكلة بدقة للعميل؛ القائم على الأصول ينتج ملكية فكرية مشكلة للقطاع ومهيأة للعميل.</li>
+<li><strong>عبء إدارة التغيير.</strong> القائم على المشاريع يحمل عبئاً أثقل لأنه عادة يعيد توصيل نموذج التشغيل.</li>
+<li><strong>ملكية الملكية الفكرية.</strong> القائم على المشاريع ينتج ملكية يملكها العميل؛ القائم على الأصول يبقي الملكية مع مافن.</li>
+</ul>
+<h2>التوصيات</h2>
+<ul>
+<li>طبّق عدسة العوامل الخمسة قبل تحديد نطاق أي مبادرة ذكاء اصطناعي جديدة.</li>
+<li>تعامل مع السوق كمحفظة، لا ككتالوج مشتريات.</li>
+<li>للمشكلات المخصصة بأسس بيانات ضعيفة، لا تتخطَّ الاكتشاف القائم على المشاريع.</li>
+<li>للمشكلات العامة برعاية قوية، قاوم رغبة الإفراط في الهندسة.</li>
+</ul>
+    `,
+    content: `
+<h2>Maven's Point of View</h2>
+<p>Maven AI delivers outcomes through two complementary paths, not one. <strong>Project-led</strong> engagements — strategy work, large-scale transformation, custom builds — sit on one rail. <strong>Asset-led</strong> adoption of productized agents and tools from our Marketplace sits on the other. Both rails converge on the same destination: AI that is actually in production, owning measurable work inside the enterprise.</p>
+<p>We do not believe these are equivalent options the client picks at random. The right path depends on the situation: budget envelope, senior sponsorship, urgency, AI and data maturity, risk appetite, and whether the underlying problem is generic or bespoke. Most engagements eventually blend the two — and a credible advisor should be honest about which sequence fits the client in front of them.</p>
+<blockquote>Project-led delivers when the problem is bespoke, the sponsor is senior, and the operating model has to change. Asset-led delivers when the problem is shared across the industry, the time-to-value pressure is acute, and the answer can be configured rather than invented.</blockquote>
+<h2>What the Research Actually Says</h2>
+<p>The published evidence on enterprise AI delivery is unusually consistent across firms. Three findings shape our POV:</p>
+<ul>
+<li><strong>Most pilots never reach production.</strong> MIT NANDA's 2025 <em>State of AI in Business</em> report finds 95% of enterprise GenAI pilots deliver no measurable P&amp;L impact; only ~5% of integrated systems generate meaningful value (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>).</li>
+<li><strong>The bottleneck is delivery, not models.</strong> BCG's <em>Where's the Value in AI?</em> finds only 26% of companies have moved past pilots to generate any value at scale, and just 4% sit at the elite frontier (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>).</li>
+<li><strong>Productization compounds returns.</strong> McKinsey's <em>State of AI</em> survey finds that organizations attributing the largest EBIT impact to AI redesigned workflows and reused capabilities across use cases — not those that ran the most isolated pilots (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>).</li>
+</ul>
+<p>Two different markets are emerging from these findings. Gartner's coverage of "agentic AI" treats it as the next platform shift, with packaged agents increasingly available off the shelf (<a href="https://www.gartner.com/en/articles/intelligent-agent-in-ai" target="_blank" rel="noopener noreferrer">Gartner, 2024–2025</a>). At the same time, EY's <em>AI Pulse Survey</em> shows large enterprises continuing to commission custom transformation programs because their data, regulatory, and operating-model context is genuinely bespoke (<a href="https://www.ey.com/en_us/insights/ai/ai-pulse-survey-results" target="_blank" rel="noopener noreferrer">EY, 2024</a>). The honest reading: both delivery shapes are durable, and clients need a framework for choosing between them.</p>
+<h2>The Two Paths, Defined</h2>
+<h3>Project-Led</h3>
+<p>A custom engagement scoped to a specific outcome inside a specific organization. Maven brings senior partners, engineers, and (where it helps) Maven Insights bench depth into the client's environment to design, build, and run an AI capability that did not exist before. Typical shapes: agentic transformation programs, AI-driven SDLC and legacy modernization, data &amp; governance foundations, and 90-day MVPs in the AI Product Studio. Project-led work is appropriate when the problem is bespoke, the data is sensitive or sovereign, the operating model has to change, or the client needs a partner accountable end-to-end.</p>
+<h3>Asset-Led</h3>
+<p>Adoption and configuration of a productized agent or tool from the Marketplace. The IP is pre-built; the work is fitting it to the client's data, processes, and governance posture. Typical shapes: the Value Realization Tool, the PMO Delivery Copilot, the Procurement Negotiation Agent, the Customer Care Hive, the Sovereign Data Steward. Asset-led delivery is appropriate when the problem is shared across the industry, the time-to-value pressure is acute, the budget envelope is constrained, or the client wants to start small and prove value before committing to a larger engagement.</p>
+<h2>A Decision Framework</h2>
+<p>We use five factors to advise clients on which path fits best. None is decisive on its own; the combination is what matters.</p>
+<div class="overflow-x-auto my-6">
+<table class="min-w-full border border-gray-200 text-sm">
+<thead class="bg-[#0E2841] text-white">
+<tr>
+<th class="text-left p-3 font-bold">Factor</th>
+<th class="text-left p-3 font-bold">Lean Project-Led When…</th>
+<th class="text-left p-3 font-bold">Lean Asset-Led When…</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-t border-gray-200">
+<td class="p-3 font-semibold text-[#0E2841]">Problem specificity</td>
+<td class="p-3 text-gray-700">The problem is bespoke to your organization, regulator, or geography.</td>
+<td class="p-3 text-gray-700">The problem is shared across your industry and largely solved already.</td>
+</tr>
+<tr class="border-t border-gray-200 bg-gray-50">
+<td class="p-3 font-semibold text-[#0E2841]">Sponsorship &amp; mandate</td>
+<td class="p-3 text-gray-700">A C-suite sponsor owns the outcome and can change the operating model.</td>
+<td class="p-3 text-gray-700">A function head owns a budget and wants a working tool in the team's hands.</td>
+</tr>
+<tr class="border-t border-gray-200">
+<td class="p-3 font-semibold text-[#0E2841]">Time-to-value</td>
+<td class="p-3 text-gray-700">12–26 weeks to a production MVP is acceptable.</td>
+<td class="p-3 text-gray-700">Weeks to first useful output is required to keep the business case alive.</td>
+</tr>
+<tr class="border-t border-gray-200 bg-gray-50">
+<td class="p-3 font-semibold text-[#0E2841]">AI &amp; data maturity</td>
+<td class="p-3 text-gray-700">Data foundations or governance need to be built or rebuilt as part of the work.</td>
+<td class="p-3 text-gray-700">Data and governance are good enough to plug a productized agent in.</td>
+</tr>
+<tr class="border-t border-gray-200">
+<td class="p-3 font-semibold text-[#0E2841]">Risk &amp; IP appetite</td>
+<td class="p-3 text-gray-700">You want exclusive IP, sovereign deployment, or a defensible moat.</td>
+<td class="p-3 text-gray-700">You are comfortable adopting shared IP and configuring it to your context.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Three or more factors leaning the same way is usually a clear signal. A genuinely split picture — two and two with one factor on the fence — typically points to a <em>blended</em> entry, not a coin flip.</p>
+<h2>Two Axes That Sharpen the Choice</h2>
+<p>The five factors above collapse, in practice, into two axes that we draw on a whiteboard with almost every client: <strong>Problem Specificity</strong> (generic ↔ bespoke) and <strong>AI Maturity &amp; Sponsorship</strong> (low ↔ high). The four quadrants give a starting recommendation:</p>
+<div class="my-8 not-prose">
+  <div class="relative bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+    <div class="text-center text-[11px] font-bold uppercase tracking-widest text-[#0E2841] mb-3">Problem Specificity →</div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="rounded-lg border-2 border-[#F5A623] bg-[#F5A623]/5 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#F5A623] mb-1">Generic · Low maturity</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Start asset-led</div>
+        <div class="text-xs text-gray-600">Configure a Marketplace tool, prove value, build internal confidence.</div>
+      </div>
+      <div class="rounded-lg border-2 border-[#156082] bg-[#156082]/5 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#156082] mb-1">Bespoke · Low maturity</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Project-led discovery</div>
+        <div class="text-xs text-gray-600">Senior-led engagement that names the real problem and rebuilds foundations.</div>
+      </div>
+      <div class="rounded-lg border-2 border-[#F5A623] bg-[#F5A623]/10 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#F5A623] mb-1">Generic · High maturity</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Asset-led at scale</div>
+        <div class="text-xs text-gray-600">Roll the productized agent across business units; fund the next move from savings.</div>
+      </div>
+      <div class="rounded-lg border-2 border-[#156082] bg-[#156082]/10 p-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-[#156082] mb-1">Bespoke · High maturity</div>
+        <div class="text-sm font-bold text-[#0E2841] mb-1">Project-led transformation</div>
+        <div class="text-xs text-gray-600">Custom build plus change-management muscle to land it.</div>
+      </div>
+    </div>
+    <div class="text-center text-[11px] font-bold uppercase tracking-widest text-[#0E2841] mt-3">↑ AI Maturity &amp; Sponsorship</div>
+  </div>
+</div>
+<h2>Blending Patterns We See in Practice</h2>
+<p>Almost every long-running Maven relationship eventually blends both paths. The interesting question is the sequence. Three patterns recur:</p>
+<h3>Pattern 1 — Asset Pilot → Project Scale</h3>
+<div class="my-5 not-prose">
+  <div class="flex flex-col sm:flex-row items-stretch gap-2 text-xs">
+    <div class="flex-1 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-3">
+      <div class="font-bold text-[#F5A623] uppercase tracking-wider text-[10px] mb-1">Asset</div>
+      <div class="text-[#0E2841] font-semibold">Marketplace agent in one team</div>
+      <div class="text-gray-600 mt-1">8–12 weeks · function-head budget</div>
+    </div>
+    <div class="flex items-center justify-center text-[#0E2841] font-bold">→</div>
+    <div class="flex-1 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-3">
+      <div class="font-bold text-[#156082] uppercase tracking-wider text-[10px] mb-1">Project</div>
+      <div class="text-[#0E2841] font-semibold">C-suite sponsorship unlocked</div>
+      <div class="text-gray-600 mt-1">Operating model re-engineered around the agent</div>
+    </div>
+  </div>
+</div>
+<p>A function head adopts a Marketplace agent (say, the PMO Delivery Copilot or the Procurement Negotiation Agent), proves value inside one team in 8–12 weeks, and uses that evidence to unlock C-suite sponsorship for a project-led transformation that re-engineers the operating model around the agent. The asset is the wedge; the project is the scale-up.</p>
+<h3>Pattern 2 — Project Discovery → Asset Rollout</h3>
+<div class="my-5 not-prose">
+  <div class="flex flex-col sm:flex-row items-stretch gap-2 text-xs">
+    <div class="flex-1 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-3">
+      <div class="font-bold text-[#156082] uppercase tracking-wider text-[10px] mb-1">Project</div>
+      <div class="text-[#0E2841] font-semibold">Value-case sprint + foundations</div>
+      <div class="text-gray-600 mt-1">Surfaces 5–6 candidate use cases</div>
+    </div>
+    <div class="flex items-center justify-center text-[#0E2841] font-bold">→</div>
+    <div class="flex-1 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-3">
+      <div class="font-bold text-[#F5A623] uppercase tracking-wider text-[10px] mb-1">Asset × N</div>
+      <div class="text-[#0E2841] font-semibold">Marketplace tools rolled across functions</div>
+      <div class="text-gray-600 mt-1">2 stay project-led; rest configured at lower cost</div>
+    </div>
+  </div>
+</div>
+<p>A C-suite sponsor commissions a project-led discovery — usually a value-case sprint plus a data &amp; governance foundations build — and the discovery surfaces five or six use cases. Two are genuinely bespoke and stay project-led; the rest are exactly the shape of existing Marketplace tools and get rolled out asset-led, much faster and at much lower cost.</p>
+<h3>Pattern 3 — Parallel Rails</h3>
+<div class="my-5 not-prose">
+  <div class="space-y-2 text-xs">
+    <div class="flex items-stretch gap-2">
+      <div class="w-20 sm:w-28 flex-shrink-0 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-2 flex items-center justify-center font-bold text-[10px] uppercase tracking-wider text-[#156082]">Project rail</div>
+      <div class="flex-1 rounded-lg bg-[#156082]/5 border border-[#156082]/30 p-3 text-[#0E2841]">Data foundation rebuild + one flagship custom agent</div>
+      <div class="flex items-center px-1 text-[#196B24] font-bold">⇢</div>
+      <div class="flex-1 rounded-lg bg-[#196B24]/10 border border-[#196B24]/40 p-3 text-[#0E2841] font-semibold">Streams converge — agents consume governed data</div>
+    </div>
+    <div class="flex items-stretch gap-2">
+      <div class="w-20 sm:w-28 flex-shrink-0 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-2 flex items-center justify-center font-bold text-[10px] uppercase tracking-wider text-[#F5A623]">Asset rail</div>
+      <div class="flex-1 rounded-lg bg-[#F5A623]/5 border border-[#F5A623]/30 p-3 text-[#0E2841]">3–4 Marketplace tools land in adjacent functions, visible value flowing</div>
+      <div class="flex items-center px-1 text-transparent">⇢</div>
+      <div class="flex-1 rounded-lg bg-transparent border border-transparent p-3"></div>
+    </div>
+  </div>
+</div>
+<p>Larger clients run both paths in parallel from day one: a project-led programme rebuilding the data foundation and one flagship agent, while three or four asset-led tools land in adjacent functions to keep visible value flowing while the foundation work matures. The two streams converge as the foundation comes online and the productized agents start consuming the new governed data.</p>
+<h2>The Honest Trade-Offs</h2>
+<p>We try to be explicit about what each path costs the client.</p>
+<ul>
+<li><strong>Cost.</strong> Project-led is more expensive per outcome on day one; asset-led is cheaper per outcome but accumulates configuration and integration cost as the catalogue grows.</li>
+<li><strong>Time-to-value.</strong> Asset-led typically delivers first useful output in weeks; project-led in months. For some problems, weeks is structurally impossible — the data isn't ready.</li>
+<li><strong>Customization.</strong> Project-led produces IP shaped exactly to the client; asset-led produces IP shaped to the industry, configured to the client. Configuration has limits.</li>
+<li><strong>Change-management load.</strong> Project-led carries heavier change-management work because it usually rewires the operating model; asset-led carries lighter (but non-zero) change-management work because it lands inside an existing process.</li>
+<li><strong>IP ownership.</strong> Project-led typically produces client-owned IP; asset-led leaves IP with Maven (with the client benefiting from continuous improvement to the catalogue). Sovereign and air-gapped deployments are available on either path.</li>
+</ul>
+<h2>What This Means for the Engagement Conversation</h2>
+<p>For the client, the practical implication is that the first conversation should not be "do you want a project or a tool?" — it should be "where are you on the five factors, and what does the blend look like for the next 6–18 months?" For Maven, the practical implication is that we have to be willing to recommend the asset-led path even when a project-led engagement would be more lucrative in the short term, and willing to recommend the project-led path even when a Marketplace tool exists that is <em>almost</em> the right fit. Credibility on this is the whole point of the POV.</p>
+<h2>Recommendations</h2>
+<ul>
+<li>Run the five-factor decision lens before scoping any new AI initiative. The default sequence ("we'll do a strategy project, then figure out the tools") is the most expensive way to learn whether the problem was generic all along.</li>
+<li>Treat the Marketplace as a portfolio, not a procurement catalogue. Adopt one tool, learn from it, and let that learning shape the next project-led move.</li>
+<li>For bespoke problems with weak data foundations, do not skip the project-led discovery. Asset-led delivery on broken data is the most common failure mode we see in the GCC enterprises we serve.</li>
+<li>For generic problems with strong sponsorship, resist the urge to over-engineer. A configured Marketplace tool in production this quarter beats a custom build that lands next year.</li>
 </ul>
     `,
   },
