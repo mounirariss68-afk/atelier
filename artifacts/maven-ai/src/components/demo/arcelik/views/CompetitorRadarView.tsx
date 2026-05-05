@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -16,6 +16,7 @@ import {
 } from "@/data/arcelik-seed";
 import { useArcelikData, getArcelikDataSnapshot } from "@/hooks/useArcelikData";
 import { usePriceHistory } from "@/hooks/usePriceHistory";
+import type { NotificationNavTarget } from "@/data/arcelik-notifications";
 
 const BRAND_COLORS: Record<string, string> = {
   Vestel: "#2563eb",
@@ -48,7 +49,12 @@ function computeBrandScores(brandName: string) {
 
 const ARCELIK_SCORES = { price: 80, variety: 95, dealer: 90, campaign: 75, brand: 88, satisfaction: 82 };
 
-export default function CompetitorRadarView() {
+interface CompetitorRadarViewProps {
+  pendingNav?: NotificationNavTarget | null;
+  onPendingNavConsumed?: () => void;
+}
+
+export default function CompetitorRadarView({ pendingNav, onPendingNavConsumed }: CompetitorRadarViewProps = {}) {
   const { filters } = useDashboardFilters();
   const { lang } = useDemoLang();
   const t = radar[lang];
@@ -57,6 +63,7 @@ export default function CompetitorRadarView() {
   const [selectedBrands, setSelectedBrands] = useState<string[]>(["Vestel", "Bosch"]);
   const [detailBrand, setDetailBrand] = useState<string | null>(null);
   const [trendRange, setTrendRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
+  const lastConsumedNonce = useRef<number | null>(null);
 
   const RANGE_OPTIONS: { key: "7d" | "30d" | "90d" | "all"; label: string }[] = [
     { key: "7d", label: t.range7d },
@@ -64,6 +71,19 @@ export default function CompetitorRadarView() {
     { key: "90d", label: t.range90d },
     { key: "all", label: t.rangeAll },
   ];
+
+  useEffect(() => {
+    if (!pendingNav || pendingNav.recordType !== "competitor") return;
+    if (lastConsumedNonce.current === pendingNav.nonce) return;
+    const known = COMPETITOR_BRANDS.find((b) => b.name === pendingNav.brand);
+    if (!known) return;
+    lastConsumedNonce.current = pendingNav.nonce;
+    setSelectedBrands((prev) =>
+      prev.includes(pendingNav.brand) ? prev : [...prev, pendingNav.brand].slice(-4),
+    );
+    setDetailBrand(pendingNav.brand);
+    onPendingNavConsumed?.();
+  }, [pendingNav, onPendingNavConsumed]);
 
   const RADAR_DIMS = [
     { key: "price", label: t.dimPrice },

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/data/arcelik-seed";
 import { useArcelikData } from "@/hooks/useArcelikData";
 import { type PriceHistoryRecord } from "@/hooks/usePriceHistory";
+import type { NotificationNavTarget } from "@/data/arcelik-notifications";
 
 const MAX_SELECTED = 4;
 const MIN_TO_COMPARE = 2;
@@ -168,7 +169,15 @@ function MatrixCell({
   );
 }
 
-export default function ProductComparisonView() {
+interface ProductComparisonViewProps {
+  pendingNav?: NotificationNavTarget | null;
+  onPendingNavConsumed?: () => void;
+}
+
+export default function ProductComparisonView({
+  pendingNav,
+  onPendingNavConsumed,
+}: ProductComparisonViewProps = {}) {
   const { lang } = useDemoLang();
   const t = comparison[lang];
   const { products, competitorPrices } = useArcelikData();
@@ -178,6 +187,19 @@ export default function ProductComparisonView() {
   const [filterCategory, setFilterCategory] = useState<ProductCategory | "all">("all");
   const [filterTier, setFilterTier] = useState<"all" | "entry" | "mid" | "premium">("all");
   const [filterBrand, setFilterBrand] = useState<string>("all");
+  const lastConsumedNonce = useRef<number | null>(null);
+
+  // Click-through from a price-change notification: pre-fill the search and
+  // scope the list to product rows so the user lands on the matching item.
+  useEffect(() => {
+    if (!pendingNav || pendingNav.recordType !== "product") return;
+    if (lastConsumedNonce.current === pendingNav.nonce) return;
+    lastConsumedNonce.current = pendingNav.nonce;
+    setSearch(pendingNav.modelCode);
+    setFilterKind("arcelik");
+    if (pendingNav.category) setFilterCategory(pendingNav.category);
+    onPendingNavConsumed?.();
+  }, [pendingNav, onPendingNavConsumed]);
 
   const allItems = useMemo<ComparisonItem[]>(() => {
     const a: ComparisonItem[] = products.map((p) => buildArcelikItem(p, lang));

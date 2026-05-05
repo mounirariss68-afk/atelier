@@ -1,17 +1,19 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard, Radar, Megaphone, SlidersHorizontal,
   CalendarRange, Bot, Bell, LogOut, ChevronLeft, ChevronRight,
   X, Filter, Brain, AlertTriangle, GitCompareArrows, Crosshair,
-  ArrowLeftRight,
+  ArrowLeftRight, TrendingUp, TrendingDown, CheckCheck,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import { DashboardProvider, useDashboardFilters, type Period } from "./DashboardContext";
 import { COMPETITOR_BRANDS, CATEGORY_LABELS, getCategoryLabel, getCityName, type ProductCategory } from "@/data/arcelik-seed";
 import { useArcelikData } from "@/hooks/useArcelikData";
-import { generateAlerts, type AgentAlert, type Severity } from "@/data/arcelik-agent";
+import { useNotifications } from "@/hooks/useNotifications";
+import { formatRelativeTime, type PriceNotification, type NotificationNavTarget } from "@/data/arcelik-notifications";
+import { useToast } from "@/hooks/use-toast";
 import { DemoLangProvider, useDemoLang } from "./DemoLangContext";
 import { shell } from "./demo-i18n";
 import DashboardView from "./views/DashboardView";
@@ -66,12 +68,27 @@ function Shell() {
   const { lang, setLang } = useDemoLang();
   const t = shell[lang];
   const { cities } = useArcelikData();
+  const { toast } = useToast();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    pendingToasts,
+    acknowledgeToasts,
+    isRead,
+  } = useNotifications();
 
-  const agentAlerts = useMemo(() => generateAlerts(), []);
-  const critHighAlerts = agentAlerts.filter((a) => a.severity === "critical" || a.severity === "high");
-
-  const SEV_DOT: Record<Severity, string> = { critical: "bg-red-500", high: "bg-orange-500", medium: "bg-amber-500", low: "bg-gray-400" };
-  const SEV_LABEL: Record<Severity, string> = { critical: t.sevCritical, high: t.sevHigh, medium: t.sevMedium, low: t.sevLow };
+  const SEV_DOT: Record<PriceNotification["severity"], string> = {
+    critical: "bg-red-500",
+    high: "bg-orange-500",
+    medium: "bg-amber-500",
+  };
+  const SEV_LABEL: Record<PriceNotification["severity"], string> = {
+    critical: t.sevCritical,
+    high: t.sevHigh,
+    medium: t.sevMedium,
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -80,6 +97,43 @@ function Shell() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    if (pendingToasts.length === 0) return;
+    const toShow = pendingToasts.slice(0, 3);
+    toShow.forEach((n) => {
+      const pct = Math.abs(n.changePercent).toFixed(1);
+      const direction = n.direction === "up" ? t.priceUp : t.priceDown;
+      const desc = t.criticalToastDesc
+        .replace("{brand}", n.brand)
+        .replace("{model}", n.modelCode)
+        .replace("{direction}", direction)
+        .replace("{pct}", pct);
+      toast({
+        title: t.criticalToastTitle,
+        description: desc,
+      });
+    });
+    acknowledgeToasts(toShow.map((n) => n.id));
+  }, [pendingToasts, toast, acknowledgeToasts, t]);
+
+  const [pendingNav, setPendingNav] = useState<NotificationNavTarget | null>(null);
+
+  const navigateToBrand = (n: PriceNotification) => {
+    const targetView: ViewId = n.recordType === "competitor" ? "radar" : "comparison";
+    setPendingNav({
+      brand: n.brand,
+      modelCode: n.modelCode,
+      recordType: n.recordType,
+      category: n.category,
+      nonce: Date.now() + Math.random(),
+    });
+    setView(targetView);
+    setNotifOpen(false);
+    markAsRead(n.id);
+  };
+
+  const clearPendingNav = useCallback(() => setPendingNav(null), []);
 
   return (
     <div className="h-screen flex flex-col bg-[#F4F6F8] text-[#0E2841]">
@@ -98,11 +152,17 @@ function Shell() {
             onClick={() => setNotifOpen(!notifOpen)}
             className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
             aria-label={t.notifications}
+            data-testid="button-notifications"
           >
             <Bell size={16} />
-            <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-[#E30613] text-[9px] font-bold flex items-center justify-center animate-pulse">
-              {critHighAlerts.length}
-            </span>
+            {unreadCount > 0 && (
+              <span
+                className="absolute top-1 right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-[#E30613] text-[9px] font-bold flex items-center justify-center animate-pulse"
+                data-testid="badge-notification-count"
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
           <AnimatePresence>
             {notifOpen && (
@@ -110,41 +170,100 @@ function Shell() {
                 initial={{ opacity: 0, y: -4, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden"
+                className="absolute right-0 top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden"
+                data-testid="panel-notifications"
               >
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-1.5"><AlertTriangle size={14} className="text-[#E30613]" /> {t.agentAlerts}</h3>
-                  <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{critHighAlerts.length} {t.urgent}</span>
+                  <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-1.5">
+                    <AlertTriangle size={14} className="text-[#E30613]" /> {t.priceAlerts}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                        {unreadCount} {t.new}
+                      </span>
+                    )}
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllAsRead}
+                        className="text-[10px] text-gray-500 hover:text-[#0E2841] flex items-center gap-1"
+                        title={t.markAllRead}
+                        data-testid="button-mark-all-read"
+                      >
+                        <CheckCheck size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
-                  {agentAlerts.slice(0, 6).map((alert) => (
-                    <button
-                      key={alert.id}
-                      onClick={() => { setView("decisions"); setNotifOpen(false); }}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${SEV_DOT[alert.severity]}`} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                              alert.severity === "critical" ? "bg-red-100 text-red-700" : alert.severity === "high" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
-                            }`}>{SEV_LABEL[alert.severity]}</span>
-                            <span className="text-[9px] text-gray-400 ml-auto">{alert.category}</span>
+                <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+                  {notifications.length === 0 && (
+                    <div className="px-4 py-8 text-center text-xs text-gray-400">
+                      {t.noPriceAlerts}
+                    </div>
+                  )}
+                  {notifications.slice(0, 8).map((n) => {
+                    const read = isRead(n.id);
+                    const absChange = Math.abs(n.changePercent).toFixed(1);
+                    const TrendIcon = n.direction === "up" ? TrendingUp : TrendingDown;
+                    const trendColor = n.direction === "up" ? "text-red-600" : "text-emerald-600";
+                    const typeLabel = n.recordType === "product" ? t.productLabel : t.competitorLabelShort;
+                    const categoryLabel = n.category ? getCategoryLabel(n.category, lang) : null;
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => navigateToBrand(n)}
+                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${
+                          read ? "bg-white" : "bg-blue-50/40"
+                        }`}
+                        data-testid={`notification-item-${n.id}`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className="relative flex-shrink-0 mt-1">
+                            <div className={`w-2 h-2 rounded-full ${SEV_DOT[n.severity]}`} />
+                            {!read && (
+                              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 ring-2 ring-white" />
+                            )}
                           </div>
-                          <p className="text-xs font-semibold text-[#0E2841] truncate">{alert.title}</p>
-                          <p className="text-[11px] text-gray-500 truncate">{alert.detail}</p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                n.severity === "critical" ? "bg-red-100 text-red-700"
+                                  : n.severity === "high" ? "bg-orange-100 text-orange-700"
+                                  : "bg-amber-100 text-amber-700"
+                              }`}>{SEV_LABEL[n.severity]}</span>
+                              <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide">{typeLabel}</span>
+                              <span className="text-[10px] text-gray-400 ml-auto">{formatRelativeTime(n.recordedAt, lang)}</span>
+                            </div>
+                            <p className={`text-xs truncate ${read ? "font-medium text-gray-700" : "font-semibold text-[#0E2841]"}`}>
+                              <span className="font-bold">{n.brand}</span> · {n.modelCode}
+                              {categoryLabel ? <span className="text-gray-400"> · {categoryLabel}</span> : null}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <TrendIcon size={11} className={trendColor} />
+                              <span className={`text-[11px] font-bold ${trendColor}`}>
+                                {n.direction === "up" ? "+" : "−"}{lang === "tr" ? `%${absChange}` : `${absChange}%`}
+                              </span>
+                              <span className="text-[10px] text-gray-400">
+                                ₺{n.newPrice.toLocaleString("tr-TR")}
+                                {n.previousPrice !== null && (
+                                  <span className="text-gray-300"> ← ₺{n.previousPrice.toLocaleString("tr-TR")}</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                 </div>
-                <button
-                  onClick={() => { setView("decisions"); setNotifOpen(false); }}
-                  className="w-full px-4 py-2.5 text-center text-xs font-bold text-[#E30613] hover:bg-red-50 transition-colors border-t border-gray-100"
-                >
-                  {t.seeAllAlerts}
-                </button>
+                {notifications.length > 0 && (
+                  <button
+                    onClick={() => { setView("decisions"); setNotifOpen(false); }}
+                    className="w-full px-4 py-2.5 text-center text-xs font-bold text-[#E30613] hover:bg-red-50 transition-colors border-t border-gray-100"
+                  >
+                    {t.seeAllPriceAlerts}
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -349,9 +468,13 @@ function Shell() {
           <div className="p-5">
             {view === "dashboard" && <DashboardView />}
             {view === "decisions" && <AgentDecisionsView />}
-            {view === "comparison" && <ProductComparisonView />}
+            {view === "comparison" && (
+              <ProductComparisonView pendingNav={pendingNav} onPendingNavConsumed={clearPendingNav} />
+            )}
             {view === "whitespace" && <WhitespaceView />}
-            {view === "radar" && <CompetitorRadarView />}
+            {view === "radar" && (
+              <CompetitorRadarView pendingNav={pendingNav} onPendingNavConsumed={clearPendingNav} />
+            )}
             {view === "campaign" && <CampaignStudioView />}
             {view === "simulator" && <SimulatorView />}
             {view === "calendar" && <CalendarView />}
