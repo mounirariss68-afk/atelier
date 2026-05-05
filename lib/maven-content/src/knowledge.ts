@@ -30,6 +30,17 @@ export interface InsightEntry {
   category: string;
   type: string;
   summary: string;
+  /**
+   * Optional Arabic / Turkish translations for the title and one-line
+   * summary. The chat KB system-prompt currently grounds in English, but
+   * any consumer that wants localized cards (suggestion chips, multilingual
+   * indexes) can fall back to these fields. Missing translations fall
+   * back to the English string.
+   */
+  titleAr?: string;
+  titleTr?: string;
+  summaryAr?: string;
+  summaryTr?: string;
 }
 
 export interface AssessmentEntry {
@@ -294,10 +305,18 @@ export const insights: InsightEntry[] = [
   {
     slug: "two-paths-to-outcomes",
     title: "Two Paths to Outcomes: Project-Led and Asset-Led AI Delivery",
+    titleAr:
+      "مساران للوصول إلى النتائج: تسليم الذكاء الاصطناعي القائم على المشاريع والقائم على الأصول",
+    titleTr:
+      "Sonuçlara Giden İki Yol: Proje Öncülüğünde ve Varlık Öncülüğünde AI Teslimi",
     category: "Agentic AI",
     type: "Perspective",
     summary:
       "Maven's POV on how clients should choose between custom transformation engagements (project-led) and productized agents from the Marketplace (asset-led) — with a decision framework drawn from BCG, MIT, McKinsey, Gartner and EY research, and the blending patterns most engagements actually follow.",
+    summaryAr:
+      "وجهة نظر مافن حول كيفية اختيار العملاء بين ارتباطات التحول المخصصة (القائمة على المشاريع) والوكلاء الجاهزين من السوق (القائمة على الأصول) — مع إطار قرار مستمد من أبحاث BCG وMIT وMcKinsey وGartner وEY، وأنماط الدمج التي تتبعها معظم الارتباطات فعلياً.",
+    summaryTr:
+      "Müşterilerin özel dönüşüm çalışmaları (proje öncülüğünde) ile Marketplace'ten ürünleştirilmiş ajanlar (varlık öncülüğünde) arasında nasıl seçim yapması gerektiğine dair Maven'in bakış açısı — BCG, MIT, McKinsey, Gartner ve EY araştırmalarından alınan bir karar çerçevesi ve çoğu çalışmanın gerçekte izlediği harmanlama desenleri ile.",
   },
 ];
 
