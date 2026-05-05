@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X, Download, FileText, ChevronRight, User as UserIcon } from "lucide-react";
+import { Search, X, Download, FileText, ChevronRight, User as UserIcon, AlertTriangle } from "lucide-react";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "../DemoLangContext";
 import { clientEmployees as t18n, tDict } from "../tasama-i18n";
@@ -64,7 +64,7 @@ export default function EmployeesView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.searchPlaceholder}
-            className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#0F766E]/20 focus:border-[#0F766E]"
+            className="ps-9 pe-3 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20 focus:border-[#1E3A8A]"
           />
         </div>
       </div>
@@ -74,6 +74,22 @@ export default function EmployeesView() {
         <FilterSelect label={t.filterNationality} value={nationality} onChange={(v) => setNationality(v as "all" | "saudi" | "non-saudi")} options={[{ value: "all", label: t.filterAll }, { value: "saudi", label: t.natSaudi }, { value: "non-saudi", label: t.natNonSaudi }]} />
         <FilterSelect label={t.filterStatus} value={status} onChange={setStatus} options={[{ value: "all", label: t.filterAll }, ...statuses.map((s) => ({ value: s, label: getEmployeeStatusLabel(s as EmployeeStatus, lang) }))]} />
       </div>
+
+      {employees.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">
+              {lang === "en" ? "No employee records found for this client" : "لم يتم العثور على سجلات موظفين لهذا العميل"}
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              {lang === "en"
+                ? "The Tasama database has not been seeded yet. Run pnpm --filter @workspace/scripts run seed:tasama to load the demo dataset (18 + 14 + 10 employees across 3 client companies)."
+                : "لم يتم تعبئة قاعدة بيانات تَسَامى بعد. شغّل pnpm --filter @workspace/scripts run seed:tasama لتحميل البيانات التجريبية (18 + 14 + 10 موظفًا عبر 3 شركات عميلة)."}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -101,7 +117,7 @@ export default function EmployeesView() {
                     <td className="px-4 py-3 text-[11px] text-gray-500 font-mono">{e.id}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-teal-50 flex items-center justify-center text-[10px] font-bold text-[#0F766E] flex-shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-[10px] font-bold text-[#1E3A8A] flex-shrink-0">
                           {(lang === "en" ? e.fullNameEn : e.fullNameAr).split(" ").slice(0, 2).map((p) => p[0]).join("")}
                         </div>
                         <div className="min-w-0">
@@ -138,7 +154,7 @@ function FilterSelect({ label, value, onChange, options }: { label: string; valu
   return (
     <div className="flex items-center gap-2">
       <span className="text-[11px] font-semibold text-gray-500 uppercase">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]/20">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20">
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -173,7 +189,7 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
         dir={isRtl ? "rtl" : "ltr"}
       >
         <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 z-10">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#0F766E] to-[#0D9488] text-white flex items-center justify-center font-bold">
+          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center font-bold">
             {(lang === "en" ? employee.fullNameEn : employee.fullNameAr).split(" ").slice(0, 2).map((p) => p[0]).join("")}
           </div>
           <div className="flex-1 min-w-0">
@@ -238,7 +254,7 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
                       <p className="text-xs font-semibold">{getMonthName(p.periodMonth, lang)} {p.periodYear}</p>
                       <p className="text-[10px] text-gray-400">{lang === "en" ? "Net" : "الصافي"} {formatSAR(p.netPay)} · {lang === "en" ? "Gross" : "الإجمالي"} {formatSAR(p.grossPay)}</p>
                     </div>
-                    <button className="text-[11px] text-[#0F766E] font-semibold hover:underline flex items-center gap-1">
+                    <button className="text-[11px] text-[#1E3A8A] font-semibold hover:underline flex items-center gap-1">
                       <Download size={11} /> {t.payslipDownload}
                     </button>
                   </div>
@@ -252,7 +268,7 @@ function EmployeeDetailPanel({ employee, onClose }: { employee: TasamaEmployee; 
               <div className="space-y-1.5">
                 {docs.map((d) => (
                   <div key={d.id} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0">
-                    <FileText size={14} className="text-[#0D9488]" />
+                    <FileText size={14} className="text-[#2563EB]" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold truncate">{lang === "en" ? d.titleEn : d.titleAr}</p>
                       <p className="text-[10px] text-gray-400">{formatDate(d.issuedAt, lang)} · {d.referenceNumber}</p>

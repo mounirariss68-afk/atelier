@@ -41,8 +41,14 @@ export default function AgentOpsShell() {
         </Link>
         <div className="h-5 w-px bg-slate-600" />
         <div className="flex items-center gap-2">
-          <Bot size={18} className="text-[#0D9488]" />
-          <h1 className="text-sm font-bold">{isAr ? "عمليات الوكلاء" : "Agent Operations"}</h1>
+          <div className="w-7 h-7 rounded-md bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+            <img src={`${import.meta.env.BASE_URL}tasama-logo-transparent.png`} alt="Tasama" className="w-6 h-6 object-contain" />
+          </div>
+          <div className="leading-tight">
+            <p className="text-[10px] font-bold tracking-widest text-[#2563EB]">TASAMA · تَسَامى</p>
+            <p className="text-[9px] text-slate-400">Business Services · تسامي لخدمات الأعمال</p>
+            <h1 className="text-xs font-bold">{isAr ? "عمليات الوكلاء" : "Agent Operations"}</h1>
+          </div>
         </div>
         <div className="text-xs text-slate-500">{isAr ? "الفريق الرقمي" : "Digital Team"}</div>
         <div className="flex-1" />
@@ -76,7 +82,7 @@ export default function AgentOpsShell() {
                       <div className="text-[11px] text-slate-500 mt-0.5">{sc.tasksThisCycle} {isAr ? "مهمة هذا الشهر" : "tasks this month"}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold text-[#0D9488]">{sc.compositeScore.toFixed(0)}</div>
+                      <div className="text-lg font-bold text-[#2563EB]">{sc.compositeScore.toFixed(0)}</div>
                       <div className="text-[10px] text-slate-500">{isAr ? "مركب" : "composite"}</div>
                     </div>
                   </div>
@@ -102,7 +108,7 @@ export default function AgentOpsShell() {
             <div className="bg-[#1E293B] border border-slate-700 rounded-xl divide-y divide-slate-700">
               {activity.map((a) => (
                 <div key={a.id} className="p-3">
-                  <div className="text-[11px] text-[#0D9488] font-semibold">{a.agentName}</div>
+                  <div className="text-[11px] text-[#2563EB] font-semibold">{a.agentName}</div>
                   <div className="text-xs text-slate-200 mt-0.5">{a.action}</div>
                   <div className="text-[11px] text-slate-500 mt-0.5">{a.detail}</div>
                 </div>
@@ -146,7 +152,7 @@ function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: strin
   return (
     <div className="bg-[#1E293B] border border-slate-700 rounded-xl p-4">
       <div className="flex items-center gap-2 text-slate-400">
-        <span className="text-[#0D9488]">{icon}</span>
+        <span className="text-[#2563EB]">{icon}</span>
         <span className="text-[11px] uppercase tracking-wider">{label}</span>
       </div>
       <div className="text-2xl font-bold text-white mt-2">{value}</div>
@@ -161,7 +167,7 @@ function Bar({ label, v }: { label: string; v: number }) {
     <div>
       <div className="text-slate-500 mb-1">{label}</div>
       <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
-        <div className="h-full bg-[#0D9488] rounded-full" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-[#2563EB] rounded-full" style={{ width: `${pct}%` }} />
       </div>
       <div className="text-slate-400 mt-1">{pct}</div>
     </div>

@@ -20,15 +20,15 @@ import type { Scenario } from "../types";
 const scenario: Scenario = {
   slug: "tasama-payroll-hub",
   toolTitle: { en: "Tasama Payroll Hub", ar: "منصة تَسَامى للرواتب" },
-  accent: "#0D9488",
+  accent: "#2563EB",
   description: {
     en: "End-to-end monthly payroll cycle for 3 client companies (42 employees): digitize HR documents, update employee records, calculate gross-to-net, process EOSB and leave, file GOSI and Mudad, prepare bank transfers, and run the compliance audit — with three human checkpoints.",
     ar: "دورة رواتب شهرية متكاملة لثلاث شركات عميلة (42 موظفاً): رقمنة وثائق الموارد البشرية، تحديث سجلات الموظفين، احتساب الإجمالي والصافي، معالجة مكافأة نهاية الخدمة والإجازات، إيداع ملفات التأمينات الاجتماعية ونظام مُدد، تجهيز التحويلات البنكية، وتدقيق الامتثال — مع ثلاث نقاط موافقة بشرية.",
   },
   buyer: { en: "Tasama Digital / IT Team", ar: "فريق تَسَامى الرقمي وتقنية المعلومات" },
   trigger: {
-    en: "First business day of May 2026 — the orchestrator opens the April payroll cycle for all 3 clients.",
-    ar: "أول يوم عمل من مايو 2026 — يفتح المنسّق دورة رواتب أبريل لجميع العملاء الثلاثة.",
+    en: "May 5, 2026 — mid-cycle prep for May payroll. April fully settled and paid; May cycle now in preparation, with per-client cutoffs at days 22 (Luma), 25 (Al-Nakhla), and 28 (Vertex).",
+    ar: "5 مايو 2026 — تحضير منتصف الدورة لرواتب مايو. اكتملت تسوية رواتب أبريل ودُفعت؛ دورة مايو الآن قيد التحضير، مع مواعيد إقفال لكل عميل في الأيام 22 (لوما)، 25 (النخلة)، 28 (فيرتكس).",
   },
   agents: [
     {
@@ -39,7 +39,7 @@ const scenario: Scenario = {
         ar: "يخطّط الدورة الشهرية ويوزّع المهام على الوكلاء المتخصصين ويراقب نقاط الموافقة البشرية.",
       },
       kind: "orchestrator",
-      color: "#0D9488",
+      color: "#2563EB",
     },
     {
       id: "doc-intelligence",

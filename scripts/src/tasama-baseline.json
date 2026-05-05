@@ -1,6 +1,6 @@
 {
-  "asOfDate": "2026-04-30",
-  "narrativePeriod": "2026-04",
+  "asOfDate": "2026-05-05",
+  "narrativePeriod": "2026-05",
   "clients": [
     {
       "id": "client-alnakhla",
@@ -20,7 +20,8 @@
         "Ahmed Al-Rashidi promotion retroactive adjustment (2 months)",
         "Aisha Al-Harbi maternity leave starts May 15"
       ],
-      "onboardedAt": "2022-03-01"
+      "onboardedAt": "2022-03-01",
+      "payrollCutoffDay": 25
     },
     {
       "id": "client-luma",
@@ -39,7 +40,8 @@
         "Khalid Al-Otaibi probation month 2 of 3",
         "Onboarding documents being processed"
       ],
-      "onboardedAt": "2023-06-15"
+      "onboardedAt": "2023-06-15",
+      "payrollCutoffDay": 22
     },
     {
       "id": "client-vertex",
@@ -59,7 +61,8 @@
         "Sarah Johnson Q1 performance bonus issued",
         "Saudization Yellow band — action plan required"
       ],
-      "onboardedAt": "2021-09-10"
+      "onboardedAt": "2021-09-10",
+      "payrollCutoffDay": 28
     }
   ],
   "namedEmployees": [
@@ -809,6 +812,87 @@
           "value": "196450",
           "confidence": 0.99
         }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-013",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-001",
+      "type": "payslip",
+      "titleEn": "April 2026 Payslip — Ahmed Al-Rashidi",
+      "titleAr": "كشف راتب أبريل 2026 — أحمد الرشيدي",
+      "referenceNumber": "ANK-PAY-2026-04-001",
+      "issuedAt": "2026-04-27",
+      "signedByName": "Saad Al-Hammadi",
+      "signedByTitle": "HR Director",
+      "filename": "payslip-april-2026-ahmed-alrashidi.pdf",
+      "extractedFields": {
+        "employee_name": { "value": "Ahmed Al-Rashidi", "confidence": 0.99 },
+        "pay_period": { "value": "April 2026", "confidence": 0.99 },
+        "basic_salary_sar": { "value": "18000", "confidence": 0.99 },
+        "housing_allowance_sar": { "value": "4500", "confidence": 0.99 },
+        "transport_allowance_sar": { "value": "1800", "confidence": 0.99 },
+        "other_allowances_sar": { "value": "800", "confidence": 0.99 },
+        "bonus_sar": { "value": "0", "confidence": 0.99 },
+        "retro_adjustment_sar": { "value": "4600", "confidence": 0.97 },
+        "gross_pay_sar": { "value": "29700", "confidence": 0.99 },
+        "gosi_employee_sar": { "value": "2475", "confidence": 0.99 },
+        "net_pay_sar": { "value": "27225", "confidence": 0.99 },
+        "payment_date": { "value": "2026-04-27", "confidence": 0.99 },
+        "mudad_reference": { "value": "MUD-ALNAKHLA-202604-001", "confidence": 0.98 }
+      },
+      "overallConfidence": 0.99
+    },
+    {
+      "id": "doc-014",
+      "clientId": "client-vertex",
+      "employeeId": null,
+      "type": "offer-letter",
+      "titleEn": "Offer Letter — Senior Backend Engineer (Vertex Tech)",
+      "titleAr": "عرض توظيف — مهندس برمجيات أول (فيرتكس)",
+      "referenceNumber": "VTX-HR-2026-OL-007",
+      "issuedAt": "2026-05-03",
+      "signedByName": "Faisal Al-Tamimi",
+      "signedByTitle": "CEO",
+      "filename": "offer-letter-vertex-senior-engineer.pdf",
+      "extractedFields": {
+        "candidate_name": { "value": "Yousef Al-Mutairi", "confidence": 0.98 },
+        "position": { "value": "Senior Backend Engineer", "confidence": 0.99 },
+        "department": { "value": "Engineering", "confidence": 0.99 },
+        "start_date": { "value": "2026-06-01", "confidence": 0.99 },
+        "probation_period": { "value": "90 days", "confidence": 0.99 },
+        "contract_type": { "value": "unlimited", "confidence": 0.98 },
+        "monthly_basic_sar": { "value": "16000", "confidence": 0.99 },
+        "housing_allowance_sar": { "value": "4000", "confidence": 0.99 },
+        "transport_allowance_sar": { "value": "1500", "confidence": 0.99 },
+        "total_monthly_sar": { "value": "21500", "confidence": 0.99 },
+        "saudization_impact": { "value": "Saudi hire — moves Vertex from 50% to 54.5%", "confidence": 0.94 }
+      },
+      "overallConfidence": 0.98
+    },
+    {
+      "id": "doc-015",
+      "clientId": "client-alnakhla",
+      "employeeId": "emp-alnakhla-005",
+      "type": "leave-request",
+      "titleEn": "Maternity Leave Request — Aisha Al-Harbi",
+      "titleAr": "طلب إجازة أمومة — عائشة الحربي",
+      "referenceNumber": "ANK-HR-2026-LR-014",
+      "issuedAt": "2026-05-02",
+      "signedByName": "Aisha Al-Harbi",
+      "signedByTitle": "Site Coordinator",
+      "filename": "leave-request-aisha-alharbi-maternity.pdf",
+      "extractedFields": {
+        "employee_name": { "value": "Aisha Al-Harbi", "confidence": 0.99 },
+        "leave_type": { "value": "Maternity (Article 151 KSA Labour Law)", "confidence": 0.99 },
+        "start_date": { "value": "2026-05-15", "confidence": 0.99 },
+        "end_date": { "value": "2026-07-23", "confidence": 0.99 },
+        "total_days": { "value": "70", "confidence": 0.99 },
+        "reason": { "value": "Maternity — full pay per Article 151", "confidence": 0.98 },
+        "coverage_plan": { "value": "Layla Al-Subaie covering site coordination duties", "confidence": 0.95 },
+        "expected_return_date": { "value": "2026-07-24", "confidence": 0.99 },
+        "monthly_payroll_impact_sar": { "value": "11000", "confidence": 0.97 }
       },
       "overallConfidence": 0.98
     }

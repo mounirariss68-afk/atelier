@@ -18,6 +18,7 @@ import Marketplace from "@/pages/Marketplace";
 import MarketplaceDetail from "@/pages/MarketplaceDetail";
 import PersonalAgentConcept from "@/pages/PersonalAgentConcept";
 import Demo from "@/pages/Demo";
+import DemoKitTasama from "@/pages/DemoKitTasama";
 import Contact from "@/pages/Contact";
 import AssessmentsIndex from "@/pages/assessments/AssessmentsIndex";
 import AssessmentDetail from "@/pages/assessments/AssessmentDetail";
@@ -78,6 +79,7 @@ function Router() {
           <Route path="/marketplace/fpa-rolling-forecast">{() => <Redirect to="/marketplace" />}</Route>
           <Route path="/marketplace/:slug" component={MarketplaceDetail} />
           <Route path="/personal-agent/concept" component={PersonalAgentConcept} />
+          <Route path="/demo-kit/tasama" component={DemoKitTasama} />
           <Route path="/contact" component={Contact} />
           <Route path="/assessments" component={AssessmentsIndex} />
           <Route path="/assessments/team/:token" component={TeamAssessment} />

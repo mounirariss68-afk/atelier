@@ -80,6 +80,7 @@ interface BaselineClient {
   contactEmail: string;
   activeEvents: string[];
   onboardedAt: string;
+  payrollCutoffDay?: number;
 }
 
 interface BaselineEmployee {
@@ -405,16 +406,19 @@ function withinBand(band: [number, number], progress: number): number {
 
 // ─── Seed entry ──────────────────────────────────────────────────────────
 
+// Narrative anchor: today is 2026-05-05. April is fully settled and paid.
+// May 2026 is the in-flight cycle currently being prepared by the agents.
 const PERIODS: { year: number; month: number }[] = [
-  { year: 2025, month: 11 },
   { year: 2025, month: 12 },
   { year: 2026, month: 1 },
   { year: 2026, month: 2 },
   { year: 2026, month: 3 },
   { year: 2026, month: 4 },
+  { year: 2026, month: 5 },
 ];
 
-const CURRENT_PERIOD = PERIODS[PERIODS.length - 1]!;
+const CURRENT_PERIOD = PERIODS[PERIODS.length - 1]!; // May 2026 — in-preparation
+const APRIL_PERIOD = { year: 2026, month: 4 } as const; // most recent settled
 
 async function seed() {
   console.log("[seed-tasama] reading baseline …");
@@ -446,6 +450,7 @@ async function seed() {
       contactEmail: c.contactEmail,
       activeEvents: c.activeEvents,
       onboardedAt: c.onboardedAt,
+      payrollCutoffDay: c.payrollCutoffDay ?? 25,
     });
   }
 
@@ -457,6 +462,18 @@ async function seed() {
     allEmployees.push(...generic);
   }
   console.log(`[seed-tasama] inserting ${allEmployees.length} employees (${baseline.namedEmployees.length} named + ${allEmployees.length - baseline.namedEmployees.length} generated)`);
+
+  // Per-client headcount sanity check — Tasama UI breaks if any client has 0.
+  for (const client of baseline.clients) {
+    const count = allEmployees.filter((e) => e.clientId === client.id).length;
+    console.log(`[seed-tasama]   ${client.id}: ${count} employees (baseline says ${client.employeeCount})`);
+    if (count === 0) {
+      throw new Error(`[seed-tasama] FATAL: client ${client.id} produced 0 employees — fix generateGenericEmployees() before seeding`);
+    }
+    if (count !== client.employeeCount) {
+      console.warn(`[seed-tasama]   ⚠ ${client.id} has ${count} employees but baseline.employeeCount=${client.employeeCount}`);
+    }
+  }
   for (const e of allEmployees) {
     await db.insert(tasamaEmployeesTable).values({
       id: e.id,
@@ -551,20 +568,23 @@ async function seed() {
       const gosiRows: Array<typeof tasamaGosiRecordsTable.$inferInsert> = [];
 
       const isCurrent = period.year === CURRENT_PERIOD.year && period.month === CURRENT_PERIOD.month;
-      for (const e of clientEmployees) {
-        // Mohammad's last working day is 2026-04-30 — included in all 6 periods.
-        // Other separated employees (none in current baseline) would skip after their last day.
-
+      const isApril = period.year === APRIL_PERIOD.year && period.month === APRIL_PERIOD.month;
+      // Mohammad Al-Ghamdi's last working day is 2026-04-30 — exclude from May.
+      const employeesForPeriod = clientEmployees.filter((e) => {
+        if (e.id === "emp-alnakhla-003" && isCurrent) return false; // skip in May 2026
+        return true;
+      });
+      for (const e of employeesForPeriod) {
         const otherTotal = e.otherAllowances.reduce((s, a) => s + a.amount, 0);
         const overtime = e.department === "construction" || e.department === "operations"
           ? intBetween(0, 600)
           : 0;
-        // April 2026: Sarah Johnson Q1 performance bonus = SAR 15,000
-        const bonus = (isCurrent && e.storyTags.includes("performance-bonus")) ? 15000
+        // April 2026: Sarah Johnson Q1 performance bonus = SAR 15,000 (already paid)
+        const bonus = (isApril && e.storyTags.includes("performance-bonus")) ? 15000
           : (period.month === 6 && rng() > 0.85) ? intBetween(1000, 3000)
           : 0;
         // April 2026: Ahmed Al-Rashidi 2-month retroactive promotion adjustment = SAR 4,600
-        const retro = (isCurrent && e.storyTags.includes("retroactive-adjustment")) ? 4600 : 0;
+        const retro = (isApril && e.storyTags.includes("retroactive-adjustment")) ? 4600 : 0;
         const grossPay = e.basicSalary + e.housingAllowance + e.transportAllowance + otherTotal + overtime + bonus + retro;
         const basicHousing = e.basicSalary + e.housingAllowance;
         const gosi = computeGosi(basicHousing, e.isSaudi);
@@ -594,8 +614,8 @@ async function seed() {
           otherDeductions,
           netPay,
           paymentStatus: isCurrent ? "pending" : "paid",
-          paymentDate: `${period.year}-${String(period.month).padStart(2, "0")}-${isCurrent ? "28" : "27"}`,
-          mudadRef: `MUD-${client.id.replace("client-", "").toUpperCase()}-${period.year}${String(period.month).padStart(2, "0")}-${e.id.split("-").pop()}`,
+          paymentDate: isCurrent ? null : `${period.year}-${String(period.month).padStart(2, "0")}-27`,
+          mudadRef: isCurrent ? null : `MUD-${client.id.replace("client-", "").toUpperCase()}-${period.year}${String(period.month).padStart(2, "0")}-${e.id.split("-").pop()}`,
         });
 
         gosiRows.push({
@@ -619,18 +639,19 @@ async function seed() {
         });
       }
 
-      // Current-period semantics: cycle is mid-flight (Mudad payment day = 28th,
-      // Payroll Manager approval still pending), so we emit a "draft" run with
-      // approvedBy/approvedAt null and a note explaining the awaiting state.
-      // Settled prior months carry the client signatory + a back-dated approval.
-      const status = isCurrent ? "draft" : "settled";
+      // Current-period (May 2026) semantics: cycle is mid-prep (today = 5 May).
+      // Cutoffs occur on day 22 (Luma), 25 (Al-Nakhla), or 28 (Vertex).
+      // Status: "in-preparation" — no run/settled date, no Mudad batch yet.
+      // April fully settled & paid by all clients on day 27.
+      const cutoffDay = client.payrollCutoffDay ?? 25;
+      const status = isCurrent ? "in-preparation" : "settled";
       const approvedBy = isCurrent ? null : client.contactName;
       await db.insert(tasamaPayrollRunsTable).values({
         id: runId,
         clientId: client.id,
         periodYear: period.year,
         periodMonth: period.month,
-        runDate: `${period.year}-${String(period.month).padStart(2, "0")}-25`,
+        runDate: `${period.year}-${String(period.month).padStart(2, "0")}-${String(cutoffDay).padStart(2, "0")}`,
         status,
         totalGross,
         totalNet,
@@ -638,10 +659,12 @@ async function seed() {
         totalGosiEmployee: totalEmployee,
         employeeCount: payslipRows.length,
         approvedBy,
-        approvedAt: isCurrent ? null : `${period.year}-${String(period.month).padStart(2, "0")}-25`,
+        approvedAt: isCurrent ? null : `${period.year}-${String(period.month).padStart(2, "0")}-${String(cutoffDay).padStart(2, "0")}`,
         settledAt: isCurrent ? null : `${period.year}-${String(period.month).padStart(2, "0")}-27`,
-        mudadBatchRef: `MUD-${client.id.replace("client-", "").toUpperCase()}-${period.year}${String(period.month).padStart(2, "0")}`,
-        notes: isCurrent ? "Awaiting Payroll Manager final approval — settles 28 Apr 2026" : null,
+        mudadBatchRef: isCurrent ? null : `MUD-${client.id.replace("client-", "").toUpperCase()}-${period.year}${String(period.month).padStart(2, "0")}`,
+        notes: isCurrent
+          ? `May 2026 cycle in preparation — cutoff day ${cutoffDay}, settles ~${cutoffDay + 2} May 2026`
+          : null,
       });
       runCount += 1;
 

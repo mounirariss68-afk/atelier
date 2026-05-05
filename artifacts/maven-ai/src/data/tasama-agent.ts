@@ -7,7 +7,7 @@
 // demo experiences (Agent Operations, Client Portal, Manager Dashboard)
 // render.
 //
-// Narrative now: April 2026 (KSA fiscal year mid-Q2).
+// Narrative now: May 5 2026 — April payroll paid; May cycle in preparation.
 
 import type {
   TasamaClient,
@@ -140,9 +140,9 @@ export interface PayrollDecisionLog {
   };
 }
 
-// ─── Time anchors (April 2026 narrative) ────────────────────────────────
+// ─── Time anchors (May 2026 narrative — anchored to demo "today" 2026-05-05) ─
 
-const NOW = new Date("2026-04-26T09:00:00Z");
+const NOW = new Date("2026-05-05T09:00:00Z");
 const isoDaysAgo = (d: number) => {
   const dt = new Date(NOW);
   dt.setDate(dt.getDate() - d);

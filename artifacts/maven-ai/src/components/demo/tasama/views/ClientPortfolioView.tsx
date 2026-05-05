@@ -13,7 +13,7 @@ const STATUS_LABEL: Record<string, { en: string; ar: string; tone: string }> = {
   draft: { en: "Draft", ar: "مسودة", tone: "bg-gray-100 text-gray-700" },
   approved: { en: "Approved", ar: "معتمد", tone: "bg-blue-100 text-blue-700" },
   settled: { en: "Settled", ar: "مسوّى", tone: "bg-emerald-100 text-emerald-700" },
-  filed: { en: "Filed", ar: "مُقدَّم", tone: "bg-teal-100 text-[#0F766E]" },
+  filed: { en: "Filed", ar: "مُقدَّم", tone: "bg-blue-100 text-[#1E3A8A]" },
   "—": { en: "—", ar: "—", tone: "bg-gray-100 text-gray-500" },
 };
 
@@ -50,7 +50,7 @@ export default function ClientPortfolioView() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Briefcase size={20} className="text-[#0F766E]" />
+          <Briefcase size={20} className="text-[#1E3A8A]" />
           {t("title", portfolio)}
         </h2>
         <p className="text-sm text-gray-500 mt-1">{t("subtitle", portfolio)}</p>
@@ -136,7 +136,7 @@ export default function ClientPortfolioView() {
 
                 <Link
                   href="/demo/tasama-payroll-hub/client"
-                  className="px-5 py-3 border-t border-gray-100 text-xs text-[#0F766E] font-bold hover:bg-teal-50 flex items-center justify-end gap-1.5"
+                  className="px-5 py-3 border-t border-gray-100 text-xs text-[#1E3A8A] font-bold hover:bg-blue-50 flex items-center justify-end gap-1.5"
                 >
                   {t("viewClient", portfolio)}
                   <ArrowRight size={12} className="rtl:rotate-180" />
@@ -154,7 +154,7 @@ function KpiCard({ icon, label, value, sub }: { icon: React.ReactNode; label: st
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
       <div className="flex items-center gap-2 text-gray-500">
-        <span className="w-7 h-7 rounded-lg bg-teal-50 text-[#0F766E] flex items-center justify-center">{icon}</span>
+        <span className="w-7 h-7 rounded-lg bg-blue-50 text-[#1E3A8A] flex items-center justify-center">{icon}</span>
         <span className="text-[10px] uppercase tracking-wider font-semibold">{label}</span>
       </div>
       <div className="text-xl font-extrabold text-gray-900 mt-2">{value}</div>
@@ -167,7 +167,7 @@ function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: strin
   return (
     <div>
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-        <span className="text-[#0F766E]">{icon}</span>
+        <span className="text-[#1E3A8A]">{icon}</span>
         {label}
       </div>
       <div className="text-sm font-bold text-gray-900 mt-1">{value}</div>

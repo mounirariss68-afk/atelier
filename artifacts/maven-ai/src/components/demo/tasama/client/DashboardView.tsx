@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import {
   Users, CheckCircle2, Wallet, Shield, Inbox, CalendarClock, ChevronRight,
-  Brain, ArrowRight, Database, FileEdit, Calculator, ShieldCheck, UserCheck, Send, Banknote, Award,
+  Brain, ArrowRight, Database, FileEdit, Calculator, ShieldCheck, UserCheck, Send, Banknote, Award, AlertTriangle,
 } from "lucide-react";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "../DemoLangContext";
@@ -45,6 +45,20 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
 
   const insights = client ? generateClientAgentInsights(CLIENT_ID).slice(0, 4) : [];
 
+  // Empty-state guard: if seed didn't load, surface a clear warning instead of
+  // showing zeroed-out KPIs that look broken to the demo viewer.
+  const hasNoEmployees = !client || activeEmployees.length === 0;
+
+  // Today is anchored at 2026-05-05. The current cycle is May 2026 (in-preparation).
+  // April 2026 is the most recent settled cycle, so we render its pipeline as Complete.
+  const cutoffDay = client?.payrollCutoffDay ?? 25;
+  const NOW = new Date("2026-05-05T00:00:00Z");
+  const cutoffDate = new Date(Date.UTC(2026, 4, cutoffDay)); // May 2026
+  const settleDate = new Date(Date.UTC(2026, 4, 27));
+  const daysToCutoff = Math.max(0, Math.ceil((cutoffDate.getTime() - NOW.getTime()) / 86_400_000));
+  const monthShort = (d: Date) => d.toLocaleString(lang === "en" ? "en-US" : "ar-SA", { month: "short", day: "numeric", timeZone: "UTC" });
+
+  // Pipeline reflects the *settled* April 2026 cycle (audit trail of what just shipped).
   const pipelineSteps = [
     { key: "DataCutoff", labelKey: "stepDataCutoff", agent: "payroll-orchestrator", date: "Apr 25" },
     { key: "EmployeeUpdates", labelKey: "stepEmployeeUpdates", agent: "document-intelligence", date: "Apr 26" },
@@ -56,7 +70,15 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
     { key: "Complete", labelKey: "stepComplete", agent: "payroll-orchestrator", date: "May 1" },
   ] as const;
 
-  const period = lastRun ? `${getMonthName(lastRun.periodMonth, lang)} ${lastRun.periodYear}` : t.kpiPayrollPeriod;
+  // For the KPIs we report on the most recent *settled* run (April 2026), not May (which is mid-prep).
+  const settledRun = runs.find((r) => r.status !== "in-preparation") ?? lastRun;
+  const settledPrev = runs.filter((r) => r.status !== "in-preparation")[1];
+  const settledGrowth = settledRun && settledPrev ? ((settledRun.totalGross - settledPrev.totalGross) / settledPrev.totalGross) * 100 : monthGrowth;
+  const period = settledRun ? `${getMonthName(settledRun.periodMonth, lang)} ${settledRun.periodYear}` : t.kpiPayrollPeriod;
+  const nextPayrollLabel = monthShort(cutoffDate); // e.g. "May 25"
+  const nextPayrollSub = lang === "en"
+    ? `Cutoff in ${daysToCutoff}d · settles ${monthShort(settleDate)}`
+    : `الإقفال خلال ${daysToCutoff} أيام · التسوية ${monthShort(settleDate)}`;
 
   return (
     <div className="space-y-6">
@@ -65,20 +87,36 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
         <p className="text-sm text-gray-500 mt-0.5">{t.subtitle}</p>
       </div>
 
+      {hasNoEmployees && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3" role="alert">
+          <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">
+              {lang === "en" ? "Demo dataset not loaded" : "لم يتم تحميل البيانات التجريبية"}
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              {lang === "en"
+                ? "KPIs below will read as zero until the Tasama seed runs. Run pnpm --filter @workspace/scripts run seed:tasama to load 18 + 14 + 10 employees and the April 2026 settled cycle."
+                : "ستظهر مؤشرات الأداء أدناه كأصفار حتى يتم تشغيل سكربت تعبئة بيانات تَسَامى. شغّل pnpm --filter @workspace/scripts run seed:tasama لتحميل 18 + 14 + 10 موظفًا ودورة أبريل 2026 المسوّاة."}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard icon={Users} color="#0F766E" value={String(activeEmployees.length)} label={t.kpiActiveEmployees} sub={`${saudi} • ${expat}`} subTitle={t.kpiActiveEmployeesSub} onClick={() => onNavigate("employees")} delay={0} />
+        <KpiCard icon={Users} color="#1E3A8A" value={String(activeEmployees.length)} label={t.kpiActiveEmployees} sub={`${saudi} • ${expat}`} subTitle={t.kpiActiveEmployeesSub} onClick={() => onNavigate("employees")} delay={0} />
         <KpiCard icon={CheckCircle2} color="#10B981" value={t.kpiPayrollApproved} label={t.kpiPayrollStatus} sub={period} subTitle="" onClick={() => onNavigate("payroll")} delay={0.05} />
-        <KpiCard icon={Wallet} color="#0D9488" value={lastRun ? formatSAR(lastRun.totalGross) : "—"} label={t.kpiTotalGross} sub={`${monthGrowth >= 0 ? "+" : ""}${monthGrowth.toFixed(1)}%`} subTitle={t.kpiTotalGrossSub} onClick={() => onNavigate("payroll")} delay={0.1} />
-        <KpiCard icon={Shield} color="#7C3AED" value={lastRun ? formatSAR(lastRun.totalGosiEmployer + lastRun.totalGosiEmployee) : "—"} label={t.kpiGosi} sub="" subTitle={t.kpiGosiSub} onClick={() => onNavigate("processes")} delay={0.15} />
+        <KpiCard icon={Wallet} color="#2563EB" value={settledRun ? formatSAR(settledRun.totalGross) : "—"} label={t.kpiTotalGross} sub={`${settledGrowth >= 0 ? "+" : ""}${settledGrowth.toFixed(1)}%`} subTitle={t.kpiTotalGrossSub} onClick={() => onNavigate("payroll")} delay={0.1} />
+        <KpiCard icon={Shield} color="#7C3AED" value={settledRun ? formatSAR(settledRun.totalGosiEmployer + settledRun.totalGosiEmployee) : "—"} label={t.kpiGosi} sub="" subTitle={t.kpiGosiSub} onClick={() => onNavigate("processes")} delay={0.15} />
         <KpiCard icon={Inbox} color="#F59E0B" value={String(openRequests.length)} label={t.kpiPendingRequests} sub="" subTitle={t.kpiPendingRequestsSub} onClick={() => onNavigate("requests")} delay={0.2} />
-        <KpiCard icon={CalendarClock} color="#3B82F6" value={t.kpiNextPayrollDate} label={t.kpiNextPayroll} sub="" subTitle={t.kpiNextPayrollSub} onClick={() => onNavigate("payroll")} delay={0.25} />
+        <KpiCard icon={CalendarClock} color="#3B82F6" value={nextPayrollLabel} label={t.kpiNextPayroll} sub={`T-${daysToCutoff}d`} subTitle={nextPayrollSub} onClick={() => onNavigate("payroll")} delay={0.25} />
       </div>
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold flex items-center gap-2">
-              <CheckCircle2 size={15} className="text-[#0F766E]" /> {t.pipelineTitle}
+              <CheckCircle2 size={15} className="text-[#1E3A8A]" /> {t.pipelineTitle}
             </h2>
             <p className="text-[11px] text-gray-400 mt-0.5">{t.pipelineSubtitle}</p>
           </div>
@@ -92,12 +130,12 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
               const Icon = PIPELINE_ICONS[i];
               return (
                 <div key={step.key} className="flex flex-col items-center text-center">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0F766E] to-[#0D9488] text-white flex items-center justify-center shadow-sm">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1E3A8A] to-[#2563EB] text-white flex items-center justify-center shadow-sm">
                     <Icon size={16} />
                   </div>
                   <p className="text-[11px] font-semibold mt-2 leading-tight">{t[step.labelKey]}</p>
                   <p className="text-[9px] text-gray-400 mt-0.5">{step.date}</p>
-                  <p className="text-[9px] text-[#0D9488] font-medium mt-0.5 line-clamp-2">
+                  <p className="text-[9px] text-[#2563EB] font-medium mt-0.5 line-clamp-2">
                     {step.agent === "human-checkpoint"
                       ? (lang === "en" ? "Manager" : "المدير")
                       : getAgentName(step.agent, lang)}
@@ -111,9 +149,9 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-          <Brain size={15} className="text-[#0F766E]" />
+          <Brain size={15} className="text-[#1E3A8A]" />
           <h2 className="text-sm font-bold">{t.insightsTitle}</h2>
-          <span className="text-[9px] font-bold bg-[#0F766E] text-white px-1.5 py-0.5 rounded-full">{t.aiPill}</span>
+          <span className="text-[9px] font-bold bg-[#1E3A8A] text-white px-1.5 py-0.5 rounded-full">{t.aiPill}</span>
           <span className="text-[10px] text-gray-400 ms-auto">{t.insightsSubtitle}</span>
         </div>
         {insights.length === 0 ? (
@@ -135,7 +173,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
                       </div>
                       <p className="text-[11px] text-gray-500 leading-relaxed">{lang === "en" ? ins.detail : ins.detailAr}</p>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="text-[10px] text-gray-400">{t.insightAgentLabel}: <span className="text-[#0D9488] font-medium">{getAgentName(ins.agentSource, lang)}</span></span>
+                        <span className="text-[10px] text-gray-400">{t.insightAgentLabel}: <span className="text-[#2563EB] font-medium">{getAgentName(ins.agentSource, lang)}</span></span>
                         <span className="text-[10px] text-gray-400">{ins.confidence}% {t.confidenceLabel}</span>
                       </div>
                     </div>
@@ -151,7 +189,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-bold">{t.activityTitle}</h2>
-          <button onClick={() => onNavigate("processes")} className="text-xs text-[#0F766E] font-semibold hover:underline flex items-center gap-1">
+          <button onClick={() => onNavigate("processes")} className="text-xs text-[#1E3A8A] font-semibold hover:underline flex items-center gap-1">
             {t.activityViewAll} <ArrowRight size={12} className="rtl:rotate-180" />
           </button>
         </div>
@@ -167,7 +205,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (v: ClientVi
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-700">{a.text}</p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="text-[10px] text-[#0D9488] font-medium">{getAgentName(a.agent, lang)}</span>
+                  <span className="text-[10px] text-[#2563EB] font-medium">{getAgentName(a.agent, lang)}</span>
                   <span className="text-[10px] text-gray-400">·</span>
                   <span className="text-[10px] text-gray-400">{a.time}</span>
                 </div>
@@ -201,7 +239,7 @@ function KpiCard({ icon: Icon, color, value, label, sub, subTitle, onClick, dela
       <p className="text-[11px] text-gray-500 mt-0.5">{label}</p>
       {(sub || subTitle) && (
         <p className="text-[10px] text-gray-400 mt-1.5 truncate" title={subTitle}>
-          {sub && <span className="text-[#0D9488] font-semibold me-1">{sub}</span>}
+          {sub && <span className="text-[#2563EB] font-semibold me-1">{sub}</span>}
           {subTitle}
         </p>
       )}

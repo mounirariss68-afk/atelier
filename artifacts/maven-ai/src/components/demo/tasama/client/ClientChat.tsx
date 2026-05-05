@@ -71,7 +71,7 @@ export default function ClientChat({ onClose }: { onClose: () => void }) {
       className={`fixed top-0 ${isRtl ? "left-0 border-r" : "right-0 border-l"} h-full w-[400px] max-w-full bg-white shadow-2xl z-50 flex flex-col border-gray-200`}
       dir={isRtl ? "rtl" : "ltr"}
     >
-      <div className="flex-shrink-0 h-14 bg-[#0F766E] text-white flex items-center px-4 gap-3">
+      <div className="flex-shrink-0 h-14 bg-[#1E3A8A] text-white flex items-center px-4 gap-3">
         <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
           <Bot size={18} />
         </div>
@@ -92,10 +92,10 @@ export default function ClientChat({ onClose }: { onClose: () => void }) {
             animate={{ opacity: 1, y: 0 }}
             className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}
           >
-            <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center ${m.role === "user" ? "bg-gray-200 text-gray-600" : "bg-[#0F766E] text-white"}`}>
+            <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center ${m.role === "user" ? "bg-gray-200 text-gray-600" : "bg-[#1E3A8A] text-white"}`}>
               {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
             </div>
-            <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-line ${m.role === "user" ? "bg-[#0F766E] text-white rounded-tr-sm" : "bg-white border border-gray-100 text-gray-700 rounded-tl-sm shadow-sm"}`}>
+            <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed whitespace-pre-line ${m.role === "user" ? "bg-[#1E3A8A] text-white rounded-tr-sm" : "bg-white border border-gray-100 text-gray-700 rounded-tl-sm shadow-sm"}`}>
               {m.text}
               {m.type === "table" && m.data && Array.isArray((m.data as { rows?: unknown[] }).rows) && (
                 <div className="mt-2 -mx-1 overflow-x-auto">
@@ -124,7 +124,7 @@ export default function ClientChat({ onClose }: { onClose: () => void }) {
         ))}
         {typing && (
           <div className="flex gap-2">
-            <div className="w-7 h-7 rounded-full bg-[#0F766E] text-white flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-[#1E3A8A] text-white flex items-center justify-center">
               <Bot size={14} />
             </div>
             <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm">
@@ -146,7 +146,7 @@ export default function ClientChat({ onClose }: { onClose: () => void }) {
               <button
                 key={i}
                 onClick={() => send(p.label)}
-                className="text-[11px] px-2.5 py-1.5 bg-teal-50 text-[#0F766E] rounded-full border border-teal-100 hover:bg-teal-100 transition-colors flex items-center gap-1"
+                className="text-[11px] px-2.5 py-1.5 bg-blue-50 text-[#1E3A8A] rounded-full border border-blue-100 hover:bg-blue-100 transition-colors flex items-center gap-1"
               >
                 <p.icon size={11} />
                 {p.label}
@@ -164,12 +164,12 @@ export default function ClientChat({ onClose }: { onClose: () => void }) {
             onKeyDown={handleKey}
             placeholder={t.placeholder}
             rows={1}
-            className="flex-1 resize-none text-[13px] border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0F766E]/20 focus:border-[#0F766E] max-h-24"
+            className="flex-1 resize-none text-[13px] border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20 focus:border-[#1E3A8A] max-h-24"
           />
           <button
             onClick={() => send(input)}
             disabled={!input.trim()}
-            className="w-9 h-9 rounded-xl bg-[#0F766E] text-white flex items-center justify-center hover:bg-[#0D9488] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+            className="w-9 h-9 rounded-xl bg-[#1E3A8A] text-white flex items-center justify-center hover:bg-[#2563EB] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
           >
             <Send size={15} />
           </button>

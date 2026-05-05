@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Users, Wallet, ShieldCheck, ClipboardList, CalendarRange, Activity, AlertTriangle,
-  TrendingUp, FileText, Clock, ArrowRight, CheckCircle2,
+  TrendingUp, FileText, Clock, ArrowRight, CheckCircle2, CalendarClock, Loader2,
 } from "lucide-react";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang, useTasamaDemoT } from "../DemoLangContext";
@@ -17,8 +17,8 @@ import {
 } from "@/data/tasama-seed";
 
 const TYPE_COLORS: Record<string, string> = {
-  extraction: "#0F766E",
-  calculation: "#0D9488",
+  extraction: "#1E3A8A",
+  calculation: "#2563EB",
   filing: "#059669",
   transfer: "#0891B2",
   monitoring: "#F59E0B",
@@ -54,6 +54,27 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
     return { saudi, expat, ratio: data.employees.length ? (saudi / data.employees.length) * 100 : 0 };
   }, [data.employees]);
 
+  // Per-client May 2026 in-preparation cycle status (anchored to demo "today" 2026-05-05)
+  const cycleStatus = useMemo(() => {
+    const NOW = new Date("2026-05-05T00:00:00Z");
+    return data.clients.map((c) => {
+      const inPrep = data.payrollRuns.find((r) => r.clientId === c.id && r.status === "in-preparation");
+      const cutoff = inPrep
+        ? new Date(Date.UTC(inPrep.periodYear, inPrep.periodMonth - 1, c.payrollCutoffDay))
+        : null;
+      const days = cutoff ? Math.max(0, Math.ceil((cutoff.getTime() - NOW.getTime()) / 86_400_000)) : null;
+      const settle = inPrep ? new Date(Date.UTC(inPrep.periodYear, inPrep.periodMonth - 1, 27)) : null;
+      return {
+        client: c,
+        inPrep,
+        cutoff,
+        settle,
+        days,
+        urgent: days !== null && days <= 7,
+      };
+    }).filter((row) => filters.clientId === "all" || row.client.id === filters.clientId);
+  }, [data.clients, data.payrollRuns, filters.clientId]);
+
   const dueLabel = (iso: string) => {
     const due = new Date(iso).getTime();
     const now = Date.now();
@@ -74,19 +95,19 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
       {/* Operations digest hero */}
       <motion.div
         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-[#0F766E] via-[#0D9488] to-[#14B8A6] text-white rounded-2xl p-6 shadow-lg"
+        className="bg-gradient-to-br from-[#1E3A8A] via-[#2563EB] to-[#3B82F6] text-white rounded-2xl p-6 shadow-lg"
       >
         <div className="flex items-center justify-between">
-          <div className="text-[10px] uppercase tracking-widest text-teal-100 font-bold">{t("digest", operations)}</div>
-          <div className="text-[10px] text-teal-100">
+          <div className="text-[10px] uppercase tracking-widest text-blue-100 font-bold">{t("digest", operations)}</div>
+          <div className="text-[10px] text-blue-100">
             {t("generatedAt", operations)} {formatDate(digest.generatedAt, lang)}
           </div>
         </div>
         <h3 className="text-lg font-bold mt-2 leading-snug">{digest.headline}</h3>
-        <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-teal-50">
+        <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-blue-50">
           {digest.bullets.map((b, i) => (
             <li key={i} className="flex items-start gap-2">
-              <CheckCircle2 size={12} className="mt-0.5 flex-shrink-0 text-teal-200" />
+              <CheckCircle2 size={12} className="mt-0.5 flex-shrink-0 text-blue-200" />
               <span>{b}</span>
             </li>
           ))}
@@ -101,6 +122,43 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
         <Kpi icon={<ShieldCheck size={16} />} label={t("kpiAvgConfidence", operations)} value={`${(stats.avgConfidence * 100).toFixed(1)}%`} sub={`${analytics.automationRate}% ${t("kpiAutomationRate", operations)}`} />
       </div>
 
+      {/* Per-client May 2026 in-preparation cycle status with cutoff countdowns */}
+      {cycleStatus.length > 0 && cycleStatus.some((r) => r.inPrep) && (
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarClock size={16} className="text-[#1E3A8A]" />
+            <h3 className="text-sm font-bold text-gray-900">{isAr ? "دورات الرواتب — قيد التحضير" : "Payroll cycles — in preparation"}</h3>
+            <span className="text-[10px] text-gray-400 ms-auto">{isAr ? "محدّث 5 مايو 2026" : "as of May 5, 2026"}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {cycleStatus.filter((r) => r.inPrep).map(({ client, inPrep, cutoff, settle, days, urgent }) => {
+              const dateFmt = (d: Date | null) => d ? d.toLocaleString(isAr ? "ar-SA" : "en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "—";
+              return (
+                <div key={client.id} className={`rounded-xl border p-3 ${urgent ? "border-orange-300 bg-orange-50" : "border-blue-100 bg-blue-50/50"}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-gray-900 truncate">{isAr ? client.legalNameAr : client.legalNameEn}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{inPrep!.employeeCount} {isAr ? "موظفًا" : "employees"} · {formatSAR(inPrep!.totalGross)}</p>
+                    </div>
+                    <Loader2 size={14} className={`flex-shrink-0 animate-spin ${urgent ? "text-orange-600" : "text-[#2563EB]"}`} />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="text-[10px] text-gray-600">
+                      <p>{isAr ? "إقفال" : "Cutoff"} <span className="font-bold text-gray-900">{dateFmt(cutoff)}</span></p>
+                      <p className="mt-0.5">{isAr ? "تسوية" : "Settle"} <span className="font-bold text-gray-900">{dateFmt(settle)}</span></p>
+                    </div>
+                    <div className={`text-end ${urgent ? "text-orange-700" : "text-[#1E3A8A]"}`}>
+                      <p className="text-[9px] font-bold uppercase tracking-wider">{isAr ? "متبقٍ" : "left"}</p>
+                      <p className="text-xl font-extrabold leading-none">T-{days}d</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SaudiSplit saudi={saudiSplit.saudi} expat={saudiSplit.expat} ratio={saudiSplit.ratio} t={t} />
         <Kpi icon={<TrendingUp size={16} />} label={isAr ? "معدل الموافقة" : "Approval rate"} value={`${analytics.overallApprovalRate}%`} sub={`${analytics.overallModificationRate}% ${isAr ? "معدّل" : "modified"}`} />
@@ -114,7 +172,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Activity size={16} className="text-[#0F766E]" />
+                <Activity size={16} className="text-[#1E3A8A]" />
                 {t("agentActivity", operations)}
               </h3>
               <p className="text-[11px] text-gray-500 mt-0.5">{t("agentActivityHint", operations)}</p>
@@ -184,7 +242,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
                 <h3 className="text-sm font-bold text-gray-900">{t("pendingDecisionsTitle", operations)}</h3>
                 <p className="text-[10px] text-gray-500 mt-0.5">{t("pendingDecisionsHint", operations)}</p>
               </div>
-              <button onClick={() => onOpenView?.("approvals")} className="text-[10px] text-[#0F766E] font-bold hover:underline flex items-center gap-1">
+              <button onClick={() => onOpenView?.("approvals")} className="text-[10px] text-[#1E3A8A] font-bold hover:underline flex items-center gap-1">
                 {t("reviewAll", operations)}
               </button>
             </div>
@@ -211,7 +269,7 @@ export default function OperationsDashboardView({ onOpenView }: { onOpenView?: (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
             <div className="px-4 py-3 border-b border-gray-100">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <CalendarRange size={14} className="text-[#0F766E]" />
+                <CalendarRange size={14} className="text-[#1E3A8A]" />
                 {t("upcomingTitle", operations)}
               </h3>
               <p className="text-[10px] text-gray-500 mt-0.5">{t("upcomingHint", operations)}</p>
@@ -244,7 +302,7 @@ function Kpi({ icon, label, value, sub }: { icon: React.ReactNode; label: string
       className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm"
     >
       <div className="flex items-center gap-2 text-gray-500">
-        <span className="w-7 h-7 rounded-lg bg-teal-50 text-[#0F766E] flex items-center justify-center">{icon}</span>
+        <span className="w-7 h-7 rounded-lg bg-blue-50 text-[#1E3A8A] flex items-center justify-center">{icon}</span>
         <span className="text-[10px] uppercase tracking-wider font-semibold">{label}</span>
       </div>
       <div className="text-xl font-extrabold text-gray-900 mt-2">{value}</div>
@@ -258,10 +316,10 @@ function SaudiSplit({ saudi, expat, ratio, t }: { saudi: number; expat: number; 
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
       <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-semibold text-gray-500">
         <span>{t("saudiSplit", operations)} / {t("expatSplit", operations)}</span>
-        <span className="text-[#0F766E] font-extrabold">{ratio.toFixed(1)}%</span>
+        <span className="text-[#1E3A8A] font-extrabold">{ratio.toFixed(1)}%</span>
       </div>
       <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden flex">
-        <div className="bg-[#0F766E] h-full" style={{ width: `${ratio}%` }} />
+        <div className="bg-[#1E3A8A] h-full" style={{ width: `${ratio}%` }} />
         <div className="bg-amber-400 h-full" style={{ width: `${100 - ratio}%` }} />
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px]">

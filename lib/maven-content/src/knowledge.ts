@@ -1443,7 +1443,7 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
         ],
       },
       status: "live",
-      accent: "#0D9488",
+      accent: "#2563EB",
       icon: "Wallet",
       demoVariants: [
         {

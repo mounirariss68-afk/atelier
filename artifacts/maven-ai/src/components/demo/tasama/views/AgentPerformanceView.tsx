@@ -61,7 +61,7 @@ export default function AgentPerformanceView() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Cpu size={20} className="text-[#0F766E]" />
+          <Cpu size={20} className="text-[#1E3A8A]" />
           {t("title", agentPerf)}
         </h2>
         <p className="text-sm text-gray-500 mt-1">{t("subtitle", agentPerf)}</p>
@@ -103,7 +103,7 @@ export default function AgentPerformanceView() {
         {/* Calibration curve */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
-            <Brain size={14} className="text-[#0F766E]" />
+            <Brain size={14} className="text-[#1E3A8A]" />
             <h3 className="text-sm font-bold text-gray-900">{t("calibration", agentPerf)}</h3>
           </div>
           <p className="text-[11px] text-gray-500">{t("predictedVsActual", agentPerf)}</p>
@@ -115,7 +115,7 @@ export default function AgentPerformanceView() {
                 <YAxis tick={{ fontSize: 9 }} domain={[40, 100]} />
                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                 <Legend wrapperStyle={{ fontSize: 10 }} />
-                <Line type="monotone" dataKey={t("predicted", agentPerf)} stroke="#0F766E" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey={t("predicted", agentPerf)} stroke="#1E3A8A" strokeWidth={2} dot={{ r: 3 }} />
                 <Line type="monotone" dataKey={t("actual", agentPerf)} stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -125,7 +125,7 @@ export default function AgentPerformanceView() {
         {/* SLA by role */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
-            <Clock size={14} className="text-[#0F766E]" />
+            <Clock size={14} className="text-[#1E3A8A]" />
             <h3 className="text-sm font-bold text-gray-900">{t("byRole", agentPerf)}</h3>
           </div>
           <p className="text-[11px] text-gray-500">{t("avgDecisionTime", agentPerf)}</p>
@@ -145,7 +145,7 @@ export default function AgentPerformanceView() {
                     <span className="font-bold text-gray-900">{r.avgDecisionTimeMinutes} {t("minutes", agentPerf)}</span>
                   </div>
                   <div className="mt-1.5 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-[#0F766E] to-[#0D9488]" style={{ width: `${Math.min(pct, 100)}%` }} />
+                    <div className="h-full bg-gradient-to-r from-[#1E3A8A] to-[#2563EB]" style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                   <div className="text-[10px] text-gray-500 mt-0.5">{(r.approvalRate * 100).toFixed(0)}% {t("approvalRate", agentPerf)}</div>
                 </div>
@@ -174,7 +174,7 @@ export default function AgentPerformanceView() {
       {/* Decisions by agent (bar chart) */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
         <div className="flex items-center gap-2 mb-2">
-          <Activity size={14} className="text-[#0F766E]" />
+          <Activity size={14} className="text-[#1E3A8A]" />
           <h3 className="text-sm font-bold text-gray-900">{t("decisionAnalytics", agentPerf)}</h3>
         </div>
         <div className="h-[260px] mt-4">
@@ -185,7 +185,7 @@ export default function AgentPerformanceView() {
               <YAxis tick={{ fontSize: 9 }} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
               <Legend wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey={approvedLabel} stackId="a" fill="#0F766E" />
+              <Bar dataKey={approvedLabel} stackId="a" fill="#1E3A8A" />
               <Bar dataKey={modifiedLabel} stackId="a" fill="#F59E0B" />
               <Bar dataKey={rejectedLabel} stackId="a" fill="#DC2626" />
             </BarChart>
@@ -196,7 +196,7 @@ export default function AgentPerformanceView() {
       {/* Agent scorecards */}
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <Zap size={16} className="text-[#0F766E]" />
+          <Zap size={16} className="text-[#1E3A8A]" />
           <h3 className="text-base font-bold text-gray-900">{t("agentScorecards", agentPerf)}</h3>
           <span className="text-xs text-gray-500">({scores.length})</span>
         </div>
@@ -224,7 +224,7 @@ export default function AgentPerformanceView() {
                       </span>
                     </div>
                     <div className="text-end flex-shrink-0">
-                      <div className="text-2xl font-extrabold text-[#0F766E]">{s.compositeScore.toFixed(1)}</div>
+                      <div className="text-2xl font-extrabold text-[#1E3A8A]">{s.compositeScore.toFixed(1)}</div>
                       <div className="text-[9px] text-gray-500 uppercase tracking-wide">{t("composite", agentPerf)}</div>
                     </div>
                   </div>
@@ -238,7 +238,7 @@ export default function AgentPerformanceView() {
 
                   <button
                     onClick={() => setExpandedId(expanded ? null : s.agentId)}
-                    className="mt-4 w-full text-xs text-[#0F766E] font-bold hover:underline flex items-center justify-center gap-1"
+                    className="mt-4 w-full text-xs text-[#1E3A8A] font-bold hover:underline flex items-center justify-center gap-1"
                   >
                     {expanded ? t("collapse", agentPerf) : t("expand", agentPerf)}
                     {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -260,7 +260,7 @@ export default function AgentPerformanceView() {
                           <div className="h-[120px]">
                             <ResponsiveContainer width="100%" height="100%">
                               <LineChart data={s.trend.map((v, i) => ({ name: `M${i + 1}`, value: v }))}>
-                                <Line type="monotone" dataKey="value" stroke="#0F766E" strokeWidth={2} dot={{ r: 2.5 }} />
+                                <Line type="monotone" dataKey="value" stroke="#1E3A8A" strokeWidth={2} dot={{ r: 2.5 }} />
                                 <YAxis hide domain={[Math.min(...s.trend) - 2, 100]} />
                                 <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
@@ -276,7 +276,7 @@ export default function AgentPerformanceView() {
                                 <PolarGrid stroke="#e5e7eb" />
                                 <PolarAngleAxis dataKey="metric" tick={{ fontSize: 9 }} />
                                 <PolarRadiusAxis tick={{ fontSize: 8 }} angle={30} domain={[0, 100]} />
-                                <Radar dataKey="value" stroke="#0F766E" fill="#0F766E" fillOpacity={0.4} />
+                                <Radar dataKey="value" stroke="#1E3A8A" fill="#1E3A8A" fillOpacity={0.4} />
                               </RadarChart>
                             </ResponsiveContainer>
                           </div>
@@ -294,7 +294,7 @@ export default function AgentPerformanceView() {
                             <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-2">{t("notable", agentPerf)}</p>
                             <ul className="text-[11px] text-gray-700 space-y-1">
                               {s.notableEvents.map((e, i) => (
-                                <li key={i} className="flex items-start gap-1.5"><span className="text-[#0F766E] mt-0.5">•</span>{e}</li>
+                                <li key={i} className="flex items-start gap-1.5"><span className="text-[#1E3A8A] mt-0.5">•</span>{e}</li>
                               ))}
                             </ul>
                           </div>
@@ -313,7 +313,7 @@ export default function AgentPerformanceView() {
 }
 
 function Stat({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: "emerald" | "teal" | "amber" }) {
-  const c = accent === "emerald" ? "bg-emerald-50 text-emerald-700" : accent === "teal" ? "bg-teal-50 text-[#0F766E]" : "bg-amber-50 text-amber-700";
+  const c = accent === "emerald" ? "bg-emerald-50 text-emerald-700" : accent === "teal" ? "bg-blue-50 text-[#1E3A8A]" : "bg-amber-50 text-amber-700";
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
       <div className="flex items-center gap-2">

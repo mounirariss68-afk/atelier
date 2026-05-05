@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Download, ArrowUp, ArrowDown, Wallet, ShieldCheck, Banknote, Users } from "lucide-react";
+import { Download, ArrowUp, ArrowDown, Wallet, ShieldCheck, Banknote, Users, CalendarClock, Loader2 } from "lucide-react";
 import { useTasamaData } from "@/hooks/useTasamaData";
 import { useTasamaDemoLang } from "../DemoLangContext";
 import { clientPayroll, tDict } from "../tasama-i18n";
@@ -12,6 +12,7 @@ export default function PayrollView() {
   const { lang } = useTasamaDemoLang();
   const t = tDict(clientPayroll, lang);
   const data = useTasamaData();
+  const client = data.clients.find((c) => c.id === CLIENT_ID);
 
   const runs = useMemo(
     () => data.payrollRuns
@@ -20,7 +21,25 @@ export default function PayrollView() {
     [data.payrollRuns],
   );
 
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(runs[0]?.id ?? null);
+  // Demo "today" anchor: 2026-05-05. Surface the live in-preparation cycle
+  // alongside the (settled) payroll register so the client sees what's next.
+  const NOW = new Date("2026-05-05T00:00:00Z");
+  const inPrepRun = runs.find((r) => r.status === "in-preparation");
+  const cutoffDay = client?.payrollCutoffDay ?? 25;
+  const cutoffDate = inPrepRun
+    ? new Date(Date.UTC(inPrepRun.periodYear, inPrepRun.periodMonth - 1, cutoffDay))
+    : null;
+  const settleDate = inPrepRun
+    ? new Date(Date.UTC(inPrepRun.periodYear, inPrepRun.periodMonth - 1, 27))
+    : null;
+  const daysToCutoff = cutoffDate
+    ? Math.max(0, Math.ceil((cutoffDate.getTime() - NOW.getTime()) / 86_400_000))
+    : 0;
+  const fmtDate = (d: Date) => d.toLocaleString(lang === "en" ? "en-US" : "ar-SA", { month: "short", day: "numeric", timeZone: "UTC" });
+
+  // Default to the most recent *settled* run (April 2026), not the in-prep May run
+  const settledRuns = useMemo(() => runs.filter((r) => r.status !== "in-preparation"), [runs]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(settledRuns[0]?.id ?? runs[0]?.id ?? null);
   const [showVariance, setShowVariance] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -68,6 +87,40 @@ export default function PayrollView() {
 
   return (
     <div className="space-y-5">
+      {inPrepRun && cutoffDate && settleDate && (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] text-white rounded-xl p-4 flex items-center gap-4 shadow-sm"
+        >
+          <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center flex-shrink-0">
+            <Loader2 size={18} className="animate-spin" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-full">
+                {lang === "en" ? "In Preparation" : "قيد التحضير"}
+              </span>
+              <p className="text-sm font-bold">
+                {getMonthName(inPrepRun.periodMonth, lang)} {inPrepRun.periodYear}
+                {" "}
+                <span className="text-blue-100 font-normal">· {inPrepRun.employeeCount} {lang === "en" ? "employees" : "موظف"}</span>
+              </p>
+            </div>
+            <p className="text-[11px] text-blue-100 mt-1">
+              {lang === "en"
+                ? `Cutoff ${fmtDate(cutoffDate)} (in ${daysToCutoff} days) · settles ${fmtDate(settleDate)} via Mudad`
+                : `الإقفال ${fmtDate(cutoffDate)} (خلال ${daysToCutoff} أيام) · التسوية ${fmtDate(settleDate)} عبر مدد`}
+            </p>
+          </div>
+          <div className="hidden md:flex flex-col items-end flex-shrink-0">
+            <div className="flex items-center gap-1.5 text-blue-100 text-[10px] font-bold uppercase tracking-wider">
+              <CalendarClock size={11} /> {lang === "en" ? "Days to cutoff" : "أيام للإقفال"}
+            </div>
+            <p className="text-2xl font-extrabold leading-none mt-1">T-{daysToCutoff}d</p>
+          </div>
+        </motion.div>
+      )}
+
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">{t.title}</h1>
@@ -78,7 +131,7 @@ export default function PayrollView() {
           <select
             value={selectedRun?.id ?? ""}
             onChange={(e) => setSelectedRunId(e.target.value)}
-            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#0F766E]/20"
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20"
           >
             {runs.map((r) => (
               <option key={r.id} value={r.id}>{getMonthName(r.periodMonth, lang)} {r.periodYear}</option>
@@ -88,7 +141,7 @@ export default function PayrollView() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryCard icon={Wallet} color="#0F766E" label={t.summaryGross} value={formatSAR(totals.gross)} />
+        <SummaryCard icon={Wallet} color="#1E3A8A" label={t.summaryGross} value={formatSAR(totals.gross)} />
         <SummaryCard icon={ShieldCheck} color="#7C3AED" label={t.summaryDeductions} value={formatSAR(totals.deductions)} />
         <SummaryCard icon={Banknote} color="#10B981" label={t.summaryNet} value={formatSAR(totals.net)} />
         <SummaryCard icon={Users} color="#3B82F6" label={t.summaryEmployees} value={String(payslips.length)} />
@@ -104,8 +157,8 @@ export default function PayrollView() {
             {trend.map((r) => (
               <div key={r.id} className="flex-1 flex flex-col items-center gap-1.5">
                 <span className="text-[9px] text-gray-400">{(r.totalGross / 1000).toFixed(0)}k</span>
-                <div className="w-full bg-teal-50 rounded-t-lg overflow-hidden flex items-end" style={{ height: "100%" }}>
-                  <div className="w-full bg-gradient-to-t from-[#0F766E] to-[#0D9488] rounded-t-lg transition-all" style={{ height: `${(r.totalGross / trendMax) * 100}%` }} />
+                <div className="w-full bg-blue-50 rounded-t-lg overflow-hidden flex items-end" style={{ height: "100%" }}>
+                  <div className="w-full bg-gradient-to-t from-[#1E3A8A] to-[#2563EB] rounded-t-lg transition-all" style={{ height: `${(r.totalGross / trendMax) * 100}%` }} />
                 </div>
                 <span className="text-[10px] font-semibold text-gray-500">{getMonthName(r.periodMonth, lang).slice(0, 3)}</span>
               </div>
@@ -120,7 +173,7 @@ export default function PayrollView() {
             {selectedRun ? `${getMonthName(selectedRun.periodMonth, lang)} ${selectedRun.periodYear}` : ""} · {payslips.length} {lang === "en" ? "payslips" : "كشف"}
           </h2>
           {prevRun && (
-            <button onClick={() => setShowVariance(!showVariance)} className="text-[11px] font-semibold text-[#0F766E] hover:underline">
+            <button onClick={() => setShowVariance(!showVariance)} className="text-[11px] font-semibold text-[#1E3A8A] hover:underline">
               {showVariance ? t.hideVariance : t.showVariance}
             </button>
           )}
@@ -167,7 +220,7 @@ export default function PayrollView() {
                       <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${statusColor}`}>{statusLabel}</span>
                     </td>
                     <td className="px-3 py-2.5">
-                      <button onClick={download} className="text-[11px] text-[#0F766E] hover:underline flex items-center gap-1" title={t.download}>
+                      <button onClick={download} className="text-[11px] text-[#1E3A8A] hover:underline flex items-center gap-1" title={t.download}>
                         <Download size={12} />
                       </button>
                     </td>

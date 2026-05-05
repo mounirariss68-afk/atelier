@@ -75,7 +75,7 @@ export default function ApprovalQueueView() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Inbox size={20} className="text-[#0F766E]" />
+          <Inbox size={20} className="text-[#1E3A8A]" />
           {t("title", approvals)}
         </h2>
         <p className="text-sm text-gray-500 mt-1">{t("subtitle", approvals)}</p>
@@ -93,7 +93,7 @@ export default function ApprovalQueueView() {
               key={key}
               onClick={() => setTab(key)}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                tab === key ? "bg-white text-[#0F766E] shadow-sm" : "text-gray-600"
+                tab === key ? "bg-white text-[#1E3A8A] shadow-sm" : "text-gray-600"
               }`}
             >
               {icon} {t(label, approvals)}
@@ -148,7 +148,7 @@ export default function ApprovalQueueView() {
                         <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${SEV_BG[rec.severity]}`}>
                           {t(rec.severity === "critical" ? "sevCritical" : rec.severity === "high" ? "sevHigh" : rec.severity === "medium" ? "sevMedium" : "sevLow", shell)}
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-[#0F766E] border border-teal-200 font-bold">
+                        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-[#1E3A8A] border border-blue-200 font-bold">
                           {role.icon}{role[lang]}
                         </span>
                         <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
@@ -168,14 +168,14 @@ export default function ApprovalQueueView() {
                       <p className="text-xs text-gray-600 mt-1 leading-relaxed">{rec.summary}</p>
                     </div>
                     <div className="text-end flex-shrink-0">
-                      <div className="text-2xl font-extrabold text-[#0F766E]">{rec.confidence}%</div>
+                      <div className="text-2xl font-extrabold text-[#1E3A8A]">{rec.confidence}%</div>
                       <div className="text-[9px] text-gray-500 uppercase">{t("confidenceLabel", approvals)}</div>
                     </div>
                   </div>
 
                   <button
                     onClick={() => setExpandedId(expanded ? null : rec.id)}
-                    className="mt-3 text-xs text-[#0F766E] font-bold hover:underline flex items-center gap-1"
+                    className="mt-3 text-xs text-[#1E3A8A] font-bold hover:underline flex items-center gap-1"
                   >
                     <Brain size={12} />
                     {expanded ? t("hideAnalysis", approvals) : t("showReasoning", approvals)}
@@ -202,11 +202,11 @@ export default function ApprovalQueueView() {
                             {rec.reasoning.map((step, i) => (
                               <div key={i} className="bg-white rounded-lg border border-gray-100 p-3">
                                 <div className="flex items-start gap-2">
-                                  <span className="w-5 h-5 rounded-full bg-[#0F766E] text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">{i + 1}</span>
+                                  <span className="w-5 h-5 rounded-full bg-[#1E3A8A] text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">{i + 1}</span>
                                   <div className="min-w-0 flex-1">
                                     <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500">{step.source}</p>
                                     <p className="text-xs text-gray-800 mt-1">{step.observation}</p>
-                                    <p className="text-xs text-[#0F766E] mt-1 font-semibold">→ {step.conclusion}</p>
+                                    <p className="text-xs text-[#1E3A8A] mt-1 font-semibold">→ {step.conclusion}</p>
                                   </div>
                                 </div>
                               </div>
@@ -215,8 +215,8 @@ export default function ApprovalQueueView() {
                         </div>
 
                         {/* Recommended action */}
-                        <div className="bg-gradient-to-r from-[#0F766E]/10 to-[#0D9488]/10 border border-teal-100 rounded-lg p-3">
-                          <p className="text-[10px] uppercase tracking-widest font-bold text-[#0F766E] flex items-center gap-1.5">
+                        <div className="bg-gradient-to-r from-[#1E3A8A]/10 to-[#2563EB]/10 border border-blue-100 rounded-lg p-3">
+                          <p className="text-[10px] uppercase tracking-widest font-bold text-[#1E3A8A] flex items-center gap-1.5">
                             <Sparkles size={11} />{t("recommendedAction", approvals)}
                           </p>
                           <p className="text-xs text-gray-800 mt-1.5">{rec.recommendedAction}</p>
@@ -272,7 +272,7 @@ export default function ApprovalQueueView() {
                             </button>
                             <button
                               onClick={() => handleDecision(rec, "approved")}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-[#0F766E] rounded-lg hover:bg-[#0D9488] flex items-center gap-1.5"
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-[#1E3A8A] rounded-lg hover:bg-[#2563EB] flex items-center gap-1.5"
                             >
                               <Check size={12} />{t("approve", approvals)}
                             </button>

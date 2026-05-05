@@ -24,6 +24,7 @@ export const tasamaClientsTable = pgTable("tasama_clients", {
   contactEmail: text("contact_email").notNull(),
   activeEvents: jsonb("active_events").notNull().$type<string[]>(),
   onboardedAt: text("onboarded_at").notNull(),
+  payrollCutoffDay: integer("payroll_cutoff_day").notNull().default(25),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

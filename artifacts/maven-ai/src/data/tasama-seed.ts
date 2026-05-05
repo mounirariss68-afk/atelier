@@ -24,6 +24,7 @@ export interface TasamaClient {
   contactEmail: string;
   activeEvents: string[];
   onboardedAt: string;
+  payrollCutoffDay: number;
 }
 
 export interface TasamaEmployee {
@@ -62,7 +63,7 @@ export interface SalaryComponent {
   effectiveTo: string | null;
 }
 
-export type PayrollRunStatus = "draft" | "approved" | "settled" | "filed";
+export type PayrollRunStatus = "in-preparation" | "draft" | "approved" | "settled" | "filed";
 
 export interface PayrollRun {
   id: string;

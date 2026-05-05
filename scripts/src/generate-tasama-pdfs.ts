@@ -45,10 +45,10 @@ interface Baseline {
   documents: DocSpec[];
 }
 
-const TEAL = rgb(13 / 255, 148 / 255, 136 / 255);
+const TEAL = rgb(0x1E / 255, 0x3A / 255, 0x8A / 255); // Tasama deep blue (was teal)
 const DARK = rgb(15 / 255, 23 / 255, 42 / 255);
 const MUTED = rgb(100 / 255, 116 / 255, 139 / 255);
-const LIGHT_BG = rgb(245 / 255, 250 / 255, 250 / 255);
+const LIGHT_BG = rgb(0xEF / 255, 0xF1 / 255, 0xFA / 255);
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -442,6 +442,54 @@ function bodyForType(doc: DocSpec, employeeName: string | null): string[] {
         `Bonus amount (SAR): ${f.bonus_amount_sar?.value ?? "-"}`,
         `Period: ${f.bonus_period?.value ?? "-"}`,
         `Payment month: ${f.payment_month?.value ?? "-"}`,
+      ];
+    case "payslip":
+      return [
+        `Monthly payslip issued to ${empN}.`,
+        ``,
+        `Pay period: ${f.pay_period?.value ?? "-"}`,
+        `Basic salary (SAR): ${f.basic_salary_sar?.value ?? "-"}`,
+        `Housing allowance (SAR): ${f.housing_allowance_sar?.value ?? "-"}`,
+        `Transport allowance (SAR): ${f.transport_allowance_sar?.value ?? "-"}`,
+        `Other allowances (SAR): ${f.other_allowances_sar?.value ?? "-"}`,
+        `Bonus (SAR): ${f.bonus_sar?.value ?? "-"}`,
+        `Gross pay (SAR): ${f.gross_pay_sar?.value ?? "-"}`,
+        `GOSI employee deduction (SAR): ${f.gosi_employee_sar?.value ?? "-"}`,
+        `Net pay (SAR): ${f.net_pay_sar?.value ?? "-"}`,
+        ``,
+        `Settled via Mudad WPS on ${f.payment_date?.value ?? "the 27th of the month"}.`,
+      ];
+    case "offer-letter":
+      return [
+        `Dear ${empN},`,
+        ``,
+        `We are pleased to extend a formal offer of employment.`,
+        ``,
+        `Position: ${f.position?.value ?? "-"}`,
+        `Department: ${f.department?.value ?? "-"}`,
+        `Start date: ${f.start_date?.value ?? "-"}`,
+        `Probation: ${f.probation_period?.value ?? "90 days"}`,
+        `Monthly basic salary (SAR): ${f.monthly_basic_sar?.value ?? "-"}`,
+        `Housing allowance (SAR): ${f.housing_allowance_sar?.value ?? "-"}`,
+        `Transport allowance (SAR): ${f.transport_allowance_sar?.value ?? "-"}`,
+        `Total monthly compensation (SAR): ${f.total_monthly_sar?.value ?? "-"}`,
+        ``,
+        `Please countersign this letter to confirm acceptance. The contract`,
+        `will be registered with Qiwa upon your joining.`,
+      ];
+    case "leave-request":
+      return [
+        `Leave request submitted by ${empN}.`,
+        ``,
+        `Leave type: ${f.leave_type?.value ?? "-"}`,
+        `Start date: ${f.start_date?.value ?? "-"}`,
+        `End date: ${f.end_date?.value ?? "-"}`,
+        `Total days: ${f.total_days?.value ?? "-"}`,
+        `Reason: ${f.reason?.value ?? "-"}`,
+        `Coverage / handover: ${f.coverage_plan?.value ?? "-"}`,
+        ``,
+        `Subject to Manager approval and remaining annual entitlement.`,
+        `Pending HR confirmation in the Tasama Service Requests queue.`,
       ];
     case "experience-letter":
       return [
