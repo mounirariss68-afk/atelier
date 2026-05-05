@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
   db,
   arcelikProductsTable,
@@ -20,6 +20,14 @@ import { eq, and, desc, sql, gte, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { runPriceScrape, isScrapeRunning } from "../lib/scraper";
 import { getSchedulerStatus } from "../lib/scheduler";
+import {
+  runCompetitiveResponseAgent,
+  runPriceElasticityAgent,
+  runCannibalizationAgent,
+  runDealerOptimizationAgent,
+  runAllAgents,
+  type AgentType,
+} from "../lib/agents";
 
 const router: IRouter = Router();
 
@@ -791,6 +799,95 @@ router.post("/scrape", async (_req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to start scrape job" });
+  }
+});
+
+// ---------- AI Agent endpoints ----------
+// In-memory rate limit per-IP for agent endpoints (prevents abuse of LLM tokens).
+const agentRateBuckets = new Map<string, number[]>();
+const AGENT_RATE_MAX = 10;
+const AGENT_RATE_WINDOW_MS = 60_000;
+
+function agentRateLimitOk(ip: string): boolean {
+  const now = Date.now();
+  const bucket = (agentRateBuckets.get(ip) ?? []).filter((t) => now - t < AGENT_RATE_WINDOW_MS);
+  if (bucket.length >= AGENT_RATE_MAX) {
+    agentRateBuckets.set(ip, bucket);
+    return false;
+  }
+  bucket.push(now);
+  agentRateBuckets.set(ip, bucket);
+  return true;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, bucket] of agentRateBuckets) {
+    const fresh = bucket.filter((t) => now - t < AGENT_RATE_WINDOW_MS);
+    if (fresh.length === 0) agentRateBuckets.delete(ip);
+    else agentRateBuckets.set(ip, fresh);
+  }
+}, AGENT_RATE_WINDOW_MS).unref?.();
+
+function parseAgentOpts(req: Request): { language: "tr" | "en"; forceBaseline: boolean } {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const langRaw = body["language"] ?? req.query["language"];
+  const language: "tr" | "en" = langRaw === "en" ? "en" : "tr";
+  const fbRaw = body["forceBaseline"] ?? req.query["forceBaseline"];
+  const forceBaseline = fbRaw === true || fbRaw === "true" || fbRaw === 1 || fbRaw === "1";
+  return { language, forceBaseline };
+}
+
+const AGENT_RUNNERS: Record<
+  AgentType,
+  (opts: { language: "tr" | "en"; forceBaseline: boolean }) => ReturnType<typeof runCompetitiveResponseAgent>
+> = {
+  "competitive-response": runCompetitiveResponseAgent,
+  "price-elasticity": runPriceElasticityAgent,
+  "cannibalization": runCannibalizationAgent,
+  "dealer-optimization": runDealerOptimizationAgent,
+};
+
+function makeAgentHandler(agentType: AgentType) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ip = req.ip ?? "anon";
+      if (!agentRateLimitOk(ip)) {
+        res.status(429).json({ error: "Rate limited. Try again in a minute." });
+        return;
+      }
+      const opts = parseAgentOpts(req);
+      const result = await AGENT_RUNNERS[agentType](opts);
+      res.json(result);
+    } catch (err) {
+      logger.error({ err, agentType }, "Agent endpoint failed");
+      res.status(500).json({ error: `Agent ${agentType} failed` });
+    }
+  };
+}
+
+router.post("/agent/competitive-response", makeAgentHandler("competitive-response"));
+router.post("/agent/price-elasticity", makeAgentHandler("price-elasticity"));
+router.post("/agent/cannibalization", makeAgentHandler("cannibalization"));
+router.post("/agent/dealer-optimization", makeAgentHandler("dealer-optimization"));
+
+router.post("/agent/run-all", async (req, res) => {
+  try {
+    const ip = req.ip ?? "anon";
+    if (!agentRateLimitOk(ip)) {
+      res.status(429).json({ error: "Rate limited. Try again in a minute." });
+      return;
+    }
+    const opts = parseAgentOpts(req);
+    const results = await runAllAgents(opts);
+    res.json({
+      generatedAt: new Date().toISOString(),
+      language: opts.language,
+      results,
+    });
+  } catch (err) {
+    logger.error({ err }, "Agent run-all failed");
+    res.status(500).json({ error: "Agent run-all failed" });
   }
 });
 

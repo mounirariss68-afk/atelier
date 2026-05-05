@@ -6,6 +6,7 @@ import {
   DollarSign, TrendingUp, Filter, BarChart3,
   Play, Pause, CheckCheck, Edit3, History, Bot, Cpu,
   Eye, Target, Package, Users, Scale, Cog,
+  Sparkles, Loader2, FlaskConical,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -14,9 +15,11 @@ import {
   type AgentRecommendation, type AgentTask, type AgentAlert,
   type AgentPlaybook, type AgentActivityEntry, type AgentDecisionLog,
   type DirectorRole, type Severity, type DecisionType, type SpecializedAgent, type AgentStatus,
+  type RecommendationAgentType, type RecommendationSource,
 } from "@/data/arcelik-agent";
 import { useDemoLang } from "../DemoLangContext";
 import { decisions } from "../demo-i18n";
+import { useArcelikAgents, LIVE_AGENT_TYPES, type LiveAgentType } from "@/hooks/useArcelikAgents";
 
 type SubTab = "recommendations" | "tasks" | "alerts" | "playbooks" | "activity" | "history" | "agents";
 const ROLE_COLORS: Record<DirectorRole, string> = {
@@ -57,6 +60,23 @@ function ConfidenceBadge({ value }: { value: number }) {
   return (
     <span className={`text-[11px] font-bold ${color} flex items-center gap-0.5`}>
       <Shield size={11} /> %{value}
+    </span>
+  );
+}
+
+function SourceBadge({ source }: { source?: RecommendationSource }) {
+  const { t } = useDecisionsI18n();
+  // No badge for legacy seed scenario data — keeps stage demo clean.
+  if (!source || source === "seed") return null;
+  const isAi = source === "ai-anthropic" || source === "ai-openai";
+  const label = isAi ? t.sourceAiBadge : t.sourceBaselineBadge;
+  const cls = isAi
+    ? "bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 border-purple-200"
+    : "bg-gray-100 text-gray-600 border-gray-200";
+  const Icon = isAi ? Sparkles : Cpu;
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${cls}`}>
+      <Icon size={10} /> {label}
     </span>
   );
 }
@@ -117,6 +137,7 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[rec.severity]}`}>{sevLabels[rec.severity]}</span>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[rec.targetRole]}`}>{roleLabels[rec.targetRole]}</span>
+              <SourceBadge source={rec.source} />
               <ConfidenceBadge value={rec.confidence} />
               <span className="text-[10px] text-gray-400 ml-auto flex items-center gap-0.5"><Clock size={10} />{timeAgo(rec.createdAt)}</span>
             </div>
@@ -641,30 +662,138 @@ function ActivityLog({ entries }: { entries: AgentActivityEntry[] }) {
 
 export default function AgentDecisionsView() {
   const { toast } = useToast();
-  const { t, sevLabels, roleLabels } = useDecisionsI18n();
+  const { lang, t, sevLabels, roleLabels, timeAgo } = useDecisionsI18n();
   const [subTab, setSubTab] = useState<SubTab>("recommendations");
   const [roleFilter, setRoleFilter] = useState<DirectorRole | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Severity | "all">("all");
+  const [agentFilter, setAgentFilter] = useState<RecommendationAgentType | "all">("all");
   const [sortBy, setSortBy] = useState<"severity" | "confidence" | "newest">("severity");
-  const [recommendations, setRecommendations] = useState(() => generateRecommendations());
+  const [seedRecs, setSeedRecs] = useState(() => generateRecommendations());
   const tasks = useMemo(() => generateTasks(), []);
   const alerts = useMemo(() => generateAlerts(), []);
   const activityLog = useMemo(() => generateActivityLog(), []);
   const [liveDecisions, setLiveDecisions] = useState<AgentDecisionLog[]>([]);
   const specializedAgents = useMemo(() => generateSpecializedAgents(), []);
+  // Decision overrides applied to server-produced recs (in-memory; recs are
+  // re-fetched on agent runs but a decision sticks until the next run for that agent).
+  const [serverRecOverrides, setServerRecOverrides] = useState<
+    Record<string, { status: AgentRecommendation["status"]; decisionNote?: string; decidedBy?: string }>
+  >({});
+
+  // Wire up the agent runtime: live AI/baseline recommendations come from POSTs.
+  const { serverRecs, loading: agentLoading, runAllLoading, meta: agentMeta, runAgent, runAll } =
+    useArcelikAgents(lang);
+
+  // Merge server recs (with any overrides applied) with seed scenario recs.
+  // Server recs first so newest AI output is most prominent.
+  const recommendations: AgentRecommendation[] = useMemo(() => {
+    const tagged = serverRecs.map((r) => {
+      const ov = serverRecOverrides[r.id];
+      return ov ? { ...r, ...ov } : r;
+    });
+    return [...tagged, ...seedRecs];
+  }, [serverRecs, serverRecOverrides, seedRecs]);
 
   const SEVERITY_ORDER: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
   const filteredRecs = useMemo(() => {
     let recs = recommendations.slice();
     if (roleFilter !== "all") recs = recs.filter((r) => r.targetRole === roleFilter);
     if (priorityFilter !== "all") recs = recs.filter((r) => r.severity === priorityFilter);
+    if (agentFilter !== "all") {
+      // Default agent type is "seed" for legacy hard-coded recs (no agentType set).
+      recs = recs.filter((r) => (r.agentType ?? "seed") === agentFilter);
+    }
     if (sortBy === "severity") recs.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
     else if (sortBy === "confidence") recs.sort((a, b) => b.confidence - a.confidence);
-    else if (sortBy === "newest") recs.reverse();
+    else if (sortBy === "newest") recs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return recs;
-  }, [recommendations, roleFilter, priorityFilter, sortBy]);
+  }, [recommendations, roleFilter, priorityFilter, agentFilter, sortBy]);
   const pendingCount = recommendations.filter((r) => r.status === "pending").length;
   const criticalCount = recommendations.filter((r) => r.severity === "critical" && r.status === "pending").length;
+
+  // Per-agent counts used to badge the agent-type filter chips.
+  const agentTypeCounts = useMemo(() => {
+    const counts: Record<RecommendationAgentType, number> = {
+      "competitive-response": 0,
+      "price-elasticity": 0,
+      "cannibalization": 0,
+      "dealer-optimization": 0,
+      "seed": 0,
+    };
+    for (const r of recommendations) {
+      const at = (r.agentType ?? "seed") as RecommendationAgentType;
+      counts[at] = (counts[at] ?? 0) + 1;
+    }
+    return counts;
+  }, [recommendations]);
+
+  const agentFilterChips: { id: RecommendationAgentType | "all"; label: string }[] = [
+    { id: "all", label: t.filterAllAgents },
+    { id: "competitive-response", label: t.filterAgentCompetitive },
+    { id: "price-elasticity", label: t.filterAgentElasticity },
+    { id: "cannibalization", label: t.filterAgentCannibalization },
+    { id: "dealer-optimization", label: t.filterAgentDealer },
+    { id: "seed", label: t.filterAgentSeed },
+  ];
+
+  // ---------- Agent run handlers ----------
+  function describeSource(source: RecommendationSource | null): string {
+    if (source === "ai-anthropic") return t.agentSourceAi;
+    if (source === "ai-openai") return t.agentSourceAiOpenai;
+    if (source === "baseline") return t.agentSourceBaseline;
+    return t.agentSourceSeed;
+  }
+
+  async function handleRunAgent(agentType: LiveAgentType) {
+    try {
+      const result = await runAgent(agentType);
+      toast({
+        title: `${describeSource(result.source)} — ${result.recommendations.length} ${t.agentRunNewRecs}`,
+        description: `${t.agentRunComplete}: ${agentLabelFor(agentType)}`,
+      });
+    } catch (err) {
+      toast({
+        title: t.agentRunFailed,
+        description: t.agentRunFailedDesc,
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRunAll() {
+    try {
+      const result = await runAll();
+      const total = result.results.reduce((acc, r) => acc + r.recommendations.length, 0);
+      toast({
+        title: t.runAllAgents,
+        description: `${result.results.length} agent · ${total} ${t.agentRunNewRecs}`,
+      });
+    } catch (err) {
+      toast({
+        title: t.agentRunFailed,
+        description: t.agentRunFailedDesc,
+        variant: "destructive",
+      });
+    }
+  }
+
+  function agentLabelFor(agentType: LiveAgentType): string {
+    switch (agentType) {
+      case "competitive-response": return t.filterAgentCompetitive;
+      case "price-elasticity": return t.filterAgentElasticity;
+      case "cannibalization": return t.filterAgentCannibalization;
+      case "dealer-optimization": return t.filterAgentDealer;
+    }
+  }
+
+  function agentIconFor(agentType: LiveAgentType) {
+    switch (agentType) {
+      case "competitive-response": return Target;
+      case "price-elasticity": return TrendingUp;
+      case "cannibalization": return Package;
+      case "dealer-optimization": return Users;
+    }
+  }
 
   const seedHistory = useMemo(() => generateDecisionHistory(), []);
   const allDecisions = [...liveDecisions, ...seedHistory];
@@ -706,9 +835,23 @@ export default function AgentDecisionsView() {
     };
   }
 
+  // Apply a status change to whichever store owns the rec — seed array for legacy
+  // scenario data, override map for server-produced recs.
+  function applyStatus(
+    id: string,
+    patch: { status: AgentRecommendation["status"]; decisionNote?: string; decidedBy?: string },
+  ) {
+    const isServerRec = serverRecs.some((r) => r.id === id);
+    if (isServerRec) {
+      setServerRecOverrides((prev) => ({ ...prev, [id]: patch }));
+    } else {
+      setSeedRecs((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    }
+  }
+
   const handleApprove = (id: string) => {
     const rec = recommendations.find((r) => r.id === id);
-    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const, decidedBy: "Elif Demir" } : r));
+    applyStatus(id, { status: "approved", decidedBy: "Elif Demir" });
     if (rec) {
       const entry = createDecisionEntry(rec, "approved");
       setLiveDecisions((prev) => [entry, ...prev]);
@@ -721,7 +864,7 @@ export default function AgentDecisionsView() {
 
   const handleReject = (id: string) => {
     const rec = recommendations.find((r) => r.id === id);
-    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "rejected" as const, decidedBy: "Elif Demir" } : r));
+    applyStatus(id, { status: "rejected", decidedBy: "Elif Demir" });
     if (rec) {
       const entry = createDecisionEntry(rec, "rejected");
       setLiveDecisions((prev) => [entry, ...prev]);
@@ -734,7 +877,7 @@ export default function AgentDecisionsView() {
 
   const handleModify = (id: string, note: string) => {
     const rec = recommendations.find((r) => r.id === id);
-    setRecommendations((prev) => prev.map((r) => r.id === id ? { ...r, status: "modified" as const, decidedBy: "Elif Demir", decisionNote: note } : r));
+    applyStatus(id, { status: "modified", decidedBy: "Elif Demir", decisionNote: note });
     if (rec) {
       const entry = createDecisionEntry(rec, "modified", note);
       setLiveDecisions((prev) => [entry, ...prev]);
@@ -834,6 +977,114 @@ export default function AgentDecisionsView() {
           </div>
         )}
       </div>
+
+      {subTab === "recommendations" && (
+        <div className="bg-gradient-to-br from-[#0E2841] to-[#1a3a5c] rounded-xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                <FlaskConical size={18} className="text-[#F5A623]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  {t.aiAgentsLab}
+                  <Sparkles size={12} className="text-[#F5A623]" />
+                </h3>
+                <p className="text-[11px] text-blue-100/80 max-w-xl">{t.aiAgentsLabDesc}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleRunAll}
+              disabled={runAllLoading}
+              className="px-4 py-2 rounded-lg bg-[#E30613] hover:bg-[#c00510] text-white text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {runAllLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              {runAllLoading ? t.runningAgent : t.runAllAgents}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 px-4 pb-4">
+            {LIVE_AGENT_TYPES.map((at) => {
+              const Icon = agentIconFor(at);
+              const m = agentMeta[at];
+              const isLoading = agentLoading[at];
+              const sourceLabel = m.source ? describeSource(m.source) : t.agentNotRun;
+              const sourceTone =
+                m.source === "ai-anthropic" || m.source === "ai-openai"
+                  ? "text-emerald-300"
+                  : m.source === "baseline"
+                  ? "text-amber-300"
+                  : "text-blue-200/60";
+              return (
+                <div
+                  key={at}
+                  className="bg-white/5 border border-white/10 rounded-lg p-3 flex flex-col gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center">
+                      <Icon size={14} className="text-[#F5A623]" />
+                    </div>
+                    <p className="text-xs font-bold text-white flex-1 leading-tight">
+                      {agentLabelFor(at)}
+                    </p>
+                  </div>
+                  <div className="text-[10px] flex items-center gap-1">
+                    <span className={`font-semibold ${sourceTone}`}>{sourceLabel}</span>
+                    {m.lastRunAt && (
+                      <>
+                        <span className="text-blue-200/40">•</span>
+                        <span className="text-blue-100/60">{timeAgo(m.lastRunAt)}</span>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRunAgent(at)}
+                    disabled={isLoading || runAllLoading}
+                    className="mt-auto px-2.5 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" /> {t.runningAgent}
+                      </>
+                    ) : (
+                      <>
+                        <Play size={12} /> {t.runAgent}
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {subTab === "recommendations" && (
+        <div className="flex items-center gap-1.5 flex-wrap bg-white rounded-xl border border-gray-100 shadow-sm p-2.5">
+          <Bot size={13} className="text-gray-400 ml-1 mr-0.5" />
+          {agentFilterChips.map((chip) => {
+            const count = chip.id === "all" ? recommendations.length : agentTypeCounts[chip.id];
+            const active = agentFilter === chip.id;
+            return (
+              <button
+                key={chip.id}
+                onClick={() => setAgentFilter(chip.id)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors flex items-center gap-1.5 ${
+                  active ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {chip.label}
+                {count > 0 && (
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                    active ? "bg-white/20 text-white" : "bg-white text-gray-500"
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">

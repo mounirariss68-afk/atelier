@@ -9,6 +9,23 @@ export type RecommendationStatus = "pending" | "approved" | "rejected" | "modifi
 export type TaskStatus = "open" | "in-progress" | "done";
 export type PlaybookStatus = "triggered" | "running" | "awaiting-approval" | "completed";
 
+// `agentType` tags which specialized agent (server-side) produced this rec, so the
+// UI can filter by agent. `seed` represents the legacy hard-coded scenario data.
+export type RecommendationAgentType =
+  | "competitive-response"
+  | "price-elasticity"
+  | "cannibalization"
+  | "dealer-optimization"
+  | "seed";
+
+// `source` indicates origin: Anthropic LLM, OpenAI LLM fallback, deterministic
+// baseline (when LLM unavailable / invalid), or hard-coded seed scenario data.
+export type RecommendationSource =
+  | "ai-anthropic"
+  | "ai-openai"
+  | "baseline"
+  | "seed";
+
 export interface ReasoningStep {
   source: string;
   observation: string;
@@ -32,6 +49,11 @@ export interface AgentRecommendation {
   decidedBy?: string;
   decisionNote?: string;
   outcome?: string;
+  // New: identifies which specialized AI agent produced this recommendation.
+  // Optional for backward compat — seed recs are tagged "seed".
+  agentType?: RecommendationAgentType;
+  // New: identifies the data origin (LLM vs deterministic fallback vs seed).
+  source?: RecommendationSource;
 }
 
 export interface AgentTask {
