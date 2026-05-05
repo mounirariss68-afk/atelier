@@ -816,6 +816,38 @@ export default function DashboardView() {
               <span>{t.nextScheduled}:</span>
               <span className="font-medium text-[#0E2841]">{formatCronSchedule(scrapeStatus.scheduler.cronExpression, lang)}</span>
             </div>
+            {(() => {
+              const geoCounts = scrapeStatus.lastCompletedRun?.geoWarningCounts ?? null;
+              const entries = geoCounts
+                ? Object.entries(geoCounts).filter(([, n]) => n > 0)
+                : [];
+              const total = entries.reduce((s, [, n]) => s + n, 0);
+              if (total === 0) {
+                return (
+                  <div
+                    className="flex items-center gap-1.5 text-xs text-gray-400"
+                    title={t.geoWarningsTooltip}
+                  >
+                    <CheckCircle2 size={12} className="text-green-500" />
+                    <span>{t.geoWarningsNone}</span>
+                  </div>
+                );
+              }
+              const summary = entries
+                .sort((a, b) => b[1] - a[1])
+                .map(([brand, n]) => `${brand}: ${n}`)
+                .join(" · ");
+              return (
+                <div
+                  className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-red-50 border border-red-200 text-red-700"
+                  title={`${t.geoWarningsTooltip}\n\n${summary}`}
+                >
+                  <AlertTriangleIcon size={12} className="text-red-500" />
+                  <span className="font-semibold">{t.geoWarningsLabel}:</span>
+                  <span className="font-medium">{summary}</span>
+                </div>
+              );
+            })()}
             <div className="flex items-center gap-3 ml-auto text-[10px] text-gray-400">
               <span>{scrapeStatus.products?.totalCount ?? 0} {t.productsTracked}</span>
               <span>{scrapeStatus.competitors?.totalCount ?? 0} {t.competitorsTracked}</span>

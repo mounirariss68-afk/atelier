@@ -43,6 +43,13 @@
       "when": 1778002395607,
       "tag": "0005_add_scrape_health",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778002768874,
+      "tag": "0006_add_geo_warning_counts",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,7 @@ export interface ScrapeStatus {
     startedAt: string;
     completedAt: string;
     scrapedCounts: Record<string, number>;
+    geoWarningCounts: Record<string, number> | null;
     matchedProducts: number;
     matchedCompetitors: number;
     totalProducts: number;
@@ -45,6 +46,7 @@ export interface ScrapeStatus {
     status: string;
     startedAt: string;
     completedAt: string | null;
+    geoWarningCounts?: Record<string, number> | null;
   }>;
   products: {
     lastScraped: string | null;

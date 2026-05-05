@@ -308,6 +308,7 @@ export const arcelikScrapeLogsTable = pgTable(
     startedAt: timestamp("started_at").notNull().defaultNow(),
     completedAt: timestamp("completed_at"),
     scrapedCounts: jsonb("scraped_counts").$type<Record<string, number>>(),
+    geoWarningCounts: jsonb("geo_warning_counts").$type<Record<string, number>>(),
     matchedProducts: integer("matched_products"),
     matchedCompetitors: integer("matched_competitors"),
     totalProducts: integer("total_products"),

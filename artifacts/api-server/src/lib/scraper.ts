@@ -528,6 +528,20 @@ const TURKIYE_GEO_PICKER_RE = /select[-_]country|country[-_]selector|country-pic
 const TURKIYE_NON_TR_LOCALE_PREFIX_RE =
   /^\/(en|ar|de|fr|es|it|ru|zh|ja|ko|pt|nl|pl|cs|sv|fi|da|no|el|hu|ro|bg|uk|he|fa)(\/|$)/i;
 
+// Per-run geo-routing warning counter, keyed by source label (the `brand`
+// argument passed to warnIfNonTurkiyeUrl — e.g. "Vestel", "N11", "Trendyol").
+// Reset at the start of every runPriceScrape so the persisted count reflects
+// only navigations from that scrape run.
+const geoWarningCounts = new Map<string, number>();
+
+function resetGeoWarningCounts(): void {
+  geoWarningCounts.clear();
+}
+
+function getGeoWarningCounts(): Record<string, number> {
+  return Object.fromEntries(geoWarningCounts);
+}
+
 function warnIfNonTurkiyeUrl(
   page: Page,
   ctx: { brand: string; expectedHost: string; requestedUrl: string },
@@ -564,6 +578,10 @@ function warnIfNonTurkiyeUrl(
         reason,
       },
       `${ctx.brand} scrape landed on a non-Türkiye URL — site may have added geo-routing; check storefront hints in newTurkiyeContext()`,
+    );
+    geoWarningCounts.set(
+      ctx.brand,
+      (geoWarningCounts.get(ctx.brand) ?? 0) + 1,
     );
     return true;
   }
@@ -2273,6 +2291,7 @@ export interface ScrapeRunResult {
   startedAt: string;
   completedAt: string;
   scrapedCounts: Record<string, number>;
+  geoWarningCounts: Record<string, number>;
   matchedProducts: number;
   matchedCompetitors: number;
   totalProducts: number;
@@ -2297,6 +2316,10 @@ export async function runPriceScrape(
   scrapeInProgress = true;
   const runId = `scrape-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const startedAt = new Date();
+
+  // Reset the per-run geo-warning counter so the persisted total reflects only
+  // navigations performed during this scrape run.
+  resetGeoWarningCounts();
 
   try {
     await db.insert(arcelikScrapeLogsTable).values({
@@ -2908,6 +2931,17 @@ export async function runPriceScrape(
     // Persist the final telemetry AFTER the equivalence rebuild so the
     // scrape_logs row reflects equivalences created in this run.
     const completedAt = new Date();
+    const geoWarningCounts = getGeoWarningCounts();
+    const totalGeoWarnings = Object.values(geoWarningCounts).reduce(
+      (s, n) => s + n,
+      0,
+    );
+    if (totalGeoWarnings > 0) {
+      logger.warn(
+        { runId, geoWarningCounts, totalGeoWarnings },
+        "Geo-routing warnings recorded during this scrape run — operators should review the affected sources",
+      );
+    }
 
     await db
       .update(arcelikScrapeLogsTable)
@@ -2915,6 +2949,7 @@ export async function runPriceScrape(
         status: "completed",
         completedAt,
         scrapedCounts,
+        geoWarningCounts,
         matchedProducts,
         matchedCompetitors,
         totalProducts: existingProducts.length,
@@ -2932,6 +2967,7 @@ export async function runPriceScrape(
         unmatchedCompetitors,
         priceChanges,
         totalScraped,
+        totalGeoWarnings,
       },
       "Price scrape completed successfully",
     );
@@ -2943,6 +2979,7 @@ export async function runPriceScrape(
       startedAt: startedAt.toISOString(),
       completedAt: completedAt.toISOString(),
       scrapedCounts,
+      geoWarningCounts,
       matchedProducts,
       matchedCompetitors,
       totalProducts: existingProducts.length,
@@ -2958,6 +2995,7 @@ export async function runPriceScrape(
       .set({
         status: "failed",
         completedAt: new Date(),
+        geoWarningCounts: getGeoWarningCounts(),
         errorMessage,
       })
       .where(eq(arcelikScrapeLogsTable.id, runId));
@@ -2971,6 +3009,7 @@ export async function runPriceScrape(
       startedAt: startedAt.toISOString(),
       completedAt: new Date().toISOString(),
       scrapedCounts: {},
+      geoWarningCounts: getGeoWarningCounts(),
       matchedProducts: 0,
       matchedCompetitors: 0,
       totalProducts: 0,

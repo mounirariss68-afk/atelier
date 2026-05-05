@@ -1,0 +1,1 @@
+ALTER TABLE "arcelik_scrape_logs" ADD COLUMN "geo_warning_counts" jsonb;
