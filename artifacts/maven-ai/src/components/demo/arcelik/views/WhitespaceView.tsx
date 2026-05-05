@@ -806,7 +806,7 @@ export default function WhitespaceView() {
           <span className="text-[10px] font-normal text-gray-500">({filteredOpps.length} {t.opportunities})</span>
         </h3>
         <div className="space-y-3">
-          {filteredOpps.map(opp => (
+          {filteredOpps.slice(0, 5).map(opp => (
             <OpportunityCard
               key={opp.id}
               opp={opp}
