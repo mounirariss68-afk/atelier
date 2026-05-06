@@ -92,7 +92,7 @@ export default function Insights() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">{featured.author}</p>
-                      <p className="text-xs text-gray-400">{insightReadTimeLabel(featured.readTime, lang)}</p>
+                      <p className="text-xs text-gray-400">{insightReadTimeLabel(featured, lang)}</p>
                     </div>
                     <span className="inline-flex items-center gap-2 bg-[#0E2841] group-hover:bg-[#F5A623] text-white font-bold px-5 py-2.5 rounded-lg transition-colors text-sm">
                       {tStr(COPY.readNow, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
@@ -196,7 +196,7 @@ export default function Insights() {
                       </h3>
                       <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-2">{insightSummary(insight, lang)}</p>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">{insightReadTimeLabel(insight.readTime, lang)}</span>
+                        <span className="text-xs text-gray-400">{insightReadTimeLabel(insight, lang)}</span>
                         <span className="text-xs font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
                           {tStr(COPY.read, lang)} <ArrowRight size={12} className="rtl:-scale-x-100" />
                         </span>

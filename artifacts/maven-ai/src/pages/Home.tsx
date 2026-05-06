@@ -653,7 +653,7 @@ export default function Home() {
                     </h3>
                     <p className="text-sm text-gray-600 leading-relaxed mb-4">{insightSummary(insight, lang)}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-400">{insightReadTimeLabel(insight.readTime, lang)}</span>
+                      <span className="text-xs text-gray-400">{insightReadTimeLabel(insight, lang)}</span>
                       <span className="text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
                         {tStr(HOME_COPY.read, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                       </span>

@@ -171,7 +171,7 @@ export default function ServiceDetail() {
                   </div>
                   <div className="p-5">
                     <h4 className="font-bold text-[#0E2841] mb-2 text-sm leading-snug">{insightTitle(relatedInsight, lang)}</h4>
-                    <p className="text-xs text-gray-500 mb-3">{insightReadTimeLabel(relatedInsight.readTime, lang)} · {insightDateLabel(relatedInsight.date, lang)}</p>
+                    <p className="text-xs text-gray-500 mb-3">{insightReadTimeLabel(relatedInsight, lang)} · {insightDateLabel(relatedInsight.date, lang)}</p>
                     <Link href={`/insights/${relatedInsight.slug}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#156082] hover:text-[#F5A623] transition-colors">
                       {tStr(COPY.readReport, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                     </Link>

@@ -76,7 +76,7 @@ export default function InsightDetail() {
               <div className="flex flex-wrap items-center gap-6 text-sm text-gray-400">
                 <span className="flex items-center gap-2"><User size={14} /> {insight.author}</span>
                 <span className="flex items-center gap-2"><Calendar size={14} /> {insightDateLabel(insight.date, lang)}</span>
-                <span className="flex items-center gap-2"><Clock size={14} /> {insightReadTimeLabel(insight.readTime, lang)}</span>
+                <span className="flex items-center gap-2"><Clock size={14} /> {insightReadTimeLabel(insight, lang)}</span>
               </div>
             </div>
             <div className="lg:col-span-4">
@@ -172,7 +172,7 @@ export default function InsightDetail() {
                     <div className="p-5">
                       <span className="text-xs font-semibold" style={{ color: categoryColors[rel.category] || "#156082" }}>{insightCategoryLabel(rel.category, lang)}</span>
                       <h3 className="font-bold text-[#0E2841] text-sm mt-1.5 mb-2 leading-snug group-hover:text-[#156082] transition-colors line-clamp-2">{insightTitle(rel, lang)}</h3>
-                      <span className="text-xs text-gray-400">{insightReadTimeLabel(rel.readTime, lang)}</span>
+                      <span className="text-xs text-gray-400">{insightReadTimeLabel(rel, lang)}</span>
                     </div>
                   </Link>
                 </motion.div>

@@ -255,3 +255,68 @@
 .article-content a:hover { color: #0E2841; }
 .article-content .sources-list { margin-top: 0.75rem; font-size: 0.95rem; }
 .article-content .sources-list li { margin-bottom: 0.5rem; line-height: 1.6; }
+
+/* Inline diagrams in long-form reports */
+.article-content figure {
+  margin: 2rem 0;
+  padding: 1.25rem;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.75rem;
+}
+.article-content figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.article-content figcaption {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #475569;
+  text-align: center;
+  font-style: italic;
+}
+[dir="rtl"] .article-content figcaption { text-align: center; }
+.article-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+}
+.article-content th, .article-content td {
+  border: 1px solid #E2E8F0;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+[dir="rtl"] .article-content th,
+[dir="rtl"] .article-content td { text-align: right; }
+.article-content th {
+  background: #0E2841;
+  color: #fff;
+  font-weight: 600;
+}
+.article-content tr:nth-child(even) td { background: #F8FAFC; }
+.article-content .maven-note {
+  background: #FFF7ED;
+  border-left: 4px solid #F5A623;
+  padding: 0.75rem 1rem;
+  margin: 1.25rem 0;
+  font-size: 0.92rem;
+  color: #7C2D12;
+  border-radius: 0.25rem;
+}
+[dir="rtl"] .article-content .maven-note {
+  border-left: none;
+  border-right: 4px solid #F5A623;
+}
+.article-content h4 {
+  color: #0E2841;
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}

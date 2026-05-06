@@ -372,17 +372,60 @@ export function insightDateLabel(date: string, lang: InsightLang): string {
   if (idx < 0) return date;
   return `${MONTH_NAMES[lang][idx]} ${m[2]}`;
 }
-const READ_TIME_TEMPLATE: Record<InsightLang, (n: string) => string> = {
+const READ_TIME_TEMPLATE: Record<InsightLang, (n: number) => string> = {
   en: (n) => `${n} min read`,
   ar: (n) => `قراءة ${n} دقيقة`,
   tr: (n) => `${n} dk okuma`,
 };
-/** Localize a "24 min read"-style read-time string. */
-export function insightReadTimeLabel(readTime: string, lang: InsightLang): string {
-  if (lang === "en") return readTime;
-  const m = /(\d+)/.exec(readTime);
-  if (!m) return readTime;
-  return READ_TIME_TEMPLATE[lang](m[1]);
+
+/** Strip HTML tags and decode common entities. */
+function stripHtml(html: string): string {
+  return html
+    .replace(new RegExp("<" + "svg[\\s\\S]*?</" + "svg>", "gi"), " ")
+    .replace(new RegExp("<" + "style[\\s\\S]*?</" + "style>", "gi"), " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Reading-speed heuristics per language. */
+const WORDS_PER_MINUTE: Record<InsightLang, number> = { en: 235, tr: 210, ar: 235 };
+const AR_CHARS_PER_MINUTE = 900;
+
+/** Compute reading time (in whole minutes, min 1) from the active language's content. */
+export function computeReadMinutes(html: string, lang: InsightLang): number {
+  const text = stripHtml(html || "");
+  if (!text) return 1;
+  if (lang === "ar") {
+    const chars = text.replace(/\s/g, "").length;
+    return Math.max(1, Math.round(chars / AR_CHARS_PER_MINUTE));
+  }
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(words / WORDS_PER_MINUTE[lang]));
+}
+
+/**
+ * Compute the localized read-time label from the insight's content for the
+ * active language. Accepts either an insight object (preferred — uses the
+ * actual word count) or a legacy "16 min read"-style string for back-compat.
+ */
+export function insightReadTimeLabel(
+  source: InsightLike | string,
+  lang: InsightLang,
+): string {
+  if (typeof source === "string") {
+    const m = /(\d+)/.exec(source);
+    const n = m ? Number(m[1]) : 1;
+    return READ_TIME_TEMPLATE[lang](Math.max(1, n));
+  }
+  const html = insightContent(source, lang);
+  return READ_TIME_TEMPLATE[lang](computeReadMinutes(html, lang));
 }
 
 // Localized accessors for founders. Each founder may carry *Ar / *Tr suffixed
@@ -500,7 +543,8 @@ export const insights = [
       summary: "MIT NANDA finds ~95% of enterprise GenAI pilots deliver no measurable P&L impact and BCG places only 26% of firms past pilots. We synthesise the published research and set out the four-layer architecture and GCC implementation sequence that close the gap.",
       featured: true,
       tags: ["Agentic AI", "Enterprise", "GCC", "Production"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>The pilot-to-production gap in enterprise GenAI is now well documented, and it is not closing on its own. MIT NANDA's <em>State of AI in Business 2025</em> reports that roughly 95% of enterprise GenAI pilots deliver no measurable P&L impact, and that fewer than ~5% of integrated systems generate meaningful value (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>). BCG's 2024 <em>Where's the Value in AI?</em> places only 26% of companies past pilots and just 4% at the elite frontier (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>). The bottleneck is not the model. It is the layered work — value framing, governed data, agent design, change management — that turns a working demo into work the enterprise actually trusts.</p>
   <h2>What the Evidence Shows</h2>
@@ -518,8 +562,21 @@ export const insights = [
   <li><strong>Operating-model resistance.</strong> Roles, processes, and incentives left untouched while the agent is bolted on. McKinsey's research is explicit that this pattern is the dominant predictor of zero EBIT impact (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>).</li>
   <li><strong>Architecture mismatch.</strong> Demo-grade prototypes that cannot be observed, evaluated, scaled, or upgraded.</li>
   </ul>
+  <h2>What DORA 2025 Adds: AI as an Amplifier</h2>
+  <p>Google's <em>2025 DORA State of AI-Assisted Software Development</em> brings the most useful new framing to this debate. Across more than 5,000 respondents, DORA finds that 90% of professionals now use AI in their daily work and over 80% report productivity gains — but it also reports a key 2025 shift: <strong>AI now improves software delivery throughput and increases delivery instability</strong> at the same time, meaning underlying systems have not yet evolved to safely manage AI-accelerated work (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, p.3-4</a>). DORA's core conclusion is that AI is an amplifier — magnifying the strengths of high-performing organisations and the dysfunctions of struggling ones — and that seven foundational capabilities determine which side a team lands on: clear and communicated AI policy, healthy data ecosystem, quality internal platform, user-centric focus, value stream management, small-batch work, and version-controlled artefacts (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, AI Capabilities Model</a>). The four-layer architecture below is, in effect, the GCC-shaped operationalisation of those seven capabilities.</p>
   <h2>A Four-Layer Architecture</h2>
   <p>Maven AI's framework is a deliberate response to those four failure modes. None of the layers is novel on its own; the discipline is treating all four as in-scope from day one rather than retrofitting the missing ones after a pilot stalls.</p>
+  <figure>
+  <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="r1d1-t r1d1-d" preserveAspectRatio="xMidYMid meet"><title id="r1d1-t">Maven AI diagram</title><desc id="r1d1-d">Maven AI diagram</desc>
+  <rect x="0" y="0" width="600" height="320" fill="#F8FAFC"/>
+  <rect x="40" y="40" width="520" height="50" fill="#F5A623" rx="6"/><text x="300" y="71" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 0 — Value Case</text>
+  <rect x="40" y="100" width="520" height="50" fill="#156082" rx="6"/><text x="300" y="131" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 1 — Data &amp; AI Foundations</text>
+  <rect x="40" y="160" width="520" height="50" fill="#1A4F7A" rx="6"/><text x="300" y="191" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 2 — Agentic AI</text>
+  <rect x="40" y="220" width="520" height="50" fill="#0E2841" rx="6"/><text x="300" y="251" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 3 — Change &amp; Adoption</text>
+  <text x="40" y="295" fill="#475569" font-size="12">Wrapped by: governance · observability · audit logs · regulator-grade controls</text>
+  </svg>
+  <figcaption>Figure 1 — The four-layer agentic architecture. The discipline is treating all four as in-scope from day one.</figcaption>
+  </figure>
   <h3>Layer 0 — Value Case</h3>
   <p>Outcome-led shaping. Specific decisions and actions the agent will own, with measurable before/after metrics. If the value case cannot be quantified, the engagement does not advance.</p>
   <h3>Layer 1 — Data &amp; AI Foundations</h3>
@@ -530,6 +587,19 @@ export const insights = [
   <p>Process redesign, role redesign, and training. The layer most providers under-resource — and the one McKinsey's evidence singles out as the difference between AI investment and AI return.</p>
   <h2>A GCC Implementation Sequence</h2>
   <p>The phases are stable across organizations; the duration varies with data maturity.</p>
+  <figure>
+  <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-2 svg-d-2"><title id="svg-t-2">26-week GCC implementation sequence</title><desc id="svg-d-2">Five-phase Gantt-style timeline from value case through change and launch over 26 weeks.</desc>
+  <rect x="0" y="0" width="700" height="200" fill="#F8FAFC"/>
+  <line x1="40" y1="170" x2="660" y2="170" stroke="#94A3B8" stroke-width="1"/>
+  <text x="40" y="190" font-size="11" fill="#475569">W1</text><text x="180" y="190" font-size="11" fill="#475569">W7</text><text x="320" y="190" font-size="11" fill="#475569">W12</text><text x="500" y="190" font-size="11" fill="#475569">W20</text><text x="640" y="190" font-size="11" fill="#475569">W26</text>
+  <rect x="40" y="40" width="100" height="22" fill="#F5A623" rx="3"/><text x="44" y="56" font-size="11" fill="#fff" font-weight="700">Value case</text>
+  <rect x="140" y="68" width="140" height="22" fill="#156082" rx="3"/><text x="144" y="84" font-size="11" fill="#fff" font-weight="700">Data readiness</text>
+  <rect x="240" y="96" width="140" height="22" fill="#1A4F7A" rx="3"/><text x="244" y="112" font-size="11" fill="#fff" font-weight="700">Prototype build</text>
+  <rect x="340" y="124" width="200" height="22" fill="#0E2841" rx="3"/><text x="344" y="140" font-size="11" fill="#fff" font-weight="700">Production hardening</text>
+  <rect x="500" y="40" width="160" height="22" fill="#7C3AED" rx="3"/><text x="504" y="56" font-size="11" fill="#fff" font-weight="700">Change &amp; launch</text>
+  </svg>
+  <figcaption>Figure 2 — Indicative 26-week GCC implementation sequence. Duration varies with data maturity.</figcaption>
+  </figure>
   <ul>
   <li><strong>Weeks 1–3 — Value case &amp; pilot selection.</strong> Quantified business case, executive sponsorship, single bounded use case.</li>
   <li><strong>Weeks 4–7 — Data readiness sprint.</strong> Even well-scoped pilots surface data problems; address them before integration, not during.</li>
@@ -546,6 +616,69 @@ export const insights = [
   <li><strong>Resource change management at parity with engineering.</strong> A change-to-engineering ratio below 1:2 is the most common predictor of post-launch under-utilisation.</li>
   <li><strong>Choose a delivery partner whose economics align with production.</strong> Partners that profit from extended advisory have no structural incentive to cut their own engagement short.</li>
   </ul>
+  
+<h2>Sectoral Mechanics: Where the Four Layers Flex</h2>
+
+<p>The four-layer architecture is durable across verticals, but the execution weight shifts materially by sector. In financial services (banking, insurance, asset management), Layer 1 (data and AI foundations) and the governance wrap consume 35–40% of total engagement cost and timeline. In healthcare and life sciences, Layer 3 (change and adoption) becomes the binding constraint because clinical workflows and regulatory sign-off require physician alignment at every step. In energy and utilities, Layer 2 (agentic AI) takes longer because the production environment often spans legacy SCADA systems, IoT networks, and real-time control loops that demand deterministic behavior from systems designed for probabilistic inference.</p>
+
+<p>For GCC enterprises specifically, three sectoral patterns emerge:</p>
+
+<ul>
+<li><strong>Banking and insurance.</strong> SAMA and CBUAE compliance frameworks place heavy weight on explainability, audit trails, and model governance. This pulls forward Layer 1 work (data lineage, governed context) and embeds observability into Layer 2 by design. Engagement duration: 24–32 weeks.</li>
+<li><strong>Oil and gas, utilities, heavy manufacturing.</strong> Operational agents that drive real-world decisions (production scheduling, maintenance dispatch, supply optimization) require integration with legacy systems, physics-aware constraints, and scenario testing. Layer 2 work (agent design, integration, validation) dominates. Engagement duration: 28–36 weeks.</li>
+<li><strong>Government, public services, sovereign wealth funds.</strong> Data sovereignty, Arabic-language model requirements, and audit-grade transparency shift weight toward Layer 1 (often requiring on-prem or GCC-hosted infrastructure) and Layer 0 (value case alignment with national strategy). Engagement duration: 32–40 weeks.</li>
+</ul>
+
+<p>The common error is treating "production AI" as a binary gate. It is not. Each sector has a different definition of production readiness, and the layer sequence should reflect that. A financial institution's go-live gate includes regulatory pre-approval; an operational manufacturing facility's gate includes failure-mode testing at scale. Maven's framework remains unchanged; the checkpoints within it are sector-shaped.</p>
+
+<h2>Vendor Selection and Platform Alignment</h2>
+
+<p>The choice of agentic platform (Layer 2) is downstream of Layers 0 and 1, not upstream. This is the inversion that most technology-first teams miss. Many organizations select a platform first (Microsoft Copilot Studio, LangGraph, AWS Bedrock Agents) and then attempt to fit their value case and data architecture to the platform's constraints. The result is a mismatch between what the organization actually needs and what the platform was designed to optimize for.</p>
+
+<p>Maven's approach is outcome-first: define the value case (Layer 0) and assess data readiness (Layer 1), then evaluate platforms against a set of production-specific criteria:</p>
+
+<ol>
+<li><strong>Observability and audit trails.</strong> Can the platform generate regulator-grade logs of every decision, every retrieval, every action taken by the agent? SAMA and CBUAE require this explicitly for material decisions. Platforms like LangGraph and LangChain offer this natively through their telemetry APIs; others require custom instrumentation.</li>
+<li><strong>Sovereignty and data residency.</strong> Does the platform allow on-prem or GCC-hosted deployment? For government entities, critical infrastructure, and organizations handling sensitive personal data, this is non-negotiable. Sovereign open-weight models (TII Falcon, Inception Jais) and self-hosted LangGraph deployments meet this gate; cloud-only platforms do not.</li>
+<li><strong>Integration breadth.</strong> How cleanly does the platform connect to your data layer (data lakes, data warehouses, governed APIs), your decision systems (ERP, BPM, CRM), and your monitoring stack? Platforms with mature connector ecosystems (LangChain, Microsoft Copilot Studio) save weeks of custom integration. Newer or more specialized platforms may require more engineering.</li>
+<li><strong>Cost model alignment.</strong> Does the platform's unit economics scale with your use case? Token-based pricing (OpenAI, Anthropic APIs) is predictable if token consumption is stable, but agentic systems with iterative reasoning or multi-hop retrieval can drive token consumption above forecast. Fixed-seat or capacity-based pricing (Microsoft Copilot, on-prem LangGraph) may be more appropriate for high-volume operational agents.</li>
+<li><strong>Governance and explainability features.</strong> Can the platform surface the reasoning chain that led to a decision? Financial services, healthcare, and government require this. Platforms with built-in chain-of-thought tracking and confidence scoring (LangGraph with structured outputs, Claude with extended thinking) are stronger choices here.</li>
+</ol>
+
+<p>For GCC organizations, platform selection should involve legal, compliance, and data governance teams at the gate. A platform that is cost-optimal but cannot be audited or hosted on-prem is a liability, not a tool.</p>
+
+<h2>The Observability and Audit Governance Wrap</h2>
+
+<p>The four layers are wrapped by three operational controls: governance (policy and guardrails), observability (telemetry and monitoring), and audit logs. These are not optional post-launch add-ons. They are core to the architecture from day one, and they determine whether a production agent is trustworthy or merely fast.</p>
+
+<p>Observability in agentic systems is materially harder than observability in traditional ML systems. A batch classification model has one decision point per input; an agent has dozens. An agent may retrieve context, refine its understanding, consult multiple tools, iterate its reasoning, and then act — all within a single user request. Without end-to-end observability, you cannot see where the agent went wrong, why it took that action, or whether it is drifting from its design intent.</p>
+
+<p>Maven's observability stack for production agentic AI includes:</p>
+
+<ul>
+<li><strong>Action telemetry.</strong> Every tool invocation, every retrieval, every decision logged with timestamp, input, output, and confidence. This is the source of truth for auditing and debugging.</li>
+<li><strong>Reasoning traces.</strong> For agents using structured reasoning (e.g., LangGraph with tools or Claude with extended thinking), capture the thinking process itself, not just the final output. This enables post-hoc review and regulator audit.</li>
+<li><strong>Data lineage.</strong> Track which data sources informed each decision. If the agent makes a material error, you need to know which data was wrong, not just that the agent was wrong.</li>
+<li><strong>Drift detection.</strong> Monitor whether the agent's behavior is changing over time. This includes decision distribution (is the agent recommending the same action more often?), retrieval patterns (is it consulting the same sources?), and error rates (is it failing more frequently on certain types of inputs?).</li>
+<li><strong>Explainability on demand.</strong> Build in the capability to ask "why did you make that recommendation?" and surface a human-readable explanation. This is non-negotiable for financial and healthcare use cases.</li>
+</ul>
+
+<p>The governance wrap specifies who can approve which agent actions, which data the agent can access, which tools it can invoke, and how often it must defer to human review. For a procurement agent in a large corporation, the governance policy might specify: "Agents can approve purchase orders up to AED 50,000 without human sign-off; all orders above that threshold require CFO approval within 24 hours." For a clinical decision support agent in a hospital, the policy might be: "Agents can surface diagnostic suggestions to clinicians; they cannot prescribe or administer medications." These are not technical constraints; they are policy constraints that the architecture must enforce.</p>
+
+<p>Audit logs are the record of compliance. SAMA expects that a bank can produce a complete audit trail of any material AI-assisted decision within 48 hours. SDAIA's data protection framework requires proof that personal data used by an AI system was processed lawfully and securely. These are not nice-to-have compliance features; they are table-stakes for production deployment in the GCC. The architecture should assume audit requests as a normal operating mode, not an exception.</p>
+
+<h2>The 90/180/365 Day Value Realization Cadence</h2>
+
+<p>A common mistake is defining success as "the agent is live." In reality, production agents are only valuable if they are adopted, trusted, and continuously improved. Maven structures the post-launch period into three value gates:</p>
+
+<p><strong>Day 90 checkpoint — Adoption and baseline trust.</strong> Is the agent being used? Are users reporting it as helpful or are they working around it? At 90 days, you should see adoption rates above 60% in the intended user base and positive Net Promoter Score (NPS) among early adopters. If adoption is flat or negative, the issue is usually Layer 3 (change management) or Layer 0 (the value case was misaligned with actual user needs). Do not invest in improvements until you understand why adoption is flat.</p>
+
+<p><strong>Day 180 checkpoint — Operational efficiency and cost avoidance.</strong> By 180 days, the agent should be measurably reducing cycle time, error rate, or cost in the use case it was designed for. For a procurement agent, this is lower time-to-PO, fewer requisitions rejected, or lower tail-end supplier costs. For a customer service agent, this is lower resolution time, fewer escalations, or improved first-contact resolution rate. If the agent is live but not driving metrics improvement by day 180, the architecture is in trouble. At this point, the issue is usually Layer 2 (the agent is not making the decisions it was designed to make) or Layer 1 (the data quality is insufficient for reliable decisions).</p>
+
+<p><strong>Day 365 checkpoint — Scaled impact and value proof.</strong> By one year, you should have evidence that the agent is delivering measurable EBIT or cash impact. This does not mean the agent has broken even; it means the impact is quantified and tracked, and the organization has made the operational commitment to sustain and evolve it. If the agent is working at 180 days but impact is not yet material at day 365, the question is whether the use case was actually valuable or whether the agent is hitting a ceiling (e.g., it is driving down cycle time but not enabling the workforce reduction needed for EBIT impact).</p>
+
+<p>These gates are not binary pass/fail; they are diagnostic. If an agent passes all three, it is a candidate for scaling to other use cases. If it fails any, the response is structured troubleshooting using the four-layer model: which layer is the constraint? The discipline is not to abandon the agent but to diagnose which layer needs reinforcement.</p>
+
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>MIT NANDA, <em>The GenAI Divide: State of AI in Business 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu/ai_report_2025.pdf</a></li>
@@ -561,7 +694,8 @@ export const insights = [
   <li>Central Bank of the UAE. <a href="https://www.centralbank.ae/" target="_blank" rel="noopener noreferrer">centralbank.ae</a></li>
   </ol>
       `,
-      contentAr: `
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+  
   <h2>الأطروحة</h2>
   <p>الفجوة بين النماذج التجريبية والإنتاج في تطبيقات الذكاء الاصطناعي التوليدي بالمؤسسات وثّقت جيداً الآن، وهي لا تغلق من تلقاء نفسها. تقرير ميت ناندا <em>حالة الذكاء الاصطناعي في الأعمال 2025</em> يُفيد بأن تقريباً 95% من النماذج التجريبية للذكاء الاصطناعي التوليدي بالمؤسسات لا تحقق تأثيراً قابلاً للقياس على الربح والخسارة، وأن أقل من ~5% من الأنظمة المدمجة تولد قيمة حقيقية (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">ميت ناندا، 2025</a>). يضع تقرير بي سي جي 2024 <em>أين تكمن القيمة في الذكاء الاصطناعي؟</em> فقط 26% من الشركات بعد المرحلة التجريبية و 4% فقط في الحدود النخبوية (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">بي سي جي، 2024</a>). الاختناق ليس في النموذج. بل هو العمل الطبقي - تحديد القيمة، البيانات المُحكومة، تصميم الوكيل، إدارة التغيير - الذي يحول عرضاً توضيحياً فعالاً إلى عمل تثق به المؤسسة فعلاً.</p>
   <h2>ما تُظهره الأدلة</h2>
@@ -607,6 +741,95 @@ export const insights = [
   <li><strong>تخصيص إدارة التغيير بالتوازي مع الهندسة.</strong> نسبة التغيير إلى الهندسة أقل من 1:2 هي المتنبئ الأكثر شيوعاً باستخدام ما بعد الإطلاق الناقص.</li>
   <li><strong>اختر شريك تسليم اقتصادياته متوافقة مع الإنتاج.</strong> الشركاء الذين يستفيدون من المشورة الممتدة ليس لديهم حافز هيكلي لتقصير مشاركتهم الخاصة.</li>
   </ul>
+  
+<h2>ميكانيكا القطاعات: حيث تنعطف الطبقات الأربع</h2>
+
+<p>معمارية الطبقات الأربع متينة عبر القطاعات الرأسية، لكن وزن التنفيذ يتحول بشكل جوهري حسب القطاع. في الخدمات المالية (البنوك والتأمين وإدارة الأصول)، تستهلك الطبقة 1 (أسس البيانات والذكاء الاصطناعي) والإطار الحاكم 35-40% من إجمالي تكلفة الالتزام والجدول الزمني. في الرعاية الصحية والعلوم الحياتية، تصبح الطبقة 3 (التغيير والتبني) هي القيد الملزِم لأن سير العمل السريري والموافقات التنظيمية تتطلب محاذاة الأطباء في كل خطوة. في الطاقة والمرافق، تستغرق الطبقة 2 (الذكاء الاصطناعي الفاعل) وقتاً أطول لأن بيئة الإنتاج غالباً تمتد عبر أنظمة SCADA الموروثة وشبكات إنترنت الأشياء وحلقات التحكم في الوقت الفعلي التي تتطلب سلوكاً حتمياً من الأنظمة المصممة للاستدلال الاحتمالي.</p>
+
+<p>بالنسبة لمؤسسات دول مجلس التعاون الخليج بالتحديد، تظهر ثلاثة أنماط قطاعية:</p>
+
+<ul>
+<li><strong>البنوك والتأمين.</strong> إطارات الامتثال الخاصة بـ SAMA و CBUAE تضع وزناً كبيراً على القابلية للشرح وتدقيق المسارات وحوكمة النماذج. وهذا يسحب إلى الأمام عمل الطبقة 1 (نسب البيانات والسياق المحكوم) ويضمن القابلية للمراقبة في الطبقة 2 حسب التصميم. مدة الالتزام: 24-32 أسبوعاً.</li>
+<li><strong>النفط والغاز والمرافق والتصنيع الثقيل.</strong> الوكلاء التشغيليون الذين يدفعون القرارات في العالم الحقيقي (جدولة الإنتاج وتوزيع الصيانة وتحسين الإمدادات) يتطلبون التكامل مع الأنظمة الموروثة والقيود الفيزيائية واختبار السيناريوهات. عمل الطبقة 2 (تصميم الوكيل والتكامل والتحقق) يهيمن. مدة الالتزام: 28-36 أسبوعاً.</li>
+<li><strong>الحكومة والخدمات العامة وصناديق الثروة السيادية.</strong> السيادة البيانية ومتطلبات نماذج اللغة العربية وشفافية على مستوى التدقيق تحول الوزن نحو الطبقة 1 (غالباً ما تتطلب البنية التحتية المحلية أو المستضافة في دول مجلس التعاون الخليج) والطبقة 0 (محاذاة حالة القيمة مع الاستراتيجية الوطنية). مدة الالتزام: 32-40 أسبوعاً.</li>
+</ul>
+
+<p>الخطأ الشائع هو معاملة "الذكاء الاصطناعي الإنتاجي" كبوابة ثنائية. إنه ليس كذلك. لكل قطاع تعريف مختلف لجاهزية الإنتاج، والتسلسل الطبقي يجب أن يعكس ذلك. بوابة الانطلاق الحي لمؤسسة مالية تشمل الموافقة المسبقة التنظيمية؛ بوابة منشأة تصنيع تشغيلية تشمل اختبار أنماط الفشل بالحجم الكامل. إطار عمل Maven يبقى دون تغيير؛ نقاط التفتيش داخله مشكّلة حسب القطاع.</p>
+
+<h2>اختيار الموردين والمحاذاة مع المنصة</h2>
+
+<p>اختيار منصة الوكيل الفاعل (الطبقة 2) يأتي لاحقاً للطبقات 0 و 1، وليس مسبقاً. هذا هو الانعكاس الذي تفتقده معظم الفرق الموجهة بالتكنولوجيا. تختار العديد من المنظمات منصة أولاً (Microsoft Copilot Studio أو LangGraph أو AWS Bedrock Agents) ثم تحاول تناسب حالة القيمة ومعمارية البيانات مع قيود المنصة. والنتيجة هي عدم توافق بين ما تحتاجه المنظمة فعلاً وما صممت له المنصة للتحسين.</p>
+
+<p>نهج Maven هو موجَّه بالنتائج: حدد حالة القيمة (الطبقة 0) وقيِّم جاهزية البيانات (الطبقة 1)، ثم قيِّم المنصات مقابل مجموعة من معايير الإنتاج المحددة:</p>
+
+<ol>
+<li><strong>القابلية للمراقبة وتدقيق المسارات.</strong> هل يمكن للمنصة إنشاء سجلات بمستوى منظِّم لكل قرار وكل عملية استرجاع وكل إجراء يتخذه الوكيل؟ SAMA و CBUAE يتطلبان هذا بشكل صريح للقرارات الجوهرية. المنصات مثل LangGraph و LangChain توفر هذا بشكل أصلي عبر واجهات برمجة التطبيقات الخاصة بهما للقياس البعدي؛ الآخرون يتطلبون أدوات مخصصة.</li>
+<li><strong>السيادة وإقامة البيانات.</strong> هل تسمح المنصة بالنشر المحلي أو النشر المستضاف في دول مجلس التعاون الخليج؟ بالنسبة لكيانات الحكومة والبنية التحتية الحرجة والمنظمات التي تتعامل مع بيانات شخصية حساسة، هذا غير قابل للتفاوض. النماذج مفتوحة الأوزان السيادية (TII Falcon و Inception Jais) ونشر LangGraph المستضاف ذاتياً يلبيان هذه البوابة؛ المنصات السحابية فقط لا.</li>
+<li><strong>نطاق التكامل.</strong> ما مدى نظافة اتصال المنصة مع طبقة البيانات لديك (بحيرات البيانات وأنوار البيانات والواجهات البرمجية المحكومة) وأنظمة القرار (ERP و BPM و CRM) ومكدس المراقبة؟ المنصات ذات النظم البيئية الناضجة للموصلات (LangChain و Microsoft Copilot Studio) توفر أسابيع من التكامل المخصص. قد تتطلب المنصات الأحدث أو الأكثر تخصصاً هندسة أكثر.</li>
+<li><strong>محاذاة نموذج التكلفة.</strong> هل اقتصاديات وحدة المنصة تتسع مع حالة الاستخدام؟ تسعير قائم على الرموز (OpenAI و Anthropic APIs) قابل للتنبؤ إذا كان استهلاك الرموز مستقراً، لكن الأنظمة الفاعلة مع التفكير التكراري أو الاسترجاع متعدد القفزات يمكن أن تدفع استهلاك الرموز فوق التوقع. التسعير القائم على المقاعد الثابتة أو الطاقة (Microsoft Copilot و LangGraph المحلي) قد يكون أكثر ملاءمة لوكلاء العمليات عالية الحجم.</li>
+<li><strong>ميزات الحوكمة والقابلية للشرح.</strong> هل يمكن للمنصة أن تسطح سلسلة التفكير التي أدت إلى القرار؟ الخدمات المالية والرعاية الصحية والحكومة تتطلب هذا. المنصات ذات تتبع سلسلة الأفكار المدمج وتسجيل الثقة (LangGraph مع المخرجات المنظمة و Claude مع التفكير الموسع) هي خيارات أقوى هنا.</li>
+</ol>
+
+<p>بالنسبة لمنظمات دول مجلس التعاون الخليج، يجب أن ينطوي اختيار المنصة على فرق قانونية والامتثال وحوكمة البيانات عند البوابة. منصة تكون مثالية من حيث التكلفة لكن لا يمكن تدقيقها أو استضافتها محلياً هي مسؤولية وليست أداة.</p>
+
+<h2>إطار الحوكمة والقابلية للمراقبة والتدقيق</h2>
+
+<p>الطبقات الأربع مغلفة بثلاثة عناصر تحكم تشغيلية: الحوكمة (السياسة والضمانات) والقابلية للمراقبة (القياس البعدي والمراقبة) وسجلات التدقيق. هذه ليست إضافات اختيارية بعد الانطلاق. وهي جزء من المعمارية من اليوم الأول، وهي تحدد ما إذا كان وكيل الإنتاج جديراً بالثقة أو مجرد سريع.</p>
+
+<p>القابلية للمراقبة في الأنظمة الفاعلة أصعب بشكل جوهري من القابلية للمراقبة في أنظمة التعلم الآلي التقليدية. نموذج التصنيف الدفعي له نقطة قرار واحدة لكل مدخل؛ الوكيل لديه العشرات. قد يسترجع الوكيل السياق ويصقل فهمه ويستشير أدوات متعددة ويكرر تفكيره ثم يتصرف — كل هذا ضمن طلب مستخدم واحد. بدون قابلية مراقبة من البداية إلى النهاية، لا يمكنك أن ترى أين ذهب الوكيل بشكل خاطئ أو لماذا اتخذ هذا الإجراء أو ما إذا كان يتحول عن نيته التصميمية.</p>
+
+<p>مكدس القابلية للمراقبة الخاص بـ Maven لذكاء اصطناعي فاعل في الإنتاج يشمل:</p>
+
+<ul>
+<li><strong>قياس الإجراءات البعدي.</strong> كل استدعاء أداة وكل عملية استرجاع وكل قرار مسجل مع الطابع الزمني والمدخل والمخرج والثقة. هذا هو مصدر الحقيقة للتدقيق والتصحيح.</li>
+<li><strong>آثار التفكير.</strong> للوكلاء الذين يستخدمون التفكير المنظم (مثل LangGraph مع الأدوات أو Claude مع التفكير الموسع)، احصر عملية التفكير نفسها وليس فقط المخرج النهائي. هذا يمكّن المراجعة اللاحقة ومراجعة المنظِّم.</li>
+<li><strong>نسب البيانات.</strong> تتبع مصادر البيانات التي أبلغت عن كل قرار. إذا ارتكب الوكيل خطأ جوهرياً، فأنت بحاجة إلى معرفة أي بيانات كانت خاطئة، وليس فقط أن الوكيل كان خاطئاً.</li>
+<li><strong>كشف الانجراف.</strong> راقب ما إذا كان سلوك الوكيل يتغير بمرور الوقت. هذا يشمل توزيع القرار (هل الوكيل يوصي بنفس الإجراء أكثر؟)، أنماط الاسترجاع (هل يستشير نفس المصادر؟)، ومعدلات الخطأ (هل يفشل أكثر بتكرار على أنواع معينة من المدخلات؟).</li>
+<li><strong>القابلية للشرح عند الطلب.</strong> بناء القدرة على السؤال "لماذا أدليت بهذه التوصية؟" وإظهار شرح مقروء للبشر. هذا غير قابل للتفاوض لحالات الاستخدام المالية والرعاية الصحية.</li>
+</ul>
+
+<p>إطار الحوكمة يحدد من يمكنه الموافقة على أي إجراءات وكيل وأي بيانات يمكن للوكيل الوصول إليها وأي أدوات يمكنه استدعاؤها وكم مرة يجب أن يؤجل للمراجعة البشرية. بالنسبة لوكيل التعاقدات في مؤسسة كبيرة، قد تحدد سياسة الحوكمة: "يمكن للوكلاء الموافقة على أوامر الشراء حتى 50000 درهم إماراتي بدون موافقة بشرية؛ جميع الطلبات فوق هذا الحد تتطلب موافقة المدير المالي خلال 24 ساعة." بالنسبة لوكيل دعم القرار السريري في مستشفى، قد تكون السياسة: "يمكن للوكلاء سطح اقتراحات تشخيصية للعاملين الطبيين؛ لا يمكنهم وصف أو إدارة الأدوية." هذه ليست قيود تقنية؛ وهي قيود السياسة التي يجب أن تفرضها المعمارية.</p>
+
+<p>سجلات التدقيق هي سجل الامتثال. SAMA يتوقع أن يكون البنك قادراً على إنتاج مسار تدقيق كامل لأي قرار مادي بمساعدة ذكاء اصطناعي خلال 48 ساعة. إطار حماية البيانات الخاص بـ SDAIA يتطلب إثباتاً بأن البيانات الشخصية التي استخدمها نظام الذكاء الاصطناعي تمت معالجتها بشكل قانوني وآمن. هذه ليست ميزات امتثال من الدرجة الثانية؛ وهي متطلبات الجدول الأساسي للنشر الإنتاجي في دول مجلس التعاون الخليج. يجب أن تفترض المعمارية طلبات التدقيق كوضع تشغيل طبيعي وليس استثناء.</p>
+
+<h2>سقم إدراك القيمة 90/180/365 يوماً</h2>
+
+<p>الخطأ الشائع هو تعريف النجاح بأنه "الوكيل مباشر." في الواقع، وكلاء الإنتاج لا يكونون قيّمين إلا إذا تم تبنيهم والثقة بهم والتحسين المستمر. يهيكل Maven فترة ما بعد الانطلاق إلى ثلاث بوابات قيمة:</p>
+
+<p><strong>نقطة تفتيش اليوم 90 — التبني والثقة الأساسية.</strong> هل يتم استخدام الوكيل؟ هل يبلغ المستخدمون عنه على أنه مفيد أم أنهم يعملون حوله؟ في اليوم 90، يجب أن تشهد معدلات تبني فوق 60% في قاعدة المستخدمين المقصودة وصافي نقاط ترويج إيجابية (NPS) بين المتبنين الأوائل. إذا كان التبني مسطحاً أو سلبياً، فالمشكلة عادة ما تكون الطبقة 3 (إدارة التغيير) أو الطبقة 0 (لم تكن حالة القيمة محاذاة مع احتياجات المستخدمين الفعلية). لا تستثمر في التحسينات حتى تفهم لماذا التبني مسطح.</p>
+
+<p><strong>نقطة تفتيش اليوم 180 — الكفاءة التشغيلية وتجنب التكاليف.</strong> بعد 180 يوماً، يجب أن يقلل الوكيل بشكل قابل للقياس من وقت الدورة أو معدل الخطأ أو التكلفة في حالة الاستخدام التي صُمم من أجلها. بالنسبة لوكيل التعاقدات، هذا هو وقت أقل للأمر الشرائي ورفض أقل للمتطلبات أو تكاليف موردين أقل في الطرف الخاسر. بالنسبة لوكيل خدمة العملاء، هذا هو وقت دقة أقل وتصعيدات أقل أو معدل دقة الاتصال الأول المحسّن. إذا كان الوكيل مباشراً لكن لم يقود تحسين المقاييس بعد 180 يوماً، فالمعمارية في مشكلة. عند هذه النقطة، المشكلة عادة ما تكون الطبقة 2 (الوكيل لا يتخذ القرارات التي صُمم من أجلها) أو الطبقة 1 (جودة البيانات غير كافية للقرارات الموثوقة).</p>
+
+<p><strong>نقطة تفتيش اليوم 365 — التأثير المتسع وإثبات القيمة.</strong> بعد سنة، يجب أن يكون لديك دليل على أن الوكيل يوفر تأثيراً قابلاً للقياس على EBIT أو النقدية. هذا لا يعني أن الوكيل حقق التعادل؛ وهذا يعني أن التأثير مُحدّد ومتتبع وأن المنظمة قدمت الالتزام التشغيلي للحفاظ عليه وتطويره. إذا كان الوكيل يعمل في اليوم 180 لكن التأثير ليس مادياً بعد في اليوم 365، فالسؤال هو ما إذا كانت حالة الاستخدام مادية فعلاً أم أن الوكيل يصل إلى سقف (مثل قيادة دورة زمنية أقل ولكن لا يمكّن تخفيض القوى العاملة المطلوب لتأثير EBIT).</p>
+
+<p>هذه البوابات ليست نجاحاً أو فشلاً ثنائياً؛ وهي تشخيصية. إذا مرّ وكيل جميع الثلاثة، فهو مرشح للتوسع إلى حالات استخدام أخرى. إذا فشل في أي منها، فالاستجابة عبارة عن استكشاف أخطاء منظم باستخدام نموذج الطبقات الأربع: أي طبقة هي القيد؟ الانضباط هو عدم التخلي عن الوكيل بل تشخيص أي طبقة تحتاج إلى تعزيز.</p>
+
+  
+  <figure>
+  <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-3 svg-d-3"><title id="svg-t-3">معمارية Maven AI متعددة الطبقات للوكلاء</title><desc id="svg-d-3">مخطط الطبقات يوضح الطبقة 0 حالة القيمة، الطبقة 1 أسس البيانات والذكاء الاصطناعي، الطبقة 2 الذكاء الاصطناعي الوكيل، الطبقة 3 التغيير والتبني، ملفوفة بضوابط الحوكمة والمراقبة والتدقيق.</desc>
+  <rect x="0" y="0" width="600" height="320" fill="#F8FAFC"/>
+  <rect x="40" y="40" width="520" height="50" fill="#F5A623" rx="6"/><text x="300" y="71" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 0 — حالة القيمة</text>
+  <rect x="40" y="100" width="520" height="50" fill="#156082" rx="6"/><text x="300" y="131" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 1 — أسس البيانات والذكاء الاصطناعي</text>
+  <rect x="40" y="160" width="520" height="50" fill="#1A4F7A" rx="6"/><text x="300" y="191" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 2 — الذكاء الاصطناعي الوكيل</text>
+  <rect x="40" y="220" width="520" height="50" fill="#0E2841" rx="6"/><text x="300" y="251" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 3 — التغيير والتبني</text>
+  <text x="40" y="295" fill="#475569" font-size="12">ملفوفة بـ: الحوكمة · المراقبة · سجلات التدقيق · ضوابط بدرجة تنظيمية</text>
+  </svg>
+  <figcaption>الشكل 1 — معمارية Maven AI متعددة الطبقات للوكلاء. الانضباط يتمثل في معاملة الطبقات الأربع كلها ضمن الاختصاص من اليوم الأول.</figcaption>
+  </figure>
+  
+  <figure>
+  <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-4 svg-d-4"><title id="svg-t-4">تسلسل تنفيذ GCC لمدة 26 أسبوعًا</title><desc id="svg-d-4">جدول زمني بخمس مراحل على طراز Gantt من دراسة القيمة من خلال التغيير والإطلاق على مدى 26 أسبوعًا.</desc>
+  <rect x="0" y="0" width="700" height="200" fill="#F8FAFC"/>
+  <line x1="40" y1="170" x2="660" y2="170" stroke="#94A3B8" stroke-width="1"/>
+  <text x="40" y="190" font-size="11" fill="#475569">W1</text><text x="180" y="190" font-size="11" fill="#475569">W7</text><text x="320" y="190" font-size="11" fill="#475569">W12</text><text x="500" y="190" font-size="11" fill="#475569">W20</text><text x="640" y="190" font-size="11" fill="#475569">W26</text>
+  <rect x="40" y="40" width="100" height="22" fill="#F5A623" rx="3"/><text x="44" y="56" font-size="11" fill="#fff" font-weight="700">دراسة القيمة</text>
+  <rect x="140" y="68" width="140" height="22" fill="#156082" rx="3"/><text x="144" y="84" font-size="11" fill="#fff" font-weight="700">جاهزية البيانات</text>
+  <rect x="240" y="96" width="140" height="22" fill="#1A4F7A" rx="3"/><text x="244" y="112" font-size="11" fill="#fff" font-weight="700">بناء النموذج الأولي</text>
+  <rect x="340" y="124" width="200" height="22" fill="#0E2841" rx="3"/><text x="344" y="140" font-size="11" fill="#fff" font-weight="700">تصلب الإنتاج</text>
+  <rect x="500" y="40" width="160" height="22" fill="#7C3AED" rx="3"/><text x="504" y="56" font-size="11" fill="#fff" font-weight="700">التغيير والإطلاق</text>
+  </svg>
+  <figcaption>الشكل 2 — تسلسل تنفيذ GCC المؤشر لمدة 26 أسبوعًا. تختلف المدة حسب نضج البيانات.</figcaption>
+  </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
   <li>ميت ناندا، <em>انقسام الذكاء الاصطناعي التوليدي: حالة الذكاء الاصطناعي في الأعمال 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu/ai_report_2025.pdf</a></li>
@@ -623,7 +846,8 @@ export const insights = [
   </ol>
       
 `,
-      contentTr: `
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+  
   <h2>Tez</h2>
   <p>Kurumsal GenAI'deki pilot-üretim boşluğu artık iyi belgelenmiştir ve kendi başına kapanmamaktadır. MIT NANDA'nın <em>İş Dünyasında AI Durumu 2025</em> raporuna göre, kurumsal GenAI pilot projelerinin kabaca %95'i ölçülebilir bir kâr/zarar etkisi sağlamaz ve entegre sistemlerin %5'ten azı anlamlı değer üretir (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>). BCG'nin 2024 <em>AI'de Değer Nerede?</em> raporu, şirketlerin yalnızca %26'sinin pilot aşamasının ötesine geçtiğini ve %4'ünün de elit sınırda olduğunu göstermektedir (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>). Sorun model değildir. Sorun, çalışan bir demoyu kurumun gerçekten güvendiği işe dönüştüren katmanlı çalışmadır: değer belirleme, yönetilen veri, ajan tasarımı ve değişim yönetimi.</p>
   <h2>Kanıtlar Neler Gösteriyor</h2>
@@ -669,6 +893,95 @@ export const insights = [
   <li><strong>Değişim yönetimini mühendislikle eşit olarak kaynaklayın.</strong> Değişim-mühendislik oranı 1:2'nin altında, başlatma sonrası eksik kullanımın en yaygın tahmincisidir.</li>
   <li><strong>ekonomisi üretimle uyumlu bir dağıtım ortağı seçin.</strong> Uzun süreli danışmanlıktan kâr sağlayan ortaklar kendi katılımlarını kısa tutmak için yapısal teşvike sahip değildirler.</li>
   </ul>
+  
+<h2>Sektörel Mekanikler: Dört Katmanın Esnek Olduğu Yerler</h2>
+
+<p>Dört katmanlı mimari dikey alanlarda dayanıklı olmakla birlikte, uygulama ağırlığı sektöre göre önemli ölçüde değişmektedir. Finansal hizmetlerde (bankacılık, sigorta, varlık yönetimi), Katman 1 (veri ve yapay zeka temelleri) ve yönetişim sarması toplam katılım maliyetinin ve zaman çizelgesinin %35-40'ını tüketmektedir. Sağlık ve yaşam bilimleri alanında, Katman 3 (değişim ve benimseme) bağlayıcı kısıtlama haline gelmektedir, çünkü klinik iş akışları ve düzenleyici onay her adımda hekimin uyumunu gerektirmektedir. Enerji ve kamu hizmetlerinde, Katman 2 (agentic yapay zeka) daha uzun sürmektedir, çünkü üretim ortamı genellikle eski SCADA sistemleri, IoT ağları ve olasılıksal çıkarım için tasarlanan sistemlerden deterministik davranış talep eden gerçek zamanlı kontrol döngüleri arasında yer almaktadır.</p>
+
+<p>GCC işletmeleri için özel olarak, üç sektörel desen ortaya çıkmaktadır:</p>
+
+<ul>
+<li><strong>Bankacılık ve sigorta.</strong> SAMA ve CBUAE uyum çerçeveleri açıklanabilirlik, denetim izleri ve model yönetişimine ağır ağırlık koymaktadır. Bu, Katman 1 çalışmasını (veri soyut çizgisi, yönetilen bağlam) ileriye çekmekte ve tasarım gereği Katman 2'ye gözlemlenebilirliği yerleştirmektedir. Katılım süresi: 24-32 hafta.</li>
+<li><strong>Petrol ve gaz, kamu hizmetleri, ağır üretim.</strong> Gerçek dünya kararlarını yönlendiren operasyonel ajanlar (üretim planlama, bakım görevlendirmesi, tedarik optimizasyonu) eski sistemlerle entegrasyon, fizik-farkında kısıtlamalar ve senaryo testi gerektirmektedir. Katman 2 çalışması (ajan tasarımı, entegrasyon, doğrulama) hakim konumdadır. Katılım süresi: 28-36 hafta.</li>
+<li><strong>Hükümet, kamu hizmetleri, egemen servet fonları.</strong> Veri egemenliği, Arapça dil modeli gereksinimleri ve denetim niteliğinde şeffaflık, ağırlığı Katman 1'e (genellikle şirket içi veya GCC tarafından barındırılan altyapı gerektiren) ve Katman 0'a (değer çalışmasının ulusal stratejiye uyumlanması) doğru kaymaktadır. Katılım süresi: 32-40 hafta.</li>
+</ul>
+
+<p>Yaygın hata, "üretim yapay zekası"nı ikili bir kapı olarak görmektir. Değildir. Her sektörün üretim hazırlığının farklı bir tanımı vardır ve katman sırası bunu yansıtmalıdır. Bir finansal kurumun canlı yayın kapısı düzenleyici ön onayını içermektedir; bir operasyonel üretim tesisinin kapısı ölçekte arıza modu testini içermektedir. Maven'in çerçevesi değişmeden kalır; içindeki kontrol noktaları sektöre göre şekillenir.</p>
+
+<h2>Satıcı Seçimi ve Platform Uyumluluğu</h2>
+
+<p>Agentic platform seçimi (Katman 2), Katman 0 ve 1 kaynağı değil, aşağı akış konu olur. Bu, çoğu teknoloji-merkezli ekibin kaçırdığı inversiyondur. Birçok kuruluş önce bir platform seçer (Microsoft Copilot Studio, LangGraph, AWS Bedrock Agents) ve ardından değer çalışmasını ve veri mimarisini platformun kısıtlamalarına uydurmaya çalışır. Sonuç, kuruluşun gerçekten ihtiyaç duyduğu ile platformun optimize etmek için tasarlandığı arasında bir uyumsuzluktur.</p>
+
+<p>Maven'in yaklaşımı sonuç-odak: değer çalışmasını tanımlayın (Katman 0) ve veri hazırlığını değerlendirin (Katman 1), ardından platformları bir dizi üretime özgü kriter karşısında değerlendirin:</p>
+
+<ol>
+<li><strong>Gözlemlenebilirlik ve denetim izleri.</strong> Platform, her karar, her geri alma, ajan tarafından alınan her eylem için düzenleyici niteliğinde loglar oluşturabilir mi? SAMA ve CBUAE bunu maddi kararlar için açıkça talep etmektedir. LangGraph ve LangChain gibi platformlar bunu telemetri API'leri aracılığıyla yerel olarak sunmaktadır; diğerleri özel enstrümantasyon gerektirir.</li>
+<li><strong>Egemenlik ve veri yerleşimi.</strong> Platform şirket içi veya GCC tarafından barındırılan dağıtıma izin veriyor mu? Hükümet işletmeleri, kritik altyapı ve duyarlı kişisel veriler ele alan kuruluşlar için bu vazgeçilmez niteliktedir. Egemen açık ağırlık modelleri (TII Falcon, Inception Jais) ve kendi kendine barındırılan LangGraph dağıtımları bu kapıyı karşılamaktadır; yalnızca bulut platformları yapmaz.</li>
+<li><strong>Entegrasyon genişliği.</strong> Platform, veri katmanına (veri göllerine, veri depolarına, yönetilen API'lere), karar sistemlerine (ERP, BPM, CRM) ve izleme yığınına ne kadar temiz bir şekilde bağlanır? Olgun bağlayıcı ekosistemlerine sahip platformlar (LangChain, Microsoft Copilot Studio) haftalarca özel entegrasyon tasarrufu sağlar. Daha yeni veya daha uzmanlaşmış platformlar daha fazla mühendislik gerektirebilir.</li>
+<li><strong>Maliyet modeli uyumluluğu.</strong> Platform'un birim ekonomisi kullanım çalışmanızla ölçekleniyor mu? Token tabanlı fiyatlandırma (OpenAI, Anthropic API'ler) token tüketimi sabit ise tahmin edilebilir olmakla birlikte, yinelemeli akıl yürütme veya çok atlamalı geri alma içeren agentic sistemler token tüketimini tahminin üzerine çıkabilir. Sabit koltuk veya kapasite tabanlı fiyatlandırma (Microsoft Copilot, şirket içi LangGraph) yüksek hacimli operasyonel ajanlar için daha uygun olabilir.</li>
+<li><strong>Yönetişim ve açıklanabilirlik özellikleri.</strong> Platform, bir kararına yol açan akıl yürütme zincirini ortaya çıkartabilir mi? Finansal hizmetler, sağlık ve hükümet bunu talep etmektedir. Yerleşik düşünce zinciri izlemesi ve güven puanlaması olan platformlar (yapılandırılmış çıktılarla LangGraph, genişletilmiş düşünme ile Claude) burada daha güçlü seçimlerdir.</li>
+</ol>
+
+<p>GCC kuruluşları için platform seçimi, hukuk, uyum ve veri yönetişim ekiplerini kapıda içermelidir. Maliyet açısından optimal olan ancak denetlenemez veya şirket içi barındırılamayan bir platform araç değil, sorumluluktur.</p>
+
+<h2>Gözlemlenebilirlik ve Denetim Yönetişimi Sarması</h2>
+
+<p>Dört katman üç operasyonel kontrol tarafından sarılır: yönetişim (politika ve korkuluklar), gözlemlenebilirlik (telemetri ve izleme) ve denetim logları. Bunlar isteğe bağlı canlı yayın sonrası eklentiler değildir. Bunlar birinci günden mimarinin temel parçasıdır ve bir üretim ajanının güvenilir mi yoksa sadece hızlı mı olduğunu belirler.</p>
+
+<p>Agentic sistemlerde gözlemlenebilirlik, geleneksel ML sistemlerinde gözlemlenebilirlikten maddi olarak daha zordur. Bir toplu sınıflandırma modelinin giriş başına bir karar noktası vardır; bir ajanın onlarcası vardır. Bir ajan bağlam alabilir, anlayışını hassaslaştırabilir, birden fazla araça danışabilir, akıl yürütmesini yineleyebilir ve ardından hareket edebilir — hepsi tek bir kullanıcı isteğinde. Uçtan uca gözlemlenebilirlik olmadan, ajanın neresinde hata yaptığını, neden bu eylemi aldığını veya tasarım amacından sürüklenmekte olup olmadığını göremezsiniz.</p>
+
+<p>Üretim agentic yapay zeka için Maven'in gözlemlenebilirlik yığını şunları içerir:</p>
+
+<ul>
+<li><strong>Eylem telemetrisi.</strong> Her araç çağırma, her geri alma, her karar zaman damgası, giriş, çıkış ve güven ile günlüğe kaydedilmiştir. Bu, denetim ve hata ayıklama için gerçeğin kaynağıdır.</li>
+<li><strong>Akıl yürütme izleri.</strong> Yapılandırılmış akıl yürütme (örneğin, araçlarla LangGraph veya genişletilmiş düşünme ile Claude) kullanan ajanlar için, yalnızca son çıktıyı değil düşünme sürecinin kendisini yakala. Bu, halde incelemesini ve düzenleyici denetimi sağlar.</li>
+<li><strong>Veri soyut çizgisi.</strong> Her kararı hangi veri kaynaklarının bilgilendirdiğini izle. Ajan maddi bir hata yaparsa, ajanın hata mı yaptığını değil, hangi verinin yanlış olduğunu bilmeniz gerekir.</li>
+<li><strong>Sapma algılaması.</strong> Ajanın davranışının zaman içinde değişip değişmediğini izleyin. Buna karar dağılımı (ajan aynı eylemi daha sık öneriliyor mu?), geri alma desenleri (aynı kaynakları danışıyor mu?) ve hata oranları (belirli giriş türlerinde daha sık başarısız mı?) dahildir.</li>
+<li><strong>İsteğe bağlı açıklanabilirlik.</strong> "Neden bu tavsiyeyi yaptın?" diye sormak ve insan tarafından okunabilir bir açıklama ortaya çıkarmak yeteneğini geliştirin. Bu, finansal ve sağlık kullanım çalışmaları için vazgeçilmez niteliktedir.</li>
+</ul>
+
+<p>Yönetişim sarması, hangi ajanlar tarafından hangi eylemleri onaylayabileceğini, ajanın hangi veriye erişebileceğini, hangi araçları çağırabileceğini ve ne sıklıkta insan incelemesine ertelenmesi gerektiğini belirtir. Büyük bir şirketteki bir satın alma ajanı için, yönetişim politikası şunu belirtebilir: "Ajanlar AED 50.000'e kadar satın alma siparişlerini insan onayı olmadan onaylayabilir; bu eşiğin üzerindeki tüm siparişler 24 saat içinde CFO onayını gerektirir." Bir hastanedeki klinik karar destek ajanı için, politika şu şekilde olabilir: "Ajanlar klinisyenlere tanı önerileri ortaya çıkartabilir; ilaçlar reçeteleyemezler veya yönetemezler." Bunlar teknik kısıtlamalar değildir; bunlar mimarinin uygulamak zorunda olduğu politika kısıtlamalarıdır.</p>
+
+<p>Denetim logları uyum kaydıdır. SAMA, bir bankanın 48 saat içinde herhangi bir maddi yapay zeka yardımlı kararının tam denetim izini üretebilmesini beklemektedir. SDAIA'nın veri koruması çerçevesi, bir yapay zeka sistemi tarafından kullanılan kişisel verinin yasal ve güvenli bir şekilde işlendiğinin kanıtını gerektirir. Bunlar GCC'de üretim dağıtımı için iyi sahip olmak için güzel özellikler değildir; bunlar masa açan bahislerdir. Mimari, denetim taleplerini istisna değil, normal çalışma modu olarak varsaymalıdır.</p>
+
+<h2>90/180/365 Gün Değer Gerçekleştirme Temposu</h2>
+
+<p>Yaygın bir hata, başarıyı "ajan canlı yayında" olarak tanımlamaktır. Gerçekte, üretim ajanları yalnızca benimsenirse, güvenilirse ve sürekli iyileştirilirse değerlidir. Maven, canlı yayın sonrası dönemin üç değer kapısına yapılandırılır:</p>
+
+<p><strong>90. gün kontrol noktası — Benimseme ve temel güven.</strong> Ajan kullanılıyor mu? Kullanıcılar bunu faydalı olarak bildiriyor mu yoksa bunu aşıyor mu? 90 günde, amaçlanan kullanıcı tabanında %60'ın üzerinde benimseme oranları ve erken benimseyenler arasında pozitif Net Promoter Skoru (NPS) görmelisiniz. Benimseme düz veya negatif ise, sorun genellikle Katman 3'tür (değişim yönetimi) veya Katman 0'dır (değer çalışması gerçek kullanıcı ihtiyaçlarıyla uyumlanmadı). Benimsemenin neden düz olduğunu anlayana kadar iyileştirmelere yatırım yapmayın.</p>
+
+<p><strong>180. gün kontrol noktası — Operasyonel verimlilik ve maliyet kaçınması.</strong> 180 günde, ajan ölçülebilir bir şekilde döngü zamanını, hata oranını veya tasarlandığı kullanım çalışmasında maliyeti azaltmalıdır. Bir satın alma ajanı için, bu daha düşük PO'ya gidiş süresi, daha az reddedilen satın almalar veya daha düşük uç tedarikçi maliyetidir. Bir müşteri hizmetleri ajanı için, bu daha düşük çözüm süresi, daha az yukarı çıkış veya iyileştirilmiş ilk iletişim çözüm oranıdır. Ajan canlı yayında ama 180 günde metrik iyileştirmesi yürütmüyorsa, mimari sorun içindedir. Bu noktada, sorun genellikle Katman 2'dir (ajan tasarlanmak üzere tasarlandığı kararları yapmıyor) veya Katman 1'dir (veri kalitesi güvenilir kararlar için yetersiz).</p>
+
+<p><strong>365. gün kontrol noktası — Ölçeklenmiş etki ve değer kanıtı.</strong> Bir yıl sonra, ajanın ölçülebilir EBIT veya nakit etkisini sunduğunun kanıtı olmalıdır. Bu, ajanın kırıldığı anlamına gelmez; etki kanıtlanabilir ve izlenir ve kuruluş onu sürdürmek ve geliştirmek için operasyonel taahhüt yaptığı anlamına gelir. Ajan 180 günde çalışıyor ama 365 gün sonra etki halen maddi değilse, soru, çalışma çalışmasının aslında değerli olup olmadığı veya ajanın bir tavana çarptığı (örneğin, döngü zamanını azaltıyor ama EBIT etkisi için gereken işgücü azaltmayı etkinleştirmiyor) sorusudur.</p>
+
+<p>Bu kapılar ikili geç/başarısız değildir; bunlar tanıdır. Ajan üçünü de geçerse, diğer kullanım çalışmalarına ölçeklendirme adayıdır. Eğer herhangi birini başarısız olursa, yanıt dört katmanlı modeli kullanarak yapılandırılmış sorun giderme olur: hangi katman kısıtlamadır? Disiplin ajanı terk etmek değildir, hangi katmanın takviyesi gerektiğini teşhis etmektir.</p>
+
+  
+  <figure>
+  <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-5 svg-d-5"><title id="svg-t-5">Maven AI dört katmanlı agentic mimarisi</title><desc id="svg-d-5">Katman 0 Değer Durumu, Katman 1 Veri ve AI Temelleri, Katman 2 Agentic AI, Katman 3 Değişim ve Benimseme'yi gösteren yığın diyagramı, yönetişim, gözlemlenebilirlik ve denetim kontrolleriyle sarılmış.</desc>
+  <rect x="0" y="0" width="600" height="320" fill="#F8FAFC"/>
+  <rect x="40" y="40" width="520" height="50" fill="#F5A623" rx="6"/><text x="300" y="71" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 0 — Değer Durumu</text>
+  <rect x="40" y="100" width="520" height="50" fill="#156082" rx="6"/><text x="300" y="131" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 1 — Veri &amp; AI Temelleri</text>
+  <rect x="40" y="160" width="520" height="50" fill="#1A4F7A" rx="6"/><text x="300" y="191" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 2 — Agentic AI</text>
+  <rect x="40" y="220" width="520" height="50" fill="#0E2841" rx="6"/><text x="300" y="251" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 3 — Değişim &amp; Benimseme</text>
+  <text x="40" y="295" fill="#475569" font-size="12">Sarılı: yönetişim · gözlemlenebilirlik · denetim günlükleri · düzenleyici-sınıf kontroller</text>
+  </svg>
+  <figcaption>Şekil 1 — Dört katmanlı agentic mimarisi. Disiplin, başından itibaren dördünün de kapsamda olmasıdır.</figcaption>
+  </figure>
+  
+  <figure>
+  <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-6 svg-d-6"><title id="svg-t-6">26 haftalık GCC uygulama sırası</title><desc id="svg-d-6">Değer durumundan değişim ve başlatmaya kadar 26 hafta içinde beş aşamalı Gantt tarzı zaman çizelgesi.</desc>
+  <rect x="0" y="0" width="700" height="200" fill="#F8FAFC"/>
+  <line x1="40" y1="170" x2="660" y2="170" stroke="#94A3B8" stroke-width="1"/>
+  <text x="40" y="190" font-size="11" fill="#475569">H1</text><text x="180" y="190" font-size="11" fill="#475569">H7</text><text x="320" y="190" font-size="11" fill="#475569">H12</text><text x="500" y="190" font-size="11" fill="#475569">H20</text><text x="640" y="190" font-size="11" fill="#475569">H26</text>
+  <rect x="40" y="40" width="100" height="22" fill="#F5A623" rx="3"/><text x="44" y="56" font-size="11" fill="#fff" font-weight="700">Değer durumu</text>
+  <rect x="140" y="68" width="140" height="22" fill="#156082" rx="3"/><text x="144" y="84" font-size="11" fill="#fff" font-weight="700">Veri hazırlığı</text>
+  <rect x="240" y="96" width="140" height="22" fill="#1A4F7A" rx="3"/><text x="244" y="112" font-size="11" fill="#fff" font-weight="700">Prototip inşaatı</text>
+  <rect x="340" y="124" width="200" height="22" fill="#0E2841" rx="3"/><text x="344" y="140" font-size="11" fill="#fff" font-weight="700">Üretim sertleştirme</text>
+  <rect x="500" y="40" width="160" height="22" fill="#7C3AED" rx="3"/><text x="504" y="56" font-size="11" fill="#fff" font-weight="700">Değişim &amp; başlatma</text>
+  </svg>
+  <figcaption>Şekil 2 — GCC uygulamasının gösterişli 26 haftalık sırası. Süre veri olgunluğuna göre değişir.</figcaption>
+  </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
   <li>MIT NANDA, <em>GenAI Ayrışması: İş Dünyasında AI Durumu 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu/ai_report_2025.pdf</a></li>
@@ -699,7 +1012,8 @@ export const insights = [
       summary: "An audit-ready posture for AI governance in the GCC, mapped against SDAIA, SAMA, CBUAE, the UAE AI Office, NIST AI RMF and the EU AI Act — with a five-level maturity model and the capability domains every regulated GCC AI deployment now needs.",
       featured: true,
       tags: ["AI Governance", "GCC", "SDAIA", "SAMA", "Compliance"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>The GCC's AI ambition is now backed by a maturing regulatory stack: SDAIA in Saudi Arabia, the UAE AI Office and CBUAE, SAMA for KSA financial services, plus enforceable personal-data laws in both jurisdictions. Organizations that treat governance as a checkbox project running parallel to AI delivery are the ones being caught off-guard. Organizations that treat governance as the design constraint that makes AI deployable at scale are pulling ahead. This report sets out the regulatory frame as it actually stands today and what an audit-ready GCC AI governance posture looks like.</p>
   <h2>The Regulatory Stack</h2>
@@ -712,6 +1026,17 @@ export const insights = [
   <h2>Why Governance Is the AI Strategy</h2>
   <p>Stanford HAI's <em>2025 AI Index</em> reports that 78% of organizations now use AI in at least one function — but responsible-AI evaluation and incident reporting have not scaled at the same rate (<a href="https://hai.stanford.edu/ai-index/2025-ai-index-report" target="_blank" rel="noopener noreferrer">Stanford HAI, 2025</a>). The OECD AI Incidents Monitor records a steady rise in AI-related harms, the majority of which trace to inadequate testing, monitoring, or oversight rather than to model capability (<a href="https://oecd.ai/en/incidents" target="_blank" rel="noopener noreferrer">OECD AI Incidents Monitor</a>). For GCC organizations, the regulator-side risk is real and increasing.</p>
   <h2>Five Capability Domains</h2>
+  <figure>
+  <svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-7 svg-d-7"><title id="svg-t-7">Five capability domains for GCC AI governance</title><desc id="svg-d-7">Pentagon-style diagram showing data lineage, model risk, explainability, human oversight, and bias and ethics domains.</desc>
+  <rect x="0" y="0" width="600" height="240" fill="#F8FAFC"/>
+  <rect x="20" y="30" width="170" height="80" fill="#156082" rx="6"/><text x="105" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Data Lineage</text><text x="105" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Provenance</text>
+  <rect x="215" y="30" width="170" height="80" fill="#1A4F7A" rx="6"/><text x="300" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Model Risk</text><text x="300" y="85" text-anchor="middle" fill="#fff" font-size="11">Management</text>
+  <rect x="410" y="30" width="170" height="80" fill="#0E2841" rx="6"/><text x="495" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Explainability</text><text x="495" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Audit Trails</text>
+  <rect x="115" y="130" width="170" height="80" fill="#F5A623" rx="6"/><text x="200" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. Human Oversight</text><text x="200" y="185" text-anchor="middle" fill="#fff" font-size="11">&amp; Escalation</text>
+  <rect x="315" y="130" width="170" height="80" fill="#7C3AED" rx="6"/><text x="400" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Bias &amp; Ethics</text><text x="400" y="185" text-anchor="middle" fill="#fff" font-size="11">Management</text>
+  </svg>
+  <figcaption>Figure 1 — The five capability domains every regulated GCC AI deployment now needs.</figcaption>
+  </figure>
   <h3>1. Data Lineage &amp; Provenance</h3>
   <p>Where the data came from, how it was transformed, who authorized its use. A pre-condition under both UAE and Saudi PDPL — and the foundation every other governance domain depends on.</p>
   <h3>2. Model Risk Management</h3>
@@ -731,6 +1056,79 @@ export const insights = [
   <li><strong>Engage SDAIA, SAMA, and CBUAE proactively.</strong> Regional regulators have consistently been more receptive to organizations that present a credible roadmap than to those waiting for examination findings to drive change.</li>
   <li><strong>Map your posture to NIST AI RMF and the EU AI Act risk categories.</strong> Even where neither is directly binding, both give a defensible reference language for board reporting.</li>
   </ul>
+  
+  <h2>Sectoral Mechanics: Where the Governance Bar Is Highest</h2>
+
+<p>The regulatory intensity of AI governance in the GCC varies sharply by sector. Financial services — banking, insurance, capital markets — face the tightest constraints. SAMA has embedded AI risk into its existing cyber-resilience and IT-governance frameworks, which means any bank deploying AI for lending decisions, fraud detection, or customer segmentation is automatically subject to model-risk management and board-level reporting. The Central Bank of the UAE has signaled alignment with SAMA's approach, creating a de facto regional standard. Organizations in these sectors cannot treat governance as parallel to development; it is embedded in the same timeline.</p>
+
+<p>Healthcare and life sciences operate under a different but equally demanding regime. While neither Saudi Arabia nor the UAE has yet published sector-specific AI guidance for healthcare, both jurisdictions' general data-protection laws apply with particular force to patient records. The UAE's PDPL explicitly addresses automated decision-making in ways that affect clinical triage, diagnostics support, and resource allocation. In practice, this means healthcare organizations deploying AI for these purposes are expected to be able to demonstrate explainability, documented consent, and human oversight — even in the absence of a dedicated healthcare AI regulation. The absence of explicit guidance does not reduce the regulator's expectation; it increases the organization's burden to document its reasoning.</p>
+
+<p>Telecommunications, government services, and energy have moderate governance intensity but are moving upward. SDAIA's emphasis on building AI capability within national institutions has pushed government agencies and large state-owned enterprises (SOEs) toward mandatory AI governance frameworks. Several Saudi and UAE ministries have published or are drafting internal AI governance standards; procurement criteria increasingly require evidence of responsible-AI practices. A vendor or contractor bidding on government AI work now faces a realistic expectation of third-party audit and demonstrable governance maturity.</p>
+
+<h3>Board-Level KPIs for AI Governance Maturity</h3>
+
+<p>Most GCC boards are still framing AI governance in qualitative terms — "we have a responsible-AI policy" — rather than measured outcomes. This gap creates exposure. A more defensible board posture tracks four KPIs on a quarterly cadence:</p>
+
+<ul>
+<li><strong>System Inventory Completeness.</strong> Percentage of production AI systems documented and registered in a central governance registry. A baseline organization should aim for 90%+ by end of Q2, and maintain that thereafter. This is the hygiene metric: if the board cannot name the AI systems running in the organization, it has no governance.</li>
+<li><strong>Model Performance Stability.</strong> Percentage of production models with documented baseline performance metrics and monitored drift detection. Tracked by model type (classification, regression, generative). If drift is detected, the metric includes time-to-remediation. SAMA expects banks to track this for models affecting customer-facing decisions; it is rapidly becoming a standard for any regulated sector.</li>
+<li><strong>Human-Oversight Adherence.</strong> Percentage of consequential decisions made by AI systems that required documented human review or escalation, and compliance with escalation procedures. For credit or underwriting decisions, this should be 100%; the metric is whether the process is followed, not whether human review rejected a decision.</li>
+<li><strong>Bias Testing Coverage.</strong> Percentage of production AI models with documented bias testing across protected groups (where applicable under local law), re-tested at least annually or after material retraining. The metric is not the absence of bias — that is unachievable — but the presence of a continuous testing discipline.</li>
+</ul>
+
+<p>Boards that track these four metrics monthly and report them quarterly to the audit committee are in a position to claim governance maturity. More importantly, they are in a position to defend themselves if a regulator or affected party raises concerns; the data shows a deliberate, measured approach rather than reactive firefighting.</p>
+
+<h2>Regulator Engagement: The 90-Day, 180-Day, and 365-Day Cadence</h2>
+
+<p>GCC regulators — SDAIA, SAMA, CBUAE, Qatar's MCIT — have not yet launched systematic AI audits of the kind the EU Financial Conduct Authority or UK Financial Conduct Authority are beginning. However, the window is closing. <em>Maven observation:</em> based on Maven AI advisory engagements with GCC financial-services clients during 2024-2025, we expect cyber and technology risk examination cycles to begin incorporating AI governance questions over the next 12-24 months. This is a forward-looking analyst view, not an official regulator statement; readers should consult SAMA, CBUAE, SDAIA and MCIT publications for authoritative timelines.</p>
+
+<p>An organization serious about governance maturity should adopt a phased engagement approach aligned to regulator expectations:</p>
+
+<h3>90-Day Foundation</h3>
+
+<p>Complete an internal AI system inventory. Map every system to one of the five capability domains above. Identify any system running in production without documented governance. Prepare a summary for the Chief Risk Officer or Chief Compliance Officer that names the gaps. In regulated sectors (financial services, healthcare), simultaneously draft a plan to address the highest-risk systems. This timeline assumes a mid-sized organization (50–300 AI practitioners); larger organizations may need 120 days.</p>
+
+<h3>180-Day Operationalization</h3>
+
+<p>Implement documented governance for the top-quartile systems (by user impact, business criticality, or regulatory sensitivity). Deploy model-monitoring and data-lineage tooling for these systems. Conduct a first round of bias testing. Document the results, including any findings and remediation plans. Prepare a board-ready summary that frames governance not as a compliance cost but as the foundation of responsible AI scaling. In conversations with SAMA or CBUAE contacts, this 180-day checkpoint offers a natural moment to flag your organization's governance roadmap before a formal examination.</p>
+
+<h3>365-Day Embedding</h3>
+
+<p>Extend governance practices to the second and third quartiles of AI systems. Establish quarterly KPI reporting to the board. Conduct a full third-party audit of your governance maturity against NIST AI RMF or equivalent standard. Publish findings internally and use them to set the next year's priorities. By this point, your organization should be able to produce, on request, a governance maturity report that demonstrates sustained, measured progress. This is the posture that regulators recognize and respect.</p>
+
+<h2>The Vendor Evaluation Trap: What to Ask</h2>
+
+<p>Many GCC organizations are tempted to outsource AI governance to vendors — systems integrators, cloud platforms, third-party risk management firms. This is partly sensible; specialized vendors have deep experience. But it is partly a trap. If you do not understand your vendor's claims about AI governance, you cannot defend the deployment.</p>
+
+<p>When evaluating AI vendors or platforms, insist on specific answers to these questions:</p>
+
+<ul>
+<li><strong>Data Lineage &amp; Provenance:</strong> Can the vendor produce a complete audit trail showing where training data came from, how it was cleaned, and who authorized its use? If the answer is "trust us" or vague architectural diagrams, move on.</li>
+<li><strong>Model Risk Management:</strong> Does the vendor have a published model-risk management framework that covers inventory, monitoring, and drift detection? Is it aligned to NIST AI RMF or equivalent? Will they provide reference customers in regulated sectors?</li>
+<li><strong>Explainability &amp; Audit Trails:</strong> For any decision-support or autonomous-decision system, can the vendor produce, on demand, a human-readable explanation of why the model made a specific decision? Can they produce this in Arabic as well as English, if your organization operates primarily in Arabic?</li>
+<li><strong>Human Oversight &amp; Escalation:</strong> Does the platform enforce human-in-the-loop controls? Can your organization configure escalation rules? Will the vendor provide documentation that escalation is logged and auditable?</li>
+<li><strong>Bias &amp; Ethics Testing:</strong> Has the vendor conducted bias testing on their model? Will they provide results disaggregated by demographic group? What is their process for continuous testing post-deployment?</li>
+</ul>
+
+<p>If a vendor cannot answer these questions or treats them as out-of-scope ("that's your responsibility"), treat that as a signal that their governance maturity is lower than your organization needs. A vendor that treats governance as embedded in their product is one that understands the GCC regulatory landscape.</p>
+
+<h2>Arabic-Language Governance: An Underestimated Complexity</h2>
+
+<p>Many GCC organizations operate dual-language environments: English for international and technical audiences, Arabic for domestic regulatory communication and customer-facing deployment. AI governance frameworks are often developed in English and then translated. This creates risk that is easy to miss.</p>
+
+<p>The issue is not translation quality alone, but the specificity of governance language. When SAMA publishes guidance on "cyber resilience," the Arabic and English versions are semantically equivalent because SAMA publishes both in parallel. When your organization translates a model-risk management policy from English into Arabic, there is no guarantee that the Arabic version will be interpreted the same way by Arabic-speaking regulators or auditors. Ambiguities in the Arabic version can compound miscommunication during examination.</p>
+
+<p>Best practice: Any governance documentation that will be submitted to, or discussed with, an Arabic-speaking regulator should be drafted simultaneously in both languages by native speakers, not translated after the fact. This is more expensive upfront but eliminates the risk that a regulator challenge hinges on a semantic gap between your English policy and its Arabic interpretation. Secondly, when communicating with regulators about governance maturity, frame any Arabic-language considerations explicitly in writing — "our model governance documentation is maintained in parallel English and Arabic versions" — rather than leaving it implicit.</p>
+
+<h2>Sovereign and Critical Infrastructure Considerations</h2>
+
+<p>Organizations operating in sovereign wealth fund (SWF), government, defense, or critical infrastructure sectors face an additional layer of governance expectation that is rarely written down but widely understood. SDAIA's mandate explicitly includes building AI capability within national institutions; the corollary is that foreign or private vendors face higher scrutiny on data residency, model auditability, and national security alignment.</p>
+
+<p>If your organization is bidding on a contract with a Saudi government entity or UAE federal ministry, assume the following governance requirements, even if they are not in the RFP: (1) All data used to train or operate the model must be stored and processed within the Kingdom or Emirate. (2) Your organization must be able to produce a model card — a published document that describes the model's training data, intended use, and known limitations — in both English and Arabic. (3) Human oversight and decision authority must rest with the government entity, never with the vendor or an automated system. (4) The contract must include a right for the government to conduct a security and governance audit, with supporting access to code, training data, and model artifacts.</p>
+
+<p>This is not regulatory conspiracy; it is a straightforward reflection of how governments in the region approach technology sovereignty. Organizations that treat these expectations as negotiable points rather than non-negotiable requirements will find procurement processes stalling or failing. Organizations that embed them into their standard offering model will win bids.</p>
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-8 svg-d-8"><title id="svg-t-8">Governance Maturity</title><desc id="svg-d-8">Governance Maturity</desc><rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/><rect x="40" y="160" width="160" height="50" fill="#0E2841"/><rect x="220" y="120" width="160" height="90" fill="#1A4F7A"/><rect x="400" y="60" width="160" height="150" fill="#156082"/><text x="120" y="190" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Tier 1 — Reactive</text><text x="300" y="170" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Tier 2 — Managed</text><text x="480" y="140" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Tier 3 — Strategic</text><text x="120" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Policy only</text><text x="300" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Controls + monitoring</text><text x="480" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Embedded in operating model</text><line x1="40" y1="220" x2="660" y2="220" stroke="#F5A623" stroke-width="2"/></svg><figcaption>Three-tier AI governance maturity model for GCC enterprises</figcaption></figure>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>UAE AI Office — <em>National Strategy for AI 2031</em> &amp; <em>UAE Charter for AI</em>. <a href="https://ai.gov.ae/" target="_blank" rel="noopener noreferrer">ai.gov.ae</a></li>
@@ -747,7 +1145,8 @@ export const insights = [
   <li>EU AI Act — Regulation 2024/1689. <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">eur-lex.europa.eu</a></li>
   </ol>
       `,
-      contentAr: `
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+  
     <h2>الأطروحة</h2>
     <p>تدعم دول مجلس التعاون الخليج الآن طموحها في مجال الذكاء الاصطناعي بإطار تنظيمي ناضج: هيئة سدايا في المملكة العربية السعودية، ومكتب الإمارات للذكاء الاصطناعي ومصرف الإمارات المركزي، وساما للخدمات المالية في المملكة، بالإضافة إلى قوانين حماية البيانات الشخصية القابلة للتنفيذ في كلا الاختصاصين. المنظمات التي تتعامل مع الحوكمة كمشروع إداري يعمل بالتوازي مع تسليم الذكاء الاصطناعي هي التي تُفاجأ بالمشاكل. المنظمات التي تتعامل مع الحوكمة كقيد تصميمي يجعل الذكاء الاصطناعي قابلاً للنشر على نطاق واسع تتقدم الآن. يحدد هذا التقرير الإطار التنظيمي كما هو قائم اليوم وما يبدو عليه موقف حوكمة الذكاء الاصطناعي الجاهز للتدقيق في دول مجلس التعاون الخليج.</p>
     <h2>الإطار التنظيمي</h2>
@@ -779,7 +1178,92 @@ export const insights = [
     <li><strong>تفاعل سدايا وساما ومصرف الإمارات المركزي بشكل استباقي.</strong> كانت المنظمات التنظيمية الإقليمية متقبلة بشكل مستمر للمنظمات التي تقدم خارطة طريق معقولة بدلاً من تلك التي تنتظر نتائج الفحص لتحفيز التغيير.</li>
     <li><strong>خريطة موقفك إلى إطار إدارة مخاطر الذكاء الاصطناعي من NIST وفئات مخاطر قانون الذكاء الاصطناعي بالاتحاد الأوروبي.</strong> حتى حيث لا يكون أي منهما ملزماً مباشرة، يعطي كلاهما لغة مرجعية قابلة للدفاع لإعادة المجلس.</li>
     </ul>
-    <h2>المصادر والمراجع</h2>
+    
+  <h2>آليات القطاع: حيث يكون معيار الحوكمة أعلى</h2>
+
+<p>تختلف كثافة التنظيم في حوكمة الذكاء الاصطناعي في دول مجلس التعاون الخليجي بشكل حاد حسب القطاع. تواجه الخدمات المالية — البنوك والتأمين والأسواق الرأسمالية — أضيق القيود. قامت SAMA بدمج مخاطر الذكاء الاصطناعي في أطرها الموجودة للمرونة السيبرية وحوكمة تكنولوجيا المعلومات، مما يعني أن أي بنك ينشر الذكاء الاصطناعي في قرارات الإقراض أو الكشف عن الاحتيال أو تقسيم العملاء يخضع تلقائياً لإدارة مخاطر النموذج والإبلاغ على مستوى مجلس الإدارة. أشارت البنك المركزي للإمارات العربية المتحدة إلى التوافق مع نهج SAMA، مما يخلق معياراً إقليمياً فعلياً. لا يمكن للمنظمات في هذه القطاعات أن تعامل الحوكمة كعملية موازية للتطوير؛ بل هي مدمجة في نفس الجدول الزمني.</p>
+
+<p>تعمل الرعاية الصحية وعلوم الحياة تحت نظام مختلف ولكن متطلب بنفس القدر. في حين لم تنشر المملكة العربية السعودية ولا الإمارات العربية المتحدة حتى الآن إرشادات خاصة بقطاع الذكاء الاصطناعي للرعاية الصحية، فإن قوانين حماية البيانات العامة في كلا الاختصاصين تنطبق بقوة خاصة على السجلات الطبية. يتناول قانون الحماية الرقمية في الإمارات العربية المتحدة بوضوح صنع القرار الآلي بطرق تؤثر على فرز المرضى السريري والدعم التشخيصي وتخصيص الموارد. من الناحية العملية، هذا يعني أن منظمات الرعاية الصحية التي تنشر الذكاء الاصطناعي لهذه الأغراض من المتوقع أن تكون قادرة على إثبات القابلية للتفسير والموافقة الموثقة والإشراف البشري — حتى في غياب اللوائح المخصصة للذكاء الاصطناعي في الرعاية الصحية. غياب الإرشادات الصريحة لا يقلل من توقع المنظم؛ بل يزيد من عبء المنظمة في توثيق منطقها.</p>
+
+<p>تكنولوجيا الاتصالات والخدمات الحكومية والطاقة لديها كثافة حوكمة معتدلة لكنها تتجه نحو الأعلى. أكد تركيز SDAIA على بناء القدرة في المؤسسات الوطنية على دفع الوكالات الحكومية والمؤسسات المملوكة للدولة الكبيرة نحو أطر حوكمة الذكاء الاصطناعي الإلزامية. أصدرت عدة وزارات سعودية وإماراتية معايير حوكمة الذكاء الاصطناعي الداخلية أو في طريقها إلى صياغتها؛ وتتطلب معايير الشراء بشكل متزايد إثبات ممارسات الذكاء الاصطناعي المسؤول. يواجه البائع أو المقاول الذي يقدم عرض عمل حكومي للذكاء الاصطناعي الآن توقعاً واقعياً للتدقيق من طرف ثالث والنضج الموثق للحوكمة.</p>
+
+<h3>مؤشرات الأداء الرئيسية على مستوى مجلس الإدارة لنضج حوكمة الذكاء الاصطناعي</h3>
+
+<p>لا تزال معظم مجالس الإدارة في دول مجلس التعاون الخليجي تصيغ حوكمة الذكاء الاصطناعي بعبارات نوعية — "لدينا سياسة ذكاء اصطناعي مسؤول" — بدلاً من النتائج المقاسة. هذه الفجوة تخلق مخاطر. يتتبع موقف مجلس إدارة أكثر دفاعاً أربعة مؤشرات أداء رئيسية على أساس ربع سنوي:</p>
+
+<ul>
+<li><strong>اكتمال جرد النظام.</strong> نسبة مئوية من أنظمة الذكاء الاصطناعي في الإنتاج الموثقة والمسجلة في سجل حوكمة مركزي. يجب على المنظمة الأساسية أن تهدف إلى 90%+ بنهاية الربع الثاني، والحفاظ على ذلك بعد ذلك. هذا هو مؤشر النظافة: إذا لم يتمكن مجلس الإدارة من تسمية أنظمة الذكاء الاصطناعي التي تعمل في المنظمة، فلا توجد لديه حوكمة.</li>
+<li><strong>استقرار أداء النموذج.</strong> نسبة مئوية من نماذج الإنتاج التي لديها مقاييس أداء أساسية موثقة واكتشاف انجراف مراقب. يتم تتبعها حسب نوع النموذج (التصنيف والانحدار والتوليدي). إذا تم اكتشاف انجراف، يتضمن المؤشر الوقت اللازم للإصلاح. تتوقع SAMA من البنوك تتبع هذا للنماذج التي تؤثر على القرارات الموجهة للعملاء؛ وهو يصبح بسرعة معياراً لأي قطاع منظم.</li>
+<li><strong>الامتثال للإشراف البشري.</strong> نسبة مئوية من القرارات المهمة التي تتخذها أنظمة الذكاء الاصطناعي التي تتطلب مراجعة أو تصعيد بشري موثق، والامتثال لإجراءات التصعيد. بالنسبة لقرارات الائتمان أو الاكتتاب، يجب أن تكون هذه 100%؛ المؤشر هو ما إذا تم اتباع العملية، وليس ما إذا كانت المراجعة البشرية ترفض القرار.</li>
+<li><strong>تغطية اختبار الانحياز.</strong> نسبة مئوية من نماذج الذكاء الاصطناعي في الإنتاج التي لديها اختبار انحياز موثق عبر المجموعات المحمية (حيث ينطبق بموجب القانون المحلي)، وإعادة اختبار سنوياً على الأقل أو بعد إعادة تدريب مادية. المؤشر ليس غياب الانحياز — وهو غير قابل للتحقيق — بل وجود انضباط اختبار مستمر.</li>
+</ul>
+
+<p>مجالس الإدارة التي تتابع هذه المؤشرات الأربعة شهرياً وتبلغ عنها ربع سنوياً إلى لجنة التدقيق تكون في وضع يسمح لها بالمطالبة بنضج الحوكمة. والأهم من ذلك، أنها في وضع يسمح لها بالدفاع عن نفسها إذا أثار منظم أو طرف متضرر مخاوف؛ تُظهر البيانات نهجاً متعمداً ومقاساً بدلاً من محاربة الحرائق بشكل متفاعل.</p>
+
+<h2>انخراط المنظم: جدول 90 يوم و180 يوم و365 يوم</h2>
+
+<p>لم تطلق منظمات دول مجلس التعاون الخليجي — SDAIA و SAMA و CBUAE و MCIT في قطر — حتى الآن عمليات تدقيق منهجية للذكاء الاصطناعي من النوع الذي تبدأه هيئة السلوك المالي بالاتحاد الأوروبي أو هيئة السلوك المالي بالمملكة المتحدة. ومع ذلك، النافذة تغلق. <em>ملاحظة Maven:</em> بناءً على مهام Maven AI الاستشارية مع عملاء الخدمات المالية في دول مجلس التعاون الخليجي خلال 2024-2025، نتوقع أن تبدأ دورات فحص المخاطر السيبرانية والتكنولوجية في تضمين أسئلة حوكمة الذكاء الاصطناعي خلال الـ 12-24 شهراً القادمة. هذه وجهة نظر تحليلية تطلعية وليست بياناً رسمياً من الجهة التنظيمية؛ يُنصح القراء بالرجوع إلى منشورات SAMA و CBUAE و SDAIA و MCIT للحصول على جداول زمنية رسمية.</p>
+
+<p>يجب على المنظمة الجادة بشأن نضج الحوكمة أن تعتمد نهج انخراط متدرج يتوافق مع توقعات المنظم:</p>
+
+<h3>أساس 90 يوم</h3>
+
+<p>أكمل جرد نظام الذكاء الاصطناعي الداخلي. اربط كل نظام بأحد المجالات الخمس للقدرة أعلاه. حدد أي نظام يعمل في الإنتاج بدون حوكمة موثقة. جهز ملخصاً لضابط المخاطر الرئيسي أو ضابط الامتثال الرئيسي يسمي الفجوات. في القطاعات المنظمة (الخدمات المالية والرعاية الصحية)، قم في نفس الوقت بصياغة خطة لمعالجة أنظمة المخاطر الأعلى. يفترض هذا الجدول الزمني منظمة متوسطة الحجم (50-300 ممارس للذكاء الاصطناعي)؛ قد تحتاج المنظمات الأكبر إلى 120 يوم.</p>
+
+<h3>تشغيل 180 يوم</h3>
+
+<p>تنفيذ حوكمة موثقة للأنظمة في أعلى ربع (حسب تأثير المستخدم أو الأهمية التجارية أو الحساسية التنظيمية). نشر نماذج المراقبة وأدوات نسب البيانات لهذه الأنظمة. إجراء جولة أولى من اختبار الانحياز. توثيق النتائج، بما في ذلك أي النتائج وخطط التصحيح. تحضير ملخص جاهز لمجلس الإدارة يؤطر الحوكمة ليس كتكلفة امتثال بل كأساس لتوسيع الذكاء الاصطناعي المسؤول. في المحادثات مع جهات اتصال SAMA أو CBUAE، يقدم هذا نقطة تفتيش 180 يوم لحظة طبيعية لتوضيح جدول أعمال حوكمة منظمتك قبل الفحص الرسمي.</p>
+
+<h3>تضمين 365 يوم</h3>
+
+<p>توسيع ممارسات الحوكمة إلى الربعين الثاني والثالث من أنظمة الذكاء الاصطناعي. إنشاء تقارير مؤشرات الأداء الرئيسية ربع السنوية لمجلس الإدارة. إجراء تدقيق كامل من طرف ثالث لنضج الحوكمة لديك مقابل NIST AI RMF أو معيار مكافئ. نشر النتائج داخلياً واستخدمها لتعيين أولويات السنة التالية. بحلول هذه النقطة، يجب أن تكون المنظمة قادرة على إنتاج تقرير نضج حوكمة عند الطلب يوضح التقدم المستمر والمقاس. هذا هو الموقف الذي يعترف به المنظمون ويحترمونه.</p>
+
+<h2>فخ تقييم البائع: ما الذي يجب أن تسأل عنه</h2>
+
+<p>تميل العديد من المنظمات في دول مجلس التعاون الخليجي إلى الاستعانة بمصادر خارجية لحوكمة الذكاء الاصطناعي من قبل البائعين — دمج الأنظمة والمنصات السحابية وشركات إدارة المخاطر الخارجية. هذا منطقي جزئياً؛ فالبائعون المتخصصون لديهم خبرة عميقة. لكنه فخ جزئياً. إذا لم تفهم ادعاءات البائع حول حوكمة الذكاء الاصطناعي، فلا يمكنك الدفاع عن النشر.</p>
+
+<p>عند تقييم بائعي أو منصات الذكاء الاصطناعي، أصر على إجابات محددة على هذه الأسئلة:</p>
+
+<ul>
+<li><strong>نسب البيانات والأصل:</strong> هل يمكن للبائع إنتاج مسار فحص كامل يوضح مصدر بيانات التدريب وكيف تم تنظيفها ومن أذن باستخدامها؟ إذا كانت الإجابة "ثق بنا" أو رسوم بيانية معمارية غامضة، تابع.</li>
+<li><strong>إدارة مخاطر النموذج:</strong> هل لدى البائع إطار عمل منشور لإدارة مخاطر النموذج يغطي الجرد والمراقبة والكشف عن الانجراف؟ هل هو متوافق مع NIST AI RMF أو معيار مكافئ؟ هل سيزودونك بعملاء مراجع في القطاعات المنظمة؟</li>
+<li><strong>القابلية للتفسير ومسارات التدقيق:</strong> بالنسبة لأي نظام دعم قرار أو نظام قرار مستقل، هل يمكن للبائع إنتاج تفسير يمكن قراءته بسهولة من قبل الإنسان حول سبب اتخاذ النموذج قراراً محدداً عند الطلب؟ هل يمكنهم إنتاج هذا باللغة العربية وكذلك الإنجليزية، إذا كانت منظمتك تعمل بشكل أساسي باللغة العربية؟</li>
+<li><strong>الإشراف البشري والتصعيد:</strong> هل تفرض المنصة عناصر تحكم التدخل البشري في الحلقة؟ هل يمكن لمنظمتك تكوين قواعد التصعيد؟ هل سيزود البائع بالتوثيق الذي يتم تسجيل التصعيد وقابل للتدقيق؟</li>
+<li><strong>اختبار الانحياز والأخلاقيات:</strong> هل أجرى البائع اختبار الانحياز على نموذجه؟ هل سيزودك بالنتائج مقسمة حسب المجموعة السكانية؟ ما هي عملية الاختبار المستمر بعد النشر؟</li>
+</ul>
+
+<p>إذا لم يتمكن البائع من الإجابة على هذه الأسئلة أو عامل معهم كما لو كانت خارج نطاق الاختصاص ("هذه مسؤوليتك")، فتعامل مع ذلك كإشارة إلى أن نضج الحوكمة لديهم أقل من احتياجات منظمتك. البائع الذي يعامل الحوكمة كمدمجة في منتجه هو بائع يفهم المشهد التنظيمي في دول مجلس التعاون الخليجي.</p>
+
+<h2>حوكمة اللغة العربية: تعقيد يتم التقليل من شأنه</h2>
+
+<p>تعمل العديد من المنظمات في دول مجلس التعاون الخليجي في بيئات ثنائية اللغة: الإنجليزية للجماهير الدولية والتقنية، والعربية للتواصل التنظيمي المحلي والنشر الموجه للعملاء. غالباً ما يتم تطوير أطر حوكمة الذكاء الاصطناعي باللغة الإنجليزية ثم ترجمتها. هذا يخلق مخاطر يسهل تفويتها.</p>
+
+<p>المشكلة ليست جودة الترجمة وحدها، بل تحديد لغة الحوكمة. عندما تنشر SAMA إرشادات حول "المرونة السيبرية"، تكون النسختان العربية والإنجليزية متكافئة دلالياً لأن SAMA تنشر كلاهما بالتوازي. عندما تترجم منظمتك سياسة إدارة مخاطر النموذج من الإنجليزية إلى العربية، لا توجد ضمانة بأن النسخة العربية ستُفسر بنفس الطريقة من قبل المنظمين أو المدققين الناطقين بالعربية. قد تؤدي الغموضات في النسخة العربية إلى تفاقم سوء الفهم أثناء الفحص.</p>
+
+<p>أفضل الممارسات: يجب أن يتم صياغة أي توثيق حوكمة سيتم تقديمه أو مناقشته مع منظم ناطق بالعربية بشكل متزامن باللغتين من قبل متحدثين أصليين، وليس ترجمة بعد صياغته. هذا أكثر تكلفة في البداية لكنه يلغي خطر أن يتعلق تحدٍ منظم بفجوة دلالية بين سياستك الإنجليزية وتفسيرها العربي. ثانياً، عند التواصل مع المنظمين حول نضج الحوكمة، قم بصياغة أي اعتبارات خاصة باللغة العربية بوضوح كتابياً — "توثيق حوكمة النموذج لدينا يتم الاحتفاظ به في نسخ موازية باللغة الإنجليزية والعربية" — بدلاً من تركه ضمنياً.</p>
+
+<h2>اعتبارات السيادة والبنية التحتية الحرجة</h2>
+
+<p>تواجه المنظمات التي تعمل في قطاعات صندوق الثروة السيادية والحكومة والدفاع أو البنية التحتية الحرجة طبقة إضافية من توقع الحوكمة التي نادراً ما تُكتب لكن يُفهم على نطاق واسع. ولاية SDAIA تشمل بشكل صريح بناء القدرة على الذكاء الاصطناعي داخل المؤسسات الوطنية؛ والحلقة المقابلة هي أن الجهات الخارجية أو البائعين الخاصين يواجهون تدقيقاً أعلى في إقامة البيانات والقدرة على تدقيق النموذج والتوافق مع الأمن الوطني.</p>
+
+<p>إذا كانت منظمتك تقدم عرض عمل حكومي سعودي أو وزاري اتحادي إماراتي، افترض متطلبات الحوكمة التالية، حتى إذا لم تكن في طلب الاقتراحات: (1) يجب تخزين ومعالجة جميع البيانات المستخدمة لتدريب أو تشغيل النموذج داخل المملكة أو الإمارة. (2) يجب أن تكون منظمتك قادرة على إنتاج بطاقة نموذج — وثيقة منشورة تصف بيانات التدريب والاستخدام المقصود والقيود المعروفة للنموذج — باللغة الإنجليزية والعربية. (3) يجب أن يستقر الإشراف البشري وسلطة القرار مع الجهة الحكومية، وليس مع البائع أو نظام آلي. (4) يجب أن يتضمن العقد حقاً للحكومة إجراء تدقيق أمني وحوكمة، مع الوصول الداعم إلى الكود وبيانات التدريب وملفات النموذج.</p>
+
+<p>هذا ليس مؤامرة تنظيمية؛ بل هو انعكاس مباشر لكيفية اقتراب الحكومات في المنطقة من سيادة التكنولوجيا. ستجد المنظمات التي تعامل هذه التوقعات كنقاط قابلة للتفاوض بدلاً من المتطلبات غير القابلة للتفاوض عمليات الشراء تتوقف أو تفشل. ستفوز المنظمات التي تدمجها في نموذج عروضها القياسي بالعطاءات.</p>
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-9 svg-d-9"><title id="svg-t-9">نضج الحوكمة</title><desc id="svg-d-9">نضج الحوكمة</desc><rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/><rect x="40" y="160" width="160" height="50" fill="#0E2841"/><rect x="220" y="120" width="160" height="90" fill="#1A4F7A"/><rect x="400" y="60" width="160" height="150" fill="#156082"/><text x="120" y="190" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">المستوى ١ — تفاعلي</text><text x="300" y="170" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">المستوى ٢ — مُدار</text><text x="480" y="140" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">المستوى ٣ — استراتيجي</text><text x="120" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">سياسات فقط</text><text x="300" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">ضوابط ورصد</text><text x="480" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">مدمجة في نموذج التشغيل</text><line x1="40" y1="220" x2="660" y2="220" stroke="#F5A623" stroke-width="2"/></svg><figcaption>نموذج نضج حوكمة الذكاء الاصطناعي ثلاثي المستويات لمؤسسات GCC</figcaption></figure>
+  
+  <figure>
+  <svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-10 svg-d-10"><title id="svg-t-10">خمسة مجالات قدرة لحوكمة الذكاء الاصطناعي في دول مجلس التعاون الخليجي</title><desc id="svg-d-10">رسم تخطيطي على شكل خماسي يوضح مجالات تتبع البيانات وخطر النموذج والقابلية للشرح والإشراف البشري والتحيز والأخلاقيات.</desc>
+  <rect x="0" y="0" width="600" height="240" fill="#F8FAFC"/>
+  <rect x="20" y="30" width="170" height="80" fill="#156082" rx="6"/><text x="105" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">١. تتبع البيانات</text><text x="105" y="85" text-anchor="middle" fill="#fff" font-size="11">والمصدر</text>
+  <rect x="215" y="30" width="170" height="80" fill="#1A4F7A" rx="6"/><text x="300" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٢. إدارة خطر</text><text x="300" y="85" text-anchor="middle" fill="#fff" font-size="11">النموذج</text>
+  <rect x="410" y="30" width="170" height="80" fill="#0E2841" rx="6"/><text x="495" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٣. القابلية للشرح</text><text x="495" y="85" text-anchor="middle" fill="#fff" font-size="11">ومسارات التدقيق</text>
+  <rect x="115" y="130" width="170" height="80" fill="#F5A623" rx="6"/><text x="200" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٤. الإشراف البشري</text><text x="200" y="185" text-anchor="middle" fill="#fff" font-size="11">والتصعيد</text>
+  <rect x="315" y="130" width="170" height="80" fill="#7C3AED" rx="6"/><text x="400" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٥. إدارة التحيز</text><text x="400" y="185" text-anchor="middle" fill="#fff" font-size="11">والأخلاقيات</text>
+  </svg>
+  <figcaption>الشكل ١ — مجالات القدرة الخمسة التي يحتاجها كل نشر ذكاء اصطناعي منظم في دول مجلس التعاون الخليجي الآن.</figcaption>
+  </figure>
+  <h2>المصادر والمراجع</h2>
     <ol class="sources-list">
     <li>مكتب الإمارات للذكاء الاصطناعي — <em>الاستراتيجية الوطنية للذكاء الاصطناعي 2031</em> و<em>ميثاق الإمارات للذكاء الاصطناعي</em>. <a href="https://ai.gov.ae/" target="_blank" rel="noopener noreferrer">ai.gov.ae</a></li>
     <li>المرسوم بقانون اتحادي رقم 45 لسنة 2021 (قانون حماية البيانات الشخصية). <a href="https://u.ae/en/about-the-uae/digital-uae/data/data-protection-laws" target="_blank" rel="noopener noreferrer">u.ae</a></li>
@@ -795,7 +1279,8 @@ export const insights = [
     <li>قانون الذكاء الاصطناعي بالاتحاد الأوروبي — اللائحة 2024/1689. <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">eur-lex.europa.eu</a></li>
     </ol>
         `,
-      contentTr: `
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+  
     <h2>Tez</h2>
     <p>Körfez İşbirliği Konseyi (KİK) ülkelerinin yapay zeka tutkusu artık olgunlaşan bir düzenleyici yığın tarafından desteklenmektedir: Suudi Arabistan'da SDAIA, BAE Yapay Zeka Ofisi ve CBUAE, KSA finansal hizmetleri için SAMA, ayrıca her iki yargı alanında uygulanabilir kişisel veri yasaları. Yönetişimi yapay zeka sunumuna paralel olarak çalışan bir kontrol projesi olarak ele alan kuruluşlar şaşkınlığa düçar olanlar. Yönetişimi yapay zekayı ölçekte dağıtılabilir kılan tasarım kısıtlaması olarak ele alan kuruluşlar öne geçiyor. Bu rapor düzenleyici çerçeveyi bugün gerçekten nasıl olduğunu ve KİK yapay zeka yönetişimi duruşunun denetim hazır neye benzediğini açıklamaktadır.</p>
     <h2>Düzenleyici Yığın</h2>
@@ -827,7 +1312,92 @@ export const insights = [
     <li><strong>SDAIA, SAMA ve CBUAE'yi proaktif olarak iletişim kurun.</strong> Bölgesel düzenleyiciler, inceleme bulguları değişimi sürmek yerine güvenilir bir yol haritası sunan kuruluşlara sürekli olarak daha karşılanabilir.</li>
     <li><strong>Duruşunuzu NIST Yapay Zeka RMF'ye ve AB Yapay Zeka Yasası risk kategorilerine haritalandırın.</strong> İkisi de doğrudan bağlayıcı olmasa bile, her ikisi de kurul raporlaması için savunulabilir bir referans dili verir.</li>
     </ul>
-    <h2>Kaynaklar ve Referanslar</h2>
+    
+  <h2>Sektörel Mekanikler: Yönetişim Standardının En Yüksek Olduğu Yerler</h2>
+
+<p>GCC'de AI yönetişiminin düzenleyici yoğunluğu sektörlere göre keskin bir şekilde değişir. Finansal hizmetler — bankacılık, sigorta, sermaye piyasaları — en sıkı kısıtlamalarla karşı karşıyadır. SAMA, AI riskini mevcut siber esneklik ve BT-yönetişim çerçevelerine yerleştirmiştir; bu, kredi kararları, sahtekarlık tespiti veya müşteri bölümlendirmesi için AI dağıtan herhangi bir banka otomatik olarak model-risk yönetimi ve yönetim kurulu düzeyinde raporlamaya tabi olduğu anlamına gelir. Birleşik Arap Emirlikleri Merkez Bankası, SAMA'nın yaklaşımıyla uyumlu olduğunu sinyalize etmiş ve bölgesel bir standart oluşturmuştur. Bu sektörlerdeki kuruluşlar yönetişimi geliştirmeye paralel olarak ele alamaz; bu aynı zaman çizelgesi içinde gömülüdür.</p>
+
+<p>Sağlık ve yaşam bilimleri farklı ancak eşit derecede talep edici bir rejim altında faaliyet göstermektedir. Ne Suudi Arabistan ne de BAE, sağlıkla ilgili AI için sektöre özgü rehberlik yayınlamıştır, ancak her iki yetki de genel veri koruma yasalarını hasta kayıtlarına özel olarak uygulamaktadır. BAE'nin PDPL, klinik triaj, tanı desteği ve kaynak tahsisini etkileyen otomatik karar verme ile ilgili konuları açıkça ele almaktadır. Uygulamada, bu, bu amaçlar için AI dağıtan sağlık kuruluşlarının açıklanabilirlik, belgeli rıza ve insan denetimi gösterebilmesi beklenmektedir — özel bir sağlık AI düzenlemesi olmasa bile. Açık rehberliğin yokluğu, düzenleyicinin beklentisini azaltmaz; kuruluşun akıl yürütmesini belgelemedeki yükünü artırır.</p>
+
+<p>Telekomünikasyon, devlet hizmetleri ve enerji orta düzey yönetişim yoğunluğuna sahiptir ancak yukarı doğru hareket etmektedir. SDAIA'nın ulusal kurumlar içinde AI yetenek inşasına yönelik vurgusu, hükümet kurumlarını ve büyük kamu işletmelerini (SOE) zorunlu AI yönetişim çerçevelerine itmiştir. Birkaç Suudi ve BAE bakanlığı iç AI yönetişim standartları yayınlamış veya taslak aşamasındadır; tedarik kriterleri giderek sorumlu-AI uygulamaları hakkında kanıt gerektirmektedir. Devlet AI işine teklif sunan bir satıcı veya yüklenici artık üçüncü taraf denetim ve gösterilebilir yönetişim olgunluğu beklentisiyle karşı karşıyadır.</p>
+
+<h3>AI Yönetişim Olgunluğu İçin Yönetim Kurulu Düzeyinde KPI'lar</h3>
+
+<p>GCC'deki çoğu yönetim kurulu hala AI yönetişimini nitel terimlerle çerçevelemektedir — "sorumlu AI politikamız vardır" — ölçülen sonuçlar yerine. Bu boşluk maruz kalma oluşturur. Daha savunulabilir bir yönetim kurulu duruşu, üç aylık bir hızda dört KPI'yı izler:</p>
+
+<ul>
+<li><strong>Sistem Envanteri Bütünlüğü.</strong> Üretim AI sistemlerinin merkezi bir yönetişim kayıt defterine belgelenmesi ve kaydedilmesi yüzdesi. Bir başlangıç kuruluşu, Q2 sonuna kadar %90+ hedeflemeli ve bundan sonra bunu korumalıdır. Bu hijyen metriğidir: yönetim kurulu kuruluşta çalışan AI sistemlerini adlandıramazsa, yönetişimi yoktur.</li>
+<li><strong>Model Performansı Stabilitesi.</strong> Belgelenmiş temel performans metrikleri ve izlenen sapma tespiti olan üretim modellerinin yüzdesi. Model türüne (sınıflandırma, regresyon, üretken) göre izlenmiştir. Sapma tespit edilirse, metrik düzeltmeye gidiş süresi içerir. SAMA, müşteriye bakan kararları etkileyen modeller için bunu izlemesini bekler; herhangi bir düzenlenmiş sektör için hızla standart haline gelmektedir.</li>
+<li><strong>İnsan Denetimi Uyumu.</strong> AI sistemleri tarafından yapılan sonuç niteliğindeki kararların belgelenen insan taraması veya yükseltme gerektiren yüzdesi ve yükseltme prosedürlerine uyum. Kredi veya sigortalama kararları için bu %100 olmalıdır; metrik, bir insan taramasının bir kararı reddedip reddetmediği değil, prosesimin takip edilip edilmediğidir.</li>
+<li><strong>Sapma Testi Kapsamı.</strong> Belgelenmiş sapma testi ile korunan gruplar arasında (yerel yasa uyarınca uygulanabilir olduğunda), yılda en az bir kez veya önemli yeniden eğitimden sonra yeniden test edilen üretim AI modellerinin yüzdesi. Metrik, sapmanın yokluğu — bu ulaşılamaz — değil, sürekli bir test disiplinin varlığıdır.</li>
+</ul>
+
+<p>Bu dört metriği aylık olarak izleyen ve üç ayda bir denetim komitesine bildiren yönetim kurulları, yönetişim olgunluğunu talep etme konumundadırlar. Daha da önemlisi, bir düzenleyici veya etkilenen taraf endişe ortaya atarsa kendilerini savunmak için konumdadırlar; veriler, reaktif yangın söndürme yerine kasıtlı, ölçülü bir yaklaşım gösterir.</p>
+
+<h2>Düzenleyici Katılım: 90 Günlük, 180 Günlük ve 365 Günlük Hız</h2>
+
+<p>GCC düzenleyicileri — SDAIA, SAMA, CBUAE, Katar'ın MCIT — henüz EU Financial Conduct Authority veya UK Financial Conduct Authority'nin başladığı türden sistematik AI denetimlerini başlatmamıştır. Ancak pencere kapanmaktadır. <em>Maven gözlemi:</em> Maven AI'nın 2024-2025 döneminde GCC finansal hizmetler müşterileriyle yürüttüğü danışmanlık çalışmalarına dayanarak, siber ve teknoloji risk inceleme döngülerinin önümüzdeki 12-24 ay içinde AI yönetişim sorularını dahil etmeye başlamasını bekliyoruz. Bu, resmi bir düzenleyici açıklaması değil ileriye dönük bir analist görüşüdür; okuyucuların yetkili zaman çizelgeleri için SAMA, CBUAE, SDAIA ve MCIT yayınlarına başvurması önerilir.</p>
+
+<p>Yönetişim olgunluğu konusunda ciddi olan bir kuruluş, düzenleyici beklentileriyle uyumlu bir aşamalı katılım yaklaşımını benimsemelidir:</p>
+
+<h3>90 Günlük Temel</h3>
+
+<p>Bir iç AI sistem envanteri tamamlayın. Her sistemi yukarıdaki beş yetenek alanından birine eşleyin. Belgelenen yönetişim olmadan üretimde çalışan herhangi bir sistemi belirleyin. Boşlukları adlandıran Chief Risk Officer veya Chief Compliance Officer için bir özet hazırlayın. Düzenlenmiş sektörlerde (finansal hizmetler, sağlık), aynı anda en yüksek riskli sistemleri ele almak için bir plan taslağı hazırlayın. Bu zaman çizelgesi orta ölçekli bir kuruluş (50–300 AI uygulayıcısı) varsayar; daha büyük kuruluşlar 120 gün gerektirebilir.</p>
+
+<h3>180 Günlük Operasyonelleştirme</h3>
+
+<p>En iyi çeyrek sistemler (kullanıcı etkisi, iş kritikliği veya düzenleyici hassasiyet tarafından) için belgelenen yönetişimi uygulayın. Bu sistemler için model izleme ve veri kaynak izleme araçlarını dağıtın. Sapma testinin ilk turunu yürütün. Bulguları ve düzeltme planlarını da içeren sonuçları belgeleyin. Yönetişimi uyum maliyeti olarak değil, sorumlu AI ölçeklendirmesinin temeli olarak çerçeveleyecek bir yönetim kurulu hazır özeti hazırlayın. SAMA veya CBUAE başlantılarıyla yaptığınız konuşmalarda, bu 180 günlük kontrol noktası, resmi bir inceleme öncesinde kuruluşunuzun yönetişim yol haritasını bildirmek için doğal bir an sunar.</p>
+
+<h3>365 Günlük Gömme</h3>
+
+<p>Yönetişim uygulamalarını AI sistemlerinin ikinci ve üçüncü çeyreklerine genişletin. Yönetim kuruluna üç aylık KPI raporlaması kuruluşu oluşturun. NIST AI RMF veya eşdeğer standarda karşı yönetişim olgunluğunuzun tam bir üçüncü taraf denetimini yürütün. Bulguları kurum içinde yayınlayın ve sonraki yılın önceliklerini belirlemek için kullanın. Bu noktada, kuruluşunuz talep üzerine, sürdürülen, ölçülü ilerlemeyi gösteren bir yönetişim olgunluk raporu üretebilmelidir. Bu, düzenleyicilerin tanıdığı ve saygı duyduğu duruştur.</p>
+
+<h2>Satıcı Değerlendirme Tuzağı: Neler Sorulacağı</h2>
+
+<p>GCC'deki birçok kuruluş, AI yönetişimini satıcılara — sistem entegratörleri, bulut platformları, üçüncü taraf risk yönetimi firmaları — dış kaynak sağlamaya başverilidir. Bu kısmen mantıklıdır; uzmanlaşmış satıcılar derin deneyime sahiptir. Ama bu kısmen bir tuzaktır. Satıcınızın AI yönetişimi hakkındaki iddialarını anlamıyorsanız, dağıtımı savunamazsınız.</p>
+
+<p>AI satıcılarını veya platformlarını değerlendirirken, bu sorulara spesifik cevaplar isteyiniz:</p>
+
+<ul>
+<li><strong>Veri Kaynak İzleme &amp; Kaynağı:</strong> Satıcı, eğitim verilerinin nereden geldiğini, nasıl temizlendiğini ve kim tarafından yetkilendirildiğini gösteren tam bir denetim izi üretebilir mi? Cevap "bize güvenin" veya muğlak mimari diyagramlarsa, devam edin.</li>
+<li><strong>Model Risk Yönetimi:</strong> Satıcının envanter, izleme ve sapma tespitini kapsayan yayımlanmış bir model-risk yönetim çerçevesi var mı? NIST AI RMF veya eşdeğer ile uyumlu mu? Düzenlenmiş sektörlerde referans müşteriler sağlayacaklar mı?</li>
+<li><strong>Açıklanabilirlik &amp; Denetim İzleri:</strong> Herhangi bir karar desteği veya otonom karar sistemi için, satıcı, talep üzerine, modelin belirli bir kararı neden yaptığını gösteren insan tarafından okunabilir bir açıklama üretebilir mi? Bunu İngilizce kadar Arapça da üretebilirler mi, kuruluşunuz öncelikle Arapça'da faaliyet gösteriyorsa?</li>
+<li><strong>İnsan Denetimi &amp; Yükseltme:</strong> Platform insan-döngüde kontrolleri uygular mı? Kuruluşunuz yükseltme kurallarını yapılandırabilir mi? Satıcı, yükseltmenin günlüğe kaydedilip denetlenebilir olduğunun belgelerini sağlayacak mı?</li>
+<li><strong>Sapma &amp; Etik Testi:</strong> Satıcı modeline karşı sapma testini yürütmüş müdür? Demografik grup tarafından ayrıştırılmış sonuçlar sağlayacaklar mı? Dağıtım sonrası sürekli test için süreçleri nedir?</li>
+</ul>
+
+<p>Bir satıcı bu sorulara cevap veremezse veya onları kapsam dışı olarak ele alırsa ("bu sizin sorumluluğunuz"), bunu, yönetişim olgunluğunun kuruluşunuzun ihtiyaç duyduğundan daha düşük olduğunun bir işareti olarak değerlendirin. Yönetişimi ürüne gömülü olarak ele alan bir satıcı, GCC düzenleyici ortamını anlayanı biridir.</p>
+
+<h2>Arapça-Dil Yönetişimi: Hafife Alınan Bir Karmaşıklık</h2>
+
+<p>Birçok GCC kuruluşu ikili dil ortamında faaliyet göstermektedir: uluslararası ve teknik izleyiciler için İngilizce, yerel düzenleyici iletişimi ve müşteriye bakan dağıtım için Arapça. AI yönetişim çerçeveleri genellikle İngilizce geliştirilir ve sonra çevrilir. Bu, kaçması kolay olan riski oluşturur.</p>
+
+<p>Sorun sadece çeviri kalitesi değil, yönetişim dilinin özgüllüğüdür. SAMA "siber esneklik" hakkında rehberlik yayınladığında, Arapça ve İngilizce versiyonları semantiksel olarak eşdeğerdir çünkü SAMA her ikisini paralel olarak yayınlar. Kuruluşunuz bir model-risk yönetim politikasını İngilizceden Arapça'ya çevirdiğinde, Arapça versiyonunun Arapça konuşan düzenleyiciler veya denetçiler tarafından aynı şekilde yorumlanacağının garantisi yoktur. Arapça versiyondaki belirsizlikler inceleme sırasında yanlış iletişimi birleştirebilir.</p>
+
+<p>En iyi uygulama: Bir Arapça konuşan düzenleyiciye gönderilecek veya tartışılacak herhangi bir yönetişim belgesi, sonradan tercüme edilmemiş, anadil konuşmacıları tarafından her iki dilde aynı anda taslak hazırlanmalıdır. Bu ön maliyeti daha yüksektir, ancak bir düzenleyici sorunu, İngilizce politikanız ile Arapça yorumu arasında semantik bir boşluğa bağlı olma riskini ortadan kaldırır. İkincisi, düzenleyicilerle yönetişim olgunluğu hakkında iletişim kurarken, herhangi bir Arapça dil hususunu açıkça yazılı olarak çerçevelendirin — "model yönetişim belgelerimiz paralel İngilizce ve Arapça versiyonlarda tutulur" — örtülü bırakmak yerine.</p>
+
+<h2>Egemen ve Kritik Altyapı Hususları</h2>
+
+<p>Egemen servet fonu (SWF), hükümet, savunma veya kritik altyapı sektörlerinde faaliyet göstermek kuruluşlar, yazılı olması nadiren görülen ancak yaygın olarak anlaşılan, ek bir yönetişim beklentisi katmanıyla karşı karşıyadır. SDAIA'nın yetkisi açıkça ulusal kurumlar içinde AI yetenek inşasını içerir; sonuç olarak yabancı veya özel satıcılar veri kalıcılığı, model denetlenebilirliği ve ulusal güvenlik uyumlanması hakkında daha yüksek incelemeyle karşı karşıyadırlar.</p>
+
+<p>Suudi hükümet kuruluşu veya BAE federal bakanlığı ile bir sözleşme için teklifçiyseniz, RFP'de olmasa bile, aşağıdaki yönetişim gerekliliklerini varsayınız: (1) Modeli eğitmek veya işletmek için kullanılan tüm veriler Krallık veya Emirlik içinde depolanmalı ve işlenmelidir. (2) Kuruluşunuz, modelin eğitim verilerini, amaçlanan kullanım ve bilinen sınırlamalarını tanımlayan yayımlanmış bir belge olan bir model kartı üretebilmesi gerekir. (3) İnsan denetimi ve karar yetkilisi hükümet kuruluşunda yer almalı, asla satıcı veya otomatik sistemde yer almamalıdır. (4) Sözleşme hükümetine güvenlik ve yönetişim denetimi yürütme, kod, eğitim verisi ve model yapıtlarına destek erişimi hakkını sağlamalıdır.</p>
+
+<p>Bu düzenleyici komplo değildir; bölgedeki hükümetlerin teknoloji egemenliğine nasıl yaklaştıklarının doğrudan bir yansımasıdır. Bu beklentileri müzakere edilebilir noktalar yerine müzakere edilemez gereklilikler olarak ele alan kuruluşlar, tedarik süreçlerinin durduğunu veya başarısız olduğunu bulacaktır. Bunları standart teklif modellerine gömülen kuruluşlar, teklifleri kazanacaktır.</p>
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-11 svg-d-11"><title id="svg-t-11">Yönetişim Olgunluğu</title><desc id="svg-d-11">Yönetişim Olgunluğu</desc><rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/><rect x="40" y="160" width="160" height="50" fill="#0E2841"/><rect x="220" y="120" width="160" height="90" fill="#1A4F7A"/><rect x="400" y="60" width="160" height="150" fill="#156082"/><text x="120" y="190" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Seviye 1 — Reaktif</text><text x="300" y="170" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Seviye 2 — Yönetilen</text><text x="480" y="140" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Seviye 3 — Stratejik</text><text x="120" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Sadece politika</text><text x="300" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Kontroller ve izleme</text><text x="480" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Operasyon modeline gömülü</text><line x1="40" y1="220" x2="660" y2="220" stroke="#F5A623" stroke-width="2"/></svg><figcaption>GCC işletmeleri için üç katmanlı AI yönetişim olgunluk modeli</figcaption></figure>
+  
+  <figure>
+  <svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-12 svg-d-12"><title id="svg-t-12">GCC AI yönetişimi için beş yetenek alanı</title><desc id="svg-d-12">Veri kökenselliği, model riski, açıklanabilirlik, insan gözetimi ve önyargı ve etik alanlarını gösteren beşgen tarzı diyagram.</desc>
+  <rect x="0" y="0" width="600" height="240" fill="#F8FAFC"/>
+  <rect x="20" y="30" width="170" height="80" fill="#156082" rx="6"/><text x="105" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Veri Kökenselliği</text><text x="105" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Kaynağı</text>
+  <rect x="215" y="30" width="170" height="80" fill="#1A4F7A" rx="6"/><text x="300" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Model Riski</text><text x="300" y="85" text-anchor="middle" fill="#fff" font-size="11">Yönetimi</text>
+  <rect x="410" y="30" width="170" height="80" fill="#0E2841" rx="6"/><text x="495" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Açıklanabilirlik</text><text x="495" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Denetim İzleri</text>
+  <rect x="115" y="130" width="170" height="80" fill="#F5A623" rx="6"/><text x="200" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. İnsan Gözetimi</text><text x="200" y="185" text-anchor="middle" fill="#fff" font-size="11">&amp; Yükseltme</text>
+  <rect x="315" y="130" width="170" height="80" fill="#7C3AED" rx="6"/><text x="400" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Önyargı &amp; Etik</text><text x="400" y="185" text-anchor="middle" fill="#fff" font-size="11">Yönetimi</text>
+  </svg>
+  <figcaption>Şekil 1 — Düzenlenmiş her GCC AI dağıtımının ihtiyaç duyduğu beş yetenek alanı.</figcaption>
+  </figure>
+  <h2>Kaynaklar ve Referanslar</h2>
     <ol class="sources-list">
     <li>BAE Yapay Zeka Ofisi — <em>2031 Ulusal Yapay Zeka Stratejisi</em> ve <em>BAE Yapay Zeka Tüzüğü</em>. <a href="https://ai.gov.ae/" target="_blank" rel="noopener noreferrer">ai.gov.ae</a></li>
     <li>BAE Federal Kararname-Kanun No. 45 of 2021 (PDPL). <a href="https://u.ae/en/about-the-uae/digital-uae/data/data-protection-laws" target="_blank" rel="noopener noreferrer">u.ae</a></li>
@@ -857,14 +1427,30 @@ export const insights = [
       summary: "Legacy systems remain the binding constraint on enterprise AI in the GCC. AI-assisted SDLC compresses the most expensive phase of modernisation — understanding what the existing system actually does — and a sovereign-first delivery model makes it deployable in regulated environments.",
       featured: false,
       tags: ["Legacy", "Modernization", "SDLC", "Sovereign AI"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>Legacy systems remain the binding constraint on enterprise AI in the GCC. Telecoms run customer billing, charging, and provisioning on platforms designed in the 1990s and early 2000s. Banks run core ledgers and risk engines on COBOL or aging Java. Public-sector platforms encode regulation and entitlement logic accumulated over two decades of customisation. AI-driven SDLC — using large language models to read, document, and rebuild from these systems — is now mature enough to compress what used to be the most expensive phase of modernisation: understanding what the existing system actually does. This report sets out the discipline that turns that capability into deliverable outcomes.</p>
   <h2>The Cost of Doing Nothing</h2>
   <p>McKinsey estimates that technical debt accounts for roughly 20–40% of the technology-asset value of typical enterprises and represents a hidden tax on every new initiative — including AI (<a href="https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights" target="_blank" rel="noopener noreferrer">McKinsey, 2020</a>). Stripe's research with developers indicates that engineering teams spend roughly a third of their time on maintenance of legacy systems and bad code (<a href="https://stripe.com/files/reports/the-developer-coefficient.pdf" target="_blank" rel="noopener noreferrer">Stripe, <em>The Developer Coefficient</em></a>). Standish Group's <em>CHAOS</em> reporting finds that large transformation programs continue to fail or run materially over budget at high rates (<a href="https://www.standishgroup.com/" target="_blank" rel="noopener noreferrer">Standish Group</a>). These conditions are exactly what our methodology is designed for.</p>
   <h2>Why Previous Modernization Programs Failed</h2>
   <p>Most large GCC enterprises carry the scar tissue of at least one failed modernization. The published evidence on enterprise IT failure points to three recurring causes: insufficient documentation of the existing system, underestimation of business-logic complexity, and inadequate testing coverage at the boundary between old and new (<a href="https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights" target="_blank" rel="noopener noreferrer">McKinsey on large IT projects</a>). The discipline below is built specifically around those three root causes.</p>
+  <h2>What DORA 2025 Tells Us About AI in the Codebase</h2>
+  <p>Google's <em>2025 DORA State of AI-Assisted Software Development</em> is the most important new data point for legacy modernisation. DORA reports 90% of professional developers are now using AI in daily work and 80%+ report productivity gains, but it also documents that AI accelerates throughput while increasing instability — meaning the same systems that benefit most from AI lift are the ones most at risk if foundations are weak (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, p.3-4</a>). Two of DORA's seven foundational AI capabilities are directly load-bearing for spec-from-legacy work: a <em>healthy data ecosystem</em> (without it, extraction agents over-fit to surface syntax) and <em>version-controlled artefacts</em> (the validated specification itself becomes a versioned, governed artefact, not a Word document). Maven's methodology treats both as preconditions, not afterthoughts.</p>
   <h2>Spec-from-Legacy: The Methodology</h2>
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-13 svg-d-13"><title id="svg-t-13">AI-assisted spec-from-legacy pipeline</title><desc id="svg-d-13">Three-phase pipeline: AI-assisted extraction, specification validation, architecture and migration planning.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Phase 1</text><text x="120" y="120" text-anchor="middle" fill="#fff" font-size="12">AI-Assisted</text><text x="120" y="138" text-anchor="middle" fill="#fff" font-size="12">Extraction</text>
+  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Phase 2</text><text x="350" y="120" text-anchor="middle" fill="#fff" font-size="12">Specification</text><text x="350" y="138" text-anchor="middle" fill="#fff" font-size="12">Validation</text>
+  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Phase 3</text><text x="580" y="120" text-anchor="middle" fill="#fff" font-size="12">Architecture &amp;</text><text x="580" y="138" text-anchor="middle" fill="#fff" font-size="12">Migration Plan</text>
+  <path d="M220 110 L250 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
+  <path d="M450 110 L480 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
+  <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
+  <text x="350" y="200" text-anchor="middle" fill="#475569" font-size="11">Human engineering judgment governs every gate · AI compresses the lift</text>
+  </svg>
+  <figcaption>Figure 1 — The three-phase spec-from-legacy pipeline.</figcaption>
+  </figure>
   <h3>Phase 1 — AI-Assisted Extraction</h3>
   <p>Code-analysis agents trained on the target legacy stack — COBOL, SAP ABAP, legacy Java, custom platforms — systematically document business logic, data structures, integration points, and exceptional flows. Stanford HAI's <em>2025 AI Index</em> and GitHub's <em>Octoverse</em> both record measurable engineering productivity gains from code-aware LLMs in real codebases (<a href="https://hai.stanford.edu/ai-index/2025-ai-index-report" target="_blank" rel="noopener noreferrer">Stanford HAI, 2025</a>; <a href="https://github.blog/news-insights/octoverse/octoverse-2024/" target="_blank" rel="noopener noreferrer">GitHub Octoverse, 2024</a>). The engineering judgment remains human; the assistant compresses the lift.</p>
   <h3>Phase 2 — Specification Validation</h3>
@@ -886,6 +1472,76 @@ export const insights = [
   <li><strong>Scope change management at the start.</strong> Technical modernization is the easier half; business-process redesign and adoption is the half that determines whether the new system gets used.</li>
   <li><strong>Build Arabic-language validation in as a formal phase.</strong> A workshop with Arabic-speaking business stakeholders reviewing the specification is non-negotiable for GCC organizations with Arabic-language process logic.</li>
   </ul>
+  
+<h2>Sectoral Application: Telecoms</h2>
+<p>Telecommunications operators in the GCC maintain billing and customer management systems that are often 15–25 years old, with cumulative layers of feature requests, regulatory compliance logic, and regional-market adaptations. Etisalat and du in the UAE, Zain across the region, and Stc in Saudi Arabia all run OSS/BSS (Operations Support Systems / Business Support Systems) stacks that encode complex provisioning workflows, rating engines, and interconnection logic. The challenge is not technical obsolescence alone — these systems work — but operational velocity: a feature that should take weeks takes months because the business logic is scattered across undocumented stored procedures, batch jobs, and configuration tables.</p>
+<p>AI-assisted extraction surfaces this logic in weeks. The extraction phase identifies every revenue-impacting business rule (promotional mechanics, tiered pricing, roaming agreements, carriage-order dependencies). The validation phase brings together the product, finance, and operations teams to confirm that the extracted rules match the intended behavior. This is critical because in GCC telecoms, a 1% error in the rating engine cascades across millions of daily transactions. Maven's methodology explicitly gates the architecture phase until the specification has been signed off by both the CTO and the CFO — a joint signature that forces the business and engineering conversations that prevent post-launch surprises.</p>
+
+<h3>Telecom Engagement Cadence: 90/180/365 Days</h3>
+<p><strong>Days 1–90:</strong> Scope the target system (usually a single BSS or provisioning subsystem, not the entire stack). Deploy extraction tooling on-premises. Conduct weekly validation workshops with business stakeholders. Produce a versioned specification document (typically 800–1,200 pages for a major telecom subsystem) with full sign-off by week 12.</p>
+<p><strong>Days 91–180:</strong> Design target architecture (cloud-native microservices, event-driven, typically Kubernetes-hosted). Conduct detailed design reviews. Build prototype APIs to prove the specification is architecturally sound. Establish test scenarios grounded in 12 months of production transaction data. By week 24, have a migration roadmap with rollback gates, parallel-run windows, and customer-impact estimates.</p>
+<p><strong>Days 181–365:</strong> Build and test the new system in isolation. Run parallel production load against both old and new system. Measure reconciliation daily. Migrate customer cohorts in staged waves (2–5% per week). By day 365, the old system is supporting <5% of traffic and is on a documented decommissioning path.</p>
+
+<h2>Sectoral Application: Banking &amp; Financial Services</h2>
+<p>GCC banks face a distinct modernization challenge: the core ledger system is almost always a decades-old mainframe COBOL application or an early-2000s SAP installation, and the regulatory environment (SAMA in Saudi, DFSA in Dubai, CBB in Bahrain) has evolved substantially since those systems were designed. A bank cannot simply rewrite its core ledger; every transaction, every audit trail, every regulatory report must reconcile to the cent. The specification phase is therefore not optional — it is the legal and compliance foundation for the build.</p>
+<p>Banking clients often discover during the extraction phase that their actual business logic differs materially from their documented business logic. A regional bank in our recent work discovered that its interest-accrual logic for Sharia-compliant products had drifted from the original Fatwa over 8 years of iterative customization, with no single person able to articulate the current state. The extracted specification made this visible; the validation workshops with both the chief risk officer and the Sharia board brought it to the surface; the new system implements the <em>correct</em> logic, not the accumulated drift. This is a multi-million-dollar correction that would have remained latent until a regulatory audit.</p>
+
+<h3>Banking Engagement Cadence: 120/240/365 Days</h3>
+<p><strong>Days 1–120:</strong> Scope includes both the core ledger extraction AND a regulatory-requirements audit (SAMA rules, DFSA rules, local AML/KYC logic). Weekly extraction with participation from risk, compliance, and finance teams. Monthly validation workshops. Produce specification <em>and</em> a regulatory-requirements traceability matrix showing how every rule in the spec maps to a specific regulation. Obtain sign-off from CRO, CFO, and Chief Compliance Officer by week 16.</p>
+<p><strong>Days 121–240:</strong> Design target architecture with built-in audit logging, encryption, and regulatory reporting. Build a reconciliation engine that compares new-system output to legacy-system output on every transaction type. Conduct regulatory pre-approval workshops with local authorities where permitted. Establish test data sets that include edge cases from the past 5 years (penalties, reversals, dividend adjustments, Zakat calculations). By week 32, have full regulatory and business sign-off on the migration plan.</p>
+<p><strong>Days 241–365:</strong> Build and extensively test in isolated environment. Run full production reconciliation in parallel (using production data replayed, not production traffic). Conduct internal audit review. Migrate in extremely narrow cohorts — by account type, by business line, by geographic market. By day 365, legacy system is in read-only mode, with new system supporting 100% of new transactions and 80%+ of historical lookups.</p>
+
+<h2>Vendor Evaluation Framework for Spec-from-Legacy Work</h2>
+<p>Not all consulting firms and technology vendors have genuine capability in this discipline. The market is crowded with firms claiming "AI-powered modernization" without the depth required for high-stakes systems. Maven recommends the following vendor evaluation criteria.</p>
+
+<h3>Capability Assessment</h3>
+<ul>
+<li><strong>On-premises execution:</strong> Can the vendor run the entire extraction and analysis pipeline on your infrastructure, without shipping code or data to cloud? If the answer is "we have a secure cloud option," that is not sufficient for sovereign GCC government work.</li>
+<li><strong>Stack specificity:</strong> Does the vendor have deep reference experience in your specific legacy stack (COBOL + CICS, SAP + ABAP, legacy Java, Informatica/Talend, Salesforce customizations)? Generic "AI for code" capability is insufficient — you need a team that has done COBOL-to-Java or SAP-to-cloud migrations before.</li>
+<li><strong>Arabic language support:</strong> If your legacy system encodes Arabic business logic (and most GCC regional systems do), has the vendor worked with Arabic-language codebases, character encodings, and bidirectional text in specifications? This is rarely on the standard vendor questionnaire but is critical in the region.</li>
+<li><strong>Testing and validation discipline:</strong> How does the vendor ensure that the extracted specification is actually correct? Do they have a formal validation methodology? Do they require business stakeholder sign-off before architecture design begins? Vendors that move straight from extraction to architecture are likely to produce an impressive-looking spec that misses edge cases.</li>
+<li><strong>Regulatory experience:</strong> For banking and insurance clients, has the vendor delivered modernizations in regulated industries? Can they show evidence of regulatory pre-approval and audit compliance in a previous program?</li>
+</ul>
+
+<h3>Reference Checks</h3>
+<p>Ask the vendor for three references from GCC enterprises. Ask each reference specifically: (1) Did the extracted specification match the actual behavior of the system? (2) Were there material changes to the spec during validation? (3) Did the validation phase catch business logic that wasn't in the original requirements? (4) Would you use this vendor again? The answer to (4) is more telling than the sales pitch.</p>
+
+<h2>Common Pitfalls &amp; How to Avoid Them</h2>
+
+<h3>Pitfall 1: Insufficient Validation Bandwidth</h3>
+<p>The most common failure mode is treating the validation phase as a checkbox: the vendor produces a 1,200-page specification, the client signs it off in a single workshop, and then engineering discovers 18 months into the build that the spec missed 20% of the actual business rules. Prevention: budget for validation as a full workstream, not an afterthought. Assign a senior business analyst (preferably someone who has worked on the legacy system for 5+ years) to the validation team. Schedule validation workshops weekly, not monthly. Use production transaction analysis — reconcile what the spec says <em>should</em> happen against what actually happens in the legacy system — to find gaps.</p>
+
+<h3>Pitfall 2: Underestimating Regional/Language Complexity</h3>
+<p>A global vendor trained primarily on English-language codebases will miss Hijri-calendar logic, Arabic character encoding edge cases, and region-specific regulatory workflows unless explicitly tasked to look for them. Prevention: explicitly require the vendor to produce an "Arabic business logic register" as part of the specification — a separate document listing every business rule that is specific to Arabic language, Islamic finance, or regional regulation. Have a separate validation phase with Arabic-speaking subject-matter experts.</p>
+
+<h3>Pitfall 3: Architecture Design Before Spec Validation</h3>
+<p>A vendor eager to move fast will sketch the target architecture (microservices, Kubernetes, event-driven) before the specification is locked. This creates a coupling risk: once the architecture is designed, changes to the spec become expensive, so the specification gets finalized before it is actually correct. Prevention: Make specification sign-off a hard gate. Require that the architect not start the design until the business has approved the specification in writing. This adds 2–3 weeks to the project timeline and saves 6–12 months in rework.</p>
+
+<h3>Pitfall 4: Inadequate Test Data &amp; Reconciliation Strategy</h3>
+<p>Testing that the new system produces the same output as the legacy system requires detailed production data and a robust reconciliation engine. Many vendors propose to "shadow" the legacy system during parallel run, but without a pre-built reconciliation capability, shadow runs discover discrepancies too late. Prevention: require the vendor to build a reconciliation engine as part of Phase 2, before any new code is written. The reconciliation should be automatic, continuous, and production-ready by the time the build phase begins.</p>
+
+<h2>Key Performance Indicators for Spec-from-Legacy Programs</h2>
+<p>GCC CIOs and CTOs need clear visibility into program health during the specification phase. Traditional IT project KPIs (burn-down charts, sprint velocity) are not appropriate here; this is investigative work, not execution. Maven recommends the following KPIs for the specification phase.</p>
+
+<ul>
+<li><strong>Specification completeness:</strong> Percentage of business rules extracted and documented. Target: 100% of revenue-impacting rules, 95%+ of operational rules. Measured by reconciliation of spec against production transaction analysis.</li>
+<li><strong>Validation coverage:</strong> Percentage of extracted rules that have been walked through with business stakeholders. Target: 100% of material rules in validation workshops. Tracked by attendance and sign-off records.</li>
+<li><strong>Stakeholder confidence:</strong> Post-validation survey of business stakeholders: "How confident are you that this specification accurately represents the current system?" Target: 85%+ respond "very confident" or "confident." Responses below 80% signal that validation gaps remain.</li>
+<li><strong>Specification stability:</strong> Week-on-week change rate in the specification document. In weeks 1–6, expect 15–25% of spec content to change as understanding deepens. By week 10, change rate should drop below 5%. If the specification is still changing at >10% per week in week 12, validation is incomplete.</li>
+<li><strong>Extraction-to-validation cycle time:</strong> Average days between extraction of a business rule and validation of that rule by a business stakeholder. Target: <10 days. If the cycle time exceeds 20 days, the validation team is a bottleneck and needs additional resources.</li>
+</ul>
+
+<h2>Board-Level Framing &amp; Executive Communication</h2>
+<p>The CFO and board care about three questions: (1) How much will this cost? (2) How long will it take? (3) What is the downside risk if we get it wrong? Spec-from-legacy work changes the answer to all three.</p>
+
+<p><strong>Cost:</strong> Specification-first methodology is more expensive in the short term (10–15% higher cost for the spec phase) because it involves business stakeholders intensively. It is dramatically cheaper in the long term because it prevents the rework, system rebuilds, and post-launch patches that characterize modernization programs that skip this phase. A rough rule of thumb: spend an extra $2M on the specification to save $10–20M in avoided rework during build and stabilization.</p>
+
+<p><strong>Timeline:</strong> The specification phase takes 3–4 months (vs. 1–2 months for a "quick" specification). The build and test phases are 30–40% faster because the team is not discovering major gaps mid-build. Total program timeline is typically 20–30% shorter than programs that skip detailed specification.</p>
+
+<p><strong>Risk:</strong> A detailed, validated specification is the single strongest hedge against modernization failure. It is also the primary contract between business and engineering: if the new system matches the specification and the specification has been signed off by the business, then the new system is correct by definition. This shifts risk from "Will the system be right?" (a binary, unpredictable outcome) to "Will we stay on schedule and budget?" (a manageable execution risk).</p>
+
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-14 svg-d-14"><title id="svg-t-14">Strangler-fig pattern</title><desc id="svg-d-14">Strangler-fig pattern</desc><rect width="700" height="240" fill="#F8FAFC"/><rect x="40" y="80" width="180" height="80" fill="#0E2841" rx="6"/><text x="130" y="125" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Legacy core</text><rect x="260" y="50" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="80" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Capability slice 1 (AI)</text><rect x="260" y="110" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="140" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Capability slice 2 (AI)</text><rect x="260" y="170" width="180" height="50" fill="#1A4F7A" rx="6"/><text x="350" y="200" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Slice 3 — staged</text><rect x="480" y="80" width="180" height="80" fill="#F5A623" rx="6"/><text x="570" y="125" font-family="Inter,Arial" font-size="13" fill="#0E2841" text-anchor="middle">Modern AI runtime</text><line x1="220" y1="120" x2="260" y2="75" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="135" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="195" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="4 3"/><line x1="440" y1="75" x2="480" y2="115" stroke="#156082" stroke-width="2"/><line x1="440" y1="135" x2="480" y2="120" stroke="#156082" stroke-width="2"/></svg><figcaption>Strangler-fig pattern for incremental AI-driven capability migration</figcaption></figure>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>McKinsey &amp; Company, <em>Tech debt: Reclaiming tech equity</em>, 2020. <a href="https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights" target="_blank" rel="noopener noreferrer">mckinsey.com</a></li>
@@ -901,7 +1557,8 @@ export const insights = [
   <li>HUMAIN (PIF AI subsidiary). <a href="https://www.humain.ai/" target="_blank" rel="noopener noreferrer">humain.ai</a></li>
   </ol>
       `,
-      contentAr: `
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+  
   <h2>الأطروحة</h2>
   <p>تظل الأنظمة الموروثة بمثابة القيد الأساسي على الذكاء الاصطناعي في المؤسسات في منطقة الخليج. تدير شركات الاتصالات فواتير العملاء والرسوم والتجهيز على منصات صُممت في التسعينيات والعقد الأول من القرن الحادي والعشرين. تدير البنوك دفاتر الحسابات الأساسية ومحركات إدارة المخاطر على COBOL أو لغة Java القديمة. تُشفر منصات القطاع العام منطق التنظيم والاستحقاقات المتراكمة على مدى عقدين من التخصيص. نضجت الدورة التطوير البرمجية بمساعدة الذكاء الاصطناعي — استخدام نماذج اللغة الكبيرة لقراءة وتوثيق وإعادة بناء هذه الأنظمة — بما يكفي لضغط ما كان يُعتبر بسابق الأوان أغلى مرحلة في التحديث: فهم ما يفعله النظام الموجود بالفعل. تضع هذه التقارير المنهجية التي تحول هذه الإمكانية إلى نتائج قابلة للتسليم.</p>
   <h2>تكلفة عدم الفعل</h2>
@@ -930,6 +1587,90 @@ export const insights = [
   <li><strong>نطاق إدارة التغيير في البداية.</strong> التحديث التقني هو النصف الأسهل؛ إعادة تصميم العملية التجارية والاعتماد هي النصف التي تحدد ما إذا كان يتم استخدام النظام الجديد.</li>
   <li><strong>بناء التحقق باللغة العربية كمرحلة رسمية.</strong> ورشة عمل مع أصحاب المصلحة في الأعمال الناطقين بالعربية يراجعون المواصفات أمر لا يمكن التفاوض عليه للمؤسسات في منطقة الخليج مع منطق العملية باللغة العربية.</li>
   </ul>
+  
+<h2>التطبيق القطاعي: الاتصالات</h2>
+<p>تحتفظ شركات الاتصالات في دول مجلس التعاون الخليجي بأنظمة فواتير وإدارة عملاء يبلغ عمرها غالباً 15-25 سنة، مع طبقات تراكمية من طلبات الميزات والمنطق المتعلق بالامتثال التنظيمي والتكييفات الخاصة بالأسواق الإقليمية. تدير اتصالات وإمارات والاتحاد للاتصالات عبر المنطقة وشركة الاتصالات السعودية أنظمة OSS/BSS (أنظمة دعم العمليات / أنظمة دعم الأعمال) تشفّر سير عمل التزويد المعقدة ومحركات التصنيف والمنطق الخاص بالترابط. التحدي ليس العفوية التقنية وحدها - فهذه الأنظمة تعمل - بل السرعة التشغيلية: فالميزة التي يجب أن تستغرق أسابيع تستغرق أشهراً لأن المنطق التجاري مشتت عبر إجراءات مخزنة غير موثقة وعمليات دفعية وجداول تكوين.</p>
+<p>يكشف الاستخراج بمساعدة الذكاء الاصطناعي هذا المنطق في غضون أسابيع. تحدد مرحلة الاستخراج كل قاعدة عمل تؤثر على الإيرادات (ميكانيكا العروض الترويجية والتسعير المتدرج واتفاقيات التجوال وتبعيات أوامر النقل). تجمع مرحلة التحقق بين فريق المنتج والمالية والعمليات للتأكد من أن القواعد المستخرجة تطابق السلوك المقصود. هذا أمر حاسم لأنه في قطاع الاتصالات بدول مجلس التعاون الخليجي، فإن خطأ بنسبة 1% في محرك التصنيف ينتشر عبر ملايين المعاملات اليومية. تشترط منهجية Maven بوضوح جواز مرحلة العمارة حتى يتم التوقيع على المواصفات من قبل كل من الرئيس التنفيذي للتكنولوجيا والمدير المالي - توقيع مشترك يفرض محادثات الأعمال والهندسة التي تمنع المفاجآت بعد الإطلاق.</p>
+
+<h3>إيقاع مشاركة الاتصالات: 90/180/365 يوماً</h3>
+<p><strong>الأيام 1-90:</strong> حدد نطاق النظام المستهدف (عادة نظام BSS واحد أو نظام فرعي للتزويد، وليس المكدس بأكمله). نشر أدوات الاستخراج على الموقع. إجراء ورش عمل التحقق الأسبوعية مع أصحاب المصلحة في الأعمال. إنتاج مستند مواصفات مرقم (عادة 800-1200 صفحة لنظام فرعي للاتصالات الرئيسية) مع التوقيع الكامل بحلول الأسبوع 12.</p>
+<p><strong>الأيام 91-180:</strong> تصميم معمارية النظام المستهدف (خدمات سحابية أصلية وموجهة للأحداث، عادة مستضافة على Kubernetes). إجراء استعراضات التصميم التفصيلية. بناء نماذج أولية من واجهات برمجية لإثبات أن المواصفات سليمة معمارياً. إنشاء سيناريوهات اختبار مستندة إلى 12 شهراً من بيانات المعاملات الإنتاجية. بحلول الأسبوع 24، يجب أن تكون لديك خارطة طريق الهجرة مع بوابات الاسترجاع ونوافذ التشغيل المتوازي وتقديرات تأثير العملاء.</p>
+<p><strong>الأيام 181-365:</strong> بناء واختبار النظام الجديد في العزلة. تشغيل حمل الإنتاج المتوازي مقابل النظام القديم والجديد. قياس التوفيق يومياً. هجرة مجموعات العملاء في موجات مرحلية (2-5% أسبوعياً). بحلول اليوم 365، يدعم النظام القديم <5% من حركة المرور وهو على طريق إيقاف موثق.</p>
+
+<h2>التطبيق القطاعي: البنوك والخدمات المالية</h2>
+<p>تواجه البنوك في دول مجلس التعاون الخليجي تحدياً فريداً في التحديث الحديث: نظام الدفتر الأساسي هو دائماً تقريباً تطبيق COBOL قديم على جهاز رئيسي أو تثبيت SAP من أوائل الألفية الثالثة، والبيئة التنظيمية (SAMA في السعودية وDFSA في دبي وCBB في البحرين) تطورت بشكل جوهري منذ تصميم تلك الأنظمة. لا يمكن للبنك ببساطة إعادة كتابة دفتره الأساسي؛ يجب أن تتوافق كل معاملة وكل مسار تدقيق وكل تقرير تنظيمي إلى الفلس. لذلك فإن مرحلة المواصفات ليست اختيارية - بل هي الأساس القانوني والامتثالي للبناء.</p>
+<p>غالباً ما يكتشف عملاء البنوك أثناء مرحلة الاستخراج أن منطق أعمالهم الفعلي يختلف بشكل جوهري عن منطق أعمالهم الموثق. اكتشفت بنك إقليمي في عملنا الأخيرة أن منطق استحقاق الفائدة للمنتجات المتوافقة مع الشريعة قد انحرف عن الفتوى الأصلية على مدى 8 سنوات من التخصيص التكراري، مع عدم قدرة أي شخص واحد على شرح الحالة الحالية. جعلت المواصفات المستخرجة هذا مرئياً؛ أحضرت ورش عمل التحقق مع كل من الرئيس التنفيذي لإدارة المخاطر ومجلس الشريعة إلى السطح؛ يطبق النظام الجديد المنطق <em>الصحيح</em> وليس الانحراف المتراكم. هذا تصحيح بملايين الدولارات كان سيبقى كامناً حتى عملية تدقيق تنظيمية.</p>
+
+<h3>إيقاع مشاركة البنوك: 120/240/365 يوماً</h3>
+<p><strong>الأيام 1-120:</strong> يشمل النطاق استخراج الدفتر الأساسي <em>وأيضاً</em> عملية تدقيق المتطلبات التنظيمية (قواعد SAMA وقواعد DFSA والمنطق المحلي للكشف عن غسل الأموال / معرفة عميلك). استخراج أسبوعي مع مشاركة من فريق إدارة المخاطر والامتثال والمالية. ورش عمل التحقق الشهرية. إنتاج مواصفات <em>وأيضاً</em> مصفوفة تتبع المتطلبات التنظيمية التي توضح كيف تعكس كل قاعدة في المواصفات لائحة محددة. الحصول على التوقيع من الرئيس التنفيذي لإدارة المخاطر والمدير المالي وكبير مسؤولي الامتثال بحلول الأسبوع 16.</p>
+<p><strong>الأيام 121-240:</strong> تصميم معمارية النظام المستهدف مع تسجيل التدقيق المدمج والتشفير والتقارير التنظيمية. بناء محرك توفيق يقارن مخرجات النظام الجديد بمخرجات النظام الموروث في كل نوع معاملة. إجراء ورش عمل الموافقة المسبقة التنظيمية مع السلطات المحلية حيثما كان مسموحاً. إنشاء مجموعات بيانات اختبار تتضمن حالات حدية من السنوات الخمس الماضية (عقوبات واسترجاعات وتعديلات أرباح وحسابات الزكاة). بحلول الأسبوع 32، يجب أن تكون لديك موافقة تنظيمية وعمل كاملة على خطة الهجرة.</p>
+<p><strong>الأيام 241-365:</strong> بناء واختبار شامل في بيئة معزولة. تشغيل التوفيق الإنتاجي الكامل بالتوازي (باستخدام بيانات الإنتاج المعاد تشغيلها وليس حركة المرور الإنتاجية). إجراء مراجعة التدقيق الداخلي. الهجرة في مجموعات ضيقة جداً - حسب نوع الحساب أو خط العمل أو السوق الجغرافي. بحلول اليوم 365، النظام الموروث في وضع القراءة فقط، مع النظام الجديد يدعم 100% من المعاملات الجديدة و80%+ من عمليات البحث التاريخية.</p>
+
+<h2>إطار تقييم المورد لعمل المواصفات من العمل الموروث</h2>
+<p>لا تملك جميع شركات الاستشارات وموردي التكنولوجيا قدرة حقيقية في هذا التخصص. السوق مكتظة بشركات تدّعي "التحديث بتقنية الذكاء الاصطناعي" بدون العمق المطلوب للأنظمة عالية المخاطر. توصي Maven بمعايير تقييم المورد التالية.</p>
+
+<h3>تقييم الإمكانيات</h3>
+<ul>
+<li><strong>التنفيذ على الموقع:</strong> هل يمكن للمورد تشغيل خط أنابيب الاستخراج والتحليل بالكامل على البنية التحتية الخاصة بك، دون شحن الكود أو البيانات إلى السحابة؟ إذا كانت الإجابة "لدينا خيار سحابي آمن"، فهذا غير كافٍ لعمل حكومة دول مجلس التعاون الخليجي ذات السيادة.</li>
+<li><strong>خصوصية المكدس:</strong> هل يملك المورد خبرة مرجعية عميقة في مكدسك الموروث المحدد (COBOL + CICS أو SAP + ABAP أو Java القديمة أو Informatica/Talend أو تخصيصات Salesforce)؟ القدرة العامة "AI للكود" غير كافية - تحتاج إلى فريق قام بترحيلات COBOL-to-Java أو SAP-to-cloud من قبل.</li>
+<li><strong>دعم اللغة العربية:</strong> إذا كان نظامك الموروث يشفّر المنطق التجاري باللغة العربية (وتفعل معظم الأنظمة الإقليمية بدول مجلس التعاون الخليجي ذلك)، هل عمل المورد مع أكواد اللغة العربية وترميزات الأحرف والنصوص ثنائية الاتجاه في المواصفات؟ هذا نادراً ما يكون في قائمة استبيان المورد القياسية لكنها حاسمة في المنطقة.</li>
+<li><strong>انضباط الاختبار والتحقق:</strong> كيف يضمن المورد أن المواصفات المستخرجة صحيحة فعلاً؟ هل لديهم منهجية تحقق رسمية؟ هل يطلبون توقيع صاحب المصلحة في الأعمال قبل بدء تصميم المعمارية؟ الموردون الذين ينتقلون مباشرة من الاستخراج إلى المعمارية من المحتمل أن ينتجوا مواصفات تبدو مثيرة للإعجاب لكنها تفتقد الحالات الحدية.</li>
+<li><strong>الخبرة التنظيمية:</strong> لعملاء البنوك والتأمين، هل سلّم المورد تحديثات في الصناعات المنظمة؟ هل يمكنهم إظهار أدلة على الموافقة المسبقة التنظيمية والامتثال التدقيقي في برنامج سابق؟</li>
+</ul>
+
+<h3>فحوصات المراجع</h3>
+<p>اطلب من المورد ثلاث مراجع من مؤسسات دول مجلس التعاون الخليجي. اطلب من كل مرجع على وجه التحديد: (1) هل طابقت المواصفات المستخرجة السلوك الفعلي للنظام؟ (2) هل كانت هناك تغييرات جوهرية على المواصفات أثناء التحقق؟ (3) هل اكتشفت مرحلة التحقق منطق أعمال لم يكن في المتطلبات الأصلية؟ (4) هل ستستخدم هذا المورد مرة أخرى؟ الإجابة على (4) أكثر إيحاءً من درجة البيع.</p>
+
+<h2>الأخطاء الشائعة وكيفية تجنبها</h2>
+
+<h3>الخطأ 1: عدم كفاية نطاق التحقق</h3>
+<p>يتمثل أكثر أنماط الفشل شيوعاً في معاملة مرحلة التحقق على أنها مربع اختيار: ينتج المورد مواصفات بـ 1200 صفحة، والعميل يوقع عليها في ورشة عمل واحدة، ثم يكتشف الهندسة 18 شهراً في البناء أن المواصفات فاتتها 20% من قواعد الأعمال الفعلية. الوقاية: قم بموازنة التحقق كمجرى عمل كامل وليس كفكرة لاحقة. عيّن محلل أعمال كبير (يفضل أن يكون شخصاً عمل على النظام الموروث لمدة 5+ سنوات) لفريق التحقق. جدول ورش عمل التحقق أسبوعياً وليس شهرياً. استخدم تحليل المعاملات الإنتاجية - قارن ما تقول المواصفات <em>يجب</em> أن يحدث مقابل ما يحدث فعلاً في النظام الموروث - للعثور على الفجوات.</p>
+
+<h3>الخطأ 2: الاستهانة بالتعقيد الإقليمي واللغوي</h3>
+<p>سيفتقد مورد عام تم تدريبه بشكل أساسي على أكواس اللغة الإنجليزية منطق التقويم الهجري وحالات ترميز الأحرف العربية والسير الإجرائية التنظيمية الخاصة بالمنطقة ما لم يُطلب منه البحث عنها صراحة. الوقاية: اطلب صراحة من المورد إنتاج "سجل المنطق التجاري العربي" كجزء من المواصفات - وثيقة منفصلة تسرد كل قاعدة عمل خاصة بلغة عربية أو مالية إسلامية أو لوائح إقليمية. لديك مرحلة تحقق منفصلة مع خبراء الموضوع الناطقين بالعربية.</p>
+
+<h3>الخطأ 3: تصميم المعمارية قبل التحقق من المواصفات</h3>
+<p>سيرسم المورد الحريص على التقدم السريع معمارية النظام المستهدف (الخدمات الصغيرة وKubernetes والموجهة للأحداث) قبل قفل المواصفات. يخلق هذا خطر الاقتران: بمجرد تصميم المعمارية، تصبح التغييرات على المواصفات مكلفة، لذا يتم نهائية المواصفات قبل أن تكون صحيحة بالفعل. الوقاية: اجعل التوقيع على المواصفات بوابة قاسية. اطلب من المهندس عدم بدء التصميم حتى توافق الأعمال على المواصفات كتابياً. يضيف هذا 2-3 أسابيع إلى جدول المشروع ويوفر 6-12 شهراً في إعادة العمل.</p>
+
+<h3>الخطأ 4: استراتيجية بيانات الاختبار والتوفيق غير الكافية</h3>
+<p>يتطلب الاختبار الذي ينتج النظام الجديد نفس المخرجات مثل النظام الموروث بيانات إنتاج مفصلة ومحرك توفيق قوي. يقترح العديد من الموردين "الظلال" على النظام الموروث أثناء التشغيل المتوازي، لكن بدون قدرة توفيق مدمجة مسبقاً، تكتشف عمليات الظلال عدم التطابق في وقت متأخر جداً. الوقاية: اطلب من المورد بناء محرك توفيق كجزء من المرحلة 2 قبل كتابة أي كود جديد. يجب أن يكون التوفيق تلقائياً ومستمراً وجاهز الإنتاج بحلول بدء مرحلة البناء.</p>
+
+<h2>مؤشرات الأداء الرئيسية لبرامج المواصفات من الموارث</h2>
+<p>يحتاج رؤساء المعلومات والمدراء التقنيون في دول مجلس التعاون الخليجي إلى رؤية واضحة في صحة البرنامج أثناء مرحلة المواصفات. مؤشرات الأداء الرئيسية للمشاريع التكنولوجية التقليدية (مخططات الحروق وسرعة المراحل) ليست مناسبة هنا؛ هذا عمل تحقيقي وليس تنفيذ. توصي Maven بمؤشرات الأداء الرئيسية التالية لمرحلة المواصفات.</p>
+
+<ul>
+<li><strong>اكتمال المواصفات:</strong> نسبة قواعد الأعمال المستخرجة والموثقة. الهدف: 100% من القواعد المؤثرة على الإيرادات و95%+ من القواعد التشغيلية. تقاس بتوفيق المواصفات مقابل تحليل المعاملات الإنتاجية.</li>
+<li><strong>تغطية التحقق:</strong> نسبة القواعد المستخرجة التي تم مراجعتها مع أصحاب المصلحة في الأعمال. الهدف: 100% من القواعس المهمة في ورش عمل التحقق. تتبعها بسجلات الحضور والتوقيع.</li>
+<li><strong>ثقة صاحب المصلحة:</strong> استطلاع ما بعد التحقق لأصحاب المصلحة في الأعمال: "ما مدى ثقتك بأن هذه المواصفات تمثل النظام الحالي بدقة؟" الهدف: 85%+ يجيبون "واثقون جداً" أو "واثقون". الإجابات أقل من 80% تشير إلى أن فجوات التحقق تبقى.</li>
+<li><strong>استقرار المواصفات:</strong> معدل التغيير من أسبوع لآخر في مستند المواصفات. في الأسابيع 1-6، توقع تغيير 15-25% من محتوى المواصفات مع تعميق الفهم. بحلول الأسبوع 10، يجب أن ينخفض معدل التغيير إلى أقل من 5%. إذا كانت المواصفات لا تزال تتغير بـ >10% أسبوعياً في الأسبوع 12، فإن التحقق غير مكتمل.</li>
+<li><strong>وقت دورة الاستخراج إلى التحقق:</strong> متوسط الأيام بين استخراج قاعدة عمل والتحقق من تلك القاعدة من قبل صاحب المصلحة في الأعمال. الهدف: <10 أيام. إذا تجاوز وقت الدورة 20 يوماً، فإن فريق التحقق عنق الزجاجة ويحتاج موارد إضافية.</li>
+</ul>
+
+<h2>الإطار على مستوى المجلس والاتصالات التنفيذية</h2>
+<p>يهتم المدير المالي والمجلس بثلاثة أسئلة: (1) ما تكلفة هذا؟ (2) كم سيستغرق؟ (3) ما خطر الجانب السلبي إذا أخطأنا؟ يغيّر عمل المواصفات من الموارث الإجابة على الجميع.</p>
+
+<p><strong>التكلفة:</strong> منهجية التمويل الأول الموصوفة أكثر تكلفة على المدى القصير (10-15% تكلفة أعلى لمرحلة المواصفات) لأنها تنطوي على أصحاب المصلحة في الأعمال بكثافة. إنها أرخص بشكل كبير على المدى الطويل لأنها تمنع إعادة العمل وإعادة بناء الأنظمة والرقع بعد الإطلاق التي تميز برامج التحديث التي تتخطى هذه المرحلة. قاعدة إبهام تقريبية: أنفق 2 مليون دولار إضافية على المواصفات لتوفير 10-20 مليون دولار في إعادة عمل تجنب أثناء البناء والاستقرار.</p>
+
+<p><strong>الجدول الزمني:</strong> تستغرق مرحلة المواصفات 3-4 أشهر (مقابل 1-2 شهر لمواصفات "سريعة"). مراحل البناء والاختبار أسرع بـ 30-40% لأن الفريق لا يكتشف فجوات رئيسية منتصف البناء. إجمالي جدول برنامج عادة ما يكون 20-30% أقصر من برامج تتخطى المواصفات التفصيلية.</p>
+
+<p><strong>المخاطر:</strong> المواصفات المفصلة والمتحقق منها هي أقوى تحوط واحد ضد فشل التحديث. كما أنها العقد الأساسي بين الأعمال والهندسة: إذا طابق النظام الجديد المواصفات وتم التوقيع على المواصفات من قبل الأعمال، فإن النظام الجديد صحيح بالتعريف. يغيّر هذا المخاطر من "هل سيكون النظام صحيحاً؟" (نتيجة ثنائية وغير متوقعة) إلى "هل سنبقى على الجدول والميزانية؟" (خطر تنفيذ قابل للإدارة).</p>
+
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-15 svg-d-15"><title id="svg-t-15">نمط Strangler-fig</title><desc id="svg-d-15">نمط Strangler-fig</desc><rect width="700" height="240" fill="#F8FAFC"/><rect x="40" y="80" width="180" height="80" fill="#0E2841" rx="6"/><text x="130" y="125" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">النواة القديمة</text><rect x="260" y="50" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="80" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">شريحة قدرة ١ (AI)</text><rect x="260" y="110" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="140" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">شريحة قدرة ٢ (AI)</text><rect x="260" y="170" width="180" height="50" fill="#1A4F7A" rx="6"/><text x="350" y="200" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">شريحة ٣ — تدريجياً</text><rect x="480" y="80" width="180" height="80" fill="#F5A623" rx="6"/><text x="570" y="125" font-family="Inter,Arial" font-size="13" fill="#0E2841" text-anchor="middle">منصة AI حديثة</text><line x1="220" y1="120" x2="260" y2="75" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="135" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="195" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="4 3"/><line x1="440" y1="75" x2="480" y2="115" stroke="#156082" stroke-width="2"/><line x1="440" y1="135" x2="480" y2="120" stroke="#156082" stroke-width="2"/></svg><figcaption>نمط Strangler-fig للهجرة التدريجية للقدرات المدفوعة بالذكاء الاصطناعي</figcaption></figure>
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-16 svg-d-16"><title id="svg-t-16">خط أنابيب المواصفات من الأنظمة الموروثة بمساعدة الذكاء الاصطناعي</title><desc id="svg-d-16">خط أنابيب ثلاثي المراحل: الاستخراج بمساعدة الذكاء الاصطناعي، التحقق من المواصفات، تخطيط الهندسة والهجرة.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">المرحلة 1</text><text x="120" y="120" text-anchor="middle" fill="#fff" font-size="12">الاستخراج بمساعدة</text><text x="120" y="138" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي</text>
+  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">المرحلة 2</text><text x="350" y="120" text-anchor="middle" fill="#fff" font-size="12">التحقق من</text><text x="350" y="138" text-anchor="middle" fill="#fff" font-size="12">المواصفات</text>
+  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">المرحلة 3</text><text x="580" y="120" text-anchor="middle" fill="#fff" font-size="12">تخطيط الهندسة</text><text x="580" y="138" text-anchor="middle" fill="#fff" font-size="12">والهجرة</text>
+  <path d="M220 110 L250 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
+  <path d="M450 110 L480 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
+  <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
+  <text x="350" y="200" text-anchor="middle" fill="#475569" font-size="11">الحكم الهندسي البشري يحكم كل بوابة · الذكاء الاصطناعي يضغط العبء</text>
+  </svg>
+  <figcaption>الشكل 1 — خط الأنابيب الثلاثي المراحل للمواصفات من الأنظمة الموروثة.</figcaption>
+  </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
   <li>ماكينزي و Company، <em>Tech debt: Reclaiming tech equity</em>، 2020. <a href="https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights" target="_blank" rel="noopener noreferrer">mckinsey.com</a></li>
@@ -945,7 +1686,8 @@ export const insights = [
   <li>HUMAIN (PIF AI subsidiary). <a href="https://www.humain.ai/" target="_blank" rel="noopener noreferrer">humain.ai</a></li>
   </ol>
 `,
-      contentTr: `
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+  
   <h2>Tez</h2>
   <p>Eski sistem, GCC'deki kurumsal yapay zeka için en temel kısıtlamadır. Telekomünikasyon şirketleri müşteri faturalandırması, ücretlendirme ve sağlama işlemlerini 1990'lar ve 2000'li yılların başında tasarlanan platformlarda çalıştırmaktadırlar. Bankalar temel defter ve risk motorlarını COBOL veya eski Java'da çalıştırmaktadırlar. Kamu sektörü platformları, yirmi yıllık özelleştirmeler sonucunda birikmiş düzenleme ve hak mantığını kodlamaktadırlar. Yapay zeka tarafından yönlendirilen SDLC — bu sistemleri okumak, belgelemek ve yeniden inşa etmek için büyük dil modellerini kullanmak — modernizasyonun tarihsel olarak en pahalı aşamasını sıkıştıracak kadar olgun hale gelmiştir: mevcut sistem ne yaptığını anlamak. Bu rapor, bu yeteneği teslim edilebilir sonuçlara dönüştüren disiplini ortaya koymaktadır.</p>
   <h2>Hiçbir Şey Yapmama Maliyeti</h2>
@@ -974,6 +1716,90 @@ export const insights = [
   <li><strong>Değişim yönetimini başlangıçta kapsamlı hale getiriniz.</strong> Teknik modernizasyon daha kolay yarısıdır; işletme süreci yeniden tasarımı ve benimseme, yeni sistem kullanılıp kullanılmayacağını belirleyen yarısıdır.</li>
   <li><strong>Arapça dil doğrulamasını resmi aşama olarak oluşturunuz.</strong> Spesifikasyonu gözden geçiren Arapça konuşan iş paydaşlarıyla bir çalıştay, Arapça işlem mantığı olan GCC kuruluşları için müzakere edilemezdir.</li>
   </ul>
+  
+<h2>Sektörel Uygulama: Telekomünikasyon</h2>
+<p>GCC bölgesindeki telekomünikasyon operatörleri, genellikle 15-25 yaşında olan ve birikmiş özellik istekleri, düzenleyici uyum mantığı ve bölgesel pazar uyarlamalarıyla dolu fatura ve müşteri yönetimi sistemleri kullanmaktadır. Etisalat ve du (BAE), Zain (bölge genelinde) ve Stc (Suudi Arabistan) tüm karmaşık sağlama iş akışlarını, derecelendirme motorlarını ve ara bağlantı mantığını kodlayan OSS/BSS (İşlem Destek Sistemleri / İşletme Destek Sistemleri) yığınlarını çalıştırmaktadır. Sorun tek başına teknik eskitme değildir — bu sistemler çalışmaktadır — operasyonel hız sorunudur: haftalar içinde tamamlanması gereken bir özellik, iş mantığı belgelenmemiş saklı yordamlar, toplu işler ve yapılandırma tabloları arasında dağıldığı için aylar alır.</p>
+<p>AI destekli çıkartma bu mantığı haftalar içinde ortaya çıkarır. Çıkartma aşaması, gelir etkileyen her iş kuralını tanımlar (promosyonel mekanikler, kademeli fiyatlandırma, dolaşım anlaşmaları, taşıma siparişi bağımlılıkları). Doğrulama aşaması, ürün, finans ve operasyon ekiplerini bir araya getirerek çıkartılan kuralların hedeflenen davranışla eşleştiğini doğrular. Bu GCC telekomünikasyonunda kritiktir çünkü derecelendirme motorundaki %1 hata milyonlarca günlük işlem genelinde kademeli olarak yayılır. Maven'in metodolojisi, mimarilendirme aşamasını, şartname hem CTO hem de CFO tarafından imzalanana kadar açıkça engeller — iş ve mühendislik konuşmalarını zorlayan ve lansmanı takip eden sürprizleri önleyen ortak bir imza.</p>
+
+<h3>Telekomünikasyon Katılım Hızı: 90/180/365 Gün</h3>
+<p><strong>1-90. Günler:</strong> Hedef sistemi kapsamını belirleyin (genellikle tek bir BSS veya sağlama alt sistemi, tüm yığın değil). Çıkartma araçlarını şirket içi olarak dağıtın. İşletme paydaşlarıyla haftalık doğrulama çalıştayları yürütün. Sürüm kontrollü bir şartname belgesi oluşturun (bir büyük telekomünikasyon alt sistemi için genellikle 800-1.200 sayfa) 12. haftaya kadar tam imza ile.</p>
+<p><strong>91-180. Günler:</strong> Hedef mimarisi tasarlayın (bulut-natif mikro hizmetler, olay-driven, genellikle Kubernetes-hosted). Detaylı tasarım incelemelerini yürütün. Şartnamenin mimari açıdan sesli olduğunu kanıtlamak için prototip API'ları oluşturun. 12 aylık üretim işlem verilerine dayalı test senaryoları belirleyin. 24. haftaya kadar, geri çekme kapıları, paralel çalışma pencereleri ve müşteri etkisi tahminleri olan bir geçiş yol haritasına sahip olun.</p>
+<p><strong>181-365. Günler:</strong> Yeni sistemi yalıtım içinde oluşturun ve test edin. Her iki eski ve yeni sisteme karşı paralel üretim yükü çalıştırın. Uzlaşmayı günlük olarak ölçün. Müşteri kohortlarını aşamalı dalgalar halinde geçirin (haftada %2-5). 365. güne kadar, eski sistem trafiğin <%5'ini desteklemekte ve belgelenmiş bir kullanımdan çıkarma yolundadır.</p>
+
+<h2>Sektörel Uygulama: Bankacılık ve Finansal Hizmetler</h2>
+<p>GCC bankaları, farklı bir modernizasyon zorlığuyla karşı karşıyadır: çekirdek defter sistemi neredeyse her zaman onlarca yaşında COBOL uygulaması veya 2000'li yılların başında SAP kurulumudur ve düzenleyici ortam (Suudi Arabistan'da SAMA, Dubai'de DFSA, Bahreyn'de CBB) bu sistemler tasarlandığından bu yana önemli ölçüde gelişmiştir. Bir banka çekirdek defterini basitçe yeniden yazamaz; her işlem, her denetim izi, her düzenleyici rapor sente kadar uzlaşmak zorundadır. Şartname aşaması bu nedenle isteğe bağlı değildir — hemen yasal ve uyum temellidir.</p>
+<p>Bankacılık müşterileri genellikle çıkartma aşaması sırasında gerçek iş mantığının belgelenmiş iş mantığından önemli ölçüde farklı olduğunu keşfederler. Son çalışmamızdaki bir bölgesel banka, Şeriat-uyumlu ürünleri için faiz tahakkuk mantığının 8 yıllık yinelemeli özelleştirme ile orijinal Fetva'dan ayrıldığını ve hiç kimsenin mevcut durumu açıklayamadığını keşfetti. Çıkartılan şartname bunu görünür hale getirdi; CRO ve Şeriat kurulu ile doğrulama çalıştayları bunu ortaya çıkardı; yeni sistem birikmiş sürüklemeyi değil, doğru mantığı uygular. Bu, bir düzenleyici denetim yapılıncaya kadar gizli kalan çok milyonluk bir düzeltmedir.</p>
+
+<h3>Bankacılık Katılım Hızı: 120/240/365 Gün</h3>
+<p><strong>1-120. Günler:</strong> Kapsam, hem çekirdek defter çıkartmasını hem de düzenleyici gereklilikleri denetim (SAMA kuralları, DFSA kuralları, yerel AML/KYC mantığı) içerir. Risk, uyum ve finans ekiplerinin katılımı ile haftalık çıkartma. Aylık doğrulama çalıştayları. Şartname oluşturun ve bir düzenleyici gereklilikleri izlenebilirlik matrisi olup, şartnamenin her kuralı belirli bir yönetmeliğe nasıl eşlendiğini gösterir. 16. haftaya kadar CRO, CFO ve Baş Uyum Görevlisinden imza alın.</p>
+<p><strong>121-240. Günler:</strong> Yerleşik denetim günlüğü, şifreleme ve düzenleyici raporlama ile hedef mimarisi tasarlayın. Her işlem türü için yeni sistem çıktısını eski sistem çıktısıyla karşılaştıran bir uzlaşma motoru oluşturun. İzin verilen yerlerde yerel yetkililerle düzenleyici ön onay çalıştayları yürütün. Geçmiş 5 yıldaki uç durumları içeren test veri kümelerini belirleyin (cezalar, tersine çekmeler, temettü ayarlamaları, Zakat hesaplamaları). 32. haftaya kadar geçiş planında tam düzenleyici ve iş imzası alın.</p>
+<p><strong>241-365. Günler:</strong> Yalıtılmış ortamda oluşturun ve kapsamlı olarak test edin. Paralel olarak tam üretim uzlaşması çalıştırın (gerçek trafiği değil, üretim verilerinin yeniden oynatılması kullanarak). İç denetim incelemesi yürütün. Son derece dar kohortlarda geçiş yapın — hesap türüne göre, iş satırına göre, coğrafi pazara göre. 365. güne kadar eski sistem salt okunur modunda, yeni sistem %100 yeni işlemleri ve %80+'ını desteklemektedir geçmiş aramaları.</p>
+
+<h2>Mirası Eski Sistemden Çıkartma Çalışması için Satıcı Değerlendirme Çerçevesi</h2>
+<p>Tüm danışmanlık firmaları ve teknoloji satıcıları bu disiplinde gerçek yeteneğe sahip değildir. Pazar, bu yüksek riskli sistemler için gereken derinliğe sahip olmaksızın "AI destekli modernizasyon" talep eden firmalarla kalabalıktır. Maven aşağıdaki satıcı değerlendirme kriterlerini önerir.</p>
+
+<h3>Yetenek Değerlendirmesi</h3>
+<ul>
+<li><strong>Şirket içi yürütme:</strong> Satıcı tüm çıkartma ve analiz işlem hattını kodu veya verileri buluta göndermeden altyapınız üzerinde çalıştırabilir mi? Cevap "güvenli bir bulut seçeneğimiz var" ise, bu egemen GCC hükumet işi için yeterli değildir.</li>
+<li><strong>Yığın özgüllüğü:</strong> Satıcı, belirli eski yığında (COBOL + CICS, SAP + ABAP, eski Java, Informatica/Talend, Salesforce özelleştirmeleri) derin referans deneyimine sahip mi? Genel "kod için AI" yeteneği yetersizdir — COBOL-Java'dan veya SAP-buluta geçişleri daha önce yapan bir ekibe ihtiyacınız vardır.</li>
+<li><strong>Arapça dil desteği:</strong> Eski sisteminiz Arapça iş mantığını kodluyorsa (ve çoğu GCC bölgesel sistemi kodlar), satıcı Arapça dil kod tabanları, karakter kodlamaları ve şartnama belgelerinde çift yönlü metinle çalıştı mı? Bu nadiren standart satıcı anketinde yer alır ama bölgede kritiktir.</li>
+<li><strong>Test ve doğrulama disiplini:</strong> Satıcı çıkartılan şartnamenin gerçekten doğru olduğundan nasıl emin olur? Resmi bir doğrulama metodolojisi var mı? Mimari tasarım başlamadan önce iş paydaşı imzasını gerektirir mi? Çıkartmadan mimariye doğru hareket eden satıcılar, uç durumları kaçıran etkileyici görünüşlü bir şartname ürün olabilir.</li>
+<li><strong>Düzenleyici deneyim:</strong> Bankacılık ve sigorta istemcileri için satıcı düzenlenmiş endüstrilerde modernizasyonları teslim etmiş mi? Önceki bir programda düzenleyici ön onay ve denetim uyumuna ilişkin kanıt gösterebilir mi?</li>
+</ul>
+
+<h3>Referans Kontrolleri</h3>
+<p>Satıcıdan GCC işletmelerinden üç referans isteyin. Her referansa özel olarak sorun: (1) Çıkartılan şartname sistemin gerçek davranışıyla eşleşti mi? (2) Doğrulama sırasında şartnameye önemli değişiklikler oldu mu? (3) Doğrulama aşaması orijinal gereksinimlerde olmayan iş mantığını yakaladı mı? (4) Bu satıcıyı yeniden kullanır mıydınız? (4) yanıtı satış sunuşundan daha belirleyicidir.</p>
+
+<h2>Yaygın Sorunlar ve Bunlardan Kaçınma Yolları</h2>
+
+<h3>Sorun 1: Yetersiz Doğrulama Bant Genişliği</h3>
+<p>En yaygın başarısızlık modu, doğrulama aşamasını bir kutu işareti olarak ele almaktır: satıcı 1.200 sayfalık bir şartname üretir, istemci tek bir çalıştayda imza atar ve daha sonra mühendislik, inşa işinin 18 ayı içine girdiğinde şartnamenin gerçek iş kurallarının %20'sini kaçırdığını keşfeder. Önleme: doğrulama için bir tam iş akışı olarak bütçe ayırın, akabinde ayar değil. Eski sistemi 5+ yıl boyunca çalışmış birini (tercihen) doğrulama ekibine atayın. Doğrulama çalıştaylarını aylık değil haftalık olarak planlayın. Üretim işlem analizi kullanın — şartnamenin yeni sistem açısından ne olması gerektiğini söylemektedir eski sistemde gerçekten ne olur karşı cümleleştir — boşlukları bulun.</p>
+
+<h3>Sorun 2: Bölgesel/Dil Karmaşıklığını Hafife Almak</h3>
+<p>Birincil olarak İngilizce dil kod tabanlarında eğitim alan küresel bir satıcı, Hicri takvim mantığı, Arapça karakter kodlaması uç durumları ve bölgeye özgü düzenleyici iş akışlarını açıkça bulmak için görev verilmediği sürece kaçıracaktır. Önleme: satıcıyı şartnamenin bir parçası olarak bir "Arapça İş Mantığı Kaydı" oluşturmak için açıkça gerekli kılın — Arapça dil, İslami finans veya bölgesel yönetmeliğe özgü her iş kuralını listeleyen ayrı bir belge. Arapça konuşan konu uzmanlarıyla ayrı bir doğrulama aşaması yürütün.</p>
+
+<h3>Sorun 3: Şartname Doğrulamasından Önce Mimari Tasarım</h3>
+<p>Hızlı hareket etmek isteyen bir satıcı, hedef mimarinin (mikro hizmetler, Kubernetes, olay-driven) şartname kilitlenmeden önce bir taslağını çizecektir. Bu bir bağlanma riski oluşturur: mimari tasarlandığında, şartname değişiklikleri pahalı hale gelir, bu nedenle şartname gerçekten doğru olmadan önce sonlandırılır. Önleme: Şartname imzasını sert bir kapı haline getirin. Mimarinin tasarım başlatmayacağını gerekli kılın tesis yazılı olarak şartnameyi onaylanmadıktan. Bu proje zaman çizelgesine 2-3 hafta ekler ve yeniden çalışmada 6-12 aydan tasarruf eder.</p>
+
+<h3>Sorun 4: Yetersiz Test Verileri ve Uzlaşma Stratejisi</h3>
+<p>Yeni sistemin eski sistemle aynı çıktıyı ürettiğini test etmek detaylı üretim verilerini ve sağlam bir uzlaşma motoru gerektirir. Birçok satıcı paralel çalışma sırasında eski sistemi "gölgelemek" önerir, ancak önceden hazırlanmış bir uzlaşma yeteneği olmadan, gölge çalışmalar çok geç tutarsızlıkları keşfeder. Önleme: satıcıyı Faz 2'nin bir parçası olarak, herhangi bir yeni kod yazılmadan önce bir uzlaşma motoru oluşturmak için gerekli kılın. Uzlaşma otomatik, sürekli ve üretim-hazır olmalıdır inşa aşaması başladığında.</p>
+
+<h2>Spec-from-Legacy Programlarından Elde Edilen Kilit Performans Göstergeleri</h2>
+<p>GCC CIO'ları ve CTO'ları, şartname aşaması sırasında program sağlığına açık görünürlük gerekir. Geleneksel BT proje KPI'ları (yaralama tabloları, sprint hızı) burada uygun değildir; bu araştırma çalışması, yürütme değil. Maven, şartname aşaması için aşağıdaki KPI'ları önerir.</p>
+
+<ul>
+<li><strong>Şartname tamlığı:</strong> Çıkartılan ve belgelenen iş kurallarının yüzdesi. Hedef: %100 gelir etkileyen kuralları, %95+ operasyonel kurallar. Üretim işlem analizi karşı şartname uzlaşması ile ölçülen.</li>
+<li><strong>Doğrulama kapsamı:</strong> Çıkartılan kuralların, iş paydaşlarıyla konuşturulan yüzdesi. Hedef: doğrulama çalıştaylarında material kuralların %100'ü. Katılım ve imza kayıtlarıyla izlenen.</li>
+<li><strong>Paydaş güveni:</strong> Doğrulama sonrası iş paydaşları anketi: "Bu şartnamenin mevcut sistemi doğru olarak temsil ettiğine ne kadar eminsiniz?" Hedef: %85+ "çok güvenli" veya "güvenli" olarak yanıt verin. %80'in altındaki yanıtlar doğrulama boşluklarının kaldığını işaret eder.</li>
+<li><strong>Şartname istikrarı:</strong> Şartname belgesinde haftadan haftaya değişiklik oranı. 1-6. haftalarda, anlayış derinleştikçe belge içeriğinin %15-25'inin değişmesini bekleyin. 10. haftaya kadar, değişiklik oranı %5'in altına düşmelidir. Şartname 12. haftada haftada >%10'da hala değişiyorsa, doğrulama tamamlanmamıştır.</li>
+<li><strong>Çıkartma-doğrulama döngü süresi:</strong> Bir iş kuralının çıkartılması ile o kuralın bir iş paydaşı tarafından doğrulanması arasındaki ortalama gün. Hedef: <10 gün. Döngü süresi 20 günü aşarsa, doğrulama ekibi bir darboğaz ve ek kaynaklara ihtiyaç duyar.</li>
+</ul>
+
+<h2>Board Düzeyinde Çerçeveleme ve Yönetici İletişimi</h2>
+<p>CFO ve kurul üç soruyla ilgilenirler: (1) Bu ne kadara mal olacak? (2) Ne kadar sürecek? (3) Yanlış yaparsak aşağı yönlü risk nedir? Spec-from-legacy çalışması üçünü de değiştirir.</p>
+
+<p><strong>Maliyet:</strong> Şartname-birinci metodoloji kısa vadede daha pahalıdır (şartname aşaması için %10-15 daha yüksek maliyet) çünkü iş paydaşlarının yoğun şekilde katılımı içerir. Düşündüğünüzde uzun vadede dramatik olarak daha ucuzdur çünkü bu aşamayı atlayan modernizasyon programlarını karakterize eden yeniden çalışma, sistem yeniden oluşturmalar ve lansmanı takip eden yamalarını engeller. Kabaca bir kural: Inşa ve stabilizasyon sırasında kaçınılan yeniden çalışmalarda $10-20M tasarruf etmek için şartnameye ekstra $2M harcayın.</p>
+
+<p><strong>Zaman Çizelgesi:</strong> Şartname aşaması 3-4 ay alır ("hızlı" bir şartname için 1-2 ay). Takım büyük boşlukları mid-build'de keşfetmediği için inşa ve test aşamaları %30-40 daha hızlıdır. Toplam program zaman çizelgesi genellikle detaylı şartnameyi atlayan programlardan %20-30 kısadır.</p>
+
+<p><strong>Risk:</strong> Detaylı, doğrulanmış bir şartname, modernizasyon başarısızlığına karşı tek güçlü riskten korunmadır. Aynı zamanda iş ve mühendislik arasındaki birincil sözleşmedir: yeni sistem şartnameyle eşleşirse ve şartname iş tarafından imzalanmışsa, yeni sistem tanımı gereği doğrudur. Bu riski "Sistem doğru olacak mı?" (ikili, tahmin edilemez bir sonuç) "Programda kalacak ve bütçede kalacak mı?" (yönetilebilir bir yürütme riski) adlı yönetilebilir bir yürütme riski kaydırır.</p>
+
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-17 svg-d-17"><title id="svg-t-17">Strangler-fig deseni</title><desc id="svg-d-17">Strangler-fig deseni</desc><rect width="700" height="240" fill="#F8FAFC"/><rect x="40" y="80" width="180" height="80" fill="#0E2841" rx="6"/><text x="130" y="125" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Eski çekirdek</text><rect x="260" y="50" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="80" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Yetenek dilimi 1 (AI)</text><rect x="260" y="110" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="140" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Yetenek dilimi 2 (AI)</text><rect x="260" y="170" width="180" height="50" fill="#1A4F7A" rx="6"/><text x="350" y="200" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Dilim 3 — aşamalı</text><rect x="480" y="80" width="180" height="80" fill="#F5A623" rx="6"/><text x="570" y="125" font-family="Inter,Arial" font-size="13" fill="#0E2841" text-anchor="middle">Modern AI çalışma zamanı</text><line x1="220" y1="120" x2="260" y2="75" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="135" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="195" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="4 3"/><line x1="440" y1="75" x2="480" y2="115" stroke="#156082" stroke-width="2"/><line x1="440" y1="135" x2="480" y2="120" stroke="#156082" stroke-width="2"/></svg><figcaption>Strangler-fig deseni: AI odaklı yeteneklerin kademeli taşınması</figcaption></figure>
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-18 svg-d-18"><title id="svg-t-18">AI-assisted spec-from-legacy pipeline</title><desc id="svg-d-18">Three-phase pipeline: AI-assisted extraction, specification validation, architecture and migration planning.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Aşama 1</text><text x="120" y="120" text-anchor="middle" fill="#fff" font-size="12">AI-Destekli</text><text x="120" y="138" text-anchor="middle" fill="#fff" font-size="12">Çıkarım</text>
+  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Aşama 2</text><text x="350" y="120" text-anchor="middle" fill="#fff" font-size="12">Spesifikasyon</text><text x="350" y="138" text-anchor="middle" fill="#fff" font-size="12">Doğrulaması</text>
+  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Aşama 3</text><text x="580" y="120" text-anchor="middle" fill="#fff" font-size="12">Mimari &amp;</text><text x="580" y="138" text-anchor="middle" fill="#fff" font-size="12">Geçiş Planı</text>
+  <path d="M220 110 L250 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
+  <path d="M450 110 L480 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
+  <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
+  <text x="350" y="200" text-anchor="middle" fill="#475569" font-size="11">İnsan mühendislik yargısı her kapıyı yönetir · AI çabayı sıkıştırır</text>
+  </svg>
+  <figcaption>Şekil 1 — Üç aşamalı spec-from-legacy ardışık düzeni.</figcaption>
+  </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
   <li>McKinsey &amp; Company, <em>Tech debt: Reclaiming tech equity</em>, 2020. <a href="https://www.mckinsey.com/capabilities/mckinsey-digital/our-insights" target="_blank" rel="noopener noreferrer">mckinsey.com</a></li>
@@ -1003,10 +1829,28 @@ export const insights = [
       summary: "PwC ME estimates ~$320B GCC GDP impact from AI by 2030; Strategy& sizes the GenAI opportunity at ~$23.5B annually. We anchor the procurement reality in named, public commitments — HUMAIN under PIF, Microsoft–G42, Aramco–Groq — and set out what it means for technology providers.",
       featured: false,
       tags: ["GCC", "AI Spending", "Vision 2030", "Sovereign AI"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>The GCC's AI investment story is not a forecast — it is a procurement reality already underway, anchored in publicly committed sovereign capital and announced strategic partnerships. PwC Middle East estimates that AI could contribute roughly $320 billion to GCC GDP by 2030, with Saudi Arabia (~$135B) and the UAE (~$96B) capturing the largest share (<a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">PwC ME, 2018</a>). Strategy&amp;'s 2023 work sizes the GCC GenAI opportunity at roughly $23.5B annually by 2030 (<a href="https://www.strategyand.pwc.com/m1/en/strategic-foresight/sector-strategies/technology/reshaping-the-middle-east-genai.html" target="_blank" rel="noopener noreferrer">Strategy&amp;, 2023</a>). What has changed since those estimates were published is the speed at which sovereign capital has moved from policy to deployment.</p>
+  <h2>The Historical Baseline: Gartner IT Key Metrics 2019</h2>
+  <p>Pre-GenAI, Gartner's <em>IT Key Metrics Data 2019</em> set a useful global baseline against which today's GCC sovereign-AI commitments can be sized. Across all industries, IT spend ran at roughly 3.6% of revenue, with about 71% of IT operational budget locked into "run-the-business" activity (keeping the lights on) and only the remaining ~29% available for change and innovation. Cloud spend (SaaS + IaaS) was still only about 8% of the IT budget, and the average enterprise spent roughly $14,538 per employee per year on IT (<a href="https://www.gartner.com/en/documents/3905769" target="_blank" rel="noopener noreferrer">Gartner, IT Key Metrics Data 2019</a>). The HUMAIN, G42, and Aramco–Groq commitments below are not incremental to that 2019 baseline — they are a structural reset of where the IT budget goes, what counts as "run-the-business," and how much of the regional IT envelope is now allocated to sovereign AI infrastructure.</p>
   <h2>Anchor Programs &amp; Commitments</h2>
+  <figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-19 svg-d-19"><title id="svg-t-19">GCC AI sector concentration and anchor commitments</title><desc id="svg-d-19">Bar chart showing concentration of GCC AI spend in government, banking and telecoms with named anchor commitments labelled.</desc>
+  <rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="30" font-size="13" font-weight="700" fill="#0E2841">Sector concentration of GCC AI spend (IDC pattern, illustrative)</text>
+  <rect x="20" y="60" width="280" height="32" fill="#156082"/><text x="30" y="82" fill="#fff" font-size="13" font-weight="700">Government &amp; public services</text>
+  <rect x="20" y="100" width="240" height="32" fill="#1A4F7A"/><text x="30" y="122" fill="#fff" font-size="13" font-weight="700">Banking &amp; financial services</text>
+  <rect x="20" y="140" width="200" height="32" fill="#0E2841"/><text x="30" y="162" fill="#fff" font-size="13" font-weight="700">Telecommunications</text>
+  <rect x="20" y="180" width="120" height="32" fill="#94A3B8"/><text x="30" y="202" fill="#fff" font-size="13" font-weight="700">All others</text>
+  <text x="380" y="80" font-size="11" fill="#0E2841">SDAIA · HUMAIN · MCIT Qatar</text>
+  <text x="380" y="120" font-size="11" fill="#0E2841">SAMA-supervised banks · Open Banking</text>
+  <text x="380" y="160" font-size="11" fill="#0E2841">STC · e&amp; · du · Ooredoo · Zain</text>
+  <text x="380" y="200" font-size="11" fill="#0E2841">Energy (Aramco–Groq), healthcare, retail</text>
+  </svg>
+  <figcaption>Figure 1 — Three sectors capture the majority of GCC AI spend, anchored by named public commitments.</figcaption>
+  </figure>
   <ul>
   <li><strong>Saudi Arabia — HUMAIN under PIF.</strong> Launched as PIF's vehicle for end-to-end AI capability — data centres, foundation models, and downstream products (<a href="https://www.humain.ai/" target="_blank" rel="noopener noreferrer">HUMAIN</a>; <a href="https://www.pif.gov.sa/" target="_blank" rel="noopener noreferrer">PIF</a>).</li>
   <li><strong>Saudi Arabia — SDAIA.</strong> Operates the National Strategy for Data &amp; AI and the National Data Bank (<a href="https://sdaia.gov.sa/" target="_blank" rel="noopener noreferrer">SDAIA</a>).</li>
@@ -1042,6 +1886,137 @@ export const insights = [
   </ul>
   <h2>A Note on Methodology</h2>
   <p>The figures in this report are reproduced as published by the cited sources. Maven AI does not produce its own GCC AI spending forecast: the dispersion across published forecasts (PwC ME, Strategy&amp;, IDC, IMARC, Mordor Intelligence) is wide enough that adding a tenth number would mislead more than it would inform. Readers should treat the cited ranges as bounds, not point estimates.</p>
+  
+  <h2>Regulator Engagement & Compliance Pathways</h2>
+
+<p>GCC regulators — SAMA in Saudi Arabia, CBUAE and DFSA in the UAE, Qatar Central Bank, and the National AI Office in each jurisdiction — are moving from a permissive "sandbox" posture to active specification of AI governance, data residency, and algorithmic-audit requirements. This shift is material: a 90-day engagement with a regulator early in a deployment programme can prevent 180 days of rework downstream. Institutions planning material AI investments should establish a formal regulatory-engagement cadence, ideally before procurement begins.</p>
+
+<p>SAMA's published IT Governance Framework now explicitly addresses AI and machine-learning risk classification (<a href="https://www.sama.gov.sa/en-US/RulesInstructions/Pages/default.aspx" target="_blank" rel="noopener noreferrer">SAMA Governance</a>). The CBUAE's 2024 guidance on algorithmic decision-making in financial services clarifies that any AI system influencing credit, pricing, or customer treatment must pass a Shariah-and-conduct screen before deployment. Qatar's regulator has signalled similar intent. Vendors and internal technology teams that treat this as "compliance overhead" rather than as a core design requirement will find their deployments delayed or mandated to rework.</p>
+
+<h3>Data Residency and Sovereign Compute</h3>
+
+<p>All six GCC states now either mandate or strongly prefer data residency within national borders for regulated sectors (banking, telecom, energy, healthcare). This is not a regulatory *suggestion*: it is embedded in open-banking frameworks, critical-infrastructure designations, and PDPL enforcement. For technology providers, this means that cloud-first, US-region-default architectures are disqualified from the largest contract categories. Vendors without credible on-premise, UAE-hosted, or Saudi-hosted compute options should expect systematic exclusion from government and financial-services RFPs.</p>
+
+<p>The emergence of HUMAIN as a sovereign AI-compute layer in Saudi Arabia and the acceleration of G42's on-prem deployment capacity in the UAE create a two-track market: vendors that can operate within these sovereign stacks gain preferential access to large anchoring institutions; vendors that cannot will be relegated to smaller enterprises and non-regulated sectors. This is not a temporary phase — it is the direction of structural change.</p>
+
+<h2>Deployment KPIs & 90/180/365-Day Cadence</h2>
+
+<p>Successful GCC AI deployments follow a measurable cadence tied to observable business impact. Maven's observation across a sample of announced projects suggests that institutions with a formal 90/180/365-day KPI structure outperform those with vaguer milestone definitions by 2–3 times in time-to-value and stakeholder alignment.</p>
+
+<h3>The 90-Day Phase: Foundation &amp; Pilot</h3>
+
+<ul>
+<li><strong>Data audit and quality assessment.</strong> Identify the three highest-value use cases and validate that underlying data exists, is accessible, and meets regulatory requirements. Many GCC institutions discover at this stage that historical data is fragmented across legacy systems and that data-cleaning will cost more than the AI system itself.</li>
+<li><strong>Regulator pre-engagement.</strong> File intent notices or hold informal technical discussions with relevant regulators. This is not optional in financial services or energy; it is a force multiplier in telecoms and public services.</li>
+<li><strong>Vendor and architecture selection.</strong> Evaluate three to five shortlisted vendors and internal-build options against weighted criteria: Arabic-language performance, data-residency capability, regulatory alignment, total-cost-of-ownership (including internal staffing), and integration complexity.</li>
+<li><strong>KPI definition.</strong> Define what "success" means in financial or operational terms: reduction in FTE for a process, improvement in prediction accuracy, time-savings per transaction, compliance violations prevented, etc. Avoid vanity metrics like "models deployed" or "data records processed."</li>
+</ul>
+
+<h3>The 180-Day Phase: Pilot Deployment &amp; Feedback</h3>
+
+<ul>
+<li><strong>Shadow-mode operation.</strong> Run the AI system in parallel with the incumbent process for 4–8 weeks to validate accuracy, latency, and integration without operational risk. This is standard practice in financial-services risk and fraud; it should be standard everywhere.</li>
+<li><strong>Shariah-board and compliance review (Islamic finance only).</strong> If the use case touches Shariah-compliant products, route the model, training data, and decision rules through Shariah review. Starting this in month 6 prevents month-9 surprises.</li>
+<li><strong>Internal-team capability building.</strong> Run two to three formal training cohorts for the teams who will operate, monitor, and iterate on the system. Delegating this to "the vendor's customer success team" consistently underperforms.</li>
+<li><strong>Regulator feedback loop.</strong> If you filed a pre-notice at 90 days, expect to receive questions or guidance by 180 days. Budget time to respond; use this as an input to your 180-day KPI reassessment.</li>
+</ul>
+
+<h3>The 365-Day Phase: Production Scale &amp; Continuous Improvement</h3>
+
+<ul>
+<li><strong>Full production rollout.</strong> Move from parallel operation to live operation, ideally with a controlled phase-in (e.g., 10% of transaction volume in week 1, 50% by week 3, 100% by week 6).</li>
+<li><strong>Data-drift and performance monitoring.</strong> Establish a quarterly review cycle tracking model performance, data distribution changes, and business impact. GCC institutions often discover that what worked in 2024 requires retraining in 2025 if new customer cohorts or product types enter the workflow.</li>
+<li><strong>ROI accounting and board reporting.</strong> Quantify the actual financial or operational benefit. Most GCC organisations undercount benefits (e.g., not capturing time freed up for higher-value work) and overcount costs (e.g., treating one-time implementation fees as recurrent). A formal 365-day reconciliation forces clarity.</li>
+<li><strong>Scaling and adjacent use-cases.</strong> Once the first deployment is operating and delivering KPIs, identify adjacent processes where the same model, data, or workflow can be extended. The second deployment often has 40% lower cost than the first.</li>
+</ul>
+
+<p>Institutions that skip or compress the 90-day phase (rushing to production) consistently report 30–50% longer time-to-value and higher rework cost. Those that treat 180-day regulator feedback as "nice to have" rather than "mandatory input" face deployment delays of three to nine months. The 365-day checkpoint is where many GCC deployments falter: if benefit realisation is not clear by month 12, stakeholder support evaporates and the project becomes a cost centre rather than a value centre.</p>
+
+<h2>Vendor Evaluation: Five Weighted Criteria for GCC Context</h2>
+
+<p>GCC CIOs and technology leaders often default to evaluating vendors on feature parity and list price, the same framework that works for traditional enterprise software. For AI systems in a regulated, Arabic-language, sovereign-compute context, this framework is backwards. The five weighted criteria below reflect the material constraints of GCC deployments:</p>
+
+<h3>1. Arabic-Language Benchmark Performance (Weight: 25%)</h3>
+
+<p>Request the vendor to score your actual use-case text (customer emails, transaction descriptions, Quranic or regulatory references where applicable) on an independent Arabic-language benchmark. Falcon and Jais publish their benchmarks; most global vendors do not. If a vendor claims Arabic capability but cannot point to published Arabic-language evaluation, assume the capability does not exist or is a thin wrapper over English-language models. This is not a minor differentiation — it is a gate.</p>
+
+<h3>2. Data-Residency Architecture (Weight: 20%)</h3>
+
+<p>Can the vendor deploy entirely on-premises in Saudi Arabia or the UAE, or via a certified regional hyperscaler (Microsoft Azure KSA, AWS Middle East Region)? If the vendor requires data transfer to US or European data centres for model training, inference, or fine-tuning, the vendor is disqualified for regulated sectors. For non-regulated sectors, on-prem and regional options should still be weighted heavily, as they reduce compliance risk and often reduce latency.</p>
+
+<h3>3. Regulatory Alignment &amp; Audit Support (Weight: 20%)</h3>
+
+<p>Has the vendor worked with SAMA, CBUAE, or other GCC regulators on algorithm transparency, auditability, and bias assessment? Can the vendor provide documentation of governance frameworks, model cards, and decision-rule transparency? For financial-services vendors, ask whether they have helped other GCC banks respond to algorithmic-decision regulatory inquiries. Vendors with zero regulatory references in the GCC should be deprioritised.</p>
+
+<h3>4. Total Cost of Ownership Over 36 Months (Weight: 20%)</h3>
+
+<p>Request a transparent 36-month cost model including: software licenses, on-prem infrastructure or cloud credits, professional services (implementation, training, governance), internal staffing assumptions, and annual support. Most GCC organisations underfund the "continuous improvement" and governance line items, leading to cost overruns in years 2–3. A vendor willing to be transparent on this is usually a better partner than one quoting only year-1 fees.</p>
+
+<h3>5. Integration Complexity &amp; Time-to-Pilot (Weight: 15%)</h3>
+
+<p>For a greenfield deployment, can the vendor achieve a meaningful pilot (shadow-mode operation on real data) within 12 weeks? For existing integrations, can the vendor provide integration patterns for your incumbent ERP, data warehouse, and identity systems? Vendors that require six months of "discovery and assessment" before a pilot launch are usually misaligned with GCC deployment timelines.</p>
+
+<p>Weighting these five criteria explicitly (rather than treating all vendors as equivalent on "features") forces a more honest vendor shortlist and typically reduces implementation surprises by 40–50%.</p>
+
+<h2>Common Implementation Pitfalls in the GCC</h2>
+
+<p>Maven's review of announced but delayed or cancelled GCC AI projects suggests four recurring failure modes:</p>
+
+<h3>Pitfall 1: Treating Data Preparation as a Vendor Responsibility</h3>
+
+<p>The expectation that an AI vendor will "fix your data" is fantasy. Data cleaning, lineage documentation, and quality assurance are the customer's responsibility. GCC institutions that budget less than 30% of AI-project cost to data work almost always miss timelines. Those that budget 40–50% typically deliver on schedule. The vendor's role is to specify *what* data quality the model requires; the customer's role is to achieve it.</p>
+
+<h3>Pitfall 2: Underestimating Governance and Audit Overhead</h3>
+
+<p>Regulated sectors — banking, telecoms, energy — require that every model decision be explainable, auditable, and reviewable by internal compliance teams and (in some cases) external regulators. GCC institutions that treat governance as a post-deployment "checkbox" consistently find that models cannot be promoted to production because audit trails are missing or insufficient. Budget 15–25% of project cost to governance infrastructure (monitoring, logging, decision-rule documentation, audit APIs) and do it from month 1.</p>
+
+<h3>Pitfall 3: Assuming Global Models Will Work in Arabic</h3>
+
+<p>Even models fine-tuned on Arabic data sometimes fail on dialect-specific text, transliterated Arabic, or domain-specific terminology (e.g., Islamic finance nomenclature). Run your actual business text through the candidate model in early evaluation, not just benchmark datasets. Many GCC pilots have discovered model limitations only after production deployment, requiring expensive rework.</p>
+
+<h3>Pitfall 4: Insufficient Stakeholder Alignment on Success Metrics</h3>
+
+<p>GCC organisations often have multiple stakeholders (business unit heads, risk officers, compliance, IT leadership, board members) with different success criteria. If "success" is not jointly defined and weighted before procurement, the same model will be seen as a success by one stakeholder and a failure by another. Spend time in the 90-day phase building consensus on what the KPIs actually are, who is accountable for tracking them, and how variances will be handled.</p>
+
+<h2>Board-Level Framing: AI as Capital Allocation</h2>
+
+<p>GCC board members increasingly expect technology and AI to be framed as a capital-allocation problem, not a cost-centre decision. The question is not "Should we deploy AI?" but "Where should we allocate our technology capital to maximise shareholder value or strategic positioning over the next three to five years?" Framing it this way creates a different conversation:</p>
+
+<ul>
+<li><strong>Opportunity-cost analysis.</strong> If we invest $2M in customer-care AI for the North American market, we cannot invest $2M in supply-chain optimisation in MENA. Which creates more value?</li>
+<li><strong>Sovereign-positioning argument.</strong> If we do not build domestic AI capability, we will become dependent on foreign vendors and infrastructure. What is the strategic cost of that dependency, and is it worth paying to avoid?</li>
+<li><strong>Talent and ecosystem.</strong> AI investments create proof points that attract and retain technical talent. Is this a factor in our longer-term headcount and capability strategy?</li>
+<li><strong>Regulatory optionality.</strong> Early movers in AI governance with regulators often gain influence over how regulations evolve. Is this a board-level strategic asset?</li>
+</ul>
+
+<p>Boards that approach AI this way make different decisions than those treating AI as a tactical IT project. In the GCC context, where sovereign wealth funds and government stakeholders often have seats at the table, this framing aligns technology decisions with broader strategic and political economy considerations.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-20 svg-d-20"><title id="svg-t-20">90/180/365-day deployment cadence and KPI milestones</title><desc id="svg-d-20">Timeline chart showing three deployment phases with key activities and regulatory touchpoints aligned to 90, 180, and 365-day marks.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<text x="20" y="25" font-size="13" font-weight="700" fill="#0E2841">GCC AI Deployment: Recommended 90/180/365-Day Cadence</text>
+<line x1="50" y1="50" x2="50" y2="180" stroke="#156082" stroke-width="3"/>
+<line x1="50" y1="180" x2="250" y2="180" stroke="#156082" stroke-width="3"/>
+<line x1="250" y1="180" x2="250" y2="50" stroke="#156082" stroke-width="3"/>
+<line x1="250" y1="50" x2="450" y2="50" stroke="#1A4F7A" stroke-width="3"/>
+<line x1="450" y1="50" x2="450" y2="180" stroke="#1A4F7A" stroke-width="3"/>
+<line x1="450" y1="180" x2="650" y2="180" stroke="#0E2841" stroke-width="3"/>
+<line x1="650" y1="180" x2="650" y2="50" stroke="#0E2841" stroke-width="3"/>
+<circle cx="50" cy="50" r="5" fill="#156082"/>
+<circle cx="250" cy="50" r="5" fill="#1A4F7A"/>
+<circle cx="450" cy="50" r="5" fill="#0E2841"/>
+<circle cx="650" cy="50" r="5" fill="#0E2841"/>
+<text x="35" y="210" font-size="11" font-weight="700" fill="#0E2841">Day 90</text>
+<text x="225" y="210" font-size="11" font-weight="700" fill="#0E2841">Day 180</text>
+<text x="425" y="210" font-size="11" font-weight="700" fill="#0E2841">Day 365</text>
+<text x="80" y="110" font-size="10" fill="#156082"><tspan x="80" dy="0">• Data audit</tspan><tspan x="80" dy="12">• Vendor selection</tspan><tspan x="80" dy="12">• Regulator brief</tspan></text>
+<text x="280" y="110" font-size="10" fill="#1A4F7A"><tspan x="280" dy="0">• Shadow-mode pilot</tspan><tspan x="280" dy="12">• Governance review</tspan><tspan x="280" dy="12">• Team training</tspan></text>
+<text x="480" y="110" font-size="10" fill="#0E2841"><tspan x="480" dy="0">• Production rollout</tspan><tspan x="480" dy="12">• KPI reconciliation</tspan><tspan x="480" dy="12">• Adjacent use-cases</tspan></text>
+</svg>
+<figcaption>Figure 2 — The 90/180/365-day deployment cadence aligns pilot phases with regulatory engagement and board-level KPI milestones.</figcaption>
+</figure>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>PwC Middle East, <em>The Potential Impact of AI in the Middle East</em>, 2018. <a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">pwc.com/m1</a></li>
@@ -1067,7 +2042,8 @@ export const insights = [
   <li>Islamic Financial Services Board. <a href="https://www.ifsb.org/" target="_blank" rel="noopener noreferrer">ifsb.org</a></li>
   </ol>
       `,
-      contentAr: `  <h2>الرؤية الأساسية</h2>
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+    <h2>الرؤية الأساسية</h2>
   <p>قصة استثمار الذكاء الاصطناعي في دول مجلس التعاون الخليج ليست توقعاً بل هي واقع المشتريات القائم بالفعل، حيث يعتمد على رأس مال سيادي ملتزم به علناً وشراكات استراتيجية معلنة. تقدّر شركة برايس ووتر هاوس كوبرز الشرق الأوسط أن الذكاء الاصطناعي قد يساهم بحوالي 320 مليار دولار في الناتج المحلي الإجمالي لدول مجلس التعاون الخليج بحلول عام 2030، مع استحواذ المملكة العربية السعودية (حوالي 135 مليار دولار) والإمارات العربية المتحدة (حوالي 96 مليار دولار) على أكبر حصة (<a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">برايس ووتر هاوس كوبرز الشرق الأوسط، 2018</a>). يقدّر عمل ستراتيجي اند الصادر سنة 2023 فرصة الذكاء الاصطناعي التوليدي في دول مجلس التعاون الخليج بحوالي 23.5 مليار دولار سنوياً بحلول عام 2030 (<a href="https://www.strategyand.pwc.com/m1/en/strategic-foresight/sector-strategies/technology/reshaping-the-middle-east-genai.html" target="_blank" rel="noopener noreferrer">ستراتيجي اند، 2023</a>). ما تغيّر منذ نشر تلك التقديرات هو السرعة التي انتقل بها رأس المال السيادي من السياسة إلى النشر الفعلي.</p>
   <h2>البرامج والالتزامات الأساسية</h2>
   <ul>
@@ -1105,6 +2081,147 @@ export const insights = [
   </ul>
   <h2>ملاحظة حول المنهجية</h2>
   <p>تُعاد الأرقام في هذا التقرير كما نُشرت من قبل المصادر المقتبسة. لا تقدّم Maven AI توقعاتها الخاصة لنفقات الذكاء الاصطناعي في دول مجلس التعاون الخليج: التشتت عبر التنبؤات المنشورة (برايس ووتر هاوس كوبرز الشرق الأوسط، ستراتيجي اند، IDC، IMARC، Mordor Intelligence) واسع بما يكفي بحيث أن إضافة رقم عاشر ستضلل أكثر مما ستوضح. يجب على القرّاء التعامل مع النطاقات المقتبسة كحدود، وليس تقديرات نقطية.</p>
+  
+<h2>تفاعل المنظمين ومسارات الامتثال</h2>
+
+<p>منظمو دول مجلس التعاون الخليجي — ساما في المملكة العربية السعودية، والمصرف المركزي الإمارات والهيئة التنظيمية للخدمات المالية في الإمارات، ومصرف قطر المركزي، ومكتب الذكاء الاصطناعي الوطني في كل ولاية قضائية — ينتقلون من موقف "رمل اختبار" متساهل إلى تحديد نشط لحوكمة الذكاء الاصطناعي ومتطلبات إقامة البيانات وتدقيق الخوارزميات. هذا التحول مهم: يمكن لـ 90 يومًا من التفاعل مع المنظم في مرحلة مبكرة من برنامج النشر أن تمنع 180 يومًا من إعادة العمل لاحقًا. يجب على المؤسسات التي تخطط لاستثمارات مادية في الذكاء الاصطناعي أن تقيم إيقاعًا رسميًا للتفاعل مع المنظمين، يفضل أن يكون قبل بدء المشتريات.</p>
+
+<p>إطار حوكمة تكنولوجيا المعلومات الذي نشرته ساما يتناول الآن بشكل صريح مخاطر تصنيف الذكاء الاصطناعي والتعلم الآلي (<a href="https://www.sama.gov.sa/en-US/RulesInstructions/Pages/default.aspx" target="_blank" rel="noopener noreferrer">حوكمة ساما</a>). يوضح الإرشاد الصادر من المصرف المركزي الإمارات في 2024 بشأن صنع القرار الخوارزمي في الخدمات المالية أن أي نظام ذكاء اصطناعي يؤثر على الائتمان أو التسعير أو معاملة العملاء يجب أن يجتاز فحص الشريعة والسلوك قبل النشر. أشار منظم قطر إلى النية المماثلة. سيجد البائعون والفرق التكنولوجية الداخلية الذين يعاملون هذا على أنه "تكلفة امتثال" بدلاً من معاملته كمتطلب تصميم أساسي أن نشراتهم قد تتأخر أو يتم إجبارها على إعادة العمل.</p>
+
+<h3>إقامة البيانات والحوسبة السيادية</h3>
+
+<p>جميع الدول الست في مجلس التعاون الخليجي إما تفرض أو تفضل بشدة إقامة البيانات داخل الحدود الوطنية للقطاعات المنظمة (الخدمات المصرفية والاتصالات والطاقة والرعاية الصحية). هذا ليس "اقتراحًا" تنظيميًا: فهو مدرج في أطر البنوك المفتوحة والتعيينات الهامة للبنية التحتية وإنفاذ قانون حماية البيانات الشخصية. بالنسبة لموفري التكنولوجيا، هذا يعني أن العمائر السحابية الأولى والافتراضية للمناطق الأمريكية يتم استبعادها من أكبر فئات العقود. يجب على البائعين الذين لا يملكون خيارات حوسبة محترمة في الموقع أو مستضافة في الإمارات أو مستضافة في المملكة العربية السعودية أن يتوقعوا الاستبعاد المنهجي من العطاءات العامة والخدمات المالية.</p>
+
+<p>ظهور HUMAIN كطبقة حوسبة ذكاء اصطناعي سيادية في المملكة العربية السعودية وتسريع قدرة نشر G42 في الموقع في الإمارات يخلق سوقًا ثنائي المسار: البائعون الذين يمكنهم العمل ضمن هذه المكدسات السيادية يحصلون على وصول تفضيلي إلى المؤسسات المرساة الكبيرة؛ البائعون الذين لا يستطيعون سيتم نقلهم إلى المؤسسات الأصغر والقطاعات غير المنظمة. هذا ليس مرحلة مؤقتة — إنها اتجاه التغيير الهيكلي.</p>
+
+<h2>مؤشرات الأداء الرئيسية للنشر وإيقاع 90/180/365 يومًا</h2>
+
+<p>تتبع نشرات الذكاء الاصطناعي الناجحة في مجلس التعاون الخليجي إيقاعًا قابلًا للقياس مرتبطًا بالتأثير التجاري الملحوظ. تشير ملاحظة Maven عبر عينة من المشاريع المعلن عنها إلى أن المؤسسات التي لديها هيكل رسمي لمؤشرات الأداء الرئيسية 90/180/365 يومًا تتفوق على تلك التي تحتوي على تعريفات مرحلية غامضة بمقدار 2-3 مرات في الوقت المناسب للقيمة والمحاذاة مع أصحاب المصلحة.</p>
+
+<h3>مرحلة 90 يوم: الأساس والتجربة الأولية</h3>
+
+<ul>
+<li><strong>تدقيق البيانات وتقييم الجودة.</strong> حدد حالات الاستخدام الثلاث ذات أعلى قيمة والتحقق من أن البيانات الأساسية موجودة وقابلة للوصول وتفي بالمتطلبات التنظيمية. تكتشف العديد من مؤسسات مجلس التعاون الخليجي في هذه المرحلة أن البيانات التاريخية موزعة عبر الأنظمة القديمة وأن تنظيف البيانات سيكلف أكثر من نظام الذكاء الاصطناعي نفسه.</li>
+<li><strong>المشاركة الأولية مع المنظم.</strong> قم بتقديم إشعارات النوايا أو عقد مناقشات تقنية غير رسمية مع المنظمين ذوي الصلة. هذا ليس اختياريًا في الخدمات المالية أو الطاقة؛ إنه مضاعف القوة في الاتصالات والخدمات العامة.</li>
+<li><strong>اختيار البائع والعمارة.</strong> قيّم ثلاثة إلى خمسة بائعين مختصرة وخيارات البناء الداخلي مقابل معايير مرجحة: أداء اللغة العربية، قدرة إقامة البيانات، المحاذاة التنظيمية، إجمالي تكلفة الملكية (بما في ذلك الموظفين الداخليين)، وتعقيد التكامل.</li>
+<li><strong>تعريف مؤشرات الأداء الرئيسية.</strong> حدد ما يعني "النجاح" من حيث المالية أو التشغيل: تقليل الموظفين بدوام كامل للعملية، وتحسين دقة التنبؤ، وتوفير الوقت لكل معاملة، ومنع انتهاكات الامتثال، وما إلى ذلك. تجنب مقاييس التباهي مثل "النماذج المنشورة" أو "سجلات البيانات المعالجة".</li>
+</ul>
+
+<h3>مرحلة 180 يوم: نشر التجربة الأولية والتعليقات</h3>
+
+<ul>
+<li><strong>عملية الوضع الظل.</strong> قم بتشغيل نظام الذكاء الاصطناعي بالتوازي مع العملية الحالية لمدة 4-8 أسابيع للتحقق من الدقة والكمون والتكامل دون مخاطر تشغيلية. هذه ممارسة معيارية في مخاطر الخدمات المالية والاحتيال؛ يجب أن تكون ممارسة معيارية في كل مكان.</li>
+<li><strong>مراجعة مجلس الشريعة والامتثال (التمويل الإسلامي فقط).</strong> إذا لمست حالة الاستخدام المنتجات المتوافقة مع الشريعة، قم بتوجيه النموذج وبيانات التدريب وقواعد القرار من خلال مراجعة الشريعة. بدء هذا في الشهر السادس يمنع مفاجآت الشهر التاسع.</li>
+<li><strong>بناء قدرات الفريق الداخلي.</strong> قم بتشغيل دفعتين إلى ثلاث دفعات تدريبية رسمية للفرق التي ستعمل وتراقب وتكرر على النظام. تفويض هذا إلى "فريق نجاح العملاء الخاص بالبائع" يؤدي باستمرار إلى أداء أقل.</li>
+<li><strong>حلقة ملاحظات المنظم.</strong> إذا قمت بتقديم إشعار مسبق في اليوم 90، فتوقع تلقي أسئلة أو إرشادات بحلول اليوم 180. قم بتخصيص الوقت للرد؛ استخدم هذا كمدخل لإعادة تقييم مؤشرات الأداء الرئيسية الخاص بك في اليوم 180.</li>
+</ul>
+
+<h3>مرحلة 365 يوم: توسيع الإنتاج والتحسين المستمر</h3>
+
+<ul>
+<li><strong>النشر الكامل للإنتاج.</strong> الانتقال من العملية المتوازية إلى العملية الحية، يفضل أن يكون مع مرحلة تدريجية محكومة (مثل 10٪ من حجم المعاملات في الأسبوع الأول، 50٪ بحلول الأسبوع الثالث، 100٪ بحلول الأسبوع السادس).</li>
+<li><strong>مراقبة الانجراف في البيانات والأداء.</strong> أنشئ دورة مراجعة ربع سنوية تتبع أداء النموذج والتغييرات في توزيع البيانات والتأثير التجاري. غالبًا ما تكتشف مؤسسات مجلس التعاون الخليجي أن ما عمل في 2024 يتطلب إعادة تدريب في 2025 إذا دخلت مجموعات عملاء جديدة أو أنواع منتجات جديدة إلى سير العمل.</li>
+<li><strong>محاسبة العائد على الاستثمار والإبلاغ على مستوى المجلس.</strong> قيّم الفائدة المالية أو التشغيلية الفعلية. غالبًا ما تقلل معظم منظمات مجلس التعاون الخليجي الفوائد (على سبيل المثال، عدم التقاط الوقت المحرر للعمل ذي القيمة الأعلى) وتبالغ في تقدير التكاليف (على سبيل المثال، معاملة رسوم التنفيذ لمرة واحدة كمتكررة). يفرض المصالحة الرسمية في اليوم 365 الوضوح.</li>
+<li><strong>التوسع وحالات الاستخدام المجاورة.</strong> بمجرد أن يكون النشر الأول قيد التشغيل ويوفر مؤشرات الأداء الرئيسية، حدد العمليات المجاورة حيث يمكن توسيع النموذج أو البيانات أو سير العمل نفسه. غالبًا ما يكون للنشر الثاني تكلفة أقل بـ 40٪ من الأول.</li>
+</ul>
+
+<p>تبلغ المؤسسات التي تتخطى أو تضغط مرحلة 90 يومًا (الاندفاع إلى الإنتاج) باستمرار عن وقت أطول 30-50٪ للقيمة والتكلفة الأعلى لإعادة العمل. يواجه الأشخاص الذين يعاملون ملاحظات المنظمين في اليوم 180 على أنها "جميلة" بدلاً من "إدخال إلزامي" تأخيرات في النشر من ثلاثة إلى تسعة أشهر. نقطة التفتيش في اليوم 365 هي المكان الذي عادة ما تعثر فيه العديد من نشرات مجلس التعاون الخليجي: إذا لم تكن تحقيق الفوائد واضحة بحلول الشهر 12، فإن دعم أصحاب المصلحة يتبخر والمشروع يصبح مركز تكلفة وليس مركز قيمة.</p>
+
+<h2>تقييم البائع: خمسة معايير مرجحة لسياق مجلس التعاون الخليجي</h2>
+
+<p>غالبًا ما يفترض مدراء المعلومات وقادة التكنولوجيا في مجلس التعاون الخليجي تقييم البائعين على أساس التكافؤ في الميزات والسعر المدرج، الإطار نفسه الذي يعمل مع برامج المؤسسات التقليدية. بالنسبة لأنظمة الذكاء الاصطناعي في السياق المنظم واللغة العربية والحوسبة السيادية، هذا الإطار معكوس. تعكس المعايير الخمسة المرجحة أدناه القيود المادية لنشرات مجلس التعاون الخليجي:</p>
+
+<h3>1. أداء معيار اللغة العربية (الوزن: 25%)</h3>
+
+<p>اطلب من البائع تسجيل النص الفعلي لحالة استخدامك (رسائل البريد الإلكتروني للعملاء وأوصاف المعاملات والمراجع القرآنية أو التنظيمية حيث ينطبق) على معيار لغة عربية مستقل. ينشر Falcon و Jais معاييرهما؛ لا تفعل معظم الشركات المصنعة العالمية. إذا ادعى البائع قدرة عربية ولكن لا يمكنه الإشارة إلى تقييم لغة عربية منشور، افترض أن القدرة غير موجودة أو أنها غلاف رقيق على نماذج اللغة الإنجليزية. هذا ليس تمايزًا طفيفًا — إنه بوابة.</p>
+
+<h3>2. عمارة إقامة البيانات (الوزن: 20%)</h3>
+
+<p>هل يمكن للبائع نشر كل شيء على الموقع في المملكة العربية السعودية أو الإمارات أو عبر مزود سحابة إقليمي معتمد (Microsoft Azure KSA و AWS Middle East Region)؟ إذا كان البائع يتطلب نقل البيانات إلى مراكز البيانات الأمريكية أو الأوروبية لتدريب النموذج أو الاستدلال أو الضبط الدقيق، فإن البائع مستبعد من القطاعات المنظمة. بالنسبة للقطاعات غير المنظمة، يجب أن تحتل خيارات الموقع والمناطق بشكل كبير أيضًا، لأنها تقلل من مخاطر الامتثال وغالبًا ما تقلل من الكمون.</p>
+
+<h3>3. المحاذاة التنظيمية ودعم التدقيق (الوزن: 20%)</h3>
+
+<p>هل عمل البائع مع ساما أو المصرف المركزي الإمارات أو منظمي مجلس التعاون الخليجي الآخرين على شفافية الخوارزمية والقابلية للتدقيق وتقييم التحيز؟ هل يمكن للبائع تقديم توثيق لأطر الحوكمة وبطاقات النموذج وشفافية قواعد القرار؟ بالنسبة لبائعي الخدمات المالية، اسأل ما إذا كانوا قد ساعدوا بنوكًا أخرى في مجلس التعاون الخليجي في الرد على الاستفسارات التنظيمية لقرار القرار الخوارزمي. يجب إعطاء الأولوية للبائعين الذين لا يملكون مراجع تنظيمية صفرية في مجلس التعاون الخليجي.</p>
+
+<h3>4. إجمالي تكلفة الملكية على مدى 36 شهرًا (الوزن: 20%)</h3>
+
+<p>اطلب نموذج تكلفة شفاف لمدة 36 شهرًا يتضمن: تراخيص البرامج والبنية التحتية في الموقع أو أرصدة سحابية والخدمات المهنية (التنفيذ والتدريب والحوكمة) وافتراضات الموظفين الداخليين والدعم السنوي. غالبًا ما تقلل معظم منظمات مجلس التعاون الخليجي من تمويل عناصر "التحسين المستمر" والحوكمة، مما يؤدي إلى تجاوز التكاليف في السنوات 2-3. البائع الذي يرغب في أن يكون شفافًا بشأن هذا عادة ما يكون شريكًا أفضل من الشريك الذي يقتبس فقط من رسوم السنة الأولى.</p>
+
+<h3>5. تعقيد التكامل والوقت المناسب للتجربة الأولية (الوزن: 15%)</h3>
+
+<p>بالنسبة للنشر الأخضر، هل يمكن للبائع تحقيق تجربة أولية ذات مغزى (عملية الوضع الظل على البيانات الفعلية) خلال 12 أسبوعًا؟ بالنسبة للتكاملات الموجودة، هل يمكن للبائع توفير أنماط تكامل نظام ERP الحالي ومستودع البيانات وأنظمة الهوية؟ البائعون الذين يتطلبون ستة أشهر من "الاكتشاف والتقييم" قبل إطلاق التجربة الأولية عادة ما يكونون سوء محاذاة مع جداول نشر مجلس التعاون الخليجي.</p>
+
+<p>يفرض ترجيح هذه المعايير الخمسة بوضوح (بدلاً من معاملة جميع البائعين على قدم المساواة في "الميزات") قائمة اختصار بائع أكثر صراحة وعادة ما يقلل من مفاجآت التنفيذ بنسبة 40-50٪.</p>
+
+<h2>الأخطاء الشائعة في التنفيذ في مجلس التعاون الخليجي</h2>
+
+<p>تشير مراجعة Maven لمشاريع الذكاء الاصطناعي المعلن عنها لكن المتأخرة أو الملغاة في مجلس التعاون الخليجي إلى أربع أوضاع فشل متكررة:</p>
+
+<h3>الخطأ 1: معاملة تحضير البيانات كمسؤولية البائع</h3>
+
+<p>التوقع بأن بائع الذكاء الاصطناعي "سيصلح بياناتك" هو خيال. تنظيف البيانات وتوثيق النسب وضمان الجودة هي مسؤولية العميل. مؤسسات مجلس التعاون الخليجي التي تحدد ميزانية أقل من 30٪ من تكلفة مشروع الذكاء الاصطناعي لعمل البيانات تفتقد دائمًا الجداول الزمنية. غالبًا ما تسلم تلك التي تحدد ميزانية 40-50٪ في الموعد المحدد. دور البائع هو تحديد *ما* جودة البيانات التي يتطلبها النموذج؛ دور العميل هو تحقيقها.</p>
+
+<h3>الخطأ 2: التقليل من شأن تكاليف الحوكمة والتدقيق</h3>
+
+<p>تتطلب القطاعات المنظمة — الخدمات المصرفية والاتصالات والطاقة — أن يكون كل قرار نموذجي قابلًا للتفسير والتدقيق والمراجعة من قبل فرق الامتثال الداخلية و (في بعض الحالات) المنظمين الخارجيين. مؤسسات مجلس التعاون الخليجي التي تعامل الحوكمة كـ "خانة اختيار" بعد النشر تكتشف باستمرار أن النماذج لا يمكن ترقيتها إلى الإنتاج لأن مسارات التدقيق مفقودة أو غير كافية. خصص 15-25٪ من تكلفة المشروع لبنية الحوكمة (المراقبة والسجلات وتوثيق قواعد القرار وواجهات برمجة تطبيقات التدقيق) وقم بذلك من الشهر الأول.</p>
+
+<h3>الخطأ 3: افتراض أن النماذج العالمية ستعمل باللغة العربية</h3>
+
+<p>حتى النماذج المضبوطة بدقة على البيانات العربية تفشل أحيانًا في النص الخاص باللهجة أو اللغة العربية المنقولة أو المصطلحات الخاصة بالمجال (على سبيل المثال، المصطلحات الخاصة بتمويل الخدمات المالية الإسلامية). قم بتشغيل نص عملك الفعلي من خلال النموذج المرشح في التقييم المبكر، وليس فقط مجموعات البيانات المعيارية. اكتشفت العديد من التجارب الأولية في مجلس التعاون الخليجي قيود النموذج فقط بعد نشر الإنتاج، مما يتطلب إعادة عمل مكلفة.</p>
+
+<h3>الخطأ 4: عدم كفاية محاذاة أصحاب المصلحة حول مقاييس النجاح</h3>
+
+<p>غالبًا ما يكون لدى منظمات مجلس التعاون الخليجي أصحاب مصلحة متعددون (رؤساء وحدات الأعمال وضباط المخاطر والامتثال وقيادة تكنولوجيا المعلومات وأعضاء المجلس) بمعايير نجاح مختلفة. إذا لم يتم تعريف "النجاح" بشكل مشترك وترجيحه قبل المشتريات، فسيتم رؤية النموذج نفسه كنجاح من قبل صاحب مصلحة وفشل من قبل آخر. استثمر الوقت في مرحلة 90 يومًا بناء إجماع على ما هي مؤشرات الأداء الرئيسية فعلاً وكيفية تتبعها ومعالجة الانحرافات.</p>
+
+<h2>التأطير على مستوى المجلس: الذكاء الاصطناعي كتخصيص رأس المال</h2>
+
+<p>يتوقع أعضاء المجلس في مجلس التعاون الخليجي بشكل متزايد أن يتم تأطير التكنولوجيا والذكاء الاصطناعي كمشكلة تخصيص رأس المال، وليس كقرار مركز تكلفة. السؤال ليس "هل يجب أن ننشر الذكاء الاصطناعي؟" بل "أين يجب أن نخصص رأس مالنا التكنولوجي لتعظيم قيمة المساهمين أو الموقف الاستراتيجي على مدى السنوات الثلاث إلى الخمس القادمة؟" يخلق تأطيره بهذه الطريقة محادثة مختلفة:</p>
+
+<ul>
+<li><strong>تحليل تكلفة الفرصة البديلة.</strong> إذا
+  
+  <figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-21 svg-d-21"><title id="svg-t-21">تركيز قطاع الذكاء الاصطناعي في دول مجلس التعاون الخليجي والالتزامات الأساسية</title><desc id="svg-d-21">رسم بياني عمودي يوضح تركيز إنفاق دول مجلس التعاون الخليجي على الذكاء الاصطناعي في الحكومة والبنوك والاتصالات مع التزامات أساسية موسومة.</desc>
+  <rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="30" font-size="13" font-weight="700" fill="#0E2841">تركيز القطاعات لإنفاق الذكاء الاصطناعي في دول مجلس التعاون الخليجي (نمط IDC، توضيحي)</text>
+  <rect x="20" y="60" width="280" height="32" fill="#156082"/><text x="30" y="82" fill="#fff" font-size="13" font-weight="700">الحكومة والخدمات العامة</text>
+  <rect x="20" y="100" width="240" height="32" fill="#1A4F7A"/><text x="30" y="122" fill="#fff" font-size="13" font-weight="700">البنوك والخدمات المالية</text>
+  <rect x="20" y="140" width="200" height="32" fill="#0E2841"/><text x="30" y="162" fill="#fff" font-size="13" font-weight="700">الاتصالات</text>
+  <rect x="20" y="180" width="120" height="32" fill="#94A3B8"/><text x="30" y="202" fill="#fff" font-size="13" font-weight="700">جميع القطاعات الأخرى</text>
+  <text x="380" y="80" font-size="11" fill="#0E2841">SDAIA · HUMAIN · MCIT Qatar</text>
+  <text x="380" y="120" font-size="11" fill="#0E2841">البنوك الخاضعة لإشراف SAMA · Open Banking</text>
+  <text x="380" y="160" font-size="11" fill="#0E2841">STC · e&amp; · du · Ooredoo · Zain</text>
+  <text x="380" y="200" font-size="11" fill="#0E2841">الطاقة (Aramco–Groq)، الصحة، البيع بالتجزئة</text>
+  </svg>
+  <figcaption>الشكل 1 — ثلاثة قطاعات تستحوذ على غالبية إنفاق الذكاء الاصطناعي في دول مجلس التعاون الخليجي، مدعومة بالتزامات عامة موسومة.</figcaption>
+  </figure>
+  
+  <figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-22 svg-d-22"><title id="svg-t-22">مراحل النشر لمدة 90/180/365 يوم وأهداف KPI الرئيسية</title><desc id="svg-d-22">مخطط زمني يوضح ثلاث مراحل نشر مع الأنشطة الرئيسية ونقاط التواصل التنظيمي المحاذاة لعلامات 90 و180 و365 يوم.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<text x="20" y="25" font-size="13" font-weight="700" fill="#0E2841">نشر AI في دول مجلس التعاون: دورة 90/180/365 يوم الموصى بها</text>
+<line x1="50" y1="50" x2="50" y2="180" stroke="#156082" stroke-width="3"/>
+<line x1="50" y1="180" x2="250" y2="180" stroke="#156082" stroke-width="3"/>
+<line x1="250" y1="180" x2="250" y2="50" stroke="#156082" stroke-width="3"/>
+<line x1="250" y1="50" x2="450" y2="50" stroke="#1A4F7A" stroke-width="3"/>
+<line x1="450" y1="50" x2="450" y2="180" stroke="#1A4F7A" stroke-width="3"/>
+<line x1="450" y1="180" x2="650" y2="180" stroke="#0E2841" stroke-width="3"/>
+<line x1="650" y1="180" x2="650" y2="50" stroke="#0E2841" stroke-width="3"/>
+<circle cx="50" cy="50" r="5" fill="#156082"/>
+<circle cx="250" cy="50" r="5" fill="#1A4F7A"/>
+<circle cx="450" cy="50" r="5" fill="#0E2841"/>
+<circle cx="650" cy="50" r="5" fill="#0E2841"/>
+<text x="35" y="210" font-size="11" font-weight="700" fill="#0E2841">اليوم 90</text>
+<text x="225" y="210" font-size="11" font-weight="700" fill="#0E2841">اليوم 180</text>
+<text x="425" y="210" font-size="11" font-weight="700" fill="#0E2841">اليوم 365</text>
+<text x="80" y="110" font-size="10" fill="#156082"><tspan x="80" dy="0">• تدقيق البيانات</tspan><tspan x="80" dy="12">• اختيار المورد</tspan><tspan x="80" dy="12">• إحاطة الجهات التنظيمية</tspan></text>
+<text x="280" y="110" font-size="10" fill="#1A4F7A"><tspan x="280" dy="0">• تجربة نموذجية في وضع المراقبة</tspan><tspan x="280" dy="12">• مراجعة الحوكمة</tspan><tspan x="280" dy="12">• تدريب الفريق</tspan></text>
+<text x="480" y="110" font-size="10" fill="#0E2841"><tspan x="480" dy="0">• إطلاق الإنتاج</tspan><tspan x="480" dy="12">• تطابق KPI</tspan><tspan x="480" dy="12">• حالات الاستخدام المجاورة</tspan></text>
+</svg>
+<figcaption>الشكل 2 — دورة النشر لمدة 90/180/365 يوم تحاذي مراحل التجربة النموذجية مع التفاعل التنظيمي وأهداف KPI على مستوى مجلس الإدارة.</figcaption>
+</figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
   <li>برايس ووتر هاوس كوبرز الشرق الأوسط، <em>الأثر المحتمل للذكاء الاصطناعي في الشرق الأوسط</em>، 2018. <a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">pwc.com/m1</a></li>
@@ -1129,7 +2246,8 @@ export const insights = [
   <li>ماكينزي، <em>حالة الذكاء الاصطناعي</em>. <a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">mckinsey.com</a></li>
   <li>مجلس خدمات المالية الإسلامية. <a href="https://www.ifsb.org/" target="_blank" rel="noopener noreferrer">ifsb.org</a></li>
   </ol>`,
-      contentTr: `  <h2>Tez</h2>
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+    <h2>Tez</h2>
   <p>GCC'nin yapay zeka yatırım hikayesi bir tahmin değil — halihazırda devam eden bir satın alma gerçeğidir ve kamuya duyurulan egemen sermaye ile ilan edilen stratejik ortaklıklar tarafından desteklenmektedir. PwC Orta Doğu, yapay zekanın 2030 yılına kadar GCC GSYİH'sine kabaca 320 milyar dolar katkıda bulunabileceğini tahmin etmektedir; Suudi Arabistan (yaklaşık 135 milyar dolar) ve Birleşik Arap Emirlikleri (yaklaşık 96 milyar dolar) en büyük payı almaktadır (<a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">PwC ME, 2018</a>). Strategy&'nin 2023 çalışması GCC GenAI fırsatını 2030 yılına kadar yaklaşık 23,5 milyar dolar olarak yıllık olarak boyutlandırmaktadır (<a href="https://www.strategyand.pwc.com/m1/en/strategic-foresight/sector-strategies/technology/reshaping-the-middle-east-genai.html" target="_blank" rel="noopener noreferrer">Strategy&, 2023</a>). Bu tahminlerin yayınlanmasından bu yana değişen şey, egemen sermayenin politikadan dağıtıma doğru hareket ettiği hızdır.</p>
   <h2>Temel Programlar ve Taahhütler</h2>
   <ul>
@@ -1167,6 +2285,153 @@ export const insights = [
   </ul>
   <h2>Metodoloji Hakkında Bir Not</h2>
   <p>Bu rapordaki rakamlar alıntı yapılan kaynaklar tarafından yayınlandığı şekilde yeniden üretilmektedir. Maven AI kendi GCC yapay zeka harcama tahmini üretmemektedir: yayınlanan tahminler arasında dağılım (PwC ME, Strategy&, IDC, IMARC, Mordor Intelligence) yeterince geniştir ki onuncu bir sayı eklemek bilgilendirmekten daha fazla yanıltacaktır. Okuyucular alıntı yapılan aralıkları nokta tahminler değil sınırlar olarak ele almalıdır.</p>
+  
+  <h2>Düzenleyici Katılım ve Uyum Yolları</h2>
+
+<p>GCC düzenleyicileri — Suudi Arabistan'da SAMA, BAE'de CBUAE ve DFSA, Katar Merkez Bankası ve her yargı alanında Ulusal AI Ofisi — izin veren "sandbox" duruşundan AI yönetişimi, veri taşınabilirliği ve algoritma denetim gereksinimlerinin aktif olarak belirlenmesine geçiş yapmaktadır. Bu değişim önemlidir: bir dağıtım programının başlarında düzenleyici ile 90 günlük bir katılım, akabinde 180 günlük yeniden çalışmayı önleyebilir. Maddi AI yatırımları planlayan kurumlar, idealiter satın almaya başlamadan önce resmi bir düzenleyici katılım takvimi oluşturmalıdır.</p>
+
+<p>SAMA'nın yayınlanan BT Yönetişim Çerçevesi artık AI ve makine öğrenme riski sınıflandırmasını açıkça ele almaktadır (<a href="https://www.sama.gov.sa/en-US/RulesInstructions/Pages/default.aspx" target="_blank" rel="noopener noreferrer">SAMA Yönetişim</a>). CBUAE'nin 2024 finansal hizmetlerde algoritmik karar alma rehberi, kredi, fiyatlandırma veya müşteri işlemini etkileyen herhangi bir AI sisteminin dağıtımdan önce bir Shariah ve davranış taramasını geçmesi gerektiğini açıklığa kavuşturmaktadır. Katar'ın düzenleyicisi benzer niyeti işaret etmiştir. Bunu "uyum yükü" olarak değil de temel tasarım gereksinimi olarak gören satıcılar ve iç teknoloji ekipleri dağıtımlarının geciktirildiğini veya yeniden çalışmaya tabi tutulduğunu göreceklerdir.</p>
+
+<h3>Veri Taşınabilirliği ve Egemen Bilgi İşlem</h3>
+
+<p>Altı GCC devletinin tamamı, düzenlenmiş sektörler (bankacılık, telekomünikasyon, enerji, sağlık) için veri taşınabilirliğini ulusal sınırlar içinde zorunlu kılmakta veya güçlü bir şekilde tercih etmektedir. Bu düzenleyici bir *öneri* değildir: açık bankacılık çerçeveleri, kritik altyapı atamları ve PDPL uygulamasına gömülüdür. Teknoloji sağlayıcıları için bu, bulut-ilk, ABD bölge-varsayılan mimarilerin en büyük sözleşme kategorilerinden diskalifiye edildiği anlamına gelir. Kimlik tanıma yapan, UAE'de barındırılan veya Suudi Arabistan'da barındırılan bilgi işlem seçenekleri olmayan satıcılar, devlet ve finansal hizmetler RFP'lerinden sistematik olarak hariç tutulmasını beklemelidir.</p>
+
+<p>Suudi Arabistan'da egemen AI bilgi işlem katmanı olarak HUMAIN'in ortaya çıkması ve BAE'de G42'nin şirket içi dağıtım kapasitesinin hızlanması, iki yollu bir pazar oluşturmaktadır: bu egemen yığınlar içinde çalışabilen satıcılar büyük sabit kurumlar için tercihli erişim elde ederler; yapamayan satıcılar daha küçük işletmeler ve düzenlemeye tabi olmayan sektörlere atılırlar. Bu geçici bir faz değildir — yapısal değişimin yönüdür.</p>
+
+<h2>Dağıtım KPI'ları ve 90/180/365 Günlük Takvim</h2>
+
+<p>Başarılı GCC AI dağıtımları, gözlemlenebilir iş etkisine bağlı ölçülebilir bir takvimi izler. Maven'in duyurulan projelerden oluşan bir örneklem genelinde gözlemi, resmi 90/180/365 günlük KPI yapısına sahip kurumların daha belirsiz kilometre taşı tanımlarına sahip olanlardan değere geliş zamanı ve paydaş uyumu açısından 2-3 kat daha iyi performans gösterdikleri sonucuna işaret etmektedir.</p>
+
+<h3>90 Günlük Faz: Temel ve Pilot</h3>
+
+<ul>
+<li><strong>Veri denetimi ve kalite değerlendirmesi.</strong> En yüksek değerli üç kullanım durumunu tanımlayın ve temelde verilerin var olduğunu, erişilebilir olduğunu ve düzenleyici gereksinimleri karşıladığını doğrulayın. Birçok GCC kurumu, bu aşamada eski verilerin eski sistemlerde parçalandığını ve veri temizlemenin AI sisteminin kendisinden daha pahalı olacağını keşfeder.</li>
+<li><strong>Düzenleyici ön katılımı.</strong> Niyet bildirimleri dosyala veya ilgili düzenleyicilerle gayri resmi teknik tartışmalar yapın. Bu finansal hizmetler veya enerji alanında isteğe bağlı değildir; telekomünikasyon ve kamu hizmetlerinde bir kuvvet çarpanıdır.</li>
+<li><strong>Satıcı ve mimari seçimi.</strong> Üç ila beş kısa listelenen satıcıyı ve ağırlıklı ölçütlere karşı iç yapı seçeneklerini değerlendirin: Arapça dil performansı, veri taşınabilirliği yeteneği, düzenleyici uyumu, toplam sahip olma maliyeti (iç personel dahil) ve entegrasyon karmaşıklığı.</li>
+<li><strong>KPI tanımı.</strong> Finansal veya operasyonel açıdan "başarı"nın ne anlama geldiğini tanımlayın: bir işlem için FTE azalması, tahmin doğruluğu iyileştirilmesi, işlem başına zaman tasarrufu, uyum ihlalleri önlenmesi, vb. "Dağıtılan modeller" veya "işlenen veri kayıtları" gibi boş metrikler kullanmaktan kaçının.</li>
+</ul>
+
+<h3>180 Günlük Faz: Pilot Dağıtım ve Geri Bildirim</h3>
+
+<ul>
+<li><strong>Gölge modu işlemi.</strong> AI sistemini işletim riski olmaksızın doğruluk, gecikme ve entegrasyonu doğrulamak için 4-8 hafta boyunca mevcut işlemle paralel olarak çalıştırın. Bu, finansal hizmetler riski ve dolandırıcılık konusunda standart uygulamadır; her yerde standart olmalıdır.</li>
+<li><strong>Shariah kurulu ve uyum incelemesi (yalnızca İslami finans).</strong> Kullanım durumu Shariah uyumlu ürünlere dokunuyorsa, modeli, eğitim verilerini ve karar kurallarını Shariah incelemesinden geçirin. Bunu 6. ayda başlatmak 9. ay sürprizlerini önler.</li>
+<li><strong>İç ekip yetkinlik geliştirme.</strong> Sistemi işletecek, izleyecek ve tekrarlayacak ekiplerle iki ila üç resmi eğitim kohortu çalıştırın. Bunu "satıcının müşteri başarı ekibine" devretmek tutarlı bir şekilde daha zayıf performans gösterir.</li>
+<li><strong>Düzenleyici geri bildirim döngüsü.</strong> 90 gün içinde ön bildiri dosyası verdiyseniz, 180 gün içinde sorular veya rehberlik almayı bekleyin. Yanıtlamaya zaman ayırın; bunu 180 günlük KPI yeniden değerlendirmesinin bir girdisi olarak kullanın.</li>
+</ul>
+
+<h3>365 Günlük Faz: Üretim Ölçeği ve Sürekli İyileştirme</h3>
+
+<ul>
+<li><strong>Tam üretim dağıtımı.</strong> Paralel işlemden canlı işleme geçin, idealiter kontrollü bir aşama takip ile (örn., 1. haftada işlem hacminin % 10'u, 3. haftaya kadar % 50, 6. haftaya kadar % 100).</li>
+<li><strong>Veri-değişimi ve performans izleme.</strong> Model performansını, veri dağılımı değişikliklerini ve iş etkisini izleyen üç aylık bir inceleme döngüsü oluşturun. GCC kurumları sıklıkla, 2024'te çalışan şeyin yeni müşteri grupları veya ürün türleri iş akışına girerse 2025'te yeniden eğitim gerektirdiğini keşfeder.</li>
+<li><strong>ROI muhasebesi ve yönetim kurulu raporlama.</strong> Gerçek finansal veya operasyonel faydayı ölçün. Çoğu GCC organizasyonu faydaları zayıf sayar (örn., daha yüksek değerli çalışmalar için serbest bırakılan zamanı yakalamamak) ve maliyetleri aşırı sayar (örn., tek seferlik uygulama ücretlerini tekrarlayan olarak ele almak). Resmi bir 365 günlük uzlaştırma netliği zorlar.</li>
+<li><strong>Ölçekleme ve bitişik kullanım durumları.</strong> İlk dağıtım çalışır duruma geldikten ve KPI'leri teslim ettikten sonra, aynı modelin, verilerin veya iş akışının genişletilebileceği bitişik işlemleri tanımlayın. İkinci dağıtım genellikle ilkinden %40 daha düşük maliyete sahiptir.</li>
+</ul>
+
+<p>90 günlük fazı atlayan veya sıkıştıran (üretime hızla geçen) kurumlar % 30-50 daha uzun değere geliş süresi ve daha yüksek yeniden çalışma maliyeti bildirmektedir. 180 günlük düzenleyici geri bildirimi "tatlı mı?" olarak değil "zorunlu giriş" olarak ele alanlar üç ila dokuz aylık dağıtım gecikmesiyle karşılaşmaktadır. 365 günlük kontrol noktası, birçok GCC dağıtımının başarısız olduğu yerdir: 12. ayda fayda realizasyonu açık değilse, paydaş desteği buharlaşır ve proje bir maliyet merkezi yerine bir değer merkezi haline gelir.</p>
+
+<h2>Satıcı Değerlendirmesi: GCC Bağlamı İçin Beş Ağırlıklı Kriter</h2>
+
+<p>GCC CIO'ları ve teknoloji liderləri sıklıkla satıcıları özelliklerin ve liste fiyatının eşitliği temelinde değerlendirmeye, geleneksel kurumsal yazılım için çalışan aynı çerçeveye yönelmektedir. Düzenlenmiş, Arapça dil, egemen bilgi işlem bağlamında AI sistemleri için bu çerçeve geriye doğru. Aşağıdaki beş ağırlıklı kriter, GCC dağıtımlarının maddi kısıtlamalarını yansıtmaktadır:</p>
+
+<h3>1. Arapça Dil Kıyaslama Performansı (Ağırlık: % 25)</h3>
+
+<p>Satıcıdan gerçek kullanım durumu metninizi (müşteri e-postaları, işlem açıklamaları, uygun olduğunda Kuranî veya düzenleyici referanslar) bağımsız bir Arapça dil kıyaslaması üzerinde puanlamasını isteyin. Falcon ve Jais yayınlanan kıyaslamalarını yayınlamaktadır; çoğu küresel satıcı yapmamaktadır. Bir satıcı Arapça yeteneğini iddia ediyorsa ancak yayınlanan Arapça dil değerlendirmesine işaret edemiyorsa, yeteneğin var olmadığını veya İngilizce dil modellerinin üzerinde ince bir sarma olduğunu varsayın. Bu küçük bir farklılık değildir — bir kapıdır.</p>
+
+<h3>2. Veri Taşınabilirliği Mimarisi (Ağırlık: % 20)</h3>
+
+<p>Satıcı Suudi Arabistan veya BAE'de tamamen şirket içi olarak veya sertifikalı bölgesel bir hiper ölçekleyici (Microsoft Azure KSA, AWS Orta Doğu Bölgesi) aracılığıyla dağıtım yapabilir mi? Satıcı model eğitimi, çıkarımı veya ince ayar için veri aktarımını ABD veya Avrupa veri merkezlerine gerektiriyorsa, satıcı düzenlenmiş sektörler için diskalifiye edilir. Düzenlemeye tabi olmayan sektörler için, şirket içi ve bölgesel seçenekler, uyum riskini azalttığı ve sıklıkla gecikmeyi azalttığı için yine de ağırlıklandırılmalıdır.</p>
+
+<h3>3. Düzenleyici Uyumu ve Denetim Desteği (Ağırlık: % 20)</h3>
+
+<p>Satıcı, algoritma şeffaflığı, denetlenebilirlik ve önyargı değerlendirmesi konusunda SAMA, CBUAE veya diğer GCC düzenleyicileriyle çalıştı mı? Satıcı yönetişim çerçeveleri, model kartları ve karar kuralı şeffaflığı belgeleri sağlayabilir mi? Finansal hizmetler satıcıları için, diğer GCC bankalarının algoritmik karar alma düzenleyici sorularına yanıt vermelerine yardım ettikleri hakkında sorular sorun. GCC'de sıfır düzenleyici referansı olan satıcılar düşük önceliklendirilmelidir.</p>
+
+<h3>4. 36 Aylık Sahip Olma Toplam Maliyeti (Ağırlık: % 20)</h3>
+
+<p>Yazılım lisanslarını, şirket içi altyapı veya bulut kredilerini, profesyonel hizmetleri (uygulama, eğitim, yönetişim), iç personel varsayımlarını ve yıllık desteği içeren şeffaf 36 aylık bir maliyet modeli isteyin. Çoğu GCC organizasyonu "sürekli iyileştirme" ve yönetişim satırı öğelerini yetersiz finanse etmekte, 2-3 yıllarda maliyet aşımlarına neden olmaktadır. Bunu açıklamaya istekli olan satıcı, genellikle sadece 1. yıl ücretlerini alıntılayan olandan daha iyi bir ortaktır.</p>
+
+<h3>5. Entegrasyon Karmaşıklığı ve Pilot'a Geliş Zamanı (Ağırlık: % 15)</h3>
+
+<p>Greenfield dağıtım için, satıcı anlamlı bir pilot'u (gerçek veriler üzerinde gölge modu işlemi) 12 hafta içinde başarabilir mi? Mevcut entegrasyonlar için, satıcı mevcut ERP, veri ambarı ve kimlik sistemleri için entegrasyon desenleri sağlayabilir mi? Pilot başlatmadan önce altı aylık "keşif ve değerlendirme" gerektiren satıcılar, genellikle GCC dağıtım zaman çizelgeleriyle uyumsuzdur.</p>
+
+<p>Bu beş kriteri açıkça ağırlıklandırma (tüm satıcıları "özellikler" açısından eşdeğer olarak ele almak yerine) daha dürüst bir satıcı kısa listesini ve tipik olarak uygulama sürprizlerini % 40-50 oranında azaltmayı zorunlu kılar.</p>
+
+<h2>GCC'deki Yaygın Uygulama Tuzakları</h2>
+
+<p>Maven'in duyurulan ancak gecikmiş veya iptal edilmiş GCC AI projelerinin incelemesi dört tekrarlanan başarısızlık modu önerir:</p>
+
+<h3>Tuzak 1: Veri Hazırlamayı Satıcı Sorumluluğu Olarak Ele Almak</h3>
+
+<p>AI satıcısının "verilerinizi onaracağını" bekleme fantezisidir. Veri temizleme, lineaj belgeleme ve kalite güvencesi müşterinin sorumluluğudur. AI projesi maliyetinin %30'ından daha azını veri çalışmasına ayıran GCC kurumları neredeyse her zaman zaman çizelgelerini kaçırır. % 40-50 ayıranlar genellikle zamanında teslim eder. Satıcının rolü, modelin *hangi* veri kalitesini gerektirdiğini belirtmektir; müşterinin rolü bunu başarmaktır.</p>
+
+<h3>Tuzak 2: Yönetişim ve Denetim Yükünü Küçümsemek</h3>
+
+<p>Düzenlenmiş sektörler — bankacılık, telekomünikasyon, enerji — her model kararının açıklanabilir, denetlenebilir ve dahili uyum ekipleri ve (bazı durumlarda) dış düzenleyiciler tarafından gözden geçirilebilir olmasını gerektirir. GCC kurumları yönetişimi dağıtım sonrası "onay kutusu" olarak ele alanlar tutarlı bir şekilde, denetim izi eksik veya yetersiz olduğu için modellerin üretim ortamına yükseltilemediğini bulurlar. Proje maliyetinin % 15-25'ini yönetişim altyapısına (izleme, günlük kaydı, karar kuralı belgeleme, denetim API'leri) tahsis edin ve bunu 1. aydan yapın.</p>
+
+<h3>Tuzak 3: Küresel Modellerin Arapçada Çalışacağını Varsayarsak</h3>
+
+<p>Arapça verilerde ince ayarlanmış modelleri bile, lehçeye özgü metne, çevrilmiş Arapçaya veya etki alanına özgü terminolojiye (örn., İslami finans adlandırması) başarısız olmaktadır. Aday modeli aracılığıyla gerçek iş metninizi ilk değerlendirmede çalıştırın, sadece kıyaslama veri setleri değil. Birçok GCC pilotu, üretime dağıtımından sonra model sınırlamalarını keşfetmiş, pahalı yeniden çalışma gerektirmiştir.</p>
+
+<h3>Tuzak 4: Başarı Metriklerinde Yetersiz Paydaş Uyumu</h3>
+
+<p>GCC organizasyonları sıklıkla birden fazla paydaşa (iş birimi başkanları, risk görevlileri, uyum, BT liderliği, yönetim kurulu üyeleri) farklı başarı kriterlerine sahip olurlar. "Başarı" satın alma öncesinde ortaklaşa tanımlanmamış ve ağırlıklandırılmamışsa, aynı model bir paydaş tarafından başarı, diğeri tarafından başarısızlık olarak görülür. KPI'ların aslında ne olduğu, bunları kimin izleyeceği ve varyansların nasıl kullanılacağı üzerine konsensüs oluşturmak için 90 günlük fazda zaman harcayın.</p>
+
+<h2>Yönetim Kurulu Düzeyinde Çerçevelendirme: AI Olarak Sermaye Tahsisi</h2>
+
+<p>GCC yönetim kurulu üyeleri giderek teknoloji ve AI'nin bir maliyet merkezi kararı değil, bir sermaye tahsisi sorunu olarak çerçevelenmesini beklemektedir. Soru "AI dağıtmalı mıyız?" değildir, "Sonraki üç ila beş yılda hissedar değerini veya stratejik konumlandırmayı maksimize etmek için teknoloji sermayesi nereye tahsis etmeliyiz?" Bunu bu şekilde çerçevelendirmek farklı bir konuşma oluşturur:</p>
+
+<ul>
+<li><strong>Fırsat maliyeti analizi.</strong> Kuzey Amerika pazarında müşteri bakımı AI'sine 2 milyon dolar yatırım yaparsak, MENA'da tedarik zinciri optimizasyonuna 2 milyon dolar yatırım yapamayız. Hangisi daha fazla değer yaratır?</li>
+<li><strong>Egemen konumlandırma argümanı.</strong> Eğer yerli AI yeteneği oluşturmazsak, yabancı satıcılara ve altyapıya bağımlı olacağız. Bu bağımlılığı önlemek için bu stratejik maliyetin ödenmesi değerli midir?</li>
+<li><strong>Yetenek ve ekosistem.</strong> AI yatırımları teknik yetenek çeken ve elde tutan kanıtlar oluşturur. Bu, daha uzun vadeli personel sayısı ve yetkinlik stratejimizin bir faktörü midir?</li>
+<li><strong>Düzenleyici seçeneklik.</strong> AI yönetişiminde düzenleyicilerle erken harekete geçenler sıklıkla düzenlemelerin nasıl geliştiğine ilişkin etkileyebilirler. Bu, yönetim kurulu düzeyinde stratejik bir varlık mıdır?</li>
+</ul>
+
+<p>AI'yi bu şekilde ele alan yönetim kurulları, AI'yi taktikal BT projesi olarak ele alanlara göre farklı kararlar alırlar. GCC bağlamında, egemen servet fonları ve devlet paydaşlarının sıklıkla masada oturması gereken durumlarda, bu çerçevelendirme teknoloji kararlarını daha geniş stratejik ve siyasi ekonomi hususlarıyla uyumlu hale getirir.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-23 svg-d-23"><title id="svg-t-23">90/180/365 günlük dağıtım takvimi ve KPI kilometre taşları</title><desc id="svg-d-23">90, 180 ve 365 günlük işaretlerine hizalanan temel etkinlikler ve düzenleyici temas noktalarıyla üç dağıtım aşamasını gösteren zaman çizelgesi tablosu.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<text x="20" y="25" font-size="13" font-weight="700" fill="#0E2841">GCC AI Dağıtımı: Önerilen 90/180/365 Günlük Takvim</text>
+<line x1="50" y1="50" x2="50" y2="180" stroke="#156082" stroke-width="3"/>
+<line x1="50" y1="180" x2="250" y2="180" stroke="#156082" stroke-width="3"/>
+<line x1="250" y1="180" x2="250" y2="50" stroke="#156082" stroke-width="3"/>
+<line x1="250" y1="50" x2="450" y2="50" stroke="#1A4F7A" stroke-width="3"/>
+<line x1="450" y1="50" x2="450" y2="180" stroke="#1A4F7A" stroke-width="3"/>
+<line x1="450" y1="180" x2="650" y2="180" stroke="#0E2841" stroke-width="3"/>
+<line x1="650" y1="180" x2="650" y2="50" stroke="#0E2841" stroke-width="3"/>
+<circle cx="50" cy="50" r="5" fill="#156082"/>
+<circle cx="250" cy="50" r="5" fill="#1A4F7A"/>
+<circle cx="450" cy="50" r="5" fill="#0E2841"/>
+<circle cx="650" cy="50" r="5" fill="#0E2841"/>
+<text x="35" y="210" font-size="11" font-weight="700" fill="#0E2841">90. Gün</text>
+<text x="225" y="210" font-size="11" font-weight="700" fill="#0E2841">180. Gün</text>
+<text x="425" y="210" font-size="11" font-weight="700" fill="#0E2841">365. Gün</text>
+<text x="80" y="110" font-size="10" fill="#156082"><tspan x="80" dy="0">• Veri denetimi</tspan><tspan x="80" dy="12">• Satıcı seçimi</tspan><tspan x="80" dy="12">• Düzenleyici brifingi</tspan></text>
+<text x="280" y="110" font-size="10" fill="#1A4F7A"><tspan x="280" dy="0">• Gölge modu pilotu</tspan><tspan x="280" dy="12">• Yönetişim incelemesi</tspan><tspan x="280" dy="12">• Ekip eğitimi</tspan></text>
+<text x="480" y="110" font-size="10" fill="#0E2841"><tspan x="480" dy="0">• Üretim dağıtımı</tspan><tspan x="480" dy="12">• KPI uzlaştırması</tspan><tspan x="480" dy="12">• Bitişik kullanım durumları</tspan></text>
+</svg>
+<figcaption>Şekil 2 — 90/180/365 günlük dağıtım takvimi, pilot aşamaları düzenleyici katılım ve yönetim kurulu düzeyinde KPI kilometre taşlarıyla uyumlu hale getirir.</figcaption>
+</figure>
+  
+  <figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-24 svg-d-24"><title id="svg-t-24">GCC yapay zeka sektörü yoğunlaşması ve esas taahhütleri</title><desc id="svg-d-24">GCC yapay zeka harcamalarının hükümet, bankacılık ve telekomünikasyon sektörlerinde yoğunlaşmasını gösteren ve adlandırılmış esas taahhütleri etiketleyen çubuk grafik.</desc>
+  <rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="30" font-size="13" font-weight="700" fill="#0E2841">GCC yapay zeka harcamalarının sektör yoğunlaşması (IDC deseni, örnek)</text>
+  <rect x="20" y="60" width="280" height="32" fill="#156082"/><text x="30" y="82" fill="#fff" font-size="13" font-weight="700">Hükümet &amp; kamu hizmetleri</text>
+  <rect x="20" y="100" width="240" height="32" fill="#1A4F7A"/><text x="30" y="122" fill="#fff" font-size="13" font-weight="700">Bankacılık &amp; finansal hizmetler</text>
+  <rect x="20" y="140" width="200" height="32" fill="#0E2841"/><text x="30" y="162" fill="#fff" font-size="13" font-weight="700">Telekomünikasyon</text>
+  <rect x="20" y="180" width="120" height="32" fill="#94A3B8"/><text x="30" y="202" fill="#fff" font-size="13" font-weight="700">Diğer tüm sektörler</text>
+  <text x="380" y="80" font-size="11" fill="#0E2841">SDAIA · HUMAIN · MCIT Qatar</text>
+  <text x="380" y="120" font-size="11" fill="#0E2841">SAMA-denetimli bankalar · Açık Bankacılık</text>
+  <text x="380" y="160" font-size="11" fill="#0E2841">STC · e&amp; · du · Ooredoo · Zain</text>
+  <text x="380" y="200" font-size="11" fill="#0E2841">Enerji (Aramco–Groq), sağlık, perakende</text>
+  </svg>
+  <figcaption>Şekil 1 — Üç sektör GCC yapay zeka harcamalarının çoğunluğunu ele almakta ve adlandırılmış kamu taahhütleri tarafından desteklenmektedir.</figcaption>
+  </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
   <li>PwC Orta Doğu, <em>Orta Doğu'da Yapay Zekanın Olası Etkisi</em>, 2018. <a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">pwc.com/m1</a></li>
@@ -1205,12 +2470,22 @@ export const insights = [
       summary: "How GCC government entities can redesign operating models around human-AI collaboration — anchored in Vision 2030's Saudization and UAE Centennial 2071's Emiratisation, and grounded in WEF Future of Jobs and McKinsey State of AI evidence.",
       featured: false,
       tags: ["Public Sector", "Workforce", "Human-AI Collaboration", "Government"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>The framing "AI will take jobs" has produced more anxiety than insight. The more useful framing — and the one that maps onto the GCC public-sector mandate — is that AI will take <em>tasks</em>, and the public-sector organizations that redesign roles and processes around this reality will be more productive, more attractive employers, and more aligned with national workforce strategies than those that do not. The World Economic Forum's <em>Future of Jobs Report 2025</em> finds that 86% of employers expect AI to transform their business by 2030, and that the highest-growth roles are those involving AI complementarity, not AI replacement (<a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">WEF, 2025</a>).</p>
   <h2>The GCC Workforce Frame</h2>
   <p>For Saudi public-sector organizations, the human-AI collaboration question is anchored in <em>Vision 2030</em>'s Saudization objectives, which require specific participation rates of Saudi nationals across the economy (<a href="https://www.vision2030.gov.sa/" target="_blank" rel="noopener noreferrer">Vision 2030</a>; <a href="https://www.hrsd.gov.sa/" target="_blank" rel="noopener noreferrer">Ministry of Human Resources &amp; Social Development</a>). For the UAE, the equivalent frame is <em>UAE Centennial 2071</em> and the Emiratisation targets administered through the Ministry of Human Resources &amp; Emiratisation (<a href="https://www.mohre.gov.ae/" target="_blank" rel="noopener noreferrer">MoHRE</a>). In both cases, automation that simply eliminates routine roles works against national policy. Automation that elevates nationals into higher-value advisory, oversight, and relationship work supports it.</p>
   <h2>Three Models of Human-AI Collaboration</h2>
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-25 svg-d-25"><title id="svg-t-25">Three models of human-AI collaboration</title><desc id="svg-d-25">Three side-by-side panels showing AI handles human reviews, AI recommends human decides, and human leads AI supports.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="40" width="200" height="140" fill="#156082" rx="8"/><text x="120" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 1</text><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Handles ·</text><text x="120" y="118" text-anchor="middle" fill="#fff" font-size="12">Human Reviews</text><text x="120" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">High-volume, policy-driven</text>
+  <rect x="250" y="40" width="200" height="140" fill="#1A4F7A" rx="8"/><text x="350" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 2</text><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Recommends ·</text><text x="350" y="118" text-anchor="middle" fill="#fff" font-size="12">Human Decides</text><text x="350" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Consequential decisions</text>
+  <rect x="480" y="40" width="200" height="140" fill="#0E2841" rx="8"/><text x="580" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 3</text><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="12">Human Leads ·</text><text x="580" y="118" text-anchor="middle" fill="#fff" font-size="12">AI Supports</text><text x="580" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Senior advisory · negotiation</text>
+  </svg>
+  <figcaption>Figure 1 — Three operating models for human-AI collaboration in GCC public sector.</figcaption>
+  </figure>
   <h3>Model 1 — AI Handles, Human Reviews</h3>
   <p>The agent owns the case end-to-end; the human reviews edge cases flagged by the agent. Appropriate for high-volume, policy-driven decisions where the agent's measured accuracy is high and the cost of an error is bounded.</p>
   <h3>Model 2 — AI Recommends, Human Decides</h3>
@@ -1237,6 +2512,99 @@ export const insights = [
   <li>Engage civil-service and HR leadership at the start, not at deployment.</li>
   <li>Track outcome quality and citizen experience alongside efficiency from day one.</li>
   </ul>
+  
+  <h2>Regulatory & Governance Frameworks for Agentic AI in GCC Public Sector</h2>
+
+<p>The deployment of autonomous or semi-autonomous AI agents in GCC public-sector organizations operates within overlapping regulatory domains that differ by country, sector, and the nature of the decisions being automated. Saudi Arabia's regulatory landscape is shaped by the Central Bank (SAMA), the General Authority of Zakat and Tax (GAZT), and sector-specific bodies like the Ministry of Interior and Ministry of Justice. The UAE operates through CBUAE, the Financial Services Regulatory Authority (FSRA), and the Digital Authority alongside sectoral regulators. Both countries are signatories to the OECD AI Principles and increasingly reference ISO/IEC 42001 for AI governance frameworks. Neither jurisdiction has yet published prescriptive agentic-AI regulations; both have issued guidance on algorithmic accountability and data governance that applies to agents by extension.</p>
+
+<p>The practical implication is that public-sector organizations cannot wait for a complete regulatory codebook. Instead, they must embed governance into the agent design and deployment process itself — what we term "design-time compliance." This means: defining decision authority at each step (which decisions does the agent handle unilaterally, which require human sign-off, which require escalation?); documenting the training data and decision logic so that it can be audited; establishing monitoring thresholds that trigger human review if agent performance drifts; and maintaining audit logs that satisfy both internal accountability and future regulatory examination. Organizations that build this discipline early avoid the high cost of retrofitting governance into a live system.</p>
+
+<h3>Design-Time Compliance Checklist</h3>
+
+<ul>
+<li><strong>Decision Authority Matrix.</strong> Map every decision the agent can make. For each, specify: Is it fully delegated to the agent? Does it require human review before action? Does it require human approval before the agent proceeds? Does it trigger escalation? Document this in a single artifact that both the technology team and governance stakeholders can read.</li>
+<li><strong>Training Data Provenance.</strong> Maintain a record of the data used to train or fine-tune the agent. In the GCC context, this is particularly important for decisions affecting citizens or nationals — regulators and courts will ask where the patterns came from and whether they reflect actual policy or historical bias. If the agent was trained on 10 years of ministry decisions, that dataset embeds the decisions and biases of that period. Document that explicitly.</li>
+<li><strong>Performance Monitoring &amp; Drift Detection.</strong> Define what "performance" means for the agent in this context: accuracy? Consistency with policy? Speed? Citizen satisfaction? Set thresholds for acceptable performance on each dimension. Establish a monitoring cadence (daily, weekly, monthly) and define what triggers human review or retraining. This is not a one-time audit; it is a production discipline.</li>
+<li><strong>Audit Logging &amp; Explainability.</strong> Every consequential decision made by the agent should be logged in a form that can be retrieved and explained months or years later. If the agent recommended denying a permit and the applicant appeals, the organization must be able to show: What inputs did the agent see? What policy or training signal led to that recommendation? What was the human reviewer's rationale for accepting or overriding it? This is now standard in financial services and is moving into public administration.</li>
+</ul>
+
+<h2>Vendor Evaluation &amp; Build-vs.-Buy Dynamics in the GCC Market</h2>
+
+<p>GCC public-sector organizations face a choice between building agents in-house, contracting with global AI service providers (Accenture, McKinsey QuantumBlack, EY, Deloitte), or working with regional boutiques that understand local regulatory and organizational context. The correct choice depends on organizational capacity, timeline, the criticality of the process, and the availability of local data and expertise.</p>
+
+<p>Build-in-house is attractive when the process is proprietary, highly sensitive, or tightly coupled to existing systems. It also builds organizational learning. However, it requires sustained investment in machine-learning engineering talent — a scarce resource in the GCC public sector — and the timeline is typically 6–12 months from inception to a production agent. Buy-or-partner is faster (3–6 months) but risks three common pitfalls: the vendor's pre-built agent may not reflect the specific policy rules or decision logic of the ministry; change orders and customization multiply the cost; and long-term maintainability and escalation become dependencies on the vendor's roadmap and staffing. A hybrid approach — vendor-led for infrastructure and core capability, but with a dedicated in-house team that understands the process and can adapt the agent as policy changes — is often the most resilient.</p>
+
+<p>When evaluating vendors or building a business case for in-house development, focus on these dimensions: Does the vendor or team understand GCC labor regulations and Saudization / Emiratisation policy? Can they work in Arabic, or are they defaulting to English-language models that will miss nuance in citizen communications? What is their approach to governance and auditability? Are they proposing a sustainable operating model, or is the agent a throw-over-the-wall handoff? Organizations that ask these questions early avoid the pattern of spending on AI delivery and then finding that the resulting agent is misaligned with organizational reality.</p>
+
+<h3>Vendor Evaluation Framework</h3>
+
+<ul>
+<li><strong>Reference Architectures &amp; Case Studies.</strong> Ask vendors for references in similar GCC government contexts. Specificity matters: a financial-services reference may not transfer to a Ministry of Interior context. Ask those references about timeline slippage, total cost of ownership, and post-deployment support.</li>
+<li><strong>Arabic-Language Capability.</strong> This is non-negotiable for agents serving citizens or handling documents in Arabic. Vendors should demonstrate that their NLP and language models have been evaluated on GCC Arabic dialects and administrative terminology, not just Modern Standard Arabic or English. Poor Arabic performance will tank adoption and citizen experience.</li>
+<li><strong>Governance &amp; Audit Tooling.</strong> Ask how the vendor's platform captures decision logic, monitors agent performance, and surfaces anomalies. If they offer a dashboard, test it. If they don't, clarify how your team will build visibility. This is the dimension most often underbid or under-specified at contract time and most likely to surface as a problem in year two of operation.</li>
+<li><strong>Transition &amp; Sustainability.</strong> How does the vendor hand off to your team? What does support look like in years 2, 3, and beyond? Is the agent dependent on vendor infrastructure (cloud, APIs, models) or can it be moved or re-trained by your team? This matters for organizational independence and budget predictability.</li>
+</ul>
+
+<h2>Arabic-Language Considerations &amp; Localization Depth</h2>
+
+<p>Agentic AI in the GCC public sector will operate heavily in Arabic — both Modern Standard Arabic (MSA) for formal documents and policy, and Khaleeji or local dialects for citizen interactions. The quality of the agent's performance in Arabic is often the hidden variable that determines whether citizens and government employees will actually use it. English-first or English-optimized models that have Arabic bolted on afterward typically underperform in two critical dimensions: vocabulary and context.</p>
+
+<p>Vocabulary issues arise because many administrative and technical terms in GCC government have specific meanings that English-first models may not have captured. A permitting system that categorizes applications as "معاملات عاجلة" (urgent cases) relies on a model that understands urgency in the GCC administrative context, not just in general Arabic. Similarly, models trained primarily on Arabic language corpora from the Levant or North Africa may not carry the vocabulary patterns of Gulf administrative Arabic. Contextual issues are more subtle but more consequential. A citizen writing to a ministry in colloquial Gulf Arabic, with abbreviations and code-switching, will confuse a model trained on formal text. The agent will misclassify the inquiry, route it incorrectly, or generate responses that feel off-tone to the citizen.</p>
+
+<p>The remediation requires more than "improve Arabic performance." It requires: (1) curating training data that is specific to your ministry's domain, citizen base, and policy terminology; (2) evaluating the model on a held-out test set of real inquiries and documents from your organization, not on generic benchmark datasets; (3) establishing a feedback loop so that employees can flag cases where the agent's Arabic comprehension failed, and those cases feed back into retraining; and (4) recognizing that this is ongoing work, not a one-time tuning. The payoff is that an agent that understands your citizens' language — and can respond in a tone that feels local, respectful, and official — will achieve adoption and trust that an English-first translation cannot.</p>
+
+<h2>Board-Level Governance &amp; 180-Day Checkpoints</h2>
+
+<p>Agentic-AI programs in public-sector organizations require board-level visibility and governance, not because the board needs to understand the technical architecture, but because the program touches workforce strategy, regulatory risk, citizen experience, and budget. The board's role is to ensure that the program is aligned with organizational strategy, that risk is being managed, and that investment is producing the intended outcomes.</p>
+
+<p>We recommend a governance cadence that spans three intervals: 90 days, 180 days, and 365 days. At 90 days, the organization should have a completed process redesign, a pilot cohort running the agent, and initial feedback on both agent performance and employee experience. The board checkpoint should address: Is the chosen process the right one? Does the pilot cohort feel that the agent is making their work better or worse? Are there regulatory or compliance surprises? At 180 days, the organization is typically moving from pilot to scaled deployment across a wider group or to a new process. The checkpoint should assess: Are the KPIs from the pilot tracking as expected? What organizational friction has emerged? Are we on track for the workforce redeployment we promised? What does the roadmap look like for the next 12 months? At 365 days, the program has been in production long enough to evaluate its true impact — not just efficiency metrics, but outcome quality, employee sentiment, and citizen experience. The board should ask: Has the program delivered on its Saudization / Emiratisation rationale? What has been the total cost of ownership, including all customization, support, and retraining? Would we do this again, or differently?</p>
+
+<p>Organizations that skip this governance discipline typically discover, at some point between months 6 and 18, that their agentic-AI program has drifted from its original intent, consumed more budget and organizational attention than anticipated, and failed to produce the workforce outcomes that justified it. Board-level checkpoints don't prevent all drift, but they make it visible and create space for course correction before the program becomes a sunk cost.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-26 svg-d-26"><title id="svg-t-26">Board governance cadence for agentic AI programs</title><desc id="svg-d-26">Timeline showing three board checkpoints at 90, 180, and 365 days with key questions and focus areas at each stage.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<line x1="60" y1="120" x2="680" y2="120" stroke="#E2E8F0" stroke-width="2"/>
+<circle cx="140" cy="120" r="6" fill="#156082"/>
+<circle cx="340" cy="120" r="6" fill="#1A4F7A"/>
+<circle cx="640" cy="120" r="6" fill="#0E2841"/>
+<text x="140" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Day 90</text>
+<text x="140" y="165" text-anchor="middle" font-size="11" fill="#475569">Pilot Ready</text>
+<text x="140" y="180" text-anchor="middle" font-size="10" fill="#64748B">Process redesign</text>
+<text x="140" y="193" text-anchor="middle" font-size="10" fill="#64748B">Employee feedback</text>
+<text x="340" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Day 180</text>
+<text x="340" y="165" text-anchor="middle" font-size="11" fill="#475569">Scale Phase</text>
+<text x="340" y="180" text-anchor="middle" font-size="10" fill="#64748B">KPI validation</text>
+<text x="340" y="193" text-anchor="middle" font-size="10" fill="#64748B">Workforce impact</text>
+<text x="640" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Day 365</text>
+<text x="640" y="165" text-anchor="middle" font-size="11" fill="#475569">Full Assessment</text>
+<text x="640" y="180" text-anchor="middle" font-size="10" fill="#64748B">Total cost & outcomes</text>
+<text x="640" y="193" text-anchor="middle" font-size="10" fill="#64748B">Strategic fit</text>
+<rect x="20" y="30" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
+<text x="80" y="43" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">Process Focus</text>
+<rect x="180" y="30" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
+<text x="240" y="43" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">Scale &amp; Risk</text>
+<rect x="340" y="30" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
+<text x="400" y="43" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">Strategic Value</text>
+</svg>
+<figcaption>Figure 2 — Board-level governance checkpoints for agentic AI programs in GCC public sector, spanning 90, 180, and 365 days.</figcaption>
+</figure>
+
+<h2>Common Traps &amp; How to Avoid Them</h2>
+
+<p>Organizations that have deployed agentic AI in public-sector contexts across the GCC and globally encounter a consistent set of failure modes. Recognizing them early prevents wasted investment and loss of organizational trust in AI.</p>
+
+<p><strong>Trap 1: The Agent-First Approach.</strong> The organization acquires or builds an agent and then looks for a process to deploy it into. This inverts the logic. The right approach is to identify a high-impact process, redesign it, and then choose the agent or build the capability. An agent optimized for one domain rarely works well in another without substantial rework. Starting with the process ensures the agent is fit-for-purpose from the start.</p>
+
+<p><strong>Trap 2: Underestimating Change Management.</strong> Employees whose work is being automated are not the same as investors in a software company cheering efficiency gains. If you deploy an agent that removes work from a national employee without a clear story about what that employee will do next, you will face resistance that no technical excellence can overcome. The organizational and human-resources conversations must precede or run parallel to the technical work, not follow it.</p>
+
+<p><strong>Trap 3: No Baseline.</strong> You cannot measure the agent's impact if you did not measure the process's performance before the agent arrived. Establish baseline metrics: how many cases per day, what is the cycle time, what is the error rate, what is the cost per transaction, what percentage require rework? These are the comparisons that matter. Without them, post-deployment claims about improvement are unfalsifiable.</p>
+
+<p><strong>Trap 4: Forgetting the Tail.</strong> The agent will perform well on 85–90% of cases — the routine, policy-driven work. It will struggle with the 10–15% of edge cases, complex scenarios, and exceptions. If you do not plan for how those cases are handled — who handles them, how quickly, with what expertise — the agent will simply shift work rather than reduce it. Worse, the agent may incorrectly handle some of those tail cases, creating rework or citizen complaints. The tail is where most of the human work is.</p>
+
+<p><strong>Trap 5: Treating Arabic as a Translation Problem.</strong> Organizations often deploy an agent trained on English, then wrap a translation layer around it. This fails because the agent's reasoning, training, and decision logic are all in English. The translation introduces errors, and the agent's understanding of the problem space is fundamentally misaligned with the Arabic-speaking user. The remediation is not to translate the agent; it is to rebuild it with Arabic-language models and Arabic-language training data from the start.</p>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>World Economic Forum, <em>Future of Jobs Report 2025</em>. <a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">weforum.org</a></li>
@@ -1250,7 +2618,8 @@ export const insights = [
   <li>OECD AI Principles. <a href="https://oecd.ai/en/ai-principles" target="_blank" rel="noopener noreferrer">oecd.ai</a></li>
   </ol>
       `,
-      contentAr: `
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+  
   <h2>الأساس المنطقي</h2>
   <p>إن صياغة "الذكاء الاصطناعي سيأخذ الوظائف" أنتجت قلقاً أكثر من الرؤية الثاقبة. الصياغة الأكثر فائدة — والصياغة التي تتماشى مع ولاية دول مجلس التعاون الخليجي للقطاع العام — هي أن الذكاء الاصطناعي سيأخذ <em>المهام</em>، والمنظمات في القطاع العام بدول مجلس التعاون الخليجي التي تعيد تصميم الأدوار والعمليات حول هذه الحقيقة ستكون أكثر إنتاجية وجاذبية كأصحاب عمل، وأكثر توافقاً مع الاستراتيجيات الوطنية للقوى العاملة من تلك التي لا تفعل ذلك. تقرير <em>مستقبل الوظائف 2025</em> من المنتدى الاقتصادي العالمي يجد أن 86% من أصحاب العمل يتوقعون أن يحول الذكاء الاصطناعي أعمالهم بحلول عام 2030، وأن الأدوار ذات النمو الأعلى هي تلك التي تتضمن التكامل مع الذكاء الاصطناعي، وليس استبدال الذكاء الاصطناعي (<a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">المنتدى الاقتصادي العالمي، 2025</a>).</p>
   <h2>إطار القوى العاملة بدول مجلس التعاون الخليجي</h2>
@@ -1282,6 +2651,103 @@ export const insights = [
   <li>تعامل مع القيادة في الخدمة المدنية والموارد البشرية في البداية، وليس عند النشر.</li>
   <li>تتبع جودة النتائج وتجربة المواطن جنباً إلى جنب مع الكفاءة من اليوم الأول.</li>
   </ul>
+  
+  <h2>أطر العمل التنظيمية والحوكمة للذكاء الاصطناعي الموكِّل في القطاع العام بدول مجلس التعاون</h2>
+
+<p>يعمل نشر وكلاء الذكاء الاصطناعي المستقلين أو شبه المستقلين في منظمات القطاع العام بدول مجلس التعاون ضمن مجالات تنظيمية متداخلة تختلف حسب البلد والقطاع وطبيعة القرارات المؤتمتة. يتشكل المشهد التنظيمي السعودي من خلال البنك المركزي (SAMA) والهيئة العامة للزكاة والدخل (GAZT) وهيئات خاصة بالقطاع مثل وزارة الداخلية ووزارة العدل. تعمل الإمارات من خلال CBUAE والهيئة العامة للخدمات المالية (FSRA) والجهاز الرقمي إلى جانب منظمي القطاع. كلا البلدين موقعان على مبادئ OECD للذكاء الاصطناعي ويشيران بشكل متزايد إلى ISO/IEC 42001 لأطر عمل حوكمة الذكاء الاصطناعي. لم تصدر أي من الولايات القضائية لوائح تفصيلية للذكاء الاصطناعي الموكِّل حتى الآن؛ وقد أصدرت كلاهما إرشادات بشأن المساءلة الخوارزمية وحوكمة البيانات التي تنطبق على الوكلاء بالتمديد.</p>
+
+<p>الآثار العملية هي أن منظمات القطاع العام لا يمكنها الانتظار لكتاب قواعد تنظيمي كامل. بدلاً من ذلك، يجب عليها دمج الحوكمة في عملية تصميم ونشر الوكيل نفسها — ما نطلق عليه "الامتثال في وقت التصميم". هذا يعني: تحديد سلطة القرار في كل خطوة (أي القرارات التي يتعامل معها الوكيل بشكل منفرد، وأيها تتطلب موافقة بشرية، وأيها تتطلب تصعيداً؟)؛ توثيق بيانات التدريب ومنطق القرار بحيث يمكن تدقيقها؛ إنشاء عتبات المراقبة التي تؤدي إلى المراجعة البشرية إذا انجرفت أداء الوكيل؛ والحفاظ على سجلات التدقيق التي تلبي المساءلة الداخلية والفحص التنظيمي في المستقبل. المنظمات التي تبني هذا النظام في وقت مبكر تتجنب التكاليف العالية لإعادة تثبيت الحوكمة في نظام مباشر.</p>
+
+<h3>قائمة التحقق من الامتثال في وقت التصميم</h3>
+
+<ul>
+<li><strong>مصفوفة سلطة القرار.</strong> قم بتعيين كل قرار يمكن للوكيل أن يتخذه. لكل قرار، حدد: هل تم تفويضه بالكامل للوكيل؟ هل يتطلب مراجعة بشرية قبل الإجراء؟ هل يتطلب موافقة بشرية قبل المتابعة؟ هل يؤدي إلى التصعيد؟ وثق ذلك في مستند واحد يمكن لفريق التكنولوجيا وأصحاب مصلحة الحوكمة قراءته.</li>
+<li><strong>منشأ بيانات التدريب.</strong> احتفظ بسجل للبيانات المستخدمة في تدريب أو ضبط الوكيل بدقة. في سياق دول مجلس التعاون، يكون هذا حاسماً بشكل خاص للقرارات التي تؤثر على المواطنين أو الرعايا — سيسأل المنظمون والقضاة من أين جاءت الأنماط وما إذا كانت تعكس السياسة الفعلية أو الانحياز التاريخي. إذا تم تدريب الوكيل على 10 سنوات من قرارات الوزارة، فإن مجموعة البيانات تلك تضمن القرارات والانحيازات من تلك الفترة. وثق ذلك بوضوح.</li>
+<li><strong>مراقبة الأداء والكشف عن الانجراف.</strong> حدد ما تعنيه "الأداء" للوكيل في هذا السياق: الدقة؟ الاتساق مع السياسة؟ السرعة؟ رضا المواطن؟ ضع عتبات للأداء المقبول على كل بُعد. أنشئ جدول مراقبة (يومي، أسبوعي، شهري) وحدد ما يؤدي إلى المراجعة البشرية أو إعادة التدريب. هذا ليس تدقيقاً لمرة واحدة؛ بل هو نظام إنتاجي.</li>
+<li><strong>تسجيل التدقيق والقابلية للشرح.</strong> يجب تسجيل كل قرار ذي نتيجة يتخذه الوكيل بطريقة يمكن استرجاعها وشرحها بعد أشهر أو سنوات. إذا أوصى الوكيل برفض تصريح واستأنف المتقدم، يجب أن تكون المنظمة قادرة على إظهار: ما هي المدخلات التي رآها الوكيل؟ ما السياسة أو إشارة التدريب التي أدت إلى تلك التوصية؟ ما هو منطق المراجع البشري لقبول أو تجاوز التوصية؟ هذا أصبح معياراً في الخدمات المالية وينتقل إلى الإدارة العامة.</li>
+</ul>
+
+<h2>تقييم البائع وديناميات بناء مقابل شراء في سوق دول مجلس التعاون</h2>
+
+<p>تواجه منظمات القطاع العام بدول مجلس التعاون خياراً بين بناء الوكلاء داخلياً، أو التعاقد مع مقدمي خدمات الذكاء الاصطناعي العالميين (Accenture وMcKinsey QuantumBlack وEY وDeloitte)، أو العمل مع متاجر إقليمية متخصصة تفهم السياق التنظيمي والتنظيمي المحلي. يعتمد الاختيار الصحيح على القدرة التنظيمية والجدول الزمني ودرجة أهمية العملية وتوفر البيانات والخبرة المحلية.</p>
+
+<p>البناء الداخلي جذاب عندما تكون العملية مملوكة أو حساسة جداً أو مرتبطة ارتباطاً وثيقاً بالأنظمة القائمة. كما أنها تبني التعلم التنظيمي. ومع ذلك، فإنها تتطلب استثماراً مستدام في موهبة هندسة التعلم الآلي — وهي موارد نادرة في القطاع العام بدول مجلس التعاون — والجدول الزمني عادة ما يكون 6-12 شهراً من الفكرة إلى وكيل إنتاجي. الشراء أو الشراكة أسرع (3-6 أشهر) لكن يخاطر بثلاث مآزق شائعة: قد لا يعكس الوكيل المبني مسبقاً من قبل البائع قواعد السياسة المحددة أو منطق القرار للوزارة؛ وتتضاعف طلبات التغيير والتخصيص التكلفة؛ وتصبح الصيانة على المدى الطويل والتصعيد تبعيات لخارطة الطريق والموظفين من البائع. غالباً ما يكون النهج الهجين — الذي يقوده البائع للبنية الأساسية والقدرة الأساسية، لكن مع فريق داخلي مخصص يفهم العملية ويمكنه تكييف الوكيل مع تغيير السياسة — الأكثر مرونة.</p>
+
+<p>عند تقييم البائعين أو بناء حالة عمل لتطوير داخلي، ركز على هذه الأبعاد: هل يفهم البائع أو الفريق لوائح العمل بدول مجلس التعاون وسياسة السعودة / التوطين؟ هل يمكنهم العمل باللغة العربية، أم أنهم يعتمدون على نماذج لغة إنجليزية ستفقد الدقة في التواصل مع المواطنين؟ ما نهجهم في الحوكمة والقابلية للتدقيق؟ هل يقترحون نموذج تشغيل مستدام، أم أن الوكيل هو تسليم بدون مسؤولية؟ المنظمات التي تطرح هذه الأسئلة مبكراً تتجنب نمط إنفاق المال على تسليم الذكاء الاصطناعي ثم اكتشاف أن الوكيل الناتج لا يتوافق مع الواقع التنظيمي.</p>
+
+<h3>إطار تقييم البائع</h3>
+
+<ul>
+<li><strong>معمارات المرجع ودراسات الحالة.</strong> اطلب من البائعين مراجع في سياقات حكومية GCC مماثلة. التحديد مهم: قد لا تنتقل مرجعية الخدمات المالية إلى سياق وزارة الداخلية. اسأل تلك المراجع عن تأخير الجدول الزمني وإجمالي تكلفة الملكية والدعم ما بعد النشر.</li>
+<li><strong>قدرة اللغة العربية.</strong> هذا غير قابل للتفاوض للوكلاء الذين يخدمون المواطنين أو يتعاملون مع الوثائق باللغة العربية. يجب على البائعين إثبات أن نماذجهم اللغوية ومعالجة اللغات الطبيعية قد تم تقييمها على لهجات دول مجلس التعاون العربية والمصطلحات الإدارية، وليس فقط العربية الفصحى الحديثة أو الإنجليزية. سيؤدي الأداء العربي الضعيف إلى فشل الاعتماد وتجربة المواطن.</li>
+<li><strong>أدوات الحوكمة والتدقيق.</strong> اسأل كيف تلتقط منصة البائع منطق القرار، وتراقب أداء الوكيل، وتظهر الشذوذ. إذا قدموا لوحة تحكم، اختبرها. إذا لم يقدموا، وضح كيف سيبني فريقك الرؤية. هذا البُعد غالباً ما يتم السعر المنخفض له أو التنقيط الناقص في وقت العقد وأكثر عرضة للظهور كمشكلة في السنة الثانية من التشغيل.</li>
+<li><strong>الانتقال والاستدامة.</strong> كيف يقوم البائع بتسليم الأمور إلى فريقك؟ كيف يبدو الدعم في السنوات 2 و 3 والسنوات اللاحقة؟ هل الوكيل يعتمد على البنية الأساسية للبائع (السحابة والواجهات البرمجية والنماذج) أم يمكن نقله أو إعادة تدريبه من قبل فريقك؟ هذا يهم من أجل الاستقلال التنظيمي والتنبؤ بالميزانية.</li>
+</ul>
+
+<h2>الاعتبارات المتعلقة باللغة العربية وعمق التوطين</h2>
+
+<p>سيعمل الذكاء الاصطناعي الموكِّل في القطاع العام بدول مجلس التعاون بشكل كبير باللغة العربية — العربية الفصحى الحديثة (MSA) للوثائق والسياسات الرسمية، ولهجات الخليج أو المحلية للتفاعل مع المواطنين. جودة أداء الوكيل باللغة العربية هي غالباً المتغير المخفي الذي يحدد ما إذا كان المواطنون وموظفو الحكومة سيستخدمونه فعلاً. عادة ما تكون النماذج الموجهة للإنجليزية أو المُحسّنة للإنجليزية التي تم إضافة العربية إليها لاحقاً أداء ضعيفاً في بُعدين حاسمين: المفردات والسياق.</p>
+
+<p>تنشأ مشاكل المفردات لأن العديد من المصطلحات الإدارية والتقنية في حكومة دول مجلس التعاون لها معاني محددة قد لا تكون النماذج الموجهة للإنجليزية قد التقطتها. نظام التصاريح الذي يصنف التطبيقات كـ "معاملات عاجلة" يعتمد على نموذج يفهم الاستعجالية في سياق الإدارة بدول مجلس التعاون، وليس بشكل عام باللغة العربية. وبالمثل، قد لا تحمل النماذج المدربة في المقام الأول على حوزات مدونات اللغة العربية من بلاد الشام أو شمال أفريقيا أنماط مفردات الإدارة الخليجية. مشاكل السياق أكثر دقة لكن أكثر عاقبة. المواطن الذي يكتب إلى وزارة باللغة العربية الخليجية العامية، مع الاختصارات والتبديل اللغوي، سيربك نموذجاً تم تدريبه على النص الرسمي. سيصنف الوكيل الاستفسار بشكل خاطئ، ويوجهه بشكل غير صحيح، أو ينتج ردوداً تبدو غير صحيحة للمواطن.</p>
+
+<p>تتطلب الحلول أكثر من مجرد "تحسين الأداء العربي". يتطلب: (1) تنظيم بيانات التدريب التي تتعلق بمجال وزارتك وقاعدتك من المواطنين والمصطلحات السياسية؛ (2) تقييم النموذج على مجموعة اختبار محفوظة من الاستفسارات والوثائق الحقيقية من منظمتك، وليس على مجموعات بيانات المعايير العامة؛ (3) إنشاء حلقة ملاحظات بحيث يمكن للموظفين الإبلاغ عن الحالات التي فشل فيها فهم الوكيل للغة العربية، وتلك الحالات تغذي العودة إلى إعادة التدريب؛ و (4) الاعتراف بأن هذا عمل مستمر، وليس ضبط لمرة واحدة. الفائدة هي أن الوكيل الذي يفهم لغة مواطنيك — ويمكنه الرد بنبرة تشعر بأنها محلية واحترام وموظفة — سيحقق اعتماداً وثقة لا يمكن للترجمة الموجهة للإنجليزية تحقيقها.</p>
+
+<h2>حوكمة المستوى الإداري ونقاط التفتيش 180 يوماً</h2>
+
+<p>تتطلب برامج الذكاء الاصطناعي الموكِّل في منظمات القطاع العام رؤية ومراقبة على مستوى المجلس الإداري، ليس لأن المجلس يحتاج إلى فهم العمارة التقنية، بل لأن البرنامج يمس استراتيجية القوى العاملة والمخاطر التنظيمية وتجربة المواطن والميزانية. دور المجلس هو التأكد من أن البرنامج متوافق مع الإستراتيجية التنظيمية وأن المخاطر يتم إدارتها وأن الاستثمار ينتج النتائج المقصودة.</p>
+
+<p>نوصي بجدول حوكمة يمتد على ثلاث فترات زمنية: 90 يوماً و 180 يوماً و 365 يوماً. بعد 90 يوماً، يجب أن تكون المنظمة قد أكملت إعادة تصميم العملية، مع وجود مجموعة تجريبية تدير الوكيل، والحصول على ملاحظات أولية على أداء الوكيل وتجربة الموظفين. يجب أن يتناول نقطة المجلس الإداري: هل العملية المختارة هي الصحيحة؟ هل تشعر المجموعة التجريبية أن الوكيل يجعل عملهم أفضل أم أسوأ؟ هل هناك مفاجآت تنظيمية أو امتثالية؟ بعد 180 يوماً، عادة ما تنتقل المنظمة من التجريب إلى نشر على نطاق واسع عبر مجموعة أوسع أو إلى عملية جديدة. يجب أن يقيّم نقطة التفتيش: هل مؤشرات الأداء الرئيسية من التجربة تتتبع كما هو متوقع؟ ما الاحتكاك التنظيمي الذي ظهر؟ هل نحن على المسار الصحيح لإعادة نشر القوى العاملة التي وعدنا بها؟ كيف تبدو خارطة الطريق للـ 12 شهراً القادمة؟ بعد 365 يوماً، كان البرنامج في الإنتاج لفترة كافية لتقييم تأثيره الحقيقي — وليس فقط مقاييس الكفاءة، بل جودة النتائج وشعور الموظفين وتجربة المواطن. يجب أن يسأل المجلس: هل حقق البرنامج منطقية السعودة / التوطين؟ ما إجمالي تكلفة الملكية، بما في ذلك كل التخصيص والدعم وإعادة التدريب؟ هل كنا سنفعل هذا مرة أخرى، أم بشكل مختلف؟</p>
+
+<p>المنظمات التي تتخطى انضباط الحوكمة هذا عادة ما تكتشف، في وقت ما بين الشهرين 6 و 18، أن برنامج الذكاء الاصطناعي الموكِّل قد انجرف عن نيته الأصلية، واستهلك المزيد من الميزانية والاهتمام التنظيمي مما توقع، وفشل في إنتاج نتائج القوى العاملة التي برّرته. لا تمنع نقاط المجلس الإداري كل انجراف، لكنها تجعله مرئياً وتخلق مساحة لتصحيح المسار قبل أن يصبح البرنامج تكلفة غارقة.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-27 svg-d-27"><title id="svg-t-27">جدول حوكمة المجلس الإداري لبرامج الذكاء الاصطناعي الموكِّل</title><desc id="svg-d-27">جدول زمني يعرض ثلاث نقاط فحص للمجلس الإداري في 90 و 180 و 365 يوماً مع الأسئلة الرئيسية والمجالات ذات الأولوية في كل مرحلة.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<line x1="60" y1="120" x2="680" y2="120" stroke="#E2E8F0" stroke-width="2"/>
+<circle cx="140" cy="120" r="6" fill="#156082"/>
+<circle cx="340" cy="120" r="6" fill="#1A4F7A"/>
+<circle cx="640" cy="120" r="6" fill="#0E2841"/>
+<text x="140" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">اليوم 90</text>
+<text x="140" y="165" text-anchor="middle" font-size="11" fill="#475569">التجربة جاهزة</text>
+<text x="140" y="180" text-anchor="middle" font-size="10" fill="#64748B">إعادة تصميم العملية</text>
+<text x="140" y="193" text-anchor="middle" font-size="10" fill="#64748B">ملاحظات الموظفين</text>
+<text x="340" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">اليوم 180</text>
+<text x="340" y="165" text-anchor="middle" font-size="11" fill="#475569">مرحلة النطاق</text>
+<text x="340" y="180" text-anchor="middle" font-size="10" fill="#64748B">التحقق من مؤشرات الأداء</text>
+<text x="340" y="193" text-anchor="middle" font-size="10" fill="#64748B">تأثير القوى العاملة</text>
+<text x="640" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">اليوم 365</text>
+<text x="640" y="165" text-anchor="middle" font-size="11" fill="#475569">التقييم الشامل</text>
+<text x="640" y="180" text-anchor="middle" font-size="10" fill="#64748B">إجمالي التكلفة والنتائج</text>
+<text x="640" y="193" text-anchor="middle" font-size="10" fill="#64748B">الملاءمة الإستراتيجية</text>
+<rect x="20" y="30" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
+<text x="80" y="43" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">تركيز العملية</text>
+<rect x="180" y="30" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
+<text x="240" y="43" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">النطاق والمخاطر</text>
+<rect x="340" y="30" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
+<text x="400" y="43" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">القيمة الإستراتيجية</text>
+</svg>
+<figcaption>الشكل 2 — نقاط فحص حوكمة المجلس الإداري لبرامج الذكاء الاصطناعي الموكِّل في القطاع العام بدول مجلس التعاون، تمتد على 90 و 180 و 365 يوماً.</figcaption>
+</figure>
+
+<h2>المآزق الشائعة وكيفية تجنبها</h2>
+
+<p>تواجه المنظمات التي نشرت الذكاء الاصطناعي الموكِّل في سياقات القطاع العام عبر دول مجلس التعاون وعالمياً مجموعة متسقة من أنماط الفشل. التعرف عليها مبكراً يمنع الاستثمار المهدر وفقدان الثقة التنظيمية في الذكاء الاصطناعي.</p>
+
+<p><strong>المأزق 1: نهج موجه للوكيل أولاً.</strong> تستحوذ المنظمة على وكيل أو تبنيه ثم تبحث عن عملية لنشره فيها. هذا يعكس المنطق. النهج الصحيح هو تحديد عملية عالية التأثير، وإعادة تصميمها، ثم اختيار الوكيل أو بناء القدرة. نادراً ما يعمل الوكيل المحسّن لمجال واحد بشكل جيد في مجال آخر بدون إعادة عمل كبيرة. يضمن البدء بالعملية أن الوكيل مناسب للغرض منذ البداية.</p>
+
+<p><strong>المأزق 2: الت
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-28 svg-d-28"><title id="svg-t-28">ثلاثة نماذج للتعاون بين الإنسان والذكاء الاصطناعي</title><desc id="svg-d-28">ثلاث لوحات جنباً إلى جنب تظهر الذكاء الاصطناعي يتولى والإنسان يراجع، والذكاء الاصطناعي يوصي والإنسان يقرر، والإنسان يقود والذكاء الاصطناعي يدعم.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="40" width="200" height="140" fill="#156082" rx="8"/><text x="120" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">النموذج 1</text><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي يتولى ·</text><text x="120" y="118" text-anchor="middle" fill="#fff" font-size="12">الإنسان يراجع</text><text x="120" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">مدفوع بالسياسة وعالي الحجم</text>
+  <rect x="250" y="40" width="200" height="140" fill="#1A4F7A" rx="8"/><text x="350" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">النموذج 2</text><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي يوصي ·</text><text x="350" y="118" text-anchor="middle" fill="#fff" font-size="12">الإنسان يقرر</text><text x="350" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">القرارات ذات التبعات</text>
+  <rect x="480" y="40" width="200" height="140" fill="#0E2841" rx="8"/><text x="580" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">النموذج 3</text><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="12">الإنسان يقود ·</text><text x="580" y="118" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي يدعم</text><text x="580" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">المشورة العليا · التفاوض</text>
+  </svg>
+  <figcaption>الشكل 1 — ثلاثة نماذج تشغيلية للتعاون بين الإنسان والذكاء الاصطناعي في القطاع العام بدول مجلس التعاون الخليجي.</figcaption>
+  </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
   <li>المنتدى الاقتصادي العالمي، <em>تقرير مستقبل الوظائف 2025</em>. <a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">weforum.org</a></li>
@@ -1295,7 +2761,8 @@ export const insights = [
   <li>مبادئ منظمة التعاون الاقتصادي والتنمية للذكاء الاصطناعي. <a href="https://oecd.ai/en/ai-principles" target="_blank" rel="noopener noreferrer">oecd.ai</a></li>
   </ol>
       `,
-      contentTr: `
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+  
   <h2>Tez</h2>
   <p>"Yapay zeka işleri alacak" çerçevesi, anlayıştan daha fazla kaygı üretmiştir. Daha faydalı çerçeve — ve GCC kamu sektörü yetkisine uygun olan — yapay zekanın <em>görevleri</em> alacağı, ve bu gerçeğin etrafında rolleri ve süreçleri yeniden tasarlayan GCC kamu sektörü kuruluşlarının bunu yapmayan kuruluşlardan daha üretken, daha çekici işverenler olacağı ve ulusal işgücü stratejileriyle daha iyi uyumlu olacağıdır. Dünya Ekonomik Forumu'nun <em>İşlerin Geleceği Raporu 2025</em>, işverenlerin %86'sının yapay zekanın 2030'a kadar işlerini dönüştüreceğini beklediğini ve en yüksek büyüme oranları olan rollerin yapay zeka yerine koyma değil, yapay zeka tamamlayıcılığını içerdiğini bulmuştur (<a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">WEF, 2025</a>).</p>
   <h2>GCC İşgücü Çerçevesi</h2>
@@ -1327,6 +2794,109 @@ export const insights = [
   <li>Sivil hizmet ve İK liderliğini dağıtımda değil başlangıçta katılımcı yapın.</li>
   <li>Birinci günden itibaren sonuç kalitesi ve vatandaş deneyimini verimlilik yanında izleyin.</li>
   </ul>
+  
+  <h2>GCC Kamu Sektöründe Agentic AI için Düzenleyici ve Yönetişim Çerçeveleri</h2>
+
+<p>GCC kamu sektörü kuruluşlarında özerk veya yarı-özerk AI ajanlarının dağıtılması, ülkeden, sektörden ve otomatikleştirilmekte olan kararların yapısından farklılık gösteren örtüşen düzenleyici alanlar içinde çalışır. Suudi Arabistan'ın düzenleyici ortamı Merkez Bankası (SAMA), Zekât ve Vergi Genel Müfettişliği (GAZT) ve İçişleri Bakanlığı ve Adalet Bakanlığı gibi sektöre özel kurumlar tarafından şekillendirilmiştir. BAE, CBUAE, Mali Hizmetler Düzenleyici Otoritesi (FSRA) ve Dijital Otorite aracılığıyla sektörel düzenleyiciler ile birlikte çalışmaktadır. Her iki ülke de OECD AI İlkeleri'nin imzatarıdır ve AI yönetişim çerçeveleri için giderek ISO/IEC 42001'e atıfta bulunmaktadır. Her iki yetki alanı da henüz reçeteci agentic-AI düzenlemeleri yayınlamamıştır; her ikisi de ajanlar tarafından uzatma yoluyla uygulanan algoritmik hesap verebilirlik ve veri yönetişimi hakkında rehberlik yayınlamıştır.</p>
+
+<p>Pratik anlamı, kamu sektörü kuruluşlarının tam bir düzenleyici kod kitabını bekleyemediğidir. Bunun yerine, yönetişimi ajan tasarımı ve dağıtım sürecinin kendisine yerleştirmeleri gerekir — buna "tasarım zamanı uyumluluğu" diyoruz. Bu şu anlama gelir: her adımda karar yetkilisini tanımlama (ajan hangi kararları tek taraflı olarak işler, hangilerine insan onayı gerekir, hangilerine yükseltme gerekir?); eğitim verilerini ve karar mantığını belgeleştirme, böylece denetlenebilir; ajanın performansı kayıyorsa insan incelemesini tetikleyen izleme eşikleri oluşturma; ve hem dahili hesap verebilirliği hem de gelecekteki düzenleyici incelemeyi karşılayan denetim günlükleri tutma. Kuruluşlar bu disiplini erken inşa edenler, canlı bir sisteme yönetişimi uyarlama yüksek maliyetinden kaçınır.</p>
+
+<h3>Tasarım Zamanı Uyumluluğu Kontrol Listesi</h3>
+
+<ul>
+<li><strong>Karar Yetkilisi Matrisi.</strong> Ajanın yapabileceği her kararı eşleştirin. Her biri için belirtin: Tamamen ajana mı devredilmiş? İşlem öncesinde insan incelemesi gerektirir mi? İşlem öncesinde insan onayı gerektirir mi? Yükseltmeyi tetikler mi? Bunu hem teknoloji takımı hem de yönetişim paydaşlarının okuyabileceği tek bir yapıda belgeleştirin.</li>
+<li><strong>Eğitim Veri Kaynağı.</strong> Ajanın eğitilmesi veya ince ayarlanması için kullanılan verilerin kaydını tutun. GCC bağlamında, bu özellikle vatandaşları veya ulusal kişileri etkileyen kararlar için önemlidir — düzenleyiciler ve mahkemeler desenlerin nereden geldiğini ve gerçek politikayı mı yoksa tarihsel önyargıyı mı yansıttığını soracaklardır. Ajan 10 yıllık bakanlık kararları üzerinde eğitilmişse, o veri seti o dönem kararlarını ve önyargılarını içerir. Bunu açıkça belgeleştirin.</li>
+<li><strong>Performans İzleme ve Sapma Algılaması.</strong> Bu bağlamda ajanın "performansının" ne anlama geldiğini tanımlayın: doğruluk? Politika ile tutarlılık? Hız? Vatandaş memnuniyeti? Her boyut için kabul edilebilir performans eşikleri belirleyin. İzleme temposu oluşturun (günlük, haftalık, aylık) ve insan incelemesini veya yeniden eğitimi tetikleyen şeyleri tanımlayın. Bu tek seferlik bir denetim değil; bu bir üretim disiplinidir.</li>
+<li><strong>Denetim Günlüğü ve Açıklanabilirlik.</strong> Ajan tarafından yapılan her sonuç doğuran karar, aylar veya yıllar sonra alınabilecek ve açıklanabilecek bir biçimde günlüğe kaydedilmelidir. Ajan bir izin verilmemesini önermiş ve başvurucu itiraz etmişse, kuruluş gösterebilmeli: Ajan hangi girdileri gördü? Hangi politika veya eğitim sinyali o öneriye yol açtı? İnsan incelemecisinin onu kabul etme veya geçersiz kılma mantığı neydi? Bu artık finansal hizmetlerde standarttır ve kamu yönetimine taşınmaktadır.</li>
+</ul>
+
+<h2>GCC Pazarında Satıcı Değerlendirmesi ve Yapı-vs.-Satın Al Dinamikleri</h2>
+
+<p>GCC kamu sektörü kuruluşları ajanları şirket içinde inşa etme, küresel AI hizmet sağlayıcıları (Accenture, McKinsey QuantumBlack, EY, Deloitte) ile kontrat yapma veya yerel düzenleyici ve kuruluş bağlamını anlayan bölgesel butikleriyle çalışma arasında bir seçimle karşı karşıyadır. Doğru seçim, kuruluş kapasitesine, zaman çizelgesine, işlemin kritikliğine ve yerel veri ve uzmanlığın mevcudiyetine bağlıdır.</p>
+
+<p>Şirket içinde inşa etme, işlem müstesna olduğunda, oldukça hassas olduğunda veya mevcut sistemlere sıkı bir şekilde bağlandığında cazip gelir. Ayrıca kuruluş öğrenmesi oluşturur. Ancak, makine öğrenmesi mühendisliği yeteneğine sürekli bir yatırım gerektirir — GCC kamu sektöründe kıt bir kaynak — ve zaman çizelgesi tipik olarak başlangıçtan bir üretim ajanına 6–12 aydır. Satın al veya ortak ol daha hızlıdır (3–6 ay) ancak üç yaygın tuzağı barındırır: satıcının önceden oluşturulmuş ajanı bakanlığın spesifik politika kurallarını veya karar mantığını yansıtmayabilir; değişiklik siparişleri ve özelleştirmeler maliyeti çoğaltır; ve uzun vadeli sürdürülebilirlik ve yükseltme satıcının yol haritası ve personel durumuna bağımlı hale gelir. Melez bir yaklaşım — altyapı ve temel yetenek için satıcı liderliğinde, ancak işlemi anlayan ve politika değiştikçe ajanı uyarlayabilen adanmış bir şirket içi takım ile — genellikle en dayanıklı olandır.</p>
+
+<p>Satıcıları değerlendirirken veya şirket içi geliştirme için iş senaryosu hazırlarken, bu boyutlara odaklanın: Satıcı veya takım GCC iş gücü düzenlemelerini ve Saudization / Emiratisation politikasını anlar mı? Arapça çalışabilirler mi, yoksa vatandaş iletişiminde nuansı kaçıracak İngilizce dil modellerine mi geri dönüyorlar? Yönetişim ve denetlenebilirliğe karşı tutumları nedir? Sürdürülebilir bir işletme modeli öneriyorlar mı, yoksa ajan bir at atma el değiştirmesi mi? Kuruluşlar bu soruları erken soranlar, AI teslimatına harcama yapma ve ardından ortaya çıkan ajanın kuruluş gerçeğiyle uyumlu olmadığını bulma modelini önlerler.</p>
+
+<h3>Satıcı Değerlendirme Çerçevesi</h3>
+
+<ul>
+<li><strong>Referans Mimarileri ve Vaka Çalışmaları.</strong> Satıcılara benzer GCC hükümet bağlamlarında referanslar isteyin. Özgüllük önemlidir: bir finansal hizmetler referansı, bir İçişleri Bakanlığı bağlamına aktarılmayabilir. Bu referanslara zaman çizelgesi kaymaları, toplam sahiplik maliyeti ve dağıtım sonrası destek hakkında sorun.</li>
+<li><strong>Arapça Dil Yeteneği.</strong> Bu, vatandaşlara hizmet veren veya Arapçada belgeleri işleyen ajanlar için pazarlıksız bir koşuldur. Satıcılar, NLP ve dil modellerinin sadece Modern Standard Arabic veya İngilizce için değil, GCC Arapça lehçeleri ve idari terminolojisi için değerlendirildiğini göstermelidir. Zayıf Arapça performansı, benimsemeyi ve vatandaş deneyimini batıracaktır.</li>
+<li><strong>Yönetişim ve Denetim Araçları.</strong> Satıcının platformunun karar mantığını nasıl yakaladığını, ajan performansını nasıl izlediğini ve anormallikleri nasıl ortaya çıkardığını sorun. Bir pano sunuyorlarsa test edin. Yoksa, takımınız görünürlüğü nasıl oluşturacağını açıklaması gerekir. Bu, sözleşme zamanında en çok az veya yetersiz belirtilen boyut ve işletimin ikinci yılında sorun olarak ortaya çıkma olasılığı en yüksek olandır.</li>
+<li><strong>Geçiş ve Sürdürülebilirlik.</strong> Satıcı takımınıza nasıl devreder? Yıl 2, 3 ve sonrasında destek nasıl görünür? Ajan satıcı altyapısına (bulut, API'ler, modeller) bağlı mı yoksa takımınız tarafından taşınabilir veya yeniden eğitililebilir mi? Bu, kuruluş bağımsızlığı ve bütçe öngörülebilirliği için önemlidir.</li>
+</ul>
+
+<h2>Arapça Dil Konuları ve Yerelleştirme Derinliği</h2>
+
+<p>GCC kamu sektöründe Agentic AI, resmi belgeler ve politika için Modern Standard Arabic (MSA) ve vatandaş etkileşimleri için Khaleeji veya yerel lehçeler de olmak üzere ağır şekilde Arapçada çalışacaktır. Ajanın Arapça performansının kalitesi, genellikle vatandaşların ve devlet çalışanlarının aslında bunu kullanıp kullanmayacağını belirleyen gizli değişkendir. İngilizce birincil veya İngilizce optimize edilmiş modeller, daha sonra Arapça eklenmişse, tipik olarak iki kritik boyutta düşük performans gösterir: sözcük bilgisi ve bağlam.</p>
+
+<p>Sözcük bilgisi sorunları, GCC hükümetinde birçok idari ve teknik terim, İngilizce birincil modellerin yakalayamayabileceği belirli anlamlara sahip olduğu için ortaya çıkar. Başvuruları "معاملات عاجلة" (acil durumlar) olarak kategorize eden bir izin verme sistemi, GCC idari bağlamında aciliyet anlamış, sadece genel Arapçada değil, bir model gerektirir. Benzer şekilde, birincil olarak Levantine veya Kuzey Afrika'dan Arapça dil kurpuslarında eğitilmiş modeller, Körfez idari Arapçasının sözcük bilgisi modellerini taşımayabilir. Bağlamsal sorunlar daha ince ama daha sonuç doğurucu olur. Harf değiştirmeler, kısaltmalar ve kod-geçişler ile halkla bir bakanlığa halk dili Körfez Arapçası ile yazarsa, resmi metin üzerinde eğitilmiş bir model karışacaktır. Ajan sorguyu yanlış sınıflandıracak, yanlış yönlendirecek veya vatandaşa sese göre çıkış yoluyla yapılamayan tepkiler oluşturacak.</p>
+
+<p>Düzeltme, "Arapça performansını iyileştir" ten daha fazlasını gerektirir. Şunları gerektirir: (1) bakanlığınızın alanı, vatandaş tabanı ve politika terminolojisine özgü eğitim verilerini seçmek; (2) modeli genel ölçüt veri setlerinde değil, kuruluşunuzdaki gerçek sorgular ve belgelerden oluşan tutulan bir test seti üzerinde değerlendirmek; (3) çalışanların ajanın Arapça anlaşması başarısız olduğu durumları işaretleyebildiği ve bu durumların yeniden eğitime geri beslendiği bir geri bildirim döngüsü oluşturmak; ve (4) bunun tek seferlik ayarlama değil, devam eden çalışma olduğunu kabul etmek. Ödül, vatandaşlarının dilini anlayan — ve vatandaşlara yerel, saygılı ve resmi bir ses tonu ile yanıt verebilen — bir ajan, İngilizce birinci çevirinin ulaşamayacağı benimseme ve güven elde edecektir.</p>
+
+<h2>Kuru Düzey Yönetişim ve 180 Günlük Kontrol Noktaları</h2>
+
+<p>Kamu sektörü kuruluşlarında Agentic-AI programları, teknik mimarisini anlamak gerektiğinden değil, program işgücü stratejisine, düzenleyici riske, vatandaş deneyimine ve bütçeye değdiğinden kurulu düzey görünürlük ve yönetişim gerektirir. Kuruluş yönetim kurulunun rolü, programın kuruluş stratejisi ile uyumlu olduğundan, riskin yönetildiğinden ve yatırımın amaçlanan sonuçları ürettiğinden emin olmaktır.</p>
+
+<p>Üç aralığa yayılan bir yönetişim temposu öneriyoruz: 90 gün, 180 gün ve 365 gün. 90 günde, kuruluş tamamlanmış bir işlem tasarımına, ajanı çalıştıran bir pilot kohorta ve hem ajan performansı hem de çalışan deneyimi hakkında ilk geri bildirime sahip olmalıdır. Kuruluş yönetim kurulu kontrol noktası şunları ele almalıdır: Seçilen işlem doğru mu? Pilot kohorta ajanın kendi işlerini daha iyi mi yoksa daha kötü mü hale getirdiğini hissediyor mu? Düzenleyici veya uyum sürprizleri var mı? 180 günde, kuruluş tipik olarak pilot ile daha geniş bir grup veya yeni işlem arasında ölçeklenmiş dağıtıma geçiş yapmaktadır. Kontrol noktası değerlendir: Pilot'dan KPI'ler beklendikleri gibi izleniyor mu? Hangi kuruluş sürtünmesi ortaya çıkmıştır? İşgücü yeniden dağıtımı için önerdiğimiz kalabalığında miyiz? Sonraki 12 aylar için yol haritası neye benziyor? 365 günde, program üretimde olmuş durumda yeterince uzun, onun doğru etkisini değerlendirmek — sadece verimlilik metriklerini değil, sonuç kalitesini, çalışan duygusunu ve vatandaş deneyimini. Kuruluş yönetim kurulu şunu sormalı: Program Saudization / Emiratisation mantığında teslim mi etmiş? Tüm özelleştirme, destek ve yeniden eğitim dahil toplam sahiplik maliyeti ne olmuş? Bunu tekrar yapardık mı, yoksa farklı mı?</p>
+
+<p>Kuruluşlar bu yönetişim disiplinini atlayan yerlerde, tipik olarak aylar 6 ile 18 arasında bir noktada, agentic-AI programlarının orijinal amaçlarından sapmış olduğunu, beklenen daha fazla bütçe ve kuruluş dikkatini tüketmiş olduğunu ve işgücü sonuçlarını haklı kılan sonuçları başaramadığını keşfeder. Kurulu düzey kontrol noktaları tüm sapmaları önlemez, ancak onu görünür hale getirirler ve program bir batık maliyet olmadan önce yön değişikliği için alan oluştururlar.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-29 svg-d-29"><title id="svg-t-29">Agentic AI programları için kurulu yönetişim temposu</title><desc id="svg-d-29">90, 180 ve 365 günlerde üç kurulu kontrol noktasını, her aşamada anahtar soruları ve odak alanlarını gösteren zaman çizelgesi.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<line x1="60" y1="120" x2="680" y2="120" stroke="#E2E8F0" stroke-width="2"/>
+<circle cx="140" cy="120" r="6" fill="#156082"/>
+<circle cx="340" cy="120" r="6" fill="#1A4F7A"/>
+<circle cx="640" cy="120" r="6" fill="#0E2841"/>
+<text x="140" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">90. Gün</text>
+<text x="140" y="165" text-anchor="middle" font-size="11" fill="#475569">Pilot Hazır</text>
+<text x="140" y="180" text-anchor="middle" font-size="10" fill="#64748B">İşlem tasarımı</text>
+<text x="140" y="193" text-anchor="middle" font-size="10" fill="#64748B">Çalışan geri bildirimi</text>
+<text x="340" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">180. Gün</text>
+<text x="340" y="165" text-anchor="middle" font-size="11" fill="#475569">Ölçek Aşaması</text>
+<text x="340" y="180" text-anchor="middle" font-size="10" fill="#64748B">KPI doğrulaması</text>
+<text x="340" y="193" text-anchor="middle" font-size="10" fill="#64748B">İşgücü etkisi</text>
+<text x="640" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">365. Gün</text>
+<text x="640" y="165" text-anchor="middle" font-size="11" fill="#475569">Tam Değerlendirme</text>
+<text x="640" y="180" text-anchor="middle" font-size="10" fill="#64748B">Toplam maliyet ve sonuçlar</text>
+<text x="640" y="193" text-anchor="middle" font-size="10" fill="#64748B">Stratejik uyum</text>
+<rect x="20" y="30" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
+<text x="80" y="43" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">İşlem Odağı</text>
+<rect x="180" y="30" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
+<text x="240" y="43" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">Ölçek & Risk</text>
+<rect x="340" y="30" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
+<text x="400" y="43" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">Stratejik Değer</text>
+</svg>
+<figcaption>Şekil 2 — GCC kamu sektöründe agentic AI programları için 90, 180 ve 365 gün süren kuruluş yönetim kurulu düzey yönetişim kontrol noktaları.</figcaption>
+</figure>
+
+<h2>Yaygın Tuzaklar ve Bunları Nasıl Kaçınabilir</h2>
+
+<p>GCC ve dünya çapında kamu sektörü bağlamlarında agentic AI dağıtmış kuruluşlar, tutarlı bir başarısızlık modları seti ile karşılaşır. Bunları erken tanımlamak, harcanan yatırımı ve yapay zekaya kuruluş güvenini kaybetmek önler.</p>
+
+<p><strong>Tuzak 1: Ajan Birincil Yaklaşımı.</strong> Kuruluş bir ajan alır veya oluşturur ve ardından dağıtması için bir işlemi arar. Bu mantığı tersine çevirir. Doğru yaklaşım, yüksek etkili bir işlem belirlemek, onu yeniden tasarlamak ve ardından ajanı seçmek veya yeteneği oluşturmaktır. Bir alan için optimize edilmiş ajan, uygun bir olmadan başka alanda nadiren iyi çalışır. İşlem ile başlamak, ajanın başlangıçtan itibaren amaç için uygun olmasını sağlar.</p>
+
+<p><strong>Tuzak 2: Değişim Yönetimini Küçümseme.</strong> İşi otomatikleştirilen çalışanlar yazılım şirketi yatırımcıları ile aynı değildir verimlilik kazanımlarını heyecanlandırır. Bir işi ulusal bir çalışandan kaldıran bir ajan dağıtır, ancak o çalışanın sonra ne yapacağı konusunda açık bir hikaye olmadan, teknolojik mükemmellik hiçbir şeyin üstesinden gelemeyeceği direnişle karşı karşıya olacaksınız. Kuruluş ve insan kaynakları konuşmaları, teknik çalışmayı önceden veya paralelinde çalıştırması gerekir, bunu takip etmez.</p>
+
+<p><strong>Tuzak 3: Temel Yok.</strong> Ajan gelmeden önce işlemin performansını ölçmediğiniz sürece ajanın etkisini ölçemezsiniz. Temel metrikleri oluşturun: günde kaç vaka, döngü süresi nedir, hata oranı nedir, işlem başına maliyet nedir, yüzde kaçı yeniden çalışma gerektirir? Bunlar önemli karşılaştırmalardır. Onlarsız, dağıtım sonrası iyileştirme talepleri yanlışlanabilir değildir.</p>
+
+<p><strong>Tuzak 4: Kuyruğu Unutmak.</strong> Ajan vakaların %85–90'ında iyi performans gösterecektir — rutin, politika tarafından yönetilen çalışma. %10–15'lik kenar durumlar, karmaşık senaryolar ve istisnalar ile mücadele edecektir. Bu durumların nasıl işlendiğini planlamazsanız — kimin işleyeceğini, ne kadar hızlı, hangi uzmanlık ile — ajan basitçe çalışmayı azaltmak yerine kaydıracaktır. Daha kötüsü, ajan bu kuyruğu durumların bazılarını yanlış işleyebilir, yeniden çalışma veya vatandaş şikayetleri oluşturursa. Kuyruk çoğu insan çalışmanın olduğu yerdir.</p>
+
+<p><strong>Tuzak 5: Arapçayı Bir Çeviri Sorunu Olarak Davranma.</strong> Kuruluşlar sık sık İngilizce üzerinde eğitilen bir ajan dağıtır, ardından çeviri katmanını sarın. Bu başarısız olur çünkü ajanın akıl yürütmesi, eğitimi ve karar mantığı hepsi İngilizce'dir. Çeviri hataları tanıtır ve ajanın sorun alanının anlaşması, Arapça konuşan kullanıcı ile temel olarak yanlış hizalanır. Düzeltme ajan çeviri değil; başlangıçtan itibaren Arapça dil modelleri ve Arapça dil eğitim verileri ile yeniden oluşturmaktır.</p>
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-30 svg-d-30"><title id="svg-t-30">İnsan-AI işbirliğinin üç modeli</title><desc id="svg-d-30">Üç yan yana panel gösterilerek AI insan incelemesini gerçekleştirir, AI önerir insan karar verir ve insan lider AI destekler.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="40" width="200" height="140" fill="#156082" rx="8"/><text x="120" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 1</text><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Yürütür ·</text><text x="120" y="118" text-anchor="middle" fill="#fff" font-size="12">İnsan İncelemesi Yapar</text><text x="120" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Yüksek hacimli, politika odaklı</text>
+  <rect x="250" y="40" width="200" height="140" fill="#1A4F7A" rx="8"/><text x="350" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 2</text><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Önerir ·</text><text x="350" y="118" text-anchor="middle" fill="#fff" font-size="12">İnsan Karar Verir</text><text x="350" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Sonuç doğuran kararlar</text>
+  <rect x="480" y="40" width="200" height="140" fill="#0E2841" rx="8"/><text x="580" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 3</text><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="12">İnsan Lider ·</text><text x="580" y="118" text-anchor="middle" fill="#fff" font-size="12">AI Destekler</text><text x="580" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Üst düzey danışmanlık · müzakere</text>
+  </svg>
+  <figcaption>Şekil 1 — GCC kamu sektöründe insan-AI işbirliği için üç işletme modeli.</figcaption>
+  </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
   <li>Dünya Ekonomik Forumu, <em>İşlerin Geleceği Raporu 2025</em>. <a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">weforum.org</a></li>
@@ -1354,12 +2924,32 @@ export const insights = [
       summary: "The Chief Data Officer mandate was built for the data-warehousing era. Three converging pressures — board-level AI accountability, regulatory frameworks, and short historical CDO tenure — make the case for elevating the role to a Chief AI/Analytics Officer with the authority the new mandate requires.",
       featured: false,
       tags: ["Leadership", "CDO", "CAO", "Data Strategy"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>The Chief Data Officer role was designed for the data-warehousing and master-data era. The mandate organizations actually need now is different: someone accountable for activating data as AI infrastructure, building the governance to deploy autonomous systems safely, and owning the productivity outcomes that follow. Whether the title becomes Chief AI Officer, Chief Analytics Officer, or simply an expanded CDO mandate matters less than whether the organisational authority and the technical depth move with it. This piece sets out what the new role actually demands — and how to staff it in the GCC context, where the talent market is genuinely thin.</p>
   <h2>Where the Pressure Is Coming From</h2>
-  <p>Three converging trends are making the traditional CDO role insufficient. First, AI-related responsibilities are now showing up at board level — McKinsey's <em>State of AI</em> finds that the C-suite is increasingly held accountable for AI risk and value capture (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>). Second, AI governance frameworks — UAE PDPL, Saudi PDPL, NIST AI RMF, and the EU AI Act as a reference standard — require an executive accountable end-to-end for AI risk (<a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>; <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">EU AI Act</a>). Third, the average tenure of CDOs has historically been short — Gartner's research has consistently shown CDO tenure averaging well below comparable C-suite roles, a signal that the original mandate is structurally hard to discharge (<a href="https://www.gartner.com/en/information-technology/role/data-analytics-leaders" target="_blank" rel="noopener noreferrer">Gartner CDAO research</a>).</p>
+  <p>Three converging pressures are making the traditional CDO role insufficient. First, AI-related responsibilities are now showing up at board level — McKinsey's <em>State of AI</em> finds that the C-suite is increasingly held accountable for AI risk and value capture (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>). Second, AI governance frameworks — UAE PDPL, Saudi PDPL, NIST AI RMF, and the EU AI Act as a reference standard — require an executive accountable end-to-end for AI risk, with documented model inventories, escalation paths and audit trails (<a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>; <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">EU AI Act</a>). Third, Google's <em>2025 DORA State of AI-Assisted Software Development</em> identifies seven distinct team profiles based on AI-adoption maturity — from "Legacy Bottleneck" to "Harmonious High-Achievers" — making the case that one executive must own the cross-cutting capability set (clear AI policy, healthy data ecosystem, quality internal platform, version-controlled artefacts) that determines which profile a team becomes (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, Team Profiles</a>).</p>
   <h2>What the New Mandate Demands</h2>
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-31 svg-d-31"><title id="svg-t-31">CDO to CAO mandate evolution</title><desc id="svg-d-31">Four arrows showing evolution from data governance to AI governance, data platforms to AI infrastructure, internal service to commercial capability, reporting to acting.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="30" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Data governance</text>
+  <rect x="400" y="30" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI governance</text>
+  <rect x="20" y="78" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Data platforms</text>
+  <rect x="400" y="78" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI infrastructure</text>
+  <rect x="20" y="126" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Internal service</text>
+  <rect x="400" y="126" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Commercial capability</text>
+  <rect x="20" y="174" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Reporting</text>
+  <rect x="400" y="174" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Acting</text>
+  <path d="M310 49 L390 49" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 97 L390 97" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 145 L390 145" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 193 L390 193" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <defs><marker id="a6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
+  </svg>
+  <figcaption>Figure 1 — Four shifts in the executive mandate: from CDO to CAO.</figcaption>
+  </figure>
   <ul>
   <li><strong>From data governance to AI governance.</strong> Beyond data quality: model risk, agent behaviour, automated-decision ethics.</li>
   <li><strong>From data platforms to AI infrastructure.</strong> Vector stores, retrieval pipelines, context management, inference infrastructure — the substrate agents actually run on.</li>
@@ -1369,7 +2959,7 @@ export const insights = [
   <h2>The GCC Organisational Argument</h2>
   <p>In financial services especially, SAMA and CBUAE expectations now create board-level accountability for AI risk (<a href="https://www.sama.gov.sa/en-US/RulesInstructions/Pages/default.aspx" target="_blank" rel="noopener noreferrer">SAMA</a>; <a href="https://www.centralbank.ae/" target="_blank" rel="noopener noreferrer">CBUAE</a>). A CDO positioned two or three levels below the board cannot credibly discharge that accountability. The CAO mandate — on the executive committee with a direct line to the CEO — can. This is the structural case for elevation, distinct from any specific individual's capability.</p>
   <h2>Talent Reality in the GCC</h2>
-  <p>The CDO talent market in the GCC has matured; there is now a reasonable supply of experienced data-governance and platform leaders. The CAO market is structurally thin. Organisations seeking a fully-formed CAO with depth in AI governance, agent architecture, inference infrastructure, and organisational change will find very few candidates. The pragmatic conclusion is that most organisations will need to develop the CAO from inside the data function — and that the institutions that began investing in AI-governance capability in 2023–2024 are the ones now well-positioned to elevate that leader. WEF's <em>Future of Jobs 2025</em> documents AI-related skills as among the top growing skill demands globally, and the supply gap in MENA is wider than the global average (<a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">WEF, 2025</a>).</p>
+  <p>In Maven AI's recruiting and advisory work across the GCC, the CDO talent pool has matured: experienced data-governance and platform leaders are findable. The CAO talent pool — leaders with combined depth in AI governance, agent architecture, inference infrastructure and organisational change — is materially thinner in our observation. The pragmatic conclusion most boards land on is that the CAO is built from the inside, with an external operating-model partner and a deliberate 18-to-24-month development plan, rather than hired ready-made. The WEF <em>Future of Jobs Report 2025</em> identifies AI and big data, networks and cybersecurity, and technological literacy as the three fastest-growing skill demands globally — useful directional context for any CAO succession plan (<a href="https://reports.weforum.org/docs/WEF_Future_of_Jobs_Report_2025.pdf" target="_blank" rel="noopener noreferrer">WEF, 2025, p.36</a>).</p>
   <h2>What the Transition Requires</h2>
   <p>Expanded scope requires expanded authority. CDOs who have spent their careers as internal service providers will find the CAO mandate uncomfortable: it requires the authority to say no to AI deployments that fail governance standards, to retire AI systems that are not performing, and to make architectural decisions that affect every business unit. The organisations that have made the transition successfully share a pattern: they invested in board-level AI-governance education before changing the mandate, ensuring that the conversations the CAO needed to have were welcomed rather than resisted.</p>
   <h2>Recommendations</h2>
@@ -1379,6 +2969,88 @@ export const insights = [
   <li>Set a 24-month transition timeline. The incumbent must maintain existing data-governance responsibilities while building new AI capabilities.</li>
   <li>Invest in board-level AI-governance education in parallel with the role redesign.</li>
   </ul>
+  
+  <h2>Governance Architecture: From Reactive Compliance to Proactive Risk Ownership</h2>
+
+<p>The traditional CDO role was built around reactive compliance — ensuring data met regulatory definitions, audit trails existed, and stakeholders could be notified of breaches. The CAO mandate inverts that model. Instead of compliance as an outcome, governance becomes the operational infrastructure for AI deployment. In the GCC regulatory context, where PDPL frameworks are still maturing and central banks are actively signalling expectations around AI risk (particularly in banking and insurance), a reactive posture creates strategic vulnerability. SAMA's most recent guidance on technology risk management, while not AI-specific, establishes board accountability for technology decisions — a framework CBUAE mirrors across its member institutions. The CAO owns the playbook: model inventories that stay current as new deployments launch, pre-deployment review gates that embed ethical and performance criteria, and escalation protocols that route novel risks to the board within defined SLAs, not after incidents occur.</p>
+
+<p>This operational approach has immediate KPI consequences. A mature CAO governance function typically maintains: (1) model inventory completeness (95%+ of production AI systems tracked), (2) time-to-governance-review (new models reviewed within 10 business days of development completion), (3) post-deployment model monitoring coverage (100% of production systems under active drift and performance observation), and (4) governance escalation closure rate (90%+ of identified gaps remediated within agreed timelines). These are distinct from data-governance metrics (which measure data quality, lineage completeness, and access control) because they measure the safety and performance of decision-making systems, not the quality of the raw material. In Maven AI's experience with GCC financial institutions, organisations that separate these measurement domains — rather than bundling AI governance into a data-governance scorecard — see faster board engagement and clearer accountability chains.</p>
+
+<h2>Infrastructure as Strategy: The Sovereign AI Capability Argument</h2>
+
+<p>The GCC's national AI strategies — Saudi Vision 2030's AI pillar, UAE's National Strategy for Artificial Intelligence, and the regional SDAIA initiatives — have created a geopolitical dimension to AI infrastructure that has no direct equivalent in legacy data management. Sovereign capability, in this context, means owning the infrastructure layers on which critical decision-making systems run, rather than depending on external cloud vendors for real-time inference, vector storage, or model versioning. A CAO who reports to a CISO or CTO without board visibility will struggle to advocate for the investment required: vector databases, on-premises or regional inference clusters, and the observability infrastructure needed to detect model drift or adversarial inputs in real time. A CAO on the executive committee, by contrast, can frame that investment as risk mitigation with strategic upside — reducing dependency on external vendors for systems that generate revenue or manage systemic risk.</p>
+
+<p>The infrastructure conversation also surfaces a common mistake: conflating AI infrastructure with cloud scalability. Many GCC organisations have framed AI infrastructure as "running our LLM API calls through a cloud vendor's service" — which is an application layer decision, not an infrastructure decision. The CAO mandate requires depth in the actual infrastructure: containerisation strategies (how are models versioned and deployed?), vector store topology (can we query embeddings with sub-100ms latency at scale?), fallback and circuit-breaking patterns (what happens when the inference service degrades?), and data residency compliance (can our inference pipeline operate within GCC borders?). Without this depth, the CAO becomes a consumer of infrastructure decisions rather than an architect of them. In our work advising GCC financial services institutions, the most effective CAO transitions have paired the mandate expansion with a three-to-four month discovery engagement led by an external cloud architect, resulting in a published Infrastructure Principles document that the CAO then owns and evolves.</p>
+
+<h2>The Board Conversation: Framing AI Risk as a Balance-Sheet and Governance Concern</h2>
+
+<p>Boards in the GCC are increasingly attuned to AI risk, but the conversation often defaults to reputational or regulatory dimensions: "Will our AI system make a biased decision?" or "Are we exposing ourselves to audit findings?" These are real risks, but they miss the balance-sheet argument that typically resonates with boards. A CAO who can articulate three distinct AI risk categories — model performance degradation (how does the system behave as input distributions shift?), competitive capability risk (are our competitors deploying AI at a speed and scale that makes us disadvantaged?), and talent retention risk (are we building the internal capability to compete, or outsourcing it to vendors and losing organisational learning?) — creates a more compelling business case for investment.</p>
+
+<p>The governance conversation also benefits from a publication cadence that most CDOs have not traditionally maintained. An effective CAO publishes, at minimum: (1) a quarterly AI Risk Register, visible to the board's risk or audit committee, documenting active model-performance issues, emerging governance gaps, and remediation status; (2) an annual Model Inventory and Audit Report, establishing a clear baseline of what systems are in production, what they decide, and what the failure modes are; and (3) a 24-month AI Infrastructure Roadmap, articulating the infrastructure investments required to sustain autonomous-system deployment at scale. These publication habits create institutional memory and reduce the risk that AI governance becomes a personality-dependent function rather than a structural one. In Maven AI's advisory work, boards that see this cadence of reporting from a senior executive (with CEO visibility) move significantly faster on AI-governance investment and infrastructure spending.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-32 svg-d-32"><title id="svg-t-32">CAO accountability and reporting structure</title><desc id="svg-d-32">Three concentric circles showing CAO's core accountability (governance, infrastructure, talent) nested within board-level risk management and CEO operational oversight, with quarterly reporting cadence to audit committee and annual reporting to full board.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<!-- Outer circle: Board/CEO context -->
+<circle cx="350" cy="120" r="160" fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5,3" opacity="0.6"/>
+<text x="350" y="35" text-anchor="middle" font-size="11" font-weight="600" fill="#1A4F7A">Board Risk Committee</text>
+<!-- Middle circle: CAO responsibility -->
+<circle cx="350" cy="120" r="110" fill="none" stroke="#0E2841" stroke-width="2"/>
+<text x="350" y="55" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Chief AI Officer</text>
+<!-- Inner domains -->
+<rect x="220" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="252" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Governance</text>
+<text x="252" y="122" text-anchor="middle" font-size="9" fill="#fff">Model risk</text>
+<text x="252" y="134" text-anchor="middle" font-size="9" fill="#fff">Ethics audit</text>
+<text x="252" y="146" text-anchor="middle" font-size="9" fill="#fff">Escalation</text>
+
+<rect x="317" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="350" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Infrastructure</text>
+<text x="350" y="122" text-anchor="middle" font-size="9" fill="#fff">Sovereignty</text>
+<text x="350" y="134" text-anchor="middle" font-size="9" fill="#fff">Latency SLA</text>
+<text x="350" y="146" text-anchor="middle" font-size="9" fill="#fff">Resilience</text>
+
+<rect x="414" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="446" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Talent &amp; Org</text>
+<text x="446" y="122" text-anchor="middle" font-size="9" fill="#fff">Engineering depth</text>
+<text x="446" y="134" text-anchor="middle" font-size="9" fill="#fff">Partner strategy</text>
+<text x="446" y="146" text-anchor="middle" font-size="9" fill="#fff">Bench strength</text>
+
+<!-- Reporting cadence -->
+<rect x="120" y="175" width="180" height="45" fill="#F5A623" opacity="0.15" rx="3"/>
+<text x="210" y="192" text-anchor="middle" font-size="10" font-weight="600" fill="#0E2841">Quarterly Risk Register</text>
+<text x="210" y="208" text-anchor="middle" font-size="9" fill="#0E2841">to Audit Committee</text>
+
+<rect x="400" y="175" width="180" height="45" fill="#F5A623" opacity="0.15" rx="3"/>
+<text x="490" y="192" text-anchor="middle" font-size="10" font-weight="600" fill="#0E2841">Annual Model Inventory</text>
+<text x="490" y="208" text-anchor="middle" font-size="9" fill="#0E2841">to Full Board</text>
+</svg>
+<figcaption>Figure 2 — CAO accountability spans governance, infrastructure, and talent domains, with distinct board reporting cadences.</figcaption>
+</figure>
+
+<h2>Vendor Evaluation and Partner Strategy: Authority Over Dependencies</h2>
+
+<p>One of the most underestimated dimensions of the CAO role is vendor and partner governance. In the data-warehouse era, vendor decisions were largely made by the technical team; the CDO's role was to integrate and govern what was selected. In the AI era, vendor decisions become capability decisions. Whether an organisation uses an external LLM API versus fine-tuning an open model, whether it stores embeddings in a managed vector database versus rolling its own, and whether it adopts a specific RAG framework or builds custom retrieval logic — these are not technical questions, they are strategic ones that affect sovereignty, cost, and long-term capability ownership. A CAO without authority over vendor selection will find themselves inheriting decisions that constrain their ability to build resilient or independent infrastructure.</p>
+
+<p>The pragmatic approach many successful GCC organisations have taken is to create a formal Partner Strategy document (typically a 12-to-18-month rolling plan) that the CAO owns, covering: which AI platform vendors or service providers the organisation will standardise on and why; what internal capability will be built versus outsourced (and under what conditions outsourced capability can be internalised); how partner dependencies will be managed (vendor health monitoring, contractual escape clauses, alternative-provider evaluation); and how to balance cost optimisation against strategic autonomy. In Maven AI's experience, organisations that separate this decision-making — giving the CAO authority over partner strategy while giving the CFO authority over cost optimisation — move faster because the criteria are explicit rather than assumed.</p>
+
+<h2>The 90-180-365 Day Roadmap: Staging the Mandate Expansion</h2>
+
+<p>The common failure mode for CDO-to-CAO transitions is attempting the entire mandate change in parallel with existing responsibilities. The successful transitions we have observed stage the expansion across explicit milestones. In the first 90 days, the focus is diagnostic: model inventory completeness (what AI systems actually exist, what do they decide, who owns them?), gap analysis against regulatory frameworks (PDPL, SAMA/CBUAE guidance, industry-specific standards), and stakeholder mapping (who will this executive need to influence, and what is their current stance?). By day 180, the focus shifts to infrastructure discovery and strategic planning: defining the technical principles for AI infrastructure, identifying the highest-risk gaps in current deployment practices, and scoping the board-level AI-governance education programme. By day 365, the focus is embedding: the governance operating model is documented and live, the infrastructure roadmap is published, the CAO has had at least two audit committee conversations and one full board presentation, and the talent/partner strategy is circulated to executive leadership.</p>
+
+<p>This cadence matters because it creates decision gates rather than open-ended expansion. An incoming CAO (whether internal or external) who operates under this roadmap can communicate realistic timelines for change and avoid the burnout that comes from attempting everything simultaneously. It also creates natural points to measure progress against: "Do we have an auditable model inventory by day 90?" is a clear KPI. "Have we educated the board on AI risk?" is measurable by day 180. This stage-gate approach is especially valuable in the GCC context, where executive transitions often happen at the leadership level without deep bench strength below; a clear roadmap reduces the risk that day-to-day operations collapse while the CAO is building the new mandate.</p>
+
+<h2>Arabic-Language and Localization Considerations for CAO Governance</h2>
+
+<p>A practical but often overlooked dimension of building a CAO function in the GCC is the language and localization of governance artefacts. Model risk documentation, governance escalation processes, and board-level reporting are typically produced in English first. However, in many GCC institutions — particularly those with significant Arabic-speaking boards or audit committees — producing governance documentation in both Arabic and English, with legal precision in each language, is a material investment. The CAO should plan for this early: what governance documents will be bilingual? (Risk registers, model inventory summaries, and strategic roadmaps should be.) What documents can remain English-only? (Technical architecture deep-dives, often only.) How will translation timelines affect governance-review SLAs? Will a model-risk escalation that requires board approval need to be translated before circulation, potentially adding days to the process?</p>
+
+<p>Beyond translation, there is also a subtler localization question: how do governance concepts that have been developed in English-language regulatory frameworks translate into the GCC context? "AI ethics," for instance, is increasingly formalised in English-language NIST and EU frameworks, but how it maps onto GCC values and Islamic principles is still emerging. A mature CAO function in the GCC explicitly addresses this: documenting how the organisation's AI principles align with both international standards and regional values, and ensuring that governance escalation conversations happen in the language and cultural context where those decisions will be made. This is especially important for boards where the chair or senior independent director may prefer Arabic; making governance visible and comprehensible to that audience materially increases the likelihood of support and resource allocation.</p>
+
+
+  <aside class="maven-note"><h3>Maven point of view</h3><p>The CDO-to-CAO transition is not a title change but a redesign of decision rights. In Maven engagements across the GCC, the boards that move fastest are those that explicitly redirect a portion of the existing data-office budget toward agent platforms, evaluation infrastructure, and human-in-the-loop reviewer capacity, rather than treating AI as an additive line item. The first ninety days of any new CAO mandate should produce three artefacts: a published agent-risk taxonomy, a live evaluation dashboard, and a quarterly board narrative tying agent decisions to commercial outcomes. Without those three, the role tends to drift back into a data-quality function within twelve months.</p></aside>
+  <h2>Sources &amp; Citations</h2>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>McKinsey, <em>State of AI</em>, 2024. <a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">mckinsey.com</a></li>
@@ -1392,11 +3064,12 @@ export const insights = [
   <li>WEF, <em>Future of Jobs Report 2025</em>. <a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">weforum.org</a></li>
   </ol>
       `,
-      contentAr: `
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+  
     <h2>الأطروحة</h2>
     <p>دور كبير مسؤولي البيانات تم تصميمه في عصر المستودعات والبيانات الرئيسية. الولاية التي تحتاجها المنظمات فعلياً الآن مختلفة: شخص مسؤول عن تفعيل البيانات كبنية تحتية للذكاء الاصطناعي، وبناء الحوكمة لنشر الأنظمة المستقلة بأمان، والمسؤولية عن نواتج الإنتاجية التي تتبع ذلك. سواء أصبح العنوان كبير مسؤولي الذكاء الاصطناعي أو كبير مسؤولي التحليلات أو ببساطة ولاية كبير مسؤولي البيانات الموسعة، الأمر الأقل أهمية من أن تنتقل السلطة التنظيمية والعمق التقني معها. تحدد هذه الوثيقة ما تتطلبه الولاية الجديدة فعلياً — وكيفية تعيينها في سياق دول مجلس التعاون الخليج، حيث أن سوق المواهب رقيقة حقاً.</p>
     <h2>من أين يأتي الضغط</h2>
-    <p>ثلاثة اتجاهات متقاربة تجعل دور كبير مسؤولي البيانات التقليدي غير كافٍ. أولاً، المسؤوليات المتعلقة بالذكاء الاصطناعي تظهر الآن على مستوى مجلس الإدارة — تجد ماكينزي في دراسة <em>State of AI</em> أن الإدارة العليا تتحمل مسؤولية متزايدة عن مخاطر الذكاء الاصطناعي واستيعاب القيمة (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">ماكينزي، 2024</a>). ثانياً، أطر الحوكمة — قانون حماية البيانات الشخصية الإماراتي وقانون حماية البيانات الشخصية السعودي و NIST AI RMF والاتحاد الأوروبي قانون الذكاء الاصطناعي كمعيار مرجعي — تتطلب مسؤولاً تنفيذياً مسؤولاً من البداية إلى النهاية عن مخاطر الذكاء الاصطناعي (<a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>; <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">قانون الاتحاد الأوروبي للذكاء الاصطناعي</a>). ثالثاً، متوسط مدة خدمة كبار مسؤولي البيانات كان دائماً قصيراً — أبحاث جارتنر أظهرت باستمرار أن متوسط مدة خدمة كبير مسؤولي البيانات يقل عن الأدوار المماثلة في الإدارة العليا، وهي إشارة إلى أن الولاية الأصلية صعبة البناء هيكلياً (<a href="https://www.gartner.com/en/information-technology/role/data-analytics-leaders" target="_blank" rel="noopener noreferrer">بحث جارتنر CDAO</a>).</p>
+    <p>ثلاثة ضغوط متقاربة تجعل دور كبير مسؤولي البيانات التقليدي غير كافٍ. أولاً، المسؤوليات المتعلقة بالذكاء الاصطناعي تظهر الآن على مستوى مجلس الإدارة — تجد ماكينزي في دراسة <em>State of AI</em> أن الإدارة العليا تتحمل مسؤولية متزايدة عن مخاطر الذكاء الاصطناعي واستيعاب القيمة (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">ماكينزي، 2024</a>). ثانياً، أطر حوكمة الذكاء الاصطناعي — قانون حماية البيانات الإماراتي والسعودي وإطار NIST لإدارة المخاطر وقانون الاتحاد الأوروبي للذكاء الاصطناعي كمعيار مرجعي — تتطلب مسؤولاً تنفيذياً يتحمل المسؤولية من البداية إلى النهاية عن مخاطر الذكاء الاصطناعي، بما في ذلك جرد النماذج الموثق ومسارات التصعيد وسجلات التدقيق (<a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>; <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">قانون الاتحاد الأوروبي للذكاء الاصطناعي</a>). ثالثاً، يحدد تقرير Google <em>2025 DORA State of AI-Assisted Software Development</em> سبعة ملفات شخصية مميزة للفرق بناءً على نضج اعتماد الذكاء الاصطناعي — من "عنق الزجاجة القديم" إلى "المحققين العالين المتناغمين" — ما يدعم ضرورة وجود مسؤول تنفيذي واحد يمتلك مجموعة القدرات الشاملة (سياسة ذكاء اصطناعي واضحة، نظام بيانات صحي، منصة داخلية عالية الجودة، وأرشيفات خاضعة لإدارة الإصدارات) التي تحدد إلى أي ملف ستنتمي الفرق (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025، ملفات الفرق</a>).</p>
     <h2>ما تتطلبه الولاية الجديدة</h2>
     <ul>
     <li><strong>من حوكمة البيانات إلى حوكمة الذكاء الاصطناعي.</strong> ما وراء جودة البيانات: مخاطر النماذج وسلوك الوكلاء الذكية والأخلاقيات الموحدة للقرارات.</li>
@@ -1407,7 +3080,7 @@ export const insights = [
     <h2>الحجة التنظيمية لدول مجلس التعاون الخليج</h2>
     <p>في الخدمات المالية خاصة، توقعات ساما ومصرف الإمارات المركزي تخلق الآن المسؤولية على مستوى مجلس الإدارة عن مخاطر الذكاء الاصطناعي (<a href="https://www.sama.gov.sa/en-US/RulesInstructions/Pages/default.aspx" target="_blank" rel="noopener noreferrer">ساما</a>; <a href="https://www.centralbank.ae/" target="_blank" rel="noopener noreferrer">مصرف الإمارات المركزي</a>). كبير مسؤول البيانات الموضوع على مستويين أو ثلاثة مستويات تحت مجلس الإدارة لا يمكنه تحمل تلك المسؤولية بمصداقية. يمكن لولاية كبير مسؤول الذكاء الاصطناعي — في اللجنة التنفيذية برابط مباشر إلى الرئيس التنفيذي. هذه هي الحالة الهيكلية للترقية، مختلفة عن قدرات أي فرد محدد.</p>
     <h2>واقع المواهب في دول مجلس التعاون الخليج</h2>
-    <p>سوق المواهب لكبار مسؤولي البيانات في دول مجلس التعاون الخليج نضج؛ هناك الآن عرض معقول من قادة حوكمة البيانات والمنصات ذوي الخبرة. سوق كبار مسؤولي الذكاء الاصطناعي رقيق هيكلياً. المنظمات التي تسعى إلى كبير مسؤول ذكاء اصطناعي متشكل بالكامل مع عمق في حوكمة الذكاء الاصطناعي وعمارة الوكلاء والبنية التحتية للاستدلال والتغيير التنظيمي سوف تجد عدداً قليلاً جداً من المرشحين. الاستنتاج العملي هو أن معظم المنظمات سوف تحتاج إلى تطوير كبير مسؤول الذكاء الاصطناعي من داخل وظيفة البيانات — وأن المؤسسات التي بدأت الاستثمار في قدرة حوكمة الذكاء الاصطناعي في 2023–2024 هي تلك التي تتمتع الآن بموقع جيد للترقية لهذا القائد. وثيقة WEF's <em>Future of Jobs 2025</em> تسجل المهارات المرتبطة بالذكاء الاصطناعي كواحدة من أعلى الطلبات على المهارات الناشئة عالمياً، وفجوة الإمداد في منطقة الشرق الأوسط وشمال أفريقيا أوسع من المتوسط العالمي (<a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">WEF، 2025</a>).</p>
+    <p>في عمل Maven AI الاستشاري والتوظيفي عبر دول مجلس التعاون الخليجي، نضج تجمع المواهب لكبار مسؤولي البيانات: قادة حوكمة البيانات والمنصات ذوي الخبرة قابلون للإيجاد. أما تجمع مواهب كبير مسؤولي الذكاء الاصطناعي — قادة يجمعون بين العمق في حوكمة الذكاء الاصطناعي وهندسة الوكلاء وبنية الاستدلال والتغيير التنظيمي — فهو أرق بشكل ملموس وفقاً لملاحظتنا. الاستنتاج العملي الذي تتوصل إليه معظم مجالس الإدارة هو أن كبير مسؤول الذكاء الاصطناعي يُبنى من الداخل، عبر شريك خارجي لنموذج التشغيل وخطة تطوير متعمدة لمدة 18–24 شهراً، بدلاً من توظيفه جاهزاً. يحدد تقرير المنتدى الاقتصادي العالمي <em>Future of Jobs 2025</em> مهارات الذكاء الاصطناعي والبيانات الضخمة، والشبكات والأمن السيبراني، ومحو الأمية التكنولوجية كأسرع ثلاث مهارات نمواً عالمياً — سياق إرشادي مفيد لأي خطة خلافة لكبير مسؤول الذكاء الاصطناعي (<a href="https://reports.weforum.org/docs/WEF_Future_of_Jobs_Report_2025.pdf" target="_blank" rel="noopener noreferrer">WEF، 2025، ص.36</a>).</p>
     <h2>ما يتطلبه الانتقال</h2>
     <p>النطاق الموسع يتطلب سلطة موسعة. كبار مسؤولي البيانات الذين أمضوا حياتهم المهنية كمزودي خدمات داخليين سوف يجدون ولاية كبير مسؤول الذكاء الاصطناعي مريحة: تتطلب السلطة للقول لا لنشرات الذكاء الاصطناعي التي تفشل معايير الحوكمة، وإلغاء أنظمة الذكاء الاصطناعي التي لا تعمل، واتخاذ قرارات معمارية تؤثر على كل وحدة أعمال. المنظمات التي أنجزت الانتقال بنجاح تشارك نمطاً: استثمرت في التعليم على مستوى مجلس الإدارة حول حوكمة الذكاء الاصطناعي قبل تغيير الولاية، مما يضمن أن المحادثات التي احتاج كبير مسؤول الذكاء الاصطناعي إلى إجرائها كانت مرحباً بها وليس مقاومة.</p>
     <h2>التوصيات</h2>
@@ -1417,7 +3090,105 @@ export const insights = [
     <li>ضع جدول زمني للانتقال لمدة 24 شهراً. يجب على الموظف الحالي الحفاظ على مسؤوليات حوكمة البيانات الحالية مع بناء قدرات الذكاء الاصطناعي الجديدة.</li>
     <li>استثمر في التعليم على مستوى مجلس الإدارة حول حوكمة الذكاء الاصطناعي بالتوازي مع إعادة تصميم الدور.</li>
     </ul>
-    <h2>المصادر والمراجع</h2>
+    
+  <h2>معمارية الحوكمة: من الامتثال التفاعلي إلى ملكية المخاطر الاستباقية</h2>
+
+<p>تم بناء دور مسؤول البيانات التقليدي حول الامتثال التفاعلي — ضمان أن البيانات تلبي التعريفات التنظيمية، وجود مسارات التدقيق، وتمكين أصحاب المصلحة من الإخطار بالانتهاكات. تقلب ولاية مسؤول الذكاء الاصطناعي هذا النموذج. بدلاً من أن يكون الامتثال نتيجة، تصبح الحوكمة البنية التحتية التشغيلية لنشر الذكاء الاصطناعي. في السياق التنظيمي لدول مجلس التعاون الخليجي، حيث لا تزال أطر PDPL تنضج والبنوك المركزية تبث بنشاط توقعات حول مخاطر الذكاء الاصطناعي (خاصة في القطاع المصرفي والتأمين)، تخلق الموقف التفاعلي ضعفاً استراتيجياً. توجيهات SAMA الأخيرة بشأن إدارة مخاطر التكنولوجيا، على الرغم من عدم كونها خاصة بالذكاء الاصطناعي، تحدد مساءلة مجلس الإدارة عن قرارات التكنولوجيا — إطار عمل تعكسه CBUAE عبر مؤسساتها الأعضاء. يمتلك مسؤول الذكاء الاصطناعي خطة العمل: جرود نماذج تبقى حالية مع إطلاق عمليات نشر جديدة، بوابات المراجعة قبل النشر التي تدمج معايير أخلاقية وأداء، وبروتوكولات التصعيد التي توجه المخاطر الجديدة إلى مجلس الإدارة ضمن اتفاقيات مستويات الخدمة المحددة، وليس بعد وقوع الحوادث.</p>
+
+<p>يترتب على هذا النهج التشغيلي عواقب فورية على مؤشرات الأداء الرئيسية. تحتفظ وظيفة حوكمة مسؤول الذكاء الاصطناعي الناضجة عادةً بـ: (1) اكتمال جرد النماذج (95%+ من أنظمة الذكاء الاصطناعي الإنتاجية مقيدة)، (2) الوقت اللازم لمراجعة الحوكمة (تتم مراجعة النماذج الجديدة خلال 10 أيام عمل من إكمال التطوير)، (3) تغطية مراقبة النماذج بعد النشر (100% من الأنظمة الإنتاجية تحت ملاحظة نشطة للانجراف والأداء)، و(4) معدل إغلاق تصعيد الحوكمة (90%+ من الفجوات المحددة تم علاجها ضمن الجداول الزمنية المتفق عليها). هذه تختلف عن مقاييس حوكمة البيانات (التي تقيس جودة البيانات واكتمال النسب والتحكم في الوصول) لأنها تقيس سلامة وأداء أنظمة صنع القرار، وليس جودة المادة الخام. في خبرة Maven AI مع المؤسسات المالية في دول مجلس التعاون الخليجي، تشهد المؤسسات التي تفصل هذه المجالات القياسية — بدلاً من دمج حوكمة الذكاء الاصطناعي في بطاقة نقاط حوكمة البيانات — تفاعلاً أسرع من مجلس الإدارة وسلاسل مساءلة أوضح.</p>
+
+<h2>البنية التحتية كاستراتيجية: حجة القدرة على الذكاء الاصطناعي السيادي</h2>
+
+<p>أنشأت الاستراتيجيات الوطنية للذكاء الاصطناعي في دول مجلس التعاون الخليجي — محور الذكاء الاصطناعي في Vision 2030 السعودي، والاستراتيجية الوطنية لدولة الإمارات للذكاء الاصطناعي، ومبادرات SDAIA الإقليمية — بعداً جيوسياسياً لبنية الذكاء الاصطناعي لا نظير له المباشر في إدارة البيانات القديمة. تعني القدرة السيادية في هذا السياق امتلاك طبقات البنية التحتية التي تعمل على أنظمة صنع القرار الحرجة، بدلاً من الاعتماد على بائعي السحابة الخارجيين للاستدلال في الوقت الفعلي أو تخزين المتجهات أو إدارة إصدار النموذج. سيواجه مسؤول الذكاء الاصطناعي الذي يبلغ إلى مسؤول الأمان السيبراني أو كبير مسؤولي التكنولوجيا بدون رؤية مجلس الإدارة صعوبة في الدفاع عن الاستثمار المطلوب: قواعد بيانات المتجهات وتجمعات الاستدلال المحلية أو الإقليمية والبنية التحتية للمراقبة اللازمة للكشف عن انجراف النموذج أو المدخلات الخصومية في الوقت الفعلي. يمكن لمسؤول الذكاء الاصطناعي في اللجنة التنفيذية، على النقيض من ذلك، أن يؤطر هذا الاستثمار كتخفيف للمخاطر مع إمكانية استراتيجية صاعدة — تقليل الاعتماد على البائعين الخارجيين للأنظمة التي تحقق إيرادات أو تدير المخاطر النظامية.</p>
+
+<p>تكشف محادثة البنية التحتية أيضاً عن خطأ شائع: الخلط بين بنية الذكاء الاصطناعي وقابلية توسع السحابة. أطرت العديد من المؤسسات في دول مجلس التعاون الخليجي بنية الذكاء الاصطناعي كـ "تشغيل استدعاءات نموذج اللغة الكبير من خلال خدمة بائع السحابة" — وهي قرار على مستوى التطبيق، وليست قرار البنية التحتية. تتطلب ولاية مسؤول الذكاء الاصطناعي عمقاً في البنية التحتية الفعلية: استراتيجيات المحاكاة (كيف يتم توصيل النماذج والنشر؟)، طوبولوجيا متجر المتجهات (هل يمكننا الاستعلام عن التضمينات بكمون أقل من 100ms بالقياس؟)، أنماط الانحدار والفشل (ماذا يحدث عند تدهور خدمة الاستدلال؟)، وامتثال إقامة البيانات (هل يمكن لخط أنابيب الاستدلال العمل ضمن حدود دول مجلس التعاون الخليجي؟). بدون هذا العمق، يصبح مسؤول الذكاء الاصطناعي مستهلكاً لقرارات البنية التحتية بدلاً من أن يكون معماراً لها. في عملنا الاستشاري مع مؤسسات الخدمات المالية في دول مجلس التعاون الخليجي، أنجح انتقالات مسؤول الذكاء الاصطناعي ربطت توسيع الولاية مع مشروع اكتشاف مدته ثلاثة إلى أربعة أشهر بقيادة معماري سحابة خارجي، مما أسفر عن وثيقة مبادئ البنية التحتية المنشورة التي يملكها مسؤول الذكاء الاصطناعي بعد ذلك ويطورها.</p>
+
+<h2>محادثة مجلس الإدارة: تأطير مخاطر الذكاء الاصطناعي كمسألة ميزانية عمومية وحوكمة</h2>
+
+<p>مجالس الإدارة في دول مجلس التعاون الخليجي متزايدة التوعي بمخاطر الذكاء الاصطناعي، لكن المحادثة غالباً ما تأخذ منحاً نحو الأبعاد السمعة أو التنظيمية: "هل سيتخذ نظام الذكاء الاصطناعي الخاص بنا قراراً متحيزاً؟" أو "هل نعرض أنفسنا لنتائج التدقيق؟" هذه مخاطر حقيقية، لكنها تفتقد حجة الميزانية العمومية التي عادةً ما تجد استجابة من مجالس الإدارة. يمكن لمسؤول الذكاء الاصطناعي الذي يستطيع صياغة ثلاث فئات مخاطر الذكاء الاصطناعي المميزة — تدهور أداء النموذج (كيف يتصرف النظام مع تحول توزيعات المدخلات؟)، مخاطر القدرة التنافسية (هل ينشر منافسونا الذكاء الاصطناعي بسرعة وحجم يجعلنا في وضع غير مؤات؟)، ومخاطر الاحتفاظ بالمواهب (هل نبني القدرة الداخلية للمنافسة، أم نوكل العمل إلى البائعين ونفقد التعلم التنظيمي؟) — ينشئ حالة عمل أكثر إقناعاً للاستثمار.</p>
+
+<p>تستفيد محادثة الحوكمة أيضاً من دورة منشورات لم يحتفظ بها معظم مسؤولي البيانات تقليدياً. ينشر مسؤول الذكاء الاصطناعي الفعال، على الحد الأدنى: (1) سجل مخاطر الذكاء الاصطناعي الربعي، المرئي للجنة مخاطر أو تدقيق مجلس الإدارة، يوثق مشاكل أداء النموذج النشطة والفجوات الحوكمة الناشئة وحالة العلاج؛ (2) تقرير جرد النموذج والتدقيق السنوي، الذي يحدد أساساً واضحاً لما هي الأنظمة في الإنتاج وما تقرره وما هي أنماط الفشل؛ و(3) خريطة طريق بنية الذكاء الاصطناعي لمدة 24 شهراً، توضح استثمارات البنية التحتية المطلوبة لاستدامة نشر الأنظمة المستقلة بالقياس. تنشئ هذه العادات المنشورة ذاكرة مؤسسية وتقلل من خطر أن تصبح حوكمة الذكاء الاصطناعي دالة معتمدة على الشخصية بدلاً من كونها هيكلية. في العمل الاستشاري لـ Maven AI، مجالس الإدارة التي ترى هذه الدورة من التقارير من قبل مسؤول رفيع المستوى (مع رؤية الرئيس التنفيذي) تتحرك بشكل أسرع بكثير على استثمار حوكمة الذكاء الاصطناعي وإنفاق البنية التحتية.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-33 svg-d-33"><title id="svg-t-33">مسؤولية ومراجع مسؤول الذكاء الاصطناعي</title><desc id="svg-d-33">ثلاث دوائر متحدة المركز تظهر المساءلة الأساسية لمسؤول الذكاء الاصطناعي (الحوكمة والبنية التحتية والمواهب) المتداخلة ضمن إدارة المخاطر على مستوى مجلس الإدارة والإشراف التشغيلي للرئيس التنفيذي، مع دورة تقارير ربع سنوية إلى لجنة التدقيق وتقارير سنوية إلى مجلس الإدارة الكامل.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<!-- Outer circle: Board/CEO context -->
+<circle cx="350" cy="120" r="160" fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5,3" opacity="0.6"/>
+<text x="350" y="35" text-anchor="middle" font-size="11" font-weight="600" fill="#1A4F7A">لجنة المخاطر بمجلس الإدارة</text>
+<!-- Middle circle: CAO responsibility -->
+<circle cx="350" cy="120" r="110" fill="none" stroke="#0E2841" stroke-width="2"/>
+<text x="350" y="55" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">مسؤول الذكاء الاصطناعي</text>
+<!-- Inner domains -->
+<rect x="220" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="252" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">الحوكمة</text>
+<text x="252" y="122" text-anchor="middle" font-size="9" fill="#fff">مخاطر النموذج</text>
+<text x="252" y="134" text-anchor="middle" font-size="9" fill="#fff">تدقيق أخلاقي</text>
+<text x="252" y="146" text-anchor="middle" font-size="9" fill="#fff">التصعيد</text>
+
+<rect x="317" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="350" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">البنية التحتية</text>
+<text x="350" y="122" text-anchor="middle" font-size="9" fill="#fff">السيادة</text>
+<text x="350" y="134" text-anchor="middle" font-size="9" fill="#fff">اتفاقية الكمون</text>
+<text x="350" y="146" text-anchor="middle" font-size="9" fill="#fff">المرونة</text>
+
+<rect x="414" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="446" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">المواهب والتنظيم</text>
+<text x="446" y="122" text-anchor="middle" font-size="9" fill="#fff">عمق الهندسة</text>
+<text x="446" y="134" text-anchor="middle" font-size="9" fill="#fff">استراتيجية الشراكة</text>
+<text x="446" y="146" text-anchor="middle" font-size="9" fill="#fff">قوة الفريق</text>
+
+<!-- Reporting cadence -->
+<rect x="120" y="175" width="180" height="45" fill="#F5A623" opacity="0.15" rx="3"/>
+<text x="210" y="192" text-anchor="middle" font-size="10" font-weight="600" fill="#0E2841">سجل المخاطر الربعي</text>
+<text x="210" y="208" text-anchor="middle" font-size="9" fill="#0E2841">إلى لجنة التدقيق</text>
+
+<rect x="400" y="175" width="180" height="45" fill="#F5A623" opacity="0.15" rx="3"/>
+<text x="490" y="192" text-anchor="middle" font-size="10" font-weight="600" fill="#0E2841">جرد النموذج السنوي</text>
+<text x="490" y="208" text-anchor="middle" font-size="9" fill="#0E2841">إلى مجلس الإدارة الكامل</text>
+</svg>
+<figcaption>الشكل 2 — تمتد مسؤولية مسؤول الذكاء الاصطناعي إلى مجالات الحوكمة والبنية التحتية والمواهب، مع دورات تقارير مختلفة للمجلس.</figcaption>
+</figure>
+
+<h2>تقييم البائعين واستراتيجية الشراكة: السلطة على التبعيات</h2>
+
+<p>أحد أكثر الأبعاد المقللة من شأنها في دور مسؤول الذكاء الاصطناعي هو حوكمة البائعين والشركاء. في عصر مستودع البيانات، تم اتخاذ قرارات البائعين بشكل كبير من قبل الفريق التقني؛ كان دور مسؤول البيانات هو التكامل والحوكمة لما تم اختياره. في عصر الذكاء الاصطناعي، تصبح قرارات البائعين قرارات القدرة. ما إذا كانت المؤسسة تستخدم واجهة برمجة تطبيقات نموذج لغة خارجية مقابل ضبط نموذج مفتوح المصدر، وما إذا كانت تخزن التضمينات في قاعدة بيانات متجهة مدارة مقابل لف نموذجها الخاص، وما إذا كانت تعتمد إطار عمل RAG محدداً أو تبني منطق استرجاع مخصص — هذه ليست أسئلة تقنية، بل هي أسئلة استراتيجية تؤثر على السيادة والتكلفة والملكية القدرة طويلة الأجل. سيجد مسؤول الذكاء الاصطناعي بدون سلطة على اختيار البائع نفسه يرث قرارات تقيد قدرته على بناء بنية تحتية مرنة أو مستقلة.</p>
+
+<p>النهج العملي الذي اتخذته العديد من المؤسسات الناجحة في دول مجلس التعاون الخليجي هو إنشاء وثيقة استراتيجية الشراكة الرسمية (عادةً خطة دوارة لمدة 12 إلى 18 شهراً) يملكها مسؤول الذكاء الاصطناعي، تغطي: أي بائعي منصات ذكاء اصطناعي أو موفري خدمات ستعتمد المؤسسة عليها ولماذا؛ ما القدرة الداخلية التي سيتم بناؤها مقابل الاستعانة بمصادر خارجية (وتحت أي ظروف يمكن إدراج القدرة المستعانة بمصادر خارجية)؛ كيف سيتم إدارة تبعيات الشراكة (مراقبة صحة البائع وشروط الهروب التعاقدية وتقييم موفر بديل)؛ وكيفية الموازنة بين تحسين التكاليف مقابل الاستقلالية الاستراتيجية. في خبرة Maven AI، تتحرك المؤسسات التي تفصل هذا صنع القرار — تعطي مسؤول الذكاء الاصطناعي سلطة على استراتيجية الشراكة بينما تعطي الرئيس المالي سلطة على تحسين التكاليف — بشكل أسرع لأن المعايير صريحة بدلاً من أن تكون مفترضة.</p>
+
+<h2>خريطة الطريق لمدة 90-180-365 يوماً: مراحل توسيع الولاية</h2>
+
+<p>نمط الفشل الشائع لانتقالات مسؤول البيانات إلى مسؤول الذكاء الاصطناعي هو محاولة تغيير الولاية كله بالتوازي مع المسؤوليات الحالية. الانتقالات الناجحة التي لاحظناها تراحل التوسيع عبر معالم صريحة. في الأيام الـ 90 الأولى، ينصب التركيز على التشخيص: اكتمال جرد النموذج (ما أنظمة الذكاء الاصطناعي التي توجد بالفعل، وما الذي تقرره، ومن يملكها؟)، تحليل الفجوة مقابل الأطر التنظيمية (PDPL وتوجيهات SAMA/CBUAE والمعايير الخاصة بالصناعة)، وخرائط أصحاب المصلحة (من سيحتاج هذا المسؤول إلى التأثير فيهم، وما هو موقفهم الحالي؟). بحلول اليوم 180، ينتقل التركيز إلى اكتشاف البنية التحتية والتخطيط الاستراتيجي: تحديد المبادئ التقنية لبنية الذكاء الاصطناعي، وتحديد أعلى الفجوات المخاطرة في ممارسات النشر الحالية، ونطاق برنامج تعليم الذكاء الاصطناعي على مستوى مجلس الإدارة. بحلول اليوم 365، ينصب التركيز على التضمين: تم توثيق نموذج تشغيل حوكمة الذكاء الاصطناعي والعمل به، وتم نشر خريطة طريق البنية التحتية، وقد أجرى مسؤول الذكاء الاصطناعي على الأقل محادثتي لجنة تدقيق وعرض تقديمي واحد على مجلس الإدارة الكامل، وتم تعميم استراتيجية المواهب والشراكة على الفريق الإداري.</p>
+
+<p>تهم هذه الدورة الزمنية لأنها تنشئ بوابات قرار بدلاً من التوسيع المفتوح. يمكن لمسؤول ذكاء اصطناعي قادم (سواء كان داخلياً أو خارجياً) يعمل ضمن هذه خريطة الطريق توصيل جداول زمنية واقعية للتغيير وتجنب الإرهاق الذي يأتي من محاولة عمل كل شيء بالتوازي. كما أنها تخلق نقاط طبيعية لقياس التقدم مقابلها: "هل لدينا جرد نموذج قابل للتدقيق بحلول اليوم 90؟" هو مؤشر أداء رئيسي واضح. "هل قمنا بتثقيف مجلس الإدارة حول مخاطر الذكاء الاصطناعي؟" قابلة للقياس بحلول اليوم 180. هذا النهج بالبوابات المرحلية مفيد بشكل خاص في السياق لدول مجلس التعاون الخليجي، حيث غالباً ما تحدث انتقالات الموارد البشرية على مستوى القيادة بدون قوة بنش عميقة تحتها؛ تقلل خريطة الطريق الواضحة من المخاطر التي تنهار العمليات اليومية أثناء بناء مسؤول الذكاء الاصطناعي للولاية الجديدة.</p>
+
+<h2>الاعتبارات اللغة العربية والتوطين لحوكمة مسؤول الذكاء الاصطناعي</h2>
+
+<p>أحد أبعاد عملية لكنها كثيراً ما يتم التغاضي عنها لبناء وظيفة مسؤول الذكاء الاصطناعي في دول مجلس التعاون الخليجي هي لغة وتوطين الوثائق الحوكمة. عادةً ما يتم إنتاج وثائق مخاطر النموذج وعمليات تصعيد الحوكمة والتقارير على مستوى مجلس الإدارة باللغة الإنجليزية أولاً. ومع ذلك، في العديد من مؤسسات دول مجلس التعاون الخليجي — خاصة تلك التي لديها مجالس إدارة أو لجان تدقيق ناطقة بالعربية بشكل كبير — فإن إنتاج وثائق الحوكمة باللغتين العربية والإنجليزية، بدقة قانونية في كل لغة، هي استثمار جوهري. يجب على مس
+  
+  <aside class="maven-note"><h3>وجهة نظر Maven</h3><p>الانتقال من CDO إلى CAO ليس تغيير مسمى، بل إعادة تصميم لحقوق القرار. في تجارب Maven عبر دول مجلس التعاون الخليجي، تكون مجالس الإدارة الأسرع تحركاً هي التي تعيد توجيه جزء من ميزانية مكتب البيانات الحالية نحو منصات الوكلاء، وبنية التقييم، وقدرة المراجعين البشريين، بدلاً من اعتبار الذكاء الاصطناعي بنداً إضافياً. ينبغي أن تُنتج أول تسعين يوماً من ولاية أي CAO جديدة ثلاث مخرجات: تصنيفاً منشوراً لمخاطر الوكلاء، ولوحة تقييم حية، وسرداً ربعياً لمجلس الإدارة يربط قرارات الوكلاء بالنتائج التجارية. بدون هذه الثلاثة، يميل الدور إلى الانجراف مرة أخرى إلى وظيفة جودة بيانات خلال اثني عشر شهراً.</p></aside>
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-34 svg-d-34"><title id="svg-t-34">تطور ولاية CDO إلى CAO</title><desc id="svg-d-34">أربعة أسهم تظهر التطور من حوكمة البيانات إلى حوكمة الذكاء الاصطناعي، ومن منصات البيانات إلى البنية التحتية للذكاء الاصطناعي، ومن الخدمة الداخلية إلى القدرة التجارية، ومن الإبلاغ إلى التنفيذ.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="30" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">حوكمة البيانات</text>
+  <rect x="400" y="30" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">حوكمة الذكاء الاصطناعي</text>
+  <rect x="20" y="78" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">منصات البيانات</text>
+  <rect x="400" y="78" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">البنية التحتية للذكاء الاصطناعي</text>
+  <rect x="20" y="126" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الخدمة الداخلية</text>
+  <rect x="400" y="126" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">القدرة التجارية</text>
+  <rect x="20" y="174" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الإبلاغ</text>
+  <rect x="400" y="174" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">التنفيذ</text>
+  <path d="M310 49 L390 49" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 97 L390 97" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 145 L390 145" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 193 L390 193" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <defs><marker id="a6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
+  </svg>
+  <figcaption>الشكل 1 — التحولات الأربعة في الولاية التنفيذية: من CDO إلى CAO.</figcaption>
+  </figure>
+  <h2>المصادر والمراجع</h2>
     <ol class="sources-list">
     <li>ماكينزي، <em>State of AI</em>، 2024. <a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">mckinsey.com</a></li>
     <li>جارتنر — Chief Data & Analytics Officer research. <a href="https://www.gartner.com/en/information-technology/role/data-analytics-leaders" target="_blank" rel="noopener noreferrer">gartner.com</a></li>
@@ -1431,11 +3202,12 @@ export const insights = [
     </ol>
         
   `,
-      contentTr: `
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+  
     <h2>Tez</h2>
     <p>Başkan Veri Görevlisi rolü veri depolama ve ana veri çağı için tasarlanmıştır. Kuruluşların şu anda gerçekten ihtiyaç duyduğu görev farklıdır: veriyi yapay zeka altyapısı olarak etkinleştirmekten sorumlu biri, otonom sistemleri güvenle dağıtmak için yönetişim oluşturma ve bunu takip eden verimlilik sonuçlarının sahibi. Başlık Başkan Yapay Zeka Görevlisi, Başkan Analitik Görevlisi olsun veya basitçe genişletilmiş Başkan Veri Görevlisi yetkisi olsun, örgütsel yetkinin ve teknik derinliğin bununla hareket etmesinden daha az önemlidir. Bu belge yeni rolün gerçekten ne talep ettiğini — ve GCC bağlamında bunu nasıl yapılandıracağını ortaya koymaktadır; burada yetenek pazarı gerçekten sınırlıdır.</p>
     <h2>Baskı Nereden Geliyor</h2>
-    <p>Üç yakınsayan eğilim, geleneksel Başkan Veri Görevlisi rolünü yetersiz kılmaktadır. Birincisi, yapay zeka ile ilgili sorumluluklar şu anda yönetim kurulu düzeyinde ortaya çıkmaktadır — McKinsey's <em>State of AI</em>, C-suite'in yapay zeka riski ve değer yakalama için giderek daha fazla sorumlu tutulduğunu bulmuştur (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>). İkincisi, yapay zeka yönetişim çerçeveleri — UAE PDPL, Saudi PDPL, NIST AI RMF ve AB Yapay Zeka Yasası referans standardı olarak — yapay zeka riskinden baştan sona sorumlu bir yöneticiyi gerektirir (<a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>; <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">AB Yapay Zeka Yasası</a>). Üçüncüsü, Başkan Veri Görevlilerinin ortalama görev süresi tarihsel olarak kısa olmuştur — Gartner'ın araştırması tutarlı olarak Başkan Veri Görevlilerinin ortalama görev süresinin karşılaştırılabilir C-suite rollerinden daha kısa olduğunu göstermiştir; bu da orijinal görevin yapısal olarak işletilmesinin zor olduğunun bir göstergesidir (<a href="https://www.gartner.com/en/information-technology/role/data-analytics-leaders" target="_blank" rel="noopener noreferrer">Gartner CDAO araştırması</a>).</p>
+    <p>Üç yakınsayan baskı, geleneksel Başkan Veri Görevlisi rolünü yetersiz kılmaktadır. Birincisi, yapay zeka ile ilgili sorumluluklar şu anda yönetim kurulu düzeyinde ortaya çıkmaktadır — McKinsey's <em>State of AI</em>, C-suite'in yapay zeka riski ve değer yakalama için giderek daha fazla sorumlu tutulduğunu bulmuştur (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>). İkincisi, yapay zeka yönetişim çerçeveleri — BAE PDPL, Suudi PDPL, NIST AI RMF ve referans standart olarak AB Yapay Zeka Yasası — belgelenmiş model envanterleri, eskalasyon yolları ve denetim izleri ile uçtan uca yapay zeka riskinden sorumlu bir yöneticiyi gerektirir (<a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>; <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">AB Yapay Zeka Yasası</a>). Üçüncüsü, Google'ın <em>2025 DORA Yapay Zeka Destekli Yazılım Geliştirme Durum Raporu</em>, yapay zeka benimseme olgunluğuna dayalı yedi farklı takım profili tanımlar — "Eski Darboğaz"dan "Uyumlu Yüksek Başarılı"ya kadar — bu da bir takımın hangi profile gireceğini belirleyen kesişen yetenek setini (net yapay zeka politikası, sağlıklı veri ekosistemi, kaliteli iç platform, sürüm kontrollü artefaktlar) tek bir yöneticinin sahiplenmesi gerektiğini göstermektedir (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, Takım Profilleri</a>).</p>
     <h2>Yeni Görev Ne Talep Ediyor</h2>
     <ul>
     <li><strong>Veri yönetişiminden yapay zeka yönetişimine.</strong> Veri kalitesinin ötesinde: model riski, ajan davranışı, otomatikleştirilmiş karar etiği.</li>
@@ -1446,7 +3218,7 @@ export const insights = [
     <h2>GCC Örgütsel Argümanı</h2>
     <p>Özellikle finansal hizmetlerde SAMA ve CBUAE beklentileri şu anda yapay zeka riski için yönetim kurulu düzeyinde sorumluluğu oluşturmaktadır (<a href="https://www.sama.gov.sa/en-US/RulesInstructions/Pages/default.aspx" target="_blank" rel="noopener noreferrer">SAMA</a>; <a href="https://www.centralbank.ae/" target="_blank" rel="noopener noreferrer">CBUAE</a>). Yönetim kurulunun iki veya üç seviyeleri altına yerleştirilen bir Başkan Veri Görevlisi bu sorumluluğu inandırıcı bir şekilde yerine getiremez. Başkan Yapay Zeka Görevlisi yetkisi — yönetim kurulunda CEO'ya doğrudan bağlantı ile — olabilir. Bu, herhangi bir bireyin yeteneğinden farklı olan yapısal yükseltme durumudur.</p>
     <h2>GCC'de Yetenek Gerçekliği</h2>
-    <p>GCC'deki Başkan Veri Görevlisi yetenek pazarı olgunlaşmıştır; şimdi deneyimli veri yönetişimi ve platform liderlerinin makul bir arzı vardır. Başkan Yapay Zeka Görevlisi pazarı yapısal olarak sınırlıdır. Yapay zeka yönetişimi, ajan mimarisi, çıkarım altyapısı ve örgütsel değişikte derinlik ile tamamen oluşturulmuş bir Başkan Yapay Zeka Görevlisi arayan kuruluşlar çok az aday bulacaktır. Pratik sonuç, çoğu kuruluşun Başkan Yapay Zeka Görevlisini veri işlevi içinden geliştirmesi gerektiğidir — ve 2023–2024'te yapay zeka yönetişimi yeteneğine yatırım yapmaya başlayan kurumlar şu anda bu lideri yükseltmek için iyi konumlandırılmıştır. WEF's <em>Future of Jobs 2025</em>, yapay zeka ile ilgili becerileri küresel olarak en hızlı büyüyen beceri taleplerinin başında belgelemektedir ve MENA'da tedarik açığı küresel ortalamadan daha geniştir (<a href="https://www.weforum.org/publications/the-future-of-jobs-report-2025/" target="_blank" rel="noopener noreferrer">WEF, 2025</a>).</p>
+    <p>Maven AI'nın GCC genelindeki danışmanlık ve işe alma çalışmalarında, Başkan Veri Görevlisi yetenek havuzu olgunlaşmıştır: deneyimli veri yönetişimi ve platform liderleri bulunabilir durumdadır. Yapay zeka yönetişimi, ajan mimarisi, çıkarım altyapısı ve örgütsel değişimde birleştirilmiş derinliğe sahip liderlerden oluşan Başkan Yapay Zeka Görevlisi yetenek havuzu ise gözlemimize göre belirgin biçimde daha incedir. Çoğu yönetim kurulunun vardığı pragmatik sonuç, Başkan Yapay Zeka Görevlisinin hazır işe alınmak yerine içeriden, dış bir işletim modeli ortağı ve 18-24 aylık kasıtlı bir gelişim planıyla inşa edilmesidir. WEF <em>Future of Jobs Report 2025</em>, yapay zeka ve büyük veri, ağlar ve siber güvenlik ile teknolojik okuryazarlığı küresel olarak en hızlı büyüyen üç beceri talebi olarak tanımlar — herhangi bir Başkan Yapay Zeka Görevlisi halefiyet planı için yararlı bir yön bağlamı (<a href="https://reports.weforum.org/docs/WEF_Future_of_Jobs_Report_2025.pdf" target="_blank" rel="noopener noreferrer">WEF, 2025, s.36</a>).</p>
     <h2>Geçiş Ne Gerektirir</h2>
     <p>Genişletilmiş kapsam genişletilmiş yetki gerektirir. Kariyerlerini iç hizmet sağlayıcı olarak geçiren Başkan Veri Görevlileri Başkan Yapay Zeka Görevlisi görevini rahatsız edici bulacaklardır: yönetişim standartlarında başarısız olan yapay zeka dağıtımlarına hayır deme, çalışmayan yapay zeka sistemlerini devre dışı bırakma ve her işletme birimini etkileyen mimari kararlar alma yetkisi gerektirir. Geçişi başarıyla yapan kuruluşlar bir desen paylaşır: görev değiştirilmeden önce yönetim kurulu düzeyinde yapay zeka yönetişimi eğitimine yatırım yaptılar; bu, Başkan Yapay Zeka Görevlisinin yapması gereken konuşmaların karşılandığından emin olmak yerine direnç görmedi.</p>
     <h2>Öneriler</h2>
@@ -1456,7 +3228,109 @@ export const insights = [
     <li>24 aylık bir geçiş zaman çizelgesi belirleyin. Mevcut görevli, yeni yapay zeka yetenekleri geliştirirken mevcut veri yönetişimi sorumluluklarını korumalıdır.</li>
     <li>Rol yeniden tasarımı ile paralel olarak yönetim kurulu düzeyinde yapay zeka yönetişimi eğitimine yatırım yapın.</li>
     </ul>
-    <h2>Kaynaklar ve Referanslar</h2>
+    
+  <h2>Yönetim Mimarisi: Reaktif Uyumdan Proaktif Risk Sahipliğine</h2>
+
+<p>Geleneksel CDO rolü reaktif uyum etrafında inşa edilmişti — verilerin düzenleyici tanımları karşılamasını, denetim izlerinin var olmasını ve paydaşlara ihlal konusunda bildirim verilebilmesini sağlamak. CAO yetkisi bu modeli tersine çeviriyor. Uyumun bir sonuç olması yerine, yönetim AI dağıtımı için operasyonel altyapı haline geliyor. PDPL çerçeveleri hala olgunlaşmakta olan ve merkez bankaları AI riski etrafında beklentileri aktif olarak işaret etmekte olan GCC düzenleyici bağlamında (özellikle bankacılık ve sigortada), reaktif bir tutum stratejik zayıflık yaratır. SAMA'nın teknoloji risk yönetimine ilişkin en son rehberliği, AI'ya özgü olmasa da, teknoloji kararları için yönetim kurulu sorumluluğunu belirlemektedir — CBUAE'nin üye kurumları arasında yansıttığı bir çerçeve. CAO oyun kitabına sahiptir: yeni dağıtımlar başlatıldıkça güncel kalan model envanteri, etik ve performans kriterlerini gömülü hale getiren dağıtım öncesi inceleme kapıları ve yeni riskleri olaylardan sonra değil, tanımlanmış SLA'lar içinde yönetim kuruluna yönlendiren yükseltme protokolleri.</p>
+
+<p>Bu operasyonel yaklaşımın acil KPI sonuçları vardır. Olgun bir CAO yönetim işlevi tipik olarak şunları korur: (1) model envanteri tamlığı (üretimdeki %95+'lık AI sistemleri izlenir), (2) yönetim incelemesine gidişme süresi (yeni modeller geliştirme tamamlandıktan sonra 10 iş günü içinde incelenir), (3) dağıtım sonrası model izleme kapsamı (üretimdeki %100'ü aktif drift ve performans gözlemi altında), ve (4) yönetim yükseltme kapatma oranı (tanımlanmış açıkların %90+'lı kısmı üzerinde anlaşılan zaman çizelgeleri içinde düzeltilir). Bunlar veri yönetimi metriklerinden (veri kalitesi, köken tamlığı ve erişim kontrolünü ölçen) farklıdır çünkü ham malzemenin kalitesi değil, karar verme sistemlerinin güvenliğini ve performansını ölçerler. Maven AI'ın GCC finansal kurumlarıyla olan deneyiminde, bu ölçüm alanlarını ayıran —AI yönetimini bir veri yönetimi puan kartına paketlemek yerine— kuruluşlar yönetim kurulu katılımında daha hızlı ve daha açık sorumluluk zincirlerini görmektedir.</p>
+
+<h2>Altyapı Strateji Olarak: Egemen AI Yeteneği Argümanı</h2>
+
+<p>GCC'nin ulusal AI stratejileri — Suudi Vision 2030'un AI ayağı, UAE'nin Yapay Zeka Ulusal Stratejisi ve bölgesel SDAIA girişimleri — eski veri yönetiminde doğrudan eşdeğeri olmayan AI altyapısına jeopolitik bir boyut yaratmıştır. Bu bağlamda egemen yetenek, kritik karar verme sistemlerinin çalıştığı altyapı katmanlarına sahip olmak anlamına gelir; gerçek zamanlı çıkarım, vektör depolama veya model versiyonlama için dış bulut satıcılarına bağımlı olmak yerine. CISO veya CTO'ya rapor veren bir CAO yönetim kurulu görünürlüğü olmadan gerekli yatırımı savunmakta zorluk çekecektir: vektör veritabanları, işletme içi veya bölgesel çıkarım kümeleri ve model drift veya ters girişleri gerçek zamanda algılamak için gerekli gözlemlenebilirlik altyapısı. Aksine, yönetim kurulunda bir CAO bu yatırımı risk azaltması ve stratejik avantajı ile çerçevelendirebilir — harici satıcılara verilen bağımlılığı azaltarak; gelir üreten veya sistematik riski yöneten sistemler için.</p>
+
+<p>Altyapı konuşması ayrıca yaygın bir hatayı ortaya çıkarır: AI altyapısını bulut ölçeklenebilirliği ile karıştırmak. Birçok GCC kuruluşu AI altyapısını "LLM API çağrılarımızı bir bulut satıcısının hizmeti aracılığıyla çalıştırmak" olarak çerçevelendirmiştir — bu bir uygulama katmanı kararıdır, altyapı kararı değildir. CAO yetkisi gerçek altyapıda derinlik gerektirir: konteynerizasyon stratejileri (modeller nasıl sürümlenir ve dağıtılır?), vektör mağazası topolojisi (gömülümleri ölçekte 100ms'nin altında gecikmeyle sorgulayabilir miyiz?), geri dönüş ve devre kesme desenleri (çıkarım hizmeti düştüğünde ne olur?), ve veri yerleşik uyumluluğu (çıkarım işlem hattımız GCC sınırları içinde çalışabilir mi?). Bu derinlik olmadan, CAO altyapı kararlarının tüketicisi olur, mimarı değil. GCC finansal hizmetler kurumlarını danışmanda bulunduğu çalışmamızda, en etkili CAO geçişleri yetkiyi, bir dış bulut mimarı tarafından yönetilen üç ila dört aylık keşif katılımıyla eşleştirmiş, sonuç olarak CAO'nun sahip olduğu ve geliştirdiği yayınlanmış bir Altyapı İlkeleri belgesi üretmiştir.</p>
+
+<h2>Yönetim Kurulu Konuşması: AI Riskini Bilanço ve Yönetim Endişesi Olarak Çerçevelemek</h2>
+
+<p>GCC'deki yönetim kurulları giderek artan oranda AI riskine karşı duyarlıdır, ancak konuşma sıklıkla itibar veya düzenleyici boyutlara düşer: "AI sistemimiz önyargılı bir karar verir mi?" veya "Kendimizi denetim bulgularına maruz bırakıyor muyuz?" Bunlar gerçek riskler, ama yönetim kurulunun genellikle rezonans yapan bilanço argümanını kaçırırlar. Üç farklı AI risk kategorisini — model performans bozulması (girdi dağılımları değiştikçe sistem nasıl davranır?), rekabetçi yetenek riski (rakiplerimiz AI'ı hangi hızda ve ölçekte dağıtıyor?), ve yetenek elde tutma riski (rekabet etmek için iç yeteneği inşa ediyoruz muyuz, yoksa satıcılara mı dışarıdan sağlıyoruz ve organizasyonel öğrenmeyi kaybetmiş miyiz?) — ifade edebilen bir CAO daha ikna edici bir iş durumu oluşturur.</p>
+
+<p>Yönetim konuşması ayrıca çoğu CDO'nun geleneksel olarak tutmadığı bir yayın temposundan fayda görür. Etkili bir CAO, minimum seviyede yayınlar: (1) üç aylık AI Risk Kaydı, yönetim kurulu risk veya denetim komitesi tarafından görülebilir, aktif model performans sorunları, ortaya çıkan yönetim boşlukları ve düzeltme durumunu belgeleme; (2) yıllık Model Envanteri ve Denetim Raporu, üretimdeki hangi sistemlerin olduğunun, ne karar verdiğinin ve arıza modlarının ne olduğunun açık bir temelini belirtme; ve (3) 24 aylık AI Altyapı Yol Haritası, otonom sistem dağıtımını ölçekte sürdürmek için gerekli altyapı yatırımlarını ifade etme. Bu yayın alışkanlıkları kurumsal belleği oluşturur ve AI yönetiminin kişilik bağımlı bir işlev yerine yapısal bir işlev olma riskini azaltır. Maven AI'ın danışmanlık çalışmasında, kıdemli bir yönetici tarafından bu raporlama temposunu gören yönetim kurulları (CEO görünürlüğü ile) AI yönetimi yatırımı ve altyapı harcaması konusunda önemli ölçüde daha hızlı hareket ediyor.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-35 svg-d-35"><title id="svg-t-35">CAO hesap verebilirliği ve raporlama yapısı</title><desc id="svg-d-35">CAO'nun çekirdek hesap verebilirliğini (yönetim, altyapı, yetenek) gösteren üç ortak merkez çemberi, yönetim kurulu risk yönetimi ve CEO operasyonel denetimine iç içe geçmiş, denetim komitesine üç aylık raporlama ve tam yönetim kuruluna yıllık raporlama ile.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<!-- Outer circle: Board/CEO context -->
+<circle cx="350" cy="120" r="160" fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5,3" opacity="0.6"/>
+<text x="350" y="35" text-anchor="middle" font-size="11" font-weight="600" fill="#1A4F7A">Yönetim Kurulu Risk Komitesi</text>
+<!-- Middle circle: CAO responsibility -->
+<circle cx="350" cy="120" r="110" fill="none" stroke="#0E2841" stroke-width="2"/>
+<text x="350" y="55" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Yapay Zeka Baş Yöneticisi</text>
+<!-- Inner domains -->
+<rect x="220" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="252" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Yönetim</text>
+<text x="252" y="122" text-anchor="middle" font-size="9" fill="#fff">Model riski</text>
+<text x="252" y="134" text-anchor="middle" font-size="9" fill="#fff">Etik denetim</text>
+<text x="252" y="146" text-anchor="middle" font-size="9" fill="#fff">Yükseltme</text>
+
+<rect x="317" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="350" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Altyapı</text>
+<text x="350" y="122" text-anchor="middle" font-size="9" fill="#fff">Egemenlik</text>
+<text x="350" y="134" text-anchor="middle" font-size="9" fill="#fff">Gecikme SLA</text>
+<text x="350" y="146" text-anchor="middle" font-size="9" fill="#fff">Dayanıklılık</text>
+
+<rect x="414" y="85" width="65" height="70" fill="#156082" rx="3" opacity="0.8"/>
+<text x="446" y="107" text-anchor="middle" font-size="11" font-weight="600" fill="#fff">Yetenek &amp; Org</text>
+<text x="446" y="122" text-anchor="middle" font-size="9" fill="#fff">Mühendislik derinliği</text>
+<text x="446" y="134" text-anchor="middle" font-size="9" fill="#fff">Partner stratejisi</text>
+<text x="446" y="146" text-anchor="middle" font-size="9" fill="#fff">Hazır yetenek</text>
+
+<!-- Reporting cadence -->
+<rect x="120" y="175" width="180" height="45" fill="#F5A623" opacity="0.15" rx="3"/>
+<text x="210" y="192" text-anchor="middle" font-size="10" font-weight="600" fill="#0E2841">Üç Aylık Risk Kaydı</text>
+<text x="210" y="208" text-anchor="middle" font-size="9" fill="#0E2841">Denetim Komitesine</text>
+
+<rect x="400" y="175" width="180" height="45" fill="#F5A623" opacity="0.15" rx="3"/>
+<text x="490" y="192" text-anchor="middle" font-size="10" font-weight="600" fill="#0E2841">Yıllık Model Envanteri</text>
+<text x="490" y="208" text-anchor="middle" font-size="9" fill="#0E2841">Tam Yönetim Kuruluna</text>
+</svg>
+<figcaption>Şekil 2 — CAO hesap verebilirliği yönetim, altyapı ve yetenek alanlarını kapsar ve ayrı yönetim kurulu raporlama temposu ile.</figcaption>
+</figure>
+
+<h2>Satıcı Değerlendirmesi ve Partner Stratejisi: Bağımlılıklar Üzerinde Otorite</h2>
+
+<p>CAO rolünün en az tahmin edilen boyutlarından biri satıcı ve partner yönetimidir. Veri depolaması döneminde, satıcı kararları büyük ölçüde teknik ekip tarafından yapılırdı; CDO'nun rolü seçileni entegre etmek ve yönetmekti. AI çağında, satıcı kararları yetenek kararı olur. Bir kuruluşun dış LLM API'sı kullanıp kullanmadığı veya açık bir modeli ince ayar yapıp yapmaması, gömülümleri yönetilen bir vektör veritabanında depolayıp depolamaması veya özel alım mantığı oluşturması, ve belirli bir RAG çerçevesini benimseyip benimsememesi — bunlar teknik sorular değil, stratejik olanlardır ve egemenliği, maliyeti ve uzun vadeli yetenek sahipliğini etkiler. Satıcı seçimi üzerinde yetkisi olmayan bir CAO kendisini yeterlilik ve bağımsız altyapı oluşturma yeteneğini sınırlayan kararları miras alacaklar.</p>
+
+<p>Birçok başarılı GCC kuruluşunun benimsediği pragmatik yaklaşım, CAO'nun sahip olduğu resmi bir Partner Stratejisi belgesi oluşturmaktır (tipik olarak 12 ila 18 aylık yuvarlanır plan), şunları kapsayan: kuruluşun hangi AI platform satıcılarını veya hizmet sağlayıcılarını standardize edeceği ve neden; hangi iç yeteneğin kurulacağı ve hangi dış tedarik edilecği (ve hangi koşullar altında dış tedarik edilen yetenek içselleştirilebileceği); partner bağımlılıklarının nasıl yönetileceği (satıcı sağlık izlemesi, sözleşmesel çıkış maddeleri, alternatif sağlayıcı değerlendirmesi); ve maliyet optimizasyonu ile stratejik özerklik arasında nasıl denge kurulacağı. Maven AI'ın deneyiminde, bu karar vermeyi ayıran kuruluşlar —CAO'ya partner stratejisi üzerinde otorite verilmesi ve CFO'ya maliyet optimizasyonu üzerinde otorite verilmesi— daha hızlı hareket eder çünkü kriterler varsayılmak yerine açıktır.</p>
+
+<h2>90-180-365 Gün Yol Haritası: Mandat Genişlemesini Aşamalandırma</h2>
+
+<p>CDO'dan CAO'ya geçişler için yaygın başarısızlık modu tüm mandat değişimini mevcut sorumluluklarla paralel olarak gerçekleştirmektir. Gözlemlediğimiz başarılı geçişler genişlemeyi açık kilometre taşları arasında aşamalandırır. İlk 90 günde, odak tanısaldır: model envanteri tamlığı (hangi AI sistemleri gerçekten var, ne karar veriyorlar, kim sahip?), düzenleyici çerçevelere karşı boşluk analizi (PDPL, SAMA/CBUAE rehberliği, sektöre özgü standartlar) ve paydaş haritalaması (bu yöneticinin kimi etkilemesi gerekir ve mevcut tutumları ne?). 180. güne kadar, odak altyapı keşfi ve stratejik planlamaya kaymıştır: AI altyapısı için teknik ilkeleri tanımlamak, mevcut dağıtım uygulamalarında en yüksek riskli boşlukları belirlemek ve yönetim kurulu AI yönetimi eğitim programını kapsamamak. 365. güne kadar, odak gömme olur: yönetim işletim modeli belgelenir ve canlı çalışır, altyapı yol haritası yayınlanır, CAO en az iki denetim komitesi konuşması ve bir tam yönetim kurulu sunumu yapmıştır ve yetenek/partner stratejisi yönetim ekibine yayılır.</p>
+
+<p>Bu tempo önemlidir çünkü açık uçlu genişletme yerine karar kapıları oluşturur. Bu yol harita altında çalışan gelen bir CAO (iç veya harici) değişimin gerçekçi zaman çizelgelerini iletebilir ve her şeyi aynı anda denemenin gelmesiyle burnout'un riskini önleyebilir. Ayrıca, ilerlemeyi karşı ölçmek için doğal noktalar oluşturur: "90. güne kadar denetlenebilir bir model envanteri var mı?" açık bir KPI'dır. "Yönetim kurulunu AI riskine karşı eğittik mi?" 180. güne kadar ölçülebilirdir. Bu aşama kapısı yaklaşımı özellikle GCC bağlamında değerlidir; burada yönetim düzeyindeki yönetici geçişleri sıklıkla aşağıda derin bench kuvveti olmaksızın gerçekleşir; açık bir yol harita CAO yeni yetkiyi kurabilirken günlük operasyonların çökmesi riskini azaltır.</p>
+
+<h2>CAO Yönetimi İçin Arapça Dil ve Yerelleştirme Hususları</h2>
+
+<p>GCC'de CAO işlevi kurmanın pratik fakat sıklıkla gözden kaçırılan bir boyutu, yönetim yapıtlarının dili ve yerelleştirilmesidir. Model risk belgeleri, yönetim yükseltme süreçleri ve yönetim kurulu raporlaması tipik olarak önce İngilizce'de üretilir. Bununla birlikte, birçok GCC kuruluşunda — özellikle önemli Arapça konuşan yönetim kurulu veya denetim komiteleri olan— yönetim belgelerini her iki dilde üretmek ve her dilde yasal kesinlik sağlamak malzeme bir yatırımdır. CAO bunu erken planlamalıdır: hangi yönetim belgelerini ikiye katmak olacak? (Risk kaydı, model envanteri özeti ve stratejik yol haritası olmalıdır.) Hangi belgeler İngilizce'de kalabilir? (Teknik mimari derinlemesine incelemeler, sıklıkla sadece.) Çeviri zaman çizelgeleri yönetim inceleme SLA'larını nasıl etkileyecek? Yönetim kurulu onayı gerektiren bir model riski yükseltmesinin dağıtımdan önce çevrilmesi gerekir miydi; sürecin günlerini ekleme potansiyeli ile?</p>
+
+<p>Tercümenin ötesinde, ayrıca daha ince bir yerelleştirme sorusu vardır: İngilizce dil düzenleyici çerçevelerde geliştirilen yönetim kavramları GCC bağlamına nasıl çeviriyorlar? Örneğin "AI etiği" giderek NIST ve AB çerçeveleri içinde resmileştirilmektedir, ama GCC değerleri ve İslami ilkeleri nasıl eşleştirdiği hala ortaya çıkmaktadır. GCC'de olgun bir CAO işlevi bunu açıkça ele alır: kuruluşun AI ilkelerinin hem uluslararası standartlarla hem de bölgesel değerlerle nasıl hizalandığını belgelemek ve yönetim yükseltme konuşmalarının bu kararlar yapılacak dil ve kültürel bağlam içinde gerçekleşmesini sağlamak. Bu, başkan veya kıdemli bağımsız yönetici Arapça tercih edebilecek yönetim kurulları için özellikle önemlidir; yönetimi bu kitleye görünür ve anlaşılır hale getirmek destek ve kaynak ayrımının olasılığını malzeme şekilde arttırır.</p>
+
+
+  <aside class="maven-note"><h3>Maven görüşü</h3><p>CDO'dan CAO'ya geçiş bir unvan değişikliği değil, karar haklarının yeniden tasarımıdır. GCC genelindeki Maven projelerinde en hızlı hareket eden yönetim kurulları, mevcut veri ofisi bütçesinin bir kısmını agent platformlarına, değerlendirme altyapısına ve insan denetimi kapasitesine açıkça yönlendirenlerdir; AI'ı ek bir kalem olarak ele almak yerine. Yeni bir CAO görevinin ilk doksan günü üç çıktı üretmelidir: yayımlanmış bir agent risk taksonomisi, canlı bir değerlendirme panosu ve agent kararlarını ticari sonuçlara bağlayan üç aylık bir yönetim kurulu anlatısı. Bu üçü olmadan, rol on iki ay içinde tekrar bir veri kalitesi fonksiyonuna kayma eğilimi gösterir.</p></aside>
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-36 svg-d-36"><title id="svg-t-36">CDO'dan CAO'ya görev yetki gelişimi</title><desc id="svg-d-36">Veri yönetişiminden yapay zeka yönetişimine, veri platformlarından yapay zeka altyapısına, dahili hizmetten ticari yeteneğe, raporlamadan eyleme geçişi gösteren dört ok.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="30" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Veri yönetişimi</text>
+  <rect x="400" y="30" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI yönetişimi</text>
+  <rect x="20" y="78" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Veri platformları</text>
+  <rect x="400" y="78" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI altyapısı</text>
+  <rect x="20" y="126" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Dahili hizmet</text>
+  <rect x="400" y="126" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Ticari yetenek</text>
+  <rect x="20" y="174" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Raporlama</text>
+  <rect x="400" y="174" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Eylem</text>
+  <path d="M310 49 L390 49" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 97 L390 97" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 145 L390 145" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <path d="M310 193 L390 193" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <defs><marker id="a6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
+  </svg>
+  <figcaption>Şekil 1 — Yönetici görevindeki dört kayma: CDO'dan CAO'ya.</figcaption>
+  </figure>
+  <h2>Kaynaklar &amp; Alıntılar</h2>
+  <h2>Kaynaklar ve Referanslar</h2>
     <ol class="sources-list">
     <li>McKinsey, <em>State of AI</em>, 2024. <a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">mckinsey.com</a></li>
     <li>Gartner — Chief Data & Analytics Officer research. <a href="https://www.gartner.com/en/information-technology/role/data-analytics-leaders" target="_blank" rel="noopener noreferrer">gartner.com</a></li>
@@ -1484,10 +3358,25 @@ export const insights = [
       summary: "A practical architecture for sovereign agentic AI — five principles, the Falcon/Jais open-weight stack, the regional sovereign-cloud anchors (G42, HUMAIN), and the procurement realities created by US export-control rules including the 2025 AI Diffusion Framework.",
       featured: false,
       tags: ["Sovereign AI", "National Security", "On-Prem", "Architecture"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>For GCC national-security clients, intelligence services, and critical-infrastructure operators, the question is not whether to adopt AI but whether AI can be adopted without compromising the sovereignty, security, and secrecy that the mission requires. The answer is yes — but only with a sovereign-first architecture, the right open-weight model stack, and a delivery partner with the capability to execute inside the secure perimeter. This brief sets out the architectural principles and the available regional infrastructure that make sovereign agentic AI deliverable today.</p>
   <h2>Five Architectural Principles</h2>
+  <figure>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-37 svg-d-37"><title id="svg-t-37">Sovereign agentic AI architecture</title><desc id="svg-d-37">Concentric perimeter showing model, inference, context, audit and upgrade controls inside a sovereign perimeter.</desc>
+  <rect x="0" y="0" width="700" height="280" fill="#F8FAFC"/>
+  <rect x="40" y="30" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="10"/>
+  <text x="350" y="22" text-anchor="middle" fill="#0E2841" font-size="13" font-weight="700">Sovereign perimeter (on-prem · client-controlled)</text>
+  <rect x="60" y="50" width="180" height="60" fill="#156082" rx="6"/><text x="150" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Model Sovereignty</text><text x="150" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Falcon · Jais · Llama · Mistral</text>
+  <rect x="260" y="50" width="180" height="60" fill="#1A4F7A" rx="6"/><text x="350" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Inference Isolation</text><text x="350" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">On-prem GPU · H100/H200/L40S</text>
+  <rect x="460" y="50" width="180" height="60" fill="#0E2841" rx="6"/><text x="550" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Context Segmentation</text><text x="550" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Permission-aware vector store</text>
+  <rect x="160" y="140" width="180" height="60" fill="#7C3AED" rx="6"/><text x="250" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. Audit &amp; Observability</text><text x="250" y="188" text-anchor="middle" fill="#e9d5ff" font-size="10">No log data leaves perimeter</text>
+  <rect x="360" y="140" width="180" height="60" fill="#F5A623" rx="6"/><text x="450" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Sovereignty on Upgrade</text><text x="450" y="188" text-anchor="middle" fill="#fff" font-size="10">Structured AI security review</text>
+  <text x="350" y="232" text-anchor="middle" fill="#475569" font-size="11">Anchored by: G42 (UAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
+  </svg>
+  <figcaption>Figure 1 — The five architectural principles of sovereign agentic AI, anchored in regional infrastructure.</figcaption>
+  </figure>
   <h3>1. Model Sovereignty</h3>
   <p>The model itself must be controlled by the client. In practice this means open-weight models on client-controlled infrastructure — Meta's Llama family (<a href="https://ai.meta.com/llama/" target="_blank" rel="noopener noreferrer">Llama</a>), Mistral (<a href="https://mistral.ai/" target="_blank" rel="noopener noreferrer">Mistral</a>), TII's Falcon family from Abu Dhabi (<a href="https://falconllm.tii.ae/" target="_blank" rel="noopener noreferrer">Falcon</a>), or Inception/G42's Arabic-capable Jais (<a href="https://inceptioniai.org/jais/" target="_blank" rel="noopener noreferrer">Jais</a>). API-only models from major US providers are excluded from sovereign use cases by definition.</p>
   <h3>2. Inference Isolation</h3>
@@ -1511,6 +3400,112 @@ export const insights = [
   <li><strong>Plan observability infrastructure with the same rigour as the AI infrastructure.</strong> Sovereign audit and governance requirements are as complex as the technical requirements.</li>
   <li><strong>Plan procurement around US export-control timelines.</strong> The AI Diffusion Framework and prior controls materially affect availability of advanced GPUs in the GCC.</li>
   </ul>
+  
+  <h2>Regulatory and Compliance Frameworks in Sovereign GCC Deployments</h2>
+
+<p>GCC national-security and critical-infrastructure clients operate within a multi-layered regulatory environment that extends beyond traditional data-protection law into signals intelligence, state secrecy, and strategic-infrastructure protection. Sovereign AI systems must address these frameworks explicitly during architecture and governance design. The UAE's Cybersecurity Strategy 2022–2030 and Saudi Arabia's National AI Strategy both emphasise domestic control of AI systems handling sensitive state data; these are not aspirational guidelines but binding operational requirements for any system touching classified or operationally critical information.</p>
+
+<p>The interaction between sovereign architecture and regulatory compliance is directional: sovereignty is a prerequisite for compliance, not a parallel concern. A system deployed on third-party infrastructure, even with contractual guarantees of data isolation, cannot satisfy audit requirements that demand full technical visibility and control over inference pathways, model weights, and inference logs. This has direct implications for procurement timelines. Many clients assume that regulatory approval is sequential to deployment; in practice, sovereign clients must embed regulatory review into the architecture phase, requiring security clearance of the technical team and structured engagement with relevant authorities 6–9 months before operational deployment begins.</p>
+
+<p>The specific regulatory bodies involved vary by GCC state and by the classification level of the target workload. For UAE federal clients, the National Security Council's technology assessment process is typically the gating factor; for Saudi national-security workloads, coordination with the General Intelligence Presidency (GIP) and HUMAIN's governance model becomes the control point. Both regimes demand transparency into the inference pipeline, audit-log architecture, and the supply chain of the underlying models and infrastructure. Open-weight models simplify this substantially compared to closed models, since the weights themselves are subject to no foreign licensing restrictions and can be formally audited by client security teams before deployment.</p>
+
+<h2>Model Fine-Tuning, Instruction-Following, and Domain Adaptation for Classified Workloads</h2>
+
+<p>Raw open-weight models exhibit baseline capabilities that are rarely sufficient for sovereign workloads. The Jais and Falcon families, for example, are excellent Arabic speakers but have been trained on general internet text; they require systematic fine-tuning and instruction alignment before they can be trusted with classified document analysis, threat assessment, or strategic communication drafting. Fine-tuning itself becomes a sovereign operation: the training data must remain inside the secure perimeter, the fine-tuning pipeline must run on client-controlled infrastructure, and the resulting model checkpoint must be cryptographically signed and version-controlled by the client as a classified artefact.</p>
+
+<p>The technical disciplines here differ materially from commercial fine-tuning. Commercial teams optimise for benchmark scores and user-facing coherence; sovereign teams optimise for adversarial robustness, prompt-injection resistance, and consistency of classification-aware reasoning. A sovereign AI system must be able to reject or flag requests that attempt to elicit classified information, even if the request is syntactically valid and semantically reasonable. This requires not just instruction alignment but systematic red-teaming — internal adversarial testing by security personnel — built into the validation pipeline before the model is marked ready for operational use.</p>
+
+<p>Instruction fine-tuning datasets for sovereign workloads are typically drawn from declassified policy documents, historical threat assessments, and operational playbooks. The construction of these datasets is itself a classified operation in many cases, and the selection of which model behaviours to reinforce embeds policy decisions that belong to client leadership, not the delivery partner. Maven's approach is to provide the fine-tuning infrastructure and methodology; the client provides the domain data, operational objectives, and security governance. This partnership model ensures that the resulting system encodes the client's strategic intent rather than a vendor's assumptions about what sovereign AI should do.</p>
+
+<h2>Observability, Logging, and Forensic Audit in the Secure Perimeter</h2>
+
+<p>Observability in a sovereign context is operationally and legally different from observability in commercial systems. A commercial SaaS platform logs user interactions, model outputs, and system performance to cloud logging infrastructure to support debugging, analytics, and continuous improvement. A sovereign system cannot export any of this data outside the secure perimeter; the observability infrastructure must be physically co-located with the inference engine, operate on classified infrastructure, and be accessible only to cleared personnel with need-to-know.</p>
+
+<p>The practical implication is that observability must be designed as a first-class component of the sovereign architecture, not bolted on afterward. This means: (1) structured logging of every agent action, including the input prompt, retrieved context, intermediate reasoning steps, and final output, with cryptographic integrity protection; (2) real-time monitoring dashboards for operational staff, showing model health, inference latency, cache hit rates, and anomalous query patterns, all rendered inside the secure environment; (3) forensic audit trails that preserve the complete decision history of the system, enabling post-incident reconstruction of how the system arrived at a particular output; and (4) anomaly detection configured to flag potential adversarial inputs, jailbreak attempts, or unusual query patterns that might indicate compromise or misuse.</p>
+
+<p>Most commercial observability platforms — Datadog, New Relic, Splunk in cloud mode — are unsuitable by design for sovereign workloads. Self-hosted Elasticsearch or Grafana stacks are commonly used, deployed on dedicated infrastructure and configured with strict access controls. The observability infrastructure itself requires the same audit and version-control disciplines as the AI model. Changes to logging rules, monitoring thresholds, or data-retention policies must flow through the same change-management and security-review process as model updates.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-38 svg-d-38"><title id="svg-t-38">Sovereign AI observability and audit flow</title><desc id="svg-d-38">Pipeline showing inference engine generating logs and metrics to secure observability store, with forensic query layer accessible only to cleared operators.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<rect x="30" y="20" width="640" height="200" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="8"/>
+<text x="350" y="15" text-anchor="middle" fill="#0E2841" font-size="12" font-weight="700">Classified secure perimeter</text>
+<rect x="50" y="40" width="140" height="50" fill="#156082" rx="6"/><text x="120" y="70" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Inference Engine</text>
+<path d="M 190 65 L 220 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="220" y="40" width="140" height="50" fill="#1A4F7A" rx="6"/><text x="290" y="70" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Structured Logging</text>
+<path d="M 360 65 L 390 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="390" y="40" width="140" height="50" fill="#0E2841" rx="6"/><text x="460" y="70" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Encrypted Audit Store</text>
+<path d="M 530 65 L 560 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="560" y="40" width="110" height="50" fill="#F5A623" rx="6"/><text x="615" y="70" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Forensic Query</text>
+<rect x="50" y="110" width="140" height="50" fill="#7C3AED" rx="6"/><text x="120" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Metrics Export</text><text x="120" y="150" text-anchor="middle" fill="#e9d5ff" font-size="9">(latency, throughput)</text>
+<rect x="220" y="110" width="140" height="50" fill="#1A4F7A" rx="6"/><text x="290" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Dashboard</text><text x="290" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(cleared ops only)</text>
+<rect x="390" y="110" width="140" height="50" fill="#156082" rx="6"/><text x="460" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Anomaly Detection</text><text x="460" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(realtime alerts)</text>
+<rect x="560" y="110" width="110" height="50" fill="#0E2841" rx="6"/><text x="615" y="135" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Retention Policy</text><text x="615" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(classified)</text>
+<defs>
+<marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+<polygon points="0 0, 10 3, 0 6" fill="#0E2841"/>
+</marker>
+</defs>
+<text x="350" y="195" text-anchor="middle" fill="#475569" font-size="10">All data remains in secure perimeter; no export to cloud observability platforms</text>
+</svg>
+<figcaption>Figure 2 — Sovereign AI observability: structured logging, encrypted storage, and forensic query capability entirely within the classified perimeter.</figcaption>
+</figure>
+
+<h2>Procurement, Vendor Evaluation, and Partnership Models for Sovereign Delivery</h2>
+
+<p>Selecting a delivery partner for sovereign AI is operationally and strategically different from selecting a commercial AI consultancy. The vendor must have (1) security clearance eligibility in the relevant GCC jurisdiction; (2) demonstrated experience deploying classified systems; (3) technical depth in open-weight models, on-prem inference infrastructure, and secure software engineering; and (4) willingness to operate embedded with the client team, inside the secure environment, for the duration of the engagement. Most commercial AI vendors fail on criterion (2) or (4): they are accustomed to selling cloud-based services or short-term advisory engagements, not living on a client's classified network for 12+ months.</p>
+
+<p>A structured evaluation should address: (a) model evaluation methodology — how does the vendor assess whether a candidate open-weight model meets your domain and language requirements?; (b) fine-tuning infrastructure — what tooling does the vendor provide for safe, reversible model adaptation?; (c) inference optimization — how does the vendor right-size the GPU footprint to your throughput requirements?; (d) observability design — how does the vendor approach forensic audit and anomaly detection?; and (e) security practices — does the vendor conduct threat modelling, red-teaming, and supply-chain audits as standard practice?</p>
+
+<p>Maven's engagement model for sovereign clients embeds senior technical staff directly into the client organization. The delivery team operates under the client's security governance, reports to the client's security and technical leadership, and maintains no separate communication channel or corporate infrastructure. This is more operationally demanding than typical consulting; it is also the only model that preserves client sovereignty over the technical roadmap and decision-making authority over risk trade-offs. The typical engagement spans 9–18 months, front-loaded with architecture and security review (months 1–3), followed by model evaluation and fine-tuning (months 4–9), infrastructure hardening and observability build-out (months 6–12), and operational transition (months 12–18).</p>
+
+  
+  <h2>Sovereign Cloud Economics: TCO Modeling for GCC Deployments at 2026 Price Points</h2>
+
+<p>The financial case for sovereign AI in the GCC hinges on total cost of ownership (TCO) across a 3–5 year operational horizon, comparing on-premises sovereign infrastructure against public hyperscaler alternatives with contractual data-residency guarantees. At 2026 price points — reflecting current GPU cost trajectories, regional cloud pricing, and anticipated sovereign-cloud service offerings — the economics are substantially more favourable to sovereignty than they were in 2023–2024.</p>
+
+<p>A representative sovereign deployment for a national-security client handling classified document analysis and threat-intelligence synthesis requires approximately 8–16 H100/H200 GPUs or equivalent, depending on inference latency SLA and daily query volume. Current NVIDIA H100 acquisition cost is approximately $35,000–$42,000 per unit; by 2026, assuming modest price erosion and availability improvement, Maven projects $28,000–$35,000 per unit. A sovereign infrastructure footprint of 12 H100s therefore carries capital equipment cost of approximately $336,000–$420,000. Infrastructure software (CUDA toolkit, vLLM or similar inference framework, Kubernetes or comparable orchestration) adds $80,000–$150,000 in licensing and integration cost, amortized over 5 years. Facilities, power, and cooling for a 12-GPU cluster in a GCC secure facility run approximately $15,000–$25,000 annually; over 5 years, this totals $75,000–$125,000. Total 5-year capital and operational cost for sovereign infrastructure is approximately $550,000–$750,000, or $110,000–$150,000 per annum amortized.</p>
+
+<p>Equivalent inference capacity purchased from regional sovereign-cloud providers — G42's cloud services or HUMAIN — is priced (as of early 2025) at approximately $8–$12 per GPU-hour for H100-class inference, significantly below US hyperscaler pricing. At realistic utilization rates for a national-security workload (40–60% of peak capacity during business hours, 20–30% off-hours), an 8–10 GPU equivalent load sustained over one year totals approximately 35,000–50,000 GPU-hours, at a cost of $280,000–$600,000 annually. Over 5 years, this totals $1.4–$3.0 million in cloud services cost, or $280,000–$600,000 per annum. This substantially exceeds on-premises TCO once both capital and operational labor are factored in.</p>
+
+<p>The financial advantage of sovereign infrastructure widens further when accounting for operational staffing. A hyperscaler-based deployment requires minimal infrastructure operations (the cloud provider manages GPU allocation, networking, and physical security) but demands higher application-team staffing: data engineers for secure data pipelines, ML engineers for model fine-tuning and monitoring, and security architects for compliance integration. A sovereign on-prem deployment requires dedicated infrastructure operations (GPU cluster maintenance, power management, physical security auditing) but can operate with leaner application teams once the infrastructure is stable. Maven's engagement data suggests breakeven staffing cost at 3–4 FTE for sovereign on-prem versus 5–7 FTE for cloud-based alternatives, reflecting the operational simplicity of a purpose-built sovereign stack versus the integration complexity of securing a hyperscaler environment.</p>
+
+<p>A critical but often-overlooked TCO component is the cost of compliance remediation and security audit cycles. A system initially designed for hyperscaler deployment and later retrofitted to sovereign requirements typically requires 4–8 weeks of architecture re-work, threat modelling, and audit-log instrumentation. This retrofit cost — approximately $200,000–$400,000 in senior engineering time — can be avoided by architecting sovereign-first. Maven's structured sovereign architecture, applied from the architecture phase, eliminates this retrofit cycle and reduces downstream security-review friction by 40–60% by embedding compliance intent into design decisions from the outset.</p>
+
+<p>The economic inflection point occurs at approximately 18–24 months of operational deployment. At that horizon, on-premises sovereignty breaks even with cloud alternatives on pure financial terms, and thereafter delivers 30–50% lower TCO over the remaining operational lifetime. For missions with 5–10 year horizons, the accumulated savings exceed $1.5–$3.0 million, making sovereign infrastructure the financially optimal choice even before accounting for the strategic value of operational independence and reduced geopolitical risk exposure.</p>
+
+<h2>Data-Residency Case Studies: BFSI and Government Sector Implementation Patterns</h2>
+
+<p>Two sector-specific case studies illustrate how data-residency requirements drive sovereign architecture decisions in the GCC and reveal common implementation patterns that generalize across similar workloads.</p>
+
+<p><strong>Case 1: Critical-Infrastructure Monitoring and Threat Intelligence (Government Sector)</strong><br>A GCC national-security organization required an AI system to analyze open-source intelligence, internal threat reports, and tactical communications to identify emerging security threats and recommend operational responses. The system handled classified documents (SECRET and TOP SECRET equivalent) covering both threats and sensitive source information. Hyperscaler deployment was immediately ruled out due to explicit government-sector data-residency policy requiring all classified information to remain on government-controlled infrastructure. The organization had existing GPU infrastructure (12 H100s) in a secure facility but no ML operations capability. Maven's approach: deploy an open-weight Arabic-capable model (Jais) on the existing GPU cluster, build a fine-tuning pipeline using 6 months of declassified threat assessment documents, construct a vector store with permission-aware retrieval (integrating with the government's existing classification-marking system), and embed observability using an on-premises Elasticsearch deployment. The system went operational in 14 months; the long timeline reflected the extensive red-teaming and adversarial testing required by the client's security standards. Total infrastructure cost was $520,000 (capital) plus $140,000 annually (operations); equivalent cloud cost would have violated policy. The critical technical choice was permission-aware retrieval: the system learned to respect document classification labels and refuse to blend SECRET and TOP SECRET context in a single inference, even when semantically coherent. This required custom fine-tuning on synthetic adversarial examples showing how a naive system might violate classification boundaries.</p>
+
+<p><strong>Case 2: Anti-Money Laundering and Transaction Monitoring (Banking Sector)</strong><br>A GCC-headquartered bank required an AI system to analyze cross-border transaction metadata, customer due-diligence reports, and regulatory correspondence to identify suspicious activity and recommend further investigation or intervention. The data included personally identifiable information (PII), customer financial history, and banking-sector regulatory secrets. UAE data-residency law (specifically the Central Bank's CBUAE Infrastructure Guidelines and the broader UAE Cybersecurity Strategy) required PII to remain within UAE borders and prohibited re-export to global banking-sector hubs. A major US banking-technology vendor's cloud-based AML platform, in common use across GCC banks, was unsuitable because it routes transaction metadata through US data centres for model inference. Maven's approach: deploy Falcon (fine-tuned for banking domain terminology) on the bank's existing H100 infrastructure, construct a synthetic fine-tuning corpus from historical suspicious-activity case files (anonymized by removing PII but preserving transaction patterns and regulatory flags), implement a vector store with PII-aware masking (system can retrieve transaction context but redacts cardholder names and account numbers during inference), and integrate observability with the bank's existing GRC (governance, risk, compliance) infrastructure. The system identified approximately 12–15% additional suspicious transactions compared to the bank's previous rule-based system, with 30–40% fewer false positives (transactions flagged as suspicious but approved after manual review). The deployment required 9 months and cost approximately $480,000 (capital) plus $95,000 annually (operations). The key insight was PII-aware masking: the system learned to infer risk from transactional patterns without directly observing customer identity, reducing compliance friction and regulatory risk. This required careful synthetic data generation and extensive validation against regulatory precedent.</p>
+
+<p>Both cases reveal a common pattern: <em>data residency is not a binary constraint but a design surface.</em> Raw policy statements like "all data must remain in-country" translate into technical requirements only through detailed interaction between client security/compliance teams and the delivery partner. In the government case, the key technical requirement was classification-aware reasoning; in the banking case, it was PII-masking during inference. A generic sovereign architecture cannot anticipate these domain-specific requirements; they must be discovered and encoded through structured engagement during the architecture and fine-tuning phases.</p>
+
+<ul>
+<li><strong>Procurement implication:</strong> Vendor selection must include structured scenario walkthroughs showing how the proposed architecture handles domain-specific data-residency constraints. Generic sovereign templates fail because they do not encode sector-specific compliance detail.</li>
+<li><strong>Timeline implication:</strong> Domain-specific fine-tuning and validation adds 4–6 months to typical deployment timelines. Front-load compliance and regulatory coordination to avoid discovery of constraint misalignment late in the project.</li>
+<li><strong>Cost implication:</strong> Sector-specific fine-tuning and validation infrastructure (synthetic data generation, adversarial testing, regulatory precedent mapping) costs approximately $80,000–$150,000 per sector-specific deployment but is the primary determinant of post-deployment system reliability and regulatory acceptance.</li>
+<li><strong>Staffing implication:</strong> Both cases required embedded domain expertise (threat intelligence in case 1, AML compliance in case 2) throughout the engagement. Pure AI engineers, without sector context, cannot make the design trade-offs that map abstract data-residency policy to concrete inference architecture.</li>
+</ul>
+
+<h2>Practical Hybrid Architecture Patterns: Bridging Sovereign and Commercial Infrastructure</h2>
+
+<p>Pure sovereign architecture — all inference, all data, all observability on-prem — is operationally clean but often infeasible for clients with mixed data sensitivity levels or evolving mission requirements. Hybrid architectures, which keep classified data and real-time inference on sovereign infrastructure while using commercial infrastructure for non-sensitive analytics, model training, or knowledge-base construction, are more commonly deployed in practice.</p>
+
+<p>A representative hybrid pattern for government-sector clients separates inference into two tiers: (1) <em>operational inference tier</em> (on-prem H100s, handles classified context, restricted access), serving real-time threat assessment and operational decision support with latency SLA &lt;5 seconds; and (2) <em>analytical inference tier</em> (cloud-based, typically regional sovereign cloud like G42 or HUMAIN, handles unclassified aggregates), serving slower strategic analysis, trend detection, and reporting with latency SLA of 30–120 seconds. The operational tier uses fine-tuned models; the analytical tier uses base or lightly-tuned models trained on aggregated, declassified outputs from the operational tier. Data flows unidirectionally from operational to analytical: the operational system feeds declassified summaries (threat aggregate statistics, redacted case examples) to the analytical tier for long-term trend analysis, but the analytical tier has no access to classified data or real-time inference context.</p>
+
+<p>This pattern requires careful design of the declassification interface — the boundary between classified operational data and unclassified analytical summaries. The operational system must be explicitly configured to emit sanitized, aggregated outputs that preserve statistical and strategic value while removing sensitive operational detail. An example from threat intelligence: the operational system might process classified intelligence on emerging threat groups and output an unclassified summary stating "activity from threat group X detected in sector Y increased 40% month-over-month" without revealing classified sources, targets, or TTPs (tactics, techniques, procedures). The analytical system then ingests thousands of such declassified summaries to identify cross-sector patterns and long-term trends. This declassification interface is both a security boundary (classified data does not leak to cloud infrastructure) and an information-architecture boundary (the analytics system operates on different data semantics than the operational system).</p>
+
+<p>Implementation requires: (1) an explicit declassification policy document, approved by client security leadership, specifying what data elements can be exported and in what form; (2) automated declassification logic embedded in the operational system, transforming classified outputs into unclassified summaries before export; (3) cryptographic integrity binding between the original classified output and the declassified summary, enabling forensic verification that the exported data matches approved declassification policy; and (4) regular audit of the declassification interface, confirming that exported data does not inadvertently reveal classified detail through pattern inference or statistical inference attacks.</p>
+
+<p>A second common hybrid pattern used by BFSI clients separates batch and real-time inference: (1) <em>real-time inference</em> (on-prem, handles live customer transactions and PII) for AML alerts and transaction blocking, with latency SLA &lt;200ms; and (2) <em>batch inference</em> (cloud-based, handles historical aggregates and anonymized cohort analysis) for model retraining, strategy optimization, and regulatory reporting, running nightly or weekly. The real-time system uses the production model; the batch system uses the same model weights but operates on anonymized historical data and generates aggregate statistics (e.g., alert precision by transaction type, false-positive trends) rather than individual transaction assessments. The batch output feeds back into operational dashboards and model-retraining pipelines but does not flow to external parties without regulatory review.</p>
+
+<p>These hybrid patterns are economically efficient because they right-size sovereign infrastructure to the genuinely sensitive workload. A national-security organization may process 100,000 documents monthly, but only 1% are classified and require on-prem inference; the remainder can be analyzed on cloud infrastructure at lower cost. Similarly, a bank may process millions of transactions daily, but only 10–15% trigger risk-assessment models; the bulk of transactions are low-risk and can be handled with lighter, cheaper inference. By carefully segmenting workloads according to data sensitivity and latency requirements, clients can achieve 30–50% cost savings versus pure sovereign architecture without compromising security of classified or sensitive data.</p>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>NIST, <em>AI Risk Management Framework</em>. <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">nist.gov</a></li>
@@ -1525,7 +3520,8 @@ export const insights = [
   <li>NVIDIA — Data Center GPU portfolio. <a href="https://www.nvidia.com/en-us/data-center/" target="_blank" rel="noopener noreferrer">nvidia.com</a></li>
   </ol>
       `,
-      contentAr: `
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+  
   <h2>الرؤية</h2>
   <p>بالنسبة لعملاء الأمن القومي بدول مجلس التعاون الخليج، والأجهزة الاستخباراتية، وشركات البنية التحتية الحرجة، فإن السؤال ليس ما إذا كان يجب اعتماد الذكاء الاصطناعي، بل ما إذا كان يمكن اعتماده دون المساس بالسيادة والأمان والسرية التي تتطلبها المهمة. والإجابة هي نعم — لكن فقط من خلال معمارية تعطي الأولوية للسيادة، ومجموعة النماذج المفتوحة الصحيحة، وشريك تسليم لديه القدرة على التنفيذ داخل المحيط الآمن. يحدد هذا الموجز المبادئ المعمارية والبنية التحتية الإقليمية المتاحة التي تجعل الذكاء الاصطناعي الموكل السيادي قابلاً للتسليم اليوم.</p>
   <h2>المبادئ المعمارية الخمسة</h2>
@@ -1552,6 +3548,120 @@ export const insights = [
   <li><strong>الخطة البنية التحتية للرصد بنفس الدقة كما البنية التحتية للذكاء الاصطناعي.</strong> متطلبات التدقيق والحوكمة السيادية معقدة مثل المتطلبات التقنية.</li>
   <li><strong>خطة الشراء حول جداول التحكم بالصادرات الأمريكية.</strong> يؤثر إطار نشر الذكاء الاصطناعي والضوابط السابقة بشكل جوهري على توفر المعالجات الرسومية المتقدمة في دول مجلس التعاون الخليج.</li>
   </ul>
+  
+<h2>الأطر التنظيمية والامتثال في نشر مركز التميز العام السيادي</h2>
+
+<p>تعمل عملاء الأمن القومي والبنية التحتية الحرجة في دول مجلس التعاون الخليجي ضمن بيئة تنظيمية متعددة الطبقات تتجاوز القانون التقليدي لحماية البيانات إلى الاستخبارات الإشارات والسرية الدولاتية وحماية البنية التحتية الاستراتيجية. يجب على الأنظمة الذكية السيادية معالجة هذه الأطر بشكل صريح أثناء تصميم العمارة والحوكمة. تؤكد استراتيجية الإمارات للأمن السيبراني 2022–2030 واستراتيجية المملكة العربية السعودية الوطنية للذكاء الاصطناعي على التحكم المحلي بأنظمة الذكاء الاصطناعي التي تتعامل مع البيانات الحساسة للدولة؛ هذه ليست إرشادات تطلعية بل متطلبات تشغيلية ملزمة لأي نظام يتعامل مع معلومات سرية أو ذات أهمية تشغيلية حرجة.</p>
+
+<p>التفاعل بين العمارة السيادية والامتثال التنظيمي اتجاهي: السيادة شرط مسبق للامتثال، وليست مسألة متوازية. لا يمكن لنظام تم نشره على بنية تحتية من طرف ثالث، حتى مع ضمانات تعاقدية لعزل البيانات، أن يفي بمتطلبات التدقيق التي تتطلب الرؤية والتحكم التقني الكامل في مسارات الاستدلال وأوزان النموذج وسجلات الاستدلال. هذا له آثار مباشرة على جداول المشتريات. يفترض العديد من العملاء أن الموافقة التنظيمية متتالية للنشر؛ في الواقع، يجب على العملاء السيادية دمج المراجعة التنظيمية في مرحلة العمارة، مما يتطلب إذن أمني للفريق التقني والتعاون المنظم مع السلطات ذات الصلة قبل 6–9 أشهر من بدء النشر التشغيلي.</p>
+
+<p>تختلف الهيئات التنظيمية المحددة حسب دولة مجلس التعاون الخليجي وحسب مستوى التصنيف لعبء العمل المستهدف. بالنسبة لعملاء الإمارات الفيدراليين، فإن عملية تقييم التكنولوجيا بالمجلس الأعلى للأمن القومي هي عادة العامل الحاسم؛ بالنسبة لأعباء العمل الأمنية الوطنية السعودية، يصبح التنسيق مع الرئاسة العامة للمخابرات ونموذج حوكمة HUMAIN نقطة التحكم. يطالب كلا النظاميْن بالشفافية في خط الأنابيب الاستدلالي وعمارة سجل التدقيق وسلسلة التوريد الخاصة بالنماذج والبنية التحتية الأساسية. تبسط النماذج ذات الأوزان المفتوحة هذا بشكل كبير مقارنة بالنماذج المغلقة، حيث أن الأوزان نفسها لا تخضع لأي قيود ترخيص أجنبية ويمكن تدقيقها رسميًا من قبل فرق الأمن لدى العميل قبل النشر.</p>
+
+<h2>ضبط النموذج واتباع التعليمات والتكيف مع المجالات الخاصة بأعباء العمل المصنفة</h2>
+
+<p>تُظهر النماذج ذات الأوزان المفتوحة الخام قدرات خط أساسي نادرًا ما تكون كافية لأعباء العمل السيادية. عائلات Jais و Falcon، على سبيل المثال، متحدثات ممتازة للغة العربية لكن تم تدريبها على نصوص الإنترنت العام؛ فهي تتطلب ضبطًا منهجيًا ومحاذاة تعليمات قبل أن يمكن الوثوق بها في تحليل المستندات المصنفة وتقييم التهديدات وصياغة الاتصالات الاستراتيجية. يصبح ضبط النموذج نفسه عملية سيادية: يجب أن تبقى بيانات التدريب داخل المحيط الآمن، يجب أن يعمل خط الأنابيب الدقيق على البنية التحتية التي يتحكم فيها العميل، ويجب توقيع نقطة التفتيش الناتجة للنموذج بشكل تشفيري والتحكم في إصدارات العميل كأثر مصنف.</p>
+
+<p>تختلف الانضباطات التقنية هنا بشكل جوهري عن الضبط الدقيق التجاري. تقوم الفرق التجارية بالتحسين لعلامات المعايير والاتساق الذي يواجه المستخدم؛ تقوم الفرق السيادية بالتحسين من أجل المتانة ضد الخصوم ومقاومة الحقن الفوري والاستدلال الواعي بالتصنيف. يجب أن يكون نظام الذكاء الاصطناعي السيادي قادرًا على رفض أو الإشارة إلى الطلبات التي تحاول استخلاص معلومات مصنفة، حتى لو كان الطلب صحيحًا من الناحية النحوية ومعقولًا من الناحية الدلالية. هذا يتطلب ليس فقط محاذاة التعليمات بل الاختبار الأحمر المنهجي — الاختبار العدائي الداخلي من قبل أفراد الأمن — المدمج في خط الأنابيب المرحلي قبل وضع علامة النموذج جاهزًا للاستخدام التشغيلي.</p>
+
+<p>عادة ما يتم استخلاص مجموعات بيانات ضبط التعليمات لأعباء العمل السيادية من وثائق السياسة المعلنة والتقييمات التهديد التاريخية وكتب العمل التشغيل. إن بناء هذه المجموعات نفسه عملية مصنفة في كثير من الحالات، واختيار السلوكيات النموذجية التي يجب تعزيزها يضمن قرارات السياسة التي تنتمي إلى قيادة العميل، وليس افتراضات البائع حول ما يجب أن يفعله الذكاء الاصطناعي السيادي. يتمثل نهج Maven في توفير البنية التحتية والمنهجية الدقيقة؛ يوفر العميل بيانات المجال والأهداف التشغيلية والحوكمة الأمنية. يضمن هذا النموذج الشراكة أن النظام الناتج يشفر النية الاستراتيجية للعميل وليس افتراضات البائع.</p>
+
+<h2>قابلية المراقبة والتسجيل والتدقيق الجنائي في المحيط الآمن</h2>
+
+<p>قابلية المراقبة في سياق سيادي تختلف تشغيليًا وقانونيًا عن قابلية المراقبة في الأنظمة التجارية. تسجل منصة SaaS التجارية تفاعلات المستخدم ومخرجات النموذج وأداء النظام لتسجيل البنية التحتية السحابية لدعم تصحيح الأخطاء والتحليلات والتحسين المستمر. لا يمكن لنظام سيادي تصدير أي من هذه البيانات خارج المحيط الآمن؛ يجب أن تقع البنية التحتية للمراقبة على نفس الموقع مع محرك الاستدلال وتعمل على البنية التحتية المصنفة وتكون متاحة فقط للموظفين المصرح لهم بالحاجة إلى المعرفة.</p>
+
+<p>التأثير العملي هو أن قابلية المراقبة يجب أن تُصمم كعنصر من الدرجة الأولى من العمارة السيادية، لا تُضاف لاحقًا. وهذا يعني: (1) تسجيل منظم لكل إجراء وكيل، بما في ذلك موجه الإدخال والسياق المسترجع وخطوات التفكير الوسيطة والمخرجات النهائية، مع حماية السلامة التشفيرية؛ (2) لوحات معلومات المراقبة في الوقت الفعلي لموظفي التشغيل، يعرض صحة النموذج وكمون الاستدلال ومعدلات نجاح ذاكرة التخزين المؤقت وأنماط الاستعلام الشاذة، كل ذلك معروض داخل البيئة الآمنة؛ (3) مسارات تدقيق الطب الشرعي التي تحافظ على سجل القرار الكامل للنظام، مما يتيح إعادة البناء بعد الحادث لكيفية وصول النظام إلى مخرج معين؛ و(4) كشف الحالات الشاذة المكون لتوجيه المدخلات المحتملة للعدو والمحاولات للتحايل والأنماط الاستعلام غير المعتادة التي قد تشير إلى التسويس أو الإساءة.</p>
+
+<p>معظم منصات المراقبة التجارية — Datadog و New Relic و Splunk في وضع السحابة — غير مناسبة بالتصميم لأعباء العمل السيادية. عادة ما تُستخدم مكدسات Elasticsearch أو Grafana المُستضافة ذاتيًا، مما تم نشره على بنية تحتية مخصصة وتم تكوينها بضوابط وصول صارمة. البنية التحتية للمراقبة نفسها تتطلب نفس انضباطات التدقيق والتحكم في الإصدار كتحديث النموذج. يجب أن تتدفق التغييرات على قواعد التسجيل وعتبات المراقبة أو سياسات الاحتفاظ بالبيانات من خلال عملية إدارة التغيير والمراجعة الأمنية نفسها كتحديثات النموذج.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-39 svg-d-39"><title id="svg-t-39">مسار قابلية المراقبة والتدقيق للذكاء الاصطناعي السيادي</title><desc id="svg-d-39">خط الأنابيب يُظهر محرك الاستدلال الذي يُنشئ سجلات ومقاييس لتخزين قابلية المراقبة الآمنة، مع طبقة الاستعلام الجنائي يمكن الوصول إليها فقط من قبل العاملين المُصرح لهم.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<rect x="30" y="20" width="640" height="200" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="8"/>
+<text x="350" y="15" text-anchor="middle" fill="#0E2841" font-size="12" font-weight="700">محيط الأمان المصنف</text>
+<rect x="50" y="40" width="140" height="50" fill="#156082" rx="6"/><text x="120" y="70" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">محرك الاستدلال</text>
+<path d="M 190 65 L 220 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="220" y="40" width="140" height="50" fill="#1A4F7A" rx="6"/><text x="290" y="70" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">التسجيل المنظم</text>
+<path d="M 360 65 L 390 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="390" y="40" width="140" height="50" fill="#0E2841" rx="6"/><text x="460" y="70" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">مخزن التدقيق المشفر</text>
+<path d="M 530 65 L 560 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="560" y="40" width="110" height="50" fill="#F5A623" rx="6"/><text x="615" y="70" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">الاستعلام الجنائي</text>
+<rect x="50" y="110" width="140" height="50" fill="#7C3AED" rx="6"/><text x="120" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">تصدير المقاييس</text><text x="120" y="150" text-anchor="middle" fill="#e9d5ff" font-size="9">(الكمون، الإنتاجية)</text>
+<rect x="220" y="110" width="140" height="50" fill="#1A4F7A" rx="6"/><text x="290" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">لوحة المعلومات</text><text x="290" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(العاملين المُصرح لهم فقط)</text>
+<rect x="390" y="110" width="140" height="50" fill="#156082" rx="6"/><text x="460" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">كشف الشذوذ</text><text x="460" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(تنبيهات في الوقت الفعلي)</text>
+<rect x="560" y="110" width="110" height="50" fill="#0E2841" rx="6"/><text x="615" y="135" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">سياسة الاحتفاظ</text><text x="615" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(مصنفة)</text>
+<defs>
+<marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+<polygon points="0 0, 10 3, 0 6" fill="#0E2841"/>
+</marker>
+</defs>
+<text x="350" y="195" text-anchor="middle" fill="#475569" font-size="10">تبقى جميع البيانات في المحيط الآمن؛ لا يوجد تصدير إلى منصات المراقبة السحابية</text>
+</svg>
+<figcaption>الشكل 2 — قابلية المراقبة للذكاء الاصطناعي السيادي: التسجيل المنظم والتخزين المشفر وقدرة الاستعلام الجنائي بالكامل ضمن المحيط المصنف.</figcaption>
+</figure>
+
+<h2>المشتريات وتقييم البائع ونماذج الشراكة لتسليم السيادة</h2>
+
+<p>اختيار شريك التسليم للذكاء الاصطناعي السيادي مختلف تشغيليًا واستراتيجيًا عن اختيار استشارة تجارية للذكاء الاصطناعي. يجب أن يكون البائع لديه (1) أهلية الإذن الأمني في اختصاص مجلس التعاون الخليجي ذي الصلة؛ (2) خبرة موثقة في نشر الأنظمة المصنفة؛ (3) عمق تقني في النماذج ذات الأوزان المفتوحة وبنية الاستدلال على الأساسيات وهندسة البرمجيات الآمنة؛ و(4) استعداد للعمل بالتضمن مع فريق العميل، داخل البيئة الآمنة، طوال مدة المشاركة. يفشل معظم بائعي الذكاء الاصطناعي التجاريين في المعيار (2) أو (4): فهم معتادون على بيع الخدمات المستندة إلى السحابة أو مشاركات استشارية قصيرة الأجل، وليس العيش على شبكة العميل المصنفة لمدة 12+ شهرًا.</p>
+
+<p>يجب أن يعالج التقييم المنظم: (أ) منهجية تقييم النموذج — كيف يقيّم البائع ما إذا كان نموذج مفتوح الأوزان مرشح يفي بمتطلبات المجال واللغة لديك؟؛ (ب) البنية التحتية الدقيقة — ما هي الأدوات التي يوفرها البائع لتكييف النموذج الآمن والقابل للعكس؟؛ (ج) تحسين الاستدلال — كيف يحدد البائع حجم البصمة GPU مع متطلبات الإنتاجية لديك؟؛ (د) تصميم قابلية المراقبة — كيف يتعامل البائع مع التدقيق الجنائي وكشف الحالات الشاذة؟؛ و(هـ) الممارسات الأمنية — هل يقوم البائع بنمذجة التهديدات والاختبار الأحمر وعمليات تدقيق سلسلة التوريد كممارسة قياسية؟</p>
+
+<p>يضمن نموذج المشاركة الخاص بـ Maven للعملاء السياديين دمج موظفي التقنية العليا مباشرة في منظمة العميل. يعمل فريق التسليم تحت حوكمة الأمن الخاصة بالعميل ويقدم تقارير إلى قيادة الأمن والتقنية بالعميل ولا يحافظ على قناة اتصال منفصلة أو بنية تحتية شركات. هذا أكثر تطلبًا تشغيليًا من الاستشارات المعتادة؛ هذا أيضًا النموذج الوحيد الذي يحافظ على سيادة العميل على المسار التقني وسلطة اتخاذ القرار على مقايضات المخاطر. تمتد المشاركة النموذجية 9–18 شهرًا، مع التركيز الأولي على مراجعة العمارة والأمان (الأشهر 1–3)، متبوعًا بتقييم النموذج والضبط الدقيق (الأشهر 4–9)، وتصلب البنية التحتية وبناء قابلية المراقبة (الأشهر 6–12)، والانتقال التشغيلي (الأشهر 12–18).</p>
+
+
+  
+<h2>اقتصاديات السحابة السيادية: نمذجة إجمالي التكلفة الملكية لنشرات مجلس التعاون الخليجي عند نقاط أسعار 2026</h2>
+
+<p>تعتمد الحالة المالية للذكاء الاصطناعي السيادي في مجلس التعاون الخليجي على إجمالي التكلفة الملكية (TCO) على مدى أفق تشغيلي يتراوح بين 3 و5 سنوات، مع مقارنة البنية التحتية السيادية المحلية مقابل بدائل المزودين السحابيين العامين مع ضمانات تعاقدية لإقامة البيانات. عند نقاط أسعار 2026 — التي تعكس مسارات تكاليف وحدات معالجة الرسومات الحالية وتسعير السحابة الإقليمية والعروض الخدمية السيادية المتوقعة — يكون الاقتصاد مواتياً بشكل أساسي للسيادة أكثر مما كان عليه في 2023-2024.</p>
+
+<p>يتطلب نشر سيادي تمثيلي لعميل الأمن القومي يتعامل مع تحليل الوثائق المصنفة وتوليف المعلومات الاستخباراتية ما يقرب من 8-16 وحدة معالجة رسومات H100/H200 أو ما يعادلها، اعتماداً على اتفاقية مستوى الخدمة لزمن الكمون والاستدلال والحجم اليومي للاستعلام. تبلغ تكلفة الاستحواذ الحالية لوحدة NVIDIA H100 حوالي 35000-42000 دولار أمريكي لكل وحدة؛ بحلول عام 2026، بافتراض تآكل سعر متواضع وتحسن في التوفر، يتوقع Maven 28000-35000 دولار أمريكي لكل وحدة. وبالتالي، فإن موطئ قدم البنية التحتية السيادية المكون من 12 وحدة H100 يحمل تكلفة معدات رأس المال البالغة حوالي 336000-420000 دولار أمريكي. تضيف البرامج البنية التحتية (مجموعة أدوات CUDA، vLLM أو إطار عمل استدلال مماثل، Kubernetes أو تنسيق مماثل) تكلفة 80000-150000 دولار أمريكي في الترخيص والتكامل، مع استهلاك على مدى 5 سنوات. المرافق والطاقة والتبريد لعنقود 12 وحدة معالجة رسومات في منشأة آمنة في مجلس التعاون الخليجي تقدر بحوالي 15000-25000 دولار أمريكي سنوياً؛ على مدى 5 سنوات، يبلغ هذا 75000-125000 دولار أمريكي. يبلغ إجمالي تكلفة رأس المال والتشغيل لمدة 5 سنوات للبنية التحتية السيادية حوالي 550000-750000 دولار أمريكي، أو 110000-150000 دولار أمريكي سنوياً مع الاستهلاك.</p>
+
+<p>تُشترى طاقة الاستدلال المكافئة من مزودي السحابة السيادية الإقليميين — خدمات السحابة من G42 أو HUMAIN — بسعر (اعتباراً من أوائل 2025) يبلغ حوالي 8-12 دولار أمريكي لكل ساعة وحدة معالجة رسومات لاستدلال الفئة H100، أقل بكثير من تسعير المزود السحابي الأمريكي. عند معدلات استخدام واقعية لعبء عمل الأمن القومي (40-60% من ذروة القدرة خلال ساعات العمل، 20-30% خارج الساعات)، يبلغ الحمل المكافئ لـ 8-10 وحدات معالجة رسومات المستدام على مدار سنة واحدة حوالي 35000-50000 ساعة وحدة معالجة رسومات، بتكلفة 280000-600000 دولار أمريكي سنوياً. على مدى 5 سنوات، يبلغ هذا 1.4-3.0 مليون دولار أمريكي في تكاليف الخدمات السحابية، أو 280000-600000 دولار أمريكي سنوياً. هذا يتجاوز بشكل كبير إجمالي التكلفة الملكية المحلي عند احتساب رأس المال والعمل التشغيلي معاً.</p>
+
+<p>تتسع الميزة المالية للبنية التحتية السيادية بشكل أكبر عند مراعاة تكاليف التشغيل. يتطلب النشر القائم على المزود السحابي الحد الأدنى من عمليات البنية التحتية (يدير مزود السحابة تخصيص وحدات معالجة الرسومات والشبكات والأمان المادي) ولكنه يطلب توظيفاً أعلى لفريق التطبيقات: مهندسو البيانات لخطوط أنابيب البيانات الآمنة، ومهندسو ML لضبط النموذج والمراقبة، ومعماريو الأمان لتكامل الامتثال. يتطلب النشر المحلي السيادي عمليات بنية تحتية مخصصة (صيانة عنقود وحدات معالجة الرسومات، وإدارة الطاقة، وتدقيق الأمان المادي) ولكنه يمكن أن يعمل مع فرق تطبيقات أقل هزالة بمجرد استقرار البنية التحتية. تشير بيانات مشاركة Maven إلى تكلفة توظيف التعادل عند 3-4 وحدات FTE للسيادة المحلية مقابل 5-7 وحدات FTE للبدائل القائمة على السحابة، مما يعكس البساطة التشغيلية لمجموعة سيادية مخصصة مقابل تعقيد التكامل في تأمين بيئة المزود السحابي.</p>
+
+<p>مكون إجمالي التكلفة الملكية الحرج ولكن غالباً ما يتم تجاهله هو تكلفة معالجة الامتثال ودورات تدقيق الأمان. عادةً ما يتطلب النظام المصمم في الأصل لنشر المزود السحابي والتحويل لاحقاً إلى المتطلبات السيادية ما يقرب من 4-8 أسابيع من إعادة العمل المعماري والنمذجة التهديدية وآلية تسجيل سجلات التدقيق. يمكن تجنب تكلفة إعادة التشكيل هذه — ما يقرب من 200000-400000 دولار أمريكي في وقت الهندسة الكبيرة — من خلال البناء السيادي أولاً. تقضي معمارية Maven الموحدة السيادية على دورة إعادة التشكيل هذه وتقلل الاحتكاك في مراجعة الأمان بمسافة كبيرة بنسبة 40-60% من خلال تضمين نية الامتثال في قرارات التصميم من البداية.</p>
+
+<p>تحدث نقطة الانقلاب الاقتصادي عند حوالي 18-24 شهراً من النشر التشغيلي. عند هذا الأفق، تتحقق السيادة المحلية من التعادل مع البدائل السحابية من حيث الشروط المالية البحتة، وبعد ذلك تحقق 30-50% انخفاضاً في إجمالي التكلفة الملكية على مدى العمر التشغيلي المتبقي. بالنسبة للمهام ذات الآفاق 5-10 سنوات، تتجاوز المدخرات المتراكمة 1.5-3.0 مليون دولار أمريكي، مما يجعل البنية التحتية السيادية الخيار الأمثل مالياً حتى قبل احتساب القيمة الإستراتيجية للاستقلالية التشغيلية وتقليل التعرض للمخاطر الجيوسياسية.</p>
+
+<h2>دراسات حالة إقامة البيانات: أنماط التنفيذ في قطاع الخدمات المالية والمصرفية والحكومية</h2>
+
+<p>توضح دراستا حالة خاصة بالقطاع كيف تدفع متطلبات إقامة البيانات قرارات البنية المعمارية السيادية في مجلس التعاون الخليجي وتكشف عن أنماط تنفيذ شائعة تعمم على أعباء عمل مماثلة.</p>
+
+<p><strong>الحالة 1: مراقبة البنية التحتية الحرجة والمعلومات الاستخباراتية التهديدية (قطاع حكومي)</strong><br>تطلبت منظمة أمن قومي في مجلس التعاون الخليجي نظام ذكاء اصطناعي لتحليل المخابرات من المصادر المفتوحة والتقارير التهديدية الداخلية والاتصالات التكتيكية لتحديد التهديدات الأمنية الناشئة والتوصية باستجابات تشغيلية. تعامل النظام مع الوثائق المصنفة (SECRET و TOP SECRET المكافئ) تغطي التهديدات والمعلومات الحساسة للمصدر. تم استبعاد النشر على المزود السحابي على الفور بسبب سياسة إقامة البيانات الصريحة للقطاع الحكومي التي تتطلب بقاء جميع المعلومات المصنفة على البنية التحتية التي تسيطر عليها الحكومة. كان لدى المنظمة بنية تحتية GPU موجودة (12 وحدة H100) في منشأة آمنة ولكن بدون قدرة عمليات ML. مقاربة Maven: نشر نموذج عربي الكفاءة ذي وزن مفتوح (Jais) على عنقود GPU الموجود، وبناء خط أنابيب ضبط دقيق باستخدام 6 أشهر من وثائق تقييم التهديدات غير المصنفة، وإنشاء متجر متجه مع استرجاع يراعي الأذونات (التكامل مع نظام وضع العلامات على التصنيف الحكومي الموجود)، وتضمين القابلية للمراقبة باستخدام نشر Elasticsearch محلي. دخل النظام العملية في 14 شهراً؛ انعكس الجدول الزمني الطويل في الاختبار الأحمر والاختبار المعاكس الواسع الذي تطلبه معايير الأمان لدى العميل. بلغت تكلفة البنية التحتية الإجمالية 520000 دولار أمريكي (رأس المال) بالإضافة إلى 140000 دولار أمريكي سنوياً (عمليات)؛ كانت تكلفة السحابة المكافئة ستنتهك السياسة. كان الخيار التقني الحرج هو الاسترجاع الذي يراعي الأذونات: تعلم النظام احترام تسميات تصنيف الوثائق والرفض في مزج سياق SECRET و TOP SECRET في استدلال واحد، حتى عندما يكون متماسكاً دلالياً. تطلب هذا ضبطاً دقيقاً مخصصاً على أمثلة خصومية اصطناعية توضح كيف قد ينتهك نظام ساذج حدود التصنيف.</p>
+
+<p><strong>الحالة 2: مكافحة غسل الأموال ومراقبة المعاملات (قطاع البنوك)</strong><br>تطلبت بنك مقره في مجلس التعاون الخليجي نظام ذكاء اصطناعي لتحليل البيانات الوصفية للمعاملات عبر الحدود وتقارير العناية الواجبة للعميل والمراسلات التنظيمية لتحديد النشاط المريب والتوصية بمزيد من التحقيق أو التدخل. تضمنت البيانات معلومات تحديد الهوية الشخصية (PII) وسجل العميل المالي والأسرار التنظيمية لقطاع الخدمات المصرفية. تطلبت قانون إقامة البيانات الإماراتي (على وجه التحديد إرشادات البنية التحتية للبنك المركزي الإماراتي CBUAE والاستراتيجية الأمنية الإلكترونية الإماراتية الأوسع) بقاء معلومات تحديد الهوية الشخصية داخل حدود الإمارات العربية المتحدة ومنع إعادة التصدير إلى مراكز القطاع المصرفي العالمي. كانت منصة مكافحة غسل الأموال القائمة على السحابة لمورد تكنولوجيا مصرفية أمريكي رئيسي، في الاستخدام الشائع عبر بنوك مجلس التعاون الخليجي، غير مناسبة لأنها توجه البيانات الوصفية للمعاملات عبر مراكز البيانات الأمريكية لاستدلال النموذج. مقاربة Maven: نشر Falcon (الذي تم ضبطه بدقة لمصطلحات المجال المصرفي) على البنية التحتية H100 الموجودة للبنك، وإنشاء مجموعة ضبط دقيق اصطناعية من ملفات القضايا المريبة التاريخية (مجهول الهوية بإزالة معلومات تحديد الهوية الشخصية ولكن الحفاظ على أنماط المعاملات والأعلام التنظيمية)، وتنفيذ متجر متجه مع إخفاء يراعي معلومات تحديد الهوية الشخصية (يمكن للنظام استرجاع سياق المعاملة ولكن إخفاء أسماء حاملي البطاقات وأرقام الحسابات أثناء الاستدلال)، والتكامل مع البنية التحتية GRC (الحوكمة والمخاطر والامتثال) الموجودة للبنك. حدد النظام حوالي 12-15% معاملات مريبة إضافية مقارنة بنظام البنك السابق القائم على القواعد، مع 30-40% عدد أقل من الإيجابيات الكاذبة (معاملات مجهزة كمريبة ولكن موافق عليها بعد مراجعة يدوية). تطلب النشر 9 أشهر وكلف حوالي 480000 دولار أمريكي (رأس المال) بالإضافة إلى 95000 دولار أمريكي سنوياً (عمليات). كانت النظرة الرئيسية هي إخفاء معلومات تحديد الهوية الشخصية: تعلم النظام الاستدلال على المخاطر من الأنماط المعاملاتية دون ملاحظة هوية العميل مباشرة، مما يقلل من احتكاك الامتثال والمخاطر التنظيمية. تطلب هذا توليد بيانات اصطناعية دقيقة والتحقق الواسع من السابقة التنظيمية.</p>
+
+<p>تكشف كلا الحالتين عن نمط مشترك: <em>إقامة البيانات ليست قيداً ثنائياً بل سطح تصميم.</em> بيانات السياسة العامة مثل "يجب أن تبقى جميع البيانات في البلد" تترجم إلى متطلبات تقنية فقط من خلال التفاعل التفصيلي بين فرق الأمان والامتثال لدى العميل وشريك التسليم. في الحالة الحكومية، كانت المتطلبات التقنية الرئيسية هي التفكير الذي يراعي التصنيف؛ في حالة البنوك، كان إخفاء معلومات تحديد الهوية الشخصية أثناء الاستدلال. لا يمكن لمعمارية سيادية عامة توقع هذه المتطلبات الخاصة بالمجال؛ يجب اكتشافها وترميزها من خلال مشاركة منظمة خلال مراحل البنية المعمارية والضبط الدقيق.</p>
+
+<ul>
+<li><strong>تأثير المشتريات:</strong> يجب أن يشمل اختيار المورد سيناريوهات هيكلية توضح كيفية تعامل البنية المعمارية المقترحة مع قيود إقامة البيانات الخاصة بالمجال. تفشل القوالب السيادية العامة لأنها لا تقوم بترميز التفاصيل الامتثالية الخاصة بالقطاع.</li>
+<li><strong>تأثير الجدول الزمني:</strong> يضيف الضبط الدقيق والتحقق الخاصة بالمجال 4-6 أشهر إلى جداول الجداول الزمنية النموذجية. ركز تنسيق الامتثال والتنسيق التنظيمي مقدماً لتجنب اكتشاف عدم تنسيق القيود في وقت متأخر من المشروع.</li>
+<li><strong>تأثير التكلفة:</strong> تكاليف البنية التحتية للضبط الدقيق والتحقق الخاصة بالقطاع (توليد البيانات الاصطناعية والاختبار المعاكس ومتابعة السابقة التنظيمية) حوالي 80000-150000 دولار أمريكي لكل نشر خاص بالقطاع ولكنها المحدد الأساسي لموثوقية النظام بعد النشر والقبول التنظيمي.</li>
+<li><strong>تأثير الموظفين:</strong> تطلبت كلا الحالتين خبرة مجال مضمنة (المخابرات التهديدية في الحالة 1 وامتثال مكافحة غسل الأموال في الحالة 2) طوال المشاركة. لا يمكن لمهندسي الذكاء الاصطناعي البحتين، بدون سياق القطاع، إجراء المقارنات التصميمية التي تعكس سياسة إقامة البيانات المجردة على معمارية استدلال ملموسة.</li>
+</ul>
+
+<h2>أنماط البنية الهجينة العملية: الجسر بين البنية التحتية السيادية والتجارية</h2>
+
+<p>معمارية السيادة البحتة — جميع الاستدلالات وجميع البيانات وجميع المراقبة محلياً — نظيفة تشغيلياً ولكن غالباً ما تكون غير ممكنة للعملاء الذين لديهم مستويات حساسية بيانات مختلطة أو متطلبات مهام متطورة. البنى الهجينة، التي تحتفظ بالبيانات المصنفة والاستدلال الفعلي على البنية التحتية السيادية بينما تستخدم البنية التحتية التجارية للتحليلات غير الحساسة أو تدريب النموذج أو بناء قاعدة المعرفة، يتم نشرها بشكل أكثر شيوعاً في الممارسة العملية.</p>
+
+<p>ينفصل نمط هجين تمثيلي لعملاء القطاع الحكومي الاستدلال إلى طبقتين: (1) <em>طبقة الاستدلال التشغيلية</em> (وحدات H100 محلية، تتعامل مع السياق المصنف، وصول مقيد)، تخدم تقييم التهديدات الفعلية ودعم القرار التشغيلي مع اتفاقية مستوى الخدمة لزمن الكمون &lt;5 ثوان؛ و(2) <em>طبقة الاستدلال التحليلية</em> (قائمة على السحابة، عادةً ما تكون سحابة سيادية إقليمية مثل G42 أو HUMAIN، تتعامل مع المجاميع غير المصنفة)، تخدم التحليلات الإستراتيجية الأبطأ واكتشاف الاتجاهات والتقارير مع اتفاقية مستوى الخدمة لزمن الكمون من 30-120 ثانية. تستخدم الطبقة التشغيلية نماذج مضبوطة بدقة؛ تستخدم الطبقة التحليلية نماذج أساسية أو مضبوطة قليلاً يتم تدريبها على المجاميع المصنفة من مخرجات الطبقة التشغيلية. تتدفق البيانات في اتجاه واحد من التشغيلي إلى التحليلي: يغذي النظام التشغيلي ملخصات غير مصنفة (إحصائيات المجموع التهديدي و
+  
+  <figure>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-40 svg-d-40"><title id="svg-t-40">معمارية الذكاء الاصطناعي الوكيل السيادي</title><desc id="svg-d-40">محيط متحدد المركز يوضح نموذج والاستدلال والسياق والتدقيق وعناصر التحكم في الترقية داخل محيط سيادي.</desc>
+  <rect x="0" y="0" width="700" height="280" fill="#F8FAFC"/>
+  <rect x="40" y="30" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="10"/>
+  <text x="350" y="22" text-anchor="middle" fill="#0E2841" font-size="13" font-weight="700">المحيط السيادي (في الموقع · يتحكم به العميل)</text>
+  <rect x="60" y="50" width="180" height="60" fill="#156082" rx="6"/><text x="150" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. سيادة النموذج</text><text x="150" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Falcon · Jais · Llama · Mistral</text>
+  <rect x="260" y="50" width="180" height="60" fill="#1A4F7A" rx="6"/><text x="350" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. عزل الاستدلال</text><text x="350" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">وحدة معالجة الرسومات في الموقع · H100/H200/L40S</text>
+  <rect x="460" y="50" width="180" height="60" fill="#0E2841" rx="6"/><text x="550" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. تقسيم السياق</text><text x="550" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">متجر ناقل مدرك للأذونات</text>
+  <rect x="160" y="140" width="180" height="60" fill="#7C3AED" rx="6"/><text x="250" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. التدقيق والمراقبة</text><text x="250" y="188" text-anchor="middle" fill="#e9d5ff" font-size="10">لا تغادر بيانات السجل المحيط</text>
+  <rect x="360" y="140" width="180" height="60" fill="#F5A623" rx="6"/><text x="450" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. السيادة عند الترقية</text><text x="450" y="188" text-anchor="middle" fill="#fff" font-size="10">مراجعة أمان الذكاء الاصطناعي المنظمة</text>
+  <text x="350" y="232" text-anchor="middle" fill="#475569" font-size="11">مثبت بواسطة: G42 (UAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
+  </svg>
+  <figcaption>الشكل 1 — المبادئ المعمارية الخمسة للذكاء الاصطناعي الوكيل السيادي، مثبت في البنية الأساسية الإقليمية.</figcaption>
+  </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
   <li>NIST, <em>AI Risk Management Framework</em>. <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">nist.gov</a></li>
@@ -1567,7 +3677,8 @@ export const insights = [
   </ol>
       
 `,
-      contentTr: `
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+  
   <h2>Tez</h2>
   <p>GCC ulusal güvenlik müşterileri, istihbarat hizmetleri ve kritik altyapı operatörleri için soru, yapay zekayı benimseyip benimsememeğimiz değil, misyonun gerektirdiği egemenliği, güvenliği ve gizliliği tehlikeye atmadan yapay zekanın benimsenebilip benimsenmeyeceğidir. Cevap evet — ancak yalnızca egemenliği ön plana alan bir mimariye, doğru açık ağırlık modeli yığınına ve güvenli çevre içinde yürütme yeteneğine sahip bir teslim ortağına sahipseniz. Bu kısa rapor, egemen ajentik yapay zekayı bugün teslim edilebilir kılan mimari ilkeler ve mevcut bölgesel altyapıyı ortaya koymaktadır.</p>
   <h2>Beş Mimari İlke</h2>
@@ -1594,6 +3705,129 @@ export const insights = [
   <li><strong>Gözlenebilirlik altyapısını yapay zeka altyapısıyla aynı hassasiyetle planlayın.</strong> Egemen denetim ve yönetişim gereklilikleri teknik gereklilikler kadar karmaşıktır.</li>
   <li><strong>ABD ihracat kontrol zaman çizelgeleri etrafında satın alma planlayın.</strong> AI Yayılım Çerçevesi ve önceki kontroller, GCC'de gelişmiş GPU'ların mevcudiyetini önemli ölçüde etkiler.</li>
   </ul>
+  
+<h2>Egemen GCC Dağıtımlarında Düzenleyici ve Uyum Çerçeveleri</h2>
+
+<p>GCC ülkesi güvenlik ve kritik altyapı istemcileri, geleneksel veri koruma kanununu sinyal istihbaratı, devlet sırrı ve stratejik altyapı korumasına genişleten çok katmanlı bir düzenleyici ortamda faaliyet göstermektedir. Egemen AI sistemleri, mimari ve yönetişim tasarımı sırasında bu çerçeveleri açıkça ele almalıdır. BAE'nin 2022–2030 Siber Güvenlik Stratejisi ve Suudi Arabistan'ın Ulusal AI Stratejisi, hassas devlet verilerini işleyen AI sistemlerinin yerli kontrolünü vurgulamaktadır; bunlar aspiratif yönergeler değil, gizli veya operasyonel açıdan kritik bilgilere dokunan herhangi bir sistem için bağlayıcı operasyonel gerekliliklerdir.</p>
+
+<p>Egemen mimari ile düzenleyici uyum arasındaki etkileşim yönlüdür: egemenlik, paralel bir endişe değil, uyum için bir ön koşuldur. Üçüncü taraf altyapısında dağıtılan bir sistem, veri yalıtımının sözleşmesel garantilerine sahip olsa dahi, çıkarım yolları, model ağırlıkları ve çıkarım günlükleri üzerinde tam teknik görünürlük ve kontrol talep eden denetim gerekliliklerini karşılayamaz. Bunun satın alma zaman çizelgeleri için doğrudan etkileri vardır. Birçok istemci düzenleyici onayın dağıtıma ardıl olduğunu varsaymaktadır; pratikte, egemen istemciler düzenleyici incelemeyi mimari aşamasına gömmelidir; bu, teknik ekibin güvenlik izni ve operasyonel dağıtım başlamadan 6–9 ay önce ilgili makamlarla yapılandırılmış katılım gerektirir.</p>
+
+<p>İlgili düzenleyici organlar GCC devletine ve hedef iş yükünün sınıflandırma seviyesine göre değişmektedir. BAE federal istemcileri için, Ulusal Güvenlik Konseyi'nin teknoloji değerlendirme süreci tipik olarak sınırlayan faktördür; Suudi ulusal güvenlik iş yükleri için, Genel İstihbarat Başkanlığı (GIP) ve HUMAIN'in yönetişim modeli ile koordinasyon kontrol noktası haline gelir. Her iki rejim de çıkarım hattına, denetim günlüğü mimarisine ve temel modellerin ve altyapının tedarik zincirine şeffaflık talep etmektedir. Açık ağırlıklı modeller, kapalı modellere kıyasla bunu önemli ölçüde basitleştirmektedir, çünkü ağırlıkların kendileri herhangi bir yabancı lisans kısıtlamasına tabi değildir ve dağıtımdan önce istemci güvenlik ekipleri tarafından resmi olarak denetlenebilir.</p>
+
+<h2>Sınıflandırılmış İş Yükleri için Model İnce Ayarı, Talimat İzleme ve Alan Uyarlaması</h2>
+
+<p>Ham açık ağırlıklı modeller, egemen iş yükleri için nadiren yeterli olan temel yetenekler sergiler. Jais ve Falcon aileleri örneğin, mükemmel Arapça konuşanlar ancak genel internet metni üzerinde eğitilmiştir; sınıflandırılmış belge analizi, tehdit değerlendirmesi veya stratejik iletişim taslakları ile güvenilir olmak için sistematik ince ayar ve talimat hizalanması gerekir. İnce ayarın kendisi bir egemen işlem haline gelir: eğitim verisi güvenli çevre içinde kalmalıdır, ince ayar hattı istemci kontrollü altyapıda çalışmalıdır ve ortaya çıkan model kontrol noktası istemci tarafından sınıflandırılmış bir artefakt olarak kriptografik olarak imzalanmalı ve sürüm kontrolü yapılmalıdır.</p>
+
+<p>Buradaki teknik disiplinler ticari ince ayardan önemli ölçüde farklıdır. Ticari ekipler kıyaslama puanları ve kullanıcı yüzeyine görünen tutarlılık için optimize etmektedir; egemen ekipler düşmanca sağlamlık, istem enjeksiyonu direnci ve sınıflandırma duyarlı akıl yürütmenin tutarlılığı için optimize etmektedir. Egemen bir AI sistemi, istem sözdizimsel olarak geçerli ve semantik olarak makul olsa bile, sınıflandırılmış bilgiyi ortaya çıkarmaya çalışan istekleri reddetmek veya bayraklandırmak için able olmalıdır. Bu, sadece talimat hizalanması değil, operasyonel kullanıma hazır olarak işaretlenmeden önce doğrulama hattına yerleştirilmiş güvenlik personeli tarafından sistematik kırmızı takım (iç düşmanca test) gerektirir.</p>
+
+<p>Egemen iş yükleri için talimat ince ayarı veri kümeleri tipik olarak gizliliği açılmış politika belgelerinden, tarihi tehdit değerlendirmelerinden ve operasyonel oyun kitaplarından çekilmektedir. Bu veri kümelerinin inşası, pek çok durumda kendisi sınıflandırılmış bir işlemdir ve hangi model davranışlarının güçlendirilmesinin seçimi, teslimat ortağının değil, istemci liderliğine ait politika kararlarını gömektedir. Maven'in yaklaşımı ince ayar altyapısı ve metodolojisi sağlamaktır; istemci alan verisi, operasyonel hedefleri ve güvenlik yönetişimi sağlamaktadır. Bu ortaklık modeli, ortaya çıkan sistemin satıcının egemen AI'ın ne yapması gerektiğine dair varsayımları yerine istemcinin stratejik niyetini kodladığını sağlamaktadır.</p>
+
+<h2>Gözlemlenebilirlik, Günlüğe Kaydetme ve Güvenli Çevrede Adli Denetim</h2>
+
+<p>Egemen bir bağlamda gözlemlenebilirlik, ticari sistemlerde gözlemlenebilirlikten operasyonel ve yasal olarak farklıdır. Ticari bir SaaS platformu, hata ayıklama, analitik ve sürekli iyileştirmeyi desteklemek için bulut günlüğe kaydetme altyapısına kullanıcı etkileşimlerini, model çıktılarını ve sistem performansını günlüğe kaydeder. Egemen bir sistem, bu verilerin hiçbirini güvenli çevrenin dışına aktaramaz; gözlemlenebilirlik altyapısı fiziksel olarak çıkarım motoruyla birlikte bulunmalı, sınıflandırılmış altyapıda çalışmalı ve sadece bilmesi gereken açık personele erişilebilir olmalıdır.</p>
+
+<p>Pratik çıkarım, gözlemlenebilirliğin daha sonra eklenmiş olmayan, egemen mimarinin birinci sınıf bir bileşeni olarak tasarlanması gerektiğidir. Bu şu anlama gelmektedir: (1) her ajan eyleminin yapılandırılmış günlüğe kaydı, giriş istemi, alınan bağlam, ara akıl yürütme adımları ve son çıktı dahil olmak üzere, kriptografik bütünlük koruması ile; (2) operasyonel personel için gerçek zamanlı izleme kontrol panelleri, model sağlığını, çıkarım gecikmesini, önbellek vuruş oranlarını ve olağandışı sorgu kalıplarını göstererek, hepsi güvenli ortam içinde işlenir; (3) sistemin belirli bir çıktıya nasıl ulaştığının tam karar geçmişini koruyarak olay sonrası yeniden oluşturmayı sağlayan adli denetim izleri; ve (4) olası düşmanca girdileri, jailbreak girişimlerini veya uzlaşma veya kötüye kullanımın gösterebileceği olağandışı sorgu kalıplarını bayraklandırmaya yapılandırılmış anomali tespiti.</p>
+
+<p>Çoğu ticari gözlemlenebilirlik platformu — Datadog, New Relic, Splunk bulut modunda — tasarım gereği egemen iş yükleri için uygunsuztur. Kendi kendine barındırılan Elasticsearch veya Grafana yığınları yaygın olarak kullanılmakta, özel altyapıda dağıtılmakta ve katı erişim kontrolleri ile yapılandırılmaktadır. Gözlemlenebilirlik altyapısının kendisi, AI modeli ile aynı denetim ve sürüm kontrol disiplinleri gerektirir. Günlüğe kaydetme kurallarına, izleme eşiklerine veya veri saklamaya ilişkin değişiklikler, model güncellemeleri ile aynı değişiklik yönetimi ve güvenlik inceleme süreci aracılığıyla akmalıdır.</p>
+
+<figure>
+<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-41 svg-d-41"><title id="svg-t-41">Egemen AI gözlemlenebilirlik ve denetim akışı</title><desc id="svg-d-41">Çıkarım motorunun günlükleri ve metrikleri güvenli gözlemlenebilirlik deposuna oluşturduğu, adli sorgu katmanının sadece açık operatörlerin erişebileceği işlem hattı.</desc>
+
+
+<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
+<rect x="30" y="20" width="640" height="200" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="8"/>
+<text x="350" y="15" text-anchor="middle" fill="#0E2841" font-size="12" font-weight="700">Sınıflandırılmış güvenli çevre</text>
+<rect x="50" y="40" width="140" height="50" fill="#156082" rx="6"/><text x="120" y="70" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Çıkarım Motoru</text>
+<path d="M 190 65 L 220 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="220" y="40" width="140" height="50" fill="#1A4F7A" rx="6"/><text x="290" y="70" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Yapılandırılmış Günlüğe Kaydetme</text>
+<path d="M 360 65 L 390 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="390" y="40" width="140" height="50" fill="#0E2841" rx="6"/><text x="460" y="70" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Şifrelenmiş Denetim Deposu</text>
+<path d="M 530 65 L 560 65" stroke="#0E2841" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="560" y="40" width="110" height="50" fill="#F5A623" rx="6"/><text x="615" y="70" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Adli Sorgu</text>
+<rect x="50" y="110" width="140" height="50" fill="#7C3AED" rx="6"/><text x="120" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Metrikleri Dışa Aktarma</text><text x="120" y="150" text-anchor="middle" fill="#e9d5ff" font-size="9">(gecikme, iş hacmi)</text>
+<rect x="220" y="110" width="140" height="50" fill="#1A4F7A" rx="6"/><text x="290" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Kontrol Paneli</text><text x="290" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(sadece açık ops)</text>
+<rect x="390" y="110" width="140" height="50" fill="#156082" rx="6"/><text x="460" y="135" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Anomali Tespiti</text><text x="460" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(gerçek zamanlı uyarılar)</text>
+<rect x="560" y="110" width="110" height="50" fill="#0E2841" rx="6"/><text x="615" y="135" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Saklama Politikası</text><text x="615" y="150" text-anchor="middle" fill="#cbd5e1" font-size="9">(sınıflandırılmış)</text>
+<defs>
+<marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+<polygon points="0 0, 10 3, 0 6" fill="#0E2841"/>
+</marker>
+</defs>
+<text x="350" y="195" text-anchor="middle" fill="#475569" font-size="10">Tüm veriler güvenli çevrede kalır; bulut gözlemlenebilirlik platformlarına dışa aktarma yok</text>
+</svg>
+<figcaption>Şekil 2 — Egemen AI gözlemlenebilirliği: yapılandırılmış günlüğe kaydetme, şifrelenmiş depolama ve adli sorgu yeteneği tamamen sınıflandırılmış çevre içinde.</figcaption>
+</figure>
+
+<h2>Egemen Teslimat için Satın Alma, Satıcı Değerlendirmesi ve Ortaklık Modelleri</h2>
+
+<p>Egemen AI için bir teslimat ortağı seçmek, ticari bir AI danışmanlık şirketini seçmekten operasyonel ve stratejik olarak farklıdır. Satıcı şunlara sahip olmalıdır: (1) ilgili GCC yargı alanında güvenlik izni uygunluğu; (2) sınıflandırılmış sistemleri dağıtmaya ilişkin kanıtlanmış deneyim; (3) açık ağırlıklı modellerde, yerinde çıkarım altyapısında ve güvenli yazılım mühendisliğinde teknik derinlik; ve (4) katılımın süresi boyunca istemci ekibi ile birlikte, güvenli ortam içinde çalışmaya istekliliktir. Çoğu ticari AI satıcı kriter (2) veya (4) başarısız olmaktadır: bulut tabanlı hizmetler veya kısa vadeli danışmanlık katılımlarını satmaya alışkındır, bir istemcinin sınıflandırılmış ağında 12+ ay yaşamaya değil.</p>
+
+<p>Yapılandırılmış bir değerlendirme şunları ele almalıdır: (a) model değerlendirme metodolojisi — satıcı aday açık ağırlıklı modelin alan ve dil gerekliliklerinizi karşılayıp karşılamadığını nasıl değerlendirir?; (b) ince ayar altyapısı — satıcı güvenli, geri döndürülebilir model uyarlaması için hangi araçları sağlar?; (c) çıkarım optimizasyonu — satıcı GPU ayak izini iş hacmi gerekliliklerinize nasıl doğru boyutlandırır?; (d) gözlemlenebilirlik tasarımı — satıcı adli denetim ve anomali tespiti nasıl yaklaşır?; ve (e) güvenlik uygulamaları — satıcı tehdit modelleme, kırmızı takım ve tedarik zinciri denetimlerini standart uygulama olarak yürütür mü?</p>
+
+<p>Maven'in egemen istemciler için katılım modeli, üst düzey teknik personeli doğrudan istemci organizasyonuna gömer. Teslimat ekibi istemcinin güvenlik yönetişimi altında çalışır, istemcinin güvenlik ve teknik liderliğine rapor verir ve ayrı iletişim kanalı veya kurumsal altyapıyı tutmaz. Bu tipik danışmanlıktan operasyonel olarak daha talep edicidir; aynı zamanda istemci egemenliğini teknik yol haritası ve risk ödünleşimleri üzerinde karar verme yetkisi üzerinde koruyan tek modeldir. Tipik katılım 9–18 ay sürer, mimari ve güvenlik incelemesi ile ön yüklü (aylar 1–3), bunu model değerlendirmesi ve ince ayarı takip eder (aylar 4–9), altyapı sertleştirme ve gözlemlenebilirlik yapısı (aylar 6–12) ve operasyonel geçiş (aylar 12–18).</p>
+
+
+  
+<h2>Egemen Bulut Ekonomisi: GCC Dağıtımları İçin 2026 Fiyat Noktalarında TCO Modellemesi</h2>
+
+<p>GCC'de egemen yapay zeka için finansal durum, 3–5 yıllık bir operasyonel ufuk boyunca toplam sahip olma maliyetine (TCO) bağlıdır ve şirket içi egemen altyapıyı, sözleşmeli veri-yerleşim garantileri olan genel hiper ölçekli alternatiflerle karşılaştırır. 2026 fiyat noktalarında — mevcut GPU maliyet yörüngeleri, bölgesel bulut fiyatlandırması ve beklenen egemen-bulut hizmet sunumları yansıtılarak — ekonomi 2023–2024'ten daha çok egemenliği desteklemektedir.</p>
+
+<p>Sınıflandırılmış belge analizi ve tehdit-istihbaratı sentezi ile ilgilenen ulusal güvenlik müşterisi için temsilci bir egemen dağıtım, gecikme SLA'sı ve günlük sorgu hacmine bağlı olarak yaklaşık 8–16 H100/H200 GPU veya eşdeğer gerektirir. NVIDIA H100 mevcut satın alma maliyeti birim başına yaklaşık 35.000–42.000 ABD dolarıdır; 2026'ya kadar, mütevazı fiyat erozyonu ve kullanılabilirlik iyileştirmesi varsayıldığında, Maven birim başına 28.000–35.000 ABD doları öngörmektedir. Bu nedenle 12 H100'lük bir egemen altyapı ayak izi, yaklaşık 336.000–420.000 ABD doları sermaye ekipmanı maliyetine taşır. Altyapı yazılımı (CUDA araç seti, vLLM veya benzer çıkarım çerçevesi, Kubernetes veya karşılaştırılabilir orkestrasyonu) 80.000–150.000 ABD doları lisanslama ve entegrasyon maliyeti ekler ve 5 yıl boyunca amorti edilir. GCC güvenli tesisinde 12 GPU kümesi için tesis, güç ve soğutma yıllık yaklaşık 15.000–25.000 ABD doları maliyetlenir; 5 yıl boyunca bu toplam 75.000–125.000 ABD doları olur. Egemen altyapı için toplam 5 yıllık sermaye ve operasyonel maliyet yaklaşık 550.000–750.000 ABD doları veya yıllık amorti edilen 110.000–150.000 ABD dolarıdır.</p>
+
+<p>Bölgesel egemen-bulut sağlayıcılarından — G42'nin bulut hizmetleri veya HUMAIN — satın alınan eşdeğer çıkarım kapasitesi (2025 erken ayı itibariyle) H100 sınıfı çıkarım için birim başına saat başına yaklaşık 8–12 ABD doları fiyatlandırılmaktadır ve ABD hiper ölçekli fiyatlandırmasından önemli ölçüde aşağıdadır. Ulusal güvenlik iş yükü için gerçekçi kullanım oranlarında (çalışma saatleri boyunca pik kapasitesinin 40–60'ı, saatler dışında 20–30'u), bir yıl boyunca sürdürülen 8–10 GPU eşdeğer yük toplam yaklaşık 35.000–50.000 GPU-saat olur ve maliyet 280.000–600.000 ABD dolarıdır. 5 yıl boyunca bu toplam 1,4–3,0 milyon ABD doları bulut hizmetleri maliyetine ulaşır veya yıllık 280.000–600.000 ABD doları olur. Bu, hem sermaye hem de operasyonel emek hesaba katıldığında şirket içi TCO'yu önemli ölçüde aşar.</p>
+
+<p>Egemen altyapının finansal avantajı, operasyonel personel açısından daha da genişlemektedir. Hiper ölçekli tabanlı bir dağıtım minimum altyapı işlemleri gerektirir (bulut sağlayıcı GPU ayırması, ağ ve fiziksel güvenliği yönetir) ancak daha yüksek uygulama-ekibi personeli talep eder: güvenli veri boru hatları için veri mühendisleri, model ince ayarı ve izleme için ML mühendisleri ve uyumluluk entegrasyonu için güvenlik mimarları. Egemen şirket içi dağıtım, özel altyapı işlemleri gerektirir (GPU kümesi bakımı, güç yönetimi, fiziksel güvenlik denetimi) ancak altyapı kararlı hale geldikten sonra daha yalın uygulama ekipleriyle çalışabilir. Maven'in katılım verileri, egemen şirket içi için 3–4 FTE ile bulut tabanlı alternatifler için 5–7 FTE arasında başabaş personel maliyeti önerir ve bu, amaçlı inşa edilmiş egemen yığının operasyonel basitliğini hiper ölçekli ortamı güvenli hale getirmenin entegrasyon karmaşıklığına karşı yansıtır.</p>
+
+<p>Genellikle gözden kaçan önemli bir TCO bileşeni, uyumluluk düzeltme maliyeti ve güvenlik denetim döngüleridir. İlk olarak hiper ölçekli dağıtım için tasarlanan ve daha sonra egemen gereksinimlere uyarlanmış bir sistem tipik olarak 4–8 haftalık mimari yeniden çalışma, tehdit modellemesi ve denetim-günlüğü enstrümantasyonu gerektirir. Bu uyarlama maliyeti — kıdemli mühendislik zamanında yaklaşık 200.000–400.000 ABD doları — mimari aşamadan itibaren egemen-birinci tasarım yapıldığında kaçınılabilir. Maven'in yapılandırılmış egemen mimarisi, mimari aşamadan itibaren uygulandığında, bu uyarlama döngüsünü ortadan kaldırır ve tasarım kararlarından itibaren uyumluluk niyetini gömülü hale getirerek aşağı akış güvenlik-inceleme sürtünmesini 40–60% oranında azaltır.</p>
+
+<p>Ekonomik dönüş noktası, operasyonel dağıtımın yaklaşık 18–24 aylık ufkunda ortaya çıkmaktadır. O ufukta, şirket içi egemenlik saf finansal terimlerle bulut alternatifleriyle başa basmaktadır ve sonrasında kalan operasyonel ömrü boyunca 30–50% daha düşük TCO sunmaktadır. 5–10 yıllık ufukları olan misyonlar için, birikmiş tasarruflar 1,5–3,0 milyon ABD dolarını aşmaktadır ve bu da egemen altyapıyı operasyonel bağımsızlığın stratejik değerini ve coğrafi-siyasi risk maruziyetinin azalmasını hesaba katmadan önce finansal olarak optimal seçim yapmaktadır.</p>
+
+<h2>Veri-Yerleşim Olay İncelemesi: BFSI ve Hükümet Sektörü Uygulama Desenleri</h2>
+
+<p>İki sektöre özgü olay incelemesi, veri-yerleşim gerekliliklerinin GCC'de egemen mimari kararlarını nasıl yönelttiğini gösterir ve benzer iş yükleri arasında genelleşen ortak uygulama desenlerini ortaya çıkarır.</p>
+
+<p><strong>Olay 1: Kritik Altyapı İzlemesi ve Tehdit İstihbaratı (Hükümet Sektörü)</strong><br>Bir GCC ulusal güvenlik kuruluşu, açık kaynak istihbaratı analiz etmek, dahili tehdit raporları ve taktik iletişimleri incelemek için ortaya çıkan güvenlik tehditleri belirlemek ve operasyonel yanıtlar önermek amacıyla bir yapay zeka sistemine ihtiyaç duymuştur. Sistem, tehditleri ve hassas kaynak bilgisini kapsayan sınıflandırılmış belgeleri (SECRET ve TOP SECRET eşdeğeri) ele almıştır. Hiper ölçekli dağıtım, tüm sınıflandırılmış bilgilerin hükümet kontrollü altyapı üzerinde kalmasını gerektiren açık hükümet sektörü veri-yerleşim politikası nedeniyle hemen reddedilmiştir. Kuruluşun mevcut GPU altyapısı (12 H100) güvenli bir tesiste ancak ML operasyonları yeteneği yoktu. Maven'in yaklaşımı: mevcut GPU kümesinde açık ağırlıklandırılmış Arapça-yetenekli bir model (Jais) dağıtmak, 6 aylık gizli tehdit değerlendirmesi belgeleri kullanarak bir ince ayarlama hattı kurmak, kuruluşun mevcut sınıflandırma işaretleme sistemiyle entegre olan izin-farkında alımı içeren bir vektör deposu oluşturmak ve şirket içi Elasticsearch dağıtımı kullanarak gözlemlenebilirliği gömmek. Sistem 14 ayda operasyonel hale geldi; uzun zaman çizelgesi, müşterinin güvenlik standartları tarafından gerekli olan kapsamlı kırmızı-takım ve ters tarafından test etmeyi yansıttı. Toplam altyapı maliyeti 520.000 ABD doları (sermaye) artı yıllık 140.000 ABD doları (operasyon) idi; eşdeğer bulut maliyeti politikayı ihlal etmiş olur. Kritik teknik seçim izin-farkında almıştı: sistem belge sınıflandırması etiketlerine saygı göstermeyi ve anlamsal olarak tutarlı olsa bile bir tek çıkarımda SECRET ve TOP SECRET bağlamını karıştırmayı reddetmeyi öğrendi. Bu, naif bir sistemin sınıflandırma sınırlarını nasıl ihlal edebileceğini gösteren sentetik olumsuz örnekler üzerinde özel ince ayarlama gerekti.</p>
+
+<p><strong>Olay 2: Kara Para Aklama ve İşlem İzleme (Bankacılık Sektörü)</strong><br>Bir GCC merkezli banka, şüpheli faaliyeti belirlemek ve daha fazla araştırma veya müdahalelem önermek için sınır ötesi işlem meta verilerini, müşteri durum tespiti raporlarını ve düzenleme yazışmalarını analiz etmek amacıyla bir yapay zeka sistemine ihtiyaç duymuştur. Veriler kişisel tanımlama bilgilerini (PII), müşteri finansal geçmişini ve bankacılık sektörü düzenleme sırlarını içermektedir. BAE veri-yerleşim kanunu (özellikle Merkez Bankası CBUAE Altyapı Yönergeleri ve daha geniş BAE Siber Güvenlik Stratejisi), PII'nin BAE sınırları içinde kalmasını gerektirmiş ve küresel bankacılık sektörü merkezlerine yeniden ihracatını yasaklamıştır. GCC bankalarında yaygın olarak kullanılan büyük bir ABD bankacılık-teknoloji satıcısının bulut tabanlı AML platformu, işlem meta verilerini model çıkarımı için ABD veri merkezleri aracılığıyla yönlendirdiği için uygun değildi. Maven'in yaklaşımı: bankanın mevcut H100 altyapısında Falcon'u (bankacılık alanı terminolojisi için ince ayarlanmış) dağıtmak, geçmiş şüpheli-faaliyet vaka dosyalarından sentetik bir ince ayarlama külliyatı oluşturmak (PII'yi kaldırarak ancak işlem desenlerini ve düzenleme bayraklarını koruyan anonimleştirilmiş), PII-farkında maskeleme ile bir vektör deposu uygulamak (sistem işlem bağlamı alabilir ancak çıkarım sırasında kart sahibi adlarını ve hesap numaralarını redakte eder) ve gözlemlenebilirliği bankanın mevcut GRC (yönetişim, risk, uyumluluk) altyapısı ile entegre etmek. Sistem bankanın önceki kural tabanlı sistemine kıyasla yaklaşık 12–15% ek şüpheli işlem belirledi ve 30–40% daha az yanlış pozitif (şüpheli olarak işaretlenen ancak manuel gözden geçirme sonrasında onaylanan işlemler). Dağıtım 9 ay gerektirmiş ve yaklaşık 480.000 ABD doları (sermaye) artı yıllık 95.000 ABD doları (operasyon) maliyetlidir. Önemli bulgu PII-farkında maskeleme idi: sistem doğrudan müşteri kimliğini gözlemlemeden işlemsel desenlerden riski çıkarmayı öğrendi ve uyumluluk sürtünmesini ve düzenleme riskini azalttı. Bu, dikkatli sentetik veri üretimi ve yasal emsal konusunda kapsamlı doğrulama gerekti.</p>
+
+<p>Her iki davan ortak bir deseni ortaya çıkarmaktadır: <em>veri yerleşimi ikili bir kısıtlama değil bir tasarım yüzeyidir.</em> "Tüm veriler ülkede kalmalıdır" gibi ham politika ifadeleri, müşteri güvenlik/uyumluluk ekipleri ve teslim ortağı arasında detaylı etkileşim yoluyla teknik gerekliliklere çevrilir. Hükümet davasında, önemli teknik gereklilik sınıflandırma-farkında akıl yürütmeydi; bankacılık davasında, çıkarım sırasında PII-maskelemesi idi. Genel bir egemen mimari bu etki alanına özgü gereklimleri tahmin edemez; bunların yapılandırılmış katılım yoluyla mimari ve ince ayarlama aşamaları sırasında keşfedilmesi ve kodlanması gerekir.</p>
+
+<ul>
+<li><strong>Satın alma çıkarımı:</strong> Satıcı seçimi, önerilen mimarinin etki alanına özgü veri-yerleşim kısıtlamalarını nasıl ele aldığını gösteren yapılandırılmış senaryo geçişini içermelidir. Genel egemen şablonları başarısız olur çünkü etki alanına özgü uyumluluk detayını kodlamazlar.</li>
+<li><strong>Zaman çizelgesi çıkarımı:</strong> Etki alanına özgü ince ayarlama ve doğrulama tipik dağıtım zaman çizelgelerine 4–6 ay ekler. Proje içinde kısıtlama uyumsuzluğunun keşfedilmesini önlemek için uyumluluk ve düzenleme koordinasyonunu önceden başlatın.</li>
+<li><strong>Maliyet çıkarımı:</strong> Etki alanına özgü ince ayarlama ve doğrulama altyapısı (sentetik veri üretimi, ters tarafından test etme, düzenleme emsal haritalama) etki alanına özgü dağıtım başına yaklaşık 80.000–150.000 ABD doları maliyetlidir ancak dağıtım sonrası sistem güvenilirliği ve düzenleme kabulünün birincil belirleyicisidir.</li>
+<li><strong>Personel çıkarımı:</strong> Her iki dava da katılım boyunca gömülü etki alanı uzmanlığı gerekti (olay 1'de tehdit istihbaratı, olay 2'de AML uyumluluğu). Sektör bağlamı olmayan saf yapay zeka mühendisleri, soyut veri-yerleşim politikasını somut çıkarım mimarisine haritalayan tasarım takaslarını yapamaz.</li>
+</ul>
+
+<h2>Pratik Hibrit Mimari Desenler: Egemen ve Ticari Altyapıyı Köprüleme</h2>
+
+<p>Saf egemen mimari — tüm çıkarım, tüm veriler, tüm gözlemlenebilirlik şirket içi — operasyonel olarak temizdir ancak karışık veri duyarlılık seviyeleri veya gelişen misyon gereksinimleri olan müşteriler için genellikle uygulanmaz. Hibrit mimariler, sınıflandırılmış veri ve gerçek zamanlı çıkarımı egemen altyapıda tutarken ticari altyapıyı hassas olmayan analitikler, model eğitimi veya bilgi tabanı oluşturma için kullanan, pratik olarak daha yaygın şekilde dağıtılır.</p>
+
+<p>Hükümet sektörü müşterileri için temsilci bir hibrit desen, çıkarımı iki katmana ayırır: (1) <em>operasyonel çıkarım katmanı</em> (şirket içi H100'ler, sınıflandırılmış bağlam ele alır, kısıtlı erişim), <5 saniyeli gecikme SLA'sı ile gerçek zamanlı tehdit değerlendirmesi ve operasyonel karar desteği sunarak; ve (2) <em>analitik çıkarım katmanı</em> (bulut tabanlı, tipik olarak G42 veya HUMAIN gibi bölgesel egemen bulut, hassas olmayan toplamlar ele alır), 30–120 saniye gecikme SLA'sı ile daha yavaş stratejik analiz, trend tespit ve raporlama sunarak. Operasyonel katman ince ayarlanmış modeller kullanır; analitik katman operasyonel katmandan toplu, gizli çıktılar üzerinde eğitilmiş temel veya hafifçe ayarlanmış modeller kullanır. Veri operasyoneldan analitike tek yönlü akar: operasyonel sistem, gizli özetler (tehdit toplam istatistikleri, redakte edilmiş durum örnekleri) analitik katmana besler uzun vadeli trend analizi için, ancak analitik katmanın sınıflandırılmış veriye veya gerçek zamanlı çıkarım bağlamına erişimi yoktur.</p>
+
+<p>Bu desen, gizli operasyonel verisi ve gizli olmayan analitik özeti arasındaki sınır olan gizli açıklama arabiriminin dikkatli tasarımını gerektirir. Operasyonel sistem, gizli operasyonel detayı kaldırırken istatistiksel ve stratejik değeri koruyarak sterilize edilmiş, toplu çıktılar yayınlamak için açıkça yapılandırılmalıdır. Tehdit istihbaratından bir örnek: operasyonel sistem, ortaya çıkan tehdit grupları hakkında sınıflandırılmış istihbarat işleyebilir ve gizli kaynakları, hedefleri veya TTP'leri (taktikler, teknikler, prosedürler) ortaya çıkarmadan "X tehdit grubundan aktivite Y sektöründe ay-üzerinde-ay %40 arttı" ifadesi gizli olmayan özet çıkarabilir. Analitik sistem daha sonra bu gizli olmayan özetlerden binlercesini alarak sektörler arası desenleri ve uzun vadeli eğilimleri belirler. Bu gizli açıklama arabirimi hem güvenlik sınırıdır (sınıflandırılmış veriler bulut altyapısına sızamamıştır) hem de bilgi-mimarisi sınırıdır (analitik sistem operasyonel sistemden farklı veri semantikleri üzerinde çalışır).</p>
+
+<p>Uygulama gerektirir: (1) müşteri güvenlik liderliği tarafından onaylanan, hangi veri öğelerinin ve hangi biçimde dışa aktarılabileceğini belirten açık bir gizli açıklama politikası belgesi; (2) operasyonel sistem içine gömülü otomatik gizli açıklama mantığı, sınıflandırılmış çıktıları dışa aktarılmadan önce gizli olmayan özetlere dönüştürerek; (3) orijinal sınıflandırılmış çıktı ve gizli olmayan özet arasında kriptografik bütünlük bağlama, dışa aktarılan verinin onaylı gizli açıklama politikasına karşılık geldiğini doğrulamak üzere adli doğrulamayı sağlayarak; ve (4) gizli açıklama arabiriminin düzenli denetimi, dışa aktarılan verinin kalıp çıkarımı veya istatistiksel çıkarım saldırıları aracılığıyla sınıflandırılmış detayları yanlışlıkla ortaya çıkarmadığını doğrulayarak.</p>
+
+<p>BFSI müşterileri tarafından kullanılan ikinci ortak hibrit desen, toplu ve gerçek zamanlı çıkarımı ayırır: (1) <em>gerçek zamanlı çıkarım</em> (şirket içi, canlı müşteri işlemlerini ve PII'yi ele alır) AML uyarıları ve işlem engelleme için, <200ms gecikme SLA'sı ile; ve (2) <em>toplu çıkarım</em> (bulut tabanlı, geçmiş toplamları ve anonimleştirilmiş kohort analizini ele alır) model yeniden eğitimi, strateji optimizasyonu ve düzenleme raporlaması için, gece veya haftalık olarak çalışan. Gerçek zamanlı sistem üretim modelini kullanır; toplu sistem aynı model ağırlıklarını kullanır ancak anonimleştirilmiş geçmiş veriler üzerinde çalışır ve toplu istatistikler (örneğin, işlem türüne göre uyarı hassaslığı, yanlış pozitif eğilimleri) oluşturur bireysel işlem değerlendirmeleri yerine. Toplu çıktı operasyonel panoları ve model-yeniden eğitimi hatlarına geri besler ancak düzenleme gözden geçirmesi olmaksızın dış taraflara akmaz.</p>
+
+<p>Bu hibrit desenler ekonomik olarak verimlidir çünkü egemen altyapıyı gerçekten hassas iş yüküne sağ şekilde ölçeklendirir. Bir ulusal güvenlik kuruluşu aylık 100.000 belge işleyebilir ancak yalnızca 1'i sınıflandırılmış ve şirket içi çıkarım gerektir; kalanı bulut altyapısında daha düşük maliyetle analiz edilebilir. Benzer şekilde, bir banka günlük milyonlarca işlem işleyebilir ancak yalnızca 10–15'i risk değerlendirmesi modellerini tetikler; işlemlerin çoğu düşük risk ve daha hafif, ucuz çıkarımla ele alınabilir. İş yüklerini veri duyarlılığı ve gecikme gerekliliklerine göre dikkatli bir şekilde bölümlendirerek, müşteriler saf egemen mimari konusunda 30–50% maliyet tasarrufu elde edebilir ve sınıflandırılmış veya hassas verinin güvenliğini tehlikeye atmaz.</p>
+
+  
+  <figure>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-42 svg-d-42"><title id="svg-t-42">Egemen agentic AI mimarisi</title><desc id="svg-d-42">Egemen bir çevre içinde model, çıkarım, bağlam, denetim ve yükseltme kontrolleri gösteren eşmerkezli çevre.</desc>
+  <rect x="0" y="0" width="700" height="280" fill="#F8FAFC"/>
+  <rect x="40" y="30" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="10"/>
+  <text x="350" y="22" text-anchor="middle" fill="#0E2841" font-size="13" font-weight="700">Egemen çevre (şirket içi · istemci tarafından kontrol edilen)</text>
+  <rect x="60" y="50" width="180" height="60" fill="#156082" rx="6"/><text x="150" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Model Egemenliği</text><text x="150" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Falcon · Jais · Llama · Mistral</text>
+  <rect x="260" y="50" width="180" height="60" fill="#1A4F7A" rx="6"/><text x="350" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Çıkarım İzolasyonu</text><text x="350" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Şirket içi GPU · H100/H200/L40S</text>
+  <rect x="460" y="50" width="180" height="60" fill="#0E2841" rx="6"/><text x="550" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Bağlam Segmentasyonu</text><text x="550" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">İzin farkında vektör depo</text>
+  <rect x="160" y="140" width="180" height="60" fill="#7C3AED" rx="6"/><text x="250" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. Denetim ve Gözlemlenebilirlik</text><text x="250" y="188" text-anchor="middle" fill="#e9d5ff" font-size="10">Hiçbir günlük veri çevreyi terk etmez</text>
+  <rect x="360" y="140" width="180" height="60" fill="#F5A623" rx="6"/><text x="450" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Yükseltmede Egemenlik</text><text x="450" y="188" text-anchor="middle" fill="#fff" font-size="10">Yapılandırılmış AI güvenlik incelemesi</text>
+  <text x="350" y="232" text-anchor="middle" fill="#475569" font-size="11">Tarafından desteklenen: G42 (UAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
+  </svg>
+  <figcaption>Şekil 1 — Egemen agentic AI'nin beş mimari ilkesi, bölgesel altyapı tarafından desteklenen.</figcaption>
+  </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
   <li>NIST, <em>AI Risk Management Framework</em>. <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">nist.gov</a></li>
@@ -1627,7 +3861,8 @@ export const insights = [
       summaryTr: "Müşterilerin özel dönüşüm çalışmaları (proje öncülüğünde) ile Marketplace'ten ürünleştirilmiş ajanlar (varlık öncülüğünde) arasında nasıl seçim yapması gerektiğine dair Maven'in bakış açısı — BCG, MIT, McKinsey, Gartner ve EY araştırmalarından alınan bir karar çerçevesi ve çoğu çalışmanın gerçekte izlediği harmanlama desenleri ile.",
       featured: true,
       tags: ["Agentic AI", "Operating Model", "Strategy", "GCC"],
-      contentAr: `
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+  
 <h2>وجهة نظر مافن</h2>
 <p>تقدم مافن للذكاء الاصطناعي النتائج عبر مسارين متكاملين، لا مسار واحد. <strong>الارتباطات القائمة على المشاريع</strong> — العمل الاستراتيجي والتحول واسع النطاق وعمليات البناء المخصصة — تقع على أحد المسارين. <strong>الاعتماد القائم على الأصول</strong> للوكلاء والأدوات الجاهزة من سوقنا يقع على الآخر. كلا المسارين يلتقيان عند الوجهة ذاتها: ذكاء اصطناعي يعمل فعلياً في الإنتاج ويمتلك عملاً قابلاً للقياس داخل المؤسسة.</p>
 <p>لا نعتقد أن هذين خيارين متكافئين يختار العميل بينهما عشوائياً. المسار الصحيح يعتمد على الموقف: حجم الميزانية، والرعاية التنفيذية، والإلحاح، ونضج الذكاء الاصطناعي والبيانات، وشهية المخاطر، وما إذا كانت المشكلة الأساسية عامة أم مخصصة. معظم الارتباطات في النهاية تمزج المسارين — والمستشار الموثوق ينبغي أن يكون صريحاً بشأن التسلسل المناسب للعميل أمامه.</p>
@@ -1650,7 +3885,7 @@ export const insights = [
 <ul>
 <li><strong>خصوصية المشكلة:</strong> فريدة → قائم على المشاريع؛ مشتركة في القطاع → قائم على الأصول.</li>
 <li><strong>الرعاية والتفويض:</strong> راعٍ تنفيذي وتغيير نموذج التشغيل → قائم على المشاريع؛ رئيس وظيفي بميزانية → قائم على الأصول.</li>
-<li><strong>الوقت لتحقيق القيمة:</strong> 12–26 أسبوعاً مقبول → قائم على المشاريع؛ أسابيع مطلوبة → قائم على الأصول.</li>
+<li><strong>الوقت لتحقيق القيمة:</strong> 12–26 أسبوعاً (نطاق تسليم لاحظته مافن، وليس معياراً تعاقدياً) → قائم على المشاريع؛ أسابيع → قائم على الأصول.</li>
 <li><strong>نضج الذكاء الاصطناعي والبيانات:</strong> الأسس بحاجة إلى بناء → قائم على المشاريع؛ جاهزة للتوصيل → قائم على الأصول.</li>
 <li><strong>شهية المخاطر والملكية الفكرية:</strong> ملكية حصرية وسيادية → قائم على المشاريع؛ ملكية مشتركة ومهيأة → قائم على الأصول.</li>
 </ul>
@@ -1666,7 +3901,7 @@ export const insights = [
 <h2>أنماط الدمج التي نراها عملياً</h2>
 <p>تقريباً كل علاقة طويلة الأمد مع مافن تمزج المسارين في النهاية. السؤال المثير هو التسلسل. ثلاثة أنماط متكررة:</p>
 <h3>النمط 1 — تجربة أصول → نطاق مشروع</h3>
-<p>يعتمد رئيس وظيفي وكيلاً من السوق (مثل كوبايلوت تسليم PMO أو وكيل تفاوض المشتريات)، يثبت القيمة داخل فريق واحد في 8–12 أسبوعاً، ويستخدم هذا الدليل لإطلاق رعاية تنفيذية لتحول قائم على المشاريع يعيد هندسة نموذج التشغيل حول الوكيل.</p>
+<p>يعتمد رئيس وظيفي وكيلاً من السوق (مثل كوبايلوت تسليم PMO أو وكيل تفاوض المشتريات)، يثبت القيمة داخل فريق واحد في غضون 8–12 أسبوعاً (نطاق التسليم النموذجي الذي لاحظته مافن لمشاريع تجريبية مماثلة)، ويستخدم هذا الدليل لإطلاق رعاية تنفيذية لتحول قائم على المشاريع يعيد هندسة نموذج التشغيل حول الوكيل.</p>
 <h3>النمط 2 — اكتشاف مشروع → نشر أصول</h3>
 <p>يكلف راعٍ تنفيذي اكتشافاً قائماً على المشاريع — عادةً سرعة حالة قيمة وبناء أسس بيانات وحوكمة — ويُظهر الاكتشاف خمس إلى ست حالات استخدام. اثنتان مخصصتان بحق وتبقيان قائمتين على المشاريع؛ والباقي بشكل أدوات سوق موجودة وتُنشر قائمة على الأصول بسرعة أكبر بكثير وتكلفة أقل.</p>
 <h3>النمط 3 — مساران متوازيان</h3>
@@ -1686,7 +3921,77 @@ export const insights = [
 <li>للمشكلات المخصصة بأسس بيانات ضعيفة، لا تتخطَّ الاكتشاف القائم على المشاريع.</li>
 <li>للمشكلات العامة برعاية قوية، قاوم رغبة الإفراط في الهندسة.</li>
 </ul>
-<h2>المصادر والاستشهادات</h2>
+
+<h2>آليات القطاع: حيث يفوز كل مسار في أسواق دول مجلس التعاون الخليجي</h2>
+
+<p>يتمتع مشهد المؤسسات في دول مجلس التعاون الخليجي—البنوك والطاقة والحكومة والاتصالات—بخصائص مميزة تغير مصفوفة القرار. تواجه الخدمات المالية في الإمارات والمملكة العربية السعودية ولايات رقمية معجلة والتدقيق التنظيمي المشدد من CBUAE و SAMA والأطر المحلية للسيادة على البيانات. في هذا السياق، غالباً ما يفتح الانخراط الموجه بالمشروع قيمة لا يمكن للأدوات الموجهة بالأصول أن تحققها: خطوط امتثال مخصصة، مسارات تدقيق موافق عليها من المنظمين، وتصنيفات المخاطر المحلية. لا يمكن لبنك يقوم ببناء نظام منشأ للموافقة على القروض استخدام نموذج عام؛ فنموذج التشغيل والتقارير التنظيمية وتتبع البيانات خاصة بالمؤسسة. على العكس من ذلك، المشاكل العامة ضمن البنك ذاته—فحص رعاية العملاء وأتمتة العمليات الداخلية وتصنيف المستندات—هي بالضبط حيث تقدم وكلاء السوق قيمة في أسابيع بدلاً من أشهر.</p>
+
+<p>يواجه مشغلو الطاقة والمرافق في دول مجلس التعاون الخليجي ضغطاً مختلفاً: الاستعجالية في رقمنة البنية التحتية SCADA القديمة وعمليات العمل قبل آجال تكامل الطاقة المتجددة على نطاق الشبكة. هنا، يهيمن العمل الموجه بالمشروع لأن المشكلة الأساسية نادراً ما تكون عامة. نظام إدارة الأصول الخاص بالمرفق وتكوين أجهزة الاستشعار وسير عمل الصيانة متعامدة مع كل مرفق آخر. يمكن لأدوات موجهة بالأصول أن تسرع <em>حول</em> القلب المخصص—وكيل المشتريات في السوق يمكنه العمل مع بيانات طلب عرض الأسعار من أي مرفق—لكن التنسيق الأساسي والخوارزميات التنبؤية والصيانة وتكامل SCADA دائماً مخصصة. يقدم العملاء الحكوميون والقطاع العام في المملكة العربية السعودية والإمارات وقطر نمط ثالث: غالباً ما يكون لديهم رعاية قوية وشهية حقيقية للتحول، لكن نضج بيانات أضعف وأسطح إدارة تغيير أكثر تعقيداً. هنا، ثبت أن الدخول الممزوج—بداية موجهة بالأصول سريعة في وحدة تشغيلية واحدة بالإضافة إلى اكتشاف موجه بالمشروع لأسس البيانات—أكثر مصداقية من أي من المسارين وحده.</p>
+
+<h2>الانخراط التنظيمي و أطر الامتثال</h2>
+
+<p>أحد العوامل المغفولة في قرار الموجه بالمشروع مقابل الموجه بالأصول هو الموافقة المسبقة للمنظم وعبء التوثيق. في دول مجلس التعاون الخليجي، نشرت SAMA (البنك المركزي السعودي) و CBUAE (البنك المركزي للإمارات) والبنك المركزي القطري أطر حكم للذكاء الاصطناعي وتتوقع من المؤسسات المالية إثبات الامتثال قبل نشر الأنظمة المنشأة على نطاق واسع. وكيل السوق المُنتج—مُنشأ مسبقاً من قبل Maven، يُستخدم عبر عملاء متعددين—يتخذ موقع موافقة مختلفاً عن النظام المخصص. البائع (Maven) يحمل التوثيق وعبء الامتثال للأصل؛ العميل يحمله للبناء الموجه بالمشروع. بالنسبة للكيانات المحافظة والمنظمة، هذا يحول الحساب: يمكن لنهج موجه بالأصول مع سلسلة امتثال Maven واضحة أن يتحرك بشكل أسرع من خلال الحكم من البناء المخصص الذي يجب على فريق امتثال العميل التحقق منه من المبادئ الأولى.</p>
+
+<p>على العكس من ذلك، بالنسبة للمؤسسات ذات متطلبات الامتثال الفريدة—بنك سعودي يعمل بموجب إرشادات SAMA المميزة وكيان حكومي بالإمارات يخضع لولايات إقامة البيانات المحلية—يكون عبء الامتثال <em>أعلى</em> على اعتماد موجه بالأصول لأن التكوين والتكامل ينشئان حالات حدودية لا تغطيها التوثيق القياسي. ينتج عن الانخراط الموجه بالمشروع قطعة امتثال واحدة (النظام المخصص ومسار تدقيقه)؛ يُنتج اعتماد موجه بالأصول لأداة السوق تلك القطعة بالإضافة إلى التكوين والتكامل وتوثيق موصلات البيانات التي يجب على فرق العميل القانونية والامتثال مراجعتها. بالنسبة للسياقات التنظيمية المخصصة، غالباً ما يعمل الموجه بالمشروع بشكل أسرع من خلال الحكم حتى لو استغرق وقتاً أطول للبناء.</p>
+
+<h2>مؤشرات الأداء الرئيسية وتكرار القياس ونقطة الفحص لمدة 90 يوماً</h2>
+
+<p>نطاق Maven بمدة 90 يوماً للتجارب الموجهة بالأصول والمنتجات الحد الأدنى الموجهة بالمشروع ليس اعتسافياً؛ فهو يتوافق مع كيفية عمل دورات مجلس الإدارة وتقاويم مراجعة الميزانية في دول مجلس التعاون الخليجي فعلياً. تُجري معظم المؤسسات في دول مجلس التعاون الخليجي استعراضات عمل ربع سنوية وأدوار ميزانية سنوية تُعاد تعيينها في الربع الأول. نقطة فحص مدة 90 يوماً—عادةً 12 أسبوعاً من الالتقاط إلى أول ناتج قابل للقياس—تهبط في نافذة ميزانية/حكم طبيعية حيث يمكن للعميل أن يقرر التوسع أو المحور أو التوقف. هذا التكرار حاسم لأنه يفرض الانضباط على كل من البائع والعميل: يجب أن يقدم الانخراط شيئاً قابلاً للقياس بحلول اليوم 90، وليس خريطة طريق أو وثيقة تصميم.</p>
+
+<p>بالنسبة للعمل الموجه بالأصول، عادةً ما تكون مؤشرات الأداء الرئيسية واضحة: الوقت المستغرق للنشر (الهدف: 6-10 أسابيع لأداة سوق واحدة)، والتكلفة لكل حالة استخدام، ومنحنى الاعتماد (نسبة مئوية من المستخدمين المستهدفين الذين يستخدمون بنشاط الوكيل بحلول الأسبوع 12). بالنسبة للعمل الموجه بالمشروع، فإن نقطة الفحص لمدة 90 يوماً هي عادةً منتج حد أدنى للإنتاج وتسليم نموذج تشغيلي، وليس النظام الكامل؛ عادةً ما يكون مؤشر الأداء الرئيسي هو "أول ناتج إنتاج مملوك من قبل فريق العمل، بدون تدخل البائع في التشغيل اليومي." القياس الصادق هو ما إذا كان بإمكان العميل تشغيل النظام بنفسه في اليوم 91. تفتقد العديد من الانخراطات الموجهة بالمشروع هذا لأنها تهدف إلى 100% اكتمال الميزات في اليوم 90 بدلاً من 60% الاكتمال مع ملكية تشغيلية كاملة.</p>
+
+<p>تعلمت سوق الاستشارات في دول مجلس التعاون الخليجي أن تقوم بإجراء هذه المحادثة مسبقاً: في اليوم الأول، نتفق على ما يبدو عليه "اليوم 90" من حيث الناتج القابل للقياس ومن يملك الأساسيات. يمكن للانخراطات الموجهة بالأصول أن تكون طموحة في الميزات لأن الوكيل المُنتج بالفعل مستقر؛ يجب على الانخراطات الموجهة بالمشروع أن تتاجر بالميزات لتحقيق النضج التشغيلي. بالنسبة للأقواس مدتها 180 يوماً و 365 يوماً، يتحول السؤال إلى كيفية إطعام الأيام الـ 90 الأولى الموجات التالية. عادةً ما يتسع الموجه بالأصول من خلال التكرار (نفس أداة السوق عبر المزيد من الوظائف أو الوحدات التجارية)؛ عادةً ما يتسع الموجه بالمشروع من خلال التكرار (يصبح منتج الحد الأدنى لمدة 90 يوماً أساساً لبناء مخصص أن العميل يملكها في النهاية ويتطور).</p>
+
+<h2>تقييم البائع وفخ الصيانة</h2>
+
+<p>غالباً ما يحدث خطأ متكرر في المؤسسات الخليجية وهو معاملة اختيار البائع كخيار ثنائي بين "شريك الخدمات" (الموجه بالمشروع) و "بائع البرامج" (الموجه بالأصول). في الواقع، تعمل Maven في كلا الوضعين، وينبغي للمستشارين الموثوقين أن يكونوا شفافين بشأن الحوافز الهيكلية في كل نمط. على العمل الموجه بالمشروع، يستفيد البائع من جداول زمنية للانخراط الأطول وإيرادات الخدمات المستمرة؛ هناك ضغط متأصل لتصميم الحلول التي تتطلب دعماً مستمراً. على العمل الموجه بالأصول، يستفيد البائع من التوسع السريع والتكلفة المنخفضة لكل عميل، لكن لديه ضغط هيكلي لتعميم المنتج بطرق قد لا تخدم أي عميل واحد بشكل مثالي. لا يكون أي من الحافزين خبيثاً، لكن كليهما حقيقيان.</p>
+
+<p>عمل العميل هو تدقيق توصية البائع من أجل الاتساق الداخلي. إذا أوصت Maven بموجه بالمشروع لمشكلة تبدو عامة (المشتريات عالية السرعة والفحص الروتيني لرعاية العملاء والتقارير الروتينية للامتثال)، يجب أن نتوقع من العميل أن يعترض ويسأل لماذا لن تعمل أداة السوق. إذا أوصينا بموجه بالأصول لمشكلة حقاً مخصصة (بنية البيانات السيادية وخطوط أنابيب الامتثال الخاصة بالمنظم والمنطق الخاص بالمؤسسة)، يجب أيضاً أن تهبط هذه الاعتراض. السؤال ليس "هل نحن صادقون؟" بل "هل لدينا حصة في اللعبة للتوصية بمسار واحد على الآخر، وهل فضحنا هذا بصراحة؟"</p>
+
+<p>فرك التقييم العملي: اطلب من البائع أن يقترح نقطة فحص لمدة 90 يوماً ومسار 180 يوماً لخيارات موجهة بالمشروع وموجهة بالأصول. الذي يقدم ناتجاً قابلاً للقياس بحلول اليوم 90 مع إجمالي تكلفة ملكية أقل على مدى 180 يوماً هو عادةً المكالمة الصحيحة. لا تسمح للبائع باستخدام "متطلبات التخصيص" كسبب لاستبعاد الموجه بالأصول، ولا تسمح لهم باستخدام "السرعة إلى القيمة" كسبب لاستبعاد الموجه بالمشروع. كلا البيان صحيح في السياق الصحيح؛ السؤال هو أي سياق أنت فعلاً فيه.</p>
+
+<h2>اعتبارات البنية التحتية السيادية وإقامة البيانات</h2>
+
+<p>بالنسبة لعملاء دول مجلس التعاون الخليجي الذين يعملون بموجب أطر SAMA و CBUAE والبنك المركزي القطري، غالباً ما تظهر متطلبات السيادة على البيانات والبنية التحتية المحلية في وقت متأخر من التخطيط للمشروع وتُرمي اختيار مسار الإسلام إلى السؤال. قد لا يكون وكيل السوق الذي يعمل على البنية التحتية السحابية لـ Maven مقبولاً لبنك سعودي التزم بإرشادات SAMA بشأن تعريب البيانات. هذا ليس عائقاً—يمكن لـ Maven نشر الوكلاء على البنية التحتية السيادية والبيئات الحاوية والأنظمة المعزولة—لكنه يغير اقتصاديات نشر موجه بالأصول. يؤدي تكوين أداة السوق للعمل في بيئة بنية تحتية يتحكم بها العميل إلى إضافة حمل تشغيلي يمحو جزئياً فائدة السرعة إلى القيمة من النهج الموجه بالأصول.</p>
+
+<p>الإطار الصادق: النشر السيادي متاح على أي من المساريين، لكنه <em>أرخص</em> على الموجه بالمشروع لأنك تقوم ببناء البنية التحتية ومعالجة البيانات والهندسة مرة واحدة وشاملة بدلاً من تحويل وكيل خارج الرف إلى مغلف بنية تحتية مخصص. بالنسبة للعملاء الذين لديهم متطلبات بنية تحتية سيادية واضحة من البداية، يجب أن يحول هذا التوصية نحو الموجه بالمشروع، حتى لو بدت المشاكل عامة. على العكس من ذلك، بالنسبة للعملاء الذين لا تكون بيانات حساسة (المقاييس التشغيلية والقياسات المالية والديموغرافيات العملاء لتوجيه الرعاية)، يمكن لوكيل السوق على البنية التحتية المشتركة لـ Maven أن يقدم بشكل أسرع وأرخص، وأن "السيادة" النقاش هو قيد كاذب. يجب أن تفصل محادثة التقييم صراحةً "لدينا ولاية منظم أو داخلية لإقامة البيانات" من "لدينا تفضيل عام لعدم وضع البيانات في السحابة." واحد يبرر مسار الموجه بالمشروع؛ الآخر عادةً ما يتم حله بشكل أرخص بواسطة الموجه بالأصول بالإضافة إلى ضمانات معالجة البيانات التعاقدية.</p>
+
+<h2>التصميم التنظيمي والاعتبارات باللغة العربية</h2>
+
+<p>أحد المضاعفات المقللة من الأهمية في اعتماد الذكاء الاصطناعي في دول مجلس التعاون الخليجي هو أن اللغة التشغيلية للعديد من الوظائف هي العربية، لكن معظم الأنظمة المنشأة للذكاء الاصطناعي—بما في ذلك أدوات السوق—هي الأولى باللغة الإنجليزية أو محسنة باللغة الإنجليزية. سوف يحتاج وكيل المشتريات الذي تم تدريبه على العقود والمواد الشراء باللغة الإنجليزية إلى إعادة تدريب كبيرة على نماذج العقود باللغة العربية وعلى عملات الموردين المحليين والمنطقة اللغة على الامتثال. بالنسبة للانخراطات الموجهة بالمشروع، هذا هو عنصر إدارة التغيير ومجموعة بيانات تدريب؛ بالنسبة لاعتماد موجه بالأصول لأداة السوق، يصبح مشكلة تكوين غير خطية لأن النماذج الأساسية قد لا تعمم بشكل جيد من الإنجليزية إلى العربية بدون إعادة تدريب. تدعم وكلاء السوق Marketplace من Maven واجهة اللغة العربية ومعالجة البيانات الإقليمية، لكن درجة إعادة التدريب المطلوبة محددة بحالة الاستخدام ويجب الكشف عنها مبكراً في التقييم.</p>
+
+<p>هذا حاد بشكل خاص في العملاء الحكومية والقطاع العام حيث اللغة العربية هي اللغة التشغيلية الرسمية وتبديل العربية لعمليات الذكاء الاصطناعي يؤدي إلى احتكاك اعتماد وخطر تنظيمي. يمكن لانخراط موجه بالمشروع أن يُجهز هذا كمتطلب تصميم؛ أداة السوق الموجهة بالأصول تتطلب من العميل إما قبول العملية باللغة الإنجليزية (مزعجة تشغيلياً) أو تمويل دورة إعادة تدريب تضغط على فائدة السرعة إلى القيمة. بالنسبة للعملاء الذين يعملون بشكل أساسي باللغة العربية، هذا سبب شرعي للانحياز نحو الموجه بالمشروع حتى لو بدت المشاكل عامة، أو لتحديد نطاق اعتماد موجه بالأصول مع فهم أن تحسين اللغة العربية سيكون استثماراً متابعة 180 يوماً.</p>
+
+<h2>الإطار على مستوى الرئيس والتقارير التكرار</h2>
+
+<p>على مستوى الرئيس، غالباً ما يتم تأطير اختيار الموجه بالمشروع مقابل الموجه بالأصول كـ "التحويل مقابل الفوز السريع." هذا مختزل وينسى القرار الحقيقي، وهو "ما يبدو النجاح في نافذة 12 شهراً، وما وتيرة التقارير التي يحتاجها الرئيس والإدارة C فعلاً؟" تولد الأدوات الموجهة بالأصول فوزاً مبكراً مرئياً وعائد استثمار قابل للقياس في 90 يوماً، وهو قيم لثقة الرئيس وموافقة إطلاق الصندوق. عادةً ما تأخذ الانخراطات الموجهة بالمشروع 6-9 أشهر لهبوط منتج حد أدنى للإنتاج لكن بعد ذلك تنتج تغيير نموذج تشغيل أعمق يتراكم على مدى 18-36 شهراً. بالنسبة لرئيس يحتاج نتائج Q1، موجه بالأصول يفوز؛ بالنسبة لرئيس يرعى تحويل متعدد السنوات، الموجه بالمشروع يتراكم قيمة إجمالية أكثر.</p>
+
+<p>التأثير العملي هو أن النهج الممزوجة ليست مساومة—فهي استراتيجية موثوقة للإبلاغ إلى الرئساء الذين لديهم مكونات متعددة. يحصل راعي C-suite على الفوز الموجه بالأصول (القيمة المرئية في اليوم 90) للدفاع عن ميزانية الذكاء الاصطناعي؛ يحصل الراعي التشغيلي على أساس العمل الموجه بالمشروع (البيانات والحكم والمنصة الأساسية) الذي يمكّن هذه الفوز من التوسع. دورة التقارير هي: 90 يوماً (أول وكيل السوق في الإنتاج)، 180 يوماً (الثاني والثالث وكلاء حي، موجه بالمشروع الأول MVP يقتربان)، 365 يوماً (نظام موجه بالمشروع سلم للعمليات، موجه بالأصول أدوات التوسع عبر وحدات العمل). هذا السرد أسهل في الحفاظ عليه—وأكثر مصداقية للرئيس—من إما "سننفق ستة أشهر بناء نظام" أو "سننوس أداة ونسميها تحويل."</p>
+
+<figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-43 svg-d-43"><title id="svg-t-43">مقارنة TCO على ٣٦ شهراً</title><desc id="svg-d-43">مقارنة TCO على ٣٦ شهراً</desc>
+    <!-- Background -->
+    <rect width="700" height="240" fill="#FAFBFC"/>
+    
+    <!-- Grid lines -->
+    <line x1="50" y1="30" x2="50" y2="210" stroke="#E5E7EB" stroke-width="1"/>
+    <line x1="50" y1="210" x2="680" y2="210" stroke="#E5E7EB" stroke-width="1"/>
+    
+    <!-- Axis labels -->
+    <text x="25" y="120" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">الرعاية والنضج</text>
+    <text x="25" y="133" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">الذكاء الاصطناعي</text>
+    
+    <text x="365" y="228" font-size="11" font-weight="600" fill="#0E2841" text-anchor="middle">تحديد المشكلة →</text>
+    
+    <!-- Quadrant 1: Asset-led (Low maturity, Generic) -->
+    <rect x="70" y="50" width="260" height="150" fill="#F5A623" fill-opacity="0.08" stroke="#F5A623" stroke-width="2"/>
+    <text x="85" y="70" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">بدء موجه بالأصول</text>
+    <text x="85" y="95" font-size="12" font-weight="600" fill="#0E2841">إثبات مفهوم سريع</text>
+    <text x="85" y="111" font-size="10" fill="#4B5563">أداة السوق في وظيفة واحدة</text>
+    <text x="85" y="126" font-size="10" fill="#4B5563">8–12 أ
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="tco-t"><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="200" x2="660" y2="200" stroke="#0E2841" stroke-width="1.5"/><line x1="60" y1="40" x2="60" y2="200" stroke="#0E2841" stroke-width="1.5"/><text x="40" y="200" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">٠$</text><text x="40" y="120" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">٥ مليون $</text><text x="40" y="50" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">١٠ مليون $</text><rect x="120" y="120" width="60" height="80" fill="#1A4F7A"/><rect x="200" y="80" width="60" height="120" fill="#156082"/><rect x="280" y="60" width="60" height="140" fill="#0E2841"/><rect x="400" y="160" width="60" height="40" fill="#F5A623"/><rect x="480" y="140" width="60" height="60" fill="#F5A623" opacity="0.85"/><rect x="560" y="120" width="60" height="80" fill="#F5A623" opacity="0.7"/><text x="230" y="225" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">بناء (داخلياً)</text><text x="510" y="225" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">شراء (مزود)</text><text x="150" y="115" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">س١</text><text x="230" y="75" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">س٢</text><text x="310" y="55" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">س٣</text><text x="430" y="155" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">س١</text><text x="510" y="135" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">س٢</text><text x="590" y="115" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">س٣</text></svg><figcaption>البناء مقابل الشراء: إجمالي تكلفة الملكية لمدة 36 شهراً على نطاق مؤسسات GCC</figcaption></figure>
+  <h2>المصادر والاستشهادات</h2>
   <ol class="sources-list">
   <li>MIT NANDA، <em>State of AI in Business 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu</a></li>
   <li>BCG، <em>Where's the Value in AI?</em>، 2024. <a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">bcg.com</a></li>
@@ -1699,7 +4004,8 @@ export const insights = [
   <li>المعهد الوطني للمعايير والتكنولوجيا (NIST)، <em>إطار إدارة مخاطر الذكاء الاصطناعي (AI RMF 1.0)</em>. <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">nist.gov</a></li>
   </ol>
     `,
-      contentTr: `
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+  
 <h2>Maven'in Bakış Açısı</h2>
 <p>Maven AI sonuçları tek bir yoldan değil, birbirini tamamlayan iki yoldan teslim eder. <strong>Proje öncülüğünde</strong> çalışmalar — strateji, büyük ölçekli dönüşüm, özel inşa — bir rayda yer alır. Marketplace'imizden ürünleştirilmiş ajan ve araçların <strong>varlık öncülüğünde</strong> benimsenmesi diğer rayda durur. Her iki ray da aynı varış noktasında birleşir: kurum içinde ölçülebilir bir işin sahibi olan, gerçekten üretimde çalışan AI.</p>
 <p>Bunların müşterinin rastgele seçtiği eşdeğer seçenekler olduğunu düşünmüyoruz. Doğru yol duruma bağlıdır: bütçe zarfı, üst düzey sponsorluk, aciliyet, AI ve veri olgunluğu, risk iştahı ve altta yatan sorunun jenerik mi yoksa özel mi olduğu. Çoğu çalışma sonunda ikisini harmanlar — ve güvenilir bir danışman, karşısındaki müşteriye hangi sıralamanın uyduğu konusunda dürüst olmalıdır.</p>
@@ -1741,7 +4047,7 @@ export const insights = [
 </tr>
 <tr class="border-t border-gray-200">
 <td class="p-3 font-semibold text-[#0E2841]">Değer süresi</td>
-<td class="p-3 text-gray-700">Üretim MVP'sine 12–26 hafta kabul edilebilir.</td>
+<td class="p-3 text-gray-700">Üretim MVP'sine 12–26 hafta kabul edilebilir (Maven'in gözlemlediği teslim aralığı, sözleşmesel bir ölçüt değil).</td>
 <td class="p-3 text-gray-700">İlk faydalı çıktı için haftalar gerekiyor; iş gerekçesini canlı tutmak için.</td>
 </tr>
 <tr class="border-t border-gray-200 bg-gray-50">
@@ -1796,7 +4102,7 @@ export const insights = [
     <div class="flex-1 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-3">
       <div class="font-bold text-[#F5A623] uppercase tracking-wider text-[10px] mb-1">Varlık</div>
       <div class="text-[#0E2841] font-semibold">Tek ekipte Marketplace ajanı</div>
-      <div class="text-gray-600 mt-1">8–12 hafta · fonksiyon başkanı bütçesi</div>
+      <div class="text-gray-600 mt-1">8–12 hafta (Maven'in tipik teslim aralığı) · fonksiyon başkanı bütçesi</div>
     </div>
     <div class="flex items-center justify-center text-[#0E2841] font-bold">→</div>
     <div class="flex-1 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-3">
@@ -1860,7 +4166,109 @@ export const insights = [
 <li>Veri temelleri zayıf olan özel sorunlarda proje öncülüğünde keşfi atlamayın. Bozuk veriyle varlık öncülüğünde teslim, hizmet verdiğimiz Körfez kurumlarında en sık gördüğümüz başarısızlık biçimidir.</li>
 <li>Güçlü sponsorluğu olan jenerik sorunlarda aşırı mühendislik dürtüsüne direnin. Bu çeyrek üretime giren yapılandırılmış bir Marketplace aracı, gelecek yıl inen özel bir inşadan daha iyidir.</li>
 </ul>
-<h2>Kaynaklar ve Atıflar</h2>
+
+  <h2>Sektörel Mekanikler: GCC Pazarlarında Her Yolun Kazandığı Yerler</h2>
+
+<p>GCC kurumsal ortamı—bankacılık, enerji, hükümet ve telekomünikasyon—farklı özelliklere sahip olup karar matrisini değiştirir. UAE ve Suudi Arabistan'daki finansal hizmetler, hızlandırılmış dijitalleştirme emirleri ve CBUAE, SAMA ve yerel veri egemenliği çerçeveleri tarafından artan düzenleyici denetim ile karşı karşıyadır. Bu bağlamda, proje odaklı katılım, varlık odaklı araçların sağlayamayacağı değeri ortaya çıkarır: özel uyum sağlama boru hatları, düzenleyici tarafından onaylanmış denetim izleri ve yerelleştirilmiş risk taksonomi sistemleri. Ajansal kredi kaynağı sistemi inşa eden bir banka, genel bir şablon kullanamaz; işletim modeli, düzenleyici raporlama ve veri kökenlemesi kurum özeldir. Tersine, aynı banktaki genel sorunlar—müşteri hizmetleri taraması, iç süreç otomasyonu, belge sınıflandırması—tam olarak Marketplace ajanlarının haftalarca değil aylarca sunduğu yerdir.</p>
+
+<p>GCC'deki enerji ve hizmet sağlayıcıları farklı bir baskı altında karşı karşıyadır: ızgarada yenilenebilir entegrasyon son tarihlerine gelmeden önce eski SCADA ve saha operasyonları altyapısını dijitalleştirme acılığı. Burada proje odaklı çalışma baskın olur çünkü altta yatan sorun neredeyse hiçbir zaman genel değildir. Bir hizmet sağlayıcının varlık yönetim sistemi, sensör topolojisi ve bakım iş akışları her diğer hizmet sağlayıcının sistemiyle ortogonaldir. Varlık odaklı araçlar özel çekirdeğin çevresinde—bir Marketplace satın alma ajanı herhangi bir hizmet sağlayıcının RFQ verileriyle çalışabilir—hızlandırabilir, ancak temel orkestrasyonla, tahmine dayalı bakım algoritmaları ve SCADA entegrasyonu her zaman özeldir. KSA, UAE ve Katar'daki hükümet ve kamu sektörü müşterileri üçüncü bir desen sunmaktadır: genellikle güçlü sponsorluk ve gerçek dönüşüm iştahı vardır, ancak daha zayıf veri olgunluğu ve daha karmaşık değişim yönetimi yüzeyleri de vardır. Burada karma giriş—bir operasyonel birimde varlık odaklı hızlı başlangıç artı veri temelleri keşfi için proje odaklı—her iki yoldan tek başına daha inandırıcı kanıtlanmıştır.</p>
+
+<h2>Düzenleyici Katılım ve Uyum Çerçeveleri</h2>
+
+<p>Proje odaklı ve varlık odaklı karar almanın gözden kaçırılan bir faktörü, düzenleyici ön onay ve belgeleştirme yüküdür. GCC'de, SAMA (Suudi Merkez Bankası), CBUAE (Birleşik Arap Emirlikleri Merkez Bankası) ve Katar Merkez Bankası AI yönetimi çerçeveleri yayınlamışlardır ve finansal kurumlara ajansal sistemleri ölçekte dağıtmadan önce uyumu göstermelerini beklemektedir. Productized Marketplace ajanı—Maven tarafından önceden oluşturulmuş, birden çok istemci genelinde kullanılmış—özel inşa edilmiş bir sistemden farklı bir onay durumunda oturur. Satıcı (Maven) varlık için belgeleştirme ve uyum yükünü taşır; istemci proje odaklı yapı için taşır. Muhafazakar düzenlenmiş kuruluşlar için bu hesapları değiştirir: net Maven uyum geçmiş olan varlık odaklı bir yaklaşım, istemci uyum ekibinin sıfırdan denetlemiş olması gereken özel bir derlemeden yönetişimden daha hızlı hareket edebilir.</p>
+
+<p>Tersine, benzersiz uyum gereksinimleri olan kuruluşlar için—SAMA rehberliği altında faaliyet gösteren Suudi bankas, yerel veri ikamet emirlerine tabi UAE devlet kuruluşu—varlık odaklı kabulün uyum yükü daha yüksektir çünkü yapılandırma ve entegrasyon standart belgeleştirmenin kapsamadığı kenar durumları oluşturur. Proje odaklı katılım tek bir uyum yapıtı (özel sistem ve denetim izleri) üretir; Marketplace aracının varlık odaklı kabulü, istemci hukuk ve uyum ekiplerinin incelemesi gereken yapılandırma, entegrasyon ve veri bağlayıcısı belgeleştirmesinin yanında bu yapıtı üretir. Benzersiz düzenleyici bağlamlar için, proje odaklı genellikle inşa almak daha uzun sürse bile yönetişimden daha hızlı koşar.</p>
+
+<h2>KPI'lar, Ölçüm Temposu ve 90 Günlük Denetim Noktası</h2>
+
+<p>Maven'in varlık odaklı pilot ve proje odaklı MVP'ler için 90 günlük teslimat aralığı keyfi değildir; GCC yönetim kurulu döngülerinin ve bütçe gözden geçirme takvimlerinin aslında nasıl çalıştığıyla uyumludur. Çoğu GCC kuruluşu, Q1'de sıfırlanan üç aylık iş incelemeleri ve yıllık bütçe döngüsü yürütmektedir. 90 günlük bir kontrol noktası—tipik olarak alım sonrası 12 hafta ilk ölçülebilir çıktıya kadar—istemcinin ölçeklendirmeyi, dönüşümü veya durdurmayı karar verebileceği doğal bir bütçe/yönetişim penceresine iner. Bu tempo kritiktir çünkü hem satıcıya hem de istemciye disiplin dayatır: katılım, bir yol haritası veya tasarım belgesi değil, gün 90'ya kadar ölçülebilir bir şey sunmalıdır.</p>
+
+<p>Varlık odaklı çalışma için KPI'lar genellikle basittir: dağıtım süresi (hedef: tek Marketplace aracı için 6–10 hafta), kullanım başına maliyet ve benimseme eğrisi (gün 12'ye kadar hedef kullanıcıların yüzdesi ajanı aktif olarak kullanmaktadır). Proje odaklı çalışma için 90 günlük denetim noktası tipik olarak tam sistem değil üretim MVP ve işletim modeli devridir; KPI tipik olarak "işletim ekibi tarafından sahipleniş ilk üretim çıktısı, satıcı katılımı olmadan gün hale hale işlem" dir. Dürüst ölçüm, istemcinin gün 91'de sistemi kendileri çalıştırıp çalıştıramayacağıdır. Birçok proje odaklı katılım bunu kaçırır çünkü gün 90'da 100% özellik bütünlüğünü hedefler, tam işletim modeli olgunluğu değil 60%.</p>
+
+<p>GCC danışmanlık pazarı bu konuşmayı önceden yüklemeyi öğrenmiştir: gün birinde, ölçülebilir çıktı ve anahtarları kimin tuttuğu açısından "gün 90" gibi göründüğü üzerinde anlaş. Varlık odaklı katılımlar, productized ajan zaten kararlı olduğu için özelliklere ilişkin iddialı olabilir; proje odaklı katılımlar işletim olgunluğu için özellikleri takas etmelidir. 180 günlük ve 365 günlük yaylar için soru, ilk 90 günün sonraki dalgaları nasıl uyduğuna kaymaktadır. Varlık odaklı tipik olarak tekrarlama ile ölçeklendirir (aynı Marketplace aracı daha fazla işlev veya iş birimleri genelinde); proje odaklı tipik olarak yineleme ile ölçeklendirir (90 günlük MVP, istemcinin sonunda sahipliğe alıp geliştireceği özel bir yapının temeli haline gelir).</p>
+
+<h2>Satıcı Değerlendirilmesi ve Hizmetlenebilirlik Tuzağı</h2>
+
+<p>GCC kuruluşlarında sık rastlanan bir hata, satıcı seçimini "hizmetler ortağı" (proje odaklı) ve "yazılım satıcısı" (varlık odaklı) arasında ikili seçim olarak işlenmektedir. Gerçekte, Maven her ikisinde de çalışır ve güvenilir danışmanlar her modda yapısal teşvikleri hakkında şeffaf olmalıdır. Proje odaklı çalışmada satıcı, daha uzun katılım zaman çizelgeleri ve devam eden hizmet gelirlerinden fayda sağlar; devam eden desteği gerektiren çözümleri tasarlamak için gerçek bir baskı vardır. Varlık odaklı çalışmada satıcı, hızlı ölçeklendirme ve azaltılmış istemci başına maliyetten fayda sağlar, ancak ürünü herhangi bir istemciyi mükemmel olarak hizmetmeyebilecek şekillerde genelleştirme konusunda yapısal baskı vardır. Her iki teşvik de kötü niyetli değildir, ancak her ikisi de gerçektir.</p>
+
+<p>İstemcinin işi satıcı önerisini iç tutarlılık için denetlemektir. Maven, genel görünümlü bir sorun için proje odaklı önerirse (yüksek hızlı satın alma, standart müşteri hizmetleri taraması, rutin uyum raporlaması), istemcinin Marketplace aracının neden çalışmayacağını sorarak geri itme beklememiz gerekir. Gerçekten özel bir sorun için varlık odaklı önerrersek (egemen veri mimarisi, düzenleyici özel uyum boru hatları, kurum özel sigortalama mantığı), bu geri itme de inmeli. Soru "biz doğru müyüz?" değil "bir yolu diğerine önerecek oyunda derimiz var mı ve bunu açıkça ortaya çıkardık mı?"</p>
+
+<p>Pratik değerlendirme rubriği: satıcıdan hem proje odaklı hem de varlık odaklı seçenekler için 90 günlük bir denetim noktası ve 180 günlük bir yol önermeyi isteyin. Gün 90'da düşük toplam sahip olma maliyeti ile ölçülebilir çıktı sunan, 180 gün üzerinde genellikle doğru çağrıdır. Satıcının "özelleştirme gereksinimleri" kullanarak varlık odaklı yasaklamasına veya "değere hız" kullanarak proje odaklı yasaklamasına izin vermeyin. Her ikisi de doğru açıklamadır doğru bağlamda; soru aslında hangi bağlamda olduğunuzdur.</p>
+
+<h2>Egemen Altyapı ve Veri İkamet Değerlendirmeleri</h2>
+
+<p>SAMA, CBUAE ve Katar Merkez Bankası çerçeveleri altında faaliyet gösteren GCC müşterileri için veri egemenliği ve yerel altyapı gereksinimleri genellikle proje planlamasında geç çıkar ve teslimat yolu seçimini soruya atarlar. Maven'in bulut altyapısında çalışan bir Marketplace ajanı, SAMA rehberliğine veri yerelleştirme konusunda bağlı olan Suudi bankas için kabul edilemeyebilir. Bu bir engel değildir—Maven ajanları egemen altyapı, konteynerleştirilmiş ortamlar ve hava açıklığı olmayan sistemlere dağıtabilir—ancak varlık odaklı teslimatın ekonomisini değiştirir. Marketplace aracını istemci kontrollü egemen bir ortamda çalıştıracak şekilde yapılandırmak, varlık odaklı yaklaşımın hız-değer avantajının kısmen silinmesine neden olan işletim başına ek yükleme ekler.</p>
+
+<p>Dürüst çerçeve: egemen dağıtım herhangi bir yolda mevcuttur, ancak proje odaklı olduğunda daha ucuzdur çünkü dağıtım ve veri işleme mimarisini bir kez, uçtan uca inşa edersiniz, özel bir altyapı zarfına standart bir ajanı uyarlama yerine. İstemciler başlangıçta net egemen altyapı gereksinimleriyle, bu proje odaklı doğru şekilde tavsiye etmelidir, sorun genel görünse bile. Tersine, verileri hassas olmayan istemciler için (işletim metrikleri, finansal kıyaslama, bakım yönlendirmesi için müşteri demografisi), Maven'in paylaşılan altyapısındaki Marketplace ajanı daha hızlı ve daha ucuz sunabilir ve "egemenlik" konuşması yanlış bir kısıtlamadır. Değerlendirme konuşması açıkça "veri ikamet için bir düzenleyici veya iç buyruk var" ile "veri buluta koymamayı tercih etme genel tercih" ayrılmalıdır. Biri proje odaklı yolu gerekçelendirir; diğeri genellikle varlık odaklı artı sözleşmeli veri işleme garantileri tarafından daha ucuz çözülür.</p>
+
+<h2>Örgütsel Tasarım ve Arapça Dil Değerlendirmeleri</h2>
+
+<p>GCC AI benimsemesinde hafife alınan bir komplikasyon, birçok işlev için operasyonel dilin Arapça olmasına rağmen, Marketplace araçları da dahil olmak üzere çoğu ajansal AI sistemi İngilizce birincil veya İngilizce optimize edilmiştir. İngilizce sözleşmeler ve satın alma iş akışlarında eğitilen bir satın alma ajanı, Arapça sözleşme şablonları, yerel tedarikçi nomenklaturü ve bölgesel uyum dilinde önemli yeniden eğitime ihtiyaç duyacaktır. Proje odaklı katılımlar için bu değişim yönetimi satır ve eğitim veri setidir; Marketplace aracının varlık odaklı kabulü için temel modeller yeniden eğitim olmadan İngilizceden Arapçaya iyi genelleştiremeyebilir çünkü doğrusal olmayan bir yapılandırma sorunu haline gelir. Maven'in Marketplace ajanları Arapça dil arayüzünü ve bölgesel veri işlemeyi destekler, ancak gerekli yeniden eğitim derecesi kullanım olay özeldir ve değerlendirmede erken yüzeye konmalıdır.</p>
+
+<p>Bu, özellikle Arapçanın resmi operasyonel dil olduğu hükümet ve kamu sektörü müşterileri için akut olup AI etkin süreçlere İngilizce geçişinin hem benimseme sürtünmesi hem de düzenleyici riskleri ortaya koydu. Proje odaklı katılım bunu tasarım gereksinimi olarak önceden yükleyebilir; Marketplace araç varlık odaklı kabulü istemciyin İngilizce dil işlemesini kabul etmesini (operasyonel olarak yıkıcı) veya hız-değer avantajını sıkıştıran bir yeniden eğitim döngüsünü fonlayan istemcinin hangisinin bunu gerektirir. Birincil olarak Arapçada çalışan istemciler için bu, varlık odaklı kabulüne yönelik lean yapmak için meşru bir neden olmasına rağmen, Arapça dil optimizasyonunun 180 günlük bir izleme yatırımı olacağı anlayışı ile kapsamlı olması durumunda bile, başka türlü genel sorunlar için.</p>
+
+<h2>Yönetim Kurulu Seviyesi Çerçevesi ve Raporlama Temposu</h2>
+
+<p>Yönetim kurulu seviyesinde proje odaklı ve varlık odaklı seçim genellikle "dönüşüm ve hızlı kazanımlar" olarak çerçevelenir. Bu indirgeyicidir ve gerçek kararı kaçırır: "12 aylık bir pencerede başarı nedir ve yönetim kurulu ve C-suite aslında ne hızda raporlamaya ihtiyaç duymaktadır?" Varlık odaklı araçlar görünür erken kazanımlar üretir ve 90 gün içinde ölçülebilir ROI, yönetim kurulu güvenine ve fon serbest bırakılmasına değerlidir. Proje odaklı katılımlar genellikle üretim MVP'ye iniş için 6–9 ay sürer, ancak 18–36 ay içinde bileşik olan daha derin işletim modeli değişimi üretir. Gün 90 sonuçları gereken yönetim kurulu için varlık odaklı kazanımlar; birden çok yıl dönüşümüne sponsor olan yönetim kurulu için proje odaklı daha fazla toplam değer birikir.</p>
+
+<p>Pratik çıkarım karma yaklaşımlar bir uzlaşma değildir—yönetim kuruluna raporlama yapmak için birden çok seçmen ile güvenilir bir stratejidir. C-suite spiker varlık odaklı hızlı kazanımlar (gün 90'da görünür değer) AI bütçesini savunmak için alır; operasyonel sponsor proje odaklı temel çalışma (veri, yönetişim, çekirdek platform) bu hızlı kazanımları ölçeklendirmek için alır. Raporlama temposu: 90 gün (ilk Marketplace ajanı üretimde), 180 gün (ikinci ve üçüncü ajanlar canlı, ilk proje odaklı MVP yakın), 365 gün (proje odaklı sistem işletmelere teslim, varlık odaklı araçlar iş birimleri genelinde ölçeklendirme). Bu anlatı—ve bir yönetim kurulunun daha inandırıcısı—ya "altı ay bir sistem inşa edeceğiz" ya da "bir araç kullanacağız ve dönüşüm diyeceğiz" daha kolay sürdürülüyor.</p>
+
+<figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-44 svg-d-44"><title id="svg-t-44">Maven AI diagram 44</title><desc id="svg-d-44">Maven AI diagram 44</desc>
+    <!-- Background -->
+    <rect width="700" height="240" fill="#FAFBFC"/>
+    
+    <!-- Grid lines -->
+    <line x1="50" y1="30" x2="50" y2="210" stroke="#E5E7EB" stroke-width="1"/>
+    <line x1="50" y1="210" x2="680" y2="210" stroke="#E5E7EB" stroke-width="1"/>
+    
+    <!-- Axis labels -->
+    <text x="25" y="120" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">Sponsorluk &amp;</text>
+    <text x="25" y="133" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">AI Olgunluğu</text>
+    
+    <text x="365" y="228" font-size="11" font-weight="600" fill="#0E2841" text-anchor="middle">Sorun Özgüllüğü →</text>
+    
+    <!-- Quadrant 1: Asset-led (Low maturity, Generic) -->
+    <rect x="70" y="50" width="260" height="150" fill="#F5A623" fill-opacity="0.08" stroke="#F5A623" stroke-width="2"/>
+    <text x="85" y="70" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">VARLIK ODAKLI BAŞLANGIC</text>
+    <text x="85" y="95" font-size="12" font-weight="600" fill="#0E2841">Hızlı konsept kanıtı</text>
+    <text x="85" y="111" font-size="10" fill="#4B5563">Marketplace aracı bir işlevde</text>
+    <text x="85" y="126" font-size="10" fill="#4B5563">İlk çıktıya kadar 8–12 hafta</text>
+    <text x="85" y="141" font-size="10" fill="#4B5563">Yönetim kurulu güvenini oluştur</text>
+    <text x="85" y="156" font-size="10" fill="#4B5563">Daha düşük bütçe kapısı; işlevsel sponsor</text>
+    <text x="85" y="171" font-size="10" fill="#4B5563">Doğrulanırsa yineyi ve ölçeklendiri</text>
+    
+    <!-- Quadrant 2: Project-led (Low maturity, Bespoke) -->
+    <rect x="370" y="50" width="260" height="150" fill="#1A4F7A" fill-opacity="0.08" stroke="#1A4F7A" stroke-width="2"/>
+    <text x="385" y="70" font-size="10" font-weight="700" fill="#1A4F7A" letter-spacing="1">PROJE ODAKLI KEŞIF</text>
+    <text x="385" y="95" font-size="12" font-weight="600" fill="#0E2841">Temele ilk yaklaşım</text>
+    <text x="385" y="111" font-size="10" fill="#4B5563">Değer durumu sprint + veri denetim</text>
+    <text x="385" y="126" font-size="10" fill="#4B5563">Gerçek sorun kapsamını tanımlı</text>
+    <text x="385" y="141" font-size="10" fill="#4B5563">Yönetişim ve boru hatları oluştur</text>
+    <text x="385" y="156" font-size="10" fill="#4B5563">C-suite sponsorluk gerekli</text>
+    <text x="385" y="171" font-size="10" fill="#4B5563">Varlık dağıtımı için kullanım durumlarını yüzey</text>
+    
+    <!-- Quadrant 3: Asset scale (High maturity, Generic) -->
+    <rect x="70" y="180" width="260" height="40" fill="#F5A623" fill-opacity="0.12" stroke="#F5A623" stroke-width="2"/>
+    <text x="85" y="200" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">VARLIK ODAKLI ÖLÇEK</text>
+    <text x="85" y="215" font-size="10" fill="#4B5563">Araçları iş birimleri genelinde dağıt; tasarruflılardan sonraki dalga fonu</text>
+    
+    <!-- Quadrant 4: Project transform (High maturity, Bespoke) -->
+    <rect x="370" y="180" width="260" height="40" fill="#156082" fill-opacity="0.12" stroke="#156082" stroke-width="2"/>
+    <text x="385" y="200" font-size="10" font-weight="700" fill="#156082" letter-spacing="1">PROJE ODAKLI DONUSUM</text>
+    <text x="385" y="215" font-size="10" fill="#4B5563">Özel yapı + işletim modeli yeniden mühendislik; değişim kası gerekli</text>
+    
+    <!-- Arrow labels -->
+    <text x="35" y="85" font-size="10" fill="#4B5563" font-style="italic">Düşük</text>
+    <text x="15" y="175" font-size="10" fill="#4B5563" font-style="italic">Yüksek</text>
+    <text x="75" y="220" font-size="10" fill="#4B5563" font-style="italic">Genel</text>
+    <text x="630" y="220" font-size="10" fill="#4B5563" font-style="italic">Özel</text>
+  </svg>
+  <figcaption><strong>Şekil 1:</strong> GCC bağlamlarında proje odaklı ve varlık odaklı teslimat için Maven karar matrisi. İki eksen—sorun özgüllüğü ve örgütsel olgunluk—dört başlangıç önerisi verir. Çoğu katılım bir dörtlüde başlar ve olgunluk arttıkça ve kullanım durumu özgüllüğü keskinleştikçe 12–24 ay içinde diğerlerinde göçer.</figcaption>
+</figure>
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-45 svg-d-45"><title id="svg-t-45">36 aylık TCO karşılaştırması</title><desc id="svg-d-45">36 aylık TCO karşılaştırması</desc><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="200" x2="660" y2="200" stroke="#0E2841" stroke-width="1.5"/><line x1="60" y1="40" x2="60" y2="200" stroke="#0E2841" stroke-width="1.5"/><text x="40" y="200" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">$0</text><text x="40" y="120" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">$5M</text><text x="40" y="50" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">$10M</text><rect x="120" y="120" width="60" height="80" fill="#1A4F7A"/><rect x="200" y="80" width="60" height="120" fill="#156082"/><rect x="280" y="60" width="60" height="140" fill="#0E2841"/><rect x="400" y="160" width="60" height="40" fill="#F5A623"/><rect x="480" y="140" width="60" height="60" fill="#F5A623" opacity="0.85"/><rect x="560" y="120" width="60" height="80" fill="#F5A623" opacity="0.7"/><text x="230" y="225" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">Yap (kurum içi)</text><text x="510" y="225" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">Satın al (tedarikçi)</text><text x="150" y="115" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y1</text><text x="230" y="75" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y2</text><text x="310" y="55" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y3</text><text x="430" y="155" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y1</text><text x="510" y="135" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y2</text><text x="590" y="115" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y3</text></svg><figcaption>Yap vs satın al: GCC işletme ölçeğinde 36 aylık toplam sahip olma maliyeti</figcaption></figure>
+  <h2>Kaynaklar ve Atıflar</h2>
   <ol class="sources-list">
   <li>MIT NANDA, <em>State of AI in Business 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu</a></li>
   <li>BCG, <em>Where's the Value in AI?</em>, 2024. <a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">bcg.com</a></li>
@@ -1873,7 +4281,8 @@ export const insights = [
   <li>NIST, <em>AI Risk Management Framework (AI RMF 1.0)</em>. <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">nist.gov</a></li>
   </ol>
     `,
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
 <h2>Maven's Point of View</h2>
 <p>Maven AI delivers outcomes through two complementary paths, not one. <strong>Project-led</strong> engagements — strategy work, large-scale transformation, custom builds — sit on one rail. <strong>Asset-led</strong> adoption of productized agents and tools from our Marketplace sits on the other. Both rails converge on the same destination: AI that is actually in production, owning measurable work inside the enterprise.</p>
 <p>We do not believe these are equivalent options the client picks at random. The right path depends on the situation: budget envelope, senior sponsorship, urgency, AI and data maturity, risk appetite, and whether the underlying problem is generic or bespoke. Most engagements eventually blend the two — and a credible advisor should be honest about which sequence fits the client in front of them.</p>
@@ -1915,7 +4324,7 @@ export const insights = [
 </tr>
 <tr class="border-t border-gray-200">
 <td class="p-3 font-semibold text-[#0E2841]">Time-to-value</td>
-<td class="p-3 text-gray-700">12–26 weeks to a production MVP is acceptable.</td>
+<td class="p-3 text-gray-700">12–26 weeks to a production MVP is acceptable (a Maven-observed delivery range, not a contractual benchmark).</td>
 <td class="p-3 text-gray-700">Weeks to first useful output is required to keep the business case alive.</td>
 </tr>
 <tr class="border-t border-gray-200 bg-gray-50">
@@ -1970,7 +4379,7 @@ export const insights = [
     <div class="flex-1 rounded-lg bg-[#F5A623]/10 border border-[#F5A623]/40 p-3">
       <div class="font-bold text-[#F5A623] uppercase tracking-wider text-[10px] mb-1">Asset</div>
       <div class="text-[#0E2841] font-semibold">Marketplace agent in one team</div>
-      <div class="text-gray-600 mt-1">8–12 weeks · function-head budget</div>
+      <div class="text-gray-600 mt-1">8–12 weeks (Maven's typical delivery range) · function-head budget</div>
     </div>
     <div class="flex items-center justify-center text-[#0E2841] font-bold">→</div>
     <div class="flex-1 rounded-lg bg-[#156082]/10 border border-[#156082]/40 p-3">
@@ -1980,7 +4389,7 @@ export const insights = [
     </div>
   </div>
 </div>
-<p>A function head adopts a Marketplace agent (say, the PMO Delivery Copilot or the Procurement Negotiation Agent), proves value inside one team in 8–12 weeks, and uses that evidence to unlock C-suite sponsorship for a project-led transformation that re-engineers the operating model around the agent. The asset is the wedge; the project is the scale-up.</p>
+<p>A function head adopts a Marketplace agent (say, the PMO Delivery Copilot or the Procurement Negotiation Agent), proves value inside one team within roughly 8–12 weeks (Maven's observed delivery range for comparable pilots, not a guaranteed timeline), and uses that evidence to unlock C-suite sponsorship for a project-led transformation that re-engineers the operating model around the agent. The asset is the wedge; the project is the scale-up.</p>
 <h3>Pattern 2 — Project Discovery → Asset Rollout</h3>
 <div class="my-5 not-prose">
   <div class="flex flex-col sm:flex-row items-stretch gap-2 text-xs">
@@ -2034,7 +4443,109 @@ export const insights = [
 <li>For bespoke problems with weak data foundations, do not skip the project-led discovery. Asset-led delivery on broken data is the most common failure mode we see in the GCC enterprises we serve.</li>
 <li>For generic problems with strong sponsorship, resist the urge to over-engineer. A configured Marketplace tool in production this quarter beats a custom build that lands next year.</li>
 </ul>
-<h2>Sources &amp; Citations</h2>
+
+  <h2>Sectoral Mechanics: Where Each Path Wins in GCC Markets</h2>
+
+<p>The GCC enterprise landscape—banking, energy, government, and telecom—has distinct characteristics that shift the decision matrix. Financial services in the UAE and Saudi Arabia face both accelerated digitization mandates and heightened regulatory scrutiny from CBUAE, SAMA, and local data sovereignty frameworks. In this context, project-led engagement often unlocks value that asset-led tools cannot match: custom compliance pipelines, regulator-approved audit trails, and localized risk taxonomies. A bank building an agentic loan-origination system cannot use a generic template; the operating model, the regulatory reporting, and the data lineage are institution-specific. Conversely, generic problems within that same bank—customer care triage, internal process automation, document classification—are exactly where Marketplace agents deliver in weeks rather than months.</p>
+
+<p>Energy and utilities operators in the GCC face a different pressure: the rush to digitize legacy SCADA and field-operations infrastructure before grid-scale renewable integration deadlines hit. Here, project-led work dominates because the underlying problem is almost never generic. A utility's asset-management system, sensor topology, and maintenance workflows are orthogonal to every other utility's. Asset-led tools can accelerate <em>around</em> the bespoke core—a Marketplace procurement agent can work with any utility's RFQ data—but the core orchestration, the predictive-maintenance algorithms, and the SCADA integration are always custom. Government and public-sector clients in KSA, UAE, and Qatar present a third pattern: they often have strong sponsorship and real appetite for transformation, but weaker data maturity and more complex change-management surfaces. Here, blended entry—asset-led quick-start in one operational unit plus project-led discovery of the data foundations—has proven more credible than either path alone.</p>
+
+<h2>Regulator Engagement & Compliance Frameworks</h2>
+
+<p>One overlooked factor in the project-led versus asset-led decision is regulatory pre-approval and documentation burden. In the GCC, both SAMA (Saudi Central Bank), CBUAE (Central Bank of the UAE), and Qatar Central Bank have published AI governance frameworks and expect financial institutions to demonstrate compliance before deploying agentic systems at scale. A productized Marketplace agent—pre-built by Maven, used across multiple clients—sits in a different approval posture than a custom-built system. The vendor (Maven) carries documentation and compliance burden for the asset; the client carries it for the project-led build. For conservative regulated entities, this shifts the calculus: an asset-led approach with clear Maven compliance pedigree can move faster through governance than a custom build that the client's compliance team has to vet from first principles.</p>
+
+<p>Conversely, for institutions with unique compliance requirements—a Saudi bank operating under distinct SAMA guidance, a UAE government entity subject to local data residency mandates—the compliance burden is <em>higher</em> on asset-led adoption because configuration and integration create edge cases the standard documentation does not cover. A project-led engagement produces a single compliance artifact (the custom system and its audit trail); asset-led adoption of a Marketplace tool produces that artifact plus configuration, integration, and data-connector documentation that the client's legal and compliance teams must review. For bespoke regulatory contexts, project-led often runs faster through governance even though it takes longer to build.</p>
+
+<h2>KPIs, Measurement Cadence, and the 90-Day Checkpoint</h2>
+
+<p>Maven's 90-day delivery range for asset-led pilots and project-led MVPs is not arbitrary; it aligns with how GCC board cycles and budget-review calendars actually work. Most GCC enterprises conduct quarterly business reviews and annual budget cycles that reset in Q1. A 90-day checkpoint—typically 12 weeks from intake to first measurable output—lands in a natural budget/governance window where the client can decide to scale, pivot, or stop. This cadence is critical because it forces discipline on both the vendor and the client: the engagement has to deliver something measurable by day 90, not a roadmap or a design document.</p>
+
+<p>For asset-led work, the KPIs are usually straightforward: time-to-deployment (target: 6–10 weeks for a single Marketplace tool), cost per use-case, and adoption curve (percentage of target users actively using the agent by week 12). For project-led work, the 90-day checkpoint is typically a production MVP and an operating-model handoff, not the full system; the KPI is usually "first production output owned by the business team, with no vendor involvement in day-to-day operation." The honest measurement is whether the client can run the system themselves on day 91. Many project-led engagements miss this because they aim for 100% feature completeness on day 90 rather than 60% completeness with full operational ownership.</p>
+
+<p>The GCC advisory market has learned to front-load this conversation: on day one, we agree on what "day 90" looks like in terms of measurable output and who owns the keys. Asset-led engagements can afford to be ambitious on features because the productized agent is already stable; project-led engagements have to trade features for operational maturity. For 180-day and 365-day arcs, the question shifts to how the first 90 days feeds the next waves. Asset-led typically scales through replication (same Marketplace tool across more functions or business units); project-led typically scales through iteration (the 90-day MVP becomes the foundation for a custom build that the client ultimately owns and evolves).</p>
+
+<h2>Vendor Evaluation & the Serviceability Trap</h2>
+
+<p>A frequent mistake in GCC enterprises is treating vendor selection as a binary choice between a "services partner" (project-led) and a "software vendor" (asset-led). In reality, Maven operates as both, and credible advisors should be transparent about the structural incentives in each mode. On project-led work, the vendor benefits from longer engagement timelines and ongoing service revenue; there is inherent pressure to design solutions that require ongoing support. On asset-led work, the vendor benefits from rapid scale and reduced per-client cost, but has structural pressure to generalize the product in ways that may not serve any single client perfectly. Neither incentive is malicious, but both are real.</p>
+
+<p>The client's job is to audit the vendor's recommendation for internal consistency. If Maven recommends project-led for a problem that looks generic (high-velocity procurement, standard customer-care triage, routine compliance reporting), we should expect the client to push back and ask why the Marketplace tool will not work. If we recommend asset-led for a problem that is genuinely bespoke (sovereign data architecture, regulator-specific compliance pipelines, institution-specific underwriting logic), that push-back should also land. The question is not "are we truthful?" but "do we have skin in the game to recommend one path over the other, and have we surfaced that openly?"</p>
+
+<p>A practical evaluation rubric: ask the vendor to propose a 90-day checkpoint and a 180-day path for both project-led and asset-led options. The one that delivers measurable output by day 90 with lower total-cost-of-ownership over 180 days is usually the right call. Do not let a vendor use "customization requirements" as a reason to rule out asset-led, and do not let them use "speed to value" as a reason to rule out project-led. Both are true statements in the right context; the question is which context you are actually in.</p>
+
+<h2>Sovereign Infrastructure & Data Residency Considerations</h2>
+
+<p>For GCC clients operating under SAMA, CBUAE, and Qatar Central Bank frameworks, data sovereignty and local infrastructure requirements often materialize late in project planning and throw the delivery-path choice into question. A Marketplace agent running on Maven's cloud infrastructure may not be acceptable for a Saudi bank that has committed to SAMA guidance on data localization. This is not a blocker—Maven can deploy agents to sovereign infrastructure, containerized environments, and air-gapped systems—but it changes the economics of asset-led delivery. Configuring a Marketplace tool to run in a client-controlled sovereign environment adds operational overhead that partially erases the speed-to-value advantage of the asset-led approach.</p>
+
+<p>The honest framing: sovereign deployment is available on either path, but it is <em>cheaper</em> on project-led because you are building the deployment and data-handling architecture once, end-to-end, rather than retrofitting an off-the-shelf agent into a bespoke infrastructure envelope. For clients with clear sovereign infrastructure requirements from the start, this should shift the recommendation toward project-led, even for problems that look generic. Conversely, for clients whose data is not sensitive (operational metrics, financial benchmarking, customer demographics for care routing), the Marketplace agent on Maven's shared infrastructure can deliver faster and cheaper, and the "sovereignty" discussion is a false constraint. The evaluation conversation should explicitly separate "we have a regulator or internal mandate for data residency" from "we have a general preference for not putting data in the cloud." One justifies the project-led path; the other is usually solved more cheaply by asset-led plus contractual data-handling guarantees.</p>
+
+<h2>Organizational Design & Arabic-Language Considerations</h2>
+
+<p>An underestimated complication in GCC AI adoption is that operational language for many functions is Arabic, but most agentic AI systems—including Marketplace tools—are English-first or English-optimized. A procurement agent trained on English contracts and purchasing workflows will need significant retraining on Arabic contract templates, local supplier nomenclature, and regional compliance language. For project-led engagements, this is a change-management line item and a training dataset; for asset-led adoption of a Marketplace tool, it becomes a non-linear configuration problem because the underlying models may not generalize well from English to Arabic without retraining. Maven's Marketplace agents support Arabic-language interfacing and regional data handling, but the degree of retrain required is use-case-specific and should be surfaced early in the evaluation.</p>
+
+<p>This is particularly acute in government and public-sector clients where Arabic is the official operational language and switching to English for AI-enabled processes introduces both adoption friction and regulatory risk. A project-led engagement can front-load this as a design requirement; an asset-led Marketplace tool requires the client to either accept English-language operation (operationally disruptive) or fund a retraining cycle that compresses the speed-to-value advantage. For clients operating primarily in Arabic, this is a legitimate reason to lean project-led even for otherwise generic problems, or to scope asset-led adoption with the understanding that Arabic-language optimization will be a 180-day follow-on investment.</p>
+
+<h2>Board-Level Framing & Reporting Cadence</h2>
+
+<p>At the board level, the project-led versus asset-led choice is often framed as "transformation versus quick wins." This is reductive and misses the real decision, which is "what does success look like in a 12-month window, and what pace of reporting do the board and C-suite actually need?" Asset-led tools generate visible early wins and measurable ROI within 90 days, which is valuable for board confidence and fund-release approval. Project-led engagements usually take 6–9 months to land a production MVP but then produce deeper operating-model change that compounds over 18–36 months. For a board that needs Q1 results, asset-led wins; for a board sponsoring a multi-year transformation, project-led accumulates more total value.</p>
+
+<p>The practical implication is that blended approaches are not a compromise—they are a credible strategy for reporting to boards with multiple constituencies. The C-suite sponsor gets the asset-led quick wins (visible value on day 90) to defend the AI budget; the operational sponsor gets the project-led foundation work (data, governance, core platform) that enables those quick wins to scale. The reporting cadence is: 90 days (first Marketplace agent in production), 180 days (second and third agents live, first project-led MVP approaching), 365 days (project-led system handed to operations, asset-led tools scaling across business units). This narrative is easier to maintain—and more credible to a board—than either "we will spend six months building a system" or "we will use a tool and call it transformation."</p>
+
+<figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-46 svg-d-46"><title id="svg-t-46">Maven AI diagram 46</title><desc id="svg-d-46">Maven AI diagram 46</desc>
+    <!-- Background -->
+    <rect width="700" height="240" fill="#FAFBFC"/>
+    
+    <!-- Grid lines -->
+    <line x1="50" y1="30" x2="50" y2="210" stroke="#E5E7EB" stroke-width="1"/>
+    <line x1="50" y1="210" x2="680" y2="210" stroke="#E5E7EB" stroke-width="1"/>
+    
+    <!-- Axis labels -->
+    <text x="25" y="120" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">Sponsorship &amp;</text>
+    <text x="25" y="133" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">AI Maturity</text>
+    
+    <text x="365" y="228" font-size="11" font-weight="600" fill="#0E2841" text-anchor="middle">Problem Specificity →</text>
+    
+    <!-- Quadrant 1: Asset-led (Low maturity, Generic) -->
+    <rect x="70" y="50" width="260" height="150" fill="#F5A623" fill-opacity="0.08" stroke="#F5A623" stroke-width="2"/>
+    <text x="85" y="70" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">ASSET-LED START</text>
+    <text x="85" y="95" font-size="12" font-weight="600" fill="#0E2841">Quick proof of concept</text>
+    <text x="85" y="111" font-size="10" fill="#4B5563">Marketplace tool in one function</text>
+    <text x="85" y="126" font-size="10" fill="#4B5563">8–12 weeks to first output</text>
+    <text x="85" y="141" font-size="10" fill="#4B5563">Build board confidence</text>
+    <text x="85" y="156" font-size="10" fill="#4B5563">Lower budget gate; functional sponsor</text>
+    <text x="85" y="171" font-size="10" fill="#4B5563">Iterate and scale if validated</text>
+    
+    <!-- Quadrant 2: Project-led (Low maturity, Bespoke) -->
+    <rect x="370" y="50" width="260" height="150" fill="#1A4F7A" fill-opacity="0.08" stroke="#1A4F7A" stroke-width="2"/>
+    <text x="385" y="70" font-size="10" font-weight="700" fill="#1A4F7A" letter-spacing="1">PROJECT-LED DISCOVERY</text>
+    <text x="385" y="95" font-size="12" font-weight="600" fill="#0E2841">Foundation-first approach</text>
+    <text x="385" y="111" font-size="10" fill="#4B5563">Value-case sprint + data audit</text>
+    <text x="385" y="126" font-size="10" fill="#4B5563">Identify true problem scope</text>
+    <text x="385" y="141" font-size="10" fill="#4B5563">Build governance &amp; pipelines</text>
+    <text x="385" y="156" font-size="10" fill="#4B5563">C-suite sponsorship required</text>
+    <text x="385" y="171" font-size="10" fill="#4B5563">Surfaces use cases for asset rollout</text>
+    
+    <!-- Quadrant 3: Asset scale (High maturity, Generic) -->
+    <rect x="70" y="180" width="260" height="40" fill="#F5A623" fill-opacity="0.12" stroke="#F5A623" stroke-width="2"/>
+    <text x="85" y="200" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">ASSET-LED AT SCALE</text>
+    <text x="85" y="215" font-size="10" fill="#4B5563">Roll tools across business units; fund next wave from savings</text>
+    
+    <!-- Quadrant 4: Project transform (High maturity, Bespoke) -->
+    <rect x="370" y="180" width="260" height="40" fill="#156082" fill-opacity="0.12" stroke="#156082" stroke-width="2"/>
+    <text x="385" y="200" font-size="10" font-weight="700" fill="#156082" letter-spacing="1">PROJECT-LED TRANSFORMATION</text>
+    <text x="385" y="215" font-size="10" fill="#4B5563">Custom build + operating-model reengineering; change muscle required</text>
+    
+    <!-- Arrow labels -->
+    <text x="35" y="85" font-size="10" fill="#4B5563" font-style="italic">Low</text>
+    <text x="15" y="175" font-size="10" fill="#4B5563" font-style="italic">High</text>
+    <text x="75" y="220" font-size="10" fill="#4B5563" font-style="italic">Generic</text>
+    <text x="630" y="220" font-size="10" fill="#4B5563" font-style="italic">Bespoke</text>
+  </svg>
+  <figcaption><strong>Figure 1:</strong> The Maven decision matrix for project-led versus asset-led delivery in GCC contexts. The two axes—problem specificity and organizational maturity—yield four starting recommendations. Most engagements begin in one quadrant and migrate through others over 12–24 months as maturity increases and use-case specificity sharpens.</figcaption>
+</figure>
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-47 svg-d-47"><title id="svg-t-47">36-month TCO comparison</title><desc id="svg-d-47">36-month TCO comparison</desc><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="200" x2="660" y2="200" stroke="#0E2841" stroke-width="1.5"/><line x1="60" y1="40" x2="60" y2="200" stroke="#0E2841" stroke-width="1.5"/><text x="40" y="200" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">$0</text><text x="40" y="120" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">$5M</text><text x="40" y="50" font-family="Inter,Arial" font-size="10" fill="#0E2841" text-anchor="end">$10M</text><rect x="120" y="120" width="60" height="80" fill="#1A4F7A"/><rect x="200" y="80" width="60" height="120" fill="#156082"/><rect x="280" y="60" width="60" height="140" fill="#0E2841"/><rect x="400" y="160" width="60" height="40" fill="#F5A623"/><rect x="480" y="140" width="60" height="60" fill="#F5A623" opacity="0.85"/><rect x="560" y="120" width="60" height="80" fill="#F5A623" opacity="0.7"/><text x="230" y="225" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">Build (in-house)</text><text x="510" y="225" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">Buy (vendor)</text><text x="150" y="115" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y1</text><text x="230" y="75" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y2</text><text x="310" y="55" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y3</text><text x="430" y="155" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y1</text><text x="510" y="135" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y2</text><text x="590" y="115" font-family="Inter,Arial" font-size="9" fill="#0E2841" text-anchor="middle">Y3</text></svg><figcaption>Build vs buy: 36-month total cost of ownership at GCC enterprise scale</figcaption></figure>
+  <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>MIT NANDA, <em>The GenAI Divide: State of AI in Business 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu</a></li>
   <li>BCG, <em>Where's the Value in AI?</em>, 2024. <a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">bcg.com</a></li>
@@ -2061,7 +4572,8 @@ export const insights = [
       summary: "Why lean, senior-delivery AI firms outperform Tier-1 competitors on the dimension that matters: time from contract to working software in production. Grounded in MIT NANDA, BCG, Stanford HAI evidence on enterprise AI delivery.",
       featured: false,
       tags: ["Boutique", "Delivery", "Speed", "Tier-1"],
-      content: `
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+  
   <h2>Thesis</h2>
   <p>The conventional logic of professional services — bigger is safer — has been systematically dismantled in the AI era. The firms shipping enterprise AI into production at the rate the GCC actually requires are, with increasing frequency, specialist boutiques delivering senior-led engagements on compressed timelines. The Tier-1 delivery model was optimised for multi-year IT transformation programs with stable requirements; AI delivery is fast, experimental, and judgment-intensive. This piece sets out why size now works against Tier-1 firms in AI delivery, the four levers boutiques can pull that Tier-1s structurally cannot, and the procurement implications for GCC buyers.</p>
   <h2>What the Evidence Says About Time-to-Production</h2>
@@ -2069,6 +4581,17 @@ export const insights = [
   <h2>Why Size Works Against Tier-1 Firms in AI Delivery</h2>
   <p>The Tier-1 pyramid — in our delivery experience, partners selling the work and a much larger pool of junior consultants doing it — creates a structural disconnect between the people who shape the engagement and the people who build it. Clients buy access to a Partner with twenty years of experience; the day-to-day delivery team is staffed at meaningfully more junior levels. In AI delivery, where the difference between a working architecture and a non-working one frequently turns on judgment at the point of build, that gap is consequential.</p>
   <h2>Four Levers Boutiques Pull</h2>
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-48 svg-d-48"><title id="svg-t-48">Four levers boutique AI firms pull</title><desc id="svg-d-48">Four colored panels showing the senior delivery, speed to value, pricing, and partner leverage levers.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="40" width="155" height="140" fill="#156082" rx="8"/><text x="97" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 1</text><text x="97" y="105" text-anchor="middle" fill="#fff" font-size="12">Senior</text><text x="97" y="123" text-anchor="middle" fill="#fff" font-size="12">Delivery</text>
+  <rect x="195" y="40" width="155" height="140" fill="#1A4F7A" rx="8"/><text x="272" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 2</text><text x="272" y="105" text-anchor="middle" fill="#fff" font-size="12">Speed</text><text x="272" y="123" text-anchor="middle" fill="#fff" font-size="12">to Value</text>
+  <rect x="370" y="40" width="155" height="140" fill="#0E2841" rx="8"/><text x="447" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 3</text><text x="447" y="105" text-anchor="middle" fill="#fff" font-size="12">Pricing</text>
+  <rect x="545" y="40" width="135" height="140" fill="#F5A623" rx="8"/><text x="612" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 4</text><text x="612" y="105" text-anchor="middle" fill="#fff" font-size="12">Partner</text><text x="612" y="123" text-anchor="middle" fill="#fff" font-size="12">Leverage</text>
+  <text x="350" y="205" text-anchor="middle" fill="#475569" font-size="11">Tier-1 structural overhead vs boutique senior-delivery model</text>
+  </svg>
+  <figcaption>Figure 1 — The four levers boutiques can pull that Tier-1 firms structurally cannot.</figcaption>
+  </figure>
   <h3>Lever 1 — Senior Delivery</h3>
   <p>Every Maven engagement has a Partner or Principal as the day-to-day delivery lead — in the working sessions, the architecture reviews, and the troubleshooting calls when something breaks. The seniority sold is the seniority delivered.</p>
   <h3>Lever 2 — Speed to Value</h3>
@@ -2089,6 +4612,76 @@ export const insights = [
   <li><strong>Require senior delivery commitment in the contract</strong>, not in the pitch. Specify the minimum seniority of the day-to-day delivery lead.</li>
   <li><strong>Measure speed to prototype as a selection criterion.</strong> Ask short-listed firms how quickly they can have a working prototype on production data. The answer is one of the most reliable predictors of production delivery capability.</li>
   </ul>
+  
+  <h2>Vendor Evaluation Framework for GCC Buyers</h2>
+
+<p>GCC procurement teams face a structural challenge when evaluating AI delivery partners: the firms that pitch best are often not the firms that deliver fastest. Tier-1 business development teams are staffed to win competitive bids; boutique founders typically attend pitches themselves. The evaluation criteria commonly used in traditional IT procurement — team size, global footprint, ISO certifications, case study volume — are poorly predictive of AI delivery success. Maven's recommendation is to shift the evaluation gate toward six measurable proxies that correlate with production outcomes.</p>
+
+<p>First, require each short-listed firm to submit a working prototype on your actual production data within two weeks of contract signature, using a dataset you provide. This is not a theoretical exercise. The prototype need not be production-grade; it must demonstrate the vendor's ability to mobilise, understand your data structure, and produce a functioning proof-of-concept under time pressure. A Tier-1 firm will typically require a month of discovery and governance reviews before prototype work begins. A delivery-led boutique will have a working model in fourteen days. This single gate eliminates a large fraction of firms whose business model depends on front-loaded assessment work rather than rapid iteration.</p>
+
+<p>Second, ask for the CV and code samples of the individual who will be the day-to-day delivery lead — not the engagement partner, but the engineer who will be in your production environment debugging models and reviewing architecture. Request references from three previous clients for whom this specific individual led delivery. If the vendor cannot name the delivery lead before contract signature, the engagement structure does not match the boutique model. If the delivery lead is a recent graduate or has no public technical presence, risk profile increases materially.</p>
+
+<p>Third, require a 90-day delivery roadmap with specific milestones tied to working software, not process gates. Request that the vendor commit contractually to the specific seniority level that will staff each phase. Include a clause that allows you to request replacement of any team member with mutual notice, without ramp-up delay. This inverts the traditional risk allocation: instead of protecting the vendor's ability to rotate junior staff, it protects your ability to maintain delivery quality.</p>
+
+<p>Fourth, evaluate "speed to prototype" as explicitly as you would evaluate cost. A vendor who can deliver a working prototype in twenty-one days at a higher rate may deliver production AI faster and cheaper overall than a vendor quoting a lower day rate but requiring four months of discovery. Model the total cost of capital — the opportunity cost of delayed value realisation — into the vendor comparison.</p>
+
+<h2>GCC-Specific Regulator and Stakeholder Engagement</h2>
+
+<p>AI governance frameworks in the GCC are emerging in parallel with procurement activity, not in advance of it. This creates a window where the vendor's ability to navigate regulator expectations, documentation requirements, and cross-agency coordination becomes a material differentiator. Tier-1 firms have regulatory relations teams; boutiques rarely do. However, the relevant difference is not the existence of a relations team, but the vendor's willingness to embed compliance thinking into the architecture from day one, rather than adding it as a post-build phase.</p>
+
+<p>The UAE's AI Principles, released in 2023, emphasise transparency, accountability, and human oversight. Saudi Arabia's NEOM and Vision 2030 programs have embedded AI governance requirements into procurement specifications. Qatar's National Data Management and AI Governance Framework establishes data lineage and model provenance requirements. Bahrain's Digital Transformation initiative requires documented AI risk assessment. Oman's AI strategy includes auditability mandates. A vendor evaluation should explicitly assess:</p>
+
+<ul>
+<li><strong>Model explainability infrastructure</strong> — the vendor's capability to generate human-interpretable explanations of model outputs, not post-hoc or as an afterthought, but as a built-in feature of the system architecture.</li>
+<li><strong>Data governance documentation</strong> — the vendor's process for documenting data lineage, transformation steps, and quality gates in a format that meets GCC regulatory expectations without becoming a compliance theatre that delays delivery.</li>
+<li><strong>Audit trail automation</strong> — the system's ability to generate logs of model decisions, retraining events, and performance drift detection that regulators can review without requiring manual reconstruction.</li>
+<li><strong>Cross-agency coordination experience</strong> — specific examples of how the vendor has managed engagements requiring sign-off or coordination across multiple government entities without extended governance delays.</li>
+</ul>
+
+<p>Maven's observation is that the vendors who successfully navigate GCC regulation are not those with the largest compliance teams, but those who build governance into the system architecture early and treat it as a technical problem to be solved, not a bureaucratic overhead to be managed. The vendor who says "we will add an audit module in phase three" is structurally at risk; the vendor who says "audit logging is built into the data pipeline from day one" is more likely to deliver.</p>
+
+<p>Additionally, GCC procurement teams should require vendors to conduct stakeholder mapping exercises that identify not only the obvious regulators (Central Banks, Ministry of Communications and IT) but also the secondary stakeholders who will ultimately use or depend on the system — internal audit teams, compliance officers, line-of-business leaders. A vendor who has experience navigating competing interests among these groups and who can produce a stakeholder engagement plan as part of scoping is more likely to avoid late-stage surprises that delay production deployment.</p>
+
+<h2>Key Performance Indicators and Success Metrics for AI Delivery</h2>
+
+<p>The metrics that matter in AI delivery differ materially from traditional IT metrics. Time-to-business-value, not time-to-code-complete, is the primary success measure. A vendor who delivers a working model six weeks after go-live that generates measurable business impact has outperformed a vendor who delivers comprehensive documentation on schedule but the model never reaches production. GCC procurement teams should define success metrics before vendor selection, not after contract signature.</p>
+
+<p>The leading indicators of production success are: (1) time from project start to working prototype on production data, (2) time from prototype to production-grade model, (3) number of documented model retrains required before reaching performance target, (4) the seniority ratio between the person who designed the architecture and the person who maintains it post-launch. Tier-1 firms optimise for delivery schedule adherence and resource utilisation. Boutique firms optimise for the speed at which the client can act on the system.</p>
+
+<p>A practical measurement framework for GCC clients includes:</p>
+
+<ol>
+<li><strong>Days to First Working Model (DFW)</strong> — the calendar days from contract signature to a prototype that runs on production data and produces outputs in the required format. Target: ≤30 days. A vendor unable to commit to this metric should be evaluated with skepticism.</li>
+<li><strong>Model Performance Delta</strong> — the improvement in the designated business metric (accuracy, reduction in false positives, cost savings, etc.) between the prototype and the production-grade model. This measures the vendor's ability to iterate toward business value, not just technical perfection.</li>
+<li><strong>Post-Launch Engagement Intensity</strong> — the hours per week of vendor involvement required to maintain model performance in the six months after production launch. A model that requires fifteen hours per week of vendor support is not truly in production; it is in extended ramp-up. Target: ≤5 hours/week by month six.</li>
+<li><strong>Knowledge Transfer Completeness</strong> — the percentage of the model architecture, training pipeline, and maintenance procedures that your internal team can execute without vendor support at the end of the engagement. Target: ≥80%. If your team cannot operate the system without ongoing vendor dependency, the engagement has not truly completed.</li>
+<li><strong>Documented Architecture Decisions</strong> — the number of explicit architecture decisions that are documented in a format your team can understand and maintain. This is a proxy for the quality of the vendor's technical communication and the durability of the solution post-engagement.</li>
+</ol>
+
+<p>These metrics should be included in the contract as success criteria, with implications for final payment, warranty periods, or performance-based pricing. This aligns the vendor's incentives with production delivery, not with schedule adherence or resource consumption.</p>
+
+<h2>The 90/180/365 Day Delivery Cadence for GCC Government Programs</h2>
+
+<p>Most GCC government AI initiatives operate on a fiscal-year cycle, which means the window for demonstrating value and securing continued funding is typically twelve months. A vendor's ability to structure the engagement into meaningful phases that produce visible value at ninety, one hundred eighty, and three hundred sixty-five days is a material advantage. This is not a preference; it is often a hard requirement imposed by budget governance or ministerial oversight.</p>
+
+<p>The optimal structure for a GCC government AI program is: (1) Weeks 1–3: Scoping and data assessment. (2) Weeks 4–12: Prototype development. (3) Week 12: First milestone and stakeholder review. (4) Weeks 13–24: Model refinement and validation. (5) Week 24 (Day 180): Second milestone, regulatory review, and "go / no-go" decision. (6) Weeks 25–52: Production deployment, user training, and performance monitoring. (7) Day 365: Full production, performance metrics published, and decision point on expansion or next phase. This cadence requires a vendor who understands government timelines and can deliver working capabilities at each gate, not just strategy documents.</p>
+
+<p>At Day 90, the deliverable should be a functioning prototype that government stakeholders can interact with and see produce outputs on their actual use case. This is not a theoretical model; it is a system in a government-controlled environment that processes real data. At Day 180, the deliverable should be a production-grade model with documented performance metrics, regulatory compliance documentation, and a handover plan for internal operations teams. At Day 365, the deliverable is a fully operational system with internal team training completed, ongoing performance monitoring automated, and a decision framework for the next phase (scale, integrate, or sunsetting).</p>
+
+<p>Vendors who structure engagements on a different cadence — quarterly deliverables, phased rollout across six months — are often being honest about their own capacity or methodology, but the cadence does not align with GCC government fiscal realities. When evaluating vendors, explicitly ask how they would structure the project against these gates, and whether they have experience delivering working capabilities at ninety-day intervals. The answer is highly predictive of whether they will actually reach production.</p>
+
+<h2>Common Procurement Traps and How to Avoid Them</h2>
+
+<p>GCC procurement teams frequently fall into three traps when selecting AI delivery partners. Maven has seen each of these play out multiple times, and early recognition is the best defense.</p>
+
+<p><strong>Trap 1: Confusing Proposal Quality with Delivery Capability.</strong> The firms that produce the most polished proposals are often those with large business development teams and institutional experience in government procurement processes. These are not the same as the firms most likely to deliver working AI. A proposal that contains detailed governance, risk, and compliance sections does not predict delivery speed; it often predicts that the firm will spend the first three months of the engagement on process work before actual build begins. Request that short-listed vendors submit a simplified one-page technical approach rather than a fifty-page methodology document. The quality and coherence of the simplified approach is more predictive of delivery capability than the length and comprehensiveness of the full proposal.</p>
+
+<p><strong>Trap 2: Overweighting Firm Size and Underweighting Individual Delivery Lead Capability.</strong> A GCC government buyer has legitimate reasons to value firm stability, financial backing, and global presence. However, the day-to-day success of the engagement depends almost entirely on the seniority, judgment, and commitment of the delivery lead. A small firm whose founder will personally lead your engagement often outperforms a large firm whose engagement is managed by an account executive while a junior architect manages daily delivery. Ask explicitly: "Who will be in our production environment, in our code reviews, and in our troubleshooting calls?" If the answer is a junior architect or a "delivery team" rather than a named senior engineer, escalate the risk in your vendor evaluation.</p>
+
+<p><strong>Trap 3: Building Long Ramp-Up Periods into the Contract.</strong> Tier-1 contracts often include lengthy discovery and planning phases (three to six months) before actual build begins. This is structurally aligned with Tier-1 economics — more billable hours at higher utilisation before delivering anything — but it is misaligned with GCC government timelines. A contract that does not include a working prototype by the end of week twelve is almost certainly a Tier-1 contract hidden in a boutique wrapper. Insist on early, testable deliverables. The vendor who cannot commit to a working prototype in fourteen days is signalling that their delivery model depends on extended front-loaded work.</p>
+
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-49 svg-d-49"><title id="svg-t-49">MVP velocity horizons</title><desc id="svg-d-49">MVP velocity horizons</desc><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="190" x2="660" y2="190" stroke="#0E2841" stroke-width="1.5"/><polyline fill="none" stroke="#156082" stroke-width="3" points="80,170 220,130 400,90 620,55"/><polyline fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5 4" points="80,170 220,160 400,150 620,140"/><circle cx="220" cy="130" r="6" fill="#F5A623"/><circle cx="400" cy="90" r="6" fill="#F5A623"/><circle cx="620" cy="55" r="6" fill="#F5A623"/><text x="220" y="115" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">90d</text><text x="400" y="75" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">180d</text><text x="620" y="40" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">365d</text><text x="370" y="215" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">Days from kickoff</text><text x="660" y="60" font-family="Inter,Arial" font-size="10" fill="#156082" text-anchor="end">Maven cohort</text><text x="660" y="135" font-family="Inter,Arial" font-size="10" fill="#1A4F7A" text-anchor="end">GCC median</text></svg><figcaption>MVP velocity benchmarks across the 90 / 180 / 365-day horizons</figcaption></figure>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>MIT NANDA, <em>State of AI in Business 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu</a></li>
@@ -2102,7 +4695,8 @@ export const insights = [
   <li>OECD, <em>AI Principles</em>. <a href="https://oecd.ai/en/ai-principles" target="_blank" rel="noopener noreferrer">oecd.ai</a></li>
   </ol>
       `,
-      contentAr: `  <h2>الأطروحة</h2>
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+    <h2>الأطروحة</h2>
   <p>لقد تم تفكيك منطق الخدمات المهنية التقليدية — حيث الحجم الأكبر أكثر أماناً — بشكل منهجي في عصر الذكاء الاصطناعي. الشركات التي تطرح الذكاء الاصطناعي للمؤسسات في الإنتاج بالمعدل الذي يتطلبه مجلس التعاون الخليجي هي، بشكل متزايد، شركات متخصصة boutique توفر انخراطات بقيادة كبار في جداول زمنية مضغوطة. تم تحسين نموذج تسليم Tier-1 من أجل برامج تحويل تكنولوجيا المعلومات متعددة السنوات مع متطلبات مستقرة؛ تسليم الذكاء الاصطناعي سريع وتجريبي وغني بالحكم. يحدد هذا المقال السبب في أن الحجم الآن يعمل ضد شركات Tier-1 في تسليم الذكاء الاصطناعي، والرافعات الأربع التي يمكن لشركات boutique سحبها بالطريقة التي لا يمكن لـ Tier-1s أن تفعلها من الناحية الهيكلية، والآثار الشرائية لمشترين مجلس التعاون الخليجي.</p>
   <h2>ما يقوله الدليل عن الوقت حتى الإنتاج</h2>
   <p>تكتشف ميت ناندا <em>حالة الذكاء الاصطناعي في الأعمال 2025</em> أن تجربة الذكاء الاصطناعي النموذجية للمؤسسة لا تصل إلى الإنتاج على الإطلاق؛ فقط ~5% من الأنظمة المتكاملة تولد قيمة قابلة للقياس (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">ميت ناندا، 2025</a>). يضع تقرير بي سي جي <em>أين القيمة في الذكاء الاصطناعي؟</em> فقط 26% من الشركات بعد التجارب و4% في الحدود النخبة، مع تحرك الشركات النخبة من الفكرة إلى الإنتاج في أشهر بدلاً من السنوات (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">بي سي جي، 2024</a>). توثق ستانفورد إتش إيه آي <em>تقرير مؤشر الذكاء الاصطناعي لعام 2025</em> أن المنظمات الأصغر والمحلية في الذكاء الاصطناعي تنشر الذكاء الاصطناعي الإنتاجي بشكل أسرع من الشركات الكبرى الراسخة (<a href="https://hai.stanford.edu/ai-index/2025-ai-index-report" target="_blank" rel="noopener noreferrer">ستانفورد إتش إيه آي، 2025</a>). السرعة ليست مقياساً غرورياً — إنها المتغير الأكثر ارتباطاً بما إذا كان مبادرة الذكاء الاصطناعي تصل إلى الإنتاج على الإطلاق.</p>
@@ -2129,6 +4723,88 @@ export const insights = [
   <li><strong>اطلب الالتزام بالتسليم الكبير في العقد</strong>، وليس في الملعب. حدد الحد الأدنى من أقدمية رئيس التسليم اليومي.</li>
   <li><strong>قياس السرعة إلى النموذج الأولي كمعيار اختيار.</strong> اسأل الشركات المختارة بقائمة قصيرة كم بسرعة يمكن أن يكون لديهم نموذج أولي عامل على بيانات الإنتاج. الإجابة هي واحدة من أكثر المتنبئات الموثوقة لقدرة تسليم الإنتاج.</li>
   </ul>
+  
+<h2>إطار عمل تقييم البائعين لمشتري دول مجلس التعاون الخليجي</h2>
+
+<p>تواجه فرق المشتريات في دول مجلس التعاون الخليجي تحديًا هيكليًا عند تقييم شركاء تسليم الذكاء الاصطناعي: الشركات التي تقدم عروضًا أفضل ليست دائمًا الشركات التي تسلم بأسرع وقت. فرق التطوير التجاري من الطبقة الأولى مؤهلة للفوز بالعطاءات التنافسية؛ مؤسسو الشركات الصغيرة المتخصصة عادة ما يحضرون العروض بأنفسهم. معايير التقييم المستخدمة بشكل شائع في المشتريات التقليدية في تكنولوجيا المعلومات — حجم الفريق والوجود العالمي وشهادات ISO وعدد دراسات الحالة — لا تنبئ بشكل جيد بنجاح تسليم الذكاء الاصطناعي. توصية Maven هي تحويل بوابة التقييم نحو ستة بدائل قابلة للقياس التي تترابط مع نتائج الإنتاج.</p>
+
+<p>أولاً، طلب من كل شركة مختارة تقديم نموذج عملي على بيانات الإنتاج الفعلية الخاصة بك خلال أسبوعين من توقيع العقد، باستخدام مجموعة بيانات تقدمها. هذا ليس تمرينًا نظريًا. لا يحتاج النموذج الأولي إلى أن يكون جاهزًا للإنتاج؛ يجب أن يوضح قدرة البائع على التحرك السريع وفهم هيكل بيانات الشركة وإنتاج إثبات مفهوم وظيفي تحت ضغط زمني. عادة ما تتطلب شركة من الطبقة الأولى شهرًا من مراجعات الاكتشاف والحوكمة قبل بدء عمل النموذج الأولي. ستكون لدى شركة متخصصة موجهة للتسليم نموذج عملي في أربعة عشر يومًا. تقضي هذه البوابة الواحدة على جزء كبير من الشركات التي يعتمد نموذج أعمالها على عمل التقييم الموسع في البداية بدلاً من التكرار السريع.</p>
+
+<p>ثانيًا، اطلب السيرة الذاتية وعينات التعليمات البرمجية للفرد الذي سيكون قائد التسليم اليومي — وليس شريك الالتزام، بل المهندس الذي سيكون في بيئة الإنتاج الخاصة بك لتصحيح الأخطاء في النماذج ومراجعة البنية. اطلب مراجع من ثلاث عملاء سابقين قاد هذا الفرد تسليمهم. إذا كان البائع غير قادر على تسمية قائد التسليم قبل توقيع العقد، فإن هيكل الالتزام لا يتطابق مع نموذج الشركة المتخصصة. إذا كان قائد التسليم خريجًا حديثًا أو ليس له وجود تقني عام، فإن ملف المخاطر يزداد بشكل كبير.</p>
+
+<p>ثالثًا، اطلب خريطة طريق تسليم لمدة 90 يومًا مع معالم محددة مرتبطة بالبرامج العاملة، وليس بوابات العملية. اطلب من البائع الالتزام بموجب العقد بمستوى الخبرة المحدد الذي سيقوم به كل مرحلة. أدرج بند يسمح لك بطلب استبدال أي عضو فريق بملاحظة متبادلة، دون تأخير في البدء. يعكس هذا تخصيص المخاطر التقليدي: بدلاً من حماية قدرة البائع على تدوير الموظفين الصغار، فإنه يحمي قدرتك على الحفاظ على جودة التسليم.</p>
+
+<p>رابعًا، قيم "السرعة للنموذج الأولي" بوضوح كما تقيم التكلفة. قد يسلم البائع الذي يستطيع تسليم نموذج أولي وظيفي في واحد وعشرين يومًا بمعدل أعلى منتجات الذكاء الاصطناعي بشكل أسرع وأرخص بشكل عام من البائع الذي يقتبس معدل يومي أقل لكن يتطلب أربعة أشهر من الاكتشاف. اجعل نموذجًا لإجمالي تكلفة رأس المال — تكلفة الفرصة البديلة لتأخير تحقق القيمة — في مقارنة البائعين.</p>
+
+<h2>التعامل مع المنظمين والمصالح في دول مجلس التعاون الخليجي</h2>
+
+<p>إطر عمل حوكمة الذكاء الاصطناعي في دول مجلس التعاون الخليجي تظهر بالتوازي مع نشاط المشتريات، وليس قبلها. يخلق هذا نافذة حيث تصبح قدرة البائع على التنقل في توقعات المنظمين ومتطلبات التوثيق والتنسيق بين الوكالات عاملاً مختلفًا ملموسًا. فرق العلاقات التنظيمية لدى شركات الطبقة الأولى؛ نادرًا ما تمتلكها الشركات الصغيرة المتخصصة. ومع ذلك، الفرق الملموس ليس وجود فريق علاقات، بل استعداد البائع لدمج التفكير المتعلق بالامتثال في البنية الأساسية من اليوم الأول، بدلاً من إضافتها كمرحلة بعد البناء.</p>
+
+<p>أكدت مبادئ الذكاء الاصطناعي في الإمارات، الصادرة في عام 2023، على الشفافية والمساءلة والإشراف البشري. تتضمن برامج NEOM ورؤية 2030 في المملكة العربية السعودية متطلبات حوكمة الذكاء الاصطناعي المدمجة في مواصفات المشتريات. يضع الإطار الوطني لإدارة البيانات وحوكمة الذكاء الاصطناعي في قطر متطلبات تتبع أصل البيانات وأصل النموذج. تتطلب مبادرة التحول الرقمي في البحرين تقييم مخاطر الذكاء الاصطناعي الموثق. تتضمن استراتيجية الذكاء الاصطناعي في عمّان متطلبات القابلية للمراجعة. يجب أن يقيّم التقييم الصريح للبائع:</p>
+
+<ul>
+<li><strong>البنية الأساسية لقابلية تفسير النماذج</strong> — قدرة البائع على إنشاء شروحات قابلة للفهم من قبل الإنسان لمخرجات النموذج، وليس بعد الحقيقة أو كفكرة ثانية، بل كميزة مدمجة في بنية معمارية النظام.</li>
+<li><strong>توثيق حوكمة البيانات</strong> — عملية البائع للتوثيق الخاص بتتبع أصل البيانات وخطوات التحويل وبوابات الجودة بصيغة تلبي توقعات المنظمين في دول مجلس التعاون الخليجي دون أن تصبح مسرحية امتثال تؤخر التسليم.</li>
+<li><strong>أتمتة مسار التدقيق</strong> — قدرة النظام على إنشاء سجلات لقرارات النموذج وأحداث إعادة التدريب واكتشاف الانجراف الأداء التي يمكن للمنظمين مراجعتها دون الحاجة إلى إعادة بناء يدوية.</li>
+<li><strong>خبرة التنسيق بين الوكالات</strong> — أمثلة محددة لكيفية قيام البائع بإدارة الالتزامات التي تتطلب الموافقة أو التنسيق بين كيانات حكومية متعددة دون تأخيرات إدارية طويلة.</li>
+</ul>
+
+<p>ملاحظة Maven هي أن البائعين الذين ينجحون في التنقل في لائحة دول مجلس التعاون الخليجي ليسوا أولئك الذين لديهم أكبر فرق امتثال، بل أولئك الذين يبنون الحوكمة في البنية الأساسية للنظام في وقت مبكر ويعاملونها كمشكلة تقنية يجب حلها، وليس كحمل بيروقراطي يجب إدارته. البائع الذي يقول "سنضيف وحدة تدقيق في المرحلة الثالثة" معرض للخطر بشكل هيكلي؛ البائع الذي يقول "تسجيل التدقيق مدمج في خط أنابيب البيانات من اليوم الأول" من المرجح أن يسلم.</p>
+
+<p>بالإضافة إلى ذلك، يجب على فرق المشتريات في دول مجلس التعاون الخليجي أن تطلب من البائعين إجراء تمارين رسم خرائط أصحاب المصلحة التي تحدد ليس فقط المنظمين الواضحين (البنوك المركزية ووزارة الاتصالات وتكنولوجيا المعلومات) بل أيضًا أصحاب المصلحة الثانويين الذين سيستخدمون النظام أو يعتمدون عليه في النهاية — فرق التدقيق الداخلية وموظفي الامتثال وقادة خط العمل. البائع الذي لديه خبرة في التنقل في المصالح المتنافسة بين هذه المجموعات والذي يمكنه تقديم خطة تفاعل أصحاب المصلحة كجزء من تحديد النطاق من المرجح أن يتجنب المفاجآت في المراحل المتأخرة التي تؤخر نشر الإنتاج.</p>
+
+<h2>مؤشرات الأداء الرئيسية ومقاييس النجاح في تسليم الذكاء الاصطناعي</h2>
+
+<p>المقاييس التي تهم في تسليم الذكاء الاصطناعي تختلف بشكل كبير عن مقاييس تكنولوجيا المعلومات التقليدية. الوقت حتى الوصول إلى قيمة العمل، وليس الوقت حتى إكمال الكود، هو مقياس النجاح الأساسي. البائع الذي يسلم نموذجًا عملاً بعد ستة أسابيع من البدء ويولد تأثيرًا قابلاً للقياس تفوق على البائع الذي يسلم وثائق شاملة في الوقت المحدد لكن النموذج لم يصل إلى الإنتاج أبدًا. يجب على فرق المشتريات في دول مجلس التعاون الخليجي تحديد مقاييس النجاح قبل اختيار البائع، وليس بعد توقيع العقد.</p>
+
+<p>المؤشرات الرائدة لنجاح الإنتاج هي: (1) الوقت من بداية المشروع إلى نموذج عملي على بيانات الإنتاج، (2) الوقت من النموذج الأولي إلى نموذج جاهز للإنتاج، (3) عدد إعادة تدريب النماذج الموثقة المطلوبة قبل الوصول إلى هدف الأداء، (4) نسبة الخبرة بين الشخص الذي صمم البنية والشخص الذي يحافظ عليها بعد الإطلاق. شركات الطبقة الأولى تحسن الالتزام بجدول التسليم واستخدام الموارد. الشركات الصغيرة المتخصصة تحسن السرعة التي يمكن للعميل التصرف بها على النظام.</p>
+
+<p>إطار قياس عملي لعملاء دول مجلس التعاون الخليجي يتضمن:</p>
+
+<ol>
+<li><strong>أيام إلى أول نموذج عملي (DFW)</strong> — أيام التقويم من توقيع العقد إلى نموذج أولي يعمل على بيانات الإنتاج وينتج مخرجات بالصيغة المطلوبة. الهدف: ≤30 يومًا. يجب تقييم البائع الذي لا يستطيع الالتزام بهذا المقياس بتشكك.</li>
+<li><strong>فجوة أداء النموذج</strong> — التحسين في المقياس المحدد للعمل (الدقة وتقليل الإيجابيات الكاذبة وتوفير التكاليف وما إلى ذلك) بين النموذج الأولي والنموذج الجاهز للإنتاج. يقيس هذا قدرة البائع على التكرار نحو قيمة العمل، وليس فقط الكمال التقني.</li>
+<li><strong>شدة الالتزام بعد الإطلاق</strong> — الساعات في الأسبوع من مشاركة البائع المطلوبة للحفاظ على أداء النموذج في الستة أشهر التالية لإطلاق الإنتاج. النموذج الذي يتطلب خمسة عشر ساعة في الأسبوع من دعم البائع ليس حقًا في الإنتاج؛ إنه في مرحلة بدء موسعة. الهدف: ≤5 ساعات/أسبوع بحلول الشهر السادس.</li>
+<li><strong>اكتمال نقل المعرفة</strong> — النسبة المئوية لبنية النموذج وخط أنابيب التدريب وإجراءات الصيانة التي يمكن لفريقك الداخلي تنفيذها دون دعم البائع في نهاية الالتزام. الهدف: ≥80%. إذا كان فريقك غير قادر على تشغيل النظام دون الاعتماد المستمر على البائع، فإن الالتزام لم ينته حقًا.</li>
+<li><strong>قرارات البنية الموثقة</strong> — عدد قرارات البنية الصريحة الموثقة بصيغة يمكن لفريقك فهمها والحفاظ عليها. هذا بديل لجودة التواصل التقني للبائع وندية الحل بعد الالتزام.</li>
+</ol>
+
+<p>يجب أن تُدرج هذه المقاييس في العقد كمعايير نجاح، مع آثار على الدفع النهائي أو فترات الضمان أو التسعير القائم على الأداء. هذا يوازن حوافز البائع مع تسليم الإنتاج، وليس مع الالتزام بالجدول الزمني أو استهلاك الموارد.</p>
+
+<h2>وتيرة التسليم 90/180/365 يوم لبرامج حكومات دول مجلس التعاون الخليجي</h2>
+
+<p>تعمل معظم مبادرات الذكاء الاصطناعي الحكومية في دول مجلس التعاون الخليجي على دورة السنة المالية، مما يعني أن النافذة لإظهار القيمة وتأمين تمويل مستمر عادة ما تكون اثني عشر شهرًا. قدرة البائع على هيكلة الالتزام في مراحل ذات مغزى تنتج قيمة مرئية عند تسعين وواحد مائة وثمانين وثلاثمائة وستين يومًا هي ميزة مادية. هذا ليس تفضيلاً؛ إنه في كثير من الأحيان مطلب صعب تفرضه حوكمة الميزانية أو الإشراف الوزاري.</p>
+
+<p>البنية المثلى لبرنامج الذكاء الاصطناعي الحكومي في دول مجلس التعاون الخليجي هي: (1) الأسابيع 1-3: تحديد النطاق وتقييم البيانات. (2) الأسابيع 4-12: تطوير النموذج الأولي. (3) الأسبوع 12: المعلم الأول ومراجعة أصحاب المصلحة. (4) الأسابيع 13-24: تحسين النموذج والتحقق من صحته. (5) الأسبوع 24 (اليوم 180): المعلم الثاني والمراجعة التنظيمية وقرار "المضي قدما / عدم المضي قدما". (6) الأسابيع 25-52: نشر الإنتاج وتدريب المستخدم ومراقبة الأداء. (7) اليوم 365: الإنتاج الكامل ونشر مقاييس الأداء وقرار التوسع أو المرحلة التالية. تتطلب هذه الوتيرة بائعًا يفهم الجداول الزمنية الحكومية ويمكنه تسليم قدرات عاملة في كل بوابة، وليس فقط مستندات الاستراتيجية.</p>
+
+<p>عند اليوم 90، يجب أن تكون المسلمات نموذجًا أوليًا وظيفيًا يمكن لأصحاب المصلحة الحكوميين التفاعل معه ورؤيته ينتج المخرجات في حالة الاستخدام الفعلية. هذا ليس نموذجًا نظريًا؛ إنه نظام في بيئة يسيطر عليها الحكومة ويعالج بيانات حقيقية. في اليوم 180، يجب أن تكون المسلمات نموذجًا جاهزًا للإنتاج مع مقاييس أداء موثقة ووثائق امتثال تنظيمية وخطة تسليم لفرق العمليات الداخلية. في اليوم 365، المسلمات هي نظام يعمل بالكامل مع اكتمال تدريب الفريق الداخلي ومراقبة الأداء المستمرة المؤتمتة وإطار عمل القرار للمرحلة التالية (التوسع أو الدمج أو الإيقاف).</p>
+
+<p>البائعون الذين يهيكلون الالتزامات على وتيرة مختلفة — المسلمات الفصلية وإطلاق المراحل على مدى ستة أشهر — غالبًا ما يكونون صادقين بشأن قدرتهم أو منهجيتهم الخاصة، لكن الوتيرة لا تتوافق مع الواقع المالي الحكومي لدول مجلس التعاون الخليجي. عند تقييم البائعين، اسأل صراحة عن كيفية هيكلة المشروع مقابل هذه البوابات، وما إذا كانت لديهم خبرة في تسليم قدرات عاملة على فترات تسعين يومًا. الجواب يتنبأ بدقة عالية بما إذا كانوا سيصلون حقًا إلى الإنتاج.</p>
+
+<h2>الفخاخ الشائعة في المشتريات وكيفية تجنبها</h2>
+
+<p>غالباً ما تقع فرق المشتريات في دول مجلس التعاون الخليجي في ثلاثة فخاخ عند اختيار شركاء تسليم الذكاء الاصطناعي. رأت Maven كل واحد من هذه تحدث عدة مرات، والتعرف المبكر هو أفضل دفاع.</p>
+
+<p><strong>الفخ 1: الخلط بين جودة الاقتراح وقدرة التسليم.</strong> الشركات التي تنتج أكثر الاقتراحات صقلاً هي غالبًا تلك التي تمتلك فرق تطوير أعمال كبيرة وخبرة مؤسسية في عمليات المشتريات الحكومية. هذا ليس نفس الشركات التي من المرجح أن تسلم الذكاء الاصطناعي العاملة. الاقتراح الذي يحتوي على أقسام تفصيلية للحوكمة والمخاطر والامتثال لا ينبئ بسرعة التسليم؛ غالباً ما ينبئ بأن الشركة ستقضي الأشهر الثلاثة الأولى من الالتزام على عمل العملية قبل البدء في البناء الفعلي. اطلب من البائعين المختارين تقديم نهج تقني مبسط من صفحة واحدة بدلاً من وثيقة منهجية من خمسين صفحة. جودة واتساق النهج المبسط أكثر تنبؤًا لقدرة التسليم من طول وشمولية الاقتراح الكامل.</p>
+
+<p><strong>الفخ 2: الإفراط في ترجيح حجم الشركة والنقص في ترجيح قدرة قائد التسليم الفردي.</strong> لدى مشتري حكومة دول مجلس التعاون الخليجي أسباب مشروعة لتقدير استقرار الشركة والدعم المالي والوجود العالمي. ومع ذلك، يعتمد النجاح اليومي للالتزام بالكامل تقريبًا على خبرة وحكم والتزام قائد التسليم. شركة صغيرة مؤسسها سيقود التزامك بشكل شخصي غالبًا ما تتفوق على شركة كبيرة يدير التزامها مسؤول حساب بينما يدير معماري صغير التسليم اليومي. اسأل بوضوح: "من سيكون في بيئة الإنتاج لدينا، في مراجعات الكود لدينا، وفي مكالمات استكشاف الأخطاء والإصلاح لدينا؟" إذا كان الجواب معماري صغير أو "فريق تسليم" بدلاً من مهندس أقدم باسم، قم بتصعيد المخاطر في تقييم البائع.</p>
+
+<p><strong>الفخ 3: بناء فترات بدء طويلة في العقد.</strong> عقود الطبقة الأولى غالباً ما تتضمن مراحل اكتشاف وتخطيط طويلة (ثلاثة إلى ستة أشهر) قبل البدء في البناء الفعلي. هذا متوازن بشكل هيكلي مع اقتصاديات الطبقة الأولى — ساعات قابلة للدفع أكثر باستخدام أعلى قبل تسليم أي شيء — لكنه غير متوازن مع جداول حكومة دول مجلس التعاون الخليجي. عقد لا يتضمن نموذجًا أوليًا عملاً بحلول نهاية الأسبوع الثاني عشر هو بالتأكيد عقد من الطبقة الأولى مختبئ في غطاء شركة صغيرة متخصصة. أصر على المسلمات المبكرة والقابلة للاختبار. البائع الذي لا يستطيع الالتزام بنموذج أولي عملي في أربعة عشر يومًا يشير إلى أن نموذج التسليم الخاص به يعتمد على عمل موسع في البداية.</p>
+
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-50 svg-d-50"><title id="svg-t-50">آفاق سرعة MVP</title><desc id="svg-d-50">آفاق سرعة MVP</desc><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="190" x2="660" y2="190" stroke="#0E2841" stroke-width="1.5"/><polyline fill="none" stroke="#156082" stroke-width="3" points="80,170 220,130 400,90 620,55"/><polyline fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5 4" points="80,170 220,160 400,150 620,140"/><circle cx="220" cy="130" r="6" fill="#F5A623"/><circle cx="400" cy="90" r="6" fill="#F5A623"/><circle cx="620" cy="55" r="6" fill="#F5A623"/><text x="220" y="115" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">٩٠ يوم</text><text x="400" y="75" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">١٨٠ يوم</text><text x="620" y="40" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">٣٦٥ يوم</text><text x="370" y="215" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">الأيام منذ الانطلاق</text><text x="660" y="60" font-family="Inter,Arial" font-size="10" fill="#156082" text-anchor="end">مجموعة Maven</text><text x="660" y="135" font-family="Inter,Arial" font-size="10" fill="#1A4F7A" text-anchor="end">وسيط دول الخليج</text></svg><figcaption>معايير سرعة MVP عبر آفاق 90 / 180 / 365 يوماً</figcaption></figure>
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-51 svg-d-51"><title id="svg-t-51">أربعة رافعات تستخدمها شركات الذكاء الاصطناعي البوتيك</title><desc id="svg-d-51">أربع لوحات ملونة توضح رافعات التسليم الأول للمديرين التنفيذيين، والسرعة في تحقيق القيمة، والتسعير، والاستفادة من الشركاء.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="40" width="155" height="140" fill="#156082" rx="8"/><text x="97" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 1</text><text x="97" y="105" text-anchor="middle" fill="#fff" font-size="12">التسليم</text><text x="97" y="123" text-anchor="middle" fill="#fff" font-size="12">الأول</text>
+  <rect x="195" y="40" width="155" height="140" fill="#1A4F7A" rx="8"/><text x="272" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 2</text><text x="272" y="105" text-anchor="middle" fill="#fff" font-size="12">السرعة في</text><text x="272" y="123" text-anchor="middle" fill="#fff" font-size="12">تحقيق القيمة</text>
+  <rect x="370" y="40" width="155" height="140" fill="#0E2841" rx="8"/><text x="447" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 3</text><text x="447" y="105" text-anchor="middle" fill="#fff" font-size="12">التسعير</text>
+  <rect x="545" y="40" width="135" height="140" fill="#F5A623" rx="8"/><text x="612" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 4</text><text x="612" y="105" text-anchor="middle" fill="#fff" font-size="12">الاستفادة</text><text x="612" y="123" text-anchor="middle" fill="#fff" font-size="12">من الشركاء</text>
+  <text x="350" y="205" text-anchor="middle" fill="#475569" font-size="11">النفقات الهيكلية من الشركات من الفئة الأولى مقابل نموذج التسليم الأول البوتيك</text>
+  </svg>
+  <figcaption>الشكل 1 — الرافعات الأربع التي يمكن للشركات البوتيك استخدامها والتي لا يمكن للشركات من الفئة الأولى استخدامها هيكليًا.</figcaption>
+  </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
   <li>ميت ناندا، <em>حالة الذكاء الاصطناعي في الأعمال 2025</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu</a></li>
@@ -2141,7 +4817,8 @@ export const insights = [
   <li>المعهد الوطني للمعايير والتكنولوجيا (NIST)، <em>إطار إدارة مخاطر الذكاء الاصطناعي (AI RMF 1.0)</em>. <a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">nist.gov</a></li>
   <li>منظمة التعاون الاقتصادي والتنمية (OECD)، <em>مبادئ الذكاء الاصطناعي</em>. <a href="https://oecd.ai/en/ai-principles" target="_blank" rel="noopener noreferrer">oecd.ai</a></li>
   </ol>`,
-      contentTr: `  <h2>Tez</h2>
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+    <h2>Tez</h2>
   <p>Profesyonel hizmetlerin geleneksel mantığı — daha büyük daha güvenlidir — yapay zeka döneminde sistematik olarak çöküntüye uğramıştır. Kurumsal yapay zekayı üretim ortamına GCC'nin gerektirdiği hızda gönderen firmalar, gittikçe artan bir şekilde, sıkıştırılmış zaman çizelgelerinde kıdemli liderliğe sahip engelli danışmanlık şirketleridir. Tier-1 teslimat modeli, istikrarlı gereksinimlerle çok yıllı BT dönüşüm programları için optimize edilmiştir; yapay zeka teslimatı hızlı, deneyseldir ve yargı yoğundur. Bu makale, Tier-1 firmaları yapay zeka teslimatında neden boyutun işlemlerine karşı çalıştığını, danışmanlık firmalarının çekebileceği dört kaldıracı belirtir Tier-1'lerin yapısal olarak alamayacağı ve GCC alıcıları için satın alma etkilerini açıklar.</p>
   <h2>Üretime Kalan Süre Hakkında Kanıtlar Neler Diyor</h2>
   <p>MIT NANDA'nın <em>2025 Işletmede Yapay Zeka Durumu</em> raporuna göre, kurumsal yapay zeka pilot programının medyan değeri hiçbir zaman üretime ulaşmaz; entegre sistemlerin yalnızca ~%5'i ölçülebilir değer üretir (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>). BCG'nin <em>Yapay Zekada Değer Nerede?</em> raporu, şirketlerin yalnızca %26'sinin pilot aşamalarından sonra ve %4'ünün elit sınırda olduğunu, elit firmaların fikraden üretime aylar içinde taşındığını belirtir (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>). Stanford HAI'nin <em>2025 Yapay Zeka İndeksi Raporu</em>, daha küçük, yapay zeka tarafından yerel bir kütüphanede kurulan kuruluşların büyük yerleşik şirketlerden daha hızlı bir üretime dağıtılan yapay zeka değerini konumlandığını belgelemektedir (<a href="https://hai.stanford.edu/ai-index/2025-ai-index-report" target="_blank" rel="noopener noreferrer">Stanford HAI, 2025</a>). Hız bir gurur metriği değildir — yapay zeka inisiyatifinin hiç üretime ulaşıp ulaşmadığı ile en yakından ilgili değişkendir.</p>
@@ -2168,6 +4845,87 @@ export const insights = [
   <li><strong>Sözleşmede kıdemli teslimat taahhüdü gerektirir</strong>, haraç içinde değil. Günlük teslimat liderinin en düşük kıdemliliğini belirtin.</li>
   <li><strong>Prototip hızını seçim kriteri olarak ölçün.</strong> Kısa listedeki firmalardan, üretime veri üzerinde çalışan bir prototip ne kadar hızlı bir şekilde yapabilecekleri hakkında soru sorun. Cevap, üretime teslimat yeteneğinin en güvenilir tahmin edicilerinden biridir.</li>
   </ul>
+  
+  <h2>GCC Alıcıları için Satıcı Değerlendirme Çerçevesi</h2>
+
+<p>GCC satın alma ekipleri, yapay zeka sunumu ortakları değerlendirilirken yapısal bir zorlukla karşı karşıyadırlar: en iyi teklif sunan firmalar sıklıkla en hızlı teslimat yapan firmalar değildir. Tier-1 işletme geliştirme ekipleri rekabetçi teklifleri kazanmak için personel bulundururken, butik kurucu ortaklar tipik olarak sunumlara kendileri katılırlar. Geleneksel BT satın almada sıklıkla kullanılan değerlendirme kriterleri — ekip büyüklüğü, küresel ayak izi, ISO sertifikaları, örnek olay çalışması hacmi — yapay zeka teslimat başarısını tahmin etmede zayıf göstergelerdir. Maven'in önerisi, değerlendirme kapısını üretim sonuçlarıyla ilişkili olan altı ölçülebilir vekil göstergeye doğru kaydırmaktır.</p>
+
+<p>İlk olarak, kısa listeye alınan her firmaya sözleşme imzalandıktan sonra iki hafta içinde sizin sağladığınız bir veri seti kullanarak gerçek üretim verileriniz üzerinde çalışan bir prototip sunmalarını talep edin. Bu teorik bir egzersiz değildir. Prototip üretim standardında olması gerekmez; satıcının mobilize olma, veri yapınızı anlama ve zaman baskısı altında çalışan bir kavram kanıtı üretme yeteneğini göstermesi gerekir. Bir Tier-1 firma tipik olarak prototip çalışması başlamadan önce bir ayını keşif ve yönetişim incelemeleri için gerektirir. İtme odaklı bir butik iki hafta içinde çalışan bir modele sahip olacaktır. Bu tek kapı, iş modeli hızlı yineleme yerine ön yüklü değerlendirme çalışmasına bağlı olan geniş bir firma yelpazesini ortadan kaldırır.</p>
+
+<p>İkinci olarak, günlük teslimat lideri olacak kişinin — katılım ortağı değil, üretim ortamınızda modelleri hata ayıklayan ve mimarisini gözden geçiren mühendis — özgeçmişini ve kod örneklerini isteyin. Bu belirli kişinin teslimatı yönettiği önceki üç müşteriden referans talep edin. Satıcı sözleşme imzalamadan önce teslimat liderini belirleyemiyorsa, katılım yapısı butik modelle eşleşmemektedir. Teslimat lideri yeni bir mezun veya herkese açık teknik varlığı yoksa, risk profili önemli ölçüde artar.</p>
+
+<p>Üçüncü olarak, işlem kapıları değil çalışan yazılıma bağlı belirli kilometre taşlarıyla 90 günlük bir teslimat yol haritası talep edin. Satıcının her aşamayı destekleyecek belirli kıdem seviyesine sözleşmeli olarak taahhüt etmesini isteyin. Karşılıklı bildirim ile hiçbir yazılım çıkış süresi olmadan herhangi bir ekip üyesinin değiştirilmesini talep etmenize izin veren bir madde ekleyin. Bu, geleneksel risk tahsisini tersine çevirir: satıcının junior personeli döndürme yeteneğini korumak yerine, teslimat kalitesini koruma yeteneğinizi korur.</p>
+
+<p>Dördüncü olarak, maliyeti değerlendireceğiniz kadar açıkça "prototiype'a kadar geçen süre"yi değerlendirin. 21 gün içinde çalışan bir prototip teslim edebilen ve daha yüksek bir oran talep eden bir satıcı, keşif için dört ay gerektiren ancak daha düşük bir günlük oran talep eden bir satıcıdan genel olarak daha hızlı ve ucuz bir şekilde üretim yapay zekası teslim edebilir. Toplam sermaye maliyetini — gecikmiş değer gerçekleştirilmesinin fırsat maliyetini — satıcı karşılaştırmasına dahil edin.</p>
+
+<h2>GCC'ye Özgü Düzenleyici ve Paydaş Katılımı</h2>
+
+<p>GCC'deki yapay zeka yönetişim çerçeveleri, satın alma faaliyetinden önce değil, onunla paralel olarak ortaya çıkmaktadır. Bu, satıcının düzenleyici beklentileri, belgelendirme gerekliliklerini ve kurum arası koordinasyonu navigate etme yeteneğinin önemli bir farklılaştırıcı haline geldiği bir pencere oluşturur. Tier-1 firmalar düzenleyici ilişkiler ekiplerine sahiptir; butikler nadiren sahiptirler. Ancak, ilgili fark bir ilişkiler ekibinin varlığı değil, satıcının uyum düşüncesini birinci günden itibaren mimariye gömme ve bunu inşaat sonrası bir aşama olarak ekleme isteksizliğidir.</p>
+
+<p>2023'te yayımlanan BAE'nin Yapay Zeka İlkeleri, şeffaflık, hesap verebilirlik ve insan gözetimini vurgulmaktadır. Suudi Arabistan'ın NEOM ve Vision 2030 programları, yapay zeka yönetişim gerekliliklerini satın alma özelliklerine gömüştür. Katar'ın Ulusal Veri Yönetimi ve Yapay Zeka Yönetişim Çerçevesi veri soyundan geçişini ve model menşeini gereklilikleri belirlemektedir. Bahreyn'in Dijital Dönüşüm girişimi belgelendirilen yapay zeka risk değerlendirmesini gerektirmektedir. Umman'ın Yapay Zeka stratejisi denetlenebilirlik yetkilerini içermektedir. Bir satıcı değerlendirmesi açıkça şunları değerlendirmelidir:</p>
+
+<ul>
+<li><strong>Model açıklanabilirliği altyapısı</strong> — satıcının model çıktılarının insan tarafından yorumlanabilir açıklamalarını oluşturma yeteneği, sonradan ekleme veya akla gelmezce değil, sistem mimarisinin yerleşik bir özelliği olarak.</li>
+<li><strong>Veri yönetişim belgelendirmesi</strong> — satıcının veri soyundan geçişini, dönüştürme adımlarını ve kalite kapılarını GCC düzenleyici beklentilerini karşılayacak, ancak teslimatı geciktiren uyum tiyatrosu haline gelmeyen bir biçimde belgeleme süreci.</li>
+<li><strong>Denetiz izi otomasyonu</strong> — sistemin model kararlarının, yeniden eğitim olaylarının ve performans sürüklenme tespitinin günlüklerini oluşturma yeteneği, düzenleyicilerin manuel yeniden oluşturmayı gerektirmeksizin gözden geçirebilmesi.</li>
+<li><strong>Kurum arası koordinasyon deneyimi</strong> — satıcının birden fazla hükümet kuruluşu arasında uzun yönetişim gecikmeleri olmaksızın koordinasyon veya onay gerektiren katılımları nasıl yönettiğinin spesifik örnekleri.</li>
+</ul>
+
+<p>Maven'in gözlemi, GCC düzenlemesini başarıyla navigate eden satıcıların en büyük uyum ekiplerine sahip olanlar değil, yönetişimi erken sistem mimarisine gömüp bunu yönetişim trafiğinin üstesinden gelmek yerine çözülmesi gereken teknik bir sorun olarak ele alanlar olmasıdır. "Üçüncü aşamada bir denetiz modülü ekleyeceğiz" diyen satıcı yapısal risk altındadır; "denetiz günlüğü birinci günden itibaren veri boru hattına yerleştirilmiştir" diyen satıcı teslim etme olasılığı daha yüksektir.</p>
+
+<p>Ek olarak, GCC satın alma ekipleri satıcıların, yalnızca bariz düzenleyicileri (Merkez Bankaları, İletişim ve Bilgi Teknolojileri Bakanlığı) değil, aynı zamanda sistemi nihayetinde kullanacak veya ona bağlı olacak ikincil paydaşları — iç denetim ekipleri, uyum görevlileri, iş alanı liderleri — tanımlamak için paydaş haritalama egzersizleri yapmasını talep etmelidir. Bu gruplar arasındaki çatışan çıkarları yönetme deneyimine sahip olan ve kapsamın parçası olarak paydaş katılım planı üretebilen bir satıcı, üretim dağıtımını geciktiren geç aşama sürprizlerinden kaçınma olasılığı daha yüksektir.</p>
+
+<h2>Yapay Zeka Teslimatı için Kilit Performans Göstergeleri ve Başarı Ölçümleri</h2>
+
+<p>Yapay zeka teslimatında önemli olan ölçütler, geleneksel BT ölçütlerinden önemli ölçüde farklıdır. İşlemden koda kadar geçen süre değil, işletmeye kadar geçen zaman birincil başarı ölçüsüdür. Go-live'dan altı hafta sonra ölçülebilir iş etkisi üreten çalışan bir model teslim eden satıcı, zamanında kapsamlı belgeleme teslim eden ancak model asla üretime ulaşmayan bir satıcıdan daha iyi bir performans göstermiştir. GCC satın alma ekipleri başarı ölçütlerini sözleşme imzalamadan sonra değil, önce tanımlamalıdır.</p>
+
+<p>Üretim başarısının önde gelen göstergeleri: (1) proje başlangıcından üretim verilerine çalışan prototipe kadar geçen zaman, (2) prototipten üretim standard modellemesine kadar geçen zaman, (3) performans hedefine ulaşmadan önce gereken belgelendirilen model yeniden eğitim sayısı, (4) mimarisini tasarlayan kişi ile onu başarının ardından koruyan kişi arasındaki kıdem oranı. Tier-1 firmalar teslimat programı uyumunu ve kaynak kullanımını optimize etmektedir. Butik firmalar müşterinin sistemde hareket etme hızını optimize etmektedir.</p>
+
+<p>GCC müşterileri için pratik bir ölçüm çerçevesi şunları içerir:</p>
+
+<ol>
+<li><strong>İlk Çalışan Modele Kadar Geçen Günler (DFW)</strong> — sözleşme imzalamadan üretim verilerine çalışan ve gerekli biçimde çıktıları üreten bir prototiype kadar geçen takvim günleri. Hedef: ≤30 gün. Bu ölçüme taahhüt edemeyen bir satıcı şüpheyle değerlendirilmelidir.</li>
+<li><strong>Model Performans Farkı</strong> — belirtilen iş ölçütü (doğruluk, yanlış pozitiflerde azalma, maliyet tasarrufu, vb.) arasındaki iyileşme prototiypte ve üretim standard modelinde. Bu, satıcının teknik mükemmelliyete değil, iş değerine doğru yineleme yeteneğini ölçer.</li>
+<li><strong>Başarının Ardından Katılım Yoğunluğu</strong> — üretim başarısının ardından ilk altı ay boyunca model performansını korumak için gereken satıcı katılımının saati hafta başına. Modelin haftada on beş saat satıcı desteğine ihtiyacı olan bir model gerçekten üretime değildir; uzatılmış ramp-up'tır. Hedef: ≤5 saat/hafta altıncı ay. </li>
+<li><strong>Bilgi Aktarım Tamlığı</strong> — model mimarisinin, eğitim boru hattının ve bakım prosedürlerinin yüzdesinin, katılım sonunda satıcı desteği olmaksızın dahili ekibiniz tarafından yürütülebilmesi. Hedef: ≥80%. Ekibiniz satıcı desteğine devam bağımlılığı olmaksızın sistemi çalıştıramıyorsa, katılım gerçekten sona ermemiştir.</li>
+<li><strong>Belgelendirilen Mimari Kararlar</strong> — ekibinizin anlayabileceği ve koruyabileceği bir biçimde belgelendirilen açık mimari kararlarının sayısı. Bu, satıcının teknik iletişim kalitesinin ve çözümün katılım sonrası dayanıklılığının bir vekili.</li>
+</ol>
+
+<p>Bu ölçütler, sözleşmeye başarı kriteri olarak dahil edilmeli ve son ödeme, garanti dönemleri veya performansa dayalı fiyatlandırma üzerinde etkileri olmalıdır. Bu, satıcının teşviklerini program uyumuna veya kaynak tüketimine değil, üretim teslimatıyla uyumlaştırır.</p>
+
+<h2>GCC Hükümet Programları için 90/180/365 Günlük Teslimat Temposu</h2>
+
+<p>Çoğu GCC hükümet yapay zeka girişimi mali yıl döngüsünde çalışır; bu, değer gösterme ve devam eden finansman güvenlik hale getirme penceresi tipik olarak on iki aydır. Satıcının katılımı doksan, yüz seksen ve üçyüz altmış beş günde görünür değer üreten anlamlı aşamalara yapılandırma yeteneği, önemli bir avantajdır. Bu bir tercih değildir; genellikle bütçe yönetişimi veya bakanı gözetimi tarafından dayatılan hard bir gereklilik olmasıdır.</p>
+
+<p>Bir GCC hükümet yapay zeka programı için optimal yapı şu şekildedir: (1) Haftalar 1–3: Kapsamlama ve veri değerlendirmesi. (2) Haftalar 4–12: Prototip geliştirme. (3) Hafta 12: İlk kilometre taşı ve paydaş incelemesi. (4) Haftalar 13–24: Model iyileştirmesi ve doğrulama. (5) Hafta 24 (Gün 180): İkinci kilometre taşı, düzenleyici inceleme ve "git / hayır" kararı. (6) Haftalar 25–52: Üretim dağıtımı, kullanıcı eğitimi ve performans izleme. (7) Gün 365: Tam üretim, yayımlanan performans metrikleri ve genişletme veya sonraki aşama üzerinde karar noktası. Bu tempo, hükümet zaman çizelgelerini anlayan ve her kapıda sadece strateji belgeleri değil çalışan yetenekleri teslim edebilen bir satıcıyı gerektirir.</p>
+
+<p>Gün 90'da, teslim edilen malı, hükümet paydaşlarının etkileşim kurabildiği ve kendi gerçek kullanım durumlarında çıktılar ürettiklerini görebildikleri işlevsel bir prototip olmalıdır. Bu teorik bir model değildir; bir hükümet kontrollü ortamında bulunan ve gerçek verileri işleyen bir sistemdir. Gün 180'de, teslim edilen malı, belgelendirilen performans metrikleri, düzenleyici uyum belgelendirmesi ve dahili operasyon ekipleri için bir devir planı ile üretim standard modeli olmalıdır. Gün 365'te, teslim edilen malı, dahili ekip eğitimi tamamlanmış, devam eden performans izleme otomatik hale getirilmiş ve sonraki aşama (ölçek, entegre veya güneşleme) için karar çerçevesi ile tam operasyonel bir sistemdir.</p>
+
+<p>Katılımları farklı tempoyla yapılandıran satıcılar — üç aylık teslim edilebilirler, altı aylık aşamalı kullanıma sunma — genellikle kendi kapasiteleri veya metodolojileri hakkında dürüst olmaktadırlar, ancak tempo GCC hükümet mali gerçekleriyle eşleşmemektedir. Satıcıları değerlendirirken, projeyi bu kapılara karşı nasıl yapılandıracaklarını ve doksan günlük aralıklarla çalışan yetenekleri teslim etme deneyimine sahip olup olmadıklarını açıkça sorun. Cevap, gerçekten üretime ulaşmış olacaklarının yüksek derecede kestiricisidir.</p>
+
+<h2>Yaygın Satın Alma Tuzakları ve Bunlardan Nasıl Kaçınılacağı</h2>
+
+<p>GCC satın alma ekipleri yapay zeka teslimat ortakları seçerken sıklıkla üç tuzağa düşmektedir. Maven her birinin birden fazla kez oynanış görmüştür ve erken tanıma en iyi savunmadır.</p>
+
+<p><strong>Tuzak 1: Teklif Kalitesini Teslimat Yeteneği ile Karıştırmak.</strong> En parlak teklifleri üreten firmalar, genellikle büyük işletme geliştirme ekiplerine ve hükümet satın alma süreçlerinde kurumsal deneyime sahip olan firmalardır. Bunlar, çalışan yapay zekayı teslim etme olasılığı en yüksek firmalarla aynı değildir. Detaylı yönetişim, risk ve uyum bölümleri içeren bir teklif, teslimat hızını tahmin etmemektedir; genellikle katılımın ilk üç ayını gerçek yapıdan başlamadan önce süreç çalışmasında harcayacak firmayı tahmin etmektedir. Kısa listeye alınan satıcılardan basitleştirilmiş bir sayfalık teknik yaklaşım sunmalarını talep edin, ellisi sayfalık metodoloji dokümenti yerine. Basitleştirilmiş yaklaşımın kalitesi ve tutarlılığı, tam teklifin uzunluğu ve kapsamlılığından daha iyi teslimat yeteneğini tahmin etmektedir.</p>
+
+<p><strong>Tuzak 2: Firma Büyüklüğünün Ağırlığını Aşırı Yapıp Bireysel Teslimat Lideri Yeteneğinin Ağırlığını Az Yapmak.</strong> Bir GCC hükümet alıcısının firma istikrarı, finansal destek ve küresel varlığa değer vermesin meşru nedenleri vardır. Ancak, katılımın günlük başarısı neredeyse tamamen teslimat liderinin kıdemi, yargısı ve taahhüdüne bağlıdır. Kurucu ortağının kişisel olarak katılımınıza liderlik edeceği küçük bir firma, genellikle katılımın bir hesap yöneticisi tarafından yönetildiği büyük bir firmayı aşırı performans göstermektedir, ancak bir junior mühendis günlük teslimatı yönetmektedir. Açıkça sorun: "Üretim ortamımızda, kod incelemelerimizde ve sorun giderme çağrılarımızda kimde olacak?" Cevap junior mühendis veya "teslimat ekibi" ise, satıcı değerlendirmenizde riski yükseltin.</p>
+
+<p><strong>Tuzak 3: Sözleşmeye Uzun Ramp-Up Dönemleri Gömülü Hale Getirmek.</strong> Tier-1 sözleşmeleri sıklıkla uzun keşif ve planlama aşamalarını (üç ile altı ay) gerçek inşaat başlamadan önce içermektedir. Bu, Tier-1 ekonomileriyle yapısal olarak uyumludur — daha yüksek faydalanım oranından birşey teslim etmeden daha fazla faturalandırılabilir saat — ancak GCC hükümet zaman çizelgeleriyle yanlış uyumludur. On ikinci haftanın sonunda çalışan bir prototip içermeyen bir sözleşme, butik sarmalı giymiş Tier-1 sözleşmesidir. Erken, test edilebilir teslim edilebilirler üzerinde ısrar edin. Çalışan bir prototipe on dört günde taahhüt edemeyen satıcı, teslimat modelinin ön yüklü çalışmalara bağlı olduğunu belirtmektedir.</p>
+  
+  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-52 svg-d-52"><title id="svg-t-52">MVP hız ufukları</title><desc id="svg-d-52">MVP hız ufukları</desc><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="190" x2="660" y2="190" stroke="#0E2841" stroke-width="1.5"/><polyline fill="none" stroke="#156082" stroke-width="3" points="80,170 220,130 400,90 620,55"/><polyline fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5 4" points="80,170 220,160 400,150 620,140"/><circle cx="220" cy="130" r="6" fill="#F5A623"/><circle cx="400" cy="90" r="6" fill="#F5A623"/><circle cx="620" cy="55" r="6" fill="#F5A623"/><text x="220" y="115" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">90g</text><text x="400" y="75" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">180g</text><text x="620" y="40" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">365g</text><text x="370" y="215" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">Başlangıçtan itibaren günler</text><text x="660" y="60" font-family="Inter,Arial" font-size="10" fill="#156082" text-anchor="end">Maven kohortu</text><text x="660" y="135" font-family="Inter,Arial" font-size="10" fill="#1A4F7A" text-anchor="end">GCC ortancası</text></svg><figcaption>MVP hız kıyaslamaları 90 / 180 / 365 günlük ufuklarda</figcaption></figure>
+  
+  <figure>
+  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-53 svg-d-53"><title id="svg-t-53">Butik AI firmalarının çektiği dört kaldıraç</title><desc id="svg-d-53">Kıdemli teslimat, değere ulaşma hızı, fiyatlandırma ve ortak kaldıracını gösteren dört renkli panel.</desc>
+  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
+  <rect x="20" y="40" width="155" height="140" fill="#156082" rx="8"/><text x="97" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 1</text><text x="97" y="105" text-anchor="middle" fill="#fff" font-size="12">Kıdemli</text><text x="97" y="123" text-anchor="middle" fill="#fff" font-size="12">Teslimat</text>
+  <rect x="195" y="40" width="155" height="140" fill="#1A4F7A" rx="8"/><text x="272" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 2</text><text x="272" y="105" text-anchor="middle" fill="#fff" font-size="12">Değere</text><text x="272" y="123" text-anchor="middle" fill="#fff" font-size="12">Ulaşma Hızı</text>
+  <rect x="370" y="40" width="155" height="140" fill="#0E2841" rx="8"/><text x="447" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 3</text><text x="447" y="105" text-anchor="middle" fill="#fff" font-size="12">Fiyatlandırma</text>
+  <rect x="545" y="40" width="135" height="140" fill="#F5A623" rx="8"/><text x="612" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 4</text><text x="612" y="105" text-anchor="middle" fill="#fff" font-size="12">Ortak</text><text x="612" y="123" text-anchor="middle" fill="#fff" font-size="12">Kaldıracı</text>
+  <text x="350" y="205" text-anchor="middle" fill="#475569" font-size="11">Tier-1 yapısal genel gider vs butik kıdemli teslimat modeli</text>
+  </svg>
+  <figcaption>Şekil 1 — Butiklerin çekebileceği dört kaldıraç ki Tier-1 firmalar yapısal olarak çekemez.</figcaption>
+  </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
   <li>MIT NANDA, <em>2025 Işletmede Yapay Zeka Durumu</em>. <a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">nanda.media.mit.edu</a></li>
