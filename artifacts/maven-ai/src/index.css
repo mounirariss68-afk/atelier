@@ -249,3 +249,9 @@
 .article-content ul { margin-bottom: 1rem; padding-left: 1.5rem; }
 .article-content ul li { margin-bottom: 0.5rem; color: #374151; }
 .article-content blockquote { border-left: 4px solid #F5A623; padding-left: 1.5rem; margin: 2rem 0; font-style: italic; color: #0E2841; font-size: 1.1rem; font-weight: 500; }
+.article-content ol { margin-bottom: 1rem; padding-left: 1.5rem; list-style-type: decimal; }
+.article-content ol li { margin-bottom: 0.5rem; color: #374151; }
+.article-content a { color: #156082; text-decoration: underline; text-underline-offset: 2px; }
+.article-content a:hover { color: #0E2841; }
+.article-content .sources-list { margin-top: 0.75rem; font-size: 0.95rem; }
+.article-content .sources-list li { margin-bottom: 0.5rem; line-height: 1.6; }
