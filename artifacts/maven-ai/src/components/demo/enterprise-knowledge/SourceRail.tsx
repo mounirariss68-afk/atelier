@@ -1,4 +1,4 @@
-import { EyeOff, FileText, Lock, X } from "lucide-react";
+import { EyeOff, FileText, Lock } from "lucide-react";
 import { useEkcLang, useEkcT } from "./DemoLangContext";
 import { useEkcData } from "@/hooks/useEnterpriseKnowledgeData";
 import { sourceRail } from "./knowledge-i18n";
@@ -28,7 +28,7 @@ const CLASS_COLOR: Record<Classification, string> = {
 export default function SourceRail({ consideredSourceIds, citedSourceIds }: Props) {
   const { lang } = useEkcLang();
   const t = useEkcT();
-  const { personaId, setOpenSourceId, openSourceId } = useEkcData();
+  const { personaId, setOpenSourceId } = useEkcData();
 
   const considered = consideredSourceIds
     .map((id) => sourceById(id))
@@ -66,16 +66,13 @@ export default function SourceRail({ consideredSourceIds, citedSourceIds }: Prop
                 <span className="text-[10px] font-semibold text-gray-500">{visible.length}</span>
               </div>
               <div className="space-y-1.5">
-                {visible.map((s, i) => {
+                {visible.map((s) => {
                   const isCited = citedSourceIds.includes(s.id);
-                  const isOpen = openSourceId === s.id;
                   return (
                     <button
                       key={s.id}
-                      onClick={() => setOpenSourceId(isOpen ? null : s.id)}
-                      className={`w-full text-start border rounded-xl p-2.5 transition ${
-                        isOpen ? "border-[#5C8CA8] bg-[#F0F5F8]" : "border-gray-200 hover:border-gray-300 bg-white"
-                      }`}
+                      onClick={() => setOpenSourceId(s.id)}
+                      className="w-full text-start border rounded-xl p-2.5 transition border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50"
                     >
                       <div className="flex items-start gap-2">
                         <div className="flex-shrink-0 mt-0.5">
@@ -98,11 +95,6 @@ export default function SourceRail({ consideredSourceIds, citedSourceIds }: Prop
                           </span>
                         </div>
                       </div>
-                      {isOpen && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <p className="text-[11px] text-gray-700 leading-relaxed">{s.passage[lang]}</p>
-                        </div>
-                      )}
                     </button>
                   );
                 })}
@@ -120,7 +112,12 @@ export default function SourceRail({ consideredSourceIds, citedSourceIds }: Prop
               </div>
               <div className="space-y-1.5">
                 {withheld.map((s) => (
-                  <div key={s.id} className="border border-gray-200 rounded-xl p-2.5 bg-[#FFF7F7] opacity-90">
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setOpenSourceId(s.id)}
+                    className="w-full text-start border border-gray-200 rounded-xl p-2.5 bg-[#FFF7F7] hover:bg-[#FFEFEF] transition"
+                  >
                     <div className="flex items-start gap-2">
                       <Lock size={13} className="text-red-500 flex-shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
@@ -131,7 +128,7 @@ export default function SourceRail({ consideredSourceIds, citedSourceIds }: Prop
                         </span>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

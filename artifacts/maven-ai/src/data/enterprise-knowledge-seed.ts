@@ -346,3 +346,40 @@ export function personaById(id: PersonaId): Persona {
 export function sourceById(id: string): Source | undefined {
   return SOURCES.find((s) => s.id === id);
 }
+
+const CLASSIFICATION_LABEL: Record<Classification, BiText> = {
+  public: { en: "Public", ar: "عام" },
+  internal: { en: "Internal", ar: "داخلي" },
+  confidential: { en: "Confidential", ar: "سرّي" },
+  "legal-privileged": { en: "Legal-privileged", ar: "سرّ قانوني" },
+};
+
+export interface SourceBodyParts {
+  intro: string;
+  passage: string;
+  outro: string;
+}
+
+/**
+ * Build a long-form document body that wraps the source's cited passage with
+ * a domain-appropriate intro and outro. The drawer highlights `passage` so the
+ * cited excerpt is visible in context, the way Glean / Notion AI render it.
+ */
+export function fullBodyParts(s: Source, lang: "en" | "ar"): SourceBodyParts {
+  const isAr = lang === "ar";
+  const owner = s.owner[lang];
+  const domain = s.domain[lang];
+  const title = s.title[lang];
+  const cls = CLASSIFICATION_LABEL[s.classification][lang];
+  const acl = s.aclGroups.join(", ");
+
+  const intro = isAr
+    ? `وثيقة "${domain}" بعنوان «${title}»، صادرة عن ${owner} بتاريخ ${s.updatedAt}.\n\nالخلفيّة: تتناول هذه الوثيقة موقف المجموعة في ضوء تطوّرات الربع الأوّل وأوائل الربع الثاني، وتربط الأرقام التشغيليّة بالسياسات القائمة. أُعدّت ضمن الدورة الدوريّة لمجال "${domain}"، وتمرّ بمراجعة المالك قبل النشر.\n\nالمقطع المُستشهَد به أدناه:\n`
+    : `${domain} document titled "${title}", issued by ${owner} on ${s.updatedAt}.\n\nBackground: This document sets out the Group's position in light of Q1 and early-Q2 developments and connects operational figures to standing policy. It was prepared as part of the regular ${domain.toLowerCase()} cycle and signed off by the owner before publication.\n\nThe cited passage is reproduced below:\n`;
+
+  const outro = isAr
+    ? `\nملاحظات ختاميّة: يُحال هذا الموقف إلى كونسيرج المعرفة لتلخيصه وتدقيقه قبل عرضه على القارئ المعنيّ. أيّ تغيير جوهري يُسجَّل في سجلّ التدقيق ويُبلَّغ المراجع المختصّ. لا تُشارَك هذه الوثيقة خارج المجموعات المسموح لها أدناه.\n\nالتصنيف: ${cls}. مجموعات الصلاحيات: ${acl}.`
+    : `\nClosing notes: This position is forwarded to the Knowledge Concierge for summarisation and audit before being shown to the relevant reader. Any material change is recorded in the audit drawer and forwarded to the appropriate reviewer. This document is not to be shared outside the ACL groups listed below.\n\nClassification: ${cls}. ACL groups: ${acl}.`;
+
+  return { intro, passage: s.passage[lang], outro };
+}

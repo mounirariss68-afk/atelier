@@ -5,6 +5,7 @@ import { kpis as kpiDict } from "../knowledge-i18n";
 import { BRAND, BRAND_INK } from "../tokens";
 import ChatThread from "../ChatThread";
 import SourceRail from "../SourceRail";
+import SourceDrawer from "../SourceDrawer";
 import { kpiVisibleCount, kpiTotalSources } from "@/data/enterprise-knowledge-agent";
 
 interface Props {
@@ -50,6 +51,7 @@ export default function ChatView({ onNavigate }: Props) {
         />
         <SourceRail consideredSourceIds={considered} citedSourceIds={cited} />
       </div>
+      <SourceDrawer />
     </div>
   );
 }

@@ -72,6 +72,32 @@ export const sourceRail: Dict = {
   classifLegal: { en: "Legal-privileged", ar: "سرّ قانوني" },
 };
 
+export const sourceDrawer: Dict = {
+  fullDocument: { en: "Full source document", ar: "وثيقة المصدر كاملة" },
+  citedPassage: { en: "Cited passage", ar: "المقطع المُستشهَد به" },
+  highlightedInContext: {
+    en: "The cited excerpt is highlighted in context within the full document.",
+    ar: "المقطع المُستشهَد به مُظلَّل ضمن سياق الوثيقة الكاملة.",
+  },
+  metaOwner: { en: "Owner", ar: "المالك" },
+  metaClassification: { en: "Classification", ar: "التصنيف" },
+  metaUpdated: { en: "Last updated", ar: "آخر تحديث" },
+  metaDomain: { en: "Domain", ar: "المجال" },
+  withheldTitle: { en: "Withheld from your persona", ar: "محجوب عن شخصيّتك" },
+  withheldBody: {
+    en: "The Permission Filter is hiding the body of this document from you because your persona does not hold the required ACL group. Request access and the steward will review.",
+    ar: "فلتر الصلاحيات يحجب نصّ هذه الوثيقة لأنّ شخصيّتك لا تملك مجموعة الصلاحيات المطلوبة. اطلب الصلاحية وسيراجع الحارس الطلب.",
+  },
+  requestAccess: { en: "Request access", ar: "اطلب صلاحية" },
+  accessRequested: { en: "Access requested", ar: "تمّ إرسال الطلب" },
+  accessRequestedBody: {
+    en: "Your request has been logged in the audit drawer and forwarded to the document steward.",
+    ar: "تمّ تسجيل طلبك في سجلّ التدقيق وأُحيل إلى حارس الوثيقة.",
+  },
+  close: { en: "Close", ar: "إغلاق" },
+  requiredAcl: { en: "Required ACL groups", ar: "مجموعات الصلاحيات المطلوبة" },
+};
+
 export const personaSwitcher: Dict = {
   title: { en: "Asking as", ar: "السؤال كـ" },
   subtitle: { en: "Persona controls which sources you can see", ar: "الشخصية تحدّد المصادر المرئية" },

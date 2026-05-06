@@ -16,6 +16,8 @@ interface EkcData {
   appendAudit: (entry: AuditEntry) => void;
   openSourceId: string | null;
   setOpenSourceId: (id: string | null) => void;
+  accessRequestedIds: string[];
+  requestSourceAccess: (id: string) => void;
 }
 
 const Ctx = createContext<EkcData | null>(null);
@@ -25,6 +27,28 @@ export function EkcDataProvider({ children }: { children: ReactNode }) {
   const [recs, setRecs] = useState<AgentRecommendation[]>(() => generateRecommendations());
   const [audit, setAudit] = useState<AuditEntry[]>(() => generateAuditLog());
   const [openSourceId, setOpenSourceId] = useState<string | null>(null);
+  const [accessRequestedIds, setAccessRequestedIds] = useState<string[]>([]);
+
+  const requestSourceAccess = useCallback((id: string) => {
+    setAccessRequestedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setAudit((prev) => [
+      {
+        id: `Q-access-${Date.now()}`,
+        ts: new Date().toISOString(),
+        personaId,
+        question: {
+          en: `Access requested for source ${id}`,
+          ar: `طلب صلاحية على المصدر ${id}`,
+        },
+        visibleCount: 0,
+        citedCount: 0,
+        withheldCount: 1,
+        confidence: null,
+        action: "escalated",
+      },
+      ...prev,
+    ]);
+  }, [personaId]);
 
   const setRecommendationStatus = useCallback((id: string, status: RecStatus) => {
     setRecs((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
@@ -45,6 +69,8 @@ export function EkcDataProvider({ children }: { children: ReactNode }) {
     appendAudit,
     openSourceId,
     setOpenSourceId,
+    accessRequestedIds,
+    requestSourceAccess,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
