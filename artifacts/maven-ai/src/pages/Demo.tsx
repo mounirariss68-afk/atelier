@@ -14,6 +14,7 @@ import NocConsole from "@/components/demo/network-ops/NocConsole";
 import SourcingDesk from "@/components/demo/procurement-negotiation/SourcingDesk";
 import CroConsole from "@/components/demo/sama-compliance/CroConsole";
 import CdoConsole from "@/components/demo/sovereign-data/CdoConsole";
+import CareDesk from "@/components/demo/customer-care/CareDesk";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -80,6 +81,10 @@ export default function Demo() {
   // Maven Personal Agent has two purpose-built demos that bypass the generic
   // scenario engine because they need a chat surface and a graph viz that
   // don't fit DemoExperience's "agent trace + workspace widgets" template.
+  if (slug === "customer-care-hive" && variant === "desk") {
+    return <CareDesk />;
+  }
+
   if (slug === "maven-personal-agent" && variant === "cockpit") {
     return <Cockpit />;
   }

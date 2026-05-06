@@ -1294,6 +1294,24 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     accent: "#0F9ED5",
     icon: "Headphones",
     relatedService: "agentic-ai-transformation",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Technical Cockpit", ar: "القمرة التقنية" },
+        audience: { en: "Care operations leadership", ar: "قيادة عمليات الرعاية" },
+        description: { en: "Agent cockpit showing the Hive Conductor, six specialist care agents, intent classification, QA scoring, and the full event trace — for operations teams.", ar: "قمرة الوكلاء تعرض منسّق الخلية وستة وكلاء متخصّصين والتصنيف وتقييم الجودة وسلسلة الأحداث الكاملة — لفِرَق العمليات." },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "desk",
+        label: { en: "Care Agent Desk", ar: "مكتب موظف الرعاية" },
+        audience: { en: "Senior care agents (Aisha persona)", ar: "موظفو الرعاية الأوائل (شخصية عائشة)" },
+        description: { en: "Three-pane Zendesk-style desk with conversation timeline, AI draft, customer 360, knowledge hits, supervisor strip and approvals — what a senior care agent uses every shift.", ar: "مكتب من ثلاث لوحات على نمط Zendesk مع خط زمني للمحادثة ومسوّدة ذكية وملف العميل 360 ومعرفة مقترحة وشريط مشرف واعتمادات — ما يستخدمه موظف الرعاية كل وردية." },
+        icon: "Headphones",
+        route: "desk",
+      },
+    ],
   },
   {
     id: "sovereign-data-steward",
