@@ -1004,6 +1004,30 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     accent: "#156082",
     icon: "Activity",
     relatedService: "agentic-ai-transformation",
+    demoVariants: [
+      {
+        id: "cockpit",
+        route: "cockpit",
+        icon: "Activity",
+        label: { en: "Agent cockpit", ar: "كوكبيت الوكلاء" },
+        audience: { en: "NOC engineer · scenario walkthrough", ar: "مهندس غرفة العمليات · جولة سيناريو" },
+        description: {
+          en: "Watch the orchestrator and the four specialist agents triage the Sharjah-South fibre cut, with two human checkpoints.",
+          ar: "شاهد المنسّق والوكلاء الأربعة وهم يفرزون قطع ألياف جنوب الشارقة، مع نقطتَي توقّف بشريّتَين.",
+        },
+      },
+      {
+        id: "noc",
+        route: "noc",
+        icon: "LayoutDashboard",
+        label: { en: "NOC Director Console", ar: "قمرة قيادة مدير مركز عمليات الشبكة" },
+        audience: { en: "Reem Al-Dosari · NOC Director, Sahara Telecom", ar: "ريم الدوسري · مدير NOC، صحارى تيليكوم" },
+        description: {
+          en: "Live GCC map, incident workspace, AI approval queue, enterprise SLA tracking, field-crew dispatch and a complete audit trail — the daily console for a pan-GCC NOC director.",
+          ar: "خريطة الخليج الحية، مساحة الحوادث، قائمة الموافقات الذكية، متابعة اتفاقيات الأعمال، إرسال الفِرق، وسجل تدقيق كامل — الكونسول اليومي لمدير NOC إقليمي.",
+        },
+      },
+    ],
   },
   {
     id: "sama-compliance-sentinel",

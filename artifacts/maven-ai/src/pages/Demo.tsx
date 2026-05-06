@@ -10,6 +10,7 @@ import Cockpit from "@/components/demo/personal-agent/Cockpit";
 import Mind from "@/components/demo/personal-agent/Mind";
 import ProgrammeWarRoomConsole from "@/components/demo/programme-war-room/Console";
 import BenefitsCockpit from "@/components/demo/value-realization/BenefitsCockpit";
+import NocConsole from "@/components/demo/network-ops/NocConsole";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -93,7 +94,15 @@ export default function Demo() {
     return <ValueRealizationCockpitRoute />;
   }
 
-  const scenario = getScenario(slug, variant);
+  if (slug === "network-ops-war-room" && variant === "noc") {
+    return <NocConsole />;
+  }
+
+  // The Network Ops cockpit is registered under the bare slug; the
+  // marketplace links to the "cockpit" variant route for symmetry with the
+  // NOC Director console variant. Fall back to the unvariant scenario.
+  const scenarioVariant = slug === "network-ops-war-room" && variant === "cockpit" ? undefined : variant;
+  const scenario = getScenario(slug, scenarioVariant);
   const { lang } = useLang();
 
   if (!scenario) {
