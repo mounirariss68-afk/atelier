@@ -24,7 +24,12 @@ const TIER_GAP: Record<Tier, number> = {
   Leading: 0.5,
 };
 
-const ASSESSMENT_FACTORS: Record<AssessmentSlug, { revPct: number; empUsd: number; ar: { ebit: string; cost: string }; en: { ebit: string; cost: string } }> = {
+interface FactorCopy { ebit: string; cost: string }
+
+const ASSESSMENT_FACTORS: Record<
+  AssessmentSlug,
+  { revPct: number; empUsd: number; en: FactorCopy; ar: FactorCopy; tr: FactorCopy }
+> = {
   ari: {
     revPct: 0.012,
     empUsd: 6_500,
@@ -35,6 +40,10 @@ const ASSESSMENT_FACTORS: Record<AssessmentSlug, { revPct: number; empUsd: numbe
     ar: {
       ebit: "أرباح إضافية تفوّتونها بعدم نشر وكلاء إنتاج في التدفقات المنظمة.",
       cost: "تكلفة تشغيل تستمرون بدفعها لأن التحويلات البشرية ما زالت تسيطر على الرحلات.",
+    },
+    tr: {
+      ebit: "Düzenlenmiş iş akışlarında üretim ajanları yayınlamayarak kaybettiğiniz EBIT artışı.",
+      cost: "İnsan devirlerinin öncelikli yolculuklara hâlâ hakim olması nedeniyle ödemeye devam ettiğiniz işletme maliyeti.",
     },
   },
   mvi: {
@@ -48,6 +57,10 @@ const ASSESSMENT_FACTORS: Record<AssessmentSlug, { revPct: number; empUsd: numbe
       ebit: "تسارع إيرادات تفوّتونه بسبب التسليم بنصف سرعة فريق معزز بالذكاء الاصطناعي.",
       cost: "70% من إنفاق تقنية المعلومات محبوس في الصيانة — الفجوة أعلاه هي الجزء القابل للاسترداد.",
     },
+    tr: {
+      ebit: "AI destekli bir ekibin yarısı hızında teslim ederek kaybettiğiniz gelir ivmesi.",
+      cost: "BT harcamanızın %70'i bakıma kilitli — yukarıdaki boşluk geri kazanılabilir kısımdır.",
+    },
   },
   dafi: {
     revPct: 0.014,
@@ -60,6 +73,10 @@ const ASSESSMENT_FACTORS: Record<AssessmentSlug, { revPct: number; empUsd: numbe
       ebit: "إيرادات جودة قرار تفوّتونها لأن البيانات تحت AI غير موثوقة.",
       cost: "تكلفة سنوية للبيانات المكررة والتوفيق اليدوي ومعالجة الامتثال.",
     },
+    tr: {
+      ebit: "AI'nızın altındaki verilere güvenilemediği için kaybettiğiniz karar kalitesi geliri.",
+      cost: "Yinelenen veri, manuel mutabakat ve önlenebilir uyum iyileştirmesinin yıllık maliyeti.",
+    },
   },
   uvr: {
     revPct: 0.008,
@@ -71,6 +88,10 @@ const ASSESSMENT_FACTORS: Record<AssessmentSlug, { revPct: number; empUsd: numbe
     ar: {
       ebit: "أثر الأرباح لأعلى حالة استخدام في محفظتكم إذا اعتمدت هذا الربع.",
       cost: "تكلفة التأخير لتأجيل أعلى حالة استخدام أربعة أرباع إضافية.",
+    },
+    tr: {
+      ebit: "Bu çeyrekte onaylanırsa portföyünüzdeki en üst çeyrekteki kullanım senaryosunun EBIT etkisi.",
+      cost: "En önemli kullanım senaryonuzu dört çeyrek daha bekletmenin gecikme maliyeti.",
     },
   },
 };
@@ -95,6 +116,7 @@ export function computeCostOfInaction(
     narrative: {
       en: `${f.en.ebit} ${f.en.cost}`,
       ar: `${f.ar.ebit} ${f.ar.cost}`,
+      tr: `${f.tr.ebit} ${f.tr.cost}`,
     },
   };
 }

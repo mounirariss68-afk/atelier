@@ -3,22 +3,41 @@ import { Link, useLocation } from "wouter";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Logo from "./Logo";
+import LanguageSwitcher from "./LanguageSwitcher";
+import { useLang, tStr, type T } from "@/lib/lang";
 
-const serviceLinks = [
-  { href: "/services/agentic-ai-transformation", label: "Agentic AI Transformation" },
-  { href: "/services/ai-driven-sdlc", label: "AI-Driven SDLC & Legacy Modernization" },
-  { href: "/services/data-governance-foundations", label: "Data & Governance Foundations" },
-  { href: "/services/ai-product-studio", label: "AI Product Studio" },
+const NAV: Record<string, T> = {
+  home: { en: "Home", ar: "الرئيسية", tr: "Ana Sayfa" },
+  about: { en: "About", ar: "من نحن", tr: "Hakkımızda" },
+  services: { en: "Services", ar: "الخدمات", tr: "Hizmetler" },
+  insights: { en: "Insights", ar: "الرؤى", tr: "İçgörüler" },
+  industries: { en: "Industries", ar: "القطاعات", tr: "Sektörler" },
+  marketplace: { en: "Marketplace", ar: "السوق", tr: "Marketplace" },
+  diagnostics: { en: "Diagnostics", ar: "التشخيصات", tr: "Tanılamalar" },
+  allServices: { en: "View All Services →", ar: "عرض جميع الخدمات ←", tr: "Tüm Hizmetleri Gör →" },
+  allInsights: { en: "All Insights", ar: "جميع الرؤى", tr: "Tüm İçgörüler" },
+  freeAssessment: { en: "Free Assessment", ar: "تقييم مجاني", tr: "Ücretsiz Değerlendirme" },
+  talkToUs: { en: "Talk to Us", ar: "تواصل معنا", tr: "Bize Ulaşın" },
+  toggleMenu: { en: "Toggle menu", ar: "تبديل القائمة", tr: "Menüyü aç/kapat" },
+};
+
+const SERVICE_LINKS: { href: string; label: T }[] = [
+  { href: "/services/agentic-ai-transformation", label: { en: "Agentic AI Transformation", ar: "تحول الذكاء الوكيل", tr: "Ajansal AI Dönüşümü" } },
+  { href: "/services/ai-driven-sdlc", label: { en: "AI-Driven SDLC & Legacy Modernization", ar: "دورة تطوير مدفوعة بالذكاء الاصطناعي وتحديث الأنظمة القديمة", tr: "AI Öncülüğünde SDLC & Eski Sistem Modernizasyonu" } },
+  { href: "/services/data-governance-foundations", label: { en: "Data & Governance Foundations", ar: "أسس البيانات والحوكمة", tr: "Veri & Yönetişim Temelleri" } },
+  { href: "/services/ai-product-studio", label: { en: "AI Product Studio", ar: "استوديو منتجات الذكاء الاصطناعي", tr: "AI Ürün Stüdyosu" } },
 ];
 
-const insightLinks = [
-  { href: "/insights?category=Agentic+AI", label: "Agentic AI" },
-  { href: "/insights?category=Data+%26+Governance", label: "Data & Governance" },
-  { href: "/insights?category=Legacy+Modernization", label: "Legacy Modernization" },
-  { href: "/insights?category=Industry+Trends", label: "Industry Trends" },
+const INSIGHT_LINKS: { href: string; label: T }[] = [
+  { href: "/insights?category=Agentic+AI", label: { en: "Agentic AI", ar: "الذكاء الوكيل", tr: "Ajansal AI" } },
+  { href: "/insights?category=Data+%26+Governance", label: { en: "Data & Governance", ar: "البيانات والحوكمة", tr: "Veri & Yönetişim" } },
+  { href: "/insights?category=Legacy+Modernization", label: { en: "Legacy Modernization", ar: "تحديث الأنظمة القديمة", tr: "Eski Sistem Modernizasyonu" } },
+  { href: "/insights?category=Industry+Trends", label: { en: "Industry Trends", ar: "اتجاهات القطاع", tr: "Sektör Trendleri" } },
 ];
 
 export default function Navbar() {
+  const { lang } = useLang();
+  const t = (s: T) => tStr(s, lang);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
@@ -45,7 +64,6 @@ export default function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          {/* Logo */}
           <Link href="/" className="flex items-center group" aria-label="Maven AI">
             <Logo size="md" />
           </Link>
@@ -53,39 +71,28 @@ export default function Navbar() {
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-8">
             <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
-              Home
+              {t(NAV.home)}
             </Link>
             <Link href="/about" className={`nav-link text-sm font-medium transition-colors ${isActive("/about") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
-              About
+              {t(NAV.about)}
             </Link>
 
-            {/* Services Dropdown */}
-            <div
-              className="relative"
-              onMouseEnter={() => setServicesOpen(true)}
-              onMouseLeave={() => setServicesOpen(false)}
-            >
+            <div className="relative" onMouseEnter={() => setServicesOpen(true)} onMouseLeave={() => setServicesOpen(false)}>
               <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/services") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
-                Services <ChevronDown size={14} className={`transition-transform ${servicesOpen ? "rotate-180" : ""}`} />
+                {t(NAV.services)} <ChevronDown size={14} className={`transition-transform ${servicesOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
                 {servicesOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.15 }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden">
                     <div className="py-2">
-                      {serviceLinks.map((link) => (
+                      {SERVICE_LINKS.map((link) => (
                         <Link key={link.href} href={link.href} className="block px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#156082] transition-colors font-medium">
-                          {link.label}
+                          {t(link.label)}
                         </Link>
                       ))}
                       <div className="border-t border-gray-100 mt-1 pt-1">
                         <Link href="/services" className="block px-5 py-3 text-sm text-[#156082] font-semibold hover:bg-blue-50 transition-colors">
-                          View All Services →
+                          {t(NAV.allServices)}
                         </Link>
                       </div>
                     </div>
@@ -94,31 +101,20 @@ export default function Navbar() {
               </AnimatePresence>
             </div>
 
-            {/* Insights Dropdown */}
-            <div
-              className="relative"
-              onMouseEnter={() => setInsightsOpen(true)}
-              onMouseLeave={() => setInsightsOpen(false)}
-            >
+            <div className="relative" onMouseEnter={() => setInsightsOpen(true)} onMouseLeave={() => setInsightsOpen(false)}>
               <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/insights") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
-                Insights <ChevronDown size={14} className={`transition-transform ${insightsOpen ? "rotate-180" : ""}`} />
+                {t(NAV.insights)} <ChevronDown size={14} className={`transition-transform ${insightsOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
                 {insightsOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.15 }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden">
                     <div className="py-2">
                       <Link href="/insights" className="block px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#156082] transition-colors font-medium">
-                        All Insights
+                        {t(NAV.allInsights)}
                       </Link>
-                      {insightLinks.map((link) => (
+                      {INSIGHT_LINKS.map((link) => (
                         <Link key={link.href} href={link.href} className="block px-5 py-3 text-sm text-gray-600 hover:bg-gray-50 hover:text-[#156082] transition-colors">
-                          {link.label}
+                          {t(link.label)}
                         </Link>
                       ))}
                     </div>
@@ -128,68 +124,61 @@ export default function Navbar() {
             </div>
 
             <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
-              Industries
+              {t(NAV.industries)}
             </Link>
             <Link href="/marketplace" className={`nav-link text-sm font-medium transition-colors ${isActive("/marketplace") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
-              Marketplace
+              {t(NAV.marketplace)}
             </Link>
             <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
-              Diagnostics
+              {t(NAV.diagnostics)}
             </Link>
           </nav>
 
-          {/* CTA */}
+          {/* Desktop CTA + LanguageSwitcher */}
           <div className="hidden lg:flex items-center gap-3">
+            <LanguageSwitcher variant="navbar" />
             <Link href="/assessments" className="border border-[#0F9ED5] text-[#0F9ED5] hover:bg-[#0F9ED5] hover:text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors">
-              Free Assessment
+              {t(NAV.freeAssessment)}
             </Link>
             <Link href="/contact" className="bg-[#F5A623] hover:bg-[#d4622a] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
-              Talk to Us
+              {t(NAV.talkToUs)}
             </Link>
           </div>
 
-          {/* Mobile Toggle */}
-          <button
-            className="lg:hidden text-white p-2"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle menu"
-          >
+          <button className="lg:hidden text-white p-2" onClick={() => setMobileOpen(!mobileOpen)} aria-label={t(NAV.toggleMenu)}>
             {mobileOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="lg:hidden bg-[#0E2841] border-t border-white/10 overflow-hidden"
-          >
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="lg:hidden bg-[#0E2841] border-t border-white/10 overflow-hidden">
             <div className="px-4 py-4 space-y-1">
-              <Link href="/" className="block py-3 text-white font-medium border-b border-white/10">Home</Link>
-              <Link href="/about" className="block py-3 text-white font-medium border-b border-white/10">About</Link>
+              <div className="pb-3 mb-2 border-b border-white/10 flex justify-center">
+                <LanguageSwitcher variant="mobile" />
+              </div>
+              <Link href="/" className="block py-3 text-white font-medium border-b border-white/10">{t(NAV.home)}</Link>
+              <Link href="/about" className="block py-3 text-white font-medium border-b border-white/10">{t(NAV.about)}</Link>
               <div className="py-2 border-b border-white/10">
-                <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-2">Services</p>
-                {serviceLinks.map((link) => (
-                  <Link key={link.href} href={link.href} className="block py-2 pl-3 text-gray-300 text-sm hover:text-white">{link.label}</Link>
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-2">{t(NAV.services)}</p>
+                {SERVICE_LINKS.map((link) => (
+                  <Link key={link.href} href={link.href} className="block py-2 pl-3 text-gray-300 text-sm hover:text-white">{t(link.label)}</Link>
                 ))}
               </div>
               <div className="py-2 border-b border-white/10">
-                <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-2">Insights</p>
-                <Link href="/insights" className="block py-2 pl-3 text-gray-300 text-sm hover:text-white">All Insights</Link>
+                <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-2">{t(NAV.insights)}</p>
+                <Link href="/insights" className="block py-2 pl-3 text-gray-300 text-sm hover:text-white">{t(NAV.allInsights)}</Link>
               </div>
-              <Link href="/industries" className="block py-3 text-white font-medium border-b border-white/10">Industries</Link>
-              <Link href="/marketplace" className="block py-3 text-white font-medium border-b border-white/10">Marketplace</Link>
-              <Link href="/assessments" className="block py-3 text-white font-medium border-b border-white/10">Diagnostics</Link>
+              <Link href="/industries" className="block py-3 text-white font-medium border-b border-white/10">{t(NAV.industries)}</Link>
+              <Link href="/marketplace" className="block py-3 text-white font-medium border-b border-white/10">{t(NAV.marketplace)}</Link>
+              <Link href="/assessments" className="block py-3 text-white font-medium border-b border-white/10">{t(NAV.diagnostics)}</Link>
               <div className="pt-3 space-y-2">
                 <Link href="/assessments" className="block text-center border border-[#0F9ED5] text-[#0F9ED5] font-semibold py-3 rounded-lg">
-                  Free Assessment
+                  {t(NAV.freeAssessment)}
                 </Link>
                 <Link href="/contact" className="block text-center bg-[#F5A623] text-white font-semibold py-3 rounded-lg">
-                  Talk to Us
+                  {t(NAV.talkToUs)}
                 </Link>
               </div>
             </div>

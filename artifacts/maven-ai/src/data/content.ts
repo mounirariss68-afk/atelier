@@ -59,48 +59,88 @@ export const founders = [
     id: "mounir-aris",
     name: "Mounir Aris",
     title: "Senior Partner",
+    titleAr: "شريك أول",
+    titleTr: "Kıdemli Ortak",
     location: "Dubai, UAE",
+    locationAr: "دبي، الإمارات العربية المتحدة",
+    locationTr: "Dubai, BAE",
     image: "/images/founder-mounir.png",
     bio: "Mounir Aris brings over 20 years of strategy and digital transformation experience across GCC and MENA. Previously a Partner at a Big-4 advisory firm, he led national AI strategy engagements for sovereign wealth funds, government ministries, and major financial institutions. A trusted C-suite advisor, Mounir has shaped enterprise AI roadmaps for some of the region's largest organizations — from public safety infrastructure to national financial platforms. He founded Maven AI to solve the problem he witnessed throughout his career: world-class AI ambitions collapsing at the point of execution.",
+    bioAr: "يجلب منير عريس أكثر من 20 عاماً من الخبرة في الاستراتيجية والتحول الرقمي عبر دول الخليج ومنطقة الشرق الأوسط وشمال أفريقيا. كان سابقاً شريكاً في إحدى شركات الاستشارات الأربع الكبرى، حيث قاد ارتباطات استراتيجية الذكاء الاصطناعي الوطنية لصناديق الثروة السيادية والوزارات الحكومية والمؤسسات المالية الكبرى. مستشار موثوق على مستوى المديرين التنفيذيين، شكّل منير خرائط طريق الذكاء الاصطناعي للمؤسسات لبعض أكبر مؤسسات المنطقة — من البنية التحتية للسلامة العامة إلى المنصات المالية الوطنية. أسس Maven AI لحل المشكلة التي شهدها طوال مسيرته المهنية: انهيار طموحات الذكاء الاصطناعي العالمية المستوى عند نقطة التنفيذ.",
+    bioTr: "Mounir Aris, Körfez ve MENA bölgesinde 20 yılı aşkın strateji ve dijital dönüşüm deneyimi getiriyor. Önceden bir Big-4 danışmanlık firmasında Ortak olarak görev yapan Mounir, egemen servet fonları, devlet bakanlıkları ve büyük finansal kuruluşlar için ulusal AI strateji çalışmalarına önderlik etti. Güvenilen bir C-suite danışmanı olan Mounir, bölgenin en büyük kuruluşlarının bazıları için kurumsal AI yol haritaları şekillendirdi — kamu güvenliği altyapısından ulusal finansal platformlara kadar. Maven AI'ı kariyeri boyunca tanık olduğu sorunu çözmek için kurdu: dünya çapında AI hedeflerinin uygulama noktasında çökmesi.",
     shortBio: "20+ years in strategy and AI transformation across GCC. Former Big-4 Partner. Advisor to sovereign funds and government ministries.",
     quote: "The organizations that will win the next decade are not the ones that started AI first — they are the ones that moved AI from the slide deck to production. That is the only gap we exist to close.",
+    quoteAr: "المؤسسات التي ستفوز في العقد القادم ليست تلك التي بدأت الذكاء الاصطناعي أولاً — بل تلك التي نقلته من الشرائح إلى الإنتاج. هذه هي الفجوة الوحيدة التي وُجدنا لسدها.",
+    quoteTr: "Önümüzdeki on yılı kazanacak kuruluşlar, AI'ya ilk başlayanlar değil — AI'yı slayttan üretime taşıyanlardır. Kapatmak için var olduğumuz tek açık budur.",
     expertise: ["AI Strategy", "Enterprise Transformation", "C-Suite Advisory", "Sovereign Fund Engagement"],
+    expertiseAr: ["استراتيجية الذكاء الاصطناعي", "تحول المؤسسات", "استشارة المديرين التنفيذيين", "ارتباط الصناديق السيادية"],
+    expertiseTr: ["AI Stratejisi", "Kurumsal Dönüşüm", "C-Suite Danışmanlığı", "Egemen Fon Çalışmaları"],
     linkedin: "https://linkedin.com/in/mouniraris",
   },
   {
     id: "gokhan-guney",
     name: "Gokhan Guney",
     title: "Senior Partner",
+    titleAr: "شريك أول",
+    titleTr: "Kıdemli Ortak",
     location: "Riyadh, KSA",
+    locationAr: "الرياض، المملكة العربية السعودية",
+    locationTr: "Riyad, Suudi Arabistan",
     image: "/images/founder-gokhan.png",
     bio: "Gokhan Guney is a technology architect and delivery leader with 15+ years building enterprise AI systems across the MENA region and Europe. His expertise spans agentic AI platforms, LLM orchestration, and cloud-native engineering for large-scale government and enterprise clients. Previously, he led engineering delivery at a global technology consultancy, where he was responsible for some of the most complex AI implementations in GCC's public sector. Gokhan joined Maven AI to build the engineering practice he always wished existed: one that values senior technical judgment, sovereign-capable delivery, and production outcomes over slide decks.",
+    bioAr: "غوكان غوناي مهندس تقنيات وقائد تسليم بخبرة تزيد عن 15 عاماً في بناء أنظمة الذكاء الاصطناعي للمؤسسات عبر منطقة الشرق الأوسط وشمال أفريقيا وأوروبا. تمتد خبرته عبر منصات الذكاء الاصطناعي الوكيلية وتنسيق نماذج اللغة الكبيرة والهندسة السحابية الأصلية لعملاء حكوميين ومؤسسيين واسعي النطاق. سابقاً، قاد تسليم الهندسة في شركة استشارات تكنولوجية عالمية، حيث كان مسؤولاً عن بعض أكثر تطبيقات الذكاء الاصطناعي تعقيداً في القطاع العام الخليجي. انضم غوكان إلى Maven AI لبناء ممارسة الهندسة التي تمنى دائماً وجودها: ممارسة تُقدّر الحكم التقني الكبير والتسليم القادر على السيادة والنتائج الإنتاجية على عروض الشرائح.",
+    bioTr: "Gokhan Guney, MENA bölgesi ve Avrupa'da 15+ yıl boyunca kurumsal AI sistemleri inşa eden bir teknoloji mimarı ve teslimat lideridir. Uzmanlığı, büyük ölçekli devlet ve kurumsal müşteriler için ajansal AI platformları, LLM orkestrasyonu ve bulut-yerli mühendisliği kapsar. Daha önce, Körfez'in kamu sektöründeki en karmaşık AI uygulamalarından bazılarından sorumlu olduğu küresel bir teknoloji danışmanlığında mühendislik teslimini yönetti. Gokhan, her zaman var olmasını dilediği mühendislik pratiğini inşa etmek için Maven AI'a katıldı: kıdemli teknik yargıyı, egemen teslimi ve slayt sunumları yerine üretim sonuçlarını değer veren bir pratik.",
     shortBio: "15+ years in enterprise AI engineering. Expert in agentic AI platforms and LLM orchestration for MENA public sector.",
     quote: "Every client we work with has 10 to 30 AI pilots running. Almost none of them are in production. The bottleneck is never the model — it's the data, the governance, and the courage to re-engineer the operating model around the agent.",
+    quoteAr: "كل عميل نعمل معه لديه ما بين 10 و30 تجربة ذكاء اصطناعي قيد التشغيل. ولا يكاد أي منها في الإنتاج. الاختناق ليس النموذج أبداً — بل البيانات والحوكمة والشجاعة لإعادة هندسة نموذج التشغيل حول الوكيل.",
+    quoteTr: "Birlikte çalıştığımız her müşterinin 10 ila 30 AI pilotu çalışıyor. Neredeyse hiçbiri üretimde değil. Darboğaz asla model değildir — veri, yönetişim ve operasyonel modeli ajan etrafında yeniden tasarlama cesaretidir.",
     expertise: ["Agentic AI Architecture", "LLM Orchestration", "Cloud Engineering", "On-Prem AI Deployment"],
+    expertiseAr: ["هندسة الذكاء الاصطناعي الوكيلي", "تنسيق نماذج اللغة الكبيرة", "هندسة السحابة", "نشر الذكاء الاصطناعي محلياً"],
+    expertiseTr: ["Ajansal AI Mimarisi", "LLM Orkestrasyonu", "Bulut Mühendisliği", "On-Prem AI Dağıtımı"],
     linkedin: "https://linkedin.com/in/gokhanguney",
   },
   {
     id: "alper-kulak",
     name: "Alper Kulak",
     title: "Senior Partner",
+    titleAr: "شريك أول",
+    titleTr: "Kıdemli Ortak",
     location: "Dubai, UAE",
+    locationAr: "دبي، الإمارات العربية المتحدة",
+    locationTr: "Dubai, BAE",
     image: "/images/founder-alper.png",
     bio: "Alper Kulak is one of the GCC's foremost experts in data platform modernization, AI governance, and data mesh architectures. Over 15 years, he has built data foundations for telecoms, banks, and government entities across the Gulf and Europe — the unglamorous but essential infrastructure that makes AI trustworthy. As former Head of Data Practice at a global systems integrator, Alper has seen firsthand how AI ambition is defeated by unmastered data, broken lineage, and governance gaps. At Maven AI, he leads the Data & Governance practice, ensuring every agent the firm builds stands on solid data foundations.",
+    bioAr: "ألبر كولاك هو أحد أبرز خبراء تحديث منصات البيانات وحوكمة الذكاء الاصطناعي وهياكل شبكات البيانات في الخليج. على مدى 15 عاماً، بنى أسس البيانات لشركات الاتصالات والبنوك والجهات الحكومية في الخليج وأوروبا — البنية التحتية غير اللامعة ولكنها الأساسية التي تجعل الذكاء الاصطناعي جديراً بالثقة. كرئيس سابق لممارسة البيانات في شركة تكامل أنظمة عالمية، شهد ألبر مباشرة كيف يُهزم طموح الذكاء الاصطناعي بسبب البيانات غير المُدارة وانقطاع السلاسل وثغرات الحوكمة. في Maven AI، يقود ممارسة البيانات والحوكمة، ضامناً أن كل وكيل تبنيه الشركة يقوم على أسس بيانات صلبة.",
+    bioTr: "Alper Kulak, Körfez'in veri platform modernizasyonu, AI yönetişimi ve veri mesh mimarileri alanlarındaki en önde gelen uzmanlarından biridir. 15 yıl boyunca Körfez ve Avrupa genelinde telekomlar, bankalar ve devlet kurumları için veri temelleri inşa etti — AI'ı güvenilir kılan göz alıcı olmayan ama temel altyapı. Küresel bir sistem entegratöründe Veri Pratiği eski Başkanı olarak Alper, AI hedefinin master verisi olmayan veriler, bozuk soy ağaçları ve yönetişim açıklarıyla nasıl yenildiğini doğrudan gördü. Maven AI'da Veri & Yönetişim pratiğini yönetiyor ve firmanın inşa ettiği her ajanın sağlam veri temelleri üzerinde durmasını sağlıyor.",
     shortBio: "Data platform and AI governance expert. 15+ years building data foundations for GCC telecoms, banks, and government.",
     quote: "AI exposes your data debt on day one. You cannot build trustworthy agents on top of fragmented, unmastered data. We fix the foundation while the business case is still live — not three years later.",
+    quoteAr: "يكشف الذكاء الاصطناعي ديون بياناتك من اليوم الأول. لا يمكنك بناء وكلاء جديرين بالثقة على بيانات مجزأة وغير مُدارة. نُصلح الأساس بينما لا تزال حالة العمل قائمة — وليس بعد ثلاث سنوات.",
+    quoteTr: "AI, veri borcunuzu birinci günden itibaren ortaya çıkarır. Parçalanmış, master verisi olmayan veriler üzerinde güvenilir ajanlar inşa edemezsiniz. İş senaryosu hâlâ canlıyken temeli onarıyoruz — üç yıl sonra değil.",
     expertise: ["Data Governance", "Data Mesh Architecture", "AI Foundations", "Lineage & Mastering"],
+    expertiseAr: ["حوكمة البيانات", "هندسة شبكة البيانات", "أسس الذكاء الاصطناعي", "السلاسل وإدارة البيانات الرئيسية"],
+    expertiseTr: ["Veri Yönetişimi", "Veri Mesh Mimarisi", "AI Temelleri", "Soy Ağacı & Master Veri"],
     linkedin: "https://linkedin.com/in/alperkulak",
   },
   {
     id: "khalid-al-khudairi",
     name: "Khalid Al Khudairi",
     title: "Senior Partner",
+    titleAr: "شريك أول",
+    titleTr: "Kıdemli Ortak",
     location: "Riyadh, KSA",
+    locationAr: "الرياض، المملكة العربية السعودية",
+    locationTr: "Riyad, Suudi Arabistan",
     image: "/images/founder-khalid.png",
     bio: "Khalid Al Khudairi is a Saudi national with deep relationships across the Kingdom's government, sovereign fund, and private sector ecosystem. With 12+ years advising on Vision 2030 programs, he has been at the center of Saudi Arabia's most consequential digital transformation initiatives — from national health platforms to smart city infrastructure. Khalid's specialization in change management, AI adoption, and organizational transformation fills the gap that most technology firms ignore: the human and institutional change required to make AI actually work inside large organizations. He brings to Maven AI the relationships and regional credibility that open doors, and the change expertise that keeps clients.",
+    bioAr: "خالد الخضيري مواطن سعودي يتمتع بعلاقات عميقة عبر حكومة المملكة وصندوقها السيادي ومنظومة القطاع الخاص. مع أكثر من 12 عاماً من الاستشارة في برامج رؤية 2030، كان في قلب أبرز مبادرات التحول الرقمي الفارقة في المملكة — من المنصات الصحية الوطنية إلى البنية التحتية للمدن الذكية. يسد تخصص خالد في إدارة التغيير وتبني الذكاء الاصطناعي والتحول التنظيمي الفجوة التي تتجاهلها معظم شركات التكنولوجيا: التغيير البشري والمؤسسي المطلوب لجعل الذكاء الاصطناعي يعمل فعلياً داخل المؤسسات الكبيرة. يجلب إلى Maven AI العلاقات والمصداقية الإقليمية التي تفتح الأبواب، وخبرة التغيير التي تُبقي العملاء.",
+    bioTr: "Khalid Al Khudairi, Krallığın hükümeti, egemen fonu ve özel sektör ekosistemi genelinde derin ilişkilere sahip bir Suudi vatandaşıdır. Vizyon 2030 programlarına 12+ yıllık danışmanlık deneyimiyle, Suudi Arabistan'ın en sonuçsal dijital dönüşüm girişimlerinin merkezinde yer aldı — ulusal sağlık platformlarından akıllı şehir altyapısına. Khalid'in değişim yönetimi, AI benimseme ve organizasyonel dönüşüm uzmanlığı, çoğu teknoloji firmasının görmezden geldiği boşluğu doldurur: AI'ın büyük kuruluşlarda gerçekten çalışmasını sağlamak için gereken insan ve kurumsal değişim. Maven AI'a kapı açan ilişkileri ve bölgesel itibarı, müşterileri elde tutan değişim uzmanlığıyla birlikte getirir.",
     shortBio: "KSA Vision 2030 advisor with deep PIF and government relationships. 12+ years in AI adoption and organizational transformation.",
     quote: "Vision 2030 and the UAE AI Charter are not aspirations — they are procurement mandates. The organizations that embed AI in their operating fabric today will define the public sector benchmarks for a generation.",
+    quoteAr: "رؤية 2030 وميثاق الإمارات للذكاء الاصطناعي ليسا طموحات — بل تفويضات شراء. المؤسسات التي تُدمج الذكاء الاصطناعي في نسيجها التشغيلي اليوم ستحدد معايير القطاع العام لجيل كامل.",
+    quoteTr: "Vizyon 2030 ve BAE AI Şartı hedefler değil — satın alma zorunluluklarıdır. Bugün AI'ı operasyonel dokularına gömen kuruluşlar, bir kuşak için kamu sektörü kıstaslarını tanımlayacak.",
     expertise: ["Change Management", "Vision 2030 Programs", "AI Adoption", "Organizational Transformation"],
+    expertiseAr: ["إدارة التغيير", "برامج رؤية 2030", "تبني الذكاء الاصطناعي", "التحول التنظيمي"],
+    expertiseTr: ["Değişim Yönetimi", "Vizyon 2030 Programları", "AI Benimseme", "Organizasyonel Dönüşüm"],
     linkedin: "https://linkedin.com/in/khalidAlKhudairi",
   },
 ];
@@ -110,11 +150,19 @@ export const services = [
     id: "agentic-ai",
     slug: "agentic-ai-transformation",
     title: "Agentic AI Transformation",
+    titleAr: "تحول الذكاء الاصطناعي الوكيل",
+    titleTr: "Ajansal AI Dönüşümü",
     tagline: "Reimagining operations with agents at the core",
+    taglineAr: "إعادة تصور العمليات بالوكلاء في صميمها",
+    taglineTr: "Operasyonları ajanların merkezde olduğu şekilde yeniden tasarlamak",
     icon: "Brain",
     color: "#156082",
     buyer: "CEO, COO, CXO",
+    buyerAr: "الرئيس التنفيذي، رئيس العمليات، الرؤساء التنفيذيون",
+    buyerTr: "CEO, COO, CXO",
     description: "We help organizations reimagine how they operate — with AI agents owning end-to-end work: deciding, acting, learning, and coordinating with humans in production. Not chatbots. Not workflows. Agents that own outcomes.",
+    descriptionAr: "نساعد المؤسسات على إعادة تصور أسلوب عملها — مع وكلاء ذكاء اصطناعي يمتلكون العمل من البداية إلى النهاية: يقررون، ويتصرفون، ويتعلمون، وينسقون مع البشر في الإنتاج. ليست روبوتات محادثة. ليست سير عمل. وكلاء يمتلكون النتائج.",
+    descriptionTr: "Kuruluşların nasıl çalıştığını yeniden tasarlamalarına yardımcı oluruz — uçtan uca işi sahiplenen AI ajanlarıyla: üretimde karar verir, harekete geçer, öğrenir ve insanlarla koordine olur. Sohbet botu değil. İş akışı değil. Sonuçları sahiplenen ajanlar.",
     longDescription: "Maven AI's Agentic AI Transformation practice sits at the intersection of business strategy and production engineering. We start by quantifying the value case — the specific decisions, actions, and outcomes that agents will own — before a single line of code is written. Then we build, deploy, and run production agents that measurably change how the organization operates.",
     useCases: [
       "Automated regulatory compliance agents for financial institutions — detecting, validating, and filing without human intervention",
@@ -139,11 +187,19 @@ export const services = [
     id: "legacy-mod",
     slug: "ai-driven-sdlc",
     title: "AI-Driven SDLC & Legacy Modernization",
+    titleAr: "دورة تطوير البرمجيات المدفوعة بالذكاء الاصطناعي وتحديث الأنظمة القديمة",
+    titleTr: "AI Öncülüğünde SDLC & Eski Sistem Modernizasyonu",
     tagline: "Unlock your legacy — AI-first, on-prem capable",
+    taglineAr: "حرّر إرثك التقني — بالذكاء الاصطناعي أولاً، وقادر على العمل محلياً",
+    taglineTr: "Eski sistemlerinizi açın — AI öncelikli, on-prem kapasiteli",
     icon: "Code2",
     color: "#F5A623",
     buyer: "CIO, CTO",
+    buyerAr: "رئيس قسم المعلومات، الرئيس التقني",
+    buyerTr: "CIO, CTO",
     description: "Industry research puts 60–80% of IT budgets into maintaining existing systems. We use AI-driven engineering to spec legacy systems, accelerate modernization, and reduce technical debt — with on-prem capability for sovereign data clients.",
+    descriptionAr: "تشير أبحاث القطاع إلى أن 60–80٪ من ميزانيات تكنولوجيا المعلومات تُستهلك في صيانة الأنظمة القائمة. نستخدم الهندسة المدفوعة بالذكاء الاصطناعي لتوصيف الأنظمة القديمة، وتسريع التحديث، وتقليل الديون التقنية — مع قدرات محلية لعملاء البيانات السيادية.",
+    descriptionTr: "Sektör araştırmaları BT bütçelerinin %60–80'inin mevcut sistemleri sürdürmeye gittiğini gösteriyor. Eski sistemleri belgelemek, modernizasyonu hızlandırmak ve teknik borcu azaltmak için AI öncülüğünde mühendislik kullanıyoruz — sovereign veri müşterileri için on-prem kapasite ile.",
     longDescription: "Most organizations know their legacy systems are slowing them down. What they don't have is a safe, fast path out. Maven AI's spec-from-legacy methodology uses AI to extract, document, and re-engineer legacy codebases — dramatically accelerating modernization timelines while preserving institutional logic. For sovereign clients who cannot move workloads to public cloud, we deliver on-prem at scale.",
     useCases: [
       "Siebel CRM migration: AI-driven specification extraction and on-prem re-engineering for telecoms",
@@ -168,11 +224,19 @@ export const services = [
     id: "data-governance",
     slug: "data-governance-foundations",
     title: "Data & Governance Foundations",
+    titleAr: "أسس البيانات والحوكمة",
+    titleTr: "Veri & Yönetişim Temelleri",
     tagline: "The foundation that makes AI trustworthy",
+    taglineAr: "الأساس الذي يجعل الذكاء الاصطناعي جديراً بالثقة",
+    taglineTr: "AI'ı güvenilir kılan temel",
     icon: "Database",
     color: "#F5A623",
     buyer: "CDO, CRO",
+    buyerAr: "رئيس قسم البيانات، رئيس قسم المخاطر",
+    buyerTr: "CDO, CRO",
     description: "AI exposes data debt on day one. We build the data platforms, lineage, masters, and governance frameworks that make AI agents trustworthy — activation work, not strategy decks.",
+    descriptionAr: "يكشف الذكاء الاصطناعي عن ديون البيانات من اليوم الأول. نبني منصات البيانات والسلاسل وقواعد البيانات الرئيسية وأطر الحوكمة التي تجعل وكلاء الذكاء الاصطناعي جديرين بالثقة — عمل تفعيل، وليس عروض استراتيجية.",
+    descriptionTr: "AI birinci günden itibaren veri borcunu ortaya çıkarır. AI ajanlarını güvenilir kılan veri platformlarını, soy ağaçlarını, master verileri ve yönetişim çerçevelerini inşa ediyoruz — strateji sunumları değil, aktivasyon çalışması.",
     longDescription: "Every AI project surfaces the same problem within weeks: the data isn't ready. Fragmented sources, unmastered identities, absent lineage, broken governance. Maven AI's Data & Governance practice is built for this exact problem. We treat data foundations as engineering work, not advisory — and we deliver activated platforms, not reports about platforms.",
     useCases: [
       "Data platform modernization for national telecoms: unified data mesh across operational, customer, and network domains",
@@ -197,11 +261,19 @@ export const services = [
     id: "ai-product-studio",
     slug: "ai-product-studio",
     title: "AI Product Studio",
+    titleAr: "استوديو منتجات الذكاء الاصطناعي",
+    titleTr: "AI Ürün Stüdyosu",
     tagline: "From idea to production in 90 days",
+    taglineAr: "من الفكرة إلى الإنتاج خلال 90 يوماً",
+    taglineTr: "Fikirden üretime 90 günde",
     icon: "Rocket",
     color: "#196B24",
     buyer: "CXO, Business Heads",
+    buyerAr: "الرؤساء التنفيذيون، رؤساء الأعمال",
+    buyerTr: "CXO, İş Liderleri",
     description: "Productized AI solutions for repeatable vertical use cases. We go from idea to MVP in 90 days — reusable IP that compounds margin and shortens the path from business case to deployed product.",
+    descriptionAr: "حلول ذكاء اصطناعي مُنتجة لحالات استخدام عمودية قابلة للتكرار. ننتقل من الفكرة إلى منتج قابل للتطبيق خلال 90 يوماً — ملكية فكرية قابلة لإعادة الاستخدام تضاعف الهامش وتختصر المسار من حالة العمل إلى المنتج المنشور.",
+    descriptionTr: "Tekrarlanabilir dikey kullanım senaryoları için ürünleştirilmiş AI çözümleri. Fikirden MVP'ye 90 günde gidiyoruz — marjı katlayan ve iş senaryosundan dağıtılmış ürüne giden yolu kısaltan yeniden kullanılabilir IP.",
     longDescription: "Maven AI's Product Studio takes a fundamentally different approach to AI product development: we treat AI solutions as products, not projects. That means version control, telemetry, product management discipline, and roadmaps — not just delivery milestones. Our 90-day MVP sprint gets working software in front of users fast enough to learn before the business case expires.",
     useCases: [
       "Regulatory intelligence platform: AI-powered monitoring and analysis of GCC regulatory changes for compliance teams",
@@ -240,6 +312,178 @@ export function insightContent(i: InsightLike, lang: InsightLang): string {
   if (lang === "ar") return i.contentAr ?? i.content;
   if (lang === "tr") return i.contentTr ?? i.content;
   return i.content;
+}
+
+// ---------------------------------------------------------------------------
+// Insight metadata localization. Insight `category`, `type`, `date`, and
+// `readTime` are stored as English strings on the data so the chat KB can
+// keep referencing the canonical names. The helpers below project them into
+// the active language for any UI consumer (Home, Insights index, detail).
+// ---------------------------------------------------------------------------
+type Bi = { en: string; ar: string; tr: string };
+export const INSIGHT_CATEGORY_LABELS: Record<string, Bi> = {
+  "All": { en: "All", ar: "الكل", tr: "Tümü" },
+  "Agentic AI": { en: "Agentic AI", ar: "الذكاء الاصطناعي الوكيل", tr: "Ajansal AI" },
+  "Data & Governance": { en: "Data & Governance", ar: "البيانات والحوكمة", tr: "Veri & Yönetişim" },
+  "Legacy Modernization": { en: "Legacy Modernization", ar: "تحديث الأنظمة القديمة", tr: "Eski Sistem Modernizasyonu" },
+  "Industry Trends": { en: "Industry Trends", ar: "اتجاهات القطاع", tr: "Sektör Trendleri" },
+};
+export const INSIGHT_TYPE_LABELS: Record<string, Bi> = {
+  "All Types": { en: "All Types", ar: "كل الأنواع", tr: "Tüm Türler" },
+  "Report": { en: "Report", ar: "تقرير", tr: "Rapor" },
+  "Research Report": { en: "Research Report", ar: "تقرير بحثي", tr: "Araştırma Raporu" },
+  "Perspective": { en: "Perspective", ar: "منظور", tr: "Bakış Açısı" },
+  "Opinion": { en: "Opinion", ar: "رأي", tr: "Görüş" },
+  "Thought Leadership": { en: "Thought Leadership", ar: "قيادة فكرية", tr: "Düşünce Liderliği" },
+  "Technical Brief": { en: "Technical Brief", ar: "موجز تقني", tr: "Teknik Özet" },
+};
+export const INSIGHT_CATEGORY_COLORS: Record<string, string> = {
+  "Agentic AI": "#156082",
+  "Data & Governance": "#F5A623",
+  "Legacy Modernization": "#F5A623",
+  "Industry Trends": "#196B24",
+};
+export function insightCategoryLabel(cat: string, lang: InsightLang): string {
+  const t = INSIGHT_CATEGORY_LABELS[cat];
+  if (!t) return cat;
+  return lang === "ar" ? t.ar : lang === "tr" ? t.tr : t.en;
+}
+export function insightTypeLabel(type: string, lang: InsightLang): string {
+  const t = INSIGHT_TYPE_LABELS[type];
+  if (!t) return type;
+  return lang === "ar" ? t.ar : lang === "tr" ? t.tr : t.en;
+}
+
+const MONTH_NAMES_EN = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const MONTH_NAMES: Record<InsightLang, string[]> = {
+  en: MONTH_NAMES_EN,
+  ar: ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
+  tr: ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+};
+/** Localize an "April 2025"-style date string from the insight metadata. */
+export function insightDateLabel(date: string, lang: InsightLang): string {
+  if (lang === "en") return date;
+  const m = /^([A-Za-z]+)\s+(\d{4})$/.exec(date.trim());
+  if (!m) return date;
+  const idx = MONTH_NAMES_EN.findIndex((mn) => mn.toLowerCase() === m[1].toLowerCase());
+  if (idx < 0) return date;
+  return `${MONTH_NAMES[lang][idx]} ${m[2]}`;
+}
+const READ_TIME_TEMPLATE: Record<InsightLang, (n: string) => string> = {
+  en: (n) => `${n} min read`,
+  ar: (n) => `قراءة ${n} دقيقة`,
+  tr: (n) => `${n} dk okuma`,
+};
+/** Localize a "24 min read"-style read-time string. */
+export function insightReadTimeLabel(readTime: string, lang: InsightLang): string {
+  if (lang === "en") return readTime;
+  const m = /(\d+)/.exec(readTime);
+  if (!m) return readTime;
+  return READ_TIME_TEMPLATE[lang](m[1]);
+}
+
+// Localized accessors for founders. Each founder may carry *Ar / *Tr suffixed
+// fields; the helpers fall back to EN when missing.
+export function founderTitleStr(f: LocalizedRecord, lang: InsightLang): string { return localized(f, "title", lang); }
+export function founderLocationStr(f: LocalizedRecord, lang: InsightLang): string { return localized(f, "location", lang); }
+export function founderBioStr(f: LocalizedRecord, lang: InsightLang): string { return localized(f, "bio", lang); }
+export function founderQuoteStr(f: LocalizedRecord, lang: InsightLang): string { return localized(f, "quote", lang); }
+export function founderExpertiseList(f: LocalizedRecord, lang: InsightLang): string[] {
+  const baseArr = (f.expertise as string[] | undefined) ?? [];
+  if (lang === "en") return baseArr;
+  const arr = f[lang === "ar" ? "expertiseAr" : "expertiseTr"] as string[] | undefined;
+  return arr && arr.length === baseArr.length ? arr : baseArr;
+}
+
+// Localized homepage stat label. homepageStats entries get *Ar / *Tr labels
+// merged in below so the canonical EN data in @workspace/maven-content stays
+// the single source of truth for the chat KB.
+export function homepageStatLabel(s: { label: string; labelAr?: string; labelTr?: string }, lang: InsightLang): string {
+  if (lang === "ar") return s.labelAr ?? s.label;
+  if (lang === "tr") return s.labelTr ?? s.label;
+  return s.label;
+}
+
+// ---------------------------------------------------------------------------
+// Generic localized field helpers for services / industries / founders.
+// Convention: a record may carry `_ar`/`_tr` suffixed fields. The helpers read
+// those when available and fall back to the EN field. tStr() in lib/lang
+// emits a dev-time console.warn when AR/TR is missing, which surfaces what
+// still needs translation in long-form data fields without breaking the UI.
+// ---------------------------------------------------------------------------
+type LocalizedRecord = Record<string, unknown>;
+
+function localized<K extends string>(rec: LocalizedRecord, key: K, lang: InsightLang): string {
+  const base = (rec[key] as string | undefined) ?? "";
+  if (lang === "ar") return (rec[`${key}Ar`] as string | undefined) ?? base;
+  if (lang === "tr") return (rec[`${key}Tr`] as string | undefined) ?? base;
+  return base;
+}
+
+export function serviceTitle(s: LocalizedRecord, lang: InsightLang): string { return localized(s, "title", lang); }
+export function serviceTagline(s: LocalizedRecord, lang: InsightLang): string { return localized(s, "tagline", lang); }
+export function serviceBuyer(s: LocalizedRecord, lang: InsightLang): string { return localized(s, "buyer", lang); }
+export function serviceDescription(s: LocalizedRecord, lang: InsightLang): string { return localized(s, "description", lang); }
+export function industryTitle(i: LocalizedRecord, lang: InsightLang): string { return localized(i, "title", lang); }
+export function industrySubtitle(i: LocalizedRecord, lang: InsightLang): string { return localized(i, "subtitle", lang); }
+export function industryHeroStatLabel(i: LocalizedRecord, lang: InsightLang): string { return localized(i, "heroStatLabel", lang); }
+export function industryDescription(i: LocalizedRecord, lang: InsightLang): string { return localized(i, "description", lang); }
+export function industryApproach(i: LocalizedRecord, lang: InsightLang): string { return localized(i, "approach", lang); }
+
+function localizedArrayItem(rec: LocalizedRecord, key: string, idx: number, lang: InsightLang): string {
+  const baseArr = (rec[key] as string[] | undefined) ?? [];
+  const base = baseArr[idx] ?? "";
+  if (lang === "en") return base;
+  const arr = rec[lang === "ar" ? `${key}Ar` : `${key}Tr`] as string[] | undefined;
+  return arr?.[idx] ?? base;
+}
+
+function localizedStatLabel(rec: LocalizedRecord, statsKey: string, idx: number, lang: InsightLang): string {
+  const baseStats = (rec[statsKey] as Array<{ label: string }> | undefined) ?? [];
+  const baseLabel = baseStats[idx]?.label ?? "";
+  if (lang === "en") return baseLabel;
+  const arr = rec[lang === "ar" ? `${statsKey}Ar` : `${statsKey}Tr`] as Array<{ label: string }> | undefined;
+  return arr?.[idx]?.label ?? baseLabel;
+}
+
+export function industryChallenge(i: LocalizedRecord, idx: number, lang: InsightLang): string {
+  return localizedArrayItem(i, "challenges", idx, lang);
+}
+export function industryStatLabel(i: LocalizedRecord, idx: number, lang: InsightLang): string {
+  return localizedStatLabel(i, "stats", idx, lang);
+}
+export function industryCaseField(
+  i: LocalizedRecord,
+  key: "title" | "framing" | "challenge" | "approach" | "outcome",
+  lang: InsightLang,
+): string {
+  const cv = (i.caseVignette as LocalizedRecord | undefined) ?? {};
+  const base = (cv[key] as string | undefined) ?? "";
+  if (lang === "en") return base;
+  const localCv = (i[lang === "ar" ? "caseVignetteAr" : "caseVignetteTr"] as LocalizedRecord | undefined) ?? {};
+  return (localCv[key] as string | undefined) ?? base;
+}
+
+export function serviceUseCase(s: LocalizedRecord, idx: number, lang: InsightLang): string {
+  return localizedArrayItem(s, "useCases", idx, lang);
+}
+export function serviceStatLabel(s: LocalizedRecord, idx: number, lang: InsightLang): string {
+  return localizedStatLabel(s, "stats", idx, lang);
+}
+export function serviceEngagementField(
+  s: LocalizedRecord,
+  key: "phase" | "duration" | "description",
+  idx: number,
+  lang: InsightLang,
+): string {
+  const baseArr = (s.engagementModel as Array<Record<string, string>> | undefined) ?? [];
+  const base = baseArr[idx]?.[key] ?? "";
+  if (lang === "en") return base;
+  const arr = s[lang === "ar" ? "engagementModelAr" : "engagementModelTr"] as Array<Record<string, string>> | undefined;
+  return arr?.[idx]?.[key] ?? base;
 }
 
 export const insights = [
@@ -2046,11 +2290,17 @@ export const industries = [
   {
     id: "public-sector",
     title: "Public Sector",
+    titleAr: "القطاع العام",
+    titleTr: "Kamu Sektörü",
     subtitle: "Accelerating national vision through production AI",
+    subtitleAr: "تسريع الرؤية الوطنية من خلال الذكاء الاصطناعي الإنتاجي",
+    subtitleTr: "Üretim AI'ı ile ulusal vizyonu hızlandırma",
     icon: "Building2",
     color: "#156082",
     heroStat: "$135B",
     heroStatLabel: "projected AI contribution to Saudi Arabia's GDP by 2030 — the largest country-level contribution in the Middle East",
+    heroStatLabelAr: "المساهمة المتوقعة للذكاء الاصطناعي في الناتج المحلي الإجمالي للمملكة العربية السعودية بحلول 2030 — أكبر مساهمة على مستوى دولة في الشرق الأوسط",
+    heroStatLabelTr: "Suudi Arabistan'ın 2030 GSYH'sine öngörülen AI katkısı — Orta Doğu'daki ülke düzeyinde en büyük katkı",
     heroStatSource: SOURCES.pwcImpact,
     description: "GCC governments are not just adopting AI — they are building national AI infrastructure. Vision 2030, UAE AI Charter, Qatar AI Roadmap — these programs represent the largest coordinated AI investment in public sector history. Maven AI is built to deliver in this environment.",
     challenges: [
@@ -2077,11 +2327,17 @@ export const industries = [
   {
     id: "telecom",
     title: "Telecommunications",
+    titleAr: "الاتصالات",
+    titleTr: "Telekomünikasyon",
     subtitle: "From legacy infrastructure to AI-native operations",
+    subtitleAr: "من البنية التحتية القديمة إلى العمليات المبنية على الذكاء الاصطناعي",
+    subtitleTr: "Eski altyapıdan AI-yerli operasyonlara",
     icon: "Wifi",
     color: "#F5A623",
     heroStat: "60–80%",
     heroStatLabel: "share of IT budgets globally consumed by maintaining existing systems (cross-industry, with telcos at the higher end)",
+    heroStatLabelAr: "حصة ميزانيات تكنولوجيا المعلومات عالمياً المستهلكة في صيانة الأنظمة القائمة (عبر القطاعات، مع تموضع شركات الاتصالات في الطرف الأعلى)",
+    heroStatLabelTr: "Mevcut sistemleri sürdürmek için global olarak tüketilen BT bütçesi payı (sektörler arası, telekomlar üst sınırda)",
     heroStatSource: SOURCES.eyTelcoLegacy,
     description: "GCC telecoms are at a critical inflection point. 5G monetization requires AI-native operations. Legacy system debt is consuming 60–80% of IT budgets. Customer experience competition is intensifying. Maven AI brings the combination of legacy modernization capability and agentic AI delivery that telecoms need.",
     challenges: [
@@ -2108,11 +2364,17 @@ export const industries = [
   {
     id: "financial-services",
     title: "Financial Services",
+    titleAr: "الخدمات المالية",
+    titleTr: "Finansal Hizmetler",
     subtitle: "AI-grade governance for the region's most demanding regulators",
+    subtitleAr: "حوكمة بمستوى الذكاء الاصطناعي لأكثر الجهات التنظيمية في المنطقة تطلباً",
+    subtitleTr: "Bölgenin en talepkâr düzenleyicileri için AI seviyesinde yönetişim",
     icon: "TrendingUp",
     color: "#F5A623",
     heroStat: "$90–100B",
     heroStatLabel: "projected GCC corporate & investment banking revenue by 2030",
+    heroStatLabelAr: "الإيرادات المتوقعة للخدمات المصرفية للشركات والاستثمار في دول الخليج بحلول 2030",
+    heroStatLabelTr: "2030 yılına kadar öngörülen Körfez kurumsal & yatırım bankacılığı geliri",
     heroStatSource: SOURCES.mckinseyGccCIB,
     description: "GCC financial services institutions operate under some of the world's most demanding AI governance requirements — SAMA guidelines, CBUAE frameworks, and PDPL compliance — while simultaneously investing in AI at a pace that matches global financial centers. Maven AI brings the rare combination of deep financial services domain knowledge and AI governance expertise.",
     challenges: [
@@ -2139,11 +2401,17 @@ export const industries = [
   {
     id: "energy-commodities",
     title: "Energy & Commodities",
+    titleAr: "الطاقة والسلع",
+    titleTr: "Enerji & Emtialar",
     subtitle: "Powering the energy transition with production AI",
+    subtitleAr: "تشغيل تحول الطاقة بالذكاء الاصطناعي الإنتاجي",
+    subtitleTr: "Enerji dönüşümünü üretim AI'ı ile güçlendirme",
     icon: "Zap",
     color: "#156082",
     heroStat: "$1.8B",
     heroStatLabel: "AI-driven Technology Realized Value reported by Saudi Aramco in 2024 alone",
+    heroStatLabelAr: "القيمة التقنية المحققة المدفوعة بالذكاء الاصطناعي والتي أعلنت عنها أرامكو السعودية في عام 2024 وحده",
+    heroStatLabelTr: "Saudi Aramco'nun yalnızca 2024'te raporladığı AI öncülüğünde Teknoloji Gerçekleşen Değeri",
     heroStatSource: SOURCES.aramcoAI,
     description: "Aramco, ADNOC, KPC, QatarEnergy, and the region's commodities trading houses are deploying AI at industrial scale — across upstream operations, refinery optimization, trading floors, and the energy transition portfolio. Sovereignty, safety classification, and decades-old operational technology make this the most demanding industrial AI environment in the GCC. Maven AI is built for it.",
     challenges: [
@@ -2170,11 +2438,17 @@ export const industries = [
   {
     id: "retail-consumer",
     title: "Retail & Consumer Products",
+    titleAr: "التجزئة والمنتجات الاستهلاكية",
+    titleTr: "Perakende & Tüketici Ürünleri",
     subtitle: "From dukan to D2C — AI-native retail for the GCC consumer",
+    subtitleAr: "من الدكان إلى البيع المباشر للمستهلك — تجزئة مبنية على الذكاء الاصطناعي للمستهلك الخليجي",
+    subtitleTr: "Dukandan D2C'ye — Körfez tüketicisi için AI-yerli perakende",
     icon: "ShoppingBag",
     color: "#F5A623",
     heroStat: "$23.5B",
     heroStatLabel: "annual GenAI economic impact projected across the GCC by 2030 (all sectors combined)",
+    heroStatLabelAr: "الأثر الاقتصادي السنوي المتوقع للذكاء الاصطناعي التوليدي عبر دول الخليج بحلول 2030 (جميع القطاعات مجتمعة)",
+    heroStatLabelTr: "2030 yılına kadar tüm sektörler bir arada Körfez genelinde öngörülen yıllık GenAI ekonomik etkisi",
     heroStatSource: SOURCES.strategyAndGenAI,
     description: "GCC retail is in dramatic flux. Q-commerce platforms, premium D2C brands, and digitally-native marketplaces are taking share from established hypermarket and department-store groups, while LuLu, Almarai, Al-Futtaim, and the region's family-owned conglomerates modernize legacy ERP and merchandising systems they have run for two decades. Maven AI delivers AI across both ends of this transition — Arabic-first, GCC-native.",
     challenges: [
@@ -2201,11 +2475,17 @@ export const industries = [
   {
     id: "travel-hospitality",
     title: "Travel & Hospitality",
+    titleAr: "السفر والضيافة",
+    titleTr: "Seyahat & Konaklama",
     subtitle: "AI for the GCC's tourism megaprojects and global hospitality brands",
+    subtitleAr: "الذكاء الاصطناعي لمشاريع السياحة الكبرى في دول الخليج والعلامات التجارية العالمية للضيافة",
+    subtitleTr: "Körfez'in turizm mega projeleri ve global konaklama markaları için AI",
     icon: "Plane",
     color: "#0F9ED5",
     heroStat: "150M",
     heroStatLabel: "Saudi Arabia's revised annual visitor target by 2030",
+    heroStatLabelAr: "الهدف السنوي المُعدّل للمملكة العربية السعودية من الزوار بحلول 2030",
+    heroStatLabelTr: "Suudi Arabistan'ın 2030 yılına kadar revize edilmiş yıllık ziyaretçi hedefi",
     heroStatSource: SOURCES.saudiTourism,
     description: "NEOM, Diriyah, Red Sea Project, Qiddiya, AlUla — the GCC's tourism ambitions are unprecedented in scale and pace. National carriers (Emirates, Qatar Airways, Saudia, Etihad) operate at the leading edge of global aviation. Established hospitality groups (Jumeirah, Rotana, Mövenpick) compete intensely for the high-margin regional and inbound traveller. Maven AI delivers the AI behind these flagship experiences — for both greenfield megaprojects and legacy modernization.",
     challenges: [
@@ -2232,11 +2512,17 @@ export const industries = [
   {
     id: "automotive",
     title: "Automotive",
+    titleAr: "السيارات",
+    titleTr: "Otomotiv",
     subtitle: "Building the GCC's mobility future, from EV mandates to autonomous",
+    subtitleAr: "بناء مستقبل التنقل في دول الخليج، من تفويضات السيارات الكهربائية إلى القيادة الذاتية",
+    subtitleTr: "EV mandatlarından otonoma — Körfez'in mobilite geleceğini inşa etmek",
     icon: "Car",
     color: "#E97132",
     heroStat: "30%",
     heroStatLabel: "Saudi Arabia's electric-vehicle adoption target for Riyadh by 2030",
+    heroStatLabelAr: "هدف المملكة العربية السعودية لاعتماد السيارات الكهربائية في الرياض بحلول 2030",
+    heroStatLabelTr: "Suudi Arabistan'ın 2030 yılına kadar Riyad için elektrikli araç benimseme hedefi",
     heroStatSource: SOURCES.saudiEvVision,
     description: "The GCC automotive landscape is being rebuilt. Saudi Arabia's 30% EV target by 2030, Lucid's local manufacturing, the Ceer national EV brand, and UAE autonomous-mobility programs in Dubai and Abu Dhabi are reshaping demand. Established dealer groups (Al-Futtaim, Petromin, Juffali, AlGhanim) are modernizing legacy DMS estates while EV-natives build greenfield platforms. Maven AI delivers AI across the entire value chain.",
     challenges: [
@@ -2265,7 +2551,27 @@ export const industries = [
 // Canonical, source-cited homepage hero stats — drawn from the same body of
 // published GCC AI research the industries pages cite. The numbers live in
 // `@workspace/maven-content` so the chat assistant can reference them too.
-export const stats = homepageStats;
+// We overlay AR / TR translations for the human-readable `label` here so the
+// canonical EN data stays the single source of truth for the chat KB while
+// the website renders the active language.
+const HOMEPAGE_STAT_TRANSLATIONS: Record<string, { labelAr: string; labelTr: string }> = {
+  "$320B": {
+    labelAr: "المكاسب الاقتصادية المتوقعة من الذكاء الاصطناعي في الشرق الأوسط بحلول 2030",
+    labelTr: "2030 yılına kadar Orta Doğu genelinde AI'dan beklenen ekonomik kazanımlar",
+  },
+  "$23.5B": {
+    labelAr: "الأثر الاقتصادي السنوي المتوقع للذكاء الاصطناعي التوليدي عبر دول الخليج بحلول 2030",
+    labelTr: "2030'a kadar Körfez genelinde beklenen yıllık GenAI ekonomik etkisi",
+  },
+  "$22.4B": {
+    labelAr: "الحجم الإجمالي المتوقع لسوق الذكاء الاصطناعي في الخليج بحلول 2033",
+    labelTr: "2033 yılına kadar Körfez AI pazarının beklenen toplam büyüklüğü",
+  },
+};
+export const stats = homepageStats.map((s) => {
+  const t = HOMEPAGE_STAT_TRANSLATIONS[s.value];
+  return t ? { ...s, ...t } : s;
+});
 
 export const operatingModel = {
   rings: [
@@ -2295,6 +2601,471 @@ export const operatingModel = {
     },
   ],
 };
+
+// ---------------------------------------------------------------------------
+// AR / TR translations for the long-form service and industry copy.
+// Kept in one block at the bottom of the file so the EN entries above stay
+// readable, and so reviewers can audit translation coverage in one place.
+// Each id maps to the *Ar / *Tr suffixed fields the localized helpers above
+// (industryChallenge, industryStatLabel, industryCaseField, serviceUseCase,
+// serviceStatLabel, serviceEngagementField) read at runtime.
+// ---------------------------------------------------------------------------
+const SERVICE_TRANSLATIONS: Record<string, Record<string, unknown>> = {
+  "agentic-ai": {
+    useCasesAr: [
+      "وكلاء امتثال تنظيمي تلقائيون للمؤسسات المالية — يكتشفون ويتحققون ويُقدّمون التقارير دون تدخل بشري",
+      "إدارة وكلاء المشتريات والموردين للجهات الحكومية، من إعداد طلب العروض إلى مراقبة العقود",
+      "تحوّل خدمة العملاء: أنظمة وكلاء متعددة تتولى مستويي الدعم الأول والثاني من البداية إلى النهاية",
+      "عمليات السلامة الوطنية: وكلاء يديرون كشف الحوادث وتوجيه الإرسال والإبلاغ التنظيمي في الوقت الفعلي",
+    ],
+    useCasesTr: [
+      "Finansal kurumlar için otomatik düzenleyici uyum ajanları — insan müdahalesi olmadan tespit, doğrulama ve dosyalama",
+      "Devlet kurumları için ajanik tedarik ve satıcı yönetimi, RFP oluşturmadan sözleşme izlemeye",
+      "Müşteri hizmetleri dönüşümü: tier-1 ve tier-2 çözümünü uçtan uca yöneten çoklu ajan sistemleri",
+      "Ulusal güvenlik operasyonları: olay tespiti, sevk yönlendirme ve düzenleyici bildirimi gerçek zamanlı yöneten AI ajanları",
+    ],
+    engagementModelAr: [
+      { phase: "الاكتشاف وحالة القيمة", duration: "2–3 أسابيع", description: "تحديد الفرص الوكيلية عالية القيمة، وقياس النتائج، وترتيب أولويات الأعمال المتراكمة" },
+      { phase: "النموذج الأولي", duration: "3–4 أسابيع", description: "وكيل عامل يُظهر القدرة الأساسية، مع ربطه بمصدري بيانات إنتاج" },
+      { phase: "نسخة إنتاج أولى", duration: "8–12 أسبوعاً", description: "وكيل بمستوى الإنتاج مع طبقة حوكمة، وقابلية مراقبة، وتصميم بمشاركة بشرية" },
+      { phase: "التوسع والتشغيل", duration: "مستمر", description: "حالات استخدام إضافية، وتحديث النموذج، وقياس الأداء، والتحسين المستمر" },
+    ],
+    engagementModelTr: [
+      { phase: "Keşif & Değer Vakası", duration: "2–3 hafta", description: "Yüksek değerli ajanik fırsatları belirleyin, sonuçları ölçün, çalışma listesini önceliklendirin" },
+      { phase: "Prototip", duration: "3–4 hafta", description: "Çekirdek yeteneği gösteren çalışan ajan, 1–2 üretim veri kaynağıyla entegre" },
+      { phase: "Üretim MVP", duration: "8–12 hafta", description: "Yönetişim katmanı, gözlemlenebilirlik ve insan-döngüde tasarımla üretim sınıfı ajan" },
+      { phase: "Ölçek & İşlet", duration: "Sürekli", description: "Ek kullanım senaryoları, model iterasyonu, telemetri ve sürekli iyileştirme" },
+    ],
+    statsAr: [
+      { label: "من تجارب الذكاء الاصطناعي التوليدي للمؤسسات لا تحقق أثراً ملموساً على الأرباح والخسائر (MIT NANDA, 2025)" },
+      { label: "من النطاق إلى نموذج أولي عامل" },
+      { label: "من الانطلاق إلى نسخة إنتاج أولى" },
+    ],
+    statsTr: [
+      { label: "kurumsal GenAI pilotunun ölçülebilir K&Z etkisi yok (MIT NANDA, 2025)" },
+      { label: "kapsamdan çalışan prototipe" },
+      { label: "başlangıçtan üretim MVP'ye" },
+    ],
+  },
+  "legacy-mod": {
+    useCasesAr: [
+      "ترحيل Siebel CRM: استخراج المواصفات بالذكاء الاصطناعي وإعادة الهندسة محلياً لشركات الاتصالات",
+      "توثيق أنظمة البنوك الأساسية: إنتاج مواصفات وظيفية كاملة من أنظمة COBOL وJava القديمة",
+      "تحديث المنصات الحكومية: إعادة هندسة شاملة لمنصات خدمات المواطنين مع اختبار مدفوع بالذكاء الاصطناعي",
+      "تسريع دورة التطوير: تقليل أوقات دورات التطوير بنسبة 40–60٪ باستخدام البرمجة الوكيلية والاختبار الآلي",
+    ],
+    useCasesTr: [
+      "Siebel CRM göçü: telekomlar için AI öncülüğünde spesifikasyon çıkarımı ve on-prem yeniden mühendislik",
+      "Bankacılık çekirdek sistem belgelemesi: COBOL ve eski Java sistemlerinden tam fonksiyonel spesifikasyon üretimi",
+      "Devlet platformu modernizasyonu: AI öncülüğünde testlerle vatandaş hizmet platformlarının uçtan uca yeniden mühendisliği",
+      "SDLC hızlandırma: ajanik kodlama ve otomatik QA ile geliştirme döngü sürelerinde %40–60 azalma",
+    ],
+    engagementModelAr: [
+      { phase: "تدقيق الإرث واستخراج المواصفات", duration: "3–6 أسابيع", description: "توثيق مدفوع بالذكاء الاصطناعي للمنطق وهياكل البيانات ونقاط التكامل" },
+      { phase: "مخطط الهندسة والتحديث", duration: "2–4 أسابيع", description: "تصميم الهندسة المستهدفة، وتسلسل الترحيل، وتقييم المخاطر" },
+      { phase: "بناء مُسرّع", duration: "12–24 أسبوعاً", description: "تطوير بمساعدة الذكاء الاصطناعي للأنظمة البديلة مع تكامل مستمر" },
+      { phase: "التحويل والاستقرار", duration: "4–8 أسابيع", description: "تشغيل متوازٍ، وإدارة التحويل، وتحسين ما بعد الترحيل" },
+    ],
+    engagementModelTr: [
+      { phase: "Eski Sistem Denetimi & Spesifikasyon Çıkarımı", duration: "3–6 hafta", description: "Mevcut sistem mantığı, veri yapıları ve entegrasyon noktalarının AI destekli belgelenmesi" },
+      { phase: "Mimari & Modernizasyon Planı", duration: "2–4 hafta", description: "Hedef mimari tasarımı, göç sıralaması, risk değerlendirmesi" },
+      { phase: "Hızlandırılmış İnşa", duration: "12–24 hafta", description: "Sürekli entegrasyonla AI destekli yedek sistem geliştirme" },
+      { phase: "Geçiş & Stabilizasyon", duration: "4–8 hafta", description: "Paralel çalışma, geçiş yönetimi, göç sonrası optimizasyon" },
+    ],
+    statsAr: [
+      { label: "من ميزانيات تكنولوجيا المعلومات عالمياً مقيّدة بصيانة الأنظمة القائمة (EY, 2024)" },
+      { label: "تقليص في أوقات دورة التطوير بهندسة الذكاء الاصطناعي" },
+      { label: "قادر على البيئات السيادية للبيانات" },
+    ],
+    statsTr: [
+      { label: "BT bütçesi global olarak mevcut sistemleri sürdürmeye sıkışmış (EY, 2024)" },
+      { label: "AI mühendisliğiyle SDLC döngü süresinde azalma" },
+      { label: "egemen veri ortamları için on-prem yetkinliği" },
+    ],
+  },
+  "data-governance": {
+    useCasesAr: [
+      "تحديث منصات البيانات لشركات الاتصالات الوطنية: شبكة بيانات موحّدة عبر المجالات التشغيلية والعميل والشبكة",
+      "تنفيذ حوكمة بمستوى الذكاء الاصطناعي لصناديق الثروة السيادية: السلسلة، والأساسيات، وتطبيق السياسات لبيانات الاستثمار",
+      "منصة بيانات الرعاية الصحية: هندسة بيانات مرضى موزعة مع تحليلات ذكاء اصطناعي تحفظ الخصوصية للهيئات الصحية الوطنية",
+      "MDM في الخدمات المالية: توحيد هويات العملاء عبر 14 نظاماً قديماً لبنك إقليمي",
+    ],
+    useCasesTr: [
+      "Ulusal telekomlar için veri platformu modernizasyonu: operasyonel, müşteri ve ağ alanları arasında birleşik veri ağı",
+      "Egemen varlık fonları için AI sınıfı yönetişim: yatırım verileri için soy ağacı, master ve politika uygulaması",
+      "Sağlık verileri platformu: ulusal sağlık otoriteleri için gizliliği koruyan AI analizi ile federe hasta veri mimarisi",
+      "Finansal hizmetler MDM: bölgesel bir banka için 14 eski sistemde müşteri kimliği master verisi",
+    ],
+    engagementModelAr: [
+      { phase: "اكتشاف البيانات وتقييم الديون", duration: "2–4 أسابيع", description: "جرد أصول البيانات، وتقييم الجودة، وتحليل فجوات الحوكمة، وتقييم جاهزية الذكاء الاصطناعي" },
+      { phase: "الهندسة والمعايير", duration: "3–5 أسابيع", description: "تصميم شبكة بيانات أو بحيرة بيانات، وإطار حوكمة، واستراتيجية أساسيات، واختيار الأدوات" },
+      { phase: "بناء المنصة وتفعيلها", duration: "10–20 أسبوعاً", description: "تنفيذ منصة البيانات، ونشر السلسلة، وإدارة البيانات الرئيسية، وفرض الحوكمة" },
+      { phase: "تمكين الذكاء الاصطناعي", duration: "4–8 أسابيع", description: "تغذية طبقة الحوكمة في خطوط استدلال الذكاء الاصطناعي ومخازن سياق الوكلاء وأنظمة الاسترجاع" },
+    ],
+    engagementModelTr: [
+      { phase: "Veri Keşfi & Borç Değerlendirmesi", duration: "2–4 hafta", description: "Veri varlıkları envanteri, kalite değerlendirmesi, yönetişim boşluğu analizi, AI hazırlık skorlaması" },
+      { phase: "Mimari & Standartlar", duration: "3–5 hafta", description: "Veri ağı veya lakehouse tasarımı, yönetişim çerçevesi, master stratejisi, araç seçimi" },
+      { phase: "Platform İnşası & Aktivasyon", duration: "10–20 hafta", description: "Veri platformu uygulaması, soy ağacı dağıtımı, master veri yönetimi, yönetişim uygulaması" },
+      { phase: "AI Etkinleştirme", duration: "4–8 hafta", description: "Yönetişim katmanını AI çıkarım hatlarına, ajan bağlam depolarına ve geri çağırma sistemlerine besleme" },
+    ],
+    statsAr: [
+      { label: "يكشف الذكاء الاصطناعي ديون البيانات لديك — نُصلحها بينما حالة العمل ساخنة" },
+      { label: "نظام بيانات تم دمجه في تكليف نموذجي لإدارة البيانات الرئيسية في المؤسسات" },
+      { label: "من تكليفات Maven AI تبدأ بتقييم جاهزية البيانات" },
+    ],
+    statsTr: [
+      { label: "AI veri borcunuzu ortaya çıkarır — iş senaryosu canlıyken düzeltiriz" },
+      { label: "tipik kurumsal MDM çalışmasında konsolide edilen veri sistemi" },
+      { label: "Maven AI çalışmasının veri hazırlık değerlendirmesiyle başlama oranı" },
+    ],
+  },
+  "ai-product-studio": {
+    useCasesAr: [
+      "منصة ذكاء تنظيمي: مراقبة وتحليل تغييرات اللوائح في دول الخليج لفرق الامتثال بالذكاء الاصطناعي",
+      "وكيل ذكاء المشتريات: اكتشاف وتأهيل ومقارنة الموردين تلقائياً لمكاتب المشتريات الحكومية",
+      "مجموعة عمليات الموارد البشرية: فرز المرشحين وتنسيق الإلحاق وتحليلات الأداء للمؤسسات الكبرى",
+      "تحليل العقود الذكية: مراجعة عقود مدفوعة بالذكاء الاصطناعي وتحديد المخاطر للفرق القانونية والتجارية في الخدمات المالية",
+    ],
+    useCasesTr: [
+      "Düzenleyici zekâ platformu: uyum ekipleri için Körfez düzenleyici değişikliklerinin AI destekli izlenmesi ve analizi",
+      "Tedarik zekâ ajanı: devlet tedarik ofisleri için otomatik satıcı keşfi, niteliklendirmesi ve karşılaştırması",
+      "İK operasyonları AI paketi: büyük kuruluşlar için aday eleme, işe alıştırma koordinasyonu ve performans analizi",
+      "Akıllı sözleşme analizi: finansal hizmetlerdeki hukuki ve ticari ekipler için AI destekli sözleşme inceleme ve risk işaretleme",
+    ],
+    engagementModelAr: [
+      { phase: "السبرنت 0: التعريف والنطاق", duration: "1–2 أسبوع", description: "تعريف المنتج، ومقاييس النجاح، والنطاق التقني، ومجموعة ميزات MVP، وقصص المستخدمين" },
+      { phase: "السبرنت 1–6: البناء", duration: "6–8 أسابيع", description: "سبرنتات تطوير رشيقة بعروض أسبوعية وتكامل مستمر ودمج تغذية المستخدم الراجعة" },
+      { phase: "السبرنت 7–8: التشديد والإطلاق", duration: "2–3 أسابيع", description: "تعزيز الإنتاج، ومراجعة الأمن، والنشر، وإعداد المراقبة وقابلية الرصد" },
+      { phase: "ما بعد الإطلاق: التكرار", duration: "مستمر", description: "مراجعة قياسات المنتج، وتحسين النموذج، وتوسيع الميزات، وترتيب أولويات خارطة الطريق" },
+    ],
+    engagementModelTr: [
+      { phase: "Sprint 0: Tanımla & Kapsam", duration: "1–2 hafta", description: "Ürün tanımı, başarı metrikleri, teknik kapsam, MVP özellik seti, kullanıcı hikayesi haritalama" },
+      { phase: "Sprint 1–6: İnşa", duration: "6–8 hafta", description: "Haftalık demolar, sürekli entegrasyon ve kullanıcı geri bildirim entegrasyonu ile çevik geliştirme sprintleri" },
+      { phase: "Sprint 7–8: Sertleştir & Başlat", duration: "2–3 hafta", description: "Üretim sertleştirme, güvenlik incelemesi, dağıtım, izleme ve gözlemlenebilirlik kurulumu" },
+      { phase: "Lansman sonrası: Yinele", duration: "Sürekli", description: "Ürün telemetri incelemesi, model iyileştirme, özellik genişletme, yol haritası önceliklendirmesi" },
+    ],
+    statsAr: [
+      { label: "من الانطلاق إلى نسخة إنتاج أولى — مضمون" },
+      { label: "أسرع من جداول التسليم لشركات Tier-1" },
+      { label: "ملكية فكرية قابلة لإعادة الاستخدام تضاعف الهامش عبر التكليفات اللاحقة" },
+    ],
+    statsTr: [
+      { label: "başlangıçtan üretim MVP'ye — garantili" },
+      { label: "Tier-1 firma teslimat sürelerinden daha hızlı" },
+      { label: "Yeniden kullanılabilir IP, sonraki çalışmalarda marjı katlar" },
+    ],
+  },
+};
+
+const INDUSTRY_TRANSLATIONS: Record<string, Record<string, unknown>> = {
+  "public-sector": {
+    challengesAr: [
+      "متطلبات سيادة البيانات تستبعد النشر في السحابة العامة لكثير من أحمال العمل الحرجة",
+      "هياكل تنظيمية معقدة وسلاسل موافقات تُبطئ جداول التسليم",
+      "متطلبات اللغة العربية والسياق الإقليمي لنماذج وبيانات الذكاء الاصطناعي",
+      "متطلبات تصنيف الأمن الوطني للذكاء الاصطناعي الحكومي الحساس",
+      "تعقيد المشتريات ودورات تعاقد طويلة نموذجية للعملاء الحكوميين",
+    ],
+    challengesTr: [
+      "Egemen veri gereksinimleri birçok kritik iş yükü için kamu bulut dağıtımını engeller",
+      "Karmaşık örgütsel yapılar ve onay zincirleri teslimat sürelerini yavaşlatır",
+      "AI modelleri ve veri kümeleri için Arapça dil ve bölgesel bağlam gereksinimleri",
+      "Hassas devlet AI'ı için ulusal güvenlik sınıflandırma gereksinimleri",
+      "Devlet müşterilerine özgü tedarik karmaşıklığı ve uzun sözleşme döngüleri",
+    ],
+    approachAr: "ممارسة Maven AI للقطاع العام مصممة خصيصاً للتسليم الحكومي الخليجي. قدراتنا في الذكاء الاصطناعي المحلي والسيادي تلبي متطلبات تصنيف البيانات. نموذج التسليم الكبير يتنقل في التعقيد التنظيمي للجهات الحكومية الكبرى. علاقاتنا الإقليمية، المرتكزة على خالد الخضيري، تفتح الأبواب وتحافظ على الزخم خلال دورات المشتريات.",
+    approachTr: "Maven AI'nın kamu sektörü pratiği özellikle Körfez devlet teslimatı için tasarlandı. On-prem ve egemen AI yetkinliğimiz veri sınıflandırma gereksinimlerini karşılar. Kıdemli teslimat modelimiz büyük devlet kurumlarının örgütsel karmaşıklığında yol alır. Khalid Al Khudairi tarafından sabitlenen bölgesel ilişkilerimiz kapıları açar ve tedarik döngüleri boyunca momentumu korur.",
+    caseVignetteAr: {
+      title: "ذكاء اصطناعي وطني للسلامة العامة",
+      framing: "كيف يمكن للذكاء الاصطناعي الوكيلي أن يقدم قيمة لعمل مصنف ضمن الأمن الوطني — سيناريو توضيحي، وليس تكليفاً منفّذاً من Maven AI.",
+      challenge: "هيئة وطنية تعمل عبر مئات الوحدات الميدانية تحتاج لتحديث إدارة الحوادث بإرسال ومعالجة أدلة بمساعدة الذكاء الاصطناعي — منشورة بالكامل على بنية تحتية سيادية، دون مغادرة بيانات تشغيلية للنطاق الوطني.",
+      approach: "منصة وكيلية منشورة على بنية سحابية وطنية، تتكامل مع أنظمة قراءة لوحات السيارات والاتصالات وإدارة القضايا. التسليم الكبير يتنقل في مراجعات التصنيف والموافقات التنظيمية وبوابات المشتريات التي تهزم معظم الموردين الخارجيين.",
+      outcome: "تشير عمليات نشر الذكاء الاصطناعي للسلامة العامة عالمياً إلى انخفاضات ملموسة في زمن الإرسال ومكاسب في إنتاجية معالجة الأدلة. للحكومات الخليجية، المكاسب الحاسمة عادةً هي الامتثال الكامل للسيادة على البيانات وسجل تدقيق موثوق للجهة التنظيمية — وليس مؤشر أداء مفرد.",
+    },
+    caseVignetteTr: {
+      title: "Ulusal Kamu Güvenliği AI",
+      framing: "Ajanik AI'nın ulusal güvenlik sınıflandırmalı bir iş yükü için nasıl değer sağlayabileceği — örnek senaryo, teslim edilmiş bir Maven AI çalışması değil.",
+      challenge: "Yüzlerce saha biriminde faaliyet gösteren ulusal bir otorite, AI destekli sevk ve delil işlemeyle olay yönetimini modernize etmek zorundadır — tamamen egemen altyapıda dağıtılmış, hiçbir operasyonel veri ulusal sınırı aşmadan.",
+      approach: "Ulusal bulut altyapısında dağıtılmış, ANPR, iletişim ve dosya yönetimi sistemleriyle entegre ajanik bir platform. Kıdemli teslimat, çoğu dış satıcıyı yenilgiye uğratan sınıflandırma incelemeleri, örgütsel onaylar ve tedarik kapılarında yol alır.",
+      outcome: "Kamu güvenliği AI dağıtımları küresel olarak olay-sevk gecikmesinde anlamlı azalmalar ve delil işleme verimliliğinde kazanımlar bildirir. Körfez hükümetleri için belirleyici kazanımlar genellikle tek bir KPI değil, tam egemen veri uyumluluğu ve düzenleyici için inandırıcı denetim izidir.",
+    },
+    statsAr: [
+      { label: "الأثر الاقتصادي السنوي للذكاء الاصطناعي التوليدي المتوقع عبر دول الخليج بحلول 2030" },
+      { label: "طموح المملكة العربية السعودية المعلن للمرتبة العالمية في الذكاء الاصطناعي ضمن الاستراتيجية الوطنية للبيانات والذكاء الاصطناعي" },
+      { label: "قدرة ذكاء اصطناعي عربية أولاً مطلوبة عبر الأسواق الخليجية الستة — وليست ميزة يقدمها معظم الموردين العالميين افتراضياً" },
+    ],
+    statsTr: [
+      { label: "2030 yılına kadar Körfez genelinde öngörülen yıllık GenAI ekonomik etkisi" },
+      { label: "Suudi Arabistan'ın Ulusal Veri & AI Stratejisi kapsamında belirttiği AI küresel sıralama hedefi" },
+      { label: "altı Körfez pazarında gerekli Arapça-öncelikli AI yetkinliği — çoğu küresel satıcı bunu varsayılan olarak sunmaz" },
+    ],
+  },
+  "telecom": {
+    challengesAr: [
+      "إرث ضخم — Siebel CRM، أنظمة BSS/OSS مخصصة، فوترة COBOL — يستهلك ميزانية تكنولوجيا المعلومات بمستويات غير مستدامة",
+      "تحقيق الإيرادات من 5G يتطلب عمليات شبكة وقدرات تجربة عميل مبنية على الذكاء الاصطناعي ليست موجودة في الأنظمة الحالية",
+      "تكاليف اكتساب العملاء واستبقائهم العالية تدفع الحاجة لتخصيص ومنع تسرب مدفوع بالذكاء الاصطناعي",
+      "تحديات جودة البيانات والتكامل عبر مجالات بيانات تشغيلية وعملاء وشبكة منعزلة",
+      "متطلبات التسليم المحلي لبيانات عمليات الشبكة الحساسة",
+    ],
+    challengesTr: [
+      "Devasa eski sistemler — Siebel CRM, özel BSS/OSS, COBOL faturalama — sürdürülemez seviyelerde BT bütçesi tüketiyor",
+      "5G gelir elde etme, mevcut sistemlerde bulunmayan AI-yerli ağ operasyonları ve müşteri deneyimi yetenekleri gerektirir",
+      "Yüksek müşteri edinme ve elde tutma maliyetleri, AI destekli kişiselleştirme ve kayıp önleme ihtiyacını artırır",
+      "Silolu operasyonel, müşteri ve ağ veri alanları arasında veri kalitesi ve entegrasyon zorlukları",
+      "Hassas ağ operasyonları verileri için on-prem teslimat gereksinimleri",
+    ],
+    approachAr: "ممارسة Maven AI للاتصالات تجمع قدرتين مميزتين: منهجيتنا في استخراج المواصفات من الإرث للتحديث الفعّال من حيث التكلفة، وتسليمنا للذكاء الاصطناعي الوكيلي لعمليات الشبكة وتجربة العميل. قدّمنا، مع Thoughtworks AI/works، أكثر برامج تحديث الإرث التلكوم تعقيداً في دول الخليج.",
+    approachTr: "Maven AI'nın telekom pratiği iki ayırt edici yetenek bir araya getirir: maliyet etkin eski sistem modernizasyonu için spec-from-legacy metodolojimiz ve ağ operasyonları ile müşteri deneyimi için ajanik AI teslimatımız. Thoughtworks AI/works ile birlikte Körfez'in en karmaşık telekom eski sistem modernizasyon programlarını teslim ettik.",
+    caseVignetteAr: {
+      title: "تحديث CRM/BSS الإرث على نطاق واسع",
+      framing: "كيف يمكن للاستخراج من الإرث والذكاء الاصطناعي الوكيلي تقديم قيمة لشركة اتصالات وطنية — سيناريو توضيحي.",
+      challenge: "شركة اتصالات وطنية تشغّل CRM عمره 15+ سنة بملايين الأسطر من التخصيص الخاص، تخدم عشرات الملايين من المشتركين. وافق المجلس على الترحيل — لكنه يجب أن يحدث محلياً، دون تعطيل الخدمة، ودون كابوس خمس سنوات.",
+      approach: "استخراج مواصفات مدفوع بالذكاء الاصطناعي من الإرث، وذكاء اصطناعي وكيلي للمساعدة في إعادة بناء سحابي-أصلي، ونشر محلي مستمر للحفاظ على السيادة لبيانات الشبكة والعملاء — يقدّمه مهندسون كبار في كل مكالمة.",
+      outcome: "تُفيد المعايير العامة لتحديث الإرث بمساعدة الذكاء الاصطناعي بانخفاضات ملموسة في تكلفة تشغيل CRM وضغط جوهري لجداول التسليم مقابل مشاريع إعادة الكتابة التقليدية. المساحة التشغيلية المُحرَّرة هي عادةً ما يموّل أجندة الذكاء الاصطناعي الأوسع للمشغّل.",
+    },
+    caseVignetteTr: {
+      title: "Ölçekte Eski CRM/BSS Modernizasyonu",
+      framing: "Spec-from-legacy ve ajanik AI'nın bir ulusal telekom için nasıl değer sağlayabileceği — örnek senaryo.",
+      challenge: "Onlarca milyon aboneye hizmet veren, milyonlarca satır özel uyarlamaya sahip 15+ yıllık bir CRM işleten ulusal telekom. Kurul göçü onayladı — ancak on-prem olmalı, hizmet kesintisi olmadan ve beş yıllık bir kâbus yaşanmadan.",
+      approach: "Eski sistemden AI öncülüğünde spesifikasyon çıkarımı, bulut-yerli yeniden inşaya yardımcı olmak için ajanik AI ve ağ ile müşteri verileri için egemenliği korumak için sürekli on-prem dağıtım — her aramada kıdemli mühendisler tarafından teslim edildi.",
+      outcome: "AI destekli eski sistem modernizasyonu için kamu kıyaslamaları, geleneksel yeniden yazma projelerine kıyasla CRM operasyonel maliyetinde anlamlı azalmalar ve önemli ölçüde sıkıştırılmış teslimat süreleri bildirir. Açılan operasyonel alan, genellikle operatörün daha geniş AI gündemini finanse eden şeydir.",
+    },
+    statsAr: [
+      { label: "حجم سوق ICT المتوقع في دول الخليج بحلول 2030" },
+      { label: "حجم سوق الذكاء الاصطناعي الإجمالي المتوقع في دول الخليج بحلول 2033" },
+      { label: "بقيادة المشغّل — كل شركة اتصالات وطنية كبرى في الخليج (stc وe& وdu وOoredoo وZain وMobily) التزمت علناً بخارطات طريق للذكاء الاصطناعي/الوكيلي" },
+    ],
+    statsTr: [
+      { label: "2030 yılına kadar öngörülen Körfez ICT pazar büyüklüğü" },
+      { label: "2033 yılına kadar öngörülen toplam Körfez AI pazar büyüklüğü" },
+      { label: "Operatör öncülüğünde — her büyük Körfez ulusal telekomu (stc, e&, du, Ooredoo, Zain, Mobily) AI/ajanik AI yol haritalarına kamuoyu önünde taahhüt etti" },
+    ],
+  },
+  "financial-services": {
+    challengesAr: [
+      "متطلبات حوكمة الذكاء الاصطناعي من SAMA وCBUAE تستلزم قابلية تفسير النموذج واختبار الإنصاف وسجلات تدقيق لا تستطيع معظم المؤسسات إنتاجها بعد",
+      "هياكل التمويل الإسلامي تخلق تحديات نمذجة فريدة لا تعالجها أطر الذكاء الاصطناعي المالي المعيارية",
+      "مشاكل جودة بيانات العملاء وتوحيد الهويات عبر أنظمة بنوك أساسية وCRM قديمة تمنع نشر الذكاء الاصطناعي",
+      "ذكاء أسواق رأس المال يتطلب التكامل مع البنية التحتية للبيانات العالمية مع الحفاظ على الامتثال السيادي للبيانات",
+      "أتمتة التقارير التنظيمية تواجه تحديات من أنظمة بيانات مجزأة وسلاسل بيانات غير مكتملة",
+    ],
+    challengesTr: [
+      "SAMA ve CBUAE AI yönetişim gereksinimleri, çoğu kuruluşun henüz üretemediği model açıklanabilirliği, adalet testi ve denetim izleri talep eder",
+      "İslami finans yapıları, standart finansal AI çerçeveleri tarafından ele alınmayan benzersiz AI modelleme zorlukları yaratır",
+      "Eski çekirdek bankacılık ve CRM sistemleri arasında müşteri veri kalitesi ve kimlik master sorunları AI dağıtımını engeller",
+      "Sermaye piyasaları AI'ı, egemen veri uyumluluğunu sürdürürken küresel veri altyapısıyla entegrasyon gerektirir",
+      "Düzenleyici raporlama otomasyonu, parçalı veri sistemlerinden ve eksik veri soyağacından kaynaklanan zorluklarla karşılaşır",
+    ],
+    approachAr: "ممارسة Maven AI للخدمات المالية مرتكزة على قدرتين: حوكمة ذكاء اصطناعي بمستوى تنظيمي (متوافقة مع متطلبات SAMA وCBUAE وPDPL)، وتحديث منصات البيانات الذي يجعل نشر الذكاء الاصطناعي ممكناً تقنياً. عملنا في الحوكمة مصمم لتلبية توقعات الجهة التنظيمية في المراجعة الأولى — لا الثالثة.",
+    approachTr: "Maven AI'nın finansal hizmetler pratiği iki yetenekte sabitlenmiştir: düzenleyici sınıfı AI yönetişimi (SAMA, CBUAE ve PDPL gereksinimleriyle uyumlu) ve AI dağıtımını teknik olarak uygulanabilir kılan veri platformu modernizasyonu. Yönetişim çalışmamız, üçüncü incelemede değil ilk incelemede düzenleyici beklentilerini karşılamak üzere tasarlanmıştır.",
+    caseVignetteAr: {
+      title: "جاهزية حوكمة الذكاء الاصطناعي لبنك إقليمي",
+      framing: "كيف يمكن للذكاء الاصطناعي الوكيلي والحوكمة المنضبطة تقديم قيمة لبنك خاضع للتنظيم — سيناريو توضيحي.",
+      challenge: "بنك خليجي يدير محفظة من نماذج الذكاء الاصطناعي الإنتاجية في الائتمان والاحتيال وتجربة العميل يحتاج إلى توثيق حوكمة، وجرد نماذج، وتفسير، واختبار إنصاف، وسجلات تدقيق جاهزة لفحص SAMA وCBUAE — بجودة فحص، لا بأفضل جهد.",
+      approach: "تمرين كامل لجرد النماذج، وإطار تفسير واختبار تحيّز متوافق مع إرشادات SAMA للذكاء الاصطناعي، وطبقة سجل تدقيق تحوّل أصول الذكاء الاصطناعي القائمة لدى البنك إلى مادة جاهزة للفحص — مصممة لإعادة استخدامها عبر بقية برنامج الذكاء الاصطناعي.",
+      outcome: "تشدد الجهات التنظيمية الخليجية توقعات حوكمة الذكاء الاصطناعي بسرعة. البنوك التي تصل إلى الفحوصات بسلسلة نماذج كاملة وأدلة مراقبة واختبار تحيّز جاهزة تميل إلى تحويل ذلك العمل إلى قالب حوكمة قابل لإعادة الاستخدام عبر بقية برنامج الذكاء الاصطناعي — محوّلةً تكلفة الامتثال إلى رافعة منصّة.",
+    },
+    caseVignetteTr: {
+      title: "Bölgesel Bir Banka için AI Yönetişim Hazırlığı",
+      framing: "Ajanik AI ve disiplinli yönetişimin düzenlemeye tabi bir banka için nasıl değer sağlayabileceği — örnek senaryo.",
+      challenge: "Kredi, dolandırıcılık ve müşteri deneyiminde üretim AI modelleri portföyü işleten bir Körfez bankasının, en iyi çabayla değil, sınav sınıfı kalitede SAMA ve CBUAE incelemesine hazır yönetişim belgeleri, model envanteri, açıklanabilirlik, adalet testi ve denetim izlerine ihtiyacı vardır.",
+      approach: "Tam bir model envanteri çalışması, SAMA AI Kılavuzu ile uyumlu bir açıklanabilirlik ve önyargı testi çerçevesi ve bankanın mevcut AI varlığını sınava hazır malzemeye dönüştüren bir denetim izi katmanı — AI programının geri kalanında yeniden kullanılmak üzere tasarlandı.",
+      outcome: "Körfez düzenleyicileri AI yönetişim beklentilerini hızla sıkıştırıyor. Sınavlara tam model soyağacı, izleme kanıtı ve önyargı testi ile gelen bankalar, bu çalışmayı genellikle AI programlarının geri kalanında yeniden kullanılabilir bir yönetişim şablonuna dönüştürür — uyum maliyetini platform kaldıracına çevirir.",
+    },
+    statsAr: [
+      { label: "تخفيض في تكلفة قطاع البنوك متوقع من اعتماد الذكاء الاصطناعي" },
+      { label: "إمكانية ربح سنوية إضافية من الذكاء الاصطناعي للبنوك التجارية على مستوى العالم بحلول 2030" },
+      { label: "اثنان من أكثر أنظمة حوكمة الذكاء الاصطناعي صرامة للبنوك عالمياً — قابلية التفسير واختبار الإنصاف وسجلات التدقيق إلزامية، لا اختيارية" },
+    ],
+    statsTr: [
+      { label: "AI benimsenmesinden öngörülen bankacılık endüstrisi maliyet azalması" },
+      { label: "2030 yılına kadar dünyadaki perakende bankalar için AI'dan ek yıllık kâr potansiyeli" },
+      { label: "küresel olarak bankalar için en kuralcı iki AI yönetişim rejimi — açıklanabilirlik, adalet testi ve denetim izleri zorunludur, isteğe bağlı değildir" },
+    ],
+  },
+  "energy-commodities": {
+    challengesAr: [
+      "بيانات تكنولوجيا التشغيل (OT) منعزلة عبر إرث الإنتاج الأولي والمتوسط والنهائي — يصعب توحيدها للذكاء الاصطناعي دون المساس بسلامة المنشأة",
+      "تصنيفات السيادة والأمن الوطني على بيانات البنية التحتية للطاقة تستبعد ذكاء السحابة العامة لأكثر أحمال العمل قيمة",
+      "ذكاء الصيانة التنبؤية والموثوقية يجب أن يتكامل مع أنظمة SCADA وDCS وPLC العمرها عقود لم تُصمم أبداً لقياس بيانات متدفقة",
+      "تفويضات تحول الطاقة تتطلب قدرات ذكاء اصطناعي جديدة لإنتاج الهيدروجين، والتقاط الكربون، ومراقبة الميثان، وتحسين عائد المتجددات",
+      "ذكاء تداول السلع يتطلب معالجة بزمن منخفض في الوقت الفعلي على بيانات سوق منظمة — مع قابلية تدقيق وتفسير ترضي الامتثال",
+    ],
+    challengesTr: [
+      "Operasyonel teknoloji (OT) verileri yukarı, orta ve aşağı akış mülklerinde silolu — tesis güvenliğini tehlikeye atmadan AI için birleştirmek zor",
+      "Enerji altyapı verilerindeki egemen ve ulusal güvenlik sınıflandırmaları, en değerli iş yükleri için kamu bulut AI'sını engeller",
+      "Tahmine dayalı bakım ve güvenilirlik AI'sı, akışlı telemetri için tasarlanmamış onlarca yıllık SCADA, DCS ve PLC sistemleriyle entegre olmalıdır",
+      "Enerji geçişi mandatları hidrojen üretimi, karbon yakalama, metan izleme ve yenilenebilir verim optimizasyonu için yeni AI yetenekleri talep eder",
+      "Emtia ticaret AI'sı, uyumu tatmin eden denetlenebilirlik ve açıklanabilirlikle düzenlenmiş piyasa verileri üzerinde gerçek zamanlı düşük gecikmeli işleme gerektirir",
+    ],
+    approachAr: "ممارسة Maven AI للطاقة تجمع هندسة الذكاء الاصطناعي الصناعي مع قدرات النشر المحلي والسيادي. ننشر ذكاءً اصطناعياً وكيلياً عبر سلسلة قيمة الطاقة — تحسين الإنتاج الأولي، وموثوقية المصافي، والإمداد النهائي، وتداول السلع، وأحمال عمل تحول الطاقة الناشئة — مع تلبية متطلبات الأمن والتصنيف لأبطال الطاقة الوطنيين. تفتح منهجيتنا في الاستخراج من الإرث ممتلكات SCADA وDCS التي قاومت التحديث لسنوات.",
+    approachTr: "Maven AI'nın enerji pratiği endüstriyel AI mühendisliğini on-prem ve egemen dağıtım yetkinliği ile birleştirir. Enerji değer zinciri boyunca ajanik AI dağıtırız — yukarı akış üretim optimizasyonu, rafineri güvenilirliği, aşağı akış tedarik, emtia ticareti ve gelişmekte olan enerji-geçiş iş yükleri — ulusal enerji şampiyonlarının güvenlik ve sınıflandırma gereksinimlerini karşılayarak. Spec-from-legacy metodolojimiz, yıllarca modernizasyona direnen SCADA ve DCS varlıklarını açar.",
+    caseVignetteAr: {
+      title: "ذكاء اصطناعي لموثوقية المصافي",
+      framing: "كيف يمكن للاستخراج من الإرث والذكاء الاصطناعي الوكيلي تقديم قيمة عبر مُلكية طاقة صناعية — سيناريو توضيحي.",
+      challenge: "شركة نفط وطنية تحتاج لتحديث الصيانة التنبؤية عبر مجمعات مصافٍ متعددة، مع تكامل ممتلكات SCADA وDCS وPLC العمرها عقود مع استدلال ذكاء اصطناعي محلي وتعلّم مستمر من قياسات تشغيلية — دون أن تخترق حدود سلامة المنشأة أبداً.",
+      approach: "استخراج مواصفات منطق التحكم بالمصفاة من الإرث، وذكاء اصطناعي وكيلي منشور على بنية تحتية محلية سيادية، مع تعلّم مستمر من أنماط الموثوقية عبر المواقع وتكامل وثيق مع فرق العمليات والسلامة.",
+      outcome: "تُفيد عمليات نشر الذكاء الاصطناعي الصناعي في شركات النفط الدولية والوطنية بانخفاضات مادية في وقت التوقف غير المخطط ووفورات خسارة قابلة للتجنّب تُقاس بعشرات الملايين من الدولارات سنوياً. لشركات النفط الوطنية الخليجية، النتيجة الأهم بالقدر نفسه هي الامتثال المحلي الكامل لتصنيف بيانات الطاقة الوطنية.",
+    },
+    caseVignetteTr: {
+      title: "Rafineri Güvenilirlik AI",
+      framing: "Spec-from-legacy ve ajanik AI'nın endüstriyel bir enerji mülkiyeti boyunca nasıl değer sağlayabileceği — örnek senaryo.",
+      challenge: "Bir ulusal petrol şirketinin, tesis güvenlik sınırlarını asla ihlal etmeden, on-prem AI çıkarımı ve operasyonel telemetriden sürekli öğrenme ile onlarca yıllık SCADA, DCS ve PLC mülklerini entegre ederek birden fazla rafineri kompleksinde tahmine dayalı bakımı modernize etmesi gerekir.",
+      approach: "Rafineri kontrol mantığının eski sistemden spec-from-legacy çıkarımı, egemen on-prem altyapıda dağıtılmış ajanik AI ve sahalar arası güvenilirlik örüntülerinden sürekli öğrenme ile operasyon ve güvenlik ekipleriyle sıkı entegrasyon.",
+      outcome: "IOC'lerde ve NOC'larda endüstriyel AI dağıtımları, plansız duruş süresinde maddi azalmalar ve yıllık on milyonlarca dolar olarak ölçülen önlenmiş kayıp tasarrufları bildirir. Körfez NOC'ları için eşit derecede önemli sonuç, ulusal enerji veri sınıflandırmasıyla tam on-prem uyumluluğudur.",
+    },
+    statsAr: [
+      { label: "حالة استخدام للذكاء الاصطناعي حدّدتها أرامكو، مع نشر 200+ حل عبر العمليات" },
+      { label: "استثمار أرامكو الاستراتيجي في Groq لبنية حوسبة الذكاء الاصطناعي التحتية" },
+      { label: "سيادي — أحمال عمل ذكاء البنية التحتية للطاقة تحمل تصنيفات أمن وطني تستبعد السحابة العامة — التسليم المحلي والسيادي إلزامي، لا مفضّل" },
+    ],
+    statsTr: [
+      { label: "Aramco tarafından belirlenen AI kullanım senaryosu, operasyonlar genelinde dağıtılmış 200+ çözüm ile" },
+      { label: "Aramco'nun AI hesaplama altyapısı için Groq'a stratejik yatırımı" },
+      { label: "Egemen — enerji altyapısı AI iş yükleri kamu bulutunu engelleyen ulusal güvenlik sınıflandırmaları taşır — on-prem ve egemen teslimat tercih edilen değil, zorunludur" },
+    ],
+  },
+  "retail-consumer": {
+    challengesAr: [
+      "بيانات العملاء مجزأة عبر المتاجر الفعلية والتجارة الإلكترونية والأسواق ومنصات الولاء — تمنع الرؤية الموحدة التي يتطلبها التخصيص",
+      "معالجة اللغة الطبيعية العربية أولاً لبحث المنتجات وخدمة العملاء وتحليل المراجعات لا تزال متخلّفة نسبياً عن النظائر الإنجليزية",
+      "التنبؤ بالطلب يجب أن يستوعب موجات رمضان والعيد والعودة إلى المدارس والسياحة ببيانات تاريخية نظيفة محدودة",
+      "التوطين والامتثال لحماية المستهلك يختلفان جوهرياً عبر الأسواق الخليجية الستة — ما ينجح في الإمارات يفشل غالباً في السعودية",
+      "ممتلكات SAP وOracle وJDA القديمة تستهلك ميزانية تكنولوجيا المعلومات بينما يتوسّع المنافسون المبنيون على الذكاء الاصطناعي بلا قيود ديون تقنية",
+    ],
+    challengesTr: [
+      "Müşteri verileri fiziksel mağazalar, e-ticaret, pazaryerleri ve sadakat platformlarında parçalanmış — kişiselleştirmenin gerektirdiği birleşik görünümü engeller",
+      "Ürün araması, müşteri hizmetleri ve inceleme analizi için Arapça-öncelikli NLP, İngilizce muadillerine göre az gelişmiş kalır",
+      "Talep tahmini, sınırlı temiz tarihsel veriyle Ramazan, Bayram, okula dönüş ve turizm odaklı dalgalanmaları emmelidir",
+      "Yerelleştirme ve tüketici koruma uyumu altı Körfez pazarında maddi olarak değişir — BAE'de işe yarayan KSA'da çoğu zaman başarısız olur",
+      "Eski SAP, Oracle ve JDA satış mülkleri BT bütçesini tüketirken AI-yerli rakipler teknik borçtan engelsiz ölçeklenir",
+    ],
+    approachAr: "ممارسة Maven AI للتجزئة تقرن تحديث الاستخراج من الإرث للاعبين القائمين مع تسليم الذكاء الاصطناعي الوكيلي للتخصيص واستشعار الطلب والتسعير الديناميكي والتجارة المحادثية. قدرتنا على العربية أولاً ذات قيمة فريدة في التجزئة، حيث يمثل تفاعل العملاء رافعة تنافسية أساسية — وحيث يتجاهل معظم مزوّدي الذكاء الاصطناعي الإقليميين النماذج العربية ويفشلون على لغة المستهلك الخليجي الحقيقية.",
+    approachTr: "Maven AI'nın perakende pratiği, mevcut oyuncular için spec-from-legacy modernizasyonunu kişiselleştirme, talep algılama, dinamik fiyatlandırma ve sohbet ticareti için ajanik AI teslimatıyla eşleştirir. Arapça-öncelikli yetkinliğimiz, müşteri katılımının temel bir rekabet kaldıracı olduğu perakende için benzersiz değerlidir — ve çoğu bölgesel AI sağlayıcısı, gerçek Körfez tüketici dilinde başarısız olan yalnızca İngilizce modellere varsayılır.",
+    caseVignetteAr: {
+      title: "تخصيص التجارة السريعة",
+      framing: "كيف يمكن للذكاء الاصطناعي الوكيلي تقديم قيمة لمنصة تجارة سريعة أو سوق تخدم المستهلكين الخليجيين — سيناريو توضيحي.",
+      challenge: "منصة تجارة سريعة أو سوق خليجية تخدم ملايين المستخدمين النشطين شهرياً عبر أسواق متعددة تحتاج تخصيصاً عربياً أولاً مدمجاً في طبقات التوصية والبحث والمحادثة — ومساراً صادقاً بعيداً عن المنصات القائمة الافتراضية للإنجليزية.",
+      approach: "نظام توصيات وكيلي مدرّب على تصنيف منتجات عربي أولاً وسلوك تسوق ملاحظ، منشور إلى جانب منصات الولاء والتسعير الديناميكي مع اختبار A/B مستمر.",
+      outcome: "تُفيد المعايير العامة عبر التجزئة العالمية بزيادة إيرادات بنسبة 5–15٪ ومكاسب جوهرية في حجم السلة من التخصيص المدفوع بالذكاء الاصطناعي. للمنصات الخليجية، الفارق هو ما إذا كان التخصيص يعمل فعلاً بالعربية — الفارق بين دراسة حالة منشورة وإطلاق غير متميّز.",
+    },
+    caseVignetteTr: {
+      title: "Q-Ticaret Kişiselleştirme",
+      framing: "Ajanik AI'nın Körfez tüketicilerine hizmet veren bir hızlı ticaret veya pazaryeri platformu için nasıl değer sağlayabileceği — örnek senaryo.",
+      challenge: "Birden çok pazarda aylık aktif milyonlarca kullanıcıya hizmet veren bir Körfez hızlı ticaret veya pazaryeri platformunun, öneri, arama ve sohbet katmanlarına yerleştirilmiş Arapça-öncelikli kişiselleştirmeye ve İngilizce-varsayılan mevcutlardan dürüst bir yola ihtiyacı vardır.",
+      approach: "Arapça-öncelikli ürün taksonomisi ve gözlemlenen alışveriş davranışı üzerinde eğitilmiş ajanik bir öneri sistemi, sürekli A/B testiyle sadakat ve dinamik fiyatlandırma platformlarının yanına dağıtıldı.",
+      outcome: "Küresel perakendede kamu kıyaslamaları, AI öncülüğünde kişiselleştirmeden %5–15 gelir artışı ve anlamlı sepet büyüklüğü kazanımları bildirir. Körfez platformları için ayırt edici, kişiselleştirmenin gerçekten Arapça'da çalışıp çalışmadığıdır — yayınlanmış bir vaka çalışması ile farksız bir lansman arasındaki fark.",
+    },
+    statsAr: [
+      { label: "حجم سوق الذكاء الاصطناعي الإجمالي المتوقع في دول الخليج بحلول 2033، مع التجزئة بين أسرع المجالات نمواً" },
+      { label: "زيادة الإيرادات التي تُبلّغ عنها متاجر التجزئة العالمية من التخصيص المدفوع بالذكاء الاصطناعي" },
+      { label: "العربية أولاً — مطلوبة لتفاعل حقيقي مع المستهلك الخليجي — معظم معالجة اللغة الجاهزة افتراضاً إنجليزية فقط وتفشل على اللهجة الإقليمية" },
+    ],
+    statsTr: [
+      { label: "2033 yılına kadar öngörülen toplam Körfez AI pazar büyüklüğü, perakende en hızlı büyüyen uygulama alanları arasında" },
+      { label: "küresel perakendecilerin AI öncülüğünde kişiselleştirmeden bildirdiği gelir artışı" },
+      { label: "Arapça-öncelikli — gerçek Körfez tüketici katılımı için gerekli — çoğu hazır NLP yalnızca İngilizce'ye varsayılır ve bölgesel lehçede başarısız olur" },
+    ],
+  },
+  "travel-hospitality": {
+    challengesAr: [
+      "نماذج تشغيل المشاريع السياحية الكبرى تُصمَّم على أرض جديدة — لا يوجد دليل لضيافة مبنية على الذكاء الاصطناعي بهذا الحجم أو بهذا الملف من الضيوف",
+      "تفاعل الضيوف متعدد اللغات (العربية والإنجليزية والماندرين والروسية والهندية) يتطلب ذكاءً محادثياً متطوراً لا يمكن للمنصات السائدة تقديمه",
+      "ذكاء إدارة العائد والتسعير الديناميكي يجب أن يحترم مبادئ التمويل الإسلامي وضوابط الأسعار التنظيمية الإقليمية وتفويضات السياحة الحكومية",
+      "أنظمة الولاء وCRM والحجوزات مجزأة عبر مجموعات الفنادق وشركات الطيران والخدمات الأرضية حتى داخل التكتل الأم نفسه",
+      "توقعات خصوصية الضيوف المميزة في الضيافة الفاخرة والملكية والثروة العالية تستبعد ذكاء السحابة العامة لأكثر بيانات العملاء قيمة",
+    ],
+    challengesTr: [
+      "Turizm mega proje işletim modelleri yeşil alanda tasarlanıyor — bu ölçekte veya bu konuk profiliyle AI-yerli konaklama için bir oyun kitabı yok",
+      "Çok dilli konuk etkileşimi (Arapça, İngilizce, Mandarin, Rusça, Hintçe) ana akım platformların sunamadığı sofistike sohbet AI talep eder",
+      "Verim yönetimi ve dinamik fiyatlandırma AI'ı, İslami finans ilkelerine, bölgesel düzenleyici fiyat kontrollerine ve devlet turizm mandatlarına uymalıdır",
+      "Sadakat, CRM ve rezervasyon sistemleri, aynı ana holding içinde bile otel grupları, havayolları ve yer hizmetleri arasında parçalanmış",
+      "Lüks, kraliyet ve yüksek net değerli konaklamada ayırt edici konuk gizlilik beklentileri, en değerli müşteri verileri için kamu bulut AI'sını engeller",
+    ],
+    approachAr: "Maven AI تشارك مطوّري المشاريع السياحية الكبرى ومجموعات الضيافة القائمة لتصميم وشحن ذكاء اصطناعي وكيلي لتجربة الضيف وتحسين الإيرادات والتميز التشغيلي. عملنا يمتد من ذكاء تصميم المفهوم للوجهات الجديدة وصولاً إلى تحديث الإرث للمجموعات التي تعمل عبر 30+ عقاراً. النشر السيادي المحلي متاح حيث يتطلب ذلك تصنيف خصوصية الضيف.",
+    approachTr: "Maven AI, konuk deneyimi, gelir optimizasyonu ve operasyonel mükemmellik için ajanik AI tasarlamak ve sevk etmek üzere turizm mega proje geliştiricileri ve mevcut konaklama gruplarıyla ortaklık kurar. Çalışmamız yeşil alan destinasyonlar için konsept-tasarım AI'sından 30+ mülkte faaliyet gösteren gruplar için eski sistem modernizasyonuna kadar uzanır. Egemen on-prem dağıtım, konuk gizlilik sınıflandırmasının talep ettiği yerlerde mevcuttur.",
+    caseVignetteAr: {
+      title: "ذكاء تجربة الضيف للمشاريع الكبرى",
+      framing: "كيف يمكن للذكاء الاصطناعي الوكيلي تقديم قيمة لمشروع سياحي كبير أو مجموعة ضيافة — سيناريو توضيحي.",
+      challenge: "مطور سياحي بعقارات فاخرة متعددة تُفتتح عبر نافذة 24 شهراً يحتاج منصة تجربة ضيف وكيلية عبر الحجز والكونسيرج والمأكولات والمشروبات والنقل وتنسيق الأنشطة — بأربع لغات أو أكثر، مع سيادة بيانات كاملة لبيانات الضيوف من الثروات العالية.",
+      approach: "منصة وكيلية تدمج الحجز والكونسيرج والمأكولات والمشروبات والنقل وتنسيق الأنشطة، مع نشر سيادي محلي لبيانات الضيف، وطبقة محادثة متعددة اللغات، ووكلاء إدارة عائد مرتبطون بإشغال العقار.",
+      outcome: "تُفيد عمليات نشر ذكاء الضيافة الاصطناعي عالمياً بمعدلات أتمتة عالية على طلبات الضيوف الروتينية ومكاسب جوهرية في رضا الضيف المُقاس. للمشاريع الكبرى الخليجية، النتائج الأصعب — تغطية اللغة، والامتثال السيادي للبيانات، والتنسيق متعدد العقارات — هي التي تحدد ما إذا كانت المنصة ستفتح فعلاً مع العقار.",
+    },
+    caseVignetteTr: {
+      title: "Mega Proje Konuk Deneyimi AI",
+      framing: "Ajanik AI'nın bir turizm mega projesi veya konaklama grubu için nasıl değer sağlayabileceği — örnek senaryo.",
+      challenge: "24 aylık bir pencere boyunca açılan birden fazla lüks mülkü olan bir turizm geliştiricisinin, dört veya daha fazla dilde, yüksek net değerli konuk verileri için tam veri egemenliği ile rezervasyon, konsiyerj, F&B, ulaşım ve aktivite kürasyonu boyunca ajanik bir konuk deneyimi platformuna ihtiyacı vardır.",
+      approach: "Konuk verileri için egemen on-prem dağıtım, çok dilli sohbet katmanı ve mülk doluluğuna bağlı gelir yönetimi ajanları ile rezervasyon, konsiyerj, F&B, ulaşım ve aktivite kürasyonunu entegre eden ajanik bir platform.",
+      outcome: "Konaklama AI dağıtımları küresel olarak rutin konuk taleplerinde yüksek otomasyon oranları ve ölçülen konuk memnuniyetinde anlamlı artışlar bildirir. Körfez mega projeleri için daha zor sonuçlar — dil kapsamı, egemen veri uyumluluğu, çok mülklü orkestrasyonu — platformun gerçekten mülkle birlikte açılıp açılmadığını belirleyenlerdir.",
+    },
+    statsAr: [
+      { label: "التزام استثمار NEOM المُعلَن عبر صندوق الاستثمارات العامة" },
+      { label: "هدف الزوار الدوليين الوافدين للمملكة العربية السعودية بحلول 2030" },
+      { label: "المساهمة المستهدفة للسياحة في الناتج المحلي الإجمالي السعودي بحلول 2030" },
+    ],
+    statsTr: [
+      { label: "Kamu Yatırım Fonu aracılığıyla NEOM'un belirttiği yatırım taahhüdü" },
+      { label: "2030 yılına kadar Suudi Arabistan için gelen uluslararası ziyaretçi hedefi" },
+      { label: "2030 yılına kadar Suudi GSYH'ye turizmin hedeflenen katkısı" },
+    ],
+  },
+  "automotive": {
+    challengesAr: [
+      "قياسات السيارات المتصلة تُولّد أحجام بيانات لا تستطيع أنظمة إدارة الوكلاء القديمة استيعابها أو تخزينها أو الاستفادة منها على نطاق واسع",
+      "صحة بطاريات السيارات الكهربائية والشحن وذكاء شبكة الطاقة يتطلب التكامل عبر السيارة والبنية التحتية للشحن وأنظمة المرافق التي لا يتحكم بها مزود واحد",
+      "تجارب التنقل الذاتي تتطلب امتثال ذكاء اصطناعي سيادي للأنظمة الحرجة للسلامة، بالإضافة إلى التعرّف على إشارات الطرق العربية وسياق المشاة الذي تفتقر إليه النماذج الجاهزة",
+      "ذكاء ما بعد البيع والخدمة يجب أن يتنقل في ديناميكيات شبكة الوكلاء المتعددة العلامات والمناطق التي تحدد توزيع السيارات الخليجية",
+      "نقص المواهب في هندسة الذكاء الاصطناعي الخاصة بالسيارات — معظم المواهب الإقليمية للذكاء الاصطناعي جاءت من الخدمات المالية أو الاتصالات، مع تعرّض محدود عميق للسيارات",
+    ],
+    challengesTr: [
+      "Bağlı araç telemetrisi, eski bayilik yönetim sistemlerinin alıp depolayamayacağı veya ölçekte para kazanamayacağı veri hacimleri üretir",
+      "EV pil sağlığı, şarj ve enerji şebekesi AI'ı, hiçbir tek satıcının kontrol etmediği araç, şarj altyapısı ve hizmet sistemleri arasında entegrasyon gerektirir",
+      "Otonom mobilite pilotları, güvenlik kritik sistemler için egemen AI uyumluluğu ve hazır modellerin sahip olmadığı Arapça yol işareti ve yaya bağlam tanıma talep eder",
+      "Satış sonrası ve servis AI'ı, Körfez otomotiv dağıtımını tanımlayan karmaşık çok markalı, çok bölgeli bayilik ağı dinamiklerinde yol almalıdır",
+      "Otomotiv-spesifik AI mühendisliğinde yetenek kıtlığı — bölgesel AI yeteneğinin çoğu sınırlı derin alan otomotiv maruziyetiyle BFSI veya telekomdan gelmiştir",
+    ],
+    approachAr: "ممارسة Maven AI للسيارات تدعم الشركات المصنعة والأبطال الوطنيين للسيارات الكهربائية ومجموعات الوكلاء ومشغلي التنقل-كخدمة بذكاء اصطناعي وكيلي للسيارات المتصلة والخدمة التنبؤية وتجربة العميل. تُسرّع قدرتنا على الاستخراج من الإرث تحديث أنظمة إدارة الوكلاء وما بعد البيع، بينما يخدم نموذج التسليم السيادي لدينا برامج القيادة الذاتية والمساعدة المتقدمة التي لا يمكنها مغادرة المحيط الوطني.",
+    approachTr: "Maven AI'nın otomotiv pratiği, OEM'leri, ulusal EV şampiyonlarını, bayilik gruplarını ve mobility-as-a-service operatörlerini bağlı araçlar, tahmine dayalı servis ve müşteri deneyimi için ajanik AI ile destekler. Spec-from-legacy yetkinliğimiz DMS ve satış sonrası modernizasyonunu hızlandırırken, egemen teslimat modelimiz ulusal çevreyi terk edemeyen otonom ve ADAS programlarına hizmet eder.",
+    caseVignetteAr: {
+      title: "ذكاء اصطناعي لتجربة العميل في السيارات",
+      framing: "كيف يمكن للذكاء الاصطناعي الوكيلي تقديم قيمة لمجموعة وكلاء أو OEM متعدد العلامات — سيناريو توضيحي.",
+      challenge: "مجموعة وكلاء سيارات إقليمية تشغّل عمليات متعددة العلامات والمناطق تحتاج إلى منصة بيانات موحّدة وذكاء اصطناعي وكيلي يتنبأ بفترات الخدمة، ويحدد فرص الاستبدال، ويدفع التواصل الاستباقي للعملاء — مع احترام ديناميكيات الوكلاء المعقدة.",
+      approach: "خط أنابيب قياسات متعدد العلامات يُغذّي ذكاءً اصطناعياً وكيلياً للتنبؤ بالخدمة والتنبؤ بقطع الغيار، مع طبقة وكلاء تفاعل العملاء تقود التواصل الاستباقي لفترات الخدمة وعمليات الاستدعاء وفرص الاستبدال.",
+      outcome: "تُفيد منصات السيارات المدعومة بالذكاء الاصطناعي عالمياً بزيادات ملموسة في إيرادات الخدمة وفرص الاستبدال. لمجموعات الوكلاء الخليجية، النتائج الأهم تشمل قدرة موحّدة عبر العلامات والمناطق وأساس بيانات يتوسّع مع نمو ممتلكات السيارات الكهربائية المتصلة.",
+    },
+    caseVignetteTr: {
+      title: "Otomotiv Müşteri Deneyimi AI",
+      framing: "Ajanik AI'nın bir bayilik grubu veya çok markalı OEM için nasıl değer sağlayabileceği — örnek senaryo.",
+      challenge: "Çok markalı, çok bölgeli operasyonlar yürüten bölgesel bir otomotiv bayilik grubunun, karmaşık bayilik dinamiklerine saygı duyarak servis aralıklarını tahmin eden, takas fırsatlarını belirleyen ve proaktif müşteri erişimini yönlendiren birleşik bir veri platformuna ve ajanik AI'ya ihtiyacı vardır.",
+      approach: "Servis tahmini ve parça tahmini için ajanik AI besleyen çok markalı bir telemetri hattı, servis aralıkları, geri çağırmalar ve takas fırsatları için proaktif erişimi yönlendiren bir müşteri etkileşim ajan katmanı ile.",
+      outcome: "AI destekli otomotiv platformları küresel olarak servis geliri ve takas fırsatlarında anlamlı artışlar bildirir. Körfez bayilik grupları için daha önemli sonuçlar arasında markalar ve bölgeler arasında birleşik yetenek ve büyüyen bağlı EV mülkiyetleriyle ölçeklenen bir veri temeli yer alır.",
+    },
+    statsAr: [
+      { label: "التزام المملكة العربية السعودية المُعلَن لتصنيع السيارات الكهربائية والبنية التحتية ضمن رؤية 2030" },
+      { label: "طاقة إنتاج السيارات الكهربائية السنوية التي تستهدفها المملكة العربية السعودية بحلول 2030 عبر Lucid وCeer والمشاريع المشتركة" },
+      { label: "المساهمة المستهدفة لقطاع السيارات الكهربائية في الناتج المحلي الإجمالي السعودي بحلول 2030" },
+    ],
+    statsTr: [
+      { label: "Suudi Arabistan'ın Vizyon 2030 kapsamında EV üretim ve altyapısına belirttiği taahhüt" },
+      { label: "Suudi Arabistan'ın Lucid, Ceer ve ortak girişimler aracılığıyla 2030'a kadar hedeflediği yıllık EV üretim kapasitesi" },
+      { label: "2030 yılına kadar Suudi GSYH'ye hedeflenen EV sektörü katkısı" },
+    ],
+  },
+};
+
+// Apply translations in place so consumers (Industries.tsx, ServiceDetail.tsx)
+// can keep reading the same `services`/`industries` exports with the new
+// suffixed fields populated. Done after the EN array literals so a missing
+// key in the translation map is visible in this file's diff, not buried.
+for (const s of services as Array<Record<string, unknown>>) {
+  const t = SERVICE_TRANSLATIONS[s.id as string];
+  if (t) Object.assign(s, t);
+}
+for (const i of industries as Array<Record<string, unknown>>) {
+  const t = INDUSTRY_TRANSLATIONS[i.id as string];
+  if (t) Object.assign(i, t);
+}
 
 assertSharedAlignment("service slug", services.map((s) => s.slug), sharedServices.map((s) => s.slug));
 assertSharedAlignment("industry id", industries.map((i) => i.id), sharedIndustries.map((i) => i.id));

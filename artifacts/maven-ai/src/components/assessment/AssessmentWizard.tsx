@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Loader2,
   Sparkles,
-  Globe,
   ShieldCheck,
 } from "lucide-react";
 import {
@@ -52,7 +51,7 @@ interface Props {
 }
 
 export default function AssessmentWizard({ def, teamToken }: Props) {
-  const { lang, setLang, dir } = useLang();
+  const { lang, dir } = useLang();
   const [, navigate] = useLocation();
   const storageKey = `maven-ai-wizard-${def.slug}`;
 
@@ -104,12 +103,10 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
   }, [def.slug, useCases.length]);
 
   useEffect(() => {
-    // ProfileInput.language predates TR support and only knows "en" | "ar".
-    // Coerce TR users to EN for the assessment profile until the wizard's
-    // copy/scoring is localized — keeps the rest of the chrome in TR while
-    // the assessment itself remains a bilingual EN/AR product.
-    const profileLang = lang === "ar" ? "ar" : "en";
-    setProfile((p) => ({ ...p, language: profileLang }));
+    // Keep the scoring profile's `language` field (memo/report locale) in
+    // sync with the wizard chrome locale so EN/AR/TR users all receive the
+    // report in their selected language.
+    setProfile((p) => ({ ...p, language: lang }));
   }, [lang]);
 
   useEffect(() => {
@@ -165,7 +162,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
     } catch (err) {
       console.error(err);
       setStep("questions");
-      alert(tStr({ en: "Submission failed. Please try again.", ar: "فشل الإرسال. حاول مرة أخرى." }, lang));
+      alert(tStr({ en: "Submission failed. Please try again.", ar: "فشل الإرسال. حاول مرة أخرى.", tr: "Gönderim başarısız oldu. Lütfen tekrar deneyin." }, lang));
     }
   };
 
@@ -193,16 +190,6 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                 {tStr(def.title, lang)}
               </h1>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setLang(lang === "en" ? "ar" : "en")}
-              className="text-xs font-medium bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-md transition"
-              data-testid="button-toggle-lang"
-            >
-              <Globe className="inline mr-1" size={12} />
-              {lang === "en" ? "العربية" : "English"}
-            </button>
           </div>
         </div>
         {step === "questions" && (
@@ -237,11 +224,11 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   value={`${def.estMinutes} ${tStr(ui.common.minutes, lang)}`}
                 />
                 <Stat
-                  label={tStr({ en: "Dimensions", ar: "الأبعاد" }, lang)}
+                  label={tStr({ en: "Dimensions", ar: "الأبعاد", tr: "Boyutlar" }, lang)}
                   value={String(def.dimensions.length)}
                 />
                 <Stat
-                  label={tStr({ en: "GCC peer benchmark", ar: "مقارنة الأقران الخليجيين" }, lang)}
+                  label={tStr({ en: "GCC peer benchmark", ar: "مقارنة الأقران الخليجيين", tr: "Körfez emsal kıyaslaması" }, lang)}
                   value="✓"
                 />
               </div>
@@ -262,7 +249,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                 className="mt-10 inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-7 py-3.5 rounded-xl text-base shadow-lg transition"
                 data-testid="button-start-assessment"
               >
-                {tStr(ui.common.intro, lang)} <ArrowRight size={18} />
+                {tStr(ui.common.intro, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
               </button>
             </motion.div>
           )}
@@ -395,7 +382,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   onClick={() => setStep("intro")}
                   className="inline-flex items-center gap-2 text-gray-600 hover:text-[#0E2841] font-medium px-4 py-2 transition"
                 >
-                  <ArrowLeft size={16} /> {tStr(ui.common.back, lang)}
+                  <ArrowLeft size={16} className="rtl:-scale-x-100" /> {tStr(ui.common.back, lang)}
                 </button>
                 <button
                   disabled={!profileValid}
@@ -406,7 +393,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   className="inline-flex items-center gap-2 bg-[#156082] hover:bg-[#0F4D6B] disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl transition"
                   data-testid="button-profile-next"
                 >
-                  {tStr(ui.common.next, lang)} <ArrowRight size={16} />
+                  {tStr(ui.common.next, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
                 </button>
               </div>
             </motion.div>
@@ -423,11 +410,11 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               {def.slug === "uvr" && (
                 <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                   <p className="text-xs uppercase tracking-widest text-amber-700 font-bold mb-2">
-                    {tStr({ en: "Use case", ar: "حالة استخدام" }, lang)} {activeUC + 1} {tStr(ui.common.of, lang)} {useCases.length}
+                    {tStr({ en: "Use case", ar: "حالة استخدام", tr: "Kullanım senaryosu" }, lang)} {activeUC + 1} {tStr(ui.common.of, lang)} {useCases.length}
                   </p>
                   <input
                     type="text"
-                    placeholder={tStr({ en: "Name this use case (e.g. Agentic procurement)", ar: "سمّ هذه الحالة (مثلاً: مشتريات وكيلية)" }, lang)}
+                    placeholder={tStr({ en: "Name this use case (e.g. Agentic procurement)", ar: "سمّ هذه الحالة (مثلاً: مشتريات وكيلية)", tr: "Bu kullanım senaryosunu adlandırın (ör. Ajansal tedarik)" }, lang)}
                     value={useCases[activeUC]?.name ?? ""}
                     onChange={(e) => {
                       setUseCases((prev) => {
@@ -489,7 +476,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   }}
                   className="inline-flex items-center gap-2 text-gray-600 hover:text-[#0E2841] font-medium px-4 py-2"
                 >
-                  <ArrowLeft size={16} /> {tStr(ui.common.back, lang)}
+                  <ArrowLeft size={16} className="rtl:-scale-x-100" /> {tStr(ui.common.back, lang)}
                 </button>
                 {qIndex < visibleQuestions.length - 1 ? (
                   <button
@@ -498,7 +485,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     className="inline-flex items-center gap-2 bg-[#156082] hover:bg-[#0F4D6B] disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl"
                     data-testid="button-next-question"
                   >
-                    {tStr(ui.common.next, lang)} <ChevronRight size={16} />
+                    {tStr(ui.common.next, lang)} <ChevronRight size={16} className="rtl:-scale-x-100" />
                   </button>
                 ) : def.slug === "uvr" && activeUC < useCases.length - 1 ? (
                   <button
@@ -508,7 +495,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     }}
                     className="inline-flex items-center gap-2 bg-[#156082] hover:bg-[#0F4D6B] text-white font-semibold px-6 py-3 rounded-xl"
                   >
-                    {tStr({ en: "Next use case", ar: "الحالة التالية" }, lang)} <ChevronRight size={16} />
+                    {tStr({ en: "Next use case", ar: "الحالة التالية", tr: "Sonraki kullanım senaryosu" }, lang)} <ChevronRight size={16} className="rtl:-scale-x-100" />
                   </button>
                 ) : def.slug === "uvr" && useCases.length < 3 ? (
                   <div className="flex gap-2">
@@ -520,7 +507,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                       }}
                       className="inline-flex items-center gap-2 bg-white border-2 border-[#156082] text-[#156082] font-semibold px-5 py-3 rounded-xl"
                     >
-                      + {tStr({ en: "Add another use case", ar: "أضف حالة أخرى" }, lang)}
+                      + {tStr({ en: "Add another use case", ar: "أضف حالة أخرى", tr: "Başka bir kullanım senaryosu ekle" }, lang)}
                     </button>
                     <button
                       onClick={submit}

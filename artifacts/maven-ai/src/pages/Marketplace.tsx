@@ -24,6 +24,7 @@ import {
   marketplaceClasses,
   marketplaceHorizontals,
   industriesIndex,
+  industryTitle as industryTitleI18n,
 } from "@/data/content";
 import { useLang, tStr } from "@/lib/lang";
 
@@ -48,10 +49,11 @@ type IndustryFilter = "all" | string;
 type HorizontalFilter = "all" | (typeof marketplaceHorizontals)[number]["id"];
 
 const COPY = {
-  eyebrow: { en: "Marketplace", ar: "السوق" },
+  eyebrow: { en: "Marketplace", ar: "السوق", tr: "Marketplace" },
   title: {
     en: "What good looks like — the asset-led path to outcomes.",
     ar: "كيف يبدو الجيد — المسار القائم على الأصول للوصول إلى النتائج.",
+    tr: "İyi neye benzer — sonuçlara giden varlık öncülüğündeki yol.",
   },
   intro: {
     en: "This is Maven's asset-led path: productized agents you can adopt, configure, and run — instead of commissioning a custom build. MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact; productized assets close the gap by shipping in weeks, not quarters. When the problem is bespoke and the operating model has to change, the project-led path through our services is the right starting point — most engagements blend the two.",
@@ -68,22 +70,23 @@ const COPY = {
     ar: "اقرأ منظور المسارين",
     tr: "İki Yol bakış açısını okuyun",
   },
-  classLabel: { en: "Class", ar: "الفئة" },
-  industryLabel: { en: "Industry", ar: "القطاع" },
-  horizontalLabel: { en: "Horizontal", ar: "أفقي" },
-  all: { en: "All", ar: "الكل" },
-  reset: { en: "Reset filters", ar: "إعادة ضبط المرشّحات" },
-  liveBadge: { en: "Live demo", ar: "عرض تفاعلي" },
-  comingSoonBadge: { en: "Coming soon", ar: "قريباً" },
-  buyer: { en: "Buyer", ar: "المشتري" },
-  open: { en: "Open the demo", ar: "افتح العرض" },
-  read: { en: "Read the detail page", ar: "اقرأ صفحة التفاصيل" },
+  classLabel: { en: "Class", ar: "الفئة", tr: "Sınıf" },
+  industryLabel: { en: "Industry", ar: "القطاع", tr: "Sektör" },
+  horizontalLabel: { en: "Horizontal", ar: "أفقي", tr: "Yatay" },
+  all: { en: "All", ar: "الكل", tr: "Tümü" },
+  reset: { en: "Reset filters", ar: "إعادة ضبط المرشّحات", tr: "Filtreleri sıfırla" },
+  liveBadge: { en: "Live demo", ar: "عرض تفاعلي", tr: "Canlı demo" },
+  comingSoonBadge: { en: "Coming soon", ar: "قريباً", tr: "Yakında" },
+  buyer: { en: "Buyer", ar: "المشتري", tr: "Alıcı" },
+  open: { en: "Open the demo", ar: "افتح العرض", tr: "Demoyu aç" },
+  read: { en: "Read the detail page", ar: "اقرأ صفحة التفاصيل", tr: "Detay sayfasını oku" },
   empty: {
     en: "No tools match your filters yet.",
     ar: "لا توجد أدوات تطابق المرشّحات حالياً.",
+    tr: "Filtrelerinize uyan araç yok.",
   },
-  classesHeading: { en: "The eight classes", ar: "الفئات الثماني" },
-  count: { en: "tools", ar: "أداة" },
+  classesHeading: { en: "The eight classes", ar: "الفئات الثماني", tr: "Sekiz sınıf" },
+  count: { en: "tools", ar: "أداة", tr: "araç" },
 };
 
 function readQueryFilter(qs: string, key: string, allowed: string[]): string {
@@ -95,9 +98,6 @@ function readQueryFilter(qs: string, key: string, allowed: string[]): string {
 export default function Marketplace() {
   const search = useSearch();
   const { lang, dir } = useLang();
-  // ToolCard predates TR support and only knows EN/AR; coerce TR users to EN
-  // for the card chrome until ToolCard's copy is localized.
-  const cardLang: "en" | "ar" = lang === "ar" ? "ar" : "en";
 
   const allClasses: ClassFilter[] = ["all", ...marketplaceClasses.map((c) => c.id)];
   const allIndustries: IndustryFilter[] = ["all", ...industriesIndex.map((i) => i.id)];
@@ -140,8 +140,10 @@ export default function Marketplace() {
     setActiveHorizontal("all");
   };
 
-  const industryTitle = (id: string) =>
-    industriesIndex.find((i) => i.id === id)?.title ?? id;
+  const industryTitle = (id: string) => {
+    const ind = industriesIndex.find((i) => i.id === id);
+    return ind ? industryTitleI18n(ind as unknown as Record<string, unknown>, lang) : id;
+  };
 
   return (
     <div className="pt-20" dir={dir}>
@@ -283,7 +285,7 @@ export default function Marketplace() {
                     <ToolCard
                       key={t.id}
                       tool={t}
-                      lang={cardLang}
+                      lang={lang}
                       idx={i}
                       featured
                       industryTitle={industryTitle}
@@ -298,7 +300,7 @@ export default function Marketplace() {
                     <ToolCard
                       key={t.id}
                       tool={t}
-                      lang={cardLang}
+                      lang={lang}
                       idx={i}
                       industryTitle={industryTitle}
                     />

@@ -1,11 +1,27 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { Brain, Code2, Database, Rocket, ArrowRight, Package } from "lucide-react";
-import { services } from "@/data/content";
+import {
+  services,
+  serviceTitle,
+  serviceTagline,
+  serviceBuyer,
+  serviceDescription,
+  serviceStatLabel,
+} from "@/data/content";
 import { useLang, tStr } from "@/lib/lang";
 
 const COPY = {
   eyebrow: { en: "Our Services", ar: "خدماتنا", tr: "Hizmetlerimiz" },
+  buyer: { en: "Buyer", ar: "المشتري", tr: "Alıcı" },
+  learnMore: { en: "Learn more", ar: "اعرف المزيد", tr: "Daha fazla bilgi" },
+  ctaTitle: { en: "Not sure where to start?", ar: "غير متأكد من أين تبدأ؟", tr: "Nereden başlayacağınızdan emin değil misiniz?" },
+  ctaPara: {
+    en: "Most of our engagements begin with a three-day scoping sprint. We map your AI landscape, identify the highest-value opportunities, and propose a sequenced plan — before you commit to anything.",
+    ar: "تبدأ معظم ارتباطاتنا بسباق نطاق مدته ثلاثة أيام. نرسم خريطة مشهد الذكاء الاصطناعي لديكم، ونحدد الفرص الأعلى قيمة، ونقترح خطة متسلسلة — قبل أن تلتزموا بأي شيء.",
+    tr: "Çalışmalarımızın çoğu üç günlük bir kapsam belirleme sprintiyle başlar. AI manzaranızı haritalandırırız, en yüksek değerli fırsatları belirleriz ve sıralı bir plan öneririz — herhangi bir taahhütte bulunmadan önce.",
+  },
+  ctaButton: { en: "Schedule a discovery call", ar: "احجز مكالمة استكشافية", tr: "Bir keşif görüşmesi planlayın" },
   title: {
     en: "Services — the project-led path to outcomes.",
     ar: "الخدمات — المسار القائم على المشاريع للوصول إلى النتائج.",
@@ -51,10 +67,10 @@ export default function Services() {
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <Link href="/marketplace" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
-              <Package size={14} /> {tStr(COPY.marketplaceLink, lang)} <ArrowRight size={14} />
+              <Package size={14} /> {tStr(COPY.marketplaceLink, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
             </Link>
             <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
-              {tStr(COPY.povLink, lang)} <ArrowRight size={14} />
+              {tStr(COPY.povLink, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
             </Link>
           </div>
         </div>
@@ -82,17 +98,17 @@ export default function Services() {
                       <Icon size={26} style={{ color: service.color }} />
                     </div>
                     <span className="text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full" style={{ backgroundColor: service.color + "15", color: service.color }}>
-                      Buyer: {service.buyer}
+                      {tStr(COPY.buyer, lang)}: {serviceBuyer(service, lang)}
                     </span>
                   </div>
-                  <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">{service.title}</h2>
-                  <p className="text-[#156082] font-semibold text-sm mb-4">{service.tagline}</p>
-                  <p className="text-gray-600 leading-relaxed mb-6">{service.description}</p>
+                  <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">{serviceTitle(service, lang)}</h2>
+                  <p className="text-[#156082] font-semibold text-sm mb-4">{serviceTagline(service, lang)}</p>
+                  <p className="text-gray-600 leading-relaxed mb-6">{serviceDescription(service, lang)}</p>
                   <div className="grid grid-cols-3 gap-4 mb-7">
                     {service.stats.map((stat, j) => (
                       <div key={j} className="text-center p-3 bg-gray-50 rounded-lg">
                         <div className="font-bold text-[#0E2841] text-sm">{stat.value}</div>
-                        <div className="text-xs text-gray-500 mt-0.5 leading-tight">{stat.label}</div>
+                        <div className="text-xs text-gray-500 mt-0.5 leading-tight">{serviceStatLabel(service, j, lang)}</div>
                       </div>
                     ))}
                   </div>
@@ -101,7 +117,7 @@ export default function Services() {
                     className="inline-flex items-center gap-2 font-bold px-6 py-3 rounded-xl text-white transition-colors"
                     style={{ backgroundColor: service.color }}
                   >
-                    Learn more <ArrowRight size={16} />
+                    {tStr(COPY.learnMore, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
                   </Link>
                 </motion.div>
               );
@@ -113,10 +129,10 @@ export default function Services() {
       {/* CTA */}
       <section className="py-20 bg-[#F8F9FA]">
         <div className="max-w-3xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4">Not sure where to start?</h2>
-          <p className="text-gray-600 mb-8">Most of our engagements begin with a three-day scoping sprint. We map your AI landscape, identify the highest-value opportunities, and propose a sequenced plan — before you commit to anything.</p>
+          <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4">{tStr(COPY.ctaTitle, lang)}</h2>
+          <p className="text-gray-600 mb-8">{tStr(COPY.ctaPara, lang)}</p>
           <Link href="/contact" className="inline-flex items-center gap-2 bg-[#F5A623] text-white font-bold px-8 py-4 rounded-xl hover:bg-[#d4622a] transition-colors">
-            Schedule a discovery call <ArrowRight size={18} />
+            {tStr(COPY.ctaButton, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
           </Link>
         </div>
       </section>

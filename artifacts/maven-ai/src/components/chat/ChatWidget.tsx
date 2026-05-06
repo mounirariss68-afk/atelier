@@ -27,33 +27,43 @@ function renderInline(text: string): ReactNode[] {
 }
 
 const T = {
-  open: { en: "Ask Maven AI", ar: "اسأل Maven AI" },
-  title: { en: "Ask Maven", ar: "اسأل Maven" },
+  open: { en: "Ask Maven AI", ar: "اسأل Maven AI", tr: "Maven AI'ya sorun" },
+  title: { en: "Ask Maven", ar: "اسأل Maven", tr: "Maven'a sorun" },
   subtitle: {
     en: "About our services, assessments, or how we work.",
     ar: "عن خدماتنا، تشخيصاتنا، أو طريقة عملنا.",
+    tr: "Hizmetlerimiz, teşhislerimiz veya nasıl çalıştığımız hakkında.",
   },
   placeholder: {
     en: "What would you like to know?",
     ar: "ما الذي تودّون معرفته؟",
+    tr: "Ne öğrenmek istersiniz?",
   },
-  send: { en: "Send", ar: "إرسال" },
-  reset: { en: "New chat", ar: "محادثة جديدة" },
-  close: { en: "Close", ar: "إغلاق" },
-  thinking: { en: "Thinking…", ar: "يفكر…" },
-  starters: { en: "Try asking…", ar: "جرّب أن تسأل…" },
+  send: { en: "Send", ar: "إرسال", tr: "Gönder" },
+  reset: { en: "New chat", ar: "محادثة جديدة", tr: "Yeni sohbet" },
+  close: { en: "Close", ar: "إغلاق", tr: "Kapat" },
+  thinking: { en: "Thinking…", ar: "يفكر…", tr: "Düşünüyor…" },
+  starters: { en: "Try asking…", ar: "جرّب أن تسأل…", tr: "Şunu sormayı deneyin…" },
   disclaimer: {
     en: "AI assistant — answers grounded in Maven AI's published material. For specifics, book a 30-minute readout.",
     ar: "مساعد ذكاء اصطناعي — إجاباته مستندة إلى محتوى Maven AI المنشور. للتفاصيل احجز قراءة 30 دقيقة.",
+    tr: "AI asistanı — yanıtlar Maven AI'nın yayımlanmış içeriğine dayanır. Ayrıntılar için 30 dakikalık bir görüşme planlayın.",
   },
-  retry: { en: "Try again", ar: "حاول مرة أخرى" },
+  retry: { en: "Try again", ar: "حاول مرة أخرى", tr: "Tekrar deneyin" },
   charLimitHint: {
     en: `Please keep messages under ${MAX_INPUT_CHARS} characters.`,
     ar: `يرجى إبقاء الرسالة أقل من ${MAX_INPUT_CHARS} حرفًا.`,
+    tr: `Lütfen mesajları ${MAX_INPUT_CHARS} karakter altında tutun.`,
   },
   charLimitNear: {
     en: "Approaching the message length limit.",
     ar: "اقتربت من حد طول الرسالة.",
+    tr: "Mesaj uzunluğu sınırına yaklaşıyorsunuz.",
+  },
+  emptyIntro: {
+    en: "Ask me about Maven AI's services, assessments, the industries we serve, or how we work. I'll answer from what the firm has published.",
+    ar: "اسألني عن خدمات Maven AI، التشخيصات، الصناعات التي نخدمها، أو كيف نعمل. سأجيب بناءً على ما نشرته الشركة.",
+    tr: "Maven AI'nın hizmetleri, teşhisleri, hizmet verdiğimiz sektörler veya nasıl çalıştığımız hakkında bana soru sorabilirsiniz. Firmanın yayımladığı içeriğe göre cevap vereceğim.",
   },
 } as const;
 
@@ -69,12 +79,18 @@ const STARTERS_AR = [
   "كيف تختلف Maven AI عن استشارية من الفئة الأولى؟",
   "ما منهجكم في الذكاء الاصطناعي السيادي على الأماكن؟",
 ];
+const STARTERS_TR = [
+  "Maven AI tam olarak ne yapıyor?",
+  "Eski sistemleri modernleştiren bir CIO için hangi teşhis uygundur?",
+  "Maven AI bir Tier-1 danışmanlıktan nasıl farklı?",
+  "Egemen on-prem AI'ya yaklaşımınız nedir?",
+];
 
 const SESSION_KEY = "maven-ai-chat-open";
 
 export default function ChatWidget() {
   const { lang, dir } = useLang();
-  const t = (s: { en: string; ar: string }) => tStr(s, lang);
+  const t = (s: { en: string; ar?: string; tr?: string }) => tStr(s, lang);
   // The chat backend's intent matcher only knows EN/AR — fall TR users back
   // to EN so the chat works correctly while the rest of the chrome stays in TR.
   const chatLang: "en" | "ar" = lang === "ar" ? "ar" : "en";
@@ -121,7 +137,7 @@ export default function ChatWidget() {
   const inputOverLimit = input.length > MAX_INPUT_CHARS;
   const inputNearLimit = !inputOverLimit && input.length >= Math.floor(MAX_INPUT_CHARS * 0.9);
 
-  const starters = lang === "ar" ? STARTERS_AR : STARTERS_EN;
+  const starters = lang === "ar" ? STARTERS_AR : lang === "tr" ? STARTERS_TR : STARTERS_EN;
 
   return (
     <>
@@ -214,9 +230,7 @@ export default function ChatWidget() {
               {messages.length === 0 && (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600 leading-relaxed">
-                    {lang === "ar"
-                      ? "اسألني عن خدمات Maven AI، التشخيصات، الصناعات التي نخدمها، أو كيف نعمل. سأجيب بناءً على ما نشرته الشركة."
-                      : "Ask me about Maven AI's services, assessments, the industries we serve, or how we work. I'll answer from what the firm has published."}
+                    {t(T.emptyIntro)}
                   </p>
                   <div>
                     <div className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-2">

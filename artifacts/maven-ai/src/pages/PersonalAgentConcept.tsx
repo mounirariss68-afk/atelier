@@ -12,13 +12,20 @@
 import { ArrowLeft, BookOpen, MessageSquare, Brain, ExternalLink, Download } from "lucide-react";
 import { Link } from "wouter";
 import { useMemo } from "react";
-import conceptMd from "@/../docs/personal-ai-assistant/concept.md?raw";
-import { useLang, tStr } from "@/lib/lang";
+import conceptMdEn from "@/../docs/personal-ai-assistant/concept.md?raw";
+import conceptMdAr from "@/../docs/personal-ai-assistant/concept.ar.md?raw";
+import conceptMdTr from "@/../docs/personal-ai-assistant/concept.tr.md?raw";
+import { useLang, tStr, type Lang } from "@/lib/lang";
 
-// Concept-page localization. Body remains the canonical English doc (the
-// translated docs are tracked as a follow-up task) but the chrome — hero,
-// CTAs, callouts — speaks the same EN/AR/TR as the rest of the surface so
-// a buyer who switches language doesn't bounce off an English-only page.
+// Concept-page localization. Each language has a fully translated sibling
+// markdown so the body, hero, CTAs and callouts all speak the visitor's
+// language. The EN doc remains the canonical source the demos are wired to;
+// the AR/TR docs are kept in sync as the EN doc evolves.
+const CONCEPT_BY_LANG: Record<Lang, string> = {
+  en: conceptMdEn,
+  ar: conceptMdAr,
+  tr: conceptMdTr,
+};
 const COPY = {
   back: { en: "Back to Maven Personal Agent", ar: "العودة إلى مساعد Maven الشخصي", tr: "Maven Kişisel Ajan'a dön" },
   badge: { en: "Concept doc", ar: "وثيقة المفهوم", tr: "Konsept belgesi" },
@@ -31,11 +38,6 @@ const COPY = {
   openCockpit: { en: "Open the Cockpit", ar: "افتح القمرة", tr: "Kokpit'i aç" },
   openMind: { en: "Open the Mind", ar: "افتح العقل", tr: "Zihni aç" },
   download: { en: "Download .md", ar: "نزّل .md", tr: ".md indir" },
-  enNote: {
-    en: "The body of this document is currently English-only. Arabic and Turkish translations are in flight.",
-    ar: "نص هذه الوثيقة حالياً بالإنجليزية فقط. الترجمتان العربية والتركية قيد الإعداد.",
-    tr: "Bu belgenin gövdesi şu anda yalnızca İngilizcedir. Arapça ve Türkçe çeviriler hazırlanıyor.",
-  },
   outroKicker: { en: "Now see it move", ar: "الآن شاهده يتحرّك", tr: "Şimdi onu hareket halinde gör" },
   outroTitle: { en: "The doc is the why. The demos are the what.", ar: "الوثيقة هي السبب. العرضان هما الكيف.", tr: "Belge nedendir. Demolar nedir." },
   outroBody: {
@@ -195,16 +197,18 @@ function inline(text: string): React.ReactNode {
 
 export default function PersonalAgentConcept() {
   const { lang } = useLang();
-  const body = useMemo(() => renderMarkdown(conceptMd), []);
-  // Build a real .md download from the imported raw source. Done lazily on
-  // click so SSR / first paint don't pay the Blob cost. The filename
-  // includes a date so re-downloads after edits don't collide locally.
+  const md = CONCEPT_BY_LANG[lang];
+  const body = useMemo(() => renderMarkdown(md), [md]);
+  // Build a real .md download from the imported raw source for the active
+  // language. Done lazily on click so SSR / first paint don't pay the Blob
+  // cost. The filename includes the language and a date so re-downloads
+  // across languages or after edits don't collide locally.
   const handleDownload = () => {
-    const blob = new Blob([conceptMd], { type: "text/markdown;charset=utf-8" });
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `maven-personal-agent-concept-${new Date().toISOString().slice(0, 10)}.md`;
+    a.download = `maven-personal-agent-concept-${lang}-${new Date().toISOString().slice(0, 10)}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -250,11 +254,6 @@ export default function PersonalAgentConcept() {
 
       {/* Body */}
       <article className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {lang !== "en" && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-            {tStr(COPY.enNote, lang)}
-          </div>
-        )}
         {body}
 
         <hr className="my-10 border-gray-200" />

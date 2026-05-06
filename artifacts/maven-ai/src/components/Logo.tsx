@@ -1,4 +1,5 @@
 import logoSrc from "@/assets/maven-ai-logo.png";
+import { useLang, tStr } from "@/lib/lang";
 
 interface LogoProps {
   size?: "sm" | "md" | "lg";
@@ -13,11 +14,13 @@ const heights = {
 
 export default function Logo({ size = "md", className = "" }: LogoProps) {
   const h = heights[size];
+  const { lang } = useLang();
+  const alt = tStr({ en: "Maven AI", ar: "Maven AI · مافن للذكاء الاصطناعي", tr: "Maven AI" }, lang);
 
   return (
     <img
       src={logoSrc}
-      alt="Maven AI"
+      alt={alt}
       height={h}
       style={{ height: h, width: "auto", mixBlendMode: "screen" }}
       className={`select-none ${className}`}

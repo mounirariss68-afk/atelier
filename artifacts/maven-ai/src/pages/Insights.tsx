@@ -1,12 +1,28 @@
 import { useState, useMemo } from "react";
 import { Link, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { Search, Filter, ArrowRight } from "lucide-react";
-import { insights, insightTitle, insightSummary } from "@/data/content";
-import { useLang } from "@/lib/lang";
+import { Search, ArrowRight } from "lucide-react";
+import {
+  insights, insightTitle, insightSummary,
+  insightCategoryLabel, insightTypeLabel, insightDateLabel, insightReadTimeLabel,
+  INSIGHT_CATEGORY_COLORS,
+} from "@/data/content";
+import { useLang, tStr } from "@/lib/lang";
 
 const categories = ["All", "Agentic AI", "Data & Governance", "Legacy Modernization", "Industry Trends"];
 const types = ["All Types", "Report", "Research Report", "Perspective", "Opinion", "Thought Leadership", "Technical Brief"];
+
+const COPY = {
+  eyebrow: { en: "Insights", ar: "رؤى", tr: "İçgörüler" },
+  heroTitle: { en: "Research, perspectives, and analysis.", ar: "أبحاث، وجهات نظر، وتحليل.", tr: "Araştırma, perspektif ve analiz." },
+  heroPara: { en: "Maven AI's team publishes original research and thought leadership on AI in the GCC — from governance frameworks to production deployment playbooks.", ar: "ينشر فريق Maven AI أبحاثاً أصلية وقيادة فكرية حول الذكاء الاصطناعي في الخليج — من أطر الحوكمة إلى أدلة النشر الإنتاجي.", tr: "Maven AI ekibi, Körfez'de AI üzerine özgün araştırmalar ve düşünce liderliği yayımlıyor — yönetişim çerçevelerinden üretim dağıtım kılavuzlarına kadar." },
+  featured: { en: "Featured", ar: "مميّز", tr: "Öne çıkan" },
+  readNow: { en: "Read now", ar: "اقرأ الآن", tr: "Şimdi oku" },
+  searchPlaceholder: { en: "Search insights...", ar: "ابحث في الرؤى...", tr: "İçgörülerde ara..." },
+  noMatch: { en: "No insights match your filters.", ar: "لا توجد رؤى تطابق المرشحات.", tr: "Filtrelerinize uyan içgörü yok." },
+  clearFilters: { en: "Clear filters", ar: "مسح المرشحات", tr: "Filtreleri temizle" },
+  read: { en: "Read", ar: "اقرأ", tr: "Oku" },
+};
 
 export default function Insights() {
   const { lang, dir } = useLang();
@@ -31,24 +47,19 @@ export default function Insights() {
 
   const featured = insights.filter((i) => i.featured)[0];
 
-  const categoryColors: Record<string, string> = {
-    "Agentic AI": "#156082",
-    "Data & Governance": "#F5A623",
-    "Legacy Modernization": "#F5A623",
-    "Industry Trends": "#196B24",
-  };
+  const categoryColors = INSIGHT_CATEGORY_COLORS;
 
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
       <section className="bg-[#0E2841] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">Insights</span>
+          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">{tStr(COPY.eyebrow, lang)}</span>
           <h1 className="text-5xl font-extrabold text-white mt-3 mb-4 max-w-3xl leading-tight">
-            Research, perspectives, and analysis.
+            {tStr(COPY.heroTitle, lang)}
           </h1>
           <p className="text-xl text-gray-300 max-w-2xl">
-            Maven AI's team publishes original research and thought leadership on AI in the GCC — from governance frameworks to production deployment playbooks.
+            {tStr(COPY.heroPara, lang)}
           </p>
         </div>
       </section>
@@ -57,7 +68,7 @@ export default function Insights() {
       {featured && (
         <section className="py-12 bg-white border-b border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-xs font-bold text-[#F5A623] uppercase tracking-widest mb-5">Featured</p>
+            <p className="text-xs font-bold text-[#F5A623] uppercase tracking-widest mb-5">{tStr(COPY.featured, lang)}</p>
             <Link href={`/insights/${featured.slug}`}>
               <div className="group grid lg:grid-cols-5 gap-8 items-center report-card border border-gray-100 rounded-2xl overflow-hidden cursor-pointer hover:shadow-xl hover:border-transparent transition-all">
                 <div className="lg:col-span-2 h-72 lg:h-full bg-[#0E2841] relative overflow-hidden">
@@ -72,19 +83,19 @@ export default function Insights() {
                 <div className="lg:col-span-3 p-8">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-xs font-bold px-3 py-1 rounded-full text-white" style={{ backgroundColor: categoryColors[featured.category] || "#156082" }}>
-                      {featured.type}
+                      {insightTypeLabel(featured.type, lang)}
                     </span>
-                    <span className="text-xs text-gray-400">{featured.category} · {featured.date}</span>
+                    <span className="text-xs text-gray-400">{insightCategoryLabel(featured.category, lang)} · {insightDateLabel(featured.date, lang)}</span>
                   </div>
                   <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4 group-hover:text-[#156082] transition-colors leading-snug">{insightTitle(featured, lang)}</h2>
                   <p className="text-gray-600 mb-6 leading-relaxed">{insightSummary(featured, lang)}</p>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">{featured.author}</p>
-                      <p className="text-xs text-gray-400">{featured.readTime}</p>
+                      <p className="text-xs text-gray-400">{insightReadTimeLabel(featured.readTime, lang)}</p>
                     </div>
                     <span className="inline-flex items-center gap-2 bg-[#0E2841] group-hover:bg-[#F5A623] text-white font-bold px-5 py-2.5 rounded-lg transition-colors text-sm">
-                      Read now <ArrowRight size={14} />
+                      {tStr(COPY.readNow, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                     </span>
                   </div>
                 </div>
@@ -109,7 +120,7 @@ export default function Insights() {
                       : "bg-white border border-gray-200 text-gray-600 hover:border-[#0E2841] hover:text-[#0E2841]"
                   }`}
                 >
-                  {cat}
+                  {insightCategoryLabel(cat, lang)}
                 </button>
               ))}
             </div>
@@ -118,7 +129,7 @@ export default function Insights() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="search"
-                  placeholder="Search insights..."
+                  placeholder={tStr(COPY.searchPlaceholder, lang)}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#156082] bg-white w-48"
@@ -129,7 +140,7 @@ export default function Insights() {
                 onChange={(e) => setActiveType(e.target.value)}
                 className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#156082] bg-white text-gray-600"
               >
-                {types.map((t) => <option key={t}>{t}</option>)}
+                {types.map((tt) => <option key={tt} value={tt}>{insightTypeLabel(tt, lang)}</option>)}
               </select>
             </div>
           </div>
@@ -141,9 +152,9 @@ export default function Insights() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {filtered.length === 0 ? (
             <div className="text-center py-20">
-              <p className="text-gray-400 text-lg">No insights match your filters.</p>
+              <p className="text-gray-400 text-lg">{tStr(COPY.noMatch, lang)}</p>
               <button onClick={() => { setActiveCategory("All"); setActiveType("All Types"); setQuery(""); }} className="mt-4 text-[#156082] font-semibold hover:underline">
-                Clear filters
+                {tStr(COPY.clearFilters, lang)}
               </button>
             </div>
           ) : (
@@ -170,24 +181,24 @@ export default function Insights() {
                           className="text-xs font-bold px-2.5 py-1 rounded-full text-white"
                           style={{ backgroundColor: categoryColors[insight.category] || "#156082" }}
                         >
-                          {insight.type}
+                          {insightTypeLabel(insight.type, lang)}
                         </span>
                       </div>
                     </div>
                     <div className="p-5">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-semibold" style={{ color: categoryColors[insight.category] || "#156082" }}>{insight.category}</span>
+                        <span className="text-xs font-semibold" style={{ color: categoryColors[insight.category] || "#156082" }}>{insightCategoryLabel(insight.category, lang)}</span>
                         <span className="text-gray-300 text-xs">·</span>
-                        <span className="text-xs text-gray-400">{insight.date}</span>
+                        <span className="text-xs text-gray-400">{insightDateLabel(insight.date, lang)}</span>
                       </div>
                       <h3 className="font-bold text-[#0E2841] text-sm leading-snug mb-2 group-hover:text-[#156082] transition-colors line-clamp-3">
                         {insightTitle(insight, lang)}
                       </h3>
                       <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-2">{insightSummary(insight, lang)}</p>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">{insight.readTime}</span>
+                        <span className="text-xs text-gray-400">{insightReadTimeLabel(insight.readTime, lang)}</span>
                         <span className="text-xs font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
-                          Read <ArrowRight size={12} />
+                          {tStr(COPY.read, lang)} <ArrowRight size={12} className="rtl:-scale-x-100" />
                         </span>
                       </div>
                     </div>

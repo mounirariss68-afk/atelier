@@ -35,6 +35,7 @@ import {
   servicesIndex,
   assessmentsIndex,
   marketplaceAgentCasts,
+  industryTitle as industryTitleI18n,
 } from "@/data/content";
 import { useLang, tStr } from "@/lib/lang";
 import NotFound from "./not-found";
@@ -90,51 +91,56 @@ const PERSONAL_AGENT_ANGLES: {
 ];
 
 const COPY = {
-  back: { en: "Back to Marketplace", ar: "العودة إلى السوق" },
-  liveBadge: { en: "Live demo", ar: "عرض تفاعلي" },
-  comingSoonBadge: { en: "Coming soon", ar: "قريباً" },
-  buyer: { en: "Named buyer", ar: "المشتري المستهدف" },
-  classLabel: { en: "Class", ar: "الفئة" },
-  industriesLabel: { en: "Industries", ar: "القطاعات" },
-  horizontalsLabel: { en: "Horizontals", ar: "الأفقي" },
-  what: { en: "What it owns and how it works", ar: "ما يملكه وكيف يعمل" },
-  topologyTitle: { en: "Agent topology", ar: "طوبولوجيا الوكلاء" },
+  back: { en: "Back to Marketplace", ar: "العودة إلى السوق", tr: "Marketplace'e dön" },
+  liveBadge: { en: "Live demo", ar: "عرض تفاعلي", tr: "Canlı demo" },
+  comingSoonBadge: { en: "Coming soon", ar: "قريباً", tr: "Yakında" },
+  buyer: { en: "Named buyer", ar: "المشتري المستهدف", tr: "Hedef alıcı" },
+  classLabel: { en: "Class", ar: "الفئة", tr: "Sınıf" },
+  industriesLabel: { en: "Industries", ar: "القطاعات", tr: "Sektörler" },
+  horizontalsLabel: { en: "Horizontals", ar: "الأفقي", tr: "Yataylar" },
+  what: { en: "What it owns and how it works", ar: "ما يملكه وكيف يعمل", tr: "Neyi sahiplenir ve nasıl çalışır" },
+  topologyTitle: { en: "Agent topology", ar: "طوبولوجيا الوكلاء", tr: "Ajan topolojisi" },
   topologyKicker: {
     en: "An orchestrator coordinates a small cast of specialists. Human checkpoints gate every irreversible action.",
     ar: "منسّق يقود فريقاً صغيراً من المتخصّصين. تتحكّم نقاط الموافقة البشرية في كل إجراء لا رجعة فيه.",
+    tr: "Bir orkestra şefi küçük bir uzman ekibini koordine eder. İnsan kontrol noktaları her geri-alınamaz eylemi denetler.",
   },
-  screensTitle: { en: "Demo screens", ar: "شاشات العرض" },
-  dataTitle: { en: "Data model", ar: "نموذج البيانات" },
-  inputs: { en: "Inputs", ar: "المدخلات" },
-  internal: { en: "Internal IP", ar: "الملكية الفكرية الداخلية" },
-  outputs: { en: "Outputs", ar: "المخرجات" },
-  launchTitle: { en: "Launch the interactive demo", ar: "ابدأ العرض التفاعلي" },
+  screensTitle: { en: "Demo screens", ar: "شاشات العرض", tr: "Demo ekranları" },
+  dataTitle: { en: "Data model", ar: "نموذج البيانات", tr: "Veri modeli" },
+  inputs: { en: "Inputs", ar: "المدخلات", tr: "Girdiler" },
+  internal: { en: "Internal IP", ar: "الملكية الفكرية الداخلية", tr: "Dahili IP" },
+  outputs: { en: "Outputs", ar: "المخرجات", tr: "Çıktılar" },
+  launchTitle: { en: "Launch the interactive demo", ar: "ابدأ العرض التفاعلي", tr: "İnteraktif demoyu başlat" },
   launchBody: {
     en: "Watch the orchestrator and its specialist agents run a deterministic scenario end-to-end — including the human checkpoint, the audit log, and the live KPIs. The demo opens in its own dedicated workspace so the marketing chrome stays out of the way.",
     ar: "شاهد المنسّق ومعاوِنيه يشغّلون سيناريو حتمياً من البداية للنهاية — بما في ذلك نقطة الموافقة البشرية وسجل التدقيق ومؤشرات الأداء المباشرة. يفتح العرض في مساحته المخصّصة بعيداً عن واجهة التسويق.",
+    tr: "Orkestra şefinin ve uzman ajanlarının deterministik bir senaryoyu uçtan uca çalıştırmasını izleyin — insan kontrol noktası, denetim günlüğü ve canlı KPI'lar dahil. Demo, pazarlama arayüzünün karışmaması için kendi özel çalışma alanında açılır.",
   },
-  launchCta: { en: "Launch demo", ar: "ابدأ العرض" },
-  ctaPartner: { en: "Talk to a partner about this tool", ar: "تحدّث مع شريك حول هذه الأداة" },
-  ctaService: { en: "Related Maven AI service", ar: "خدمة Maven AI المرتبطة" },
-  ctaAssessment: { en: "Run the related diagnostic", ar: "شغّل التشخيص المرتبط" },
+  launchCta: { en: "Launch demo", ar: "ابدأ العرض", tr: "Demoyu başlat" },
+  ctaPartner: { en: "Talk to a partner about this tool", ar: "تحدّث مع شريك حول هذه الأداة", tr: "Bu araç hakkında bir ortakla konuşun" },
+  ctaService: { en: "Related Maven AI service", ar: "خدمة Maven AI المرتبطة", tr: "İlgili Maven AI hizmeti" },
+  ctaAssessment: { en: "Run the related diagnostic", ar: "شغّل التشخيص المرتبط", tr: "İlgili teşhisi çalıştırın" },
   comingSoonNote: {
     en: "An interactive scenario for this tool is being scripted as part of the agentic marketplace redesign. The detail below — agent topology, data model, screens — is the canonical brief our delivery teams use when scoping it.",
     ar: "يجري الآن إعداد سيناريو تفاعلي لهذه الأداة ضمن إعادة تصميم السوق الوكيلي. التفاصيل أدناه — طوبولوجيا الوكلاء ونموذج البيانات والشاشات — هي الموجز الرسمي الذي تستخدمه فرق التسليم عند تحديد النطاق.",
+    tr: "Bu araç için interaktif bir senaryo, ajansal marketplace yeniden tasarımının bir parçası olarak yazılıyor. Aşağıdaki ayrıntılar — ajan topolojisi, veri modeli, ekranlar — teslim ekiplerimizin kapsam belirlerken kullandığı resmi özettir.",
   },
-  workflowsTitle: { en: "Autonomous workflows", ar: "سير العمل المستقل" },
+  workflowsTitle: { en: "Autonomous workflows", ar: "سير العمل المستقل", tr: "Otonom iş akışları" },
   workflowsKicker: {
     en: "Each workflow is a scripted run the orchestrator can launch end-to-end. The cast of agents, the trigger, and the human checkpoint are spelled out so the buyer knows exactly what they are approving.",
     ar: "كل سير عمل هو تشغيل مكتوب يمكن للمنسّق إطلاقه من البداية إلى النهاية. فريق الوكلاء والمحفّز ونقطة الموافقة البشرية موضّحون كي يعرف المشتري بالضبط ما يوافق عليه.",
+    tr: "Her iş akışı, orkestra şefinin uçtan uca başlatabileceği yazılmış bir koşumdur. Ajanlar, tetikleyici ve insan kontrol noktası açıkça belirtilir, böylece alıcı tam olarak neyi onayladığını bilir.",
   },
-  workflowTrigger: { en: "Trigger", ar: "المحفّز" },
-  workflowSteps: { en: "Steps", ar: "الخطوات" },
-  kpisTitle: { en: "KPI impact", ar: "أثر مؤشرات الأداء" },
+  workflowTrigger: { en: "Trigger", ar: "المحفّز", tr: "Tetikleyici" },
+  workflowSteps: { en: "Steps", ar: "الخطوات", tr: "Adımlar" },
+  kpisTitle: { en: "KPI impact", ar: "أثر مؤشرات الأداء", tr: "KPI etkisi" },
   kpisKicker: {
     en: "Baseline metrics the demo's seeded scenario moves. Sources are cited so the CFO can trace every number.",
     ar: "المؤشرات الأساسية التي يحرّكها سيناريو العرض. المصادر موثّقة كي يستطيع المدير المالي تتبّع كل رقم.",
+    tr: "Demonun başlangıç senaryosunun hareket ettirdiği temel metrikler. CFO'nun her sayıyı takip edebilmesi için kaynaklar belirtilmiştir.",
   },
-  kpiBaseline: { en: "Baseline", ar: "خط الأساس" },
-  kpiSource: { en: "Source", ar: "المصدر" },
+  kpiBaseline: { en: "Baseline", ar: "خط الأساس", tr: "Başlangıç değeri" },
+  kpiSource: { en: "Source", ar: "المصدر", tr: "Kaynak" },
 };
 
 export default function MarketplaceDetail() {
@@ -254,7 +260,7 @@ export default function MarketplaceDetail() {
                 {tStr(COPY.industriesLabel, lang)}
               </p>
               <p className="text-sm text-white">
-                {industryEntries.map((i) => i.title).join(" · ")}
+                {industryEntries.map((i) => industryTitleI18n(i as unknown as Record<string, unknown>, lang)).join(" · ")}
               </p>
             </div>
             <div>
@@ -500,7 +506,7 @@ export default function MarketplaceDetail() {
                             <span className="font-bold text-[#0E2841]">
                               {s.kind === "checkpoint"
                                 ? tStr(
-                                    s.human ?? { en: "Human checkpoint", ar: "نقطة بشرية" },
+                                    s.human ?? { en: "Human checkpoint", ar: "نقطة بشرية", tr: "İnsan kontrol noktası" },
                                     lang,
                                   )
                                 : tStr(agentNameById(s.agentId ?? ""), lang)}
@@ -540,7 +546,7 @@ export default function MarketplaceDetail() {
                 <thead className="bg-[#0E2841] text-white">
                   <tr>
                     <th className="text-start rtl:text-right px-5 py-3 font-bold text-xs uppercase tracking-widest">
-                      {tStr({ en: "Metric", ar: "المؤشر" }, lang)}
+                      {tStr({ en: "Metric", ar: "المؤشر", tr: "Metrik" }, lang)}
                     </th>
                     <th className="text-start rtl:text-right px-5 py-3 font-bold text-xs uppercase tracking-widest">
                       {tStr(COPY.kpiBaseline, lang)}
@@ -627,7 +633,7 @@ export default function MarketplaceDetail() {
         <section className="py-16 bg-gradient-to-br from-[#0E2841] to-[#156082]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-3">
-              {tStr({ en: "Try it now", ar: "جرّبها الآن" }, lang)}
+              {tStr({ en: "Try it now", ar: "جرّبها الآن", tr: "Şimdi deneyin" }, lang)}
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-4">
               {tStr(COPY.launchTitle, lang)}
@@ -652,13 +658,13 @@ export default function MarketplaceDetail() {
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-10">
               <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-3">
-                {tStr({ en: "Choose your experience", ar: "اختر تجربتك" }, lang)}
+                {tStr({ en: "Choose your experience", ar: "اختر تجربتك", tr: "Deneyiminizi seçin" }, lang)}
               </p>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-3">
-                {tStr({ en: "Three demos, three perspectives", ar: "ثلاثة عروض، ثلاث وجهات نظر" }, lang)}
+                {tStr({ en: "Three demos, three perspectives", ar: "ثلاثة عروض، ثلاث وجهات نظر", tr: "Üç demo, üç bakış açısı" }, lang)}
               </h2>
               <p className="text-base text-gray-300 max-w-2xl mx-auto">
-                {tStr({ en: "Each demo shows the same platform from a different stakeholder's view.", ar: "كل عرض يُظهر المنصة نفسها من منظور صاحب مصلحة مختلف." }, lang)}
+                {tStr({ en: "Each demo shows the same platform from a different stakeholder's view.", ar: "كل عرض يُظهر المنصة نفسها من منظور صاحب مصلحة مختلف.", tr: "Her demo aynı platformu farklı bir paydaşın bakış açısından gösterir." }, lang)}
               </p>
             </div>
             <div className={`grid gap-5 ${tool.demoVariants.length === 3 ? "sm:grid-cols-3" : tool.demoVariants.length === 2 ? "sm:grid-cols-2" : ""}`}>
@@ -682,7 +688,7 @@ export default function MarketplaceDetail() {
                     <p className="text-sm text-gray-300 leading-relaxed flex-1">{tStr(v.description, lang)}</p>
                     <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#F5A623] mt-2 group-hover:gap-3 transition-all">
                       <Play size={12} fill="currentColor" />
-                      {tStr({ en: "Launch demo", ar: "ابدأ العرض" }, lang)}
+                      {tStr({ en: "Launch demo", ar: "ابدأ العرض", tr: "Demoyu başlat" }, lang)}
                     </span>
                   </Link>
                 );

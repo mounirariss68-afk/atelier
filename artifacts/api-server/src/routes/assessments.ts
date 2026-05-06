@@ -42,7 +42,7 @@ const ProfileSchema = z.object({
   country: z.enum(["ksa", "uae", "qatar", "bahrain", "kuwait", "oman", "other"]),
   revenueBand: z.string(),
   employeeCountBand: z.string(),
-  language: z.enum(["en", "ar"]),
+  language: z.enum(["en", "ar", "tr"]),
   optInMarketing: z.boolean().default(false),
 });
 
@@ -175,7 +175,7 @@ router.post("/submissions/:publicId/memo", async (req, res) => {
       profile: row.profile as never,
       result: row.result as ScoreResult,
     },
-    row.language as "en" | "ar",
+    row.language as "en" | "ar" | "tr",
   );
   await db
     .update(assessmentSubmissionsTable)
@@ -195,16 +195,22 @@ router.post("/submissions/:publicId/email", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const profile = row.profile as { email: string; name: string; language: "en" | "ar" };
+  const profile = row.profile as { email: string; name: string; language: "en" | "ar" | "tr" };
   const def = getAssessment(row.slug as AssessmentSlug);
-  const isAr = profile.language === "ar";
-  const subject = isAr
-    ? `تقرير ${def.title.ar} الخاص بـ ${profile.name}`
-    : `Your Maven AI ${def.code} report`;
   const url = `${(req.body?.viewUrl as string) || ""}` || "(report attached on the website)";
-  const html = isAr
-    ? `<p>عزيزي ${profile.name},</p><p>تجدون تقرير ${def.title.ar} (${row.tier}, ${row.overallScore}/5).</p><p><a href="${url}">عرض التقرير الكامل</a></p><p>— شراكة Maven AI</p>`
-    : `<p>Hi ${profile.name},</p><p>Your ${def.title.en} report is ready (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">View the full report</a></p><p>— The Maven AI partnership</p>`;
+  const trTitle = def.title.tr ?? def.title.en;
+  const subject =
+    profile.language === "ar"
+      ? `تقرير ${def.title.ar} الخاص بـ ${profile.name}`
+      : profile.language === "tr"
+        ? `${profile.name} için Maven AI ${def.code} raporu`
+        : `Your Maven AI ${def.code} report`;
+  const html =
+    profile.language === "ar"
+      ? `<p>عزيزي ${profile.name},</p><p>تجدون تقرير ${def.title.ar} (${row.tier}, ${row.overallScore}/5).</p><p><a href="${url}">عرض التقرير الكامل</a></p><p>— شراكة Maven AI</p>`
+      : profile.language === "tr"
+        ? `<p>Merhaba ${profile.name},</p><p>${trTitle} raporunuz hazır (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">Tam raporu görüntüle</a></p><p>— Maven AI ortaklığı</p>`
+        : `<p>Hi ${profile.name},</p><p>Your ${def.title.en} report is ready (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">View the full report</a></p><p>— The Maven AI partnership</p>`;
   const sent = await sendEmail({ to: profile.email, subject, html });
   res.json(sent);
 });
@@ -217,7 +223,7 @@ const CallSchema = z.object({
   role: z.string().optional(),
   preferredTime: z.string().optional(),
   message: z.string().optional(),
-  language: z.enum(["en", "ar"]).default("en"),
+  language: z.enum(["en", "ar", "tr"]).default("en"),
 });
 
 router.post("/book-call", async (req, res) => {

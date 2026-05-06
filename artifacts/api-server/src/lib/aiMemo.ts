@@ -41,11 +41,14 @@ End with: "— The Maven AI partnership"
 Output PLAIN TEXT only. No markdown, no headers, no asterisks. Each paragraph separated by a blank line. Maximum 380 words total.`;
 }
 
-export async function generateExecutiveMemo(args: MemoArgs, language: "en" | "ar" = "en"): Promise<string> {
+export async function generateExecutiveMemo(args: MemoArgs, language: "en" | "ar" | "tr" = "en"): Promise<string> {
   const prompt = buildSystemPrompt(args);
-  const userInstr = language === "ar"
-    ? "Write the memo in modern standard Arabic (فصحى), executive register, fully translated."
-    : "Write the memo in English.";
+  const userInstr =
+    language === "ar"
+      ? "Write the memo in modern standard Arabic (فصحى), executive register, fully translated."
+      : language === "tr"
+        ? "Write the memo in formal executive Turkish (Türkçe), fully translated. Use a senior, candid partner register."
+        : "Write the memo in English.";
 
   try {
     const baseURL = process.env["AI_INTEGRATIONS_ANTHROPIC_BASE_URL"];
@@ -90,16 +93,28 @@ export async function generateExecutiveMemo(args: MemoArgs, language: "en" | "ar
   return buildTemplateMemo(args, language);
 }
 
-function buildTemplateMemo(args: MemoArgs, language: "en" | "ar"): string {
+function buildTemplateMemo(args: MemoArgs, language: "en" | "ar" | "tr"): string {
   const { def, profile, result } = args;
-  const isAr = language === "ar";
-  if (isAr) {
+  if (language === "ar") {
     return [
       `الموقع الصريح: نتيجة ${profile.company} الإجمالية في ${def.title.ar} هي ${result.overallScore}/5 (مستوى: ${result.tier}). هذا يضعكم في الموقع المتوسط بين أقران الخليج، مع نقاط ضعف مرئية في ${result.gaps.join("، ") || "لا شيء بارز"}.`,
       `أهم تحرك خلال 90 يوماً: ${result.recommendations.quickWins90d[0]?.ar ?? "تحديد راعٍ تنفيذي بصلاحية P&L."}. هذا التحرك يفك أكبر اختناق في وضعكم الحالي بأقل تكلفة.`,
       `التحول الاستراتيجي خلال 6–12 شهراً: ${result.recommendations.strategic12m[0]?.ar ?? "نقل القدرة من المختبر إلى الإنتاج."} يفعل ${"$" + result.costOfInaction.ebitDeltaUsd.toLocaleString()} من القيمة المتروكة على الطاولة.`,
       `الحقيقة التي لن يخبركم بها مزود: ${def.antiVendor.ar[0] ?? "نتائجكم ليست مشكلة تقنية، بل مشكلة نموذج تشغيل وحوكمة."}`,
       "— شراكة Maven AI",
+    ].join("\n\n");
+  }
+  if (language === "tr") {
+    const trTitle = def.title.tr ?? def.title.en;
+    const trQuick = result.recommendations.quickWins90d[0]?.tr ?? result.recommendations.quickWins90d[0]?.en ?? "P&L yetkisine sahip bir üst düzey sponsor belirleyin.";
+    const trStrategic = result.recommendations.strategic12m[0]?.tr ?? result.recommendations.strategic12m[0]?.en ?? "Ajansal yeteneği laboratuvardan üretime taşıyın.";
+    const trAntiVendor = def.antiVendor.tr?.[0] ?? def.antiVendor.en[0] ?? "Skorunuz teknoloji sorunu değil, operasyonel model ve yönetişim sorununu yansıtıyor.";
+    return [
+      `Net duruşunuz: ${profile.company} şirketinin ${trTitle} genel skoru ${result.overallScore}/5 (Seviye: ${result.tier}). Bu sizi Körfez emsal bandının ortasına yerleştiriyor; belirgin zayıflıklar: ${result.gaps.join(", ") || "öne çıkan bir boyut yok"}.`,
+      `90 günlük hamle: ${trQuick} Bu, mevcut işletim modelinizdeki en büyük kısıtı en düşük maliyetle açar.`,
+      `6–12 aylık dönüşüm: ${trStrategic} Bu, şu anda masada bırakılan ${"$" + result.costOfInaction.ebitDeltaUsd.toLocaleString()} değerini harekete geçirir.`,
+      `Dürüst paragraf: ${trAntiVendor}`,
+      "— Maven AI ortaklığı",
     ].join("\n\n");
   }
   return [

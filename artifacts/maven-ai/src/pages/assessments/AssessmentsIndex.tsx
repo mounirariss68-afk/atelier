@@ -2,35 +2,37 @@ import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowRight, Clock, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { assessmentsList } from "@workspace/assessments";
-import { useLang, tStr } from "@/lib/lang";
+import { useLang, tStr, type T } from "@/lib/lang";
 
 export default function AssessmentsIndex() {
   const { lang, dir } = useLang();
-  const t = (s: { en: string; ar: string }) => tStr(s, lang);
+  const t = (s: T) => tStr(s, lang);
   return (
     <div dir={dir} className="pt-20 bg-gradient-to-b from-white via-slate-50 to-white">
       <section className="bg-[#0E2841] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
           <span className="inline-flex items-center gap-2 bg-[#E97132]/20 border border-[#E97132]/30 text-[#E97132] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-6">
-            {t({ en: "Diagnostic Suite", ar: "حزمة التشخيص" })}
+            {t({ en: "Diagnostic Suite", ar: "حزمة التشخيص", tr: "Teşhis Paketi" })}
           </span>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight max-w-4xl">
             {t({
               en: "Where do you actually stand?",
               ar: "أين تقفون فعلاً؟",
+              tr: "Aslında nerede duruyorsunuz?",
             })}
           </h1>
           <p className="mt-6 text-lg sm:text-xl text-gray-300 max-w-3xl leading-relaxed">
             {t({
               en: "Four short, partner-grade diagnostics calibrated for the GCC. Each one delivers a tier rating, peer benchmark, sovereign sub-score, anti-pattern detection, an executive memo signed by the partnership, and a branded PDF report. No CRM. No email wall. No bot.",
               ar: "أربعة تشخيصات قصيرة بمستوى شراكة معايرة لمنطقة الخليج. كل واحد يقدم تصنيف نضج، مقارنة أقران، نتيجة سيادية، أنماط مضادة، مذكرة تنفيذية بتوقيع الشركاء، وتقرير PDF منمّق.",
+              tr: "Körfez için kalibre edilmiş, ortak seviyesinde dört kısa teşhis. Her biri bir olgunluk seviyesi, emsal karşılaştırması, egemen alt-skor, anti-pattern tespiti, ortaklık tarafından imzalanmış bir yönetici notu ve markalı bir PDF raporu sunar. CRM yok. E-posta duvarı yok. Bot yok.",
             })}
           </p>
           <div className="mt-8 flex flex-wrap gap-4 text-sm text-gray-300">
-            <span className="inline-flex items-center gap-2"><Clock size={14} /> 6–14 {t({ en: "minutes each", ar: "دقائق لكل تشخيص" })}</span>
-            <span className="inline-flex items-center gap-2"><ShieldCheck size={14} /> {t({ en: "Sovereign sub-score baked in", ar: "نتيجة سيادية مدمجة" })}</span>
-            <span className="inline-flex items-center gap-2"><Users size={14} /> {t({ en: "Multi-stakeholder team mode", ar: "وضع فريق متعدد المعنيين" })}</span>
-            <span className="inline-flex items-center gap-2"><Sparkles size={14} /> {t({ en: "AI-personalized memo", ar: "مذكرة مخصصة بالذكاء الاصطناعي" })}</span>
+            <span className="inline-flex items-center gap-2"><Clock size={14} /> 6–14 {t({ en: "minutes each", ar: "دقائق لكل تشخيص", tr: "dakika (her biri)" })}</span>
+            <span className="inline-flex items-center gap-2"><ShieldCheck size={14} /> {t({ en: "Sovereign sub-score baked in", ar: "نتيجة سيادية مدمجة", tr: "Yerleşik egemen alt-skor" })}</span>
+            <span className="inline-flex items-center gap-2"><Users size={14} /> {t({ en: "Multi-stakeholder team mode", ar: "وضع فريق متعدد المعنيين", tr: "Çok-paydaşlı takım modu" })}</span>
+            <span className="inline-flex items-center gap-2"><Sparkles size={14} /> {t({ en: "AI-personalized memo", ar: "مذكرة مخصصة بالذكاء الاصطناعي", tr: "AI-kişiselleştirilmiş not" })}</span>
           </div>
         </div>
       </section>
@@ -54,7 +56,7 @@ export default function AssessmentsIndex() {
                   {a.code}
                 </span>
                 <span className="text-xs font-medium text-gray-500">
-                  {a.estMinutes} {t({ en: "min", ar: "دقيقة" })}
+                  {a.estMinutes} {t({ en: "min", ar: "دقيقة", tr: "dk" })}
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold text-[#0E2841] mb-2 leading-tight">
@@ -73,7 +75,7 @@ export default function AssessmentsIndex() {
                 ))}
                 {a.dimensions.length > 4 && (
                   <span className="text-xs text-slate-500 px-2 py-1">
-                    +{a.dimensions.length - 4} {t({ en: "more", ar: "أخرى" })}
+                    +{a.dimensions.length - 4} {t({ en: "more", ar: "أخرى", tr: "daha" })}
                   </span>
                 )}
               </div>
@@ -83,8 +85,8 @@ export default function AssessmentsIndex() {
                 style={{ color: a.brandColor }}
                 data-testid={`link-start-${a.slug}`}
               >
-                {t({ en: "Start the assessment", ar: "ابدأ التقييم" })}
-                <ArrowRight size={16} />
+                {t({ en: "Start the assessment", ar: "ابدأ التقييم", tr: "Değerlendirmeye başlayın" })}
+                <ArrowRight size={16} className="rtl:-scale-x-100" />
               </Link>
             </motion.div>
           ))}
@@ -94,18 +96,20 @@ export default function AssessmentsIndex() {
           <div className="grid md:grid-cols-[2fr,1fr] gap-8 items-center">
             <div>
               <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#E97132] mb-3">
-                {t({ en: "Reinvention Index", ar: "مؤشر إعادة الابتكار" })}
+                {t({ en: "Reinvention Index", ar: "مؤشر إعادة الابتكار", tr: "Yeniden İcat İndeksi" })}
               </span>
               <h3 className="text-2xl sm:text-3xl font-extrabold mb-3">
                 {t({
                   en: "Complete all three core assessments → unlock your composite Reinvention Index",
                   ar: "أكمل التقييمات الثلاثة → افتح مؤشر إعادة الابتكار المركّب",
+                  tr: "Üç temel değerlendirmeyi tamamlayın → bileşik Yeniden İcat İndeksinizi açın",
                 })}
               </h3>
               <p className="text-gray-200 leading-relaxed">
                 {t({
                   en: "ARI + MVI + DAFI combine into a single 0–100 readiness rating. The number boards take seriously.",
                   ar: "ARI + MVI + DAFI تتحد في نتيجة جاهزية واحدة من 100. رقم تأخذه مجالس الإدارة بجدية.",
+                  tr: "ARI + MVI + DAFI, tek bir 0–100 hazırlık derecesinde birleşir. Yönetim kurullarının ciddiye aldığı sayı.",
                 })}
               </p>
             </div>
@@ -113,7 +117,7 @@ export default function AssessmentsIndex() {
               href="/assessments/ari"
               className="bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-6 py-4 rounded-xl text-center transition"
             >
-              {t({ en: "Start with ARI →", ar: "ابدأ بـ ARI →" })}
+              {t({ en: "Start with ARI →", ar: "ابدأ بـ ARI →", tr: "ARI ile başlayın →" })}
             </Link>
           </div>
         </div>

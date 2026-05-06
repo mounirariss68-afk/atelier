@@ -1,10 +1,110 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowRight, Brain, Code2, Database, Rocket, ChevronRight, Quote, ExternalLink, Briefcase, Package, GitMerge } from "lucide-react";
-import { stats, services, insights, industries, SITE_SOURCES } from "@/data/content";
+import {
+  stats, services, insights, industries, SITE_SOURCES,
+  serviceTitle, serviceBuyer, serviceDescription,
+  industryTitle, industrySubtitle, industryHeroStatLabel,
+  insightTitle, insightSummary,
+  insightCategoryLabel, insightTypeLabel, insightDateLabel, insightReadTimeLabel,
+  INSIGHT_CATEGORY_COLORS, homepageStatLabel,
+} from "@/data/content";
 import PartnerLogos from "@/components/PartnerLogos";
 import TwoPathsDiagram from "@/components/TwoPathsDiagram";
-import { useLang, tStr } from "@/lib/lang";
+import { useLang, tStr, formatNumber } from "@/lib/lang";
+
+const HOME_COPY = {
+  heroBadge: { en: "A Maven Insights Company", ar: "شركة من مجموعة Maven Insights", tr: "Bir Maven Insights Şirketi" },
+  heroLine1: { en: "From AI ambition", ar: "من طموح الذكاء الاصطناعي", tr: "AI hırsından" },
+  heroLine2: { en: "to AI in production.", ar: "إلى الذكاء الاصطناعي في الإنتاج.", tr: "üretime AI'ya." },
+  heroPara: {
+    en: "Maven AI is a boutique AI advisory and engineering firm built for outcomes. We close the gap between enterprise AI ambition and enterprise AI in production — with senior delivery, lean economics, and an agentic-native practice.",
+    ar: "Maven AI شركة استشارات وهندسة ذكاء اصطناعي بوتيكية مبنية لتحقيق النتائج. نسد الفجوة بين طموح الذكاء الاصطناعي في المؤسسات وتطبيقه الفعلي في الإنتاج — بفرق قيادية، واقتصاديات مرنة، وممارسة وكيلية أصيلة.",
+    tr: "Maven AI, sonuç odaklı butik bir AI danışmanlık ve mühendislik firmasıdır. Kurumsal AI hırsı ile kurumsal AI üretimi arasındaki açığı kapatıyoruz — kıdemli teslimat, yalın ekonomi ve agentic-native bir pratikle.",
+  },
+  heroCtaPrimary: { en: "Take a free 12-min diagnostic", ar: "ابدأ تشخيصاً مجانياً مدته 12 دقيقة", tr: "Ücretsiz 12 dakikalık teşhis alın" },
+  heroCtaSecondary: { en: "Start the conversation", ar: "ابدأ المحادثة", tr: "Görüşmeyi başlatın" },
+  diagEyebrow: { en: "Maven AI Diagnostic Suite · Free · ~12 min", ar: "مجموعة تشخيص Maven AI · مجاناً · ~12 دقيقة", tr: "Maven AI Teşhis Paketi · Ücretsiz · ~12 dk" },
+  diagTitle: { en: "Where does your AI program actually stand against the GCC peer band?", ar: "أين يقف برنامج الذكاء الاصطناعي لديكم فعلياً مقابل أقرانكم في الخليج؟", tr: "AI programınız aslında Körfez emsalleriyle karşılaştırıldığında nerede duruyor?" },
+  diagSub: { en: "Four diagnostics — Agentic Readiness, Model & Value, Data & Governance, Use Case Value — produce a sovereign-aware score, an executive memo, and a branded board pack.", ar: "أربعة تشخيصات — الجاهزية الوكيلية، النموذج والقيمة، البيانات والحوكمة، قيمة حالات الاستخدام — تنتج درجة سيادية، مذكرة تنفيذية، وحزمة مجلس بعلامتكم.", tr: "Dört teşhis — Agentic Hazırlık, Model & Değer, Veri & Yönetişim, Kullanım Senaryosu Değeri — egemenlik bilinçli bir skor, yönetici notu ve markalı bir yönetim paketi üretir." },
+  diagStartAri: { en: "Start ARI →", ar: "ابدأ ARI ←", tr: "ARI'ya başla →" },
+  diagAllFour: { en: "See all 4 diagnostics", ar: "عرض التشخيصات الأربعة", tr: "4 teşhisin tümünü görün" },
+  statsEyebrow: { en: "The Middle East AI opportunity — by the published numbers", ar: "فرصة الذكاء الاصطناعي في الشرق الأوسط — بالأرقام المنشورة", tr: "Orta Doğu AI fırsatı — yayımlanan rakamlarla" },
+  sourceLabel: { en: "Source", ar: "المصدر", tr: "Kaynak" },
+  gapTitle: { en: "The gap we exist to close", ar: "الفجوة التي وُجدنا لسدها", tr: "Kapatmak için var olduğumuz açık" },
+  gapParaPart1: { en: "MIT's 2025", ar: "تقرير MIT لعام 2025", tr: "MIT'in 2025" },
+  gapParaPart2: { en: "State of AI in Business", ar: "حالة الذكاء الاصطناعي في الأعمال", tr: "İşte Yapay Zekânın Durumu" },
+  gapParaPart3: { en: "report found that", ar: "وجد أن", tr: "raporu" },
+  gapParaPart4: { en: "95% of enterprise GenAI pilots delivered no measurable P&L impact", ar: "95% من تجارب الذكاء الاصطناعي التوليدي في المؤسسات لم تحقق أي أثر قابل للقياس على الأرباح والخسائر", tr: "kurumsal GenAI pilotlarının %95'inin ölçülebilir bir kâr/zarar etkisi yaratmadığını" },
+  gapParaPart5: { en: "— only 5% of integrated systems generated meaningful value. We exist to put GCC enterprises in the 5%.", ar: "— فقط 5% من الأنظمة المتكاملة حققت قيمة فعلية. نحن موجودون لوضع شركات الخليج في فئة الـ 5%.", tr: "— entegre sistemlerin yalnızca %5'inin anlamlı değer ürettiğini ortaya koydu. Körfez şirketlerini bu %5'e taşımak için varız." },
+  gapMitSource: { en: "MIT NANDA — The GenAI Divide: State of AI in Business (2025)", ar: "MIT NANDA — The GenAI Divide: State of AI in Business (2025)", tr: "MIT NANDA — The GenAI Divide: State of AI in Business (2025)" },
+  gapItem1Title: { en: "Pilot purgatory", ar: "مطهر التجارب", tr: "Pilot çıkmazı" },
+  gapItem1Desc: { en: "Dozens of POCs, no production path. The fix is governance plus orchestration plus change leadership — work the Tier-1 margin model rejects.", ar: "عشرات تجارب الإثبات بلا مسار للإنتاج. الحل هو حوكمة وتنسيق وقيادة تغيير — عمل يرفضه نموذج هامش الفئة الأولى.", tr: "Onlarca POC, üretim yolu yok. Çözüm: yönetişim, orkestrasyon ve değişim liderliği — Tier-1 marj modelinin reddettiği iş." },
+  gapItem2Title: { en: "Technical debt trap", ar: "فخ الدين التقني", tr: "Teknik borç tuzağı" },
+  gapItem2Desc: { en: "Industry research puts 60–80% of IT budgets into maintaining existing systems (with telcos at the higher end). AI-driven SDLC is the path out — almost no one delivers it on-prem for sovereign clients.", ar: "تشير الأبحاث إلى أن 60–80% من ميزانيات IT تذهب لصيانة الأنظمة القائمة (الاتصالات في الطرف الأعلى). دورة التطوير المدفوعة بالذكاء الاصطناعي هي المخرج — قلة من يقدمونها داخل المؤسسة للعملاء السياديين.", tr: "Sektör araştırması BT bütçelerinin %60–80'inin mevcut sistemlerin bakımına gittiğini gösteriyor (telekomlar üst uçta). AI öncülüğündeki SDLC çıkış yoludur — neredeyse kimse bunu egemen müşteriler için on-prem teslim etmiyor." },
+  gapItem3Title: { en: "Data & governance vacuum", ar: "فراغ البيانات والحوكمة", tr: "Veri & yönetişim boşluğu" },
+  gapItem3Desc: { en: "AI exposes data debt instantly. Big-4 sells strategy, hyperscalers sell tools. No one delivers the operating activation that makes agents trustworthy.", ar: "الذكاء الاصطناعي يكشف دين البيانات فوراً. الشركات الأربع الكبرى تبيع الاستراتيجية، والـ hyperscalers يبيعون الأدوات. لا أحد يقدم التفعيل التشغيلي الذي يجعل الوكلاء جديرين بالثقة.", tr: "AI, veri borcunu anında ortaya çıkarır. Big-4 strateji satar, hiper ölçekleyiciler araç satar. Ajanları güvenilir kılan operasyonel aktivasyonu kimse teslim etmez." },
+  gapItem4Title: { en: "Adoption gap", ar: "فجوة التبني", tr: "Benimseme açığı" },
+  gapItem4Desc: { en: "BCG finds only 26% of companies have moved past AI pilots to generate any value at scale — and just 4% sit at the elite frontier. The bottleneck is delivery, not models.", ar: "تجد BCG أن 26% فقط من الشركات تجاوزت مرحلة التجارب لتحقيق أي قيمة على نطاق واسع — وفقط 4% في المقدمة النخبوية. الاختناق في التنفيذ، لا النماذج.", tr: "BCG, şirketlerin yalnızca %26'sının AI pilotlarını geçerek ölçekte değer ürettiğini ve sadece %4'ünün elit cephede olduğunu buluyor. Darboğaz modeller değil, teslimattır." },
+  diffTitle: { en: "How Maven AI is different", ar: "ما الذي يميز Maven AI", tr: "Maven AI'nın farkı nedir" },
+  diffItem1Title: { en: "Production-led", ar: "مدفوع بالإنتاج", tr: "Üretim öncülüğünde" },
+  diffItem1Desc: { en: "We deliver AI in production, not AI in PowerPoint. Measured outcomes, not advisory.", ar: "نوصل الذكاء الاصطناعي إلى الإنتاج، لا إلى عروض PowerPoint. نتائج مقاسة، لا مجرد استشارة.", tr: "AI'yı üretime teslim ederiz, PowerPoint'e değil. Ölçülen sonuçlar, danışmanlık değil." },
+  diffItem2Title: { en: "Boutique by design", ar: "بوتيكية بالتصميم", tr: "Tasarımı gereği butik" },
+  diffItem2Desc: { en: "Senior partners and principals on every engagement. No pyramid, no bench-warming.", ar: "شركاء كبار ومديرون في كل مهمة. بلا هرم، بلا انتظار على الدكة.", tr: "Her çalışmada kıdemli ortaklar ve principallar. Piramit yok, bekleme yok." },
+  diffItem3Title: { en: "Agentic-native", ar: "وكيلي أصيل", tr: "Agentic-native" },
+  diffItem3Desc: { en: "Built around agentic AI as the operating fabric — not retrofitted onto a legacy services model.", ar: "مبنية حول الذكاء الاصطناعي الوكيلي كنسيج تشغيلي — لا مرقّع على نموذج خدمات قديم.", tr: "Operasyonel doku olarak agentic AI etrafında kuruldu — eski hizmet modeline sonradan eklenmedi." },
+  diffItem4Title: { en: "Lean economics", ar: "اقتصاديات مرنة", tr: "Yalın ekonomi" },
+  diffItem4Desc: { en: "Boutique structure plus partner leverage delivers what Tier-1 cost bases cannot match.", ar: "البنية البوتيكية مع رافعة الشركاء توفر ما لا تستطيع قواعد تكلفة الفئة الأولى مجاراته.", tr: "Butik yapı ve ortak kaldıracı, Tier-1 maliyet tabanlarının eşleşemeyeceği şeyi sağlar." },
+  diffItem5Title: { en: "Platform-agnostic", ar: "مستقلة عن المنصة", tr: "Platform bağımsız" },
+  diffItem5Desc: { en: "Clients pick the right stack. Our economics aren't tied to any vendor.", ar: "العملاء يختارون المنصة المناسبة. اقتصادنا غير مرتبط بأي مورد.", tr: "Müşteriler doğru yığını seçer. Ekonomimiz hiçbir tedarikçiye bağlı değil." },
+  diffLearnMore: { en: "Learn more about our approach", ar: "تعرّف أكثر على منهجنا", tr: "Yaklaşımımız hakkında daha fazla bilgi" },
+  servicesTitle: { en: "Four value propositions", ar: "أربعة عروض قيمة", tr: "Dört değer önerisi" },
+  servicesSub: { en: "Built for what clients actually need to ship.", ar: "مبنية حول ما يحتاجه العملاء فعلاً للإطلاق.", tr: "Müşterilerin gerçekten ürün çıkarmak için ihtiyaç duyduğu şey için tasarlandı." },
+  learnMore: { en: "Learn more", ar: "اعرف المزيد", tr: "Daha fazla bilgi" },
+  featuredTitle: { en: "Featured insights", ar: "أبرز الرؤى", tr: "Öne çıkan içgörüler" },
+  featuredSub: { en: "Research, perspectives, and analysis from the Maven AI team.", ar: "أبحاث ومنظورات وتحليلات من فريق Maven AI.", tr: "Maven AI ekibinden araştırma, bakış açıları ve analizler." },
+  allInsights: { en: "All insights", ar: "كل الرؤى", tr: "Tüm içgörüler" },
+  read: { en: "Read", ar: "اقرأ", tr: "Oku" },
+  founderQuote: {
+    en: "The organizations that will win the next decade are not the ones that started AI first — they are the ones that moved AI from the slide deck to production. That is the only gap we exist to close.",
+    ar: "المؤسسات التي ستفوز في العقد القادم ليست تلك التي بدأت الذكاء الاصطناعي أولاً — بل تلك التي نقلته من الشرائح إلى الإنتاج. هذه هي الفجوة الوحيدة التي وُجدنا لسدها.",
+    tr: "Önümüzdeki on yılı kazanacak kuruluşlar, AI'ya ilk başlayanlar değil — AI'yı slayttan üretime taşıyanlardır. Kapatmak için var olduğumuz tek açık budur.",
+  },
+  founderRole: { en: "Senior Partner", ar: "شريك أول", tr: "Kıdemli Ortak" },
+  industriesTitle: { en: "Where we work", ar: "أين نعمل", tr: "Nerede çalışıyoruz" },
+  industriesSub: { en: "Deep domain knowledge in the sectors that matter most in the GCC.", ar: "خبرة قطاعية عميقة في القطاعات الأكثر أهمية في الخليج.", tr: "Körfez'de en önemli sektörlerde derin alan bilgisi." },
+  explore: { en: "Explore", ar: "استكشف", tr: "Keşfet" },
+  mpBadge: { en: "New · Marketplace", ar: "جديد · السوق", tr: "Yeni · Marketplace" },
+  mpTitle: { en: "What good looks like — interactive demos, not slides.", ar: "كيف يبدو التميّز — عروض تفاعلية، لا شرائح.", tr: "İyi neye benzer — slaytlar değil, interaktif demolar." },
+  mpPara: {
+    en: "MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact. Our Marketplace is the answer: a working CFO scoreboard for AI initiatives, plus detail pages for fourteen demos across the seven industries we know best.",
+    ar: "تجد MIT NANDA أن 95% من تجارب GenAI في المؤسسات لا تحقق أثراً مالياً قابلاً للقياس. سوقنا هو الإجابة: لوحة قياس فعلية للمدير المالي حول مبادرات الذكاء الاصطناعي، بالإضافة إلى صفحات تفصيلية لأربعة عشر عرضاً عبر القطاعات السبعة التي نعرفها جيداً.",
+    tr: "MIT NANDA, kurumsal GenAI pilotlarının %95'inin ölçülebilir kâr/zarar etkisi yaratmadığını bulguluyor. Marketplace'imiz cevap: AI girişimleri için çalışan bir CFO skor tablosu, artı en iyi bildiğimiz yedi sektördeki on dört demonun detay sayfaları.",
+  },
+  mpCtaTool: { en: "Open the Value Realization Tool", ar: "افتح أداة تحقيق القيمة", tr: "Değer Gerçekleştirme Aracını aç" },
+  mpCtaBrowse: { en: "Browse the Marketplace", ar: "تصفح السوق", tr: "Marketplace'e göz at" },
+  vrEyebrow: { en: "Value Realization · sample", ar: "تحقيق القيمة · عينة", tr: "Değer Gerçekleştirme · örnek" },
+  vrUnits: { en: "AED · annual", ar: "درهم · سنوياً", tr: "AED · yıllık" },
+  vrRow1: { en: "Citizen-services agent", ar: "وكيل خدمات المواطنين", tr: "Vatandaş hizmetleri ajanı" },
+  vrRow2: { en: "Network-ops copilot", ar: "مساعد عمليات الشبكة", tr: "Ağ operasyonları yardımcısı" },
+  vrRow3: { en: "Procurement intelligence", ar: "ذكاء المشتريات", tr: "Tedarik zekâsı" },
+  vrRow4: { en: "Demand forecaster", ar: "متنبئ الطلب", tr: "Talep tahmincisi" },
+  vrRow5: { en: "Hospitality revenue", ar: "إيرادات الضيافة", tr: "Konaklama geliri" },
+  vrRealRate: { en: "Realization rate", ar: "معدل التحقيق", tr: "Gerçekleştirme oranı" },
+  vrAtRisk: { en: "Value at risk", ar: "قيمة معرضة للخطر", tr: "Risk altındaki değer" },
+  sisterEyebrow: { en: "A sister company", ar: "شركة شقيقة", tr: "Bir kardeş şirket" },
+  sisterTitle: { en: "Maven AI is backed by 200+ consultants at Maven Insights", ar: "Maven AI مدعومة بأكثر من 200 استشاري في Maven Insights", tr: "Maven AI, Maven Insights'taki 200+ danışman tarafından desteklenmektedir" },
+  sisterPara: {
+    en: "Maven Insights is a leading consulting firm with offices in Dubai, Riyadh, Abu Dhabi, Doha, and Ankara. Maven AI was founded as a dedicated AI delivery practice, leveraging Maven Insights' bench, client relationships, and regional presence.",
+    ar: "Maven Insights شركة استشارات رائدة بمكاتب في دبي والرياض وأبوظبي والدوحة وأنقرة. تأسست Maven AI كممارسة مخصصة لتسليم الذكاء الاصطناعي، مستفيدةً من فريق Maven Insights وعلاقات العملاء والحضور الإقليمي.",
+    tr: "Maven Insights; Dubai, Riyad, Abu Dabi, Doha ve Ankara'da ofisleri bulunan lider bir danışmanlık firmasıdır. Maven AI, Maven Insights'ın ekibinden, müşteri ilişkilerinden ve bölgesel varlığından yararlanan özel bir AI teslimat pratiği olarak kuruldu.",
+  },
+  sisterCta: { en: "Visit Maven Insights", ar: "زيارة Maven Insights", tr: "Maven Insights'ı ziyaret edin" },
+  ctaTitle: { en: "Ready to move AI from the slide to production?", ar: "هل أنتم مستعدون لنقل الذكاء الاصطناعي من الشريحة إلى الإنتاج؟", tr: "AI'yı slayttan üretime taşımaya hazır mısınız?" },
+  ctaPara: { en: "Three-day scope. Three-week prototype. 90-day MVP. Let's talk about where to start.", ar: "نطاق في ثلاثة أيام. نموذج أولي في ثلاثة أسابيع. منتج أولي في 90 يوماً. لنتحدث عن نقطة البداية.", tr: "Üç günlük kapsam. Üç haftalık prototip. 90 günlük MVP. Nereden başlayacağımızı konuşalım." },
+  ctaPrimary: { en: "Start the conversation", ar: "ابدأ المحادثة", tr: "Görüşmeyi başlatın" },
+  ctaSecondary: { en: "Read our research", ar: "اقرأ أبحاثنا", tr: "Araştırmamızı okuyun" },
+};
 
 const TWO_PATHS_COPY = {
   eyebrow: { en: "Our POV", ar: "وجهة نظرنا", tr: "Bakış Açımız" },
@@ -130,7 +230,7 @@ export default function Home() {
           <div className="max-w-4xl">
             <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={0}>
               <span className="inline-flex items-center gap-2 bg-[#F5A623]/20 border border-[#F5A623]/30 text-[#F5A623] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-8">
-                A Maven Insights Company
+                {tStr(HOME_COPY.heroBadge, lang)}
               </span>
             </motion.div>
 
@@ -141,9 +241,9 @@ export default function Home() {
               custom={1}
               className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white leading-[1.05] tracking-tight mb-8"
             >
-              From AI ambition
+              {tStr(HOME_COPY.heroLine1, lang)}
               <br />
-              <span className="text-[#F5A623]">to AI in production.</span>
+              <span className="text-[#F5A623]">{tStr(HOME_COPY.heroLine2, lang)}</span>
             </motion.h1>
 
             <motion.p
@@ -153,7 +253,7 @@ export default function Home() {
               custom={2}
               className="text-xl text-gray-300 leading-relaxed max-w-2xl mb-12"
             >
-              Maven AI is a boutique AI advisory and engineering firm built for outcomes. We close the gap between enterprise AI ambition and enterprise AI in production — with senior delivery, lean economics, and an agentic-native practice.
+              {tStr(HOME_COPY.heroPara, lang)}
             </motion.p>
 
             <motion.div
@@ -167,13 +267,13 @@ export default function Home() {
                 href="/assessments"
                 className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
               >
-                Take a free 12-min diagnostic <ArrowRight size={18} />
+                {tStr(HOME_COPY.heroCtaPrimary, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
               </Link>
               <Link
                 href="/contact"
                 className="inline-flex items-center gap-2 border border-white/30 hover:border-white/60 text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors"
               >
-                Start the conversation <ChevronRight size={18} />
+                {tStr(HOME_COPY.heroCtaSecondary, lang)} <ChevronRight size={18} className="rtl:-scale-x-100" />
               </Link>
             </motion.div>
           </div>
@@ -187,13 +287,13 @@ export default function Home() {
       <section className="bg-gradient-to-r from-[#0F9ED5] via-[#156082] to-[#0E2841] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">Maven AI Diagnostic Suite · Free · ~12 min</p>
-            <p className="text-2xl font-extrabold leading-tight">Where does your AI program actually stand against the GCC peer band?</p>
-            <p className="text-sm text-white/80 mt-2">Four diagnostics — Agentic Readiness, Model & Value, Data & Governance, Use Case Value — produce a sovereign-aware score, an executive memo, and a branded board pack.</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">{tStr(HOME_COPY.diagEyebrow, lang)}</p>
+            <p className="text-2xl font-extrabold leading-tight">{tStr(HOME_COPY.diagTitle, lang)}</p>
+            <p className="text-sm text-white/80 mt-2">{tStr(HOME_COPY.diagSub, lang)}</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0">
-            <Link href="/assessments/ari" className="bg-white text-[#0E2841] font-bold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-gray-100">Start ARI →</Link>
-            <Link href="/assessments" className="border border-white/40 text-white font-semibold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-white/10">See all 4 diagnostics</Link>
+            <Link href="/assessments/ari" className="bg-white text-[#0E2841] font-bold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-gray-100">{tStr(HOME_COPY.diagStartAri, lang)}</Link>
+            <Link href="/assessments" className="border border-white/40 text-white font-semibold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-white/10">{tStr(HOME_COPY.diagAllFour, lang)}</Link>
           </div>
         </div>
       </section>
@@ -202,7 +302,7 @@ export default function Home() {
       <section className="bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-8">
-            The Middle East AI opportunity — by the published numbers
+            {tStr(HOME_COPY.statsEyebrow, lang)}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
             {stats.map((stat, i) => (
@@ -218,10 +318,10 @@ export default function Home() {
                   <AnimatedCounter value={stat.value} />
                 </div>
                 <div className="text-sm text-gray-700 font-medium leading-snug mb-2">
-                  {stat.label}
+                  {homepageStatLabel(stat, lang)}
                 </div>
                 <p className="text-[11px] text-gray-500 leading-snug">
-                  Source:{" "}
+                  {tStr(HOME_COPY.sourceLabel, lang)}:{" "}
                   <a
                     href={stat.source.url}
                     target="_blank"
@@ -249,19 +349,19 @@ export default function Home() {
             className="text-center mb-16"
           >
             <div className="section-divider mx-auto" />
-            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5">The gap we exist to close</h2>
+            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5">{tStr(HOME_COPY.gapTitle, lang)}</h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              MIT's 2025 <em>State of AI in Business</em> report found that <span className="font-semibold text-[#0E2841]">95% of enterprise GenAI pilots delivered no measurable P&amp;L impact</span> — only 5% of integrated systems generated meaningful value. We exist to put GCC enterprises in the 5%.
+              {tStr(HOME_COPY.gapParaPart1, lang)} <em>{tStr(HOME_COPY.gapParaPart2, lang)}</em> {tStr(HOME_COPY.gapParaPart3, lang)} <span className="font-semibold text-[#0E2841]">{tStr(HOME_COPY.gapParaPart4, lang)}</span> {tStr(HOME_COPY.gapParaPart5, lang)}
             </p>
             <p className="text-xs text-gray-500 mt-4">
-              Source:{" "}
+              {tStr(HOME_COPY.sourceLabel, lang)}:{" "}
               <a
                 href="https://nanda.media.mit.edu/ai_report_2025.pdf"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
               >
-                MIT NANDA — The GenAI Divide: State of AI in Business (2025)
+                {tStr(HOME_COPY.gapMitSource, lang)}
                 <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
               </a>
             </p>
@@ -270,10 +370,10 @@ export default function Home() {
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div className="space-y-5">
               {[
-                { num: "01", title: "Pilot purgatory", desc: "Dozens of POCs, no production path. The fix is governance plus orchestration plus change leadership — work the Tier-1 margin model rejects." },
-                { num: "02", title: "Technical debt trap", desc: "Industry research puts 60–80% of IT budgets into maintaining existing systems (with telcos at the higher end). AI-driven SDLC is the path out — almost no one delivers it on-prem for sovereign clients.", source: SITE_SOURCES.eyTelcoLegacy },
-                { num: "03", title: "Data & governance vacuum", desc: "AI exposes data debt instantly. Big-4 sells strategy, hyperscalers sell tools. No one delivers the operating activation that makes agents trustworthy." },
-                { num: "04", title: "Adoption gap", desc: "BCG finds only 26% of companies have moved past AI pilots to generate any value at scale — and just 4% sit at the elite frontier. The bottleneck is delivery, not models.", source: SITE_SOURCES.bcgValueAI },
+                { num: "01", title: tStr(HOME_COPY.gapItem1Title, lang), desc: tStr(HOME_COPY.gapItem1Desc, lang) },
+                { num: "02", title: tStr(HOME_COPY.gapItem2Title, lang), desc: tStr(HOME_COPY.gapItem2Desc, lang), source: SITE_SOURCES.eyTelcoLegacy },
+                { num: "03", title: tStr(HOME_COPY.gapItem3Title, lang), desc: tStr(HOME_COPY.gapItem3Desc, lang) },
+                { num: "04", title: tStr(HOME_COPY.gapItem4Title, lang), desc: tStr(HOME_COPY.gapItem4Desc, lang), source: SITE_SOURCES.bcgValueAI },
               ].map((item, i) => (
                 <motion.div
                   key={i}
@@ -289,7 +389,7 @@ export default function Home() {
                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
                     {item.source && (
                       <p className="text-[11px] text-gray-400 mt-1.5">
-                        Source:{" "}
+                        {tStr(HOME_COPY.sourceLabel, lang)}:{" "}
                         <a
                           href={item.source.url}
                           target="_blank"
@@ -313,14 +413,14 @@ export default function Home() {
               transition={{ duration: 0.6 }}
               className="bg-[#0E2841] rounded-2xl p-10 text-white"
             >
-              <h3 className="text-2xl font-bold mb-8">How Maven AI is different</h3>
+              <h3 className="text-2xl font-bold mb-8">{tStr(HOME_COPY.diffTitle, lang)}</h3>
               <div className="space-y-6">
                 {[
-                  { label: "Production-led", desc: "We deliver AI in production, not AI in PowerPoint. Measured outcomes, not advisory." },
-                  { label: "Boutique by design", desc: "Senior partners and principals on every engagement. No pyramid, no bench-warming." },
-                  { label: "Agentic-native", desc: "Built around agentic AI as the operating fabric — not retrofitted onto a legacy services model." },
-                  { label: "Lean economics", desc: "Boutique structure plus partner leverage delivers what Tier-1 cost bases cannot match." },
-                  { label: "Platform-agnostic", desc: "Clients pick the right stack. Our economics aren't tied to any vendor." },
+                  { label: tStr(HOME_COPY.diffItem1Title, lang), desc: tStr(HOME_COPY.diffItem1Desc, lang) },
+                  { label: tStr(HOME_COPY.diffItem2Title, lang), desc: tStr(HOME_COPY.diffItem2Desc, lang) },
+                  { label: tStr(HOME_COPY.diffItem3Title, lang), desc: tStr(HOME_COPY.diffItem3Desc, lang) },
+                  { label: tStr(HOME_COPY.diffItem4Title, lang), desc: tStr(HOME_COPY.diffItem4Desc, lang) },
+                  { label: tStr(HOME_COPY.diffItem5Title, lang), desc: tStr(HOME_COPY.diffItem5Desc, lang) },
                 ].map((item, i) => (
                   <div key={i} className="flex gap-3">
                     <div className="w-2 h-2 rounded-full bg-[#F5A623] mt-2 flex-shrink-0" />
@@ -332,7 +432,7 @@ export default function Home() {
                 ))}
               </div>
               <Link href="/about" className="mt-8 inline-flex items-center gap-2 text-[#F5A623] font-semibold text-sm hover:text-white transition-colors">
-                Learn more about our approach <ArrowRight size={16} />
+                {tStr(HOME_COPY.diffLearnMore, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
               </Link>
             </motion.div>
           </div>
@@ -414,7 +514,7 @@ export default function Home() {
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardProjectDesc, lang)}</p>
               <Link href="/services" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#156082] hover:text-[#0E2841]">
-                {tStr(TWO_PATHS_COPY.ctaServices, lang)} <ArrowRight size={14} />
+                {tStr(TWO_PATHS_COPY.ctaServices, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
@@ -424,7 +524,7 @@ export default function Home() {
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardAssetDesc, lang)}</p>
               <Link href="/marketplace" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#F5A623] hover:text-[#d4622a]">
-                {tStr(TWO_PATHS_COPY.ctaMarketplace, lang)} <ArrowRight size={14} />
+                {tStr(TWO_PATHS_COPY.ctaMarketplace, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
@@ -434,7 +534,7 @@ export default function Home() {
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardBlendedDesc, lang)}</p>
               <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#196B24] hover:text-[#0E2841]">
-                {tStr(TWO_PATHS_COPY.ctaPov, lang)} <ArrowRight size={14} />
+                {tStr(TWO_PATHS_COPY.ctaPov, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>
           </div>
@@ -452,8 +552,8 @@ export default function Home() {
             className="mb-14"
           >
             <div className="section-divider" />
-            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-4">Four value propositions</h2>
-            <p className="text-lg text-gray-600 max-w-xl">Built for what clients actually need to ship.</p>
+            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-4">{tStr(HOME_COPY.servicesTitle, lang)}</h2>
+            <p className="text-lg text-gray-600 max-w-xl">{tStr(HOME_COPY.servicesSub, lang)}</p>
           </motion.div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -475,15 +575,15 @@ export default function Home() {
                     <Icon size={24} style={{ color: service.color }} />
                   </div>
                   <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: service.color }}>
-                    {service.buyer}
+                    {serviceBuyer(service, lang)}
                   </div>
-                  <h3 className="text-lg font-bold text-[#0E2841] mb-3 leading-snug">{service.title}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed mb-5">{service.description}</p>
+                  <h3 className="text-lg font-bold text-[#0E2841] mb-3 leading-snug">{serviceTitle(service, lang)}</h3>
+                  <p className="text-sm text-gray-600 leading-relaxed mb-5">{serviceDescription(service, lang)}</p>
                   <Link
                     href={`/services/${service.slug}`}
                     className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors"
                   >
-                    Learn more <ArrowRight size={14} />
+                    {tStr(HOME_COPY.learnMore, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                   </Link>
                 </motion.div>
               );
@@ -501,11 +601,11 @@ export default function Home() {
           <div className="flex items-end justify-between mb-14">
             <div>
               <div className="section-divider" />
-              <h2 className="text-4xl font-extrabold text-[#0E2841] mb-2">Featured insights</h2>
-              <p className="text-gray-600">Research, perspectives, and analysis from the Maven AI team.</p>
+              <h2 className="text-4xl font-extrabold text-[#0E2841] mb-2">{tStr(HOME_COPY.featuredTitle, lang)}</h2>
+              <p className="text-gray-600">{tStr(HOME_COPY.featuredSub, lang)}</p>
             </div>
             <Link href="/insights" className="hidden sm:inline-flex items-center gap-2 text-[#156082] font-semibold text-sm hover:text-[#F5A623] transition-colors">
-              All insights <ArrowRight size={14} />
+              {tStr(HOME_COPY.allInsights, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
             </Link>
           </div>
 
@@ -523,7 +623,7 @@ export default function Home() {
                   <div className="h-52 overflow-hidden bg-[#0E2841] relative">
                     <img
                       src={insight.coverImage}
-                      alt={insight.title}
+                      alt={insightTitle(insight, lang)}
                       className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity group-hover:scale-105 transition-transform duration-500"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
@@ -534,31 +634,28 @@ export default function Home() {
                       <span
                         className="text-xs font-bold px-3 py-1 rounded-full"
                         style={{
-                          backgroundColor:
-                            insight.category === "Agentic AI" ? "#156082" :
-                            insight.category === "Data & Governance" ? "#F5A623" :
-                            insight.category === "Industry Trends" ? "#F5A623" : "#196B24",
+                          backgroundColor: INSIGHT_CATEGORY_COLORS[insight.category] ?? "#196B24",
                           color: "white",
                         }}
                       >
-                        {insight.type}
+                        {insightTypeLabel(insight.type, lang)}
                       </span>
                     </div>
                   </div>
                   <div className="p-6">
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs font-semibold text-[#156082]">{insight.category}</span>
+                      <span className="text-xs font-semibold text-[#156082]">{insightCategoryLabel(insight.category, lang)}</span>
                       <span className="text-gray-300">·</span>
-                      <span className="text-xs text-gray-400">{insight.date}</span>
+                      <span className="text-xs text-gray-400">{insightDateLabel(insight.date, lang)}</span>
                     </div>
                     <h3 className="font-bold text-[#0E2841] text-lg leading-snug mb-3 group-hover:text-[#156082] transition-colors">
-                      {insight.title}
+                      {insightTitle(insight, lang)}
                     </h3>
-                    <p className="text-sm text-gray-600 leading-relaxed mb-4">{insight.summary}</p>
+                    <p className="text-sm text-gray-600 leading-relaxed mb-4">{insightSummary(insight, lang)}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-400">{insight.readTime}</span>
+                      <span className="text-xs text-gray-400">{insightReadTimeLabel(insight.readTime, lang)}</span>
                       <span className="text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
-                        Read <ArrowRight size={13} />
+                        {tStr(HOME_COPY.read, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                       </span>
                     </div>
                   </div>
@@ -577,7 +674,7 @@ export default function Home() {
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <Quote size={48} className="text-[#F5A623] mx-auto mb-8 opacity-60" />
           <blockquote className="text-2xl sm:text-3xl font-semibold text-white leading-relaxed mb-10">
-            "The organizations that will win the next decade are not the ones that started AI first — they are the ones that moved AI from the slide deck to production. That is the only gap we exist to close."
+            "{tStr(HOME_COPY.founderQuote, lang)}"
           </blockquote>
           <div className="flex items-center justify-center gap-4">
             <div className="w-14 h-14 rounded-full overflow-hidden bg-[#156082] border-2 border-[#F5A623]">
@@ -589,7 +686,7 @@ export default function Home() {
             </div>
             <div className="text-left">
               <div className="text-white font-bold">Mounir Aris</div>
-              <div className="text-gray-400 text-sm">Senior Partner</div>
+              <div className="text-gray-400 text-sm">{tStr(HOME_COPY.founderRole, lang)}</div>
             </div>
           </div>
         </div>
@@ -606,8 +703,8 @@ export default function Home() {
             className="mb-14"
           >
             <div className="section-divider" />
-            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-4">Where we work</h2>
-            <p className="text-lg text-gray-600 max-w-xl">Deep domain knowledge in the sectors that matter most in the GCC.</p>
+            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-4">{tStr(HOME_COPY.industriesTitle, lang)}</h2>
+            <p className="text-lg text-gray-600 max-w-xl">{tStr(HOME_COPY.industriesSub, lang)}</p>
           </motion.div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {industries.map((ind, i) => (
@@ -621,7 +718,7 @@ export default function Home() {
               >
                 <div className="text-5xl font-extrabold mb-2 leading-none" style={{ color: ind.color }}>{ind.heroStat}</div>
                 <p className="text-[11px] text-gray-500 leading-snug mb-4">
-                  {ind.heroStatLabel}
+                  {industryHeroStatLabel(ind, lang)}
                   <br />
                   <a
                     href={ind.heroStatSource.url}
@@ -633,10 +730,10 @@ export default function Home() {
                     <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
                   </a>
                 </p>
-                <h3 className="text-xl font-bold text-[#0E2841] mb-3">{ind.title}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed mb-6 flex-1">{ind.subtitle}</p>
+                <h3 className="text-xl font-bold text-[#0E2841] mb-3">{industryTitle(ind, lang)}</h3>
+                <p className="text-sm text-gray-600 leading-relaxed mb-6 flex-1">{industrySubtitle(ind, lang)}</p>
                 <Link href={`/industries#${ind.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors">
-                  Explore <ArrowRight size={14} />
+                  {tStr(HOME_COPY.explore, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                 </Link>
               </motion.div>
             ))}
@@ -651,26 +748,26 @@ export default function Home() {
             <div className="lg:col-span-7">
               <div className="section-divider" />
               <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white bg-[#0F9ED5] mb-4">
-                New · Marketplace
+                {tStr(HOME_COPY.mpBadge, lang)}
               </span>
               <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5 max-w-2xl leading-tight">
-                What good looks like — interactive demos, not slides.
+                {tStr(HOME_COPY.mpTitle, lang)}
               </h2>
               <p className="text-lg text-gray-600 max-w-2xl leading-relaxed mb-6">
-                MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact. Our Marketplace is the answer: a working CFO scoreboard for AI initiatives, plus detail pages for fourteen demos across the seven industries we know best.
+                {tStr(HOME_COPY.mpPara, lang)}
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <Link
                   href="/marketplace/value-realization"
                   className="inline-flex items-center gap-2 bg-[#0E2841] hover:bg-[#156082] text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
                 >
-                  Open the Value Realization Tool <ArrowRight size={16} />
+                  {tStr(HOME_COPY.mpCtaTool, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
                 </Link>
                 <Link
                   href="/marketplace"
                   className="inline-flex items-center gap-2 border border-[#0E2841] text-[#0E2841] hover:bg-[#0E2841] hover:text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
                 >
-                  Browse the Marketplace
+                  {tStr(HOME_COPY.mpCtaBrowse, lang)}
                 </Link>
               </div>
             </div>
@@ -678,18 +775,18 @@ export default function Home() {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-[#0F9ED5]">
-                    Value Realization · sample
+                    {tStr(HOME_COPY.vrEyebrow, lang)}
                   </span>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                    AED · annual
+                    {tStr(HOME_COPY.vrUnits, lang)}
                   </span>
                 </div>
                 {[
-                  { label: "Citizen-services agent", expected: 4.2, realized: 3.35, color: "#196B24" },
-                  { label: "Network-ops copilot", expected: 6.8, realized: 4.6, color: "#196B24" },
-                  { label: "Procurement intelligence", expected: 9.5, realized: 5.2, color: "#F5A623" },
-                  { label: "Demand forecaster", expected: 3.1, realized: 1.4, color: "#0F9ED5" },
-                  { label: "Hospitality revenue", expected: 5.4, realized: 0.0, color: "#B91C1C" },
+                  { label: tStr(HOME_COPY.vrRow1, lang), expected: 4.2, realized: 3.35, color: "#196B24" },
+                  { label: tStr(HOME_COPY.vrRow2, lang), expected: 6.8, realized: 4.6, color: "#196B24" },
+                  { label: tStr(HOME_COPY.vrRow3, lang), expected: 9.5, realized: 5.2, color: "#F5A623" },
+                  { label: tStr(HOME_COPY.vrRow4, lang), expected: 3.1, realized: 1.4, color: "#0F9ED5" },
+                  { label: tStr(HOME_COPY.vrRow5, lang), expected: 5.4, realized: 0.0, color: "#B91C1C" },
                 ].map((row) => {
                   const max = 9.5;
                   const expW = (row.expected / max) * 100;
@@ -699,7 +796,7 @@ export default function Home() {
                       <div className="flex justify-between text-[11px] text-gray-600">
                         <span className="font-semibold">{row.label}</span>
                         <span className="text-gray-400">
-                          AED {row.realized.toFixed(1)}M / {row.expected.toFixed(1)}M
+                          AED {formatNumber(row.realized, lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M / {formatNumber(row.expected, lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M
                         </span>
                       </div>
                       <div className="relative h-2.5 rounded-full bg-gray-100 overflow-hidden">
@@ -716,7 +813,7 @@ export default function Home() {
                   );
                 })}
                 <p className="text-[11px] text-gray-500 leading-relaxed pt-2 border-t border-gray-100">
-                  Realization rate <span className="font-bold text-[#0E2841]">49%</span> · Value at risk <span className="font-bold text-[#B91C1C]">AED 9.7M</span>
+                  {tStr(HOME_COPY.vrRealRate, lang)} <span className="font-bold text-[#0E2841]">{formatNumber(49, lang)}%</span> · {tStr(HOME_COPY.vrAtRisk, lang)} <span className="font-bold text-[#B91C1C]">AED {formatNumber(9.7, lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M</span>
                 </p>
               </div>
             </div>
@@ -727,12 +824,12 @@ export default function Home() {
       {/* ── MAVEN INSIGHTS BANNER ── */}
       <section className="py-16 bg-white border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">A sister company</p>
+          <p className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">{tStr(HOME_COPY.sisterEyebrow, lang)}</p>
           <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4">
-            Maven AI is backed by 200+ consultants at Maven Insights
+            {tStr(HOME_COPY.sisterTitle, lang)}
           </h2>
           <p className="text-gray-600 max-w-2xl mx-auto mb-8">
-            Maven Insights is a leading consulting firm with offices in Dubai, Riyadh, Abu Dhabi, Doha, and Ankara. Maven AI was founded as a dedicated AI delivery practice, leveraging Maven Insights' bench, client relationships, and regional presence.
+            {tStr(HOME_COPY.sisterPara, lang)}
           </p>
           <a
             href="https://www.maveninsights.com"
@@ -740,7 +837,7 @@ export default function Home() {
             rel="noreferrer"
             className="inline-flex items-center gap-2 border border-[#156082] text-[#156082] font-semibold px-6 py-3 rounded-xl hover:bg-[#156082] hover:text-white transition-colors"
           >
-            Visit Maven Insights <ArrowRight size={16} />
+            {tStr(HOME_COPY.sisterCta, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
           </a>
         </div>
       </section>
@@ -755,17 +852,17 @@ export default function Home() {
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-4xl font-extrabold text-white mb-6">
-              Ready to move AI from the slide to production?
+              {tStr(HOME_COPY.ctaTitle, lang)}
             </h2>
             <p className="text-xl text-gray-300 mb-10 max-w-xl mx-auto">
-              Three-day scope. Three-week prototype. 90-day MVP. Let's talk about where to start.
+              {tStr(HOME_COPY.ctaPara, lang)}
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/contact" className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg">
-                Start the conversation <ArrowRight size={18} />
+                {tStr(HOME_COPY.ctaPrimary, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
               </Link>
               <Link href="/insights" className="inline-flex items-center gap-2 border border-white/30 hover:border-white text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors">
-                Read our research <ArrowRight size={16} />
+                {tStr(HOME_COPY.ctaSecondary, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
               </Link>
             </div>
           </motion.div>

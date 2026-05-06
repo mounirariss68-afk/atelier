@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 export type Lang = "en" | "ar" | "tr";
 
-interface LangContextValue {
+export interface LangContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
   dir: "ltr" | "rtl";
@@ -45,14 +45,73 @@ export function useLang(): LangContextValue {
   return useContext(LangContext);
 }
 
+export type T = { en: string; ar?: string; tr?: string };
+
+const warnedKeys = new Set<string>();
+function devWarnMissing(s: T, lang: Lang) {
+  if (typeof import.meta === "undefined") return;
+  // Vite injects DEV at build time
+  if (!(import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) return;
+  const need = lang === "ar" || lang === "tr" ? lang : null;
+  if (!need) return;
+  if (s[need]) return;
+  const k = `${lang}:${(s.en ?? "").slice(0, 60)}`;
+  if (warnedKeys.has(k)) return;
+  warnedKeys.add(k);
+  console.warn(`[i18n] missing ${lang} translation for: "${(s.en ?? "").slice(0, 100)}"`);
+}
+
 /**
- * Translate a multilingual string. The shared content library currently
- * carries `{ en, ar }` everywhere; the new Personal Agent surface adds an
- * optional `tr` field. Missing TR (or any missing key) silently falls
- * back to English so existing EN/AR-only data keeps working.
+ * Translate a multilingual string. Missing AR/TR silently falls back to EN
+ * but emits a dev-time console warning (once per unique missing key) so
+ * untranslated strings are easy to spot during development.
  */
-export function tStr(s: { en: string; ar: string; tr?: string }, lang: Lang): string {
-  if (lang === "tr") return s.tr ?? s.en;
-  if (lang === "ar") return s.ar ?? s.en;
+export function tStr(s: T, lang: Lang): string {
+  if (lang === "tr") {
+    if (!s.tr) devWarnMissing(s, lang);
+    return s.tr ?? s.en;
+  }
+  if (lang === "ar") {
+    if (!s.ar) devWarnMissing(s, lang);
+    return s.ar ?? s.en;
+  }
   return s.en;
+}
+
+/** Hook for component-local translation. */
+export function useT() {
+  const { lang } = useLang();
+  return (s: T) => tStr(s, lang);
+}
+
+const LOCALE_TAG: Record<Lang, string> = {
+  en: "en-US",
+  ar: "ar-SA",
+  tr: "tr-TR",
+};
+
+/** Locale-aware date formatter. */
+export function formatDate(
+  input: string | number | Date,
+  lang: Lang,
+  opts: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" },
+): string {
+  try {
+    return new Intl.DateTimeFormat(LOCALE_TAG[lang], opts).format(new Date(input));
+  } catch {
+    return new Date(input).toLocaleDateString();
+  }
+}
+
+/** Locale-aware number formatter. */
+export function formatNumber(
+  n: number,
+  lang: Lang,
+  opts: Intl.NumberFormatOptions = {},
+): string {
+  try {
+    return new Intl.NumberFormat(LOCALE_TAG[lang], opts).format(n);
+  } catch {
+    return String(n);
+  }
 }

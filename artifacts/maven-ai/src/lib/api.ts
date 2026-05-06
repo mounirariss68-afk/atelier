@@ -23,7 +23,7 @@ export interface SubmissionDetail {
   overallScore: number;
   tier: string;
   sovereignScore: number;
-  language: "en" | "ar";
+  language: "en" | "ar" | "tr";
   profile: {
     name: string;
     email: string;
@@ -33,7 +33,7 @@ export interface SubmissionDetail {
     country: string;
     revenueBand: string;
     employeeCountBand: string;
-    language: "en" | "ar";
+    language: "en" | "ar" | "tr";
   };
   result: ScoreResult;
   memo: string | null;
@@ -69,7 +69,7 @@ export async function bookCall(args: {
   role?: string;
   preferredTime?: string;
   message?: string;
-  language: "en" | "ar";
+  language: "en" | "ar" | "tr";
 }) {
   const r = await fetch(`${BASE}/assessments/book-call`, {
     method: "POST",

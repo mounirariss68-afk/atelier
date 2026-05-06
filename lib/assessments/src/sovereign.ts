@@ -1,10 +1,10 @@
-import type { AssessmentDefinition, SovereignSubScore } from "./types";
+import type { AssessmentDefinition, BiText, SovereignSubScore } from "./types";
 
 export function computeSovereignSubScore(
   def: AssessmentDefinition,
   answers: Record<string, string>
 ): SovereignSubScore {
-  const components: { id: string; label: { en: string; ar: string }; value: number }[] = [];
+  const components: { id: string; label: BiText; value: number }[] = [];
   let total = 0;
   let count = 0;
   for (const dim of def.dimensions) {
