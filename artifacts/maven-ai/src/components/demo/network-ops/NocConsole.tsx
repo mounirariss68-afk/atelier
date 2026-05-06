@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Map as MapIcon, Activity, Inbox, ShieldCheck, Truck, History,
-  Sparkles, Bell, ChevronLeft, ChevronRight, ArrowLeft, X,
+  Sparkles, ChevronLeft, ChevronRight, ArrowLeft,
 } from "lucide-react";
 import { NocDemoLangProvider, useNocDemoLang, useNocDemoT } from "./DemoLangContext";
 import { shell } from "./noc-i18n";
 import { BRAND, BRAND_DARK } from "./tokens";
+import DemoTopBar from "../DemoTopBar";
+import { getDemoAccent } from "@workspace/maven-content";
 import LiveMapView from "./views/LiveMapView";
 import IncidentWorkspaceView from "./views/IncidentWorkspaceView";
 import ApprovalsView from "./views/ApprovalsView";
@@ -47,31 +49,11 @@ function ConsoleInner() {
   const t = useNocDemoT();
   const isAr = lang === "ar";
 
+  const [, setLocation] = useLocation();
   const [view, setView] = useState<ViewKey>("live-map");
   const [openIncidentId, setOpenIncidentId] = useState<string | undefined>();
   const [collapsed, setCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const prevDir = document.documentElement.dir;
-    const prevLang = document.documentElement.lang;
-    document.documentElement.dir = isAr ? "rtl" : "ltr";
-    document.documentElement.lang = isAr ? "ar" : "en";
-    return () => {
-      document.documentElement.dir = prevDir || "ltr";
-      document.documentElement.lang = prevLang || "en";
-    };
-  }, [isAr]);
-
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
 
   const goToIncident = (id: string) => {
     setOpenIncidentId(id);
@@ -152,73 +134,38 @@ function ConsoleInner() {
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top bar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4 sticky top-0 z-30">
-          <div className="min-w-0">
-            <h1 className="text-base font-extrabold text-gray-900 truncate">{t(NAV.find((n) => n.key === view)!.labelKey, shell)}</h1>
-            <p className="text-[11px] text-gray-500 truncate">{t("personaTitle", shell)} · {t("persona", shell)}</p>
-          </div>
+        <DemoTopBar
+          marketplaceSlug="network-ops-war-room"
+          accent={getDemoAccent("network-ops-war-room")}
+          brandTag={t("brandTag", shell)}
+          platformTitle={t("platformTitle", shell)}
+          backLabel={t("back", shell)}
+          lang={lang}
+          setLang={setLang}
 
-          <div className="ms-auto flex items-center gap-2">
-            <div className="flex bg-gray-100 rounded-lg p-0.5 text-[11px] font-bold">
-              {(["en", "ar"] as const).map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLang(l)}
-                  className={`px-3 py-1 rounded ${lang === l ? "bg-white shadow-sm" : "text-gray-600"}`}
-                  style={lang === l ? { color: BRAND } : undefined}
-                >
-                  {l === "en" ? "EN" : "AR"}
-                </button>
-              ))}
-            </div>
-
-            <div ref={notifRef} className="relative">
-              <button
-                onClick={() => setNotifOpen((o) => !o)}
-                className="relative w-9 h-9 rounded-lg flex items-center justify-center text-gray-600 hover:bg-gray-100"
-                aria-label={t("notifications", shell)}
-              >
-                <Bell size={18} />
-                <span className="absolute top-1 end-1 w-2 h-2 rounded-full bg-red-500" />
-              </button>
-              <AnimatePresence>
-                {notifOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    className={`absolute mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden ${isAr ? "left-0" : "right-0"}`}
-                  >
-                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase text-gray-500">
-                      {t("notifications", shell)}
-                    </div>
-                    {[
-                      { tk: "notifSettlement", time: "notifSettlementTime" },
-                      { tk: "notifSla", time: "notifSlaTime" },
-                      { tk: "notifHajj", time: "notifHajjTime" },
-                    ].map((n) => (
-                      <div key={n.tk} className="px-3 py-2.5 border-b border-gray-100 last:border-0">
-                        <p className="text-xs text-gray-800">{t(n.tk, shell)}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{t(n.time, shell)}</p>
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="flex items-center gap-2 ps-2 border-s border-gray-100">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: BRAND }}>
-                {isAr ? "ر" : "RA"}
-              </div>
-              <div className="hidden sm:block text-end">
-                <p className="text-xs font-bold text-gray-900">{t("persona", shell)}</p>
-                <p className="text-[10px] text-gray-500">{isAr ? "مدير NOC" : "NOC Director"}</p>
-              </div>
-            </div>
-          </div>
-        </header>
+          persona={{
+            initials: t("personaInitials", shell),
+            name: t("persona", shell),
+            title: t("personaTitle", shell),
+          }}
+          notifications={{
+            panelTitle: t("notifications", shell),
+            items: [
+              { tk: "notifSettlement", time: "notifSettlementTime" },
+              { tk: "notifSla", time: "notifSlaTime" },
+              { tk: "notifHajj", time: "notifHajjTime" },
+            ].map((n) => ({
+              id: n.tk,
+              severity: "high" as const,
+              title: t(n.tk, shell),
+              timestamp: t(n.time, shell),
+            })),
+            seeAllLabel: t("seeAllAlerts", shell),
+            onSeeAll: () => setView("approvals"),
+          }}
+          onSwitchView={() => setLocation("/demo/network-ops-war-room")}
+          switchViewLabel={t("switchView", shell)}
+        />
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">

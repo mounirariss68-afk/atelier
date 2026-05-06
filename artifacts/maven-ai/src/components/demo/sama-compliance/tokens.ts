@@ -3,8 +3,10 @@
 // the platform navy so the surface evokes Workiva / MetricStream rather
 // than a "marketing demo".
 
-export const BRAND = "#F5A623";
-export const BRAND_DARK = "#C58413";
+import { getDemoAccent } from "@workspace/maven-content";
+
+export const BRAND = getDemoAccent("sama-compliance-sentinel", "#0E2841");
+export const BRAND_DARK = "#0A1F33";
 export const BRAND_INK = "#0E2841";       // platform navy — header & primary text
 export const BRAND_MUTED = "#5C6B7A";
 

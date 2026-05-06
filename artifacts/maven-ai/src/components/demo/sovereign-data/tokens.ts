@@ -1,4 +1,6 @@
-export const BRAND = "#0E2841";
+import { getDemoAccent } from "@workspace/maven-content";
+
+export const BRAND = getDemoAccent("sovereign-data-steward", "#0E2841");
 export const BRAND_INK = "#0E2841";
 export const BRAND_ACCENT = "#156082";
 export const BRAND_MUTED = "#5C8CA8";

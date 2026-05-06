@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
-import { AnimatePresence, motion } from "framer-motion";
+import { useMemo, useState } from "react";
+import { Link, useLocation } from "wouter";
+import { AnimatePresence } from "framer-motion";
 import {
   Inbox, FolderOpen, CheckSquare, BarChart3, BookOpen, ClipboardList,
-  Bell, Bot, ChevronLeft, Globe, ArrowLeft, Sparkles, AlertTriangle, X,
+  Bot, ChevronLeft, ArrowLeft, Sparkles,
 } from "lucide-react";
 import { useCscLang } from "./DemoLangContext";
 import { shell, tDict } from "./citizen-i18n";
 import { useCitizenServicesData } from "@/hooks/useCitizenServicesData";
 import { tt } from "@/data/citizen-services-seed";
-import { BRAND, BRAND_INK, BRAND_MUTED, NAVY, CANVAS, SEVERITY } from "./tokens";
+import { BRAND, BRAND_INK, NAVY, CANVAS, SEVERITY } from "./tokens";
+import DemoTopBar from "../DemoTopBar";
+import { getDemoAccent } from "@workspace/maven-content";
 import AiChat from "./AiChat";
 import MyQueueView from "./views/MyQueueView";
 import CaseWorkspaceView from "./views/CaseWorkspaceView";
@@ -35,22 +37,10 @@ export default function OfficerConsole() {
   const isRtl = lang === "ar";
   const data = useCitizenServicesData();
 
+  const [, setLocation] = useLocation();
   const [view, setView] = useState<ViewKey>("queue");
   const [activeCase, setActiveCase] = useState<string | null>("CSC-2026-1421");
   const [chatOpen, setChatOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-
-  useEffect(() => {
-    const html = document.documentElement;
-    const prevDir = html.getAttribute("dir");
-    const prevLang = html.getAttribute("lang");
-    html.setAttribute("dir", isRtl ? "rtl" : "ltr");
-    html.setAttribute("lang", lang);
-    return () => {
-      if (prevDir) html.setAttribute("dir", prevDir); else html.removeAttribute("dir");
-      if (prevLang) html.setAttribute("lang", prevLang); else html.removeAttribute("lang");
-    };
-  }, [isRtl, lang]);
 
   const openCase = (id: string) => { setActiveCase(id); setView("workspace"); };
 
@@ -97,31 +87,41 @@ export default function OfficerConsole() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Topbar */}
-        <header className="flex-shrink-0 h-14 bg-white border-b border-gray-100 flex items-center px-5 gap-3">
-          <p className="text-[13px] font-bold text-gray-800">{t[NAV.find((n) => n.key === view)!.labelKey]}</p>
-          <div className="ms-auto flex items-center gap-1.5">
-            <button onClick={() => setLang(lang === "en" ? "ar" : "en")}
-              className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center gap-1.5">
-              <Globe size={12} /> {lang === "en" ? "العربية" : "EN"}
-            </button>
-            <button onClick={() => setNotifOpen(true)} className="relative w-9 h-9 rounded-md border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50">
-              <Bell size={15} />
-              {data.alerts.length > 0 && <span className="absolute top-1 end-1 w-2 h-2 rounded-full" style={{ background: SEVERITY.critical }} />}
-            </button>
+        <DemoTopBar
+          marketplaceSlug="citizen-services-concierge"
+          accent={getDemoAccent("citizen-services-concierge")}
+          brandTag={t.brandTag}
+          platformTitle={t.toolTitle}
+          backLabel={lang === "en" ? "Back" : "رجوع"}
+          lang={lang}
+          setLang={setLang}
+
+          persona={{
+            initials: tt(data.officer.initials, lang),
+            name: tt(data.officer.name, lang),
+            title: tt(data.officer.role, lang),
+          }}
+          actionButton={
             <button onClick={() => setChatOpen(true)} className="hidden md:flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-md text-white"
               style={{ background: BRAND }}>
               <Sparkles size={12} /> {t.aiAssistant}
             </button>
-            <div className="ms-2 flex items-center gap-2 ps-3 border-s border-gray-100">
-              <div className="w-8 h-8 rounded-full text-white flex items-center justify-center text-[11px] font-bold" style={{ background: BRAND_INK }}>{tt(data.officer.initials, lang)}</div>
-              <div className="hidden sm:block text-[11px] leading-tight">
-                <p className="font-semibold text-gray-800">{tt(data.officer.name, lang)}</p>
-                <p className="text-gray-400">{tt(data.officer.role, lang)}</p>
-              </div>
-            </div>
-          </div>
-        </header>
+          }
+          notifications={{
+            panelTitle: t.notifications,
+            unreadCount: data.alerts.length,
+            items: data.alerts.map((a) => ({
+              id: a.id,
+              severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
+              title: tt(a.title, lang),
+              detail: tt(a.sub, lang),
+              timestamp: a.at,
+              onClick: () => { if (a.caseId) openCase(a.caseId); },
+            })),
+          }}
+          onSwitchView={() => setLocation("/demo/citizen-services-concierge")}
+          switchViewLabel={t.switchView}
+        />
 
         {/* KPI strip */}
         <div className="flex-shrink-0 px-5 pt-4">
@@ -154,44 +154,6 @@ export default function OfficerConsole() {
 
       {/* AI panel */}
       <AnimatePresence>{chatOpen && <AiChat onClose={() => setChatOpen(false)} />}</AnimatePresence>
-
-      {/* Notifications drawer */}
-      <AnimatePresence>
-        {notifOpen && (
-          <motion.div initial={{ x: isRtl ? "-100%" : "100%" }} animate={{ x: 0 }} exit={{ x: isRtl ? "-100%" : "100%" }}
-            transition={{ type: "spring", damping: 26, stiffness: 260 }}
-            className={`fixed top-0 ${isRtl ? "left-0 border-r" : "right-0 border-l"} h-full w-[360px] max-w-full bg-white shadow-2xl z-50 flex flex-col border-gray-200`}
-            dir={isRtl ? "rtl" : "ltr"}>
-            <div className="h-14 px-4 flex items-center gap-3 text-white" style={{ background: NAVY }}>
-              <Bell size={16} />
-              <p className="text-sm font-bold flex-1">{t.notifications}</p>
-              <button onClick={() => setNotifOpen(false)} className="p-1.5 hover:bg-white/15 rounded-lg"><X size={16} /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50">
-              {data.alerts.map((a) => {
-                const sColor = a.severity === "critical" ? SEVERITY.critical : a.severity === "high" ? SEVERITY.high : SEVERITY.medium;
-                return (
-                  <button key={a.id} onClick={() => { if (a.caseId) { openCase(a.caseId); setNotifOpen(false); } }}
-                    className="w-full text-start bg-white rounded-lg border border-gray-100 p-3 hover:border-gray-200 transition-colors">
-                    <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: sColor }} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12.5px] font-semibold text-gray-800 leading-snug">{tt(a.title, lang)}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">{tt(a.sub, lang)}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">{a.at}</p>
-                      </div>
-                      {a.severity === "critical" && <AlertTriangle size={12} className="text-red-500 flex-shrink-0 mt-1" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="p-3 border-t border-gray-100 text-center">
-              <span className="text-[10px] text-gray-400">{lang === "en" ? "Brand accent" : "لون الهوية"} • <span style={{ color: BRAND_MUTED, background: BRAND, padding: "0 6px", borderRadius: 4 }}>{BRAND}</span></span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

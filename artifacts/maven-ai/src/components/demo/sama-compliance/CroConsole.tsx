@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronLeft, Bell, AlertTriangle, LogOut, ArrowLeftRight, Sparkles,
+  LogOut, Sparkles,
   Filter, FileText, Inbox, ShieldCheck, CalendarClock, History, MessageSquare,
 } from "lucide-react";
-import Logo from "@/components/Logo";
 import { SamaComplianceDataProvider, useSamaComplianceData } from "@/hooks/useSamaComplianceData";
 import { SamaDemoLangProvider, useSamaDemoLang } from "./DemoLangContext";
 import { shell, kpis, useTrFactory } from "./sama-i18n";
 import { BRAND, BRAND_INK } from "./tokens";
+import DemoTopBar from "../DemoTopBar";
+import { getDemoAccent } from "@workspace/maven-content";
 import { generateAlerts, generateRecommendations, type Severity } from "@/data/sama-compliance-agent";
 import { formatAed, relativeTime } from "@/data/sama-compliance-seed";
 import ObligationsRegisterView from "./views/ObligationsRegisterView";
@@ -57,30 +58,22 @@ function ConsoleInner() {
   const t = useTrFactory(lang);
   const isAr = lang === "ar";
   const data = useSamaComplianceData();
+  const [, setLocation] = useLocation();
 
   const [view, setView] = useState<View>("register");
   const [circularId, setCircularId] = useState<string | undefined>(undefined);
   const [chatOpen, setChatOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [notifRead, setNotifRead] = useState<Record<string, boolean>>({});
 
   const alerts = useMemo(() => generateAlerts(), []);
   const recs = useMemo(() => generateRecommendations(), []);
   const unread = alerts.filter((a) => !notifRead[a.id]).length;
 
-  // Apply RTL at the document level for the duration of this experience
-  useEffect(() => {
-    const prev = document.documentElement.dir;
-    document.documentElement.dir = isAr ? "rtl" : "ltr";
-    return () => { document.documentElement.dir = prev; };
-  }, [isAr]);
-
   const navigateTo = (v: string, id?: string) => {
     if (NAV.some((n) => n.id === v)) {
       setView(v as View);
       if (v === "circular" && id) setCircularId(id);
       setChatOpen(false);
-      setNotifOpen(false);
     }
   };
 
@@ -103,120 +96,42 @@ function ConsoleInner() {
 
   return (
     <div className="h-screen flex flex-col bg-[#F4F6F8] text-[#0E2841]" dir={isAr ? "rtl" : "ltr"}>
-      <header className="flex-shrink-0 h-14 text-white flex items-center px-4 gap-3 z-20" style={{ background: BRAND_INK }}>
-        <Link href="/marketplace/sama-compliance-sentinel" className="flex items-center gap-1 text-xs text-gray-300 hover:text-white">
-          <ChevronLeft size={14} className={isAr ? "rotate-180" : ""} />
-          <span className="hidden md:inline">{t("back", shell)}</span>
-        </Link>
-        <Logo className="h-5 w-auto text-white" />
-        <div className="h-5 w-px bg-white/20" />
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: BRAND }}>{t("brandTag", shell)}</p>
-          <p className="text-xs font-semibold truncate">{t("platformTitle", shell)}</p>
-        </div>
+      <DemoTopBar
+        marketplaceSlug="sama-compliance-sentinel"
+        accent={getDemoAccent("sama-compliance-sentinel")}
+        brandTag={t("brandTag", shell)}
+        platformTitle={t("platformTitle", shell)}
+        backLabel={t("back", shell)}
+        lang={lang}
+        setLang={setLang}
 
-        {/* Notifications */}
-        <div className="relative">
-          <button
-            onClick={() => setNotifOpen((o) => !o)}
-            className="relative p-2 hover:bg-white/10 rounded-lg"
-            aria-label={t("notifications", shell)}
-            data-testid="button-notifications"
-          >
-            <Bell size={16} />
-            {unread > 0 && (
-              <span className="absolute top-1 right-1 min-w-[14px] h-3.5 px-1 rounded-full text-[9px] font-bold flex items-center justify-center animate-pulse" style={{ background: BRAND, color: BRAND_INK }}>
-                {unread}
-              </span>
-            )}
-          </button>
-          <AnimatePresence>
-            {notifOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                className={`absolute ${isAr ? "left-0" : "right-0"} top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden`}
-              >
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: BRAND_INK }}>
-                    <AlertTriangle size={14} style={{ color: BRAND }} /> {t("notifications", shell)}
-                  </h3>
-                  {unread > 0 && (
-                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{unread} {isAr ? "جديد" : "new"}</span>
-                  )}
-                </div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
-                  {alerts.length === 0 && (
-                    <div className="px-4 py-8 text-center text-xs text-gray-400">{t("noAlerts", shell)}</div>
-                  )}
-                  {alerts.map((a) => {
-                    const read = !!notifRead[a.id];
-                    return (
-                      <button
-                        key={a.id}
-                        onClick={() => {
-                          setNotifRead((p) => ({ ...p, [a.id]: true }));
-                          if (a.href) navigateTo(a.href.view, a.href.id);
-                        }}
-                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors ${read ? "bg-white" : "bg-amber-50/40"}`}
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <div className={`mt-1 w-2 h-2 rounded-full ${SEV_DOT[a.severity]}`} />
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-xs ${read ? "font-medium text-gray-700" : "font-bold"}`} style={!read ? { color: BRAND_INK } : undefined}>
-                              {a.title[lang] ?? a.title.en}
-                            </p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">{a.detail[lang] ?? a.detail.en}</p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{relativeTime(a.timestamp, lang)}</p>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  onClick={() => { navigateTo("audit"); }}
-                  className="w-full px-4 py-2.5 text-center text-xs font-bold border-t border-gray-100 hover:bg-amber-50"
-                  style={{ color: BRAND }}
-                >
-                  {t("seeAll", shell)}
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Persona */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: BRAND, color: BRAND_INK }}>{t("croInitials", shell)}</div>
-          <div className="hidden md:block text-xs">
-            <div className="font-semibold leading-tight">{t("croName", shell)}</div>
-            <div className="text-gray-400 text-[10px] leading-tight">{t("croTitle", shell)}</div>
-          </div>
-        </div>
-
-        {/* Lang */}
-        <div className="flex items-center bg-white/10 rounded-full p-0.5">
-          <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${lang === "en" ? "bg-white" : "text-white/60 hover:text-white"}`} style={lang === "en" ? { color: BRAND_INK } : undefined}>EN</button>
-          <button onClick={() => setLang("ar")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${lang === "ar" ? "bg-white" : "text-white/60 hover:text-white"}`} style={lang === "ar" ? { color: BRAND_INK } : undefined}>AR</button>
-        </div>
-
-        {/* Switch to cockpit (technical demo) */}
-        <Link
-          href="/demo/sama-compliance-sentinel"
-          className="flex items-center gap-1 text-xs text-gray-300 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/10"
-          title={t("switchView", shell)}
-        >
-          <ArrowLeftRight size={14} />
-          <span className="hidden md:inline">{t("switchView", shell)}</span>
-        </Link>
-
-        <Link href="/marketplace/sama-compliance-sentinel" className="flex items-center gap-1 text-xs text-gray-300 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/10">
-          <LogOut size={14} />
-          <span className="hidden md:inline">{t("logout", shell)}</span>
-        </Link>
-      </header>
+        persona={{
+          initials: t("croInitials", shell),
+          name: t("croName", shell),
+          title: t("croTitle", shell),
+        }}
+        notifications={{
+          panelTitle: t("notifications", shell),
+          urgentLabel: isAr ? "جديد" : "new",
+          emptyLabel: t("noAlerts", shell),
+          seeAllLabel: t("seeAll", shell),
+          onSeeAll: () => navigateTo("audit"),
+          unreadCount: unread,
+          items: alerts.map((a) => ({
+            id: a.id,
+            severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
+            title: a.title[lang] ?? a.title.en,
+            detail: a.detail[lang] ?? a.detail.en,
+            timestamp: relativeTime(a.timestamp, lang),
+            onClick: () => {
+              setNotifRead((p) => ({ ...p, [a.id]: true }));
+              if (a.href) navigateTo(a.href.view, a.href.id);
+            },
+          })),
+        }}
+        onSwitchView={() => setLocation("/demo/sama-compliance-sentinel")}
+        switchViewLabel={t("switchView", shell)}
+      />
 
       <div className="flex-1 min-h-0 flex">
         {/* Sidebar */}

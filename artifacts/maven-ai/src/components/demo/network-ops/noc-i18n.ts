@@ -8,9 +8,15 @@ export function tDict(dict: I18n, lang: DemoLang) {
 
 export const shell: I18n = {
   en: {
+    brandTag: "Network Ops War Room",
+    platformTitle: "NOC Director Console",
     appName: "NOC Director Console",
     persona: "Reem Al-Dosari",
+    personaInitials: "RA",
     personaTitle: "NOC Director · Sahara Telecom",
+    back: "Back",
+    switchView: "Switch view",
+    seeAllAlerts: "See all alerts →",
     backToMarketplace: "Back",
     aiAssistant: "AI Assistant",
     notifications: "Notifications",
@@ -40,9 +46,15 @@ export const shell: I18n = {
     notifHajjTime: "1 day ago",
   },
   ar: {
+    brandTag: "غرفة عمليات الشبكة",
+    platformTitle: "كونسول مدير NOC",
     appName: "كونسول مدير NOC",
     persona: "ريم الدوسري",
+    personaInitials: "ر",
     personaTitle: "مدير غرفة عمليات الشبكة · صحارى تيليكوم",
+    back: "رجوع",
+    switchView: "تبديل العرض",
+    seeAllAlerts: "كل التنبيهات →",
     backToMarketplace: "رجوع",
     aiAssistant: "المساعد الذكي",
     notifications: "الإشعارات",

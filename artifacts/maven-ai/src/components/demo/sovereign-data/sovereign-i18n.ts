@@ -3,8 +3,10 @@ import type { DemoLang } from "./DemoLangContext";
 export type Dict = Record<string, Record<DemoLang, string>>;
 
 export const shell: Dict = {
+  brandTag: { en: "Sovereign Data Steward", ar: "وصي البيانات السيادي" },
   platformTitle: { en: "CDO Sovereign Console", ar: "قمرة المدير الرقمي السيادية" },
   back: { en: "Back to marketplace", ar: "العودة للسوق" },
+  notifications: { en: "Notifications", ar: "الإشعارات" },
   navCatalogue: { en: "Catalogue", ar: "الكتالوج" },
   navProduct: { en: "Product detail", ar: "تفاصيل المنتج" },
   navApprovals: { en: "Approvals", ar: "الموافقات" },

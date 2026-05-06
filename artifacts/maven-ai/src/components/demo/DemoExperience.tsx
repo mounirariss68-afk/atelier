@@ -5,8 +5,6 @@ import {
   Pause,
   StepForward,
   RotateCcw,
-  ChevronLeft,
-  Globe,
   X,
   Activity,
   Inbox,
@@ -20,7 +18,8 @@ import {
 import { useScenarioEngine } from "@/lib/sim/engine";
 import { useLang, tStr } from "@/lib/lang";
 import type { Scenario } from "@/lib/sim/types";
-import Logo from "@/components/Logo";
+import DemoTopBar from "./DemoTopBar";
+import { getDemoAccent } from "@workspace/maven-content";
 import AgentCockpit from "./AgentCockpit";
 import CheckpointModal from "./CheckpointModal";
 import OverviewTab from "./tabs/OverviewTab";
@@ -77,85 +76,65 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
       dir={dir}
     >
       {/* Top bar */}
-      <header className="flex-shrink-0 bg-[#0E2841] text-white border-b border-black/20">
-        <div className="h-14 px-4 flex items-center gap-4">
-          <Link
-            href={`/marketplace/${scenario.slug}`}
-            className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white"
-          >
-            <ChevronLeft size={14} className="rtl:rotate-180" />
-            {tStr({ en: "Back to detail", ar: "العودة للتفاصيل" }, lang)}
-          </Link>
-          <div className="h-5 w-px bg-white/20" />
-          <Logo className="h-6 w-auto text-white" />
-          <div className="h-5 w-px bg-white/20" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
-              {tStr({ en: "Interactive demo", ar: "عرض تفاعلي" }, lang)}
-            </p>
-            <p className="text-sm font-bold truncate">{tStr(scenario.toolTitle, lang)}</p>
-          </div>
-          <span
-            className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1.5"
-            style={{
-              backgroundColor: statusColor[state.status] + "22",
-              color: statusColor[state.status],
-            }}
-          >
+      <DemoTopBar
+        marketplaceSlug={scenario.slug}
+        accent={getDemoAccent(scenario.slug, scenario.accent ?? "#F5A623")}
+        brandTag={tStr({ en: "Interactive demo", ar: "عرض تفاعلي" }, lang)}
+        platformTitle={tStr(scenario.toolTitle, lang)}
+        backLabel={tStr({ en: "Back to detail", ar: "العودة للتفاصيل" }, lang)}
+        lang={lang === "ar" ? "ar" : "en"}
+        setLang={(l) => setLang(l)}
+
+        persona={{
+          initials: lang === "en" ? "AI" : "ذ",
+          name: tStr({ en: "Scenario engine", ar: "محرّك السيناريو" }, lang),
+          title: tStr({ en: "Demo guide", ar: "دليل العرض" }, lang),
+        }}
+        actionButton={
+          <div className="flex items-center gap-2">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${statusPulses ? "animate-pulse" : ""}`}
-              style={{ background: statusColor[state.status] }}
-            />
-            {tStr(statusLabel[state.status], lang)}
-          </span>
-          <button
-            type="button"
-            onClick={() => setLang(lang === "en" ? "ar" : "en")}
-            className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"
-            title={tStr(
-              {
-                en: lang === "en"
-                  ? "Switch to Arabic (RTL layout)"
-                  : "Switch to English (LTR layout)",
-                ar: lang === "en"
-                  ? "التبديل إلى العربية (تخطيط من اليمين إلى اليسار)"
-                  : "التبديل إلى الإنجليزية (تخطيط من اليسار إلى اليمين)",
-              },
-              lang,
-            )}
-          >
-            <Globe size={14} />
-            {lang === "en" ? "AR" : "EN"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowResetConfirm(true)}
-            className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"
-            title={tStr({ en: "Reset demo", ar: "إعادة العرض" }, lang)}
-          >
-            <RotateCcw size={14} />
-            {tStr({ en: "Reset", ar: "إعادة" }, lang)}
-          </button>
-          <Link
-            href={`/marketplace/${scenario.slug}`}
-            className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"
-            title={tStr({ en: "Exit demo", ar: "إغلاق العرض" }, lang)}
-          >
-            <X size={14} />
-            {tStr({ en: "Exit", ar: "خروج" }, lang)}
-          </Link>
-        </div>
-        {/* Progress bar — blue while running, green at 100% */}
-        <div className="h-0.5 bg-black/30">
-          <div
-            className="h-full transition-all duration-300"
-            style={{
-              width: `${progress}%`,
-              background: progress >= 100 ? "#196B24" : "#156082",
-            }}
-          />
-        </div>
-      </header>
+              className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1.5"
+              style={{
+                backgroundColor: statusColor[state.status] + "22",
+                color: statusColor[state.status],
+              }}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${statusPulses ? "animate-pulse" : ""}`}
+                style={{ background: statusColor[state.status] }}
+              />
+              {tStr(statusLabel[state.status], lang)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowResetConfirm(true)}
+              className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"
+              title={tStr({ en: "Reset demo", ar: "إعادة العرض" }, lang)}
+            >
+              <RotateCcw size={14} />
+              {tStr({ en: "Reset", ar: "إعادة" }, lang)}
+            </button>
+            <Link
+              href={`/marketplace/${scenario.slug}`}
+              className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"
+              title={tStr({ en: "Exit demo", ar: "إغلاق العرض" }, lang)}
+            >
+              <X size={14} />
+              {tStr({ en: "Exit", ar: "خروج" }, lang)}
+            </Link>
+          </div>
+        }
+      />
+      {/* Progress bar — blue while running, green at 100% */}
+      <div className="h-0.5 bg-black/30 flex-shrink-0">
+        <div
+          className="h-full transition-all duration-300"
+          style={{
+            width: `${progress}%`,
+            background: progress >= 100 ? "#196B24" : "#156082",
+          }}
+        />
+      </div>
 
       {/* Main row: left rail + content */}
       <div className="flex-1 min-h-0 flex">

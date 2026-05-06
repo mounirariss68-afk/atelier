@@ -1,18 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard, Target, ClipboardCheck, ListChecks, Sparkles,
-  ScrollText, Bot, Bell, ChevronLeft, ChevronRight, Filter, AlertTriangle,
-  ArrowLeftRight, LogOut,
+  ScrollText, Bot, ChevronLeft, ChevronRight, Filter, LogOut,
 } from "lucide-react";
-import Logo from "@/components/Logo";
 import { ValueRealizationDataProvider } from "@/hooks/useValueRealizationData";
 import { DemoLangProvider, useDemoLang, tBi } from "./DemoLangContext";
 import { shell, t as tr } from "./value-realization-i18n";
 import { generateAlerts, generateRecommendations } from "@/data/value-realization-agent";
 import { PERSONA, BUSINESS_UNITS } from "@/data/value-realization-seed";
-import { BRAND, NAVY, CANVAS, SEMANTIC } from "./tokens";
+import { BRAND, NAVY, CANVAS } from "./tokens";
+import DemoTopBar from "../DemoTopBar";
 import PortfolioView from "./views/PortfolioView";
 import InitiativeDetailView from "./views/InitiativeDetailView";
 import ApprovalsView from "./views/ApprovalsView";
@@ -60,29 +59,10 @@ function CockpitShell({ marketplaceSlug, onSwitchView }: BenefitsCockpitProps) {
   const [filterBu, setFilterBu] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [notifOpen, setNotifOpen] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
 
   const alerts = generateAlerts();
   const pendingRecs = generateRecommendations().filter((r) => r.status === "pending").length;
   const urgentAlerts = alerts.filter((a) => a.severity === "critical" || a.severity === "high").length;
-
-  useEffect(() => {
-    document.documentElement.setAttribute("dir", dir);
-    document.documentElement.setAttribute("lang", lang);
-    return () => {
-      document.documentElement.removeAttribute("dir");
-      document.documentElement.removeAttribute("lang");
-    };
-  }, [dir, lang]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   const goInitiative = (id: string) => {
     setPickedInitiative(id);
@@ -91,118 +71,51 @@ function CockpitShell({ marketplaceSlug, onSwitchView }: BenefitsCockpitProps) {
 
   return (
     <div dir={dir} className="h-screen flex flex-col" style={{ background: CANVAS, color: NAVY }} data-testid="benefits-cockpit">
-      {/* Top bar */}
-      <header className="flex-shrink-0 h-14 text-white flex items-center px-4 gap-3 z-20" style={{ background: NAVY }}>
-        <Link href={`/marketplace/${marketplaceSlug}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white" data-testid="link-back-marketplace">
-          <ChevronLeft size={14} /> {tr(shell, "back", lang)}
-        </Link>
-        <Logo className="h-5 w-auto text-white" />
-        <div className="h-5 w-px bg-white/20" />
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: BRAND }}>{tr(shell, "brandTag", lang)}</p>
-          <p className="text-xs font-semibold truncate">{tr(shell, "platformTitle", lang)}</p>
-        </div>
+      <DemoTopBar
+        marketplaceSlug={marketplaceSlug}
+        accent={BRAND}
+        brandTag={tr(shell, "brandTag", lang)}
+        platformTitle={tr(shell, "platformTitle", lang)}
+        backLabel={tr(shell, "back", lang)}
+        lang={lang}
+        setLang={setLang}
 
-        {/* Approvals shortcut */}
-        <button
-          onClick={() => setView("approvals")}
-          className="text-[11px] font-semibold px-2.5 py-1 rounded-full text-white"
-          style={{ background: BRAND }}
-          data-testid="button-pending-approvals"
-        >
-          {pendingRecs} {tr(shell, "pendingApprovals", lang)}
-        </button>
-
-        {/* Notifications */}
-        <div className="relative" ref={notifRef}>
+        persona={{
+          initials: PERSONA.initials,
+          name: tBi(PERSONA.name, lang),
+          title: tBi(PERSONA.title, lang),
+        }}
+        actionButton={
           <button
-            onClick={() => setNotifOpen((v) => !v)}
-            className="relative p-2 hover:bg-white/10 rounded-lg"
-            aria-label={tr(shell, "notifications", lang)}
-            data-testid="button-notifications"
+            onClick={() => setView("approvals")}
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-full text-white"
+            style={{ background: BRAND }}
+            data-testid="button-pending-approvals"
           >
-            <Bell size={16} />
-            {urgentAlerts > 0 && (
-              <span className="absolute top-1 right-1 min-w-[14px] h-3.5 px-1 rounded-full text-[9px] font-bold flex items-center justify-center text-white" style={{ background: SEMANTIC.critical }}>
-                {urgentAlerts}
-              </span>
-            )}
+            {pendingRecs} {tr(shell, "pendingApprovals", lang)}
           </button>
-          <AnimatePresence>
-            {notifOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -4, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                className={`absolute ${lang === "ar" ? "left-0" : "right-0"} top-12 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden`}
-                data-testid="panel-notifications"
-              >
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold flex items-center gap-1.5" style={{ color: NAVY }}>
-                    <AlertTriangle size={14} style={{ color: SEMANTIC.critical }} /> {tr(shell, "notifications", lang)}
-                  </h3>
-                  <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                    {urgentAlerts} {tr(shell, "urgent", lang)}
-                  </span>
-                </div>
-                <ul className="max-h-80 overflow-y-auto">
-                  {alerts.map((a) => (
-                    <li key={a.id}>
-                      <button
-                        onClick={() => {
-                          setNotifOpen(false);
-                          if (a.navTarget === "initiative" && a.initiativeId) goInitiative(a.initiativeId);
-                          else if (a.navTarget === "approvals") setView("approvals");
-                          else if (a.navTarget === "chase") setView("chase");
-                          else if (a.navTarget === "audit") setView("audit");
-                          else setView("portfolio");
-                        }}
-                        className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-50 flex items-start gap-2"
-                        data-testid={`notif-${a.id}`}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0"
-                          style={{ background: a.severity === "critical" ? SEMANTIC.critical : a.severity === "high" ? SEMANTIC.attention : "#9CA3AF" }}
-                        />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold" style={{ color: NAVY }}>{tBi(a.title, lang)}</p>
-                          <p className="text-[11px] text-gray-600 mt-0.5">{tBi(a.detail, lang)}</p>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Lang toggle */}
-        <button
-          onClick={() => setLang(lang === "en" ? "ar" : "en")}
-          className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-white/20 hover:bg-white/10"
-          data-testid="button-lang-toggle"
-        >
-          {lang === "en" ? "AR" : "EN"}
-        </button>
-
-        {onSwitchView && (
-          <button onClick={onSwitchView} className="p-2 hover:bg-white/10 rounded-lg" aria-label={tr(shell, "switchView", lang)} data-testid="button-switch-view">
-            <ArrowLeftRight size={14} />
-          </button>
-        )}
-
-        {/* Persona */}
-        <div className="flex items-center gap-2 pl-2 border-l border-white/20">
-          <div className="w-7 h-7 rounded-full text-[10px] font-bold flex items-center justify-center" style={{ background: BRAND }}>
-            {PERSONA.initials}
-          </div>
-          <div className="hidden md:block leading-tight">
-            <p className="text-[11px] font-semibold">{tBi(PERSONA.name, lang)}</p>
-            <p className="text-[9px] text-gray-300">{tBi(PERSONA.title, lang)}</p>
-          </div>
-        </div>
-      </header>
+        }
+        notifications={{
+          panelTitle: tr(shell, "notifications", lang),
+          urgentLabel: tr(shell, "urgent", lang),
+          unreadCount: urgentAlerts,
+          items: alerts.map((a) => ({
+            id: a.id,
+            severity: a.severity,
+            title: tBi(a.title, lang),
+            detail: tBi(a.detail, lang),
+            onClick: () => {
+              if (a.navTarget === "initiative" && a.initiativeId) goInitiative(a.initiativeId);
+              else if (a.navTarget === "approvals") setView("approvals");
+              else if (a.navTarget === "chase") setView("chase");
+              else if (a.navTarget === "audit") setView("audit");
+              else setView("portfolio");
+            },
+          })),
+        }}
+        onSwitchView={onSwitchView}
+        switchViewLabel={tr(shell, "switchView", lang)}
+      />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}

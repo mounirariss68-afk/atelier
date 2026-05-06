@@ -1,14 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Headphones, Inbox, ShieldCheck, Activity, BookOpen, ListTree, ArrowLeft, Bell, LogOut,
-  Sparkles, Globe2, ChevronDown, MessageSquare, ChevronRight,
+  Headphones, Inbox, ShieldCheck, Activity, BookOpen, ListTree, ArrowLeft, LogOut,
+  Sparkles, MessageSquare, ChevronRight,
 } from "lucide-react";
 import { useCareLang, CareLangProvider } from "./DemoLangContext";
 import { CareToastProvider } from "./ToastContext";
 import { shell, tDict } from "./care-i18n";
 import { BRAND, BRAND_DARK } from "./tokens";
+import DemoTopBar from "../DemoTopBar";
+import { getDemoAccent } from "@workspace/maven-content";
 import { AiChat } from "./AiChat";
 import DeskView from "./views/DeskView";
 import MyQueueView from "./views/MyQueueView";
@@ -33,16 +35,11 @@ const NAV: { id: CareViewId; icon: typeof Headphones; key: "navDesk" | "navQueue
 function Inner() {
   const { lang, setLang } = useCareLang();
   const t = tDict(shell, lang);
+  const [, setLocation] = useLocation();
   const [view, setView] = useState<CareViewId>("desk");
   const [chatOpen, setChatOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const data = useCustomerCareData();
   const kpis = useMemo(() => getDeskKpis(lang), [lang]);
-
-  useEffect(() => {
-    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
-    return () => { document.documentElement.dir = "ltr"; };
-  }, [lang]);
 
   const renderView = () => {
     switch (view) {
@@ -100,61 +97,39 @@ function Inner() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold" style={{ background: BRAND_DARK }}>
-              {lang === "en" ? "AB" : "ع"}
-            </div>
-            <div>
-              <p className="text-sm font-bold leading-tight">{t.personaName}</p>
-              <p className="text-[11px] text-gray-500">{t.personaRole}</p>
-            </div>
-          </div>
+        <DemoTopBar
+          marketplaceSlug="customer-care-hive"
+          accent={getDemoAccent("customer-care-hive")}
+          brandTag={t.brandTag}
+          platformTitle={t.brandTitle}
+          backLabel={lang === "en" ? "Back" : "رجوع"}
+          lang={lang}
+          setLang={setLang}
 
-          <div className="ms-auto flex items-center gap-2">
-            <button onClick={() => setLang(lang === "en" ? "ar" : "en")} className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50">
-              <Globe2 size={12} /> {lang === "en" ? "AR" : "EN"} <ChevronDown size={10} />
-            </button>
-            <div className="relative">
-              <button onClick={() => setNotifOpen((o) => !o)} className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-600">
-                <Bell size={15} />
-                {data.notifications.length > 0 && (
-                  <span className="absolute top-1 end-1 w-2 h-2 bg-red-500 rounded-full" />
-                )}
-              </button>
-              <AnimatePresence>
-                {notifOpen && (
-                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute end-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-                      <h3 className="text-xs font-bold">{t.notifications}</h3>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto">
-                      {data.notifications.length === 0 ? (
-                        <p className="text-xs text-gray-400 px-4 py-6 text-center">{t.notifEmpty}</p>
-                      ) : (
-                        data.notifications.map((n) => (
-                          <div key={n.id} className="px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50">
-                            <div className="flex items-start gap-2">
-                              <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${n.severity === "critical" ? "bg-red-500" : n.severity === "high" ? "bg-amber-500" : n.severity === "medium" ? "bg-blue-500" : "bg-gray-300"}`} />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs text-gray-700">{lang === "en" ? n.textEn : n.textAr}</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{n.time}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            <button onClick={() => setChatOpen((o) => !o)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-white px-3 py-1.5 rounded-lg" style={{ background: BRAND }}>
+          persona={{
+            initials: lang === "en" ? "AB" : "ع",
+            name: t.personaName,
+            title: t.personaRole,
+          }}
+          actionButton={
+            <button onClick={() => setChatOpen((o) => !o)} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white px-3 py-1.5 rounded-lg" style={{ background: BRAND }}>
               <Sparkles size={12} /> {t.aiAssistant}
             </button>
-          </div>
-        </header>
+          }
+          notifications={{
+            panelTitle: t.notifications,
+            emptyLabel: t.notifEmpty,
+            unreadCount: data.notifications.length,
+            items: data.notifications.map((n) => ({
+              id: n.id,
+              severity: n.severity as "critical" | "high" | "medium" | "low" | "info",
+              title: lang === "en" ? n.textEn : n.textAr,
+              timestamp: n.time,
+            })),
+          }}
+          onSwitchView={() => setLocation("/demo/customer-care-hive")}
+          switchViewLabel={t.switchView}
+        />
 
         {/* KPI strip */}
         <div className="bg-white border-b border-gray-200 px-5 py-3 overflow-x-auto">

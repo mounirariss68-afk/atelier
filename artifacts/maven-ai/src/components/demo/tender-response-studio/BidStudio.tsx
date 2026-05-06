@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, FileText, Inbox, ShieldCheck, BookOpen, History,
-  Sparkles, Bell, ChevronLeft, ChevronRight, ArrowLeft, ArrowLeftRight,
-  AlertTriangle, X, Filter, LogOut,
+  Sparkles, ChevronLeft, ChevronRight,
+  X, Filter,
 } from "lucide-react";
 import { useTenderResponseData, TenderResponseDataProvider } from "@/hooks/useTenderResponseData";
 import { useTenderDemoLang, useTenderDemoT, TenderDemoLangProvider } from "./DemoLangContext";
 import { shell } from "./tender-i18n";
-import { BRAND, BRAND_DARK, BRAND_MUTED, NAVY, CANVAS, SEM } from "./tokens";
+import { BRAND, BRAND_DARK, BRAND_MUTED, NAVY, CANVAS } from "./tokens";
+import DemoTopBar from "../DemoTopBar";
+import { getDemoAccent } from "@workspace/maven-content";
 import { generateAlerts } from "@/data/tender-response-agent";
 import PipelineView from "./views/PipelineView";
 import TenderWorkspaceView from "./views/TenderWorkspaceView";
@@ -45,41 +47,16 @@ function ShellInner() {
   const t = useTenderDemoT();
   const isAr = lang === "ar";
   const { tenders } = useTenderResponseData();
+  const [, setLocation] = useLocation();
 
   const [view, setView] = useState<ViewKey>("pipeline");
   const [collapsed, setCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [fabHover, setFabHover] = useState(false);
   const [stage, setStage] = useState<string>("all");
-  const notifRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const prevDir = document.documentElement.dir;
-    const prevLang = document.documentElement.lang;
-    document.documentElement.dir = isAr ? "rtl" : "ltr";
-    document.documentElement.lang = isAr ? "ar" : "en";
-    return () => {
-      document.documentElement.dir = prevDir || "ltr";
-      document.documentElement.lang = prevLang || "en";
-    };
-  }, [isAr]);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (notifOpen && notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [notifOpen]);
 
   const alerts = useMemo(() => generateAlerts(), []);
   const critCount = alerts.filter((a) => a.severity === "critical").length;
-
-  const handleNavFromAlert = (v: string) => {
-    setNotifOpen(false);
-    setView(v as ViewKey);
-  };
 
   return (
     <div dir={isAr ? "rtl" : "ltr"} className="min-h-screen flex" style={{ background: CANVAS }}>
@@ -156,109 +133,37 @@ function ShellInner() {
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col relative">
-        {/* Header */}
-        <header className="h-14 flex items-center px-5 gap-3 sticky top-0 z-20 text-white" style={{ background: NAVY }}>
-          <Link href="/marketplace/tender-response-studio" className="text-gray-300 hover:text-white flex items-center gap-1.5 text-[11px] font-medium">
-            <ArrowLeft size={13} className={isAr ? "rotate-180" : ""} />
-            {t("back", shell)}
-          </Link>
-          <div className="h-5 w-px bg-white/20" />
-          <div className="min-w-0">
-            <p className="text-[8px] font-bold uppercase tracking-widest" style={{ color: BRAND }}>{t("brandTag", shell)}</p>
-            <p className="text-[11px] font-extrabold leading-tight truncate">{t("platformTitle", shell)}</p>
-          </div>
-          <div className="flex-1" />
+        <DemoTopBar
+          marketplaceSlug="tender-response-studio"
+          accent={getDemoAccent("tender-response-studio")}
+          brandTag={t("brandTag", shell)}
+          platformTitle={t("platformTitle", shell)}
+          backLabel={t("back", shell)}
+          lang={lang}
+          setLang={setLang}
 
-          {/* Notifications */}
-          <div ref={notifRef} className="relative">
-            <button
-              onClick={() => setNotifOpen(!notifOpen)}
-              className="relative w-9 h-9 rounded-lg hover:bg-white/10 flex items-center justify-center"
-              aria-label="notifications"
-            >
-              <Bell size={15} />
-              {critCount > 0 && (
-                <span className="absolute top-1 end-1 min-w-[14px] h-3.5 px-1 rounded-full text-[8px] font-extrabold flex items-center justify-center text-white" style={{ background: SEM.bad }}>
-                  {critCount}
-                </span>
-              )}
-            </button>
-            <AnimatePresence>
-              {notifOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  className={`absolute top-12 ${isAr ? "left-0" : "right-0"} w-[380px] bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50 text-gray-900`}
-                >
-                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-bold">{t("agentAlerts", shell)}</p>
-                      <p className="text-[11px] text-gray-500">{critCount} {t("urgent", shell)}</p>
-                    </div>
-                    <button onClick={() => setNotifOpen(false)} className="p-1 text-gray-400 hover:text-gray-600"><X size={14} /></button>
-                  </div>
-                  <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-50">
-                    {alerts.map((a) => (
-                      <button
-                        key={a.id}
-                        onClick={() => handleNavFromAlert(a.view)}
-                        className="block w-full text-start px-4 py-3 hover:bg-gray-50"
-                      >
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" style={{ color: a.severity === "critical" ? SEM.bad : a.severity === "high" ? SEM.warn : SEM.info }} />
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold">{a.title[lang]}</p>
-                            <p className="text-[11px] text-gray-500 mt-0.5">{a.detail[lang]}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  <button onClick={() => { setNotifOpen(false); setView("approvals"); }} className="w-full px-4 py-2.5 text-[11px] font-bold border-t border-gray-100 hover:bg-gray-50" style={{ color: BRAND }}>
-                    {t("seeAllAlerts", shell)}
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Lang */}
-          <button
-            onClick={() => setLang(lang === "en" ? "ar" : "en")}
-            className="text-[10px] font-bold px-2.5 py-1 rounded-md hover:bg-white/10"
-            style={{ background: "rgba(255,255,255,0.08)" }}
-          >
-            {lang === "en" ? "العربية" : "English"}
-          </button>
-
-          {/* Switch view */}
-          <Link
-            href="/demo/tender-response-studio/teknik"
-            className="text-[10px] font-bold px-2.5 py-1 rounded-md hover:bg-white/10 inline-flex items-center gap-1"
-            style={{ background: "rgba(255,255,255,0.08)" }}
-            title={t("switchToCockpit", shell)}
-          >
-            <ArrowLeftRight size={11} />
-            <span className="hidden md:inline">{t("switchView", shell)}</span>
-          </Link>
-
-          {/* Persona */}
-          <div className={`flex items-center gap-2 ps-3 ${isAr ? "border-r" : "border-l"} border-white/15`}>
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-extrabold" style={{ background: BRAND }}>
-              {t("managerInitials", shell)}
-            </div>
-            <div className="hidden md:block min-w-0">
-              <p className="text-[10px] font-bold leading-tight truncate">{t("managerName", shell)}</p>
-              <p className="text-[8px] text-gray-300 truncate">{t("managerTitle", shell)}</p>
-            </div>
-          </div>
-
-          <Link href="/marketplace/tender-response-studio" className="hidden md:flex items-center gap-1 text-[10px] text-gray-300 hover:text-white">
-            <LogOut size={12} /> {t("logout", shell)}
-          </Link>
-        </header>
+          persona={{
+            initials: t("managerInitials", shell),
+            name: t("managerName", shell),
+            title: t("managerTitle", shell),
+          }}
+          notifications={{
+            panelTitle: t("agentAlerts", shell),
+            urgentLabel: t("urgent", shell),
+            unreadCount: critCount,
+            seeAllLabel: t("seeAllAlerts", shell),
+            onSeeAll: () => setView("approvals"),
+            items: alerts.map((a) => ({
+              id: a.id,
+              severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
+              title: a.title[lang],
+              detail: a.detail[lang],
+              onClick: () => setView(a.view as ViewKey),
+            })),
+          }}
+          onSwitchView={() => setLocation("/demo/tender-response-studio/teknik")}
+          switchViewLabel={t("switchToCockpit", shell)}
+        />
 
         {/* Sticky filter bar */}
         <div className="sticky top-14 z-10 bg-white/90 backdrop-blur border-b border-gray-100 px-5 py-2 flex items-center gap-3 flex-wrap">

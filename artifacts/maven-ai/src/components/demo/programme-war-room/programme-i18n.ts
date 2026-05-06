@@ -3,8 +3,10 @@ import type { DemoLang } from "./DemoLangContext";
 export type Dict = Record<string, Record<DemoLang, string>>;
 
 export const shell: Dict = {
+  brandTag: { en: "Programme War Room", ar: "غرفة عمليات البرامج" },
   platformTitle: { en: "EPMO Command Console", ar: "قمرة قيادة المكتب التنفيذي" },
   back: { en: "Back to marketplace", ar: "العودة للسوق" },
+  notifications: { en: "Notifications", ar: "الإشعارات" },
   navPortfolio: { en: "Portfolio", ar: "محفظة البرامج" },
   navProgramme: { en: "Programme detail", ar: "تفاصيل البرنامج" },
   navApprovals: { en: "Approvals", ar: "الموافقات" },

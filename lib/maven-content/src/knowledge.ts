@@ -1842,6 +1842,18 @@ export const marketplaceTools: MarketplaceToolEntry[] = marketplaceToolsBase.map
   },
 );
 
+/**
+ * Look up the marketplace card accent for a given tool slug.
+ *
+ * Demo headers and the accents that flow through their tokens.ts read from
+ * this single source of truth so the colour shown on the marketplace card
+ * carries through into the launched demo.
+ */
+export function getDemoAccent(slug: string, fallback = "#156082"): string {
+  const tool = marketplaceTools.find((t) => t.slug === slug);
+  return tool?.accent ?? fallback;
+}
+
 export const firmFacts = {
   positioning:
     "Maven AI is a boutique GCC AI advisory and engineering firm — sister firm to Maven Insights (~200 consultant bench). We exist to close the gap between enterprise AI ambition and production outcomes.",

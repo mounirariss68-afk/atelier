@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   MessageSquare, Library, ClipboardCheck, FileText, Settings2,
-  ChevronLeft, ChevronRight, Languages, ArrowLeft, Bell, Sparkles, X,
+  ChevronLeft, ChevronRight, Languages, ArrowLeft, Sparkles,
 } from "lucide-react";
 import { EkcDemoLangProvider, useEkcLang, useEkcT } from "./DemoLangContext";
 import { EkcDataProvider, useEkcData } from "@/hooks/useEnterpriseKnowledgeData";
 import { shell } from "./knowledge-i18n";
 import { BRAND, BRAND_INK } from "./tokens";
+import DemoTopBar from "../DemoTopBar";
+import { getDemoAccent } from "@workspace/maven-content";
 import ChatView from "./views/ChatView";
 import SourceLibraryView from "./views/SourceLibraryView";
 import ApprovalsView from "./views/ApprovalsView";
@@ -22,17 +24,12 @@ function ConsoleInner() {
   const { lang, setLang } = useEkcLang();
   const t = useEkcT();
   const isAr = lang === "ar";
+  const [, setLocation] = useLocation();
   const { recommendations, personas, personaId } = useEkcData();
   const currentPersona = personas.find((p) => p.id === personaId)!;
 
   const [view, setView] = useState<View>("chat");
   const [collapsed, setCollapsed] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-
-  useEffect(() => {
-    document.documentElement.dir = isAr ? "rtl" : "ltr";
-    return () => { document.documentElement.dir = "ltr"; };
-  }, [isAr]);
 
   const alerts = generateAlerts();
   const pendingCount = recommendations.filter((r) => r.status === "pending").length;
@@ -102,31 +99,36 @@ function ConsoleInner() {
 
       {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Topbar */}
-        <header className="h-14 border-b border-gray-200 bg-white flex items-center px-4 gap-3 flex-shrink-0">
-          <Link href={`/demo/enterprise-knowledge-concierge`} className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1">
-            <Sparkles size={12} /> {t("switchView", shell)}
-          </Link>
-          <div className="ms-auto flex items-center gap-2">
-            <button onClick={() => setNotifOpen((v) => !v)} className="relative w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-600">
-              <Bell size={16} />
-              {pendingCount > 0 && (
-                <span className="absolute -top-0.5 -end-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-            <div className="flex items-center gap-2 ps-2 border-s border-gray-200">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold" style={{ background: BRAND }}>
-                {currentPersona.initials[lang]}
-              </div>
-              <div className="hidden md:block">
-                <p className="text-[12px] font-bold leading-tight" style={{ color: BRAND_INK }}>{currentPersona.name[lang]}</p>
-                <p className="text-[10px] text-gray-500">{currentPersona.role[lang]}</p>
-              </div>
-            </div>
-          </div>
-        </header>
+        <DemoTopBar
+          marketplaceSlug="enterprise-knowledge-concierge"
+          accent={getDemoAccent("enterprise-knowledge-concierge")}
+          brandTag={t("brandTag", shell)}
+          platformTitle={t("platformTitle", shell)}
+          backLabel={t("back", shell)}
+          lang={lang}
+          setLang={setLang}
+
+          persona={{
+            initials: currentPersona.initials[lang],
+            name: currentPersona.name[lang],
+            title: currentPersona.role[lang],
+          }}
+          notifications={{
+            panelTitle: t("agentAlerts", shell),
+            seeAllLabel: t("seeAllAlerts", shell),
+            onSeeAll: () => setView("approvals"),
+            unreadCount: pendingCount,
+            items: alerts.map((a) => ({
+              id: a.id,
+              severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
+              title: a.title[lang],
+              detail: a.detail[lang],
+              onClick: () => setView("approvals"),
+            })),
+          }}
+          onSwitchView={() => setLocation("/demo/enterprise-knowledge-concierge")}
+          switchViewLabel={t("switchView", shell)}
+        />
 
         {/* View body */}
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -138,44 +140,6 @@ function ConsoleInner() {
         </div>
       </main>
 
-      {/* Notification panel */}
-      <AnimatePresence>
-        {notifOpen && (
-          <motion.div
-            initial={{ x: isAr ? -320 : 320 }}
-            animate={{ x: 0 }}
-            exit={{ x: isAr ? -320 : 320 }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            dir={isAr ? "rtl" : "ltr"}
-            className={`fixed top-0 bottom-0 w-80 bg-white shadow-2xl border-gray-200 z-40 flex flex-col ${isAr ? "left-0 border-r" : "right-0 border-l"}`}
-          >
-            <div className="h-14 px-4 border-b border-gray-100 flex items-center gap-2 flex-shrink-0">
-              <Bell size={14} style={{ color: BRAND }} />
-              <p className="text-sm font-bold flex-1" style={{ color: BRAND_INK }}>{t("agentAlerts", shell)}</p>
-              <button onClick={() => setNotifOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {alerts.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => { setView("approvals"); setNotifOpen(false); }}
-                  className="w-full text-start bg-gray-50 hover:bg-white border border-gray-200 hover:border-[#5C8CA8] rounded-xl p-3 transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`w-2 h-2 rounded-full ${a.severity === "critical" ? "bg-red-500" : a.severity === "high" ? "bg-amber-500" : "bg-blue-500"}`} />
-                    <span className="text-[10px] font-semibold uppercase text-gray-500">{a.severity}</span>
-                  </div>
-                  <p className="text-[12px] font-bold" style={{ color: BRAND_INK }}>{a.title[lang]}</p>
-                  <p className="text-[11px] text-gray-600 mt-0.5">{a.detail[lang]}</p>
-                </button>
-              ))}
-              <button onClick={() => { setView("approvals"); setNotifOpen(false); }} className="w-full text-[12px] font-semibold py-2 mt-2" style={{ color: BRAND }}>
-                {t("seeAllAlerts", shell)}
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

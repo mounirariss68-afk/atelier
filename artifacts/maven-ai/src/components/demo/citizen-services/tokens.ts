@@ -1,5 +1,7 @@
 // Brand tokens for the Citizen Services Concierge officer console.
-export const BRAND = "#5BA98A";
+import { getDemoAccent } from "@workspace/maven-content";
+
+export const BRAND = getDemoAccent("citizen-services-concierge", "#5BA98A");
 export const BRAND_INK = "#1F4F3F";
 export const BRAND_MUTED = "#E8F2EC";
 export const NAVY = "#0E2841";

@@ -1,6 +1,6 @@
-import knowledgeScenario from "@/lib/sim/scenarios/enterprise-knowledge-concierge";
+import { getDemoAccent } from "@workspace/maven-content";
 
-export const BRAND = knowledgeScenario.accent ?? "#5C8CA8";
+export const BRAND = getDemoAccent("enterprise-knowledge-concierge", "#156082");
 export const BRAND_INK = "#0E2841";
 export const BRAND_MUTED = "#7FA3B8";
 export const BRAND_DEEP = "#156082";

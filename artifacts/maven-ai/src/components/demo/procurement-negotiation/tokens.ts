@@ -1,4 +1,6 @@
-export const BRAND = "#D9534F";
+import { getDemoAccent } from "@workspace/maven-content";
+
+export const BRAND = getDemoAccent("procurement-negotiation-agent", "#D9534F");
 export const BRAND_DARK = "#A53C39";
 export const BRAND_MUTED = "#FCEAE9";
 export const BRAND_INK = "#0E2841";

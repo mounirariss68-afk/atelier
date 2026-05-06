@@ -3,9 +3,14 @@ import type { DemoLang } from "./DemoLangContext";
 export type Dict = Record<string, Record<DemoLang, string>>;
 
 export const shell: Dict = {
+  brandTag: { en: "Enterprise Knowledge", ar: "معرفة المؤسسة" },
   platformTitle: { en: "Knowledge Concierge", ar: "كونسيرج المعرفة" },
   platformSub: { en: "v1 · chat", ar: "الإصدار 1 · دردشة" },
   back: { en: "Back to marketplace", ar: "العودة للسوق" },
+  notifications: { en: "Notifications", ar: "الإشعارات" },
+  personaInitials: { en: "MK", ar: "م ك" },
+  personaName: { en: "Munira Khalid", ar: "منيرة خالد" },
+  personaTitle: { en: "Knowledge Concierge", ar: "كونسيرج المعرفة" },
   navChat: { en: "Chat", ar: "الدردشة" },
   navSources: { en: "Source library", ar: "مكتبة المصادر" },
   navApprovals: { en: "Approvals", ar: "الموافقات" },
