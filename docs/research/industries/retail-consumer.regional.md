@@ -134,6 +134,7 @@ Target: Namshi, Ounass (Al Tayer Group, UAE/KSA), LC Waikiki KSA. Offering: gene
 
 ---
 
+<<<<<<< HEAD
 ---
 
 ## 6. Regional case studies / lighthouse projects
@@ -305,3 +306,57 @@ _The brief requires ≥4–6 named MENAT lighthouse cases in total. Two are embe
 [^33]: United Nations Conference on Trade and Development (UNCTAD), "Red Sea Shipping Disruption — Impact on MENAT Trade Flows", UNCTAD, 2024–2025, https://unctad.org — _unsourced — verify or replace with specific confirmed UNCTAD or IMO report on Red Sea / Houthi disruption_
 
 [^34]: Saudi Arabia Public Investment Fund (PIF), "PIF Portfolio — Retail and Consumer Sector Investments", PIF, 2024–2025, https://www.pif.gov.sa — verify Almarai and other retail holdings for state-linkage accuracy
+=======
+## 6. Regional case studies / lighthouse projects
+
+### 6.1 Carrefour MAF — UAE/GCC — Hopla Arabic Extension
+
+**Player:** Majid Al Futtaim / Carrefour MAF
+**Country:** UAE (with GCC rollout)
+**Program:** Hopla Arabic (extension of Carrefour France's Hopla programme)
+**What they built:** Carrefour MAF extended the Hopla GenAI shopping assistant — originally built on OpenAI GPT-4 via Azure OpenAI Service — to include Arabic-language support with local GCC assortment grounding. The regional implementation required fine-tuning the retrieval layer on a Gulf Arabic product taxonomy and adapting the recipe-to-basket conversion workflow for regional cuisine categories (Arabic breakfast staples, Ramadan pantry items, Halal-certified substitutions). The architecture is RAG-based, grounding responses against Carrefour MAF's live product catalogue and promotional feed, with a brand-voice filter layer adapted for Arabic register. _Architecture details partially unverified — Arabic grounding approach inferred from Carrefour global press and regional trade coverage._
+**Reported outcome:** Increased basket size for Hopla-assisted sessions reported by Carrefour globally; UAE-specific figures _outcome figure unverified_.
+**Source:** Carrefour press release, 2024[^17]; Gulf News coverage of Carrefour MAF digital programmes, 2024–2025.[^4]
+
+---
+
+### 6.2 Trendyol — Türkiye — Multi-Model Personalisation and Logistics AI
+
+**Player:** Trendyol (Alibaba-backed, Türkiye)
+**Country:** Türkiye
+**Program:** Trendyol AI Platform (internal; no single public brand name confirmed)
+**What they built:** Trendyol has deployed a multi-layer AI stack across its marketplace: (1) a real-time personalisation engine using collaborative filtering and transformer-based ranking models that re-rank search results and home-page modules at session level for 30+ million active buyers; (2) an ML-native last-mile logistics optimisation system that routes deliveries across its Trendyol GO courier network using real-time traffic, weather, and demand density signals; (3) a generative product-description and title-optimisation tool for sellers, reducing listing setup time. The personalisation engine runs on Trendyol's own cloud infrastructure with GPU capacity sourced from domestic Turkish providers and AWS Frankfurt. _Architecture details partially unverified — inferred from Trendyol engineering blog posts and trade press._
+**Reported outcome:** Trendyol has publicly credited AI-driven personalisation with material improvements in conversion rate; specific figures _outcome figure unverified_.
+**Source:** Trendyol Engineering Blog (trendyol.com/engineering), 2024–2025; coverage in Wamda and MENAbytes on GCC expansion, 2025.[^10]
+
+---
+
+### 6.3 Almarai — KSA — ML-Driven Demand Forecasting and Distribution Optimisation
+
+**Player:** Almarai Company (Tadawul-listed)
+**Country:** Saudi Arabia
+**Program:** Almarai Supply Chain AI (internal programme; exact brand name _unsourced — verify or replace_)
+**What they built:** Almarai — which operates one of the largest direct-distribution networks in the Arab world, delivering chilled dairy and bakery products daily to 130,000+ retail outlets across the GCC — deployed ML-based demand forecasting models that ingest POS data from retail partners, temperature and weather signals, and Ramadan/public-holiday demand patterns to generate daily distribution plans. The forecasting layer uses gradient-boosted tree models (architecture details partially unverified) feeding a route-optimisation engine that sequences delivery stops across Almarai's owned fleet of refrigerated vehicles. The system replaced a largely manual planning process and reduced the forecast-to-dispatch cycle time.
+**Reported outcome:** Almarai has referenced digital transformation and supply-chain efficiency in annual reports 2024–2025; specific AI-attributable figures _outcome figure unverified_.
+**Source:** Almarai Annual Report 2024 (almarai.com); Arab News coverage of Almarai digital transformation, 2024.[^6]
+
+---
+
+### 6.4 Hepsiburada — Türkiye — AI-Native Dynamic Pricing and GenAI Product Listings
+
+**Player:** Hepsiburada (Nasdaq: HEPS)
+**Country:** Türkiye
+**Program:** HepsiAI (publicly referenced brand for AI capability suite)
+**What they built:** Hepsiburada has deployed two confirmed production AI capabilities: (1) a dynamic pricing engine that adjusts prices for competitive electronics and home-goods categories at sub-hourly intervals using competitor-price scraping, demand-elasticity models, and inventory-level signals — operating with hardcoded floor-ceiling envelopes to prevent runaway pricing (directly analogous to the guardrail best practice identified in §5 of the global dossier); (2) a GenAI product-listing assistant that generates optimised Turkish-language product titles and descriptions for marketplace sellers, using fine-tuned LLM prompts grounded on Hepsiburada's category taxonomy. The pricing engine runs on AWS with real-time data pipelines; the GenAI listing tool is built on Azure OpenAI Service. _Architecture details partially unverified._
+**Reported outcome:** Hepsiburada referenced AI-driven operational efficiency in its Nasdaq investor communications 2024–2025; margin contribution from dynamic pricing _outcome figure unverified_.
+**Source:** Hepsiburada Investor Relations, Annual Report 2024 (hepsiburada.com/ir); Hürriyet Daily News coverage of HepsiAI launch, 2024.[^11]
+
+---
+
+### 6.5 Noon — UAE/KSA — Arabic NLP Search and Recommendation Engine
+
+**Player:** Noon (noon.com)
+**Country:** UAE (HQ), KSA (primary market)
+**Program:** Noon AI Search and Personalisation (internal; no confirmed public brand name)
+**What they built:** Noon deployed an Arabic-language product-search NLP system replacing keyword-match search with semantic search using transformer-based embeddings fine-tuned on Gulf Arabic e-commerce queries. The system handles colloquial Arabic transliteration (Arabic queries typed in Latin script, known as "Arab
+>>>>>>> 2178078 (Hide Maven AI logo on Tasama agent ops top bar)

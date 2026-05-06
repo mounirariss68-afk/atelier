@@ -181,6 +181,7 @@ Target customer: Commercial International Bank (CIB), Attijariwafa Bank, Banque 
 
 ---
 
+<<<<<<< HEAD
 ---
 
 ## 7. Risks & blockers unique to MENAT
@@ -300,3 +301,10 @@ Target customer: Commercial International Bank (CIB), Attijariwafa Bank, Banque 
 [^41]: IMF, "Arab World Economic Outlook — Egypt and Morocco FX and Sovereign Risk," IMF Regional Economic Outlook Middle East and Central Asia, April 2025, https://www.imf.org/en/Publications/REO — _verify specific Egypt pound volatility and Morocco dirham stress data; cross-reference CBE and Bank Al-Maghrib 2025 monetary policy reports._
 
 [^42]: Khazna Data Centers / G42 Inception, "Sovereign Cloud Infrastructure for UAE Financial Institutions," G42 Group, 2024–2025, https://www.g42.ai; Aramco / stc Cloud, "Nour Data Centers and stc Cloud Sovereign Positioning," 2024–2025 — _unsourced at this level of specificity — verify specific capacity, toolchain maturity, and financial sector certification disclosures from named providers._
+=======
+## 7. Risks & blockers unique to MENAT
+
+- **Data residency and sovereign cloud constraints create multi-deployment complexity.** Saudi PDPL, UAE PDPL, KVKK, and CBE cloud regulations collectively require that customer financial data for the four largest MENAT markets be processed on in-jurisdiction infrastructure. While AWS Riyadh, AWS UAE, Microsoft Azure UAE, and Google Cloud Doha provide sovereign regions, not all foundation model APIs are available in these regions, and GPU capacity remains constrained relative to demand. Banks attempting to deploy multi-jurisdiction agentic systems (e.g., a pan-MENA bank operating in KSA, UAE, and Egypt) must maintain separate model deployments per jurisdiction, multiplying operational and model-governance complexity. The Stargate KSA and UAE datacenter buildouts partially address this by 2027, but the near-term constraint is real.[^9]
+
+- **Arabic NLP maturity gap for financial document processing.** Financial agentic workflows require high-accuracy processing of Arabic-language documents: loan agreements, trade finance instruments (frequently using classical Arabic legal vocabulary), KYC documents in Arabic script, and bilingual regulatory circulars. Current Arabic LLM capabilities (ALLAM, Falcon
+>>>>>>> 2178078 (Hide Maven AI logo on Tasama agent ops top bar)

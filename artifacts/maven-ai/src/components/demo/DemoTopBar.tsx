@@ -81,6 +81,10 @@ export interface DemoTopBarProps {
    *  active language so RTL chrome flips. Set false when the host already
    *  manages it (e.g. a parent provider). */
   manageDocumentDir?: boolean;
+  /** When true, hides the Maven AI logo and its trailing divider. Used by
+   *  demos that should read as a tenant-branded surface (e.g. Tasama agent
+   *  ops). Other layout elements are unaffected. */
+  hideLogo?: boolean;
 }
 
 /**
@@ -104,6 +108,7 @@ export default function DemoTopBar({
   onSwitchView,
   switchViewLabel = "Switch view",
   manageDocumentDir = true,
+  hideLogo = false,
 }: DemoTopBarProps) {
   const isAr = lang === "ar";
   const [notifOpen, setNotifOpen] = useState(false);
@@ -153,9 +158,12 @@ export default function DemoTopBar({
         <span className="hidden md:inline">{backLabel}</span>
       </Link>
 
-      <Logo className="h-5 w-auto" />
-
-      <div className="h-5 w-px bg-white/20" />
+      {!hideLogo && (
+        <>
+          <Logo className="h-5 w-auto" />
+          <div className="h-5 w-px bg-white/20" />
+        </>
+      )}
 
       <div className="flex-1 min-w-0">
         <p

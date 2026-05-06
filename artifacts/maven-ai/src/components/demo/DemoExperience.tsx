@@ -84,7 +84,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
         backLabel={tStr({ en: "Back to detail", ar: "العودة للتفاصيل" }, lang)}
         lang={lang === "ar" ? "ar" : "en"}
         setLang={(l) => setLang(l)}
-
+        hideLogo={scenario.slug === "tasama-payroll-hub"}
         persona={{
           initials: lang === "en" ? "AI" : "ذ",
           name: tStr({ en: "Scenario engine", ar: "محرّك السيناريو" }, lang),
