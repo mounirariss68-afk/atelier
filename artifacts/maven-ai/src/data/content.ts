@@ -732,6 +732,7 @@ export const insights = [
 <li><strong>Explainability on demand.</strong> Build in the capability to ask "why did you make that recommendation?" and surface a human-readable explanation. This is non-negotiable for financial and healthcare use cases.</li>
 </ul>
 
+
 <p>The governance wrap specifies who can approve which agent actions, which data the agent can access, which tools it can invoke, and how often it must defer to human review. For a procurement agent in a large corporation, the governance policy might specify: "Agents can approve purchase orders up to AED 50,000 without human sign-off; all orders above that threshold require CFO approval within 24 hours." For a clinical decision support agent in a hospital, the policy might be: "Agents can surface diagnostic suggestions to clinicians; they cannot prescribe or administer medications." These are not technical constraints; they are policy constraints that the architecture must enforce.</p>
 
 <p>Audit logs are the record of compliance. SAMA expects that a bank can produce a complete audit trail of any material AI-assisted decision within 48 hours. SDAIA's data protection framework requires proof that personal data used by an AI system was processed lawfully and securely. These are not nice-to-have compliance features; they are table-stakes for production deployment in the GCC. The architecture should assume audit requests as a normal operating mode, not an exception.</p>
@@ -817,11 +818,13 @@ export const insights = [
 
 <p>بالنسبة لمؤسسات دول مجلس التعاون الخليج بالتحديد، تظهر ثلاثة أنماط قطاعية:</p>
 
+
 <ul>
 <li><strong>البنوك والتأمين.</strong> إطارات الامتثال الخاصة بـ SAMA و CBUAE تضع وزناً كبيراً على القابلية للشرح وتدقيق المسارات وحوكمة النماذج. وهذا يسحب إلى الأمام عمل الطبقة 1 (نسب البيانات والسياق المحكوم) ويضمن القابلية للمراقبة في الطبقة 2 حسب التصميم. مدة الالتزام: 24-32 أسبوعاً.</li>
 <li><strong>النفط والغاز والمرافق والتصنيع الثقيل.</strong> الوكلاء التشغيليون الذين يدفعون القرارات في العالم الحقيقي (جدولة الإنتاج وتوزيع الصيانة وتحسين الإمدادات) يتطلبون التكامل مع الأنظمة الموروثة والقيود الفيزيائية واختبار السيناريوهات. عمل الطبقة 2 (تصميم الوكيل والتكامل والتحقق) يهيمن. مدة الالتزام: 28-36 أسبوعاً.</li>
 <li><strong>الحكومة والخدمات العامة وصناديق الثروة السيادية.</strong> السيادة البيانية ومتطلبات نماذج اللغة العربية وشفافية على مستوى التدقيق تحول الوزن نحو الطبقة 1 (غالباً ما تتطلب البنية التحتية المحلية أو المستضافة في دول مجلس التعاون الخليج) والطبقة 0 (محاذاة حالة القيمة مع الاستراتيجية الوطنية). مدة الالتزام: 32-40 أسبوعاً.</li>
 </ul>
+
 
 <p>الخطأ الشائع هو معاملة "الذكاء الاصطناعي الإنتاجي" كبوابة ثنائية. إنه ليس كذلك. لكل قطاع تعريف مختلف لجاهزية الإنتاج، والتسلسل الطبقي يجب أن يعكس ذلك. بوابة الانطلاق الحي لمؤسسة مالية تشمل الموافقة المسبقة التنظيمية؛ بوابة منشأة تصنيع تشغيلية تشمل اختبار أنماط الفشل بالحجم الكامل. إطار عمل Maven يبقى دون تغيير؛ نقاط التفتيش داخله مشكّلة حسب القطاع.</p>
 
@@ -849,6 +852,7 @@ export const insights = [
 
 <p>مكدس القابلية للمراقبة الخاص بـ Maven لذكاء اصطناعي فاعل في الإنتاج يشمل:</p>
 
+
 <ul>
 <li><strong>قياس الإجراءات البعدي.</strong> كل استدعاء أداة وكل عملية استرجاع وكل قرار مسجل مع الطابع الزمني والمدخل والمخرج والثقة. هذا هو مصدر الحقيقة للتدقيق والتصحيح.</li>
 <li><strong>آثار التفكير.</strong> للوكلاء الذين يستخدمون التفكير المنظم (مثل LangGraph مع الأدوات أو Claude مع التفكير الموسع)، احصر عملية التفكير نفسها وليس فقط المخرج النهائي. هذا يمكّن المراجعة اللاحقة ومراجعة المنظِّم.</li>
@@ -856,6 +860,7 @@ export const insights = [
 <li><strong>كشف الانجراف.</strong> راقب ما إذا كان سلوك الوكيل يتغير بمرور الوقت. هذا يشمل توزيع القرار (هل الوكيل يوصي بنفس الإجراء أكثر؟)، أنماط الاسترجاع (هل يستشير نفس المصادر؟)، ومعدلات الخطأ (هل يفشل أكثر بتكرار على أنواع معينة من المدخلات؟).</li>
 <li><strong>القابلية للشرح عند الطلب.</strong> بناء القدرة على السؤال "لماذا أدليت بهذه التوصية؟" وإظهار شرح مقروء للبشر. هذا غير قابل للتفاوض لحالات الاستخدام المالية والرعاية الصحية.</li>
 </ul>
+
 
 <p>إطار الحوكمة يحدد من يمكنه الموافقة على أي إجراءات وكيل وأي بيانات يمكن للوكيل الوصول إليها وأي أدوات يمكنه استدعاؤها وكم مرة يجب أن يؤجل للمراجعة البشرية. بالنسبة لوكيل التعاقدات في مؤسسة كبيرة، قد تحدد سياسة الحوكمة: "يمكن للوكلاء الموافقة على أوامر الشراء حتى 50000 درهم إماراتي بدون موافقة بشرية؛ جميع الطلبات فوق هذا الحد تتطلب موافقة المدير المالي خلال 24 ساعة." بالنسبة لوكيل دعم القرار السريري في مستشفى، قد تكون السياسة: "يمكن للوكلاء سطح اقتراحات تشخيصية للعاملين الطبيين؛ لا يمكنهم وصف أو إدارة الأدوية." هذه ليست قيود تقنية؛ وهي قيود السياسة التي يجب أن تفرضها المعمارية.</p>
 
@@ -990,6 +995,7 @@ export const insights = [
 <p>Dört katmanlı mimari dikey alanlarda dayanıklı olmakla birlikte, uygulama ağırlığı sektöre göre önemli ölçüde değişmektedir. Finansal hizmetlerde (bankacılık, sigorta, varlık yönetimi), Katman 1 (veri ve yapay zeka temelleri) ve yönetişim sarması toplam katılım maliyetinin ve zaman çizelgesinin %35-40'ını tüketmektedir. Sağlık ve yaşam bilimleri alanında, Katman 3 (değişim ve benimseme) bağlayıcı kısıtlama haline gelmektedir, çünkü klinik iş akışları ve düzenleyici onay her adımda hekimin uyumunu gerektirmektedir. Enerji ve kamu hizmetlerinde, Katman 2 (agentic yapay zeka) daha uzun sürmektedir, çünkü üretim ortamı genellikle eski SCADA sistemleri, IoT ağları ve olasılıksal çıkarım için tasarlanan sistemlerden deterministik davranış talep eden gerçek zamanlı kontrol döngüleri arasında yer almaktadır.</p>
 
 <p>GCC işletmeleri için özel olarak, üç sektörel desen ortaya çıkmaktadır:</p>
+
 
 <ul>
 <li><strong>Bankacılık ve sigorta.</strong> SAMA ve CBUAE uyum çerçeveleri açıklanabilirlik, denetim izleri ve model yönetişimine ağır ağırlık koymaktadır. Bu, Katman 1 çalışmasını (veri soyut çizgisi, yönetilen bağlam) ileriye çekmekte ve tasarım gereği Katman 2'ye gözlemlenebilirliği yerleştirmektedir. Katılım süresi: 24-32 hafta.</li>
