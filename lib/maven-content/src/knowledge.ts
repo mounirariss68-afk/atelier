@@ -936,9 +936,27 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
       ],
     },
     status: "live",
-    accent: "#196B24",
+    accent: "#D9534F",
     icon: "ShoppingCart",
     relatedService: "ai-product-studio",
+    demoVariants: [
+      {
+        id: "cockpit",
+        label: { en: "Agent Cockpit", ar: "لوحة الوكلاء" },
+        audience: { en: "Technical & operations teams", ar: "الفرق التقنية والتشغيلية" },
+        description: { en: "Six-agent negotiation cockpit showing the conductor, specialist agents, tool calls, and the live event trace — for technical teams monitoring autonomous sourcing.", ar: "لوحة قيادة من ستة وكلاء تعرض المنسّق والوكلاء المتخصّصين واستدعاءات الأدوات وسلسلة الأحداث المباشرة — للفرق التقنية." },
+        icon: "Activity",
+        route: "",
+      },
+      {
+        id: "desk",
+        label: { en: "Category Manager Desk", ar: "مكتب مدير الفئة" },
+        audience: { en: "Category managers & CPOs", ar: "مديرو الفئات وكبير مسؤولي المشتريات" },
+        description: { en: "User-facing sourcing console with the bid matrix, round timeline, allocation slider, approvals queue, supplier 360, counter-bid composer, and audit log — for the category manager negotiating live events.", ar: "وحدة توريد للمستخدم النهائي تشمل مصفوفة العروض والخط الزمني للجولات وشريط الترسية وقائمة الموافقات وملف المورد والكاتب المضادّ وسجلّ التدقيق — لمدير الفئة في الأحداث المباشرة." },
+        icon: "Briefcase",
+        route: "desk",
+      },
+    ],
   },
   {
     id: "network-ops-war-room",

@@ -11,6 +11,7 @@ import Mind from "@/components/demo/personal-agent/Mind";
 import ProgrammeWarRoomConsole from "@/components/demo/programme-war-room/Console";
 import BenefitsCockpit from "@/components/demo/value-realization/BenefitsCockpit";
 import NocConsole from "@/components/demo/network-ops/NocConsole";
+import SourcingDesk from "@/components/demo/procurement-negotiation/SourcingDesk";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -96,6 +97,14 @@ export default function Demo() {
 
   if (slug === "network-ops-war-room" && variant === "noc") {
     return <NocConsole />;
+  }
+
+  // Procurement Negotiation Agent — Category Manager Desk (Faisal Bin Hashim).
+  // Sits alongside the cockpit demo (default scenario) and exposes a
+  // user-facing sourcing console with the bid matrix, allocation slider,
+  // approvals queue, supplier 360, counter-bid composer, and audit log.
+  if (slug === "procurement-negotiation-agent" && variant === "desk") {
+    return <SourcingDesk />;
   }
 
   // The Network Ops cockpit is registered under the bare slug; the
