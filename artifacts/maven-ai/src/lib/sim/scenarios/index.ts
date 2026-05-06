@@ -24,6 +24,7 @@ import tasamaPayrollHub from "./tasama-payroll-hub";
 
 const SCENARIOS: Record<string, Scenario> = {
   "value-realization": valueRealization,
+  "value-realization/teknik": valueRealization,
   "programme-war-room": programmeWarRoom,
   "programme-war-room/teknik": programmeWarRoom,
   "programme-war-room/console": programmeWarRoom,

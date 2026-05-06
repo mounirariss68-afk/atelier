@@ -609,6 +609,24 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     icon: "TrendingUp",
     relatedService: "agentic-ai-transformation",
     relatedAssessment: "uvr",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Technical Monitoring Panel", ar: "لوحة المراقبة التقنية" },
+        audience: { en: "Transformation & PMO", ar: "فريق التحوّل ومكتب البرامج" },
+        description: { en: "Watch the Realization Conductor coordinate scoring, attribution and re-baseline agents end-to-end on a single board pack — for the technical and PMO teams operating the system.", ar: "شاهد منسّق تحقيق القيمة وهو ينسّق وكلاء التقييم والإسناد وإعادة الاحتساب على حزمة مجلس واحدة — للفرق التقنية ومكتب البرامج المشغّلة للنظام." },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "cockpit",
+        label: { en: "CFO Benefits Cockpit", ar: "قمرة المدير المالي" },
+        audience: { en: "CFOs & Heads of Transformation", ar: "المدراء الماليون ورؤساء التحوّل" },
+        description: { en: "A CFO's daily-driver dashboard for the AI portfolio — promised vs realised AED, stalled initiatives, recommendations awaiting sign-off, and an AI assistant that briefs you for the board.", ar: "لوحة العمل اليومية للمدير المالي على محفظة الذكاء — الموعود مقابل المحقّق بالدرهم، والمبادرات المتعثّرة، والتوصيات بانتظار الاعتماد، ومساعد ذكي يحضّر ملخّص المجلس." },
+        icon: "LayoutDashboard",
+        route: "cockpit",
+      },
+    ],
     samplePortfolio: [
       {
         id: "vr-citizen-services",

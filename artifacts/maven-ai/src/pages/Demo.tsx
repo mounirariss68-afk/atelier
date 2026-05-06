@@ -9,7 +9,9 @@ import { TasamaDemoLangProvider } from "@/components/demo/tasama/DemoLangContext
 import Cockpit from "@/components/demo/personal-agent/Cockpit";
 import Mind from "@/components/demo/personal-agent/Mind";
 import ProgrammeWarRoomConsole from "@/components/demo/programme-war-room/Console";
+import BenefitsCockpit from "@/components/demo/value-realization/BenefitsCockpit";
 import { getScenario } from "@/lib/sim/scenarios";
+import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
 import { ArcelikDataProvider } from "@/hooks/useArcelikData";
 import { TasamaDataProvider } from "@/hooks/useTasamaData";
@@ -69,6 +71,12 @@ export default function Demo() {
     return <ProgrammeWarRoomConsole />;
   }
 
+  // Value Realization "CFO Benefits Cockpit" — second user-facing variant
+  // alongside the "teknik" agent cockpit handled by the scenario engine.
+  if (slug === "value-realization" && variant === "cockpit") {
+    return <ValueRealizationCockpitRoute />;
+  }
+
   const scenario = getScenario(slug, variant);
   const { lang } = useLang();
 
@@ -110,4 +118,14 @@ export default function Demo() {
   }
 
   return <DemoExperience scenario={scenario} />;
+}
+
+function ValueRealizationCockpitRoute() {
+  const [, navigate] = useLocation();
+  return (
+    <BenefitsCockpit
+      marketplaceSlug="value-realization"
+      onSwitchView={() => navigate("/demo/value-realization/teknik")}
+    />
+  );
 }
