@@ -15,6 +15,10 @@ import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
 import { ArcelikDataProvider } from "@/hooks/useArcelikData";
 import { TasamaDataProvider } from "@/hooks/useTasamaData";
+import OfficerConsole from "@/components/demo/citizen-services/OfficerConsole";
+import { CscDemoLangProvider } from "@/components/demo/citizen-services/DemoLangContext";
+import { CitizenServicesDataProvider } from "@/hooks/useCitizenServicesData";
+import { CscToastProvider } from "@/components/demo/citizen-services/ToastContext";
 
 export default function Demo() {
   const params = useParams();
@@ -54,6 +58,18 @@ export default function Demo() {
           <ManagerDashboardShell />
         </TasamaDataProvider>
       </TasamaDemoLangProvider>
+    );
+  }
+
+  if (slug === "citizen-services-concierge" && variant === "officer") {
+    return (
+      <CscDemoLangProvider>
+        <CitizenServicesDataProvider>
+          <CscToastProvider>
+            <OfficerConsole />
+          </CscToastProvider>
+        </CitizenServicesDataProvider>
+      </CscDemoLangProvider>
     );
   }
 

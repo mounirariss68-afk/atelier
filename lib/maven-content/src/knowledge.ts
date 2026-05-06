@@ -1135,10 +1135,34 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
         ],
       },
       status: "live",
-      accent: "#0F9ED5",
+      accent: "#5BA98A",
       icon: "Users",
       relatedService: "agentic-ai-transformation",
       relatedAssessment: "ari",
+      demoVariants: [
+        {
+          id: "teknik",
+          label: { en: "Technical Monitoring Panel", ar: "لوحة المراقبة التقنية" },
+          audience: { en: "Technical teams", ar: "الفرق التقنية" },
+          description: {
+            en: "Agent cockpit showing the Service Conductor, six specialist agents, tool calls, and the full event trace — for technical teams monitoring agent performance.",
+            ar: "لوحة قيادة الوكلاء تعرض منسّق الكونسيرج وستة وكلاء متخصّصين واستدعاءات الأدوات وسلسلة الأحداث الكاملة — للفرق التقنية.",
+          },
+          icon: "Activity",
+          route: "teknik",
+        },
+        {
+          id: "officer",
+          label: { en: "Case Officer Console", ar: "قمرة موظف الخدمة" },
+          audience: { en: "Senior case officers & directors", ar: "موظفو الخدمة الكبار والمديرون" },
+          description: {
+            en: "Senior Case Officer console with bilingual queue, cross-agency case workspace, agent recommendations, director heatmap, and a policy-grounded AI assistant — what Yousef Al-Harbi sees every morning.",
+            ar: "قمرة موظف الخدمة الأول مع قائمة ثنائية اللغة وملف القضيّة عبر الجهات وتوصيات الوكلاء وخريطة المديرة ومساعد ذكي يستند إلى السياسات — ما يراه يوسف الحربي كل صباح.",
+          },
+          icon: "Inbox",
+          route: "officer",
+        },
+      ],
     },
     {
     id: "customer-care-hive",

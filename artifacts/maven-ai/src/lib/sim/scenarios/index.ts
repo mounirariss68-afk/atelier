@@ -33,6 +33,7 @@ const SCENARIOS: Record<string, Scenario> = {
   "network-ops-war-room": networkOps,
   "sama-compliance-sentinel": samaCompliance,
   "citizen-services-concierge": citizenServices,
+  "citizen-services-concierge/teknik": citizenServices,
   "customer-care-hive": customerCare,
   "sovereign-data-steward": sovereignData,
   "enterprise-knowledge-concierge": knowledgeConcierge,
