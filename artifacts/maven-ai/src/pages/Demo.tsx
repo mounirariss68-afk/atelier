@@ -16,6 +16,7 @@ import CroConsole from "@/components/demo/sama-compliance/CroConsole";
 import CdoConsole from "@/components/demo/sovereign-data/CdoConsole";
 import CareDesk from "@/components/demo/customer-care/CareDesk";
 import BidStudio from "@/components/demo/tender-response-studio/BidStudio";
+import KnowledgeChat from "@/components/demo/enterprise-knowledge/KnowledgeChat";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -127,10 +128,22 @@ export default function Demo() {
     return <CdoConsole />;
   }
 
-  // The Network Ops cockpit is registered under the bare slug; the
-  // marketplace links to the "cockpit" variant route for symmetry with the
-  // NOC Director console variant. Fall back to the unvariant scenario.
-  const scenarioVariant = slug === "network-ops-war-room" && variant === "cockpit" ? undefined : variant;
+  // Enterprise Knowledge Concierge — user-facing persona-aware Knowledge Chat,
+  // alongside the cockpit served by the scenario engine via the "teknik" route.
+  if (slug === "enterprise-knowledge-concierge" && variant === "chat") {
+    return <KnowledgeChat />;
+  }
+
+  // Resolve the variant for the scenario engine:
+  // - `teknik` is the conventional alias for "the cockpit demo, no variant".
+  // - The Network Ops cockpit is registered under the bare slug; the
+  //   marketplace links to the "cockpit" variant route for symmetry with the
+  //   NOC Director console variant. Fall back to the unvariant scenario.
+  const scenarioVariant =
+    variant === "teknik" ||
+    (slug === "network-ops-war-room" && variant === "cockpit")
+      ? undefined
+      : variant;
   const scenario = getScenario(slug, scenarioVariant);
   const { lang } = useLang();
 

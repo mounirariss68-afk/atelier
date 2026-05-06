@@ -1478,6 +1478,30 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
         },
       },
     ],
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Technical Monitoring Panel", ar: "لوحة المراقبة التقنية" },
+        audience: { en: "AI engineering & governance teams", ar: "فرق هندسة الذكاء الاصطناعي والحوكمة" },
+        description: {
+          en: "Agent cockpit showing the Concierge Conductor and five specialist agents (Permission Filter, Retriever, Drafter, Citation Auditor, Confidence Scorer), every tool call and the full event trace — for technical teams monitoring agent behaviour.",
+          ar: "لوحة قيادة الوكلاء تعرض منسّق الكونسيرج وخمسة وكلاء متخصّصين (فلتر الصلاحيات، المسترجِع، الكاتب، مدقّق الاستشهاد، مصنّف الثقة) واستدعاءات الأدوات وسلسلة الأحداث الكاملة — للفرق التقنية.",
+        },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "chat",
+        label: { en: "Knowledge Chat", ar: "محادثة المعرفة" },
+        audience: { en: "CFOs, analysts, treasury, legal counsel, external consultants", ar: "المديرون الماليون والمحلّلون والخزينة والمستشارون القانونيون والاستشاريون الخارجيون" },
+        description: {
+          en: "Persona-aware enterprise knowledge chat: pick a persona, ask in plain language, see grounded answers with inline citations, withhold disclosures, a confidence chip, and a defensible refusal when the asker's ACL is too narrow.",
+          ar: "دردشة معرفة مؤسسيّة واعية بالشخصية: اختر شخصية، اسأل بلغة طبيعية، واطّلع على إجابات مؤصّلة بمراجع داخلية، وإفصاحات عمّا حُجب، ورقاقة ثقة، ورفض مبرّر حين تكون صلاحيات السائل ضيّقة.",
+        },
+        icon: "MessageSquare",
+        route: "chat",
+      },
+    ],
     dataModel: {
       inputs: [
         { en: "SharePoint, Confluence, Notion, email mailboxes; user identity and permission graph", ar: "شيربوينت، Confluence، نوشن، صناديق البريد؛ هوية المستخدم ورسم الصلاحيات" },
