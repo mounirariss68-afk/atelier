@@ -1,6 +1,19 @@
 import { motion } from "framer-motion";
 import { Link } from "wouter";
-import { ArrowRight, Building2, Wifi, TrendingUp, Zap, ShoppingBag, Plane, Car, ExternalLink } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  Wifi,
+  TrendingUp,
+  Zap,
+  ShoppingBag,
+  Plane,
+  Car,
+  ExternalLink,
+  Globe,
+  Target,
+  BookOpen,
+} from "lucide-react";
 import {
   industries,
   industryTitle,
@@ -11,6 +24,13 @@ import {
   industryChallenge,
   industryStatLabel,
   industryCaseField,
+  industryGlobalTrend,
+  industryGlobalTrendsCount,
+  industryOpportunity,
+  industryOpportunitiesCount,
+  industryReportSlug,
+  industryCaseSource,
+  industryCasePlayer,
 } from "@/data/content";
 import { useLang, tStr } from "@/lib/lang";
 
@@ -23,21 +43,26 @@ const COPY = {
   heroTitle: { en: "Deep domain expertise in the sectors that matter most.", ar: "خبرة قطاعية عميقة في القطاعات الأكثر أهمية.", tr: "En önemli sektörlerde derin alan uzmanlığı." },
   heroPara: { en: "Maven AI works where AI transformation is most consequential and most complex — across the GCC's flagship sectors, from sovereign public services to global hospitality.", ar: "تعمل Maven AI حيث يكون تحول الذكاء الاصطناعي الأكثر تأثيراً والأكثر تعقيداً — عبر القطاعات الرائدة في الخليج، من الخدمات العامة السيادية إلى الضيافة العالمية.", tr: "Maven AI, AI dönüşümünün en sonuçlu ve en karmaşık olduğu yerlerde — Körfez'in amiral sektörlerinde, egemen kamu hizmetlerinden küresel konaklamaya kadar — çalışıyor." },
   noteEyebrow: { en: "A note on this page —", ar: "ملاحظة حول هذه الصفحة —", tr: "Bu sayfa hakkında bir not —" },
-  noteBody: { en: "the headline figures and key metrics below are drawn from named third-party sources (PwC, McKinsey, BCG, Strategy&, IMARC, Mordor Intelligence, EY, Saudi Aramco, the Saudi Tourism Authority and the Public Investment Fund), and link to those sources. The case studies are illustrative scenarios showing how agentic AI can deliver value in each industry — not delivered Maven AI engagements; any numbers inside them are round figures or public benchmark ranges, not specific outcomes Maven AI has produced.", ar: "الأرقام الرئيسية والمقاييس أدناه مستمدة من مصادر طرف ثالث مذكورة بالاسم (PwC, McKinsey, BCG, Strategy&, IMARC, Mordor Intelligence, EY, أرامكو، هيئة السياحة السعودية وصندوق الاستثمارات العامة)، ومرتبطة بهذه المصادر. حالات الاستخدام عبارة عن سيناريوهات توضيحية تبيّن كيف يمكن للذكاء الاصطناعي الوكيلي تقديم القيمة في كل قطاع — وليست مشاريع نفذتها Maven AI؛ أي أرقام بداخلها هي أرقام تقديرية أو نطاقات مرجعية عامة، وليست نتائج محددة حققتها Maven AI.", tr: "Aşağıdaki başlık rakamları ve temel metrikler, adı belirtilen üçüncü taraf kaynaklardan (PwC, McKinsey, BCG, Strategy&, IMARC, Mordor Intelligence, EY, Saudi Aramco, Suudi Turizm Otoritesi ve Kamu Yatırım Fonu) alınmıştır ve bu kaynaklara bağlanmaktadır. Vaka çalışmaları, agentic AI'nın her sektörde nasıl değer üretebileceğini gösteren örnek senaryolardır — Maven AI'nın gerçekleştirdiği projeler değildir; içlerindeki sayılar yuvarlak rakamlar veya kamuya açık karşılaştırma aralıklarıdır, Maven AI'nın ürettiği belirli sonuçlar değildir." },
+  noteBody: { en: "the headline figures and key metrics below are drawn from named third-party sources (PwC, McKinsey, BCG, Strategy&, IMARC, Mordor Intelligence, EY, Saudi Aramco, the Saudi Tourism Authority and the Public Investment Fund), and link to those sources. The case studies summarise publicly disclosed AI programmes by named regional players — drawn from the company's own annual reports, press releases or major outlets — and are not delivered Maven AI engagements; any numbers inside them are taken from the cited public source.", ar: "الأرقام الرئيسية والمقاييس أدناه مستمدة من مصادر طرف ثالث مذكورة بالاسم (PwC, McKinsey, BCG, Strategy&, IMARC, Mordor Intelligence, EY, أرامكو، هيئة السياحة السعودية وصندوق الاستثمارات العامة)، ومرتبطة بهذه المصادر. تلخّص حالات الدراسة برامج الذكاء الاصطناعي المُعلنة من قِبل لاعبين إقليميين مُسمَّين — مستمدّة من تقارير الشركة السنوية أو بياناتها الصحفية أو من كبرى المنابر الإعلامية — وليست مشاريع نفّذتها Maven AI؛ أي أرقام بداخلها مأخوذة من المصدر العام المُستشهَد به.", tr: "Aşağıdaki başlık rakamları ve temel metrikler, adı belirtilen üçüncü taraf kaynaklardan (PwC, McKinsey, BCG, Strategy&, IMARC, Mordor Intelligence, EY, Saudi Aramco, Suudi Turizm Otoritesi ve Kamu Yatırım Fonu) alınmıştır ve bu kaynaklara bağlanmaktadır. Vaka çalışmaları, adı belirtilen bölgesel oyuncuların kamuya açıkladığı AI programlarını özetlemektedir — şirketin kendi yıllık raporlarından, basın bültenlerinden veya başlıca medya kuruluşlarından alınmıştır — ve Maven AI'nın gerçekleştirdiği projeler değildir; içlerindeki sayılar, atıfta bulunulan kamuya açık kaynaktan alınmıştır." },
+  globalTrendsTitle: { en: "Global trends shaping this industry", ar: "اتجاهات عالمية تشكّل هذا القطاع", tr: "Bu sektörü şekillendiren küresel trendler" },
+  regionalImplicationsTitle: { en: "What it means for the region", ar: "ماذا يعني ذلك للمنطقة", tr: "Bunun bölge için anlamı" },
+  regionalImplicationsBlurb: { en: "Named opportunities for MENAT players, drawn from the regional implications brief.", ar: "فرص مُسمّاة للاعبي منطقة الشرق الأوسط وشمال أفريقيا وتركيا، مستمدّة من ملخّص الانعكاسات الإقليمية.", tr: "Bölgesel etki notundan derlenen, MENAT oyuncuları için isimlendirilmiş fırsatlar." },
   challengesTitle: { en: "Industry challenges we address", ar: "تحديات القطاع التي نعالجها", tr: "Ele aldığımız sektör zorlukları" },
   approachTitle: { en: "Our approach", ar: "منهجنا", tr: "Yaklaşımımız" },
   metricsTitle: { en: "Key metrics", ar: "المقاييس الرئيسية", tr: "Temel metrikler" },
-  scenarioLabel: { en: "Illustrative scenario", ar: "سيناريو توضيحي", tr: "Örnek senaryo" },
+  caseStudyLabel: { en: "Best practice — public case study", ar: "أفضل الممارسات — حالة عامة موثّقة", tr: "En iyi uygulama — kamuya açık vaka çalışması" },
   challenge: { en: "Challenge", ar: "التحدي", tr: "Zorluk" },
   approach: { en: "Approach", ar: "المنهج", tr: "Yaklaşım" },
-  goodLooks: { en: "What good looks like", ar: "كيف يبدو التميّز", tr: "İyi neye benzer" },
+  goodLooks: { en: "Reported outcome", ar: "النتيجة المُعلنة", tr: "Açıklanan sonuç" },
   talkTeamPrefix: { en: "Talk to our", ar: "تحدّث مع فريق", tr: "Ekibimizle konuşun:" },
   talkTeamSuffix: { en: "team", ar: "", tr: "" },
   relatedTools: { en: "Related tools in the Marketplace", ar: "أدوات ذات صلة في السوق", tr: "Marketplace'teki ilgili araçlar" },
+  readReport: { en: "Read the full report", ar: "اقرأ التقرير الكامل", tr: "Tam raporu okuyun" },
   ctaTitle: { en: "Don't see your sector?", ar: "لا تجدون قطاعكم؟", tr: "Sektörünüzü göremiyor musunuz?" },
   ctaPara: { en: "Maven AI works with organizations across the GCC economy. Our agentic AI and data capabilities apply across industries — from healthcare to logistics to energy.", ar: "تعمل Maven AI مع المؤسسات عبر اقتصاد الخليج. قدراتنا في الذكاء الاصطناعي الوكيلي والبيانات تنطبق على كل القطاعات — من الرعاية الصحية إلى اللوجستيات إلى الطاقة.", tr: "Maven AI, Körfez ekonomisindeki kuruluşlarla çalışır. Agentic AI ve veri yeteneklerimiz; sağlıktan lojistiğe, enerjiye kadar tüm sektörlerde geçerlidir." },
   ctaButton: { en: "Discuss your industry", ar: "ناقش قطاعك", tr: "Sektörünüzü tartışalım" },
   source: { en: "Source", ar: "المصدر", tr: "Kaynak" },
+  target: { en: "Target", ar: "الجهة المستهدفة", tr: "Hedef" },
 };
 
 type Source = { name: string; year: number; url: string };
@@ -99,6 +124,11 @@ export default function Industries() {
       {industries.map((industry, idx) => {
         const Icon = industryIcons[industry.icon] || Building2;
         const indTitle = industryTitle(industry, lang);
+        const trendsCount = industryGlobalTrendsCount(industry);
+        const oppsCount = industryOpportunitiesCount(industry);
+        const caseSource = industryCaseSource(industry);
+        const casePlayer = industryCasePlayer(industry);
+        const reportSlug = industryReportSlug(industry);
         return (
           <section key={industry.id} id={industry.id} className={`py-24 scroll-mt-32 ${idx % 2 === 0 ? "bg-white" : "bg-[#F8F9FA]"}`}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -134,11 +164,70 @@ export default function Industries() {
 
                   <p className="text-gray-700 leading-relaxed text-lg">{industryDescription(industry, lang)}</p>
 
+                  {/* Global trends */}
+                  {trendsCount > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-5">
+                        <Globe size={18} style={{ color: industry.color }} />
+                        <h3 className="text-lg font-bold text-[#0E2841]">{tStr(COPY.globalTrendsTitle, lang)}</h3>
+                      </div>
+                      <ul className="space-y-3">
+                        {Array.from({ length: trendsCount }).map((_, i) => (
+                          <motion.li
+                            key={i}
+                            initial={{ opacity: 0, x: -10 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.05 }}
+                            className="flex gap-3 items-start"
+                          >
+                            <span
+                              className="text-xs font-extrabold flex-shrink-0 mt-1 w-5 h-5 rounded-md flex items-center justify-center"
+                              style={{ backgroundColor: industry.color + "18", color: industry.color }}
+                            >
+                              {i + 1}
+                            </span>
+                            <p className="text-sm text-gray-700 leading-relaxed">{industryGlobalTrend(industry, i, lang)}</p>
+                          </motion.li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* What it means for the region */}
+                  {oppsCount > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Target size={18} style={{ color: industry.color }} />
+                        <h3 className="text-lg font-bold text-[#0E2841]">{tStr(COPY.regionalImplicationsTitle, lang)}</h3>
+                      </div>
+                      <p className="text-sm text-gray-500 mb-5 leading-relaxed">{tStr(COPY.regionalImplicationsBlurb, lang)}</p>
+                      <div className="grid sm:grid-cols-1 gap-4">
+                        {Array.from({ length: oppsCount }).map((_, i) => (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 10 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.06 }}
+                            className="border border-gray-200 rounded-xl p-5 bg-white"
+                          >
+                            <h4 className="font-bold text-[#0E2841] mb-1.5">{industryOpportunity(industry, i, "title", lang)}</h4>
+                            <p className="text-xs uppercase tracking-wider mb-2 font-semibold" style={{ color: industry.color }}>
+                              {tStr(COPY.target, lang)}: <span className="text-gray-600 normal-case tracking-normal font-medium">{industryOpportunity(industry, i, "target", lang)}</span>
+                            </p>
+                            <p className="text-sm text-gray-700 leading-relaxed">{industryOpportunity(industry, i, "description", lang)}</p>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Challenges */}
                   <div>
                     <h3 className="text-lg font-bold text-[#0E2841] mb-5">{tStr(COPY.challengesTitle, lang)}</h3>
                     <div className="space-y-3">
-                      {industry.challenges.map((challenge, i) => (
+                      {industry.challenges.map((_, i) => (
                         <motion.div
                           key={i}
                           initial={{ opacity: 0, x: -10 }}
@@ -179,12 +268,17 @@ export default function Industries() {
                     ))}
                   </div>
 
-                  {/* Illustrative scenario */}
+                  {/* Best-practice case study (real public reference) */}
                   <div className="rounded-xl border-2 p-6" style={{ borderColor: industry.color + "40" }}>
                     <div className="flex items-center gap-2 mb-4">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: industry.color }} />
-                      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: industry.color }}>{tStr(COPY.scenarioLabel, lang)}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: industry.color }}>{tStr(COPY.caseStudyLabel, lang)}</span>
                     </div>
+                    {casePlayer && (
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
+                        {casePlayer.name}{casePlayer.country ? ` · ${casePlayer.country}` : ""}
+                      </p>
+                    )}
                     <h4 className="font-bold text-[#0E2841] mb-2">{industryCaseField(industry, "title", lang)}</h4>
                     <p className="text-xs text-gray-500 italic mb-4 leading-relaxed">{industryCaseField(industry, "framing", lang)}</p>
                     <div className="space-y-3">
@@ -200,17 +294,28 @@ export default function Industries() {
                         <span className="text-xs font-bold uppercase tracking-wider" style={{ color: industry.color }}>{tStr(COPY.goodLooks, lang)}</span>
                         <p className="text-sm font-semibold text-[#0E2841] mt-1 leading-relaxed">{industryCaseField(industry, "outcome", lang)}</p>
                       </div>
+                      {caseSource && (
+                        <SourceCaption source={caseSource} prefix={sourceLabel} />
+                      )}
                     </div>
                   </div>
 
-                  <Link href="/contact" className="block w-full text-center font-bold py-3.5 rounded-xl text-white transition-colors" style={{ backgroundColor: industry.color }}>
+                  <Link
+                    href={`/insights/${reportSlug}`}
+                    className="flex items-center justify-center gap-2 w-full text-center font-bold py-3.5 rounded-xl text-white transition-colors"
+                    style={{ backgroundColor: industry.color }}
+                  >
+                    <BookOpen size={16} />
+                    {tStr(COPY.readReport, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
+                  </Link>
+
+                  <Link href="/contact" className="block w-full text-center font-semibold py-3 rounded-xl border-2 transition-colors hover:bg-gray-50" style={{ borderColor: industry.color, color: industry.color }}>
                     {tStr(COPY.talkTeamPrefix, lang)} {indTitle} {tStr(COPY.talkTeamSuffix, lang)} <ArrowRight size={14} className="inline ml-1 rtl:-scale-x-100" />
                   </Link>
 
                   <Link
                     href={`/marketplace?industry=${industry.id}`}
-                    className="block w-full text-center font-semibold py-3 rounded-xl border-2 transition-colors hover:bg-gray-50"
-                    style={{ borderColor: industry.color, color: industry.color }}
+                    className="block w-full text-center font-semibold py-3 rounded-xl text-sm text-gray-600 hover:text-[#0E2841] transition-colors"
                   >
                     {tStr(COPY.relatedTools, lang)} <ArrowRight size={14} className="inline ml-1 rtl:-scale-x-100" />
                   </Link>
