@@ -12,6 +12,7 @@ import ProgrammeWarRoomConsole from "@/components/demo/programme-war-room/Consol
 import BenefitsCockpit from "@/components/demo/value-realization/BenefitsCockpit";
 import NocConsole from "@/components/demo/network-ops/NocConsole";
 import SourcingDesk from "@/components/demo/procurement-negotiation/SourcingDesk";
+import CroConsole from "@/components/demo/sama-compliance/CroConsole";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -105,6 +106,10 @@ export default function Demo() {
   // approvals queue, supplier 360, counter-bid composer, and audit log.
   if (slug === "procurement-negotiation-agent" && variant === "desk") {
     return <SourcingDesk />;
+  }
+
+  if (slug === "sama-compliance-sentinel" && variant === "console") {
+    return <CroConsole />;
   }
 
   // The Network Ops cockpit is registered under the bare slug; the

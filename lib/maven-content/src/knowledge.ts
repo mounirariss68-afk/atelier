@@ -1113,6 +1113,30 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     icon: "ShieldCheck",
     relatedService: "data-governance-foundations",
     relatedAssessment: "dafi",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Agent Cockpit", ar: "قمرة الوكلاء" },
+        audience: { en: "Risk-platform engineers", ar: "مهندسو منصّة المخاطر" },
+        description: {
+          en: "Replay the full agent topology — orchestrator, monitor, policy mapper, memo drafter, evidence stager — as it ingests SAMA circular CRU-2026-04 overnight, with checkpoints for the CRO.",
+          ar: "إعادة تشغيل كامل مخطط الوكلاء — المنسّق والمراقب وكاتب السياسة وكاتب المذكّرات وقوّام الأدلّة — أثناء استلامه لتعميم ساما CRU-2026-04 ليلاً مع نقاط مراجعة لرئيس المخاطر.",
+        },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "console",
+        label: { en: "CRO Obligations Console", ar: "قمرة الالتزامات لرئيس المخاطر" },
+        audience: { en: "Chief Risk Officer", ar: "رئيس إدارة المخاطر" },
+        description: {
+          en: "Noura Al-Saif's daily home — 240 obligations, the controls library, returns calendar, approvals queue, and an audit log she'd happily hand to SAMA, in EN/AR.",
+          ar: "الصفحة اليومية لنورا السيف — 240 التزاماً ومكتبة الضوابط وتقويم الإيداعات وقائمة الاعتمادات وسجل تدقيق تثق بتسليمه لساما — بالعربية والإنجليزية.",
+        },
+        icon: "ShieldCheck",
+        route: "console",
+      },
+    ],
   },
   {
       id: "citizen-services-concierge",
