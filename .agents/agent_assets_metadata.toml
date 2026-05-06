@@ -60,3 +60,45 @@ id = "P3xRHLWGDEyTbwlK3s6Z6"
 uri = "file://artifacts/maven-ai/public/images/report-9.png"
 type = "image"
 title = "two paths converging report cover"
+
+[[generated]]
+id = "lH6puTKh2wd9MsTe4PNxc"
+uri = "file://artifacts/maven-ai/public/images/report-industry-public-sector.png"
+type = "image"
+title = "report cover public-sector"
+
+[[generated]]
+id = "dfy8mzhUa8hncmrpakgBN"
+uri = "file://artifacts/maven-ai/public/images/report-industry-telecom.png"
+type = "image"
+title = "report cover telecom"
+
+[[generated]]
+id = "V2_NMPSDN-lkb8aKnpV-x"
+uri = "file://artifacts/maven-ai/public/images/report-industry-financial-services.png"
+type = "image"
+title = "report cover financial-services"
+
+[[generated]]
+id = "2DmdC83tJe5g1uicoy_GR"
+uri = "file://artifacts/maven-ai/public/images/report-industry-energy-commodities.png"
+type = "image"
+title = "report cover energy-commodities"
+
+[[generated]]
+id = "Q6vxQgKGlyqPTIrHAjB-0"
+uri = "file://artifacts/maven-ai/public/images/report-industry-retail-consumer.png"
+type = "image"
+title = "report cover retail-consumer"
+
+[[generated]]
+id = "EcseEVlQFvav1CshBMccE"
+uri = "file://artifacts/maven-ai/public/images/report-industry-travel-hospitality.png"
+type = "image"
+title = "report cover travel-hospitality"
+
+[[generated]]
+id = "m8xdLQ0a2z1Gi2oVzIRBj"
+uri = "file://artifacts/maven-ai/public/images/report-industry-automotive.png"
+type = "image"
+title = "report cover automotive"
