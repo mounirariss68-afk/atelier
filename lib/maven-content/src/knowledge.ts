@@ -1360,6 +1360,30 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     icon: "Database",
     relatedService: "data-governance-foundations",
     relatedAssessment: "dafi",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Technical Monitoring Panel", ar: "لوحة المراقبة التقنية" },
+        audience: { en: "Technical teams", ar: "الفرق التقنية" },
+        description: {
+          en: "Agent cockpit showing the orchestrator, six specialist agents, tool calls, and the full event trace — for technical teams monitoring agent performance.",
+          ar: "لوحة قيادة الوكلاء تعرض المنسّق وستة وكلاء متخصّصين واستدعاءات الأدوات وسلسلة الأحداث الكاملة — للفرق التقنية.",
+        },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "console",
+        label: { en: "CDO Sovereign Console", ar: "قمرة المدير الرقمي السيادية" },
+        audience: { en: "CDO + Head of AI Foundations", ar: "المدير الرقمي ورئيس أُسس الذكاء" },
+        description: {
+          en: "Catalogue of 32 data products with KPI tiles, decision queue, lineage map, obligations register, and audit log — what Mansour, the CDO, lives in every day.",
+          ar: "كتالوج 32 منتج بيانات مع مؤشرات وقائمة قرارات وخريطة نسب وسجل التزامات وسجل تدقيق — ما يعيش فيه منصور، المدير الرقمي، يومياً.",
+        },
+        icon: "Database",
+        route: "console",
+      },
+    ],
   },
   {
     id: "enterprise-knowledge-concierge",

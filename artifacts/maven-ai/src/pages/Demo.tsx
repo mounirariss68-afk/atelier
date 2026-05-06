@@ -13,6 +13,7 @@ import BenefitsCockpit from "@/components/demo/value-realization/BenefitsCockpit
 import NocConsole from "@/components/demo/network-ops/NocConsole";
 import SourcingDesk from "@/components/demo/procurement-negotiation/SourcingDesk";
 import CroConsole from "@/components/demo/sama-compliance/CroConsole";
+import CdoConsole from "@/components/demo/sovereign-data/CdoConsole";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -110,6 +111,10 @@ export default function Demo() {
 
   if (slug === "sama-compliance-sentinel" && variant === "console") {
     return <CroConsole />;
+  }
+
+  if (slug === "sovereign-data-steward" && variant === "console") {
+    return <CdoConsole />;
   }
 
   // The Network Ops cockpit is registered under the bare slug; the
