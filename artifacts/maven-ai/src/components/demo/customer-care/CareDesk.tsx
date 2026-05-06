@@ -149,7 +149,7 @@ function Inner() {
     <UserDemoShell
       lang={lang}
       sidebar={sidebar}
-      topbar={topbar}
+      header={topbar}
       belowTopbar={belowTopbar}
       drawers={<AiChat open={chatOpen} onClose={() => setChatOpen(false)} />}
       background="#F9FAFB"

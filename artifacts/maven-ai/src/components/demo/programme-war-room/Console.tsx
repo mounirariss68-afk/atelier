@@ -98,7 +98,7 @@ function ConsoleInner() {
   ) : null;
 
   return (
-    <UserDemoShell lang={lang} sidebar={sidebar} topbar={
+    <UserDemoShell lang={lang} sidebar={sidebar} header={
       <DemoTopBar
         marketplaceSlug="programme-war-room"
         accent={getDemoAccent("programme-war-room")}

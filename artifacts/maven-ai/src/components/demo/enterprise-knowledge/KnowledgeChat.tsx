@@ -64,7 +64,7 @@ function ConsoleInner() {
     <UserDemoShell
       lang={lang}
       sidebar={sidebar}
-      topbar={
+      header={
         <DemoTopBar
           marketplaceSlug="enterprise-knowledge-concierge"
           accent={getDemoAccent("enterprise-knowledge-concierge")}

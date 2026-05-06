@@ -160,7 +160,7 @@ export default function OfficerConsole() {
     <UserDemoShell
       lang={lang}
       sidebar={sidebar}
-      topbar={topbar}
+      header={topbar}
       belowTopbar={belowTopbar}
       fab={fab}
       drawers={drawers}

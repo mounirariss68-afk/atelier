@@ -129,7 +129,7 @@ function ConsoleInner() {
   ) : null;
 
   return (
-    <UserDemoShell lang={lang} sidebar={sidebar} topbar={topbar} drawers={drawers} fab={fab} background="#F9FAFB" height="min">
+    <UserDemoShell lang={lang} sidebar={sidebar} header={topbar} drawers={drawers} fab={fab} background="#F9FAFB" height="min">
       <div className="flex-1 overflow-y-auto">
         {view === "catalogue" && <CatalogueView onOpenProduct={openProduct} onOpenView={(v) => setView(v as View)} />}
         {view === "product" && <ProductDetailView />}

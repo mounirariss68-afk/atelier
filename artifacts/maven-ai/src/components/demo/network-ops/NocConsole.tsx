@@ -191,7 +191,7 @@ function ConsoleInner() {
   );
 
   return (
-    <UserDemoShell lang={lang} sidebar={sidebar} topbar={topbar} fab={fab} drawers={drawers} background="#F4F6F8" textColor="#111827" height="min" applyInterFont={false}>
+    <UserDemoShell lang={lang} sidebar={sidebar} header={topbar} fab={fab} drawers={drawers} background="#F4F6F8" textColor="#111827" height="min" applyInterFont={false}>
       <main className="flex-1 overflow-y-auto p-6">
         {view === "live-map" && <LiveMapView onOpenIncident={goToIncident} />}
         {view === "incident" && <IncidentWorkspaceView initialIncidentId={openIncidentId} onOpenApprovals={() => setView("approvals")} />}
