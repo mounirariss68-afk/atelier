@@ -567,15 +567,25 @@ export const insights = [
   <h2>A Four-Layer Architecture</h2>
   <p>Maven AI's framework is a deliberate response to those four failure modes. None of the layers is novel on its own; the discipline is treating all four as in-scope from day one rather than retrofitting the missing ones after a pilot stalls.</p>
   <figure>
-  <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="r1d1-t r1d1-d" preserveAspectRatio="xMidYMid meet"><title id="r1d1-t">Maven AI diagram</title><desc id="r1d1-d">Maven AI diagram</desc>
-  <rect x="0" y="0" width="600" height="320" fill="#F8FAFC"/>
-  <rect x="40" y="40" width="520" height="50" fill="#F5A623" rx="6"/><text x="300" y="71" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 0 — Value Case</text>
-  <rect x="40" y="100" width="520" height="50" fill="#156082" rx="6"/><text x="300" y="131" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 1 — Data &amp; AI Foundations</text>
-  <rect x="40" y="160" width="520" height="50" fill="#1A4F7A" rx="6"/><text x="300" y="191" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 2 — Agentic AI</text>
-  <rect x="40" y="220" width="520" height="50" fill="#0E2841" rx="6"/><text x="300" y="251" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Layer 3 — Change &amp; Adoption</text>
-  <text x="40" y="295" fill="#475569" font-size="12">Wrapped by: governance · observability · audit logs · regulator-grade controls</text>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="r1d1-t r1d1-d"><title id="r1d1-t">Maven four-layer architecture vs Tier-1 budget mix</title><desc id="r1d1-d">For each of the four agentic layers, the chart pairs the failure mode it neutralises with the share of programme budget Maven allocates versus a typical Tier-1 consultancy.</desc>
+  <rect width="700" height="280" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Layer · failure mode reversed</text>
+  <text x="430" y="22" font-size="12" font-weight="700" fill="#0E2841">Share of programme budget</text><text x="430" y="38" font-size="10" fill="#475569">Maven (filled) vs Tier-1 typical (outline)</text>
+  <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">L0 · Value Case</text><text x="32" y="86" fill="#fff" font-size="10">"No measurable outcome" → quantified before/after</text>
+  <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="540" y="70" font-size="10" fill="#0E2841" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
+  <rect x="20" y="104" width="380" height="44" fill="#156082" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">L1 · Data & Foundations</text><text x="32" y="140" fill="#fff" font-size="10">"Data not agent-ready" → lineage, masters, retrieval</text>
+  <rect x="430" y="112" width="160" height="14" fill="#156082"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="600" y="124" font-size="10" fill="#0E2841" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
+  <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">L2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot can't scale" → production agents, sovereign-fit</text>
+  <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="618" y="178" font-size="10" fill="#0E2841" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
+  <rect x="20" y="212" width="380" height="44" fill="#0E2841" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">L3 · Change & Adoption</text><text x="32" y="248" fill="#fff" font-size="10">"Adoption stalls" → role redesign, training, comms</text>
+  <rect x="430" y="220" width="125" height="14" fill="#0E2841"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="565" y="232" font-size="10" fill="#0E2841" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
+  <text x="20" y="272" font-size="10" fill="#475569" font-style="italic">Wrapper: governance · observability · audit · regulator-grade controls</text>
   </svg>
-  <figcaption>Figure 1 — The four-layer agentic architecture. The discipline is treating all four as in-scope from day one.</figcaption>
+  <figcaption>Figure 1 — The four-layer architecture, with each layer paired to the failure mode it reverses and to the budget share Maven allocates versus a typical Tier-1 plan. The diagnostic difference: Maven roughly doubles spend on Value Case (L0) and Change & Adoption (L3), the two layers Tier-1 firms underfund and that McKinsey identifies as the largest drivers of pilot-to-production failure.</figcaption>
   </figure>
   <h3>Layer 0 — Value Case</h3>
   <p>Outcome-led shaping. Specific decisions and actions the agent will own, with measurable before/after metrics. If the value case cannot be quantified, the engagement does not advance.</p>
@@ -588,17 +598,29 @@ export const insights = [
   <h2>A GCC Implementation Sequence</h2>
   <p>The phases are stable across organizations; the duration varies with data maturity.</p>
   <figure>
-  <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-2 svg-d-2"><title id="svg-t-2">26-week GCC implementation sequence</title><desc id="svg-d-2">Five-phase Gantt-style timeline from value case through change and launch over 26 weeks.</desc>
-  <rect x="0" y="0" width="700" height="200" fill="#F8FAFC"/>
-  <line x1="40" y1="170" x2="660" y2="170" stroke="#94A3B8" stroke-width="1"/>
-  <text x="40" y="190" font-size="11" fill="#475569">W1</text><text x="180" y="190" font-size="11" fill="#475569">W7</text><text x="320" y="190" font-size="11" fill="#475569">W12</text><text x="500" y="190" font-size="11" fill="#475569">W20</text><text x="640" y="190" font-size="11" fill="#475569">W26</text>
-  <rect x="40" y="40" width="100" height="22" fill="#F5A623" rx="3"/><text x="44" y="56" font-size="11" fill="#fff" font-weight="700">Value case</text>
-  <rect x="140" y="68" width="140" height="22" fill="#156082" rx="3"/><text x="144" y="84" font-size="11" fill="#fff" font-weight="700">Data readiness</text>
-  <rect x="240" y="96" width="140" height="22" fill="#1A4F7A" rx="3"/><text x="244" y="112" font-size="11" fill="#fff" font-weight="700">Prototype build</text>
-  <rect x="340" y="124" width="200" height="22" fill="#0E2841" rx="3"/><text x="344" y="140" font-size="11" fill="#fff" font-weight="700">Production hardening</text>
-  <rect x="500" y="40" width="160" height="22" fill="#7C3AED" rx="3"/><text x="504" y="56" font-size="11" fill="#fff" font-weight="700">Change &amp; launch</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-2 svg-d-2"><title id="svg-t-2">26-week GCC implementation sequence with go/no-go gates</title><desc id="svg-d-2">Gantt-style timeline of the five phases from value case through change and launch, with three critical go/no-go decision gates marked in amber.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="20" font-size="11" font-weight="700" fill="#0E2841">Critical path · five phases · three go/no-go gates</text>
+  <line x1="40" y1="180" x2="660" y2="180" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#94A3B8">
+  <line x1="40" y1="40" x2="40" y2="180" stroke="#E2E8F0"/><text x="40" y="200" text-anchor="middle">W1</text>
+  <line x1="160" y1="40" x2="160" y2="180" stroke="#E2E8F0"/><text x="160" y="200" text-anchor="middle">W6</text>
+  <line x1="280" y1="40" x2="280" y2="180" stroke="#E2E8F0"/><text x="280" y="200" text-anchor="middle">W11</text>
+  <line x1="400" y1="40" x2="400" y2="180" stroke="#E2E8F0"/><text x="400" y="200" text-anchor="middle">W16</text>
+  <line x1="520" y1="40" x2="520" y2="180" stroke="#E2E8F0"/><text x="520" y="200" text-anchor="middle">W21</text>
+  <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
+  </g>
+  <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Value case · W1–3</text>
+  <rect x="112" y="76" width="168" height="20" fill="#156082" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Data readiness · W4–10</text>
+  <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototype · W9–14</text>
+  <rect x="328" y="132" width="216" height="20" fill="#0E2841" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Production hardening · W13–22</text>
+  <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">Change & launch · W20–26</text>
+  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">Gate 1: ROI signed</text>
+  <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">Gate 2: Pilot proven</text>
+  <line x1="544" y1="44" x2="544" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#F5A623" text-anchor="end">Gate 3: Prod sign-off</text></g>
+  <text x="40" y="225" font-size="10" fill="#475569">No-go at any gate ends the programme — gates are designed to halt, not to delay.</text>
   </svg>
-  <figcaption>Figure 2 — Indicative 26-week GCC implementation sequence. Duration varies with data maturity.</figcaption>
+  <figcaption>Figure 2 — The 26-week sequence with three go/no-go gates. Weeks 1–3 must close with a quantified ROI; the prototype gate at W12 demands a measurable pilot outcome; production sign-off at W22 is conditioned on observability and rollback readiness. Skipping any gate is the most common driver of failed scale-up.</figcaption>
   </figure>
   <ul>
   <li><strong>Weeks 1–3 — Value case &amp; pilot selection.</strong> Quantified business case, executive sponsorship, single bounded use case.</li>
@@ -806,29 +828,51 @@ export const insights = [
 
   
   <figure>
-  <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-3 svg-d-3"><title id="svg-t-3">معمارية Maven AI متعددة الطبقات للوكلاء</title><desc id="svg-d-3">مخطط الطبقات يوضح الطبقة 0 حالة القيمة، الطبقة 1 أسس البيانات والذكاء الاصطناعي، الطبقة 2 الذكاء الاصطناعي الوكيل، الطبقة 3 التغيير والتبني، ملفوفة بضوابط الحوكمة والمراقبة والتدقيق.</desc>
-  <rect x="0" y="0" width="600" height="320" fill="#F8FAFC"/>
-  <rect x="40" y="40" width="520" height="50" fill="#F5A623" rx="6"/><text x="300" y="71" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 0 — حالة القيمة</text>
-  <rect x="40" y="100" width="520" height="50" fill="#156082" rx="6"/><text x="300" y="131" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 1 — أسس البيانات والذكاء الاصطناعي</text>
-  <rect x="40" y="160" width="520" height="50" fill="#1A4F7A" rx="6"/><text x="300" y="191" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 2 — الذكاء الاصطناعي الوكيل</text>
-  <rect x="40" y="220" width="520" height="50" fill="#0E2841" rx="6"/><text x="300" y="251" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">الطبقة 3 — التغيير والتبني</text>
-  <text x="40" y="295" fill="#475569" font-size="12">ملفوفة بـ: الحوكمة · المراقبة · سجلات التدقيق · ضوابط بدرجة تنظيمية</text>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-3 svg-d-3"><title id="svg-t-3">معمارية Maven الرباعية الطبقات مقابل توزيع ميزانية الفئة الأولى</title><desc id="svg-d-3">لكل طبقة من الطبقات الأربع للوكلاء، يربط الرسم بين وضع الفشل الذي تعالجه ونسبة الميزانية التي تخصصها Maven مقارنةً باستشاري الفئة الأولى التقليدي.</desc>
+  <rect width="700" height="280" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">الطبقة · وضع الفشل المُعالَج</text>
+  <text x="430" y="22" font-size="12" font-weight="700" fill="#0E2841">حصة ميزانية البرنامج</text><text x="430" y="38" font-size="10" fill="#475569">Maven (ممتلئ) مقابل الفئة الأولى التقليدي (محيط)</text>
+  <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">الطبقة 0 · حالة القيمة</text><text x="32" y="86" fill="#fff" font-size="10">"لا نتيجة قابلة للقياس" ← قبل/بعد مُكمَّم</text>
+  <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="540" y="70" font-size="10" fill="#0E2841" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (الفئة الأولى)</text>
+  <rect x="20" y="104" width="380" height="44" fill="#156082" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">الطبقة 1 · أسس البيانات</text><text x="32" y="140" fill="#fff" font-size="10">"البيانات غير جاهزة للوكيل" ← نسب البيانات والاسترجاع</text>
+  <rect x="430" y="112" width="160" height="14" fill="#156082"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="600" y="124" font-size="10" fill="#0E2841" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
+  <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">الطبقة 2 · الذكاء الوكيل</text><text x="32" y="194" fill="#fff" font-size="10">"التجربة لا تتوسع" ← وكلاء إنتاج · ملاءمة سيادية</text>
+  <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="618" y="178" font-size="10" fill="#0E2841" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
+  <rect x="20" y="212" width="380" height="44" fill="#0E2841" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">الطبقة 3 · التغيير والتبني</text><text x="32" y="248" fill="#fff" font-size="10">"التبني يتعثر" ← إعادة تصميم الأدوار · تدريب</text>
+  <rect x="430" y="220" width="125" height="14" fill="#0E2841"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="565" y="232" font-size="10" fill="#0E2841" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
+  <text x="20" y="272" font-size="10" fill="#475569" font-style="italic">إطار شامل: حوكمة · مراقبة · سجلات تدقيق · ضوابط بدرجة تنظيمية</text>
   </svg>
-  <figcaption>الشكل 1 — معمارية Maven AI متعددة الطبقات للوكلاء. الانضباط يتمثل في معاملة الطبقات الأربع كلها ضمن الاختصاص من اليوم الأول.</figcaption>
+  <figcaption>الشكل 1 — المعمارية الرباعية الطبقات، مع ربط كل طبقة بوضع الفشل الذي تعالجه وحصة الميزانية التي تخصصها Maven مقارنةً بخطة استشاري الفئة الأولى التقليدية. الفارق التشخيصي: تضاعف Maven تقريباً الإنفاق على حالة القيمة (L0) والتغيير والتبني (L3)، وهما الطبقتان اللتان تُنقص الفئة الأولى تمويلهما، وتحدّدهما ماكينزي بوصفهما المحرّكين الأكبرين لفشل الانتقال من التجربة إلى الإنتاج.</figcaption>
   </figure>
   
   <figure>
-  <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-4 svg-d-4"><title id="svg-t-4">تسلسل تنفيذ GCC لمدة 26 أسبوعًا</title><desc id="svg-d-4">جدول زمني بخمس مراحل على طراز Gantt من دراسة القيمة من خلال التغيير والإطلاق على مدى 26 أسبوعًا.</desc>
-  <rect x="0" y="0" width="700" height="200" fill="#F8FAFC"/>
-  <line x1="40" y1="170" x2="660" y2="170" stroke="#94A3B8" stroke-width="1"/>
-  <text x="40" y="190" font-size="11" fill="#475569">W1</text><text x="180" y="190" font-size="11" fill="#475569">W7</text><text x="320" y="190" font-size="11" fill="#475569">W12</text><text x="500" y="190" font-size="11" fill="#475569">W20</text><text x="640" y="190" font-size="11" fill="#475569">W26</text>
-  <rect x="40" y="40" width="100" height="22" fill="#F5A623" rx="3"/><text x="44" y="56" font-size="11" fill="#fff" font-weight="700">دراسة القيمة</text>
-  <rect x="140" y="68" width="140" height="22" fill="#156082" rx="3"/><text x="144" y="84" font-size="11" fill="#fff" font-weight="700">جاهزية البيانات</text>
-  <rect x="240" y="96" width="140" height="22" fill="#1A4F7A" rx="3"/><text x="244" y="112" font-size="11" fill="#fff" font-weight="700">بناء النموذج الأولي</text>
-  <rect x="340" y="124" width="200" height="22" fill="#0E2841" rx="3"/><text x="344" y="140" font-size="11" fill="#fff" font-weight="700">تصلب الإنتاج</text>
-  <rect x="500" y="40" width="160" height="22" fill="#7C3AED" rx="3"/><text x="504" y="56" font-size="11" fill="#fff" font-weight="700">التغيير والإطلاق</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-4 svg-d-4"><title id="svg-t-4">تسلسل تنفيذ GCC لمدة 26 أسبوعاً مع بوابات قرار</title><desc id="svg-d-4">جدول زمني على طراز Gantt للمراحل الخمس من حالة القيمة وحتى التغيير والإطلاق، مع ثلاث بوابات قرار حاسمة بلون كهرماني.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="20" font-size="11" font-weight="700" fill="#0E2841">المسار الحرج · خمس مراحل · ثلاث بوابات قرار</text>
+  <line x1="40" y1="180" x2="660" y2="180" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#94A3B8">
+  <line x1="40" y1="40" x2="40" y2="180" stroke="#E2E8F0"/><text x="40" y="200" text-anchor="middle">W1</text>
+  <line x1="160" y1="40" x2="160" y2="180" stroke="#E2E8F0"/><text x="160" y="200" text-anchor="middle">W6</text>
+  <line x1="280" y1="40" x2="280" y2="180" stroke="#E2E8F0"/><text x="280" y="200" text-anchor="middle">W11</text>
+  <line x1="400" y1="40" x2="400" y2="180" stroke="#E2E8F0"/><text x="400" y="200" text-anchor="middle">W16</text>
+  <line x1="520" y1="40" x2="520" y2="180" stroke="#E2E8F0"/><text x="520" y="200" text-anchor="middle">W21</text>
+  <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
+  </g>
+  <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">حالة القيمة · أ1–3</text>
+  <rect x="112" y="76" width="168" height="20" fill="#156082" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">جاهزية البيانات · أ4–10</text>
+  <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">النموذج الأولي · أ9–14</text>
+  <rect x="328" y="132" width="216" height="20" fill="#0E2841" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">تصلب الإنتاج · أ13–22</text>
+  <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">التغيير والإطلاق · أ20–26</text>
+  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">بوابة 1: عائد الاستثمار موقّع</text>
+  <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">بوابة 2: التجربة مُثبتة</text>
+  <line x1="544" y1="44" x2="544" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#F5A623" text-anchor="end">بوابة 3: اعتماد الإنتاج</text></g>
+  <text x="40" y="225" font-size="10" fill="#475569">الرفض عند أي بوابة ينهي البرنامج — البوابات مصممة للإيقاف لا للتأجيل.</text>
   </svg>
-  <figcaption>الشكل 2 — تسلسل تنفيذ GCC المؤشر لمدة 26 أسبوعًا. تختلف المدة حسب نضج البيانات.</figcaption>
+  <figcaption>الشكل 2 — تسلسل الـ26 أسبوعاً مع ثلاث بوابات قرار. يجب أن تنغلق الأسابيع 1–3 بعائد استثمار مُكمَّم؛ تتطلب بوابة النموذج الأولي في الأسبوع 12 نتيجة تجربة قابلة للقياس؛ يشترط اعتماد الإنتاج في الأسبوع 22 جاهزية المراقبة والاسترجاع. تخطي أي بوابة هو السبب الأكثر شيوعاً لفشل التوسع.</figcaption>
   </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
@@ -958,29 +1002,51 @@ export const insights = [
 
   
   <figure>
-  <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-5 svg-d-5"><title id="svg-t-5">Maven AI dört katmanlı agentic mimarisi</title><desc id="svg-d-5">Katman 0 Değer Durumu, Katman 1 Veri ve AI Temelleri, Katman 2 Agentic AI, Katman 3 Değişim ve Benimseme'yi gösteren yığın diyagramı, yönetişim, gözlemlenebilirlik ve denetim kontrolleriyle sarılmış.</desc>
-  <rect x="0" y="0" width="600" height="320" fill="#F8FAFC"/>
-  <rect x="40" y="40" width="520" height="50" fill="#F5A623" rx="6"/><text x="300" y="71" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 0 — Değer Durumu</text>
-  <rect x="40" y="100" width="520" height="50" fill="#156082" rx="6"/><text x="300" y="131" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 1 — Veri &amp; AI Temelleri</text>
-  <rect x="40" y="160" width="520" height="50" fill="#1A4F7A" rx="6"/><text x="300" y="191" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 2 — Agentic AI</text>
-  <rect x="40" y="220" width="520" height="50" fill="#0E2841" rx="6"/><text x="300" y="251" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">Katman 3 — Değişim &amp; Benimseme</text>
-  <text x="40" y="295" fill="#475569" font-size="12">Sarılı: yönetişim · gözlemlenebilirlik · denetim günlükleri · düzenleyici-sınıf kontroller</text>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-5 svg-d-5"><title id="svg-t-5">Maven dört katmanlı mimarisi vs Tier-1 bütçe dağılımı</title><desc id="svg-d-5">Dört agentic katmanın her biri için, çizim katmanın etkisizleştirdiği başarısızlık modunu Maven'in tipik bir Tier-1 danışmanlığa kıyasla bu katmana ayırdığı program bütçesi payıyla eşleştirir.</desc>
+  <rect width="700" height="280" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Katman · tersine çevrilen başarısızlık</text>
+  <text x="430" y="22" font-size="12" font-weight="700" fill="#0E2841">Program bütçesi payı</text><text x="430" y="38" font-size="10" fill="#475569">Maven (dolu) vs Tier-1 tipik (kontur)</text>
+  <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">K0 · Değer Durumu</text><text x="32" y="86" fill="#fff" font-size="10">"Ölçülebilir sonuç yok" → nicelendirilmiş öncesi/sonrası</text>
+  <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="540" y="70" font-size="10" fill="#0E2841" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
+  <rect x="20" y="104" width="380" height="44" fill="#156082" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">K1 · Veri & Temeller</text><text x="32" y="140" fill="#fff" font-size="10">"Veri ajan için hazır değil" → soyağacı, getirme</text>
+  <rect x="430" y="112" width="160" height="14" fill="#156082"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="600" y="124" font-size="10" fill="#0E2841" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
+  <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">K2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot ölçeklenemiyor" → üretim ajanları · egemenlik uyumu</text>
+  <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="618" y="178" font-size="10" fill="#0E2841" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
+  <rect x="20" y="212" width="380" height="44" fill="#0E2841" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">K3 · Değişim & Benimseme</text><text x="32" y="248" fill="#fff" font-size="10">"Benimseme tıkanıyor" → rol tasarımı · eğitim · iletişim</text>
+  <rect x="430" y="220" width="125" height="14" fill="#0E2841"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="565" y="232" font-size="10" fill="#0E2841" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
+  <text x="20" y="272" font-size="10" fill="#475569" font-style="italic">Sarmalayan: yönetişim · gözlemlenebilirlik · denetim · düzenleyici-sınıf kontroller</text>
   </svg>
-  <figcaption>Şekil 1 — Dört katmanlı agentic mimarisi. Disiplin, başından itibaren dördünün de kapsamda olmasıdır.</figcaption>
+  <figcaption>Şekil 1 — Dört katmanlı mimari, her katmanın tersine çevirdiği başarısızlık modu ve Maven'in tipik bir Tier-1 plana kıyasla ayırdığı bütçe payı ile eşleştirilmiş. Tanısal fark: Maven, Değer Durumu (K0) ve Değişim & Benimseme (K3) için harcamayı kabaca iki katına çıkarır — bunlar Tier-1 firmaların yetersiz finanse ettiği ve McKinsey'nin pilot-üretim başarısızlığının en büyük itici güçleri olarak tanımladığı iki katmandır.</figcaption>
   </figure>
   
   <figure>
-  <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-6 svg-d-6"><title id="svg-t-6">26 haftalık GCC uygulama sırası</title><desc id="svg-d-6">Değer durumundan değişim ve başlatmaya kadar 26 hafta içinde beş aşamalı Gantt tarzı zaman çizelgesi.</desc>
-  <rect x="0" y="0" width="700" height="200" fill="#F8FAFC"/>
-  <line x1="40" y1="170" x2="660" y2="170" stroke="#94A3B8" stroke-width="1"/>
-  <text x="40" y="190" font-size="11" fill="#475569">H1</text><text x="180" y="190" font-size="11" fill="#475569">H7</text><text x="320" y="190" font-size="11" fill="#475569">H12</text><text x="500" y="190" font-size="11" fill="#475569">H20</text><text x="640" y="190" font-size="11" fill="#475569">H26</text>
-  <rect x="40" y="40" width="100" height="22" fill="#F5A623" rx="3"/><text x="44" y="56" font-size="11" fill="#fff" font-weight="700">Değer durumu</text>
-  <rect x="140" y="68" width="140" height="22" fill="#156082" rx="3"/><text x="144" y="84" font-size="11" fill="#fff" font-weight="700">Veri hazırlığı</text>
-  <rect x="240" y="96" width="140" height="22" fill="#1A4F7A" rx="3"/><text x="244" y="112" font-size="11" fill="#fff" font-weight="700">Prototip inşaatı</text>
-  <rect x="340" y="124" width="200" height="22" fill="#0E2841" rx="3"/><text x="344" y="140" font-size="11" fill="#fff" font-weight="700">Üretim sertleştirme</text>
-  <rect x="500" y="40" width="160" height="22" fill="#7C3AED" rx="3"/><text x="504" y="56" font-size="11" fill="#fff" font-weight="700">Değişim &amp; başlatma</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-6 svg-d-6"><title id="svg-t-6">Karar kapılı 26 haftalık GCC uygulama sırası</title><desc id="svg-d-6">Değer durumundan değişim ve başlatmaya kadar beş aşamanın Gantt tarzı zaman çizelgesi, kehribar renkli üç kritik git/gitme kapısı ile.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="20" font-size="11" font-weight="700" fill="#0E2841">Kritik yol · beş aşama · üç git/gitme kapısı</text>
+  <line x1="40" y1="180" x2="660" y2="180" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#94A3B8">
+  <line x1="40" y1="40" x2="40" y2="180" stroke="#E2E8F0"/><text x="40" y="200" text-anchor="middle">W1</text>
+  <line x1="160" y1="40" x2="160" y2="180" stroke="#E2E8F0"/><text x="160" y="200" text-anchor="middle">W6</text>
+  <line x1="280" y1="40" x2="280" y2="180" stroke="#E2E8F0"/><text x="280" y="200" text-anchor="middle">W11</text>
+  <line x1="400" y1="40" x2="400" y2="180" stroke="#E2E8F0"/><text x="400" y="200" text-anchor="middle">W16</text>
+  <line x1="520" y1="40" x2="520" y2="180" stroke="#E2E8F0"/><text x="520" y="200" text-anchor="middle">W21</text>
+  <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
+  </g>
+  <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Değer durumu · H1–3</text>
+  <rect x="112" y="76" width="168" height="20" fill="#156082" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Veri hazırlığı · H4–10</text>
+  <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototip · H9–14</text>
+  <rect x="328" y="132" width="216" height="20" fill="#0E2841" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Üretim sertleştirme · H13–22</text>
+  <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">Değişim & başlatma · H20–26</text>
+  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">Kapı 1: ROI imzalı</text>
+  <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">Kapı 2: Pilot kanıtlandı</text>
+  <line x1="544" y1="44" x2="544" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#F5A623" text-anchor="end">Kapı 3: Üretim onayı</text></g>
+  <text x="40" y="225" font-size="10" fill="#475569">Herhangi bir kapıdaki "gitme" kararı programı sonlandırır — kapılar geciktirmek için değil, durdurmak için tasarlanmıştır.</text>
   </svg>
-  <figcaption>Şekil 2 — GCC uygulamasının gösterişli 26 haftalık sırası. Süre veri olgunluğuna göre değişir.</figcaption>
+  <figcaption>Şekil 2 — Üç git/gitme kapılı 26 haftalık sıra. Haftalar 1–3 nicelendirilmiş bir ROI ile kapanmalıdır; H12'deki prototip kapısı ölçülebilir bir pilot sonucu talep eder; H22'deki üretim onayı gözlemlenebilirlik ve geri alma hazırlığına bağlıdır. Herhangi bir kapıyı atlamak, başarısız ölçeklenmenin en yaygın itici gücüdür.</figcaption>
   </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
@@ -1027,15 +1093,26 @@ export const insights = [
   <p>Stanford HAI's <em>2025 AI Index</em> reports that 78% of organizations now use AI in at least one function — but responsible-AI evaluation and incident reporting have not scaled at the same rate (<a href="https://hai.stanford.edu/ai-index/2025-ai-index-report" target="_blank" rel="noopener noreferrer">Stanford HAI, 2025</a>). The OECD AI Incidents Monitor records a steady rise in AI-related harms, the majority of which trace to inadequate testing, monitoring, or oversight rather than to model capability (<a href="https://oecd.ai/en/incidents" target="_blank" rel="noopener noreferrer">OECD AI Incidents Monitor</a>). For GCC organizations, the regulator-side risk is real and increasing.</p>
   <h2>Five Capability Domains</h2>
   <figure>
-  <svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-7 svg-d-7"><title id="svg-t-7">Five capability domains for GCC AI governance</title><desc id="svg-d-7">Pentagon-style diagram showing data lineage, model risk, explainability, human oversight, and bias and ethics domains.</desc>
-  <rect x="0" y="0" width="600" height="240" fill="#F8FAFC"/>
-  <rect x="20" y="30" width="170" height="80" fill="#156082" rx="6"/><text x="105" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Data Lineage</text><text x="105" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Provenance</text>
-  <rect x="215" y="30" width="170" height="80" fill="#1A4F7A" rx="6"/><text x="300" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Model Risk</text><text x="300" y="85" text-anchor="middle" fill="#fff" font-size="11">Management</text>
-  <rect x="410" y="30" width="170" height="80" fill="#0E2841" rx="6"/><text x="495" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Explainability</text><text x="495" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Audit Trails</text>
-  <rect x="115" y="130" width="170" height="80" fill="#F5A623" rx="6"/><text x="200" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. Human Oversight</text><text x="200" y="185" text-anchor="middle" fill="#fff" font-size="11">&amp; Escalation</text>
-  <rect x="315" y="130" width="170" height="80" fill="#7C3AED" rx="6"/><text x="400" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Bias &amp; Ethics</text><text x="400" y="185" text-anchor="middle" fill="#fff" font-size="11">Management</text>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-7 svg-d-7"><title id="svg-t-7">Five capability domains × four governance frameworks coverage matrix</title><desc id="svg-d-7">Matrix mapping the five GCC AI capability domains against SDAIA AI Ethics, SAMA model risk, NIST AI RMF and the EU AI Act, with filled circles for mandatory, half-fill for guidance and outline for not addressed.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Five domains × four frameworks: which mandates what</text>
+  <g font-size="10" font-weight="700" fill="#0E2841" text-anchor="middle">
+  <text x="320" y="50">SDAIA AI Ethics</text><text x="420" y="50">SAMA MRM</text><text x="520" y="50">NIST AI RMF</text><text x="620" y="50">EU AI Act</text>
+  </g>
+  <line x1="270" y1="58" x2="670" y2="58" stroke="#CBD5E1"/>
+  <g font-size="11" fill="#0E2841">
+  <text x="20" y="86">1. Data Lineage & Provenance</text><text x="20" y="118">2. Model Risk Management</text><text x="20" y="150">3. Explainability & Audit</text><text x="20" y="182">4. Human Oversight</text><text x="20" y="214">5. Bias & Ethics</text>
+  </g>
+  <circle cx="320" cy="82" r="9" fill="#156082"/><circle cx="420" cy="82" r="9" fill="#156082"/><circle cx="520" cy="82" r="9" fill="#156082" fill-opacity="0.35"/><circle cx="620" cy="82" r="9" fill="#156082"/>
+  <circle cx="320" cy="114" r="9" fill="#1A4F7A" fill-opacity="0.35"/><circle cx="420" cy="114" r="9" fill="#1A4F7A"/><circle cx="520" cy="114" r="9" fill="#1A4F7A"/><circle cx="620" cy="114" r="9" fill="#1A4F7A"/>
+  <circle cx="320" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="420" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="520" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="620" cy="146" r="9" fill="#F5A623"/>
+  <circle cx="320" cy="178" r="9" fill="#0E2841"/><circle cx="420" cy="178" r="9" fill="#0E2841"/><circle cx="520" cy="178" r="9" fill="#0E2841"/><circle cx="620" cy="178" r="9" fill="#0E2841"/>
+  <circle cx="320" cy="210" r="9" fill="#7C3AED"/><circle cx="420" cy="210" r="9" fill="#7C3AED" fill-opacity="0.35"/><circle cx="520" cy="210" r="9" fill="#7C3AED" fill-opacity="0.35"/><circle cx="620" cy="210" r="9" fill="#7C3AED"/>
+  <circle cx="40" cy="240" r="6" fill="#0E2841"/><text x="52" y="244" font-size="10" fill="#0E2841">Mandatory</text>
+  <circle cx="160" cy="240" r="6" fill="#0E2841" fill-opacity="0.35"/><text x="172" y="244" font-size="10" fill="#0E2841">Guidance</text>
+  <circle cx="280" cy="240" r="6" fill="none" stroke="#CBD5E1" stroke-width="1.5"/><text x="292" y="244" font-size="10" fill="#475569">Not addressed</text>
   </svg>
-  <figcaption>Figure 1 — The five capability domains every regulated GCC AI deployment now needs.</figcaption>
+  <figcaption>Figure 1 — Five capability domains plotted against the four frameworks GCC operators answer to. Human oversight is universally mandatory; explainability (row 3, in amber) is the most unevenly enforced — the single largest source of audit findings against GCC AI deployments.</figcaption>
   </figure>
   <h3>1. Data Lineage &amp; Provenance</h3>
   <p>Where the data came from, how it was transformed, who authorized its use. A pre-condition under both UAE and Saudi PDPL — and the foundation every other governance domain depends on.</p>
@@ -1128,7 +1205,33 @@ export const insights = [
 
 <p>This is not regulatory conspiracy; it is a straightforward reflection of how governments in the region approach technology sovereignty. Organizations that treat these expectations as negotiable points rather than non-negotiable requirements will find procurement processes stalling or failing. Organizations that embed them into their standard offering model will win bids.</p>
   
-  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-8 svg-d-8"><title id="svg-t-8">Governance Maturity</title><desc id="svg-d-8">Governance Maturity</desc><rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/><rect x="40" y="160" width="160" height="50" fill="#0E2841"/><rect x="220" y="120" width="160" height="90" fill="#1A4F7A"/><rect x="400" y="60" width="160" height="150" fill="#156082"/><text x="120" y="190" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Tier 1 — Reactive</text><text x="300" y="170" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Tier 2 — Managed</text><text x="480" y="140" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Tier 3 — Strategic</text><text x="120" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Policy only</text><text x="300" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Controls + monitoring</text><text x="480" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Embedded in operating model</text><line x1="40" y1="220" x2="660" y2="220" stroke="#F5A623" stroke-width="2"/></svg><figcaption>Three-tier AI governance maturity model for GCC enterprises</figcaption></figure>
+  <figure>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-8 svg-d-8"><title id="svg-t-8">Three-tier governance maturity with quantified KPI deltas</title><desc id="svg-d-8">Step ladder of three maturity tiers showing controls in place, mean time to detect incidents and audit-fail risk dropping from tier 1 reactive to tier 3 strategic.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="24" font-size="12" font-weight="700" fill="#0E2841">Tier deltas: what changes as governance matures</text>
+  <rect x="40" y="160" width="180" height="60" fill="#0E2841" rx="6"/>
+  <text x="130" y="180" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Tier 1 · Reactive</text>
+  <text x="130" y="196" text-anchor="middle" fill="#cbd5e1" font-size="9">Policy only · ad-hoc reviews</text>
+  <text x="130" y="212" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">~12 controls live</text>
+  <rect x="240" y="115" width="180" height="105" fill="#1A4F7A" rx="6"/>
+  <text x="330" y="138" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Tier 2 · Managed</text>
+  <text x="330" y="155" text-anchor="middle" fill="#cbd5e1" font-size="9">Controls + monitoring</text>
+  <text x="330" y="180" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">25–60 controls live</text>
+  <text x="330" y="196" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">MTTD ≤ 14d</text>
+  <rect x="440" y="60" width="220" height="160" fill="#156082" rx="6"/>
+  <text x="550" y="86" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Tier 3 · Strategic</text>
+  <text x="550" y="104" text-anchor="middle" fill="#cbd5e1" font-size="9">Embedded in operating model</text>
+  <text x="550" y="135" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">100+ controls live</text>
+  <text x="550" y="155" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">MTTD &lt; 24h · auto-rollback</text>
+  <text x="550" y="175" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Quarterly board KPIs</text>
+  <text x="550" y="195" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Audit-fail risk: low</text>
+  <text x="130" y="230" text-anchor="middle" fill="#0E2841" font-size="9" font-weight="700">MTTD > 30d</text>
+  <text x="130" y="244" text-anchor="middle" fill="#0E2841" font-size="9" font-weight="700">Audit risk: high</text>
+  <line x1="40" y1="252" x2="660" y2="252" stroke="#F5A623" stroke-width="2"/>
+  <text x="40" y="258" font-size="9" fill="#475569">MTTD = mean-time-to-detect a model incident · controls per NIST AI RMF mapping</text>
+  </svg>
+  <figcaption>Figure 2 — Maturity expressed as quantified deltas, not just labels. Moving from Tier 1 to Tier 3 cuts incident detection time from a month to under a day and turns audit findings from likely to negligible.</figcaption>
+  </figure>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>UAE AI Office — <em>National Strategy for AI 2031</em> &amp; <em>UAE Charter for AI</em>. <a href="https://ai.gov.ae/" target="_blank" rel="noopener noreferrer">ai.gov.ae</a></li>
@@ -1250,18 +1353,55 @@ export const insights = [
 
 <p>هذا ليس مؤامرة تنظيمية؛ بل هو انعكاس مباشر لكيفية اقتراب الحكومات في المنطقة من سيادة التكنولوجيا. ستجد المنظمات التي تعامل هذه التوقعات كنقاط قابلة للتفاوض بدلاً من المتطلبات غير القابلة للتفاوض عمليات الشراء تتوقف أو تفشل. ستفوز المنظمات التي تدمجها في نموذج عروضها القياسي بالعطاءات.</p>
   
-  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-9 svg-d-9"><title id="svg-t-9">نضج الحوكمة</title><desc id="svg-d-9">نضج الحوكمة</desc><rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/><rect x="40" y="160" width="160" height="50" fill="#0E2841"/><rect x="220" y="120" width="160" height="90" fill="#1A4F7A"/><rect x="400" y="60" width="160" height="150" fill="#156082"/><text x="120" y="190" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">المستوى ١ — تفاعلي</text><text x="300" y="170" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">المستوى ٢ — مُدار</text><text x="480" y="140" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">المستوى ٣ — استراتيجي</text><text x="120" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">سياسات فقط</text><text x="300" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">ضوابط ورصد</text><text x="480" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">مدمجة في نموذج التشغيل</text><line x1="40" y1="220" x2="660" y2="220" stroke="#F5A623" stroke-width="2"/></svg><figcaption>نموذج نضج حوكمة الذكاء الاصطناعي ثلاثي المستويات لمؤسسات GCC</figcaption></figure>
+  <figure>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-9 svg-d-9"><title id="svg-t-9">ثلاثة مستويات نضج للحوكمة مع فروق KPI مُكمَّمة</title><desc id="svg-d-9">سلم تدرّجي من ثلاثة مستويات نضج يُظهر الضوابط الفاعلة، ومتوسط زمن اكتشاف الحوادث، ومخاطر فشل التدقيق وهي تنخفض من المستوى 1 التفاعلي إلى المستوى 3 الاستراتيجي.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="24" font-size="12" font-weight="700" fill="#0E2841">فروق المستويات: ما الذي يتغيّر مع نضج الحوكمة</text>
+  <rect x="40" y="160" width="180" height="60" fill="#0E2841" rx="6"/>
+  <text x="130" y="180" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">المستوى 1 · تفاعلي</text>
+  <text x="130" y="196" text-anchor="middle" fill="#cbd5e1" font-size="9">سياسات فقط · مراجعات عشوائية</text>
+  <text x="130" y="212" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">~12 ضابط فاعل</text>
+  <rect x="240" y="115" width="180" height="105" fill="#1A4F7A" rx="6"/>
+  <text x="330" y="138" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">المستوى 2 · مُدار</text>
+  <text x="330" y="155" text-anchor="middle" fill="#cbd5e1" font-size="9">ضوابط + مراقبة</text>
+  <text x="330" y="180" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">25–60 ضابط فاعل</text>
+  <text x="330" y="196" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">MTTD ≤ 14 يوم</text>
+  <rect x="440" y="60" width="220" height="160" fill="#156082" rx="6"/>
+  <text x="550" y="86" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">المستوى 3 · استراتيجي</text>
+  <text x="550" y="104" text-anchor="middle" fill="#cbd5e1" font-size="9">مدمج في نموذج التشغيل</text>
+  <text x="550" y="135" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">100+ ضابط فاعل</text>
+  <text x="550" y="155" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">MTTD &lt; 24 ساعة · استرجاع تلقائي</text>
+  <text x="550" y="175" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">مؤشرات مجلس فصلية</text>
+  <text x="550" y="195" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">مخاطر فشل التدقيق: منخفضة</text>
+  <text x="130" y="230" text-anchor="middle" fill="#0E2841" font-size="9" font-weight="700">MTTD > 30 يوم</text>
+  <text x="130" y="244" text-anchor="middle" fill="#0E2841" font-size="9" font-weight="700">مخاطر التدقيق: عالية</text>
+  <line x1="40" y1="252" x2="660" y2="252" stroke="#F5A623" stroke-width="2"/>
+  <text x="40" y="258" font-size="9" fill="#475569">MTTD = متوسط زمن اكتشاف حادث النموذج · الضوابط وفق NIST AI RMF</text>
+  </svg>
+  <figcaption>الشكل 2 — النضج مُعبَّر عنه بفروق مُكمَّمة لا مجرد تسميات. الانتقال من المستوى 1 إلى المستوى 3 يخفض زمن اكتشاف الحوادث من شهر إلى أقل من يوم ويحوّل ملاحظات التدقيق من محتملة إلى مهملة.</figcaption>
+  </figure>
   
   <figure>
-  <svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-10 svg-d-10"><title id="svg-t-10">خمسة مجالات قدرة لحوكمة الذكاء الاصطناعي في دول مجلس التعاون الخليجي</title><desc id="svg-d-10">رسم تخطيطي على شكل خماسي يوضح مجالات تتبع البيانات وخطر النموذج والقابلية للشرح والإشراف البشري والتحيز والأخلاقيات.</desc>
-  <rect x="0" y="0" width="600" height="240" fill="#F8FAFC"/>
-  <rect x="20" y="30" width="170" height="80" fill="#156082" rx="6"/><text x="105" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">١. تتبع البيانات</text><text x="105" y="85" text-anchor="middle" fill="#fff" font-size="11">والمصدر</text>
-  <rect x="215" y="30" width="170" height="80" fill="#1A4F7A" rx="6"/><text x="300" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٢. إدارة خطر</text><text x="300" y="85" text-anchor="middle" fill="#fff" font-size="11">النموذج</text>
-  <rect x="410" y="30" width="170" height="80" fill="#0E2841" rx="6"/><text x="495" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٣. القابلية للشرح</text><text x="495" y="85" text-anchor="middle" fill="#fff" font-size="11">ومسارات التدقيق</text>
-  <rect x="115" y="130" width="170" height="80" fill="#F5A623" rx="6"/><text x="200" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٤. الإشراف البشري</text><text x="200" y="185" text-anchor="middle" fill="#fff" font-size="11">والتصعيد</text>
-  <rect x="315" y="130" width="170" height="80" fill="#7C3AED" rx="6"/><text x="400" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">٥. إدارة التحيز</text><text x="400" y="185" text-anchor="middle" fill="#fff" font-size="11">والأخلاقيات</text>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-10 svg-d-10"><title id="svg-t-10">مصفوفة تغطية: خمسة مجالات قدرة × أربعة أطر حوكمة</title><desc id="svg-d-10">مصفوفة تقابل مجالات قدرة الذكاء الاصطناعي الخمسة في الخليج مع SDAIA AI Ethics وSAMA لإدارة مخاطر النماذج وNIST AI RMF وقانون الاتحاد الأوروبي للذكاء الاصطناعي، بدوائر ممتلئة للإلزام ونصف ممتلئة للإرشاد ومحيط فارغ لعدم التغطية.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">خمسة مجالات × أربعة أطر: ماذا يفرض كل إطار</text>
+  <g font-size="10" font-weight="700" fill="#0E2841" text-anchor="middle">
+  <text x="320" y="50">SDAIA لأخلاقيات الذكاء</text><text x="420" y="50">SAMA MRM</text><text x="520" y="50">NIST AI RMF</text><text x="620" y="50">قانون الاتحاد الأوروبي</text>
+  </g>
+  <line x1="270" y1="58" x2="670" y2="58" stroke="#CBD5E1"/>
+  <g font-size="11" fill="#0E2841">
+  <text x="20" y="86">١. تتبع البيانات والمصدر</text><text x="20" y="118">٢. إدارة مخاطر النماذج</text><text x="20" y="150">٣. القابلية للشرح والتدقيق</text><text x="20" y="182">٤. الإشراف البشري</text><text x="20" y="214">٥. التحيز والأخلاقيات</text>
+  </g>
+  <circle cx="320" cy="82" r="9" fill="#156082"/><circle cx="420" cy="82" r="9" fill="#156082"/><circle cx="520" cy="82" r="9" fill="#156082" fill-opacity="0.35"/><circle cx="620" cy="82" r="9" fill="#156082"/>
+  <circle cx="320" cy="114" r="9" fill="#1A4F7A" fill-opacity="0.35"/><circle cx="420" cy="114" r="9" fill="#1A4F7A"/><circle cx="520" cy="114" r="9" fill="#1A4F7A"/><circle cx="620" cy="114" r="9" fill="#1A4F7A"/>
+  <circle cx="320" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="420" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="520" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="620" cy="146" r="9" fill="#F5A623"/>
+  <circle cx="320" cy="178" r="9" fill="#0E2841"/><circle cx="420" cy="178" r="9" fill="#0E2841"/><circle cx="520" cy="178" r="9" fill="#0E2841"/><circle cx="620" cy="178" r="9" fill="#0E2841"/>
+  <circle cx="320" cy="210" r="9" fill="#7C3AED"/><circle cx="420" cy="210" r="9" fill="#7C3AED" fill-opacity="0.35"/><circle cx="520" cy="210" r="9" fill="#7C3AED" fill-opacity="0.35"/><circle cx="620" cy="210" r="9" fill="#7C3AED"/>
+  <circle cx="40" cy="240" r="6" fill="#0E2841"/><text x="52" y="244" font-size="10" fill="#0E2841">إلزامي</text>
+  <circle cx="160" cy="240" r="6" fill="#0E2841" fill-opacity="0.35"/><text x="172" y="244" font-size="10" fill="#0E2841">إرشادي</text>
+  <circle cx="280" cy="240" r="6" fill="none" stroke="#CBD5E1" stroke-width="1.5"/><text x="292" y="244" font-size="10" fill="#475569">غير مُعالَج</text>
   </svg>
-  <figcaption>الشكل ١ — مجالات القدرة الخمسة التي يحتاجها كل نشر ذكاء اصطناعي منظم في دول مجلس التعاون الخليجي الآن.</figcaption>
+  <figcaption>الشكل 1 — خمسة مجالات قدرة مقابل الأطر الأربعة التي يستجيب لها مشغلو الخليج. الإشراف البشري إلزامي عالمياً؛ القابلية للشرح (السطر 3 بالكهرماني) هي الأكثر تفاوتاً في التطبيق — والمصدر الأكبر منفرداً لملاحظات التدقيق ضد عمليات نشر الذكاء الاصطناعي في الخليج.</figcaption>
   </figure>
   <h2>المصادر والمراجع</h2>
     <ol class="sources-list">
@@ -1384,18 +1524,55 @@ export const insights = [
 
 <p>Bu düzenleyici komplo değildir; bölgedeki hükümetlerin teknoloji egemenliğine nasıl yaklaştıklarının doğrudan bir yansımasıdır. Bu beklentileri müzakere edilebilir noktalar yerine müzakere edilemez gereklilikler olarak ele alan kuruluşlar, tedarik süreçlerinin durduğunu veya başarısız olduğunu bulacaktır. Bunları standart teklif modellerine gömülen kuruluşlar, teklifleri kazanacaktır.</p>
   
-  <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-11 svg-d-11"><title id="svg-t-11">Yönetişim Olgunluğu</title><desc id="svg-d-11">Yönetişim Olgunluğu</desc><rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/><rect x="40" y="160" width="160" height="50" fill="#0E2841"/><rect x="220" y="120" width="160" height="90" fill="#1A4F7A"/><rect x="400" y="60" width="160" height="150" fill="#156082"/><text x="120" y="190" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Seviye 1 — Reaktif</text><text x="300" y="170" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Seviye 2 — Yönetilen</text><text x="480" y="140" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Seviye 3 — Stratejik</text><text x="120" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Sadece politika</text><text x="300" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Kontroller ve izleme</text><text x="480" y="30" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">Operasyon modeline gömülü</text><line x1="40" y1="220" x2="660" y2="220" stroke="#F5A623" stroke-width="2"/></svg><figcaption>GCC işletmeleri için üç katmanlı AI yönetişim olgunluk modeli</figcaption></figure>
+  <figure>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-11 svg-d-11"><title id="svg-t-11">Üç seviyeli yönetişim olgunluğu, nicelendirilmiş KPI farkları ile</title><desc id="svg-d-11">Üç olgunluk seviyesinin merdiveni; uygulanan kontroller, ortalama olay tespit süresi ve denetim başarısızlık riskinin Seviye 1 reaktiften Seviye 3 stratejiğe doğru düştüğünü gösterir.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="24" font-size="12" font-weight="700" fill="#0E2841">Seviye farkları: yönetişim olgunlaştıkça ne değişir</text>
+  <rect x="40" y="160" width="180" height="60" fill="#0E2841" rx="6"/>
+  <text x="130" y="180" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Seviye 1 · Reaktif</text>
+  <text x="130" y="196" text-anchor="middle" fill="#cbd5e1" font-size="9">Sadece politika · ad-hoc incelemeler</text>
+  <text x="130" y="212" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">~12 aktif kontrol</text>
+  <rect x="240" y="115" width="180" height="105" fill="#1A4F7A" rx="6"/>
+  <text x="330" y="138" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Seviye 2 · Yönetilen</text>
+  <text x="330" y="155" text-anchor="middle" fill="#cbd5e1" font-size="9">Kontroller + izleme</text>
+  <text x="330" y="180" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">25–60 aktif kontrol</text>
+  <text x="330" y="196" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">MTTD ≤ 14g</text>
+  <rect x="440" y="60" width="220" height="160" fill="#156082" rx="6"/>
+  <text x="550" y="86" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Seviye 3 · Stratejik</text>
+  <text x="550" y="104" text-anchor="middle" fill="#cbd5e1" font-size="9">Operasyon modeline gömülü</text>
+  <text x="550" y="135" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">100+ aktif kontrol</text>
+  <text x="550" y="155" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">MTTD &lt; 24s · oto geri-alma</text>
+  <text x="550" y="175" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Üç aylık kurul KPI'ları</text>
+  <text x="550" y="195" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Denetim risk: düşük</text>
+  <text x="130" y="230" text-anchor="middle" fill="#0E2841" font-size="9" font-weight="700">MTTD > 30g</text>
+  <text x="130" y="244" text-anchor="middle" fill="#0E2841" font-size="9" font-weight="700">Denetim riski: yüksek</text>
+  <line x1="40" y1="252" x2="660" y2="252" stroke="#F5A623" stroke-width="2"/>
+  <text x="40" y="258" font-size="9" fill="#475569">MTTD = bir model olayını tespit etmenin ortalama süresi · kontroller NIST AI RMF eşlemesine göre</text>
+  </svg>
+  <figcaption>Şekil 2 — Olgunluk, sadece etiketler olarak değil nicelendirilmiş farklar olarak ifade edilir. Seviye 1'den Seviye 3'e geçiş olay tespit süresini bir aydan bir günün altına indirir ve denetim bulgularını olası olmaktan ihmal edilebilir hale getirir.</figcaption>
+  </figure>
   
   <figure>
-  <svg viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-12 svg-d-12"><title id="svg-t-12">GCC AI yönetişimi için beş yetenek alanı</title><desc id="svg-d-12">Veri kökenselliği, model riski, açıklanabilirlik, insan gözetimi ve önyargı ve etik alanlarını gösteren beşgen tarzı diyagram.</desc>
-  <rect x="0" y="0" width="600" height="240" fill="#F8FAFC"/>
-  <rect x="20" y="30" width="170" height="80" fill="#156082" rx="6"/><text x="105" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Veri Kökenselliği</text><text x="105" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Kaynağı</text>
-  <rect x="215" y="30" width="170" height="80" fill="#1A4F7A" rx="6"/><text x="300" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Model Riski</text><text x="300" y="85" text-anchor="middle" fill="#fff" font-size="11">Yönetimi</text>
-  <rect x="410" y="30" width="170" height="80" fill="#0E2841" rx="6"/><text x="495" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Açıklanabilirlik</text><text x="495" y="85" text-anchor="middle" fill="#fff" font-size="11">&amp; Denetim İzleri</text>
-  <rect x="115" y="130" width="170" height="80" fill="#F5A623" rx="6"/><text x="200" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. İnsan Gözetimi</text><text x="200" y="185" text-anchor="middle" fill="#fff" font-size="11">&amp; Yükseltme</text>
-  <rect x="315" y="130" width="170" height="80" fill="#7C3AED" rx="6"/><text x="400" y="165" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Önyargı &amp; Etik</text><text x="400" y="185" text-anchor="middle" fill="#fff" font-size="11">Yönetimi</text>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-12 svg-d-12"><title id="svg-t-12">Kapsama matrisi: beş yetenek alanı × dört yönetişim çerçevesi</title><desc id="svg-d-12">Beş GCC AI yetenek alanını SDAIA AI Etik, SAMA model risk, NIST AI RMF ve AB AI Yasası ile eşleştiren matris; dolu daire zorunlu, yarım dolu rehber, kontur ele alınmamış için.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Beş alan × dört çerçeve: hangisi neyi zorunlu kılar</text>
+  <g font-size="10" font-weight="700" fill="#0E2841" text-anchor="middle">
+  <text x="320" y="50">SDAIA AI Etik</text><text x="420" y="50">SAMA MRM</text><text x="520" y="50">NIST AI RMF</text><text x="620" y="50">AB AI Yasası</text>
+  </g>
+  <line x1="270" y1="58" x2="670" y2="58" stroke="#CBD5E1"/>
+  <g font-size="11" fill="#0E2841">
+  <text x="20" y="86">1. Veri Soyağacı & Kaynak</text><text x="20" y="118">2. Model Risk Yönetimi</text><text x="20" y="150">3. Açıklanabilirlik & Denetim</text><text x="20" y="182">4. İnsan Gözetimi</text><text x="20" y="214">5. Önyargı & Etik</text>
+  </g>
+  <circle cx="320" cy="82" r="9" fill="#156082"/><circle cx="420" cy="82" r="9" fill="#156082"/><circle cx="520" cy="82" r="9" fill="#156082" fill-opacity="0.35"/><circle cx="620" cy="82" r="9" fill="#156082"/>
+  <circle cx="320" cy="114" r="9" fill="#1A4F7A" fill-opacity="0.35"/><circle cx="420" cy="114" r="9" fill="#1A4F7A"/><circle cx="520" cy="114" r="9" fill="#1A4F7A"/><circle cx="620" cy="114" r="9" fill="#1A4F7A"/>
+  <circle cx="320" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="420" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="520" cy="146" r="9" fill="#F5A623" fill-opacity="0.35"/><circle cx="620" cy="146" r="9" fill="#F5A623"/>
+  <circle cx="320" cy="178" r="9" fill="#0E2841"/><circle cx="420" cy="178" r="9" fill="#0E2841"/><circle cx="520" cy="178" r="9" fill="#0E2841"/><circle cx="620" cy="178" r="9" fill="#0E2841"/>
+  <circle cx="320" cy="210" r="9" fill="#7C3AED"/><circle cx="420" cy="210" r="9" fill="#7C3AED" fill-opacity="0.35"/><circle cx="520" cy="210" r="9" fill="#7C3AED" fill-opacity="0.35"/><circle cx="620" cy="210" r="9" fill="#7C3AED"/>
+  <circle cx="40" cy="240" r="6" fill="#0E2841"/><text x="52" y="244" font-size="10" fill="#0E2841">Zorunlu</text>
+  <circle cx="160" cy="240" r="6" fill="#0E2841" fill-opacity="0.35"/><text x="172" y="244" font-size="10" fill="#0E2841">Rehber</text>
+  <circle cx="280" cy="240" r="6" fill="none" stroke="#CBD5E1" stroke-width="1.5"/><text x="292" y="244" font-size="10" fill="#475569">Ele alınmamış</text>
   </svg>
-  <figcaption>Şekil 1 — Düzenlenmiş her GCC AI dağıtımının ihtiyaç duyduğu beş yetenek alanı.</figcaption>
+  <figcaption>Şekil 1 — Beş yetenek alanı, GCC operatörlerinin yanıt verdiği dört çerçeveye karşı çizilmiştir. İnsan gözetimi evrensel olarak zorunludur; açıklanabilirlik (3. satır, kehribar) en eşitsiz uygulanan alandır — GCC AI dağıtımlarına karşı denetim bulgularının en büyük tek kaynağı.</figcaption>
   </figure>
   <h2>Kaynaklar ve Referanslar</h2>
     <ol class="sources-list">
@@ -1454,17 +1631,35 @@ export const insights = [
   <p>The implication for spec-from-legacy work is direct. A GCC bank or telecom that drops coding assistants into an unspecified, untested, manually-released brownfield stack will measure higher commit velocity inside a month — and a higher rate of production incidents, failed reconciliations, and rolled-back changes inside a quarter. The amplifier does not discriminate between disciplined acceleration and undisciplined acceleration; only the foundations underneath do. The engineering practices set out in the next sections are not optional hygiene. They are the precondition that determines whether AI lifts the programme or accelerates its failure mode.</p>
   <h2>Spec-from-Legacy: The Methodology</h2>
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-13 svg-d-13"><title id="svg-t-13">AI-assisted spec-from-legacy pipeline</title><desc id="svg-d-13">Three-phase pipeline: AI-assisted extraction, specification validation, architecture and migration planning.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Phase 1</text><text x="120" y="120" text-anchor="middle" fill="#fff" font-size="12">AI-Assisted</text><text x="120" y="138" text-anchor="middle" fill="#fff" font-size="12">Extraction</text>
-  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Phase 2</text><text x="350" y="120" text-anchor="middle" fill="#fff" font-size="12">Specification</text><text x="350" y="138" text-anchor="middle" fill="#fff" font-size="12">Validation</text>
-  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Phase 3</text><text x="580" y="120" text-anchor="middle" fill="#fff" font-size="12">Architecture &amp;</text><text x="580" y="138" text-anchor="middle" fill="#fff" font-size="12">Migration Plan</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-13 svg-d-13"><title id="svg-t-13">Three-phase spec-from-legacy pipeline with inputs, outputs, gates</title><desc id="svg-d-13">Pipeline showing each phase with its inputs on the left, output artefacts at the bottom, and a human engineering gate that must close before the next phase starts.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="11" font-weight="700" fill="#0E2841">Each phase: inputs in · artefact out · gate closes before next phase</text>
+  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/>
+  <text x="120" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Phase 1</text>
+  <text x="120" y="104" text-anchor="middle" fill="#fff" font-size="11">AI-Assisted Extraction</text>
+  <text x="120" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">In: COBOL/RPG src, batch logs</text>
+  <text x="120" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">Out: dependency graph + intent map</text>
+  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/>
+  <text x="350" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Phase 2</text>
+  <text x="350" y="104" text-anchor="middle" fill="#fff" font-size="11">Specification Validation</text>
+  <text x="350" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">In: SME interviews, test data</text>
+  <text x="350" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">Out: signed business spec</text>
+  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/>
+  <text x="580" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Phase 3</text>
+  <text x="580" y="104" text-anchor="middle" fill="#fff" font-size="11">Architecture & Migration</text>
+  <text x="580" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">In: target stack, RTO/RPO</text>
+  <text x="580" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">Out: cutover plan + tests</text>
   <path d="M220 110 L250 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
   <path d="M450 110 L480 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
   <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
-  <text x="350" y="200" text-anchor="middle" fill="#475569" font-size="11">Human engineering judgment governs every gate · AI compresses the lift</text>
+  <rect x="222" y="40" width="46" height="16" fill="#F5A623" rx="3"/><text x="245" y="52" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Gate A</text>
+  <text x="245" y="32" text-anchor="middle" font-size="9" fill="#0E2841">Coverage ≥ 95%</text>
+  <rect x="452" y="40" width="46" height="16" fill="#F5A623" rx="3"/><text x="475" y="52" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Gate B</text>
+  <text x="475" y="32" text-anchor="middle" font-size="9" fill="#0E2841">SME sign-off</text>
+  <rect x="500" y="180" width="160" height="20" fill="#F5A623" rx="3"/><text x="580" y="195" text-anchor="middle" font-size="10" fill="#fff" font-weight="700">Gate C: parallel-run pass</text>
+  <text x="350" y="222" text-anchor="middle" fill="#475569" font-size="10">Human engineering judgment governs every gate · AI compresses the lift, not the accountability.</text>
   </svg>
-  <figcaption>Figure 1 — The three-phase spec-from-legacy pipeline.</figcaption>
+  <figcaption>Figure 1 — The three-phase extraction pipeline, instrumented with gates: each phase ships a defined artefact and cannot pass to the next until its gate closes (coverage threshold, SME sign-off, parallel-run equivalence). Gates are where AI speed converts into low-risk modernisation.</figcaption>
   </figure>
   <h3>Phase 1 — AI-Assisted Extraction</h3>
   <p>Code-analysis agents trained on the target legacy stack — COBOL, SAP ABAP, legacy Java, custom platforms — systematically document business logic, data structures, integration points, and exceptional flows. Stanford HAI's <em>2025 AI Index</em> and GitHub's <em>Octoverse</em> both record measurable engineering productivity gains from code-aware LLMs in real codebases (<a href="https://hai.stanford.edu/ai-index/2025-ai-index-report" target="_blank" rel="noopener noreferrer">Stanford HAI, 2025</a>; <a href="https://github.blog/news-insights/octoverse/octoverse-2024/" target="_blank" rel="noopener noreferrer">GitHub Octoverse, 2024</a>). The engineering judgment remains human; the assistant compresses the lift.</p>
@@ -1522,7 +1717,7 @@ export const insights = [
 <h3>Telecom Engagement Cadence: 90/180/365 Days</h3>
 <p><strong>Days 1–90:</strong> Scope the target system (usually a single BSS or provisioning subsystem, not the entire stack). Deploy extraction tooling on-premises. Conduct weekly validation workshops with business stakeholders. Produce a versioned specification document (typically 800–1,200 pages for a major telecom subsystem) with full sign-off by week 12.</p>
 <p><strong>Days 91–180:</strong> Design target architecture (cloud-native microservices, event-driven, typically Kubernetes-hosted). Conduct detailed design reviews. Build prototype APIs to prove the specification is architecturally sound. Establish test scenarios grounded in 12 months of production transaction data. By week 24, have a migration roadmap with rollback gates, parallel-run windows, and customer-impact estimates.</p>
-<p><strong>Days 181–365:</strong> Build and test the new system in isolation. Run parallel production load against both old and new system. Measure reconciliation daily. Migrate customer cohorts in staged waves (2–5% per week). By day 365, the old system is supporting <5% of traffic and is on a documented decommissioning path.</p>
+<p><strong>Days 181–365:</strong> Build and test the new system in isolation. Run parallel production load against both old and new system. Measure reconciliation daily. Migrate customer cohorts in staged waves (2–5% per week). By day 365, the old system is supporting &lt;5% of traffic and is on a documented decommissioning path.</p>
 
 <h2>Sectoral Application: Banking &amp; Financial Services</h2>
 <p>GCC banks face a distinct modernization challenge: the core ledger system is almost always a decades-old mainframe COBOL application or an early-2000s SAP installation, and the regulatory environment (SAMA in Saudi, DFSA in Dubai, CBB in Bahrain) has evolved substantially since those systems were designed. A bank cannot simply rewrite its core ledger; every transaction, every audit trail, every regulatory report must reconcile to the cent. The specification phase is therefore not optional — it is the legal and compliance foundation for the build.</p>
@@ -1570,7 +1765,7 @@ export const insights = [
 <li><strong>Validation coverage:</strong> Percentage of extracted rules that have been walked through with business stakeholders. Target: 100% of material rules in validation workshops. Tracked by attendance and sign-off records.</li>
 <li><strong>Stakeholder confidence:</strong> Post-validation survey of business stakeholders: "How confident are you that this specification accurately represents the current system?" Target: 85%+ respond "very confident" or "confident." Responses below 80% signal that validation gaps remain.</li>
 <li><strong>Specification stability:</strong> Week-on-week change rate in the specification document. In weeks 1–6, expect 15–25% of spec content to change as understanding deepens. By week 10, change rate should drop below 5%. If the specification is still changing at >10% per week in week 12, validation is incomplete.</li>
-<li><strong>Extraction-to-validation cycle time:</strong> Average days between extraction of a business rule and validation of that rule by a business stakeholder. Target: <10 days. If the cycle time exceeds 20 days, the validation team is a bottleneck and needs additional resources.</li>
+<li><strong>Extraction-to-validation cycle time:</strong> Average days between extraction of a business rule and validation of that rule by a business stakeholder. Target: &lt;10 days. If the cycle time exceeds 20 days, the validation team is a bottleneck and needs additional resources.</li>
 </ul>
 
 <h2>Board-Level Framing &amp; Executive Communication</h2>
@@ -1697,7 +1892,7 @@ export const insights = [
 <h3>إيقاع مشاركة الاتصالات: 90/180/365 يوماً</h3>
 <p><strong>الأيام 1-90:</strong> حدد نطاق النظام المستهدف (عادة نظام BSS واحد أو نظام فرعي للتزويد، وليس المكدس بأكمله). نشر أدوات الاستخراج على الموقع. إجراء ورش عمل التحقق الأسبوعية مع أصحاب المصلحة في الأعمال. إنتاج مستند مواصفات مرقم (عادة 800-1200 صفحة لنظام فرعي للاتصالات الرئيسية) مع التوقيع الكامل بحلول الأسبوع 12.</p>
 <p><strong>الأيام 91-180:</strong> تصميم معمارية النظام المستهدف (خدمات سحابية أصلية وموجهة للأحداث، عادة مستضافة على Kubernetes). إجراء استعراضات التصميم التفصيلية. بناء نماذج أولية من واجهات برمجية لإثبات أن المواصفات سليمة معمارياً. إنشاء سيناريوهات اختبار مستندة إلى 12 شهراً من بيانات المعاملات الإنتاجية. بحلول الأسبوع 24، يجب أن تكون لديك خارطة طريق الهجرة مع بوابات الاسترجاع ونوافذ التشغيل المتوازي وتقديرات تأثير العملاء.</p>
-<p><strong>الأيام 181-365:</strong> بناء واختبار النظام الجديد في العزلة. تشغيل حمل الإنتاج المتوازي مقابل النظام القديم والجديد. قياس التوفيق يومياً. هجرة مجموعات العملاء في موجات مرحلية (2-5% أسبوعياً). بحلول اليوم 365، يدعم النظام القديم <5% من حركة المرور وهو على طريق إيقاف موثق.</p>
+<p><strong>الأيام 181-365:</strong> بناء واختبار النظام الجديد في العزلة. تشغيل حمل الإنتاج المتوازي مقابل النظام القديم والجديد. قياس التوفيق يومياً. هجرة مجموعات العملاء في موجات مرحلية (2-5% أسبوعياً). بحلول اليوم 365، يدعم النظام القديم &lt;5% من حركة المرور وهو على طريق إيقاف موثق.</p>
 
 <h2>التطبيق القطاعي: البنوك والخدمات المالية</h2>
 <p>تواجه البنوك في دول مجلس التعاون الخليجي تحدياً فريداً في التحديث الحديث: نظام الدفتر الأساسي هو دائماً تقريباً تطبيق COBOL قديم على جهاز رئيسي أو تثبيت SAP من أوائل الألفية الثالثة، والبيئة التنظيمية (SAMA في السعودية وDFSA في دبي وCBB في البحرين) تطورت بشكل جوهري منذ تصميم تلك الأنظمة. لا يمكن للبنك ببساطة إعادة كتابة دفتره الأساسي؛ يجب أن تتوافق كل معاملة وكل مسار تدقيق وكل تقرير تنظيمي إلى الفلس. لذلك فإن مرحلة المواصفات ليست اختيارية - بل هي الأساس القانوني والامتثالي للبناء.</p>
@@ -1745,7 +1940,7 @@ export const insights = [
 <li><strong>تغطية التحقق:</strong> نسبة القواعد المستخرجة التي تم مراجعتها مع أصحاب المصلحة في الأعمال. الهدف: 100% من القواعس المهمة في ورش عمل التحقق. تتبعها بسجلات الحضور والتوقيع.</li>
 <li><strong>ثقة صاحب المصلحة:</strong> استطلاع ما بعد التحقق لأصحاب المصلحة في الأعمال: "ما مدى ثقتك بأن هذه المواصفات تمثل النظام الحالي بدقة؟" الهدف: 85%+ يجيبون "واثقون جداً" أو "واثقون". الإجابات أقل من 80% تشير إلى أن فجوات التحقق تبقى.</li>
 <li><strong>استقرار المواصفات:</strong> معدل التغيير من أسبوع لآخر في مستند المواصفات. في الأسابيع 1-6، توقع تغيير 15-25% من محتوى المواصفات مع تعميق الفهم. بحلول الأسبوع 10، يجب أن ينخفض معدل التغيير إلى أقل من 5%. إذا كانت المواصفات لا تزال تتغير بـ >10% أسبوعياً في الأسبوع 12، فإن التحقق غير مكتمل.</li>
-<li><strong>وقت دورة الاستخراج إلى التحقق:</strong> متوسط الأيام بين استخراج قاعدة عمل والتحقق من تلك القاعدة من قبل صاحب المصلحة في الأعمال. الهدف: <10 أيام. إذا تجاوز وقت الدورة 20 يوماً، فإن فريق التحقق عنق الزجاجة ويحتاج موارد إضافية.</li>
+<li><strong>وقت دورة الاستخراج إلى التحقق:</strong> متوسط الأيام بين استخراج قاعدة عمل والتحقق من تلك القاعدة من قبل صاحب المصلحة في الأعمال. الهدف: &lt;10 أيام. إذا تجاوز وقت الدورة 20 يوماً، فإن فريق التحقق عنق الزجاجة ويحتاج موارد إضافية.</li>
 </ul>
 
 <h2>الإطار على مستوى المجلس والاتصالات التنفيذية</h2>
@@ -1769,17 +1964,35 @@ export const insights = [
   <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-15 svg-d-15"><title id="svg-t-15">نمط Strangler-fig</title><desc id="svg-d-15">نمط Strangler-fig</desc><rect width="700" height="240" fill="#F8FAFC"/><rect x="40" y="80" width="180" height="80" fill="#0E2841" rx="6"/><text x="130" y="125" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">النواة القديمة</text><rect x="260" y="50" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="80" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">شريحة قدرة ١ (AI)</text><rect x="260" y="110" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="140" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">شريحة قدرة ٢ (AI)</text><rect x="260" y="170" width="180" height="50" fill="#1A4F7A" rx="6"/><text x="350" y="200" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">شريحة ٣ — تدريجياً</text><rect x="480" y="80" width="180" height="80" fill="#F5A623" rx="6"/><text x="570" y="125" font-family="Inter,Arial" font-size="13" fill="#0E2841" text-anchor="middle">منصة AI حديثة</text><line x1="220" y1="120" x2="260" y2="75" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="135" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="195" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="4 3"/><line x1="440" y1="75" x2="480" y2="115" stroke="#156082" stroke-width="2"/><line x1="440" y1="135" x2="480" y2="120" stroke="#156082" stroke-width="2"/></svg><figcaption>نمط Strangler-fig للهجرة التدريجية للقدرات المدفوعة بالذكاء الاصطناعي</figcaption></figure>
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-16 svg-d-16"><title id="svg-t-16">خط أنابيب المواصفات من الأنظمة الموروثة بمساعدة الذكاء الاصطناعي</title><desc id="svg-d-16">خط أنابيب ثلاثي المراحل: الاستخراج بمساعدة الذكاء الاصطناعي، التحقق من المواصفات، تخطيط الهندسة والهجرة.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">المرحلة 1</text><text x="120" y="120" text-anchor="middle" fill="#fff" font-size="12">الاستخراج بمساعدة</text><text x="120" y="138" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي</text>
-  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">المرحلة 2</text><text x="350" y="120" text-anchor="middle" fill="#fff" font-size="12">التحقق من</text><text x="350" y="138" text-anchor="middle" fill="#fff" font-size="12">المواصفات</text>
-  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">المرحلة 3</text><text x="580" y="120" text-anchor="middle" fill="#fff" font-size="12">تخطيط الهندسة</text><text x="580" y="138" text-anchor="middle" fill="#fff" font-size="12">والهجرة</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-16 svg-d-16"><title id="svg-t-16">خط أنابيب المواصفات من الأنظمة الموروثة بثلاث مراحل مع مدخلات ومخرجات وبوابات</title><desc id="svg-d-16">خط أنابيب يُظهر كل مرحلة بمدخلاتها على اليسار، وقطعها الأثرية الناتجة في الأسفل، وبوابة هندسية بشرية يجب أن تنغلق قبل بدء المرحلة التالية.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="11" font-weight="700" fill="#0E2841">كل مرحلة: مدخلات داخل · قطعة أثرية للخارج · البوابة تنغلق قبل المرحلة التالية</text>
+  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/>
+  <text x="120" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">المرحلة 1</text>
+  <text x="120" y="104" text-anchor="middle" fill="#fff" font-size="11">الاستخراج بمساعدة الذكاء</text>
+  <text x="120" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">الدخل: شفرات COBOL/RPG وسجلات</text>
+  <text x="120" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">الخرج: رسم تبعية + خريطة نية</text>
+  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/>
+  <text x="350" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">المرحلة 2</text>
+  <text x="350" y="104" text-anchor="middle" fill="#fff" font-size="11">التحقق من المواصفات</text>
+  <text x="350" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">الدخل: مقابلات الخبراء وبيانات اختبار</text>
+  <text x="350" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">الخرج: مواصفة عمل موقَّعة</text>
+  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/>
+  <text x="580" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">المرحلة 3</text>
+  <text x="580" y="104" text-anchor="middle" fill="#fff" font-size="11">الهندسة والهجرة</text>
+  <text x="580" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">الدخل: المنصة الهدف، RTO/RPO</text>
+  <text x="580" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">الخرج: خطة تحوّل + اختبارات</text>
   <path d="M220 110 L250 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
   <path d="M450 110 L480 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
   <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
-  <text x="350" y="200" text-anchor="middle" fill="#475569" font-size="11">الحكم الهندسي البشري يحكم كل بوابة · الذكاء الاصطناعي يضغط العبء</text>
+  <rect x="222" y="40" width="46" height="16" fill="#F5A623" rx="3"/><text x="245" y="52" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">بوابة A</text>
+  <text x="245" y="32" text-anchor="middle" font-size="9" fill="#0E2841">تغطية ≥ ٩٥٪</text>
+  <rect x="452" y="40" width="46" height="16" fill="#F5A623" rx="3"/><text x="475" y="52" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">بوابة B</text>
+  <text x="475" y="32" text-anchor="middle" font-size="9" fill="#0E2841">موافقة الخبراء</text>
+  <rect x="500" y="180" width="160" height="20" fill="#F5A623" rx="3"/><text x="580" y="195" text-anchor="middle" font-size="10" fill="#fff" font-weight="700">بوابة C: نجاح التشغيل المتوازي</text>
+  <text x="350" y="222" text-anchor="middle" fill="#475569" font-size="10">الحكم الهندسي البشري يحكم كل بوابة · الذكاء الاصطناعي يضغط العبء لا المساءلة.</text>
   </svg>
-  <figcaption>الشكل 1 — خط الأنابيب الثلاثي المراحل للمواصفات من الأنظمة الموروثة.</figcaption>
+  <figcaption>الشكل 1 — خط الأنابيب الثلاثي المراحل للاستخراج، مزوَّد بالبوابات: كل مرحلة تُسلِّم قطعة أثرية محددة ولا يمكن المرور إلى التالية حتى تنغلق بوابتها (عتبة التغطية، موافقة الخبراء، تكافؤ التشغيل المتوازي). البوابات هي حيث تتحول سرعة الذكاء الاصطناعي إلى تحديث منخفض المخاطر.</figcaption>
   </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
@@ -1934,7 +2147,7 @@ export const insights = [
 <li><strong>Doğrulama kapsamı:</strong> Çıkartılan kuralların, iş paydaşlarıyla konuşturulan yüzdesi. Hedef: doğrulama çalıştaylarında material kuralların %100'ü. Katılım ve imza kayıtlarıyla izlenen.</li>
 <li><strong>Paydaş güveni:</strong> Doğrulama sonrası iş paydaşları anketi: "Bu şartnamenin mevcut sistemi doğru olarak temsil ettiğine ne kadar eminsiniz?" Hedef: %85+ "çok güvenli" veya "güvenli" olarak yanıt verin. %80'in altındaki yanıtlar doğrulama boşluklarının kaldığını işaret eder.</li>
 <li><strong>Şartname istikrarı:</strong> Şartname belgesinde haftadan haftaya değişiklik oranı. 1-6. haftalarda, anlayış derinleştikçe belge içeriğinin %15-25'inin değişmesini bekleyin. 10. haftaya kadar, değişiklik oranı %5'in altına düşmelidir. Şartname 12. haftada haftada >%10'da hala değişiyorsa, doğrulama tamamlanmamıştır.</li>
-<li><strong>Çıkartma-doğrulama döngü süresi:</strong> Bir iş kuralının çıkartılması ile o kuralın bir iş paydaşı tarafından doğrulanması arasındaki ortalama gün. Hedef: <10 gün. Döngü süresi 20 günü aşarsa, doğrulama ekibi bir darboğaz ve ek kaynaklara ihtiyaç duyar.</li>
+<li><strong>Çıkartma-doğrulama döngü süresi:</strong> Bir iş kuralının çıkartılması ile o kuralın bir iş paydaşı tarafından doğrulanması arasındaki ortalama gün. Hedef: &lt;10 gün. Döngü süresi 20 günü aşarsa, doğrulama ekibi bir darboğaz ve ek kaynaklara ihtiyaç duyar.</li>
 </ul>
 
 <h2>Board Düzeyinde Çerçeveleme ve Yönetici İletişimi</h2>
@@ -1958,17 +2171,35 @@ export const insights = [
   <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-17 svg-d-17"><title id="svg-t-17">Strangler-fig deseni</title><desc id="svg-d-17">Strangler-fig deseni</desc><rect width="700" height="240" fill="#F8FAFC"/><rect x="40" y="80" width="180" height="80" fill="#0E2841" rx="6"/><text x="130" y="125" font-family="Inter,Arial" font-size="13" fill="#fff" text-anchor="middle">Eski çekirdek</text><rect x="260" y="50" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="80" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Yetenek dilimi 1 (AI)</text><rect x="260" y="110" width="180" height="50" fill="#156082" rx="6"/><text x="350" y="140" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Yetenek dilimi 2 (AI)</text><rect x="260" y="170" width="180" height="50" fill="#1A4F7A" rx="6"/><text x="350" y="200" font-family="Inter,Arial" font-size="12" fill="#fff" text-anchor="middle">Dilim 3 — aşamalı</text><rect x="480" y="80" width="180" height="80" fill="#F5A623" rx="6"/><text x="570" y="125" font-family="Inter,Arial" font-size="13" fill="#0E2841" text-anchor="middle">Modern AI çalışma zamanı</text><line x1="220" y1="120" x2="260" y2="75" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="135" stroke="#1A4F7A" stroke-width="2"/><line x1="220" y1="120" x2="260" y2="195" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="4 3"/><line x1="440" y1="75" x2="480" y2="115" stroke="#156082" stroke-width="2"/><line x1="440" y1="135" x2="480" y2="120" stroke="#156082" stroke-width="2"/></svg><figcaption>Strangler-fig deseni: AI odaklı yeteneklerin kademeli taşınması</figcaption></figure>
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-18 svg-d-18"><title id="svg-t-18">AI-assisted spec-from-legacy pipeline</title><desc id="svg-d-18">Three-phase pipeline: AI-assisted extraction, specification validation, architecture and migration planning.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Aşama 1</text><text x="120" y="120" text-anchor="middle" fill="#fff" font-size="12">AI-Destekli</text><text x="120" y="138" text-anchor="middle" fill="#fff" font-size="12">Çıkarım</text>
-  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Aşama 2</text><text x="350" y="120" text-anchor="middle" fill="#fff" font-size="12">Spesifikasyon</text><text x="350" y="138" text-anchor="middle" fill="#fff" font-size="12">Doğrulaması</text>
-  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Aşama 3</text><text x="580" y="120" text-anchor="middle" fill="#fff" font-size="12">Mimari &amp;</text><text x="580" y="138" text-anchor="middle" fill="#fff" font-size="12">Geçiş Planı</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-18 svg-d-18"><title id="svg-t-18">Girdi-çıktı-kapılı üç aşamalı eski-sistemden-spesifikasyon ardışık düzeni</title><desc id="svg-d-18">Her aşamayı solda girdileri, altta çıktı eserleri ve sonraki aşama başlamadan önce kapanması gereken insan mühendislik kapısı ile gösteren ardışık düzen.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="11" font-weight="700" fill="#0E2841">Her aşama: girdiler içeri · eser dışarı · sonraki aşamadan önce kapı kapanır</text>
+  <rect x="20" y="60" width="200" height="100" fill="#156082" rx="8"/>
+  <text x="120" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Aşama 1</text>
+  <text x="120" y="104" text-anchor="middle" fill="#fff" font-size="11">AI-Destekli Çıkarım</text>
+  <text x="120" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">Giriş: COBOL/RPG kaynak, batch log'ları</text>
+  <text x="120" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">Çıkış: bağımlılık grafiği + niyet haritası</text>
+  <rect x="250" y="60" width="200" height="100" fill="#1A4F7A" rx="8"/>
+  <text x="350" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Aşama 2</text>
+  <text x="350" y="104" text-anchor="middle" fill="#fff" font-size="11">Spesifikasyon Doğrulaması</text>
+  <text x="350" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">Giriş: SME görüşmeleri, test verisi</text>
+  <text x="350" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">Çıkış: imzalı iş spesifikasyonu</text>
+  <rect x="480" y="60" width="200" height="100" fill="#0E2841" rx="8"/>
+  <text x="580" y="84" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Aşama 3</text>
+  <text x="580" y="104" text-anchor="middle" fill="#fff" font-size="11">Mimari & Geçiş</text>
+  <text x="580" y="128" text-anchor="middle" fill="#cbd5e1" font-size="9">Giriş: hedef stack, RTO/RPO</text>
+  <text x="580" y="142" text-anchor="middle" fill="#cbd5e1" font-size="9">Çıkış: geçiş planı + testler</text>
   <path d="M220 110 L250 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
   <path d="M450 110 L480 110" stroke="#0E2841" stroke-width="2" marker-end="url(#a3)"/>
   <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
-  <text x="350" y="200" text-anchor="middle" fill="#475569" font-size="11">İnsan mühendislik yargısı her kapıyı yönetir · AI çabayı sıkıştırır</text>
+  <rect x="222" y="40" width="46" height="16" fill="#F5A623" rx="3"/><text x="245" y="52" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Kapı A</text>
+  <text x="245" y="32" text-anchor="middle" font-size="9" fill="#0E2841">Kapsam ≥ %95</text>
+  <rect x="452" y="40" width="46" height="16" fill="#F5A623" rx="3"/><text x="475" y="52" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">Kapı B</text>
+  <text x="475" y="32" text-anchor="middle" font-size="9" fill="#0E2841">SME onayı</text>
+  <rect x="500" y="180" width="160" height="20" fill="#F5A623" rx="3"/><text x="580" y="195" text-anchor="middle" font-size="10" fill="#fff" font-weight="700">Kapı C: paralel-çalışma geçişi</text>
+  <text x="350" y="222" text-anchor="middle" fill="#475569" font-size="10">İnsan mühendislik yargısı her kapıyı yönetir · AI emeği sıkıştırır, sorumluluğu değil.</text>
   </svg>
-  <figcaption>Şekil 1 — Üç aşamalı spec-from-legacy ardışık düzeni.</figcaption>
+  <figcaption>Şekil 1 — Üç aşamalı çıkarım ardışık düzeni, kapılarla donatılmıştır: her aşama tanımlı bir eser teslim eder ve kapısı kapanmadan bir sonrakine geçemez (kapsam eşiği, SME onayı, paralel-çalışma denkliği). Kapılar, AI hızının düşük riskli modernizasyona dönüştüğü yerdir.</figcaption>
   </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
@@ -2015,19 +2246,28 @@ export const insights = [
   <p>Pre-GenAI, Gartner's <em>IT Key Metrics Data 2019</em> set a useful global baseline against which today's GCC sovereign-AI commitments can be sized. Across all industries, IT spend ran at roughly 3.6% of revenue, with about 71% of IT operational budget locked into "run-the-business" activity (keeping the lights on) and only the remaining ~29% available for change and innovation. Cloud spend (SaaS + IaaS) was still only about 8% of the IT budget, and the average enterprise spent roughly $14,538 per employee per year on IT (<a href="https://www.gartner.com/en/documents/3905769" target="_blank" rel="noopener noreferrer">Gartner, IT Key Metrics Data 2019</a>). The HUMAIN, G42, and Aramco–Groq commitments below are not incremental to that 2019 baseline — they are a structural reset of where the IT budget goes, what counts as "run-the-business," and how much of the regional IT envelope is now allocated to sovereign AI infrastructure.</p>
   <h2>Anchor Programs &amp; Commitments</h2>
   <figure>
-  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-19 svg-d-19"><title id="svg-t-19">GCC AI sector concentration and anchor commitments</title><desc id="svg-d-19">Bar chart showing concentration of GCC AI spend in government, banking and telecoms with named anchor commitments labelled.</desc>
-  <rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-  <text x="20" y="30" font-size="13" font-weight="700" fill="#0E2841">Sector concentration of GCC AI spend (IDC pattern, illustrative)</text>
-  <rect x="20" y="60" width="280" height="32" fill="#156082"/><text x="30" y="82" fill="#fff" font-size="13" font-weight="700">Government &amp; public services</text>
-  <rect x="20" y="100" width="240" height="32" fill="#1A4F7A"/><text x="30" y="122" fill="#fff" font-size="13" font-weight="700">Banking &amp; financial services</text>
-  <rect x="20" y="140" width="200" height="32" fill="#0E2841"/><text x="30" y="162" fill="#fff" font-size="13" font-weight="700">Telecommunications</text>
-  <rect x="20" y="180" width="120" height="32" fill="#94A3B8"/><text x="30" y="202" fill="#fff" font-size="13" font-weight="700">All others</text>
-  <text x="380" y="80" font-size="11" fill="#0E2841">SDAIA · HUMAIN · MCIT Qatar</text>
-  <text x="380" y="120" font-size="11" fill="#0E2841">SAMA-supervised banks · Open Banking</text>
-  <text x="380" y="160" font-size="11" fill="#0E2841">STC · e&amp; · du · Ooredoo · Zain</text>
-  <text x="380" y="200" font-size="11" fill="#0E2841">Energy (Aramco–Groq), healthcare, retail</text>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-19 svg-d-19"><title id="svg-t-19">GCC AI spend share by sector with named anchor commitments</title><desc id="svg-d-19">Horizontal bar chart of AI spend share by sector with each bar tagged by its largest publicly disclosed anchor commitment.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Estimated GCC AI spend share, 2024–2027 (IDC + public commitments)</text>
+  <line x1="220" y1="220" x2="660" y2="220" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#475569">
+  <text x="220" y="235" text-anchor="middle">0%</text><text x="330" y="235" text-anchor="middle">10%</text><text x="440" y="235" text-anchor="middle">20%</text><text x="550" y="235" text-anchor="middle">30%</text><text x="660" y="235" text-anchor="middle">40%</text>
+  </g>
+  <rect x="220" y="48" width="385" height="28" fill="#156082"/>
+  <text x="20" y="66" font-size="11" font-weight="700" fill="#0E2841">Government & public services</text>
+  <text x="612" y="66" font-size="10" font-weight="700" fill="#156082">~35%</text>
+  <text x="220" y="92" font-size="9" fill="#475569">Anchors: SDAIA · HUMAIN $40B+ · MCIT Qatar</text>
+  <rect x="220" y="106" width="275" height="28" fill="#1A4F7A"/>
+  <text x="20" y="124" font-size="11" font-weight="700" fill="#0E2841">Banking & financial services</text>
+  <text x="502" y="124" font-size="10" font-weight="700" fill="#1A4F7A">~25%</text>
+  <text x="220" y="150" font-size="9" fill="#475569">Anchors: SAMA-supervised banks · UAE Open Banking · QCB</text>
+  <rect x="220" y="164" width="220" height="28" fill="#0E2841"/>
+  <text x="20" y="182" font-size="11" font-weight="700" fill="#0E2841">Telecommunications</text>
+  <text x="447" y="182" font-size="10" font-weight="700" fill="#0E2841">~20%</text>
+  <text x="220" y="208" font-size="9" fill="#475569">Anchors: STC · e& · du · Ooredoo · Zain (network ops + Group AI)</text>
+  <text x="20" y="252" font-size="10" fill="#475569">All others (energy, healthcare, retail) ≈ 20% · key anchor: Aramco–Groq inference deal</text>
   </svg>
-  <figcaption>Figure 1 — Three sectors capture the majority of GCC AI spend, anchored by named public commitments.</figcaption>
+  <figcaption>Figure 1 — Three sectors absorb ~80% of GCC AI spend. Government leads on the back of HUMAIN's $40B+ commitment; banking is regulator-pulled by SAMA model-risk rules; telecoms convert AI into a network-monetisation lever. Energy is the dark horse, anchored by the Aramco–Groq inference deal.</figcaption>
   </figure>
   <ul>
   <li><strong>Saudi Arabia — HUMAIN under PIF.</strong> Launched as PIF's vehicle for end-to-end AI capability — data centres, foundation models, and downstream products (<a href="https://www.humain.ai/" target="_blank" rel="noopener noreferrer">HUMAIN</a>; <a href="https://www.pif.gov.sa/" target="_blank" rel="noopener noreferrer">PIF</a>).</li>
@@ -2170,31 +2410,37 @@ export const insights = [
 <p>Boards that approach AI this way make different decisions than those treating AI as a tactical IT project. In the GCC context, where sovereign wealth funds and government stakeholders often have seats at the table, this framing aligns technology decisions with broader strategic and political economy considerations.</p>
 
 <figure>
-<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-20 svg-d-20"><title id="svg-t-20">90/180/365-day deployment cadence and KPI milestones</title><desc id="svg-d-20">Timeline chart showing three deployment phases with key activities and regulatory touchpoints aligned to 90, 180, and 365-day marks.</desc>
-
-
-<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-<text x="20" y="25" font-size="13" font-weight="700" fill="#0E2841">GCC AI Deployment: Recommended 90/180/365-Day Cadence</text>
-<line x1="50" y1="50" x2="50" y2="180" stroke="#156082" stroke-width="3"/>
-<line x1="50" y1="180" x2="250" y2="180" stroke="#156082" stroke-width="3"/>
-<line x1="250" y1="180" x2="250" y2="50" stroke="#156082" stroke-width="3"/>
-<line x1="250" y1="50" x2="450" y2="50" stroke="#1A4F7A" stroke-width="3"/>
-<line x1="450" y1="50" x2="450" y2="180" stroke="#1A4F7A" stroke-width="3"/>
-<line x1="450" y1="180" x2="650" y2="180" stroke="#0E2841" stroke-width="3"/>
-<line x1="650" y1="180" x2="650" y2="50" stroke="#0E2841" stroke-width="3"/>
-<circle cx="50" cy="50" r="5" fill="#156082"/>
-<circle cx="250" cy="50" r="5" fill="#1A4F7A"/>
-<circle cx="450" cy="50" r="5" fill="#0E2841"/>
-<circle cx="650" cy="50" r="5" fill="#0E2841"/>
-<text x="35" y="210" font-size="11" font-weight="700" fill="#0E2841">Day 90</text>
-<text x="225" y="210" font-size="11" font-weight="700" fill="#0E2841">Day 180</text>
-<text x="425" y="210" font-size="11" font-weight="700" fill="#0E2841">Day 365</text>
-<text x="80" y="110" font-size="10" fill="#156082"><tspan x="80" dy="0">• Data audit</tspan><tspan x="80" dy="12">• Vendor selection</tspan><tspan x="80" dy="12">• Regulator brief</tspan></text>
-<text x="280" y="110" font-size="10" fill="#1A4F7A"><tspan x="280" dy="0">• Shadow-mode pilot</tspan><tspan x="280" dy="12">• Governance review</tspan><tspan x="280" dy="12">• Team training</tspan></text>
-<text x="480" y="110" font-size="10" fill="#0E2841"><tspan x="480" dy="0">• Production rollout</tspan><tspan x="480" dy="12">• KPI reconciliation</tspan><tspan x="480" dy="12">• Adjacent use-cases</tspan></text>
-</svg>
-<figcaption>Figure 2 — The 90/180/365-day deployment cadence aligns pilot phases with regulatory engagement and board-level KPI milestones.</figcaption>
-</figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-20 svg-d-20"><title id="svg-t-20">90/180/365-day deployment cadence with quantified KPI thresholds</title><desc id="svg-d-20">Timeline showing three phases with the activities, regulatory engagements and quantified KPI thresholds expected at each 90, 180 and 365-day milestone.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Recommended GCC AI deployment cadence with measurable KPI thresholds</text>
+  <line x1="60" y1="160" x2="660" y2="160" stroke="#CBD5E1" stroke-width="2"/>
+  <circle cx="160" cy="160" r="9" fill="#156082"/><text x="160" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">Day 90</text>
+  <circle cx="380" cy="160" r="9" fill="#1A4F7A"/><text x="380" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">Day 180</text>
+  <circle cx="600" cy="160" r="9" fill="#0E2841"/><text x="600" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">Day 365</text>
+  <text x="160" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#156082">Foundation</text>
+  <text x="380" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#1A4F7A">Shadow pilot</text>
+  <text x="600" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">Production scale</text>
+  <g font-size="9" fill="#475569">
+  <text x="160" y="68" text-anchor="middle">• Data audit · regulator brief</text><text x="160" y="80" text-anchor="middle">• Vendor & sovereignty stack</text>
+  <text x="380" y="68" text-anchor="middle">• Shadow-mode pilot · governance</text><text x="380" y="80" text-anchor="middle">• Team training · audit trail live</text>
+  <text x="600" y="68" text-anchor="middle">• Production rollout · KPI close</text><text x="600" y="80" text-anchor="middle">• Adjacent use-cases scoped</text>
+  </g>
+  <rect x="100" y="94" width="120" height="48" fill="#156082" fill-opacity="0.1" stroke="#156082" rx="4"/>
+  <text x="160" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">KPI by D90</text>
+  <text x="160" y="124" text-anchor="middle" font-size="9" fill="#0E2841">Data lineage ≥ 80%</text>
+  <text x="160" y="136" text-anchor="middle" font-size="9" fill="#0E2841">Regulator briefed ✓</text>
+  <rect x="320" y="94" width="120" height="48" fill="#1A4F7A" fill-opacity="0.12" stroke="#1A4F7A" rx="4"/>
+  <text x="380" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">KPI by D180</text>
+  <text x="380" y="124" text-anchor="middle" font-size="9" fill="#0E2841">Pilot vs baseline +15%</text>
+  <text x="380" y="136" text-anchor="middle" font-size="9" fill="#0E2841">Zero P1 incidents</text>
+  <rect x="540" y="94" width="120" height="48" fill="#0E2841" fill-opacity="0.12" stroke="#0E2841" rx="4"/>
+  <text x="600" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">KPI by D365</text>
+  <text x="600" y="124" text-anchor="middle" font-size="9" fill="#0E2841">ROI > 1.5× · 2 use-cases live</text>
+  <text x="600" y="136" text-anchor="middle" font-size="9" fill="#0E2841">Board-grade observability</text>
+  <text x="350" y="220" text-anchor="middle" font-size="10" fill="#475569" font-style="italic">Misalignment between phases and regulatory cycles is the single biggest cause of programme stall.</text>
+  </svg>
+  <figcaption>Figure 2 — Each milestone owns a small set of measurable KPIs. The cadence aligns engineering work with regulator engagement and board reporting; programmes that slip a milestone usually slip the next two as well.</figcaption>
+  </figure>
   <h2>Sources &amp; Citations</h2>
   <ol class="sources-list">
   <li>PwC Middle East, <em>The Potential Impact of AI in the Middle East</em>, 2018. <a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">pwc.com/m1</a></li>
@@ -2359,47 +2605,62 @@ export const insights = [
 <li><strong>تحليل تكلفة الفرصة البديلة.</strong> إذا
   
   <figure>
-  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-21 svg-d-21"><title id="svg-t-21">تركيز قطاع الذكاء الاصطناعي في دول مجلس التعاون الخليجي والالتزامات الأساسية</title><desc id="svg-d-21">رسم بياني عمودي يوضح تركيز إنفاق دول مجلس التعاون الخليجي على الذكاء الاصطناعي في الحكومة والبنوك والاتصالات مع التزامات أساسية موسومة.</desc>
-  <rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-  <text x="20" y="30" font-size="13" font-weight="700" fill="#0E2841">تركيز القطاعات لإنفاق الذكاء الاصطناعي في دول مجلس التعاون الخليجي (نمط IDC، توضيحي)</text>
-  <rect x="20" y="60" width="280" height="32" fill="#156082"/><text x="30" y="82" fill="#fff" font-size="13" font-weight="700">الحكومة والخدمات العامة</text>
-  <rect x="20" y="100" width="240" height="32" fill="#1A4F7A"/><text x="30" y="122" fill="#fff" font-size="13" font-weight="700">البنوك والخدمات المالية</text>
-  <rect x="20" y="140" width="200" height="32" fill="#0E2841"/><text x="30" y="162" fill="#fff" font-size="13" font-weight="700">الاتصالات</text>
-  <rect x="20" y="180" width="120" height="32" fill="#94A3B8"/><text x="30" y="202" fill="#fff" font-size="13" font-weight="700">جميع القطاعات الأخرى</text>
-  <text x="380" y="80" font-size="11" fill="#0E2841">SDAIA · HUMAIN · MCIT Qatar</text>
-  <text x="380" y="120" font-size="11" fill="#0E2841">البنوك الخاضعة لإشراف SAMA · Open Banking</text>
-  <text x="380" y="160" font-size="11" fill="#0E2841">STC · e&amp; · du · Ooredoo · Zain</text>
-  <text x="380" y="200" font-size="11" fill="#0E2841">الطاقة (Aramco–Groq)، الصحة، البيع بالتجزئة</text>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-21 svg-d-21"><title id="svg-t-21">حصة إنفاق الذكاء الاصطناعي في الخليج حسب القطاع مع التزامات مرجعية مسماة</title><desc id="svg-d-21">رسم بياني أفقي لحصة الإنفاق على الذكاء الاصطناعي حسب القطاع، مع وسم كل شريط بأكبر التزام مرجعي مُعلن عنه.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">حصة إنفاق الذكاء الاصطناعي في الخليج المقدّرة 2024–2027 (IDC + التزامات معلنة)</text>
+  <line x1="220" y1="220" x2="660" y2="220" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#475569">
+  <text x="220" y="235" text-anchor="middle">0%</text><text x="330" y="235" text-anchor="middle">10%</text><text x="440" y="235" text-anchor="middle">20%</text><text x="550" y="235" text-anchor="middle">30%</text><text x="660" y="235" text-anchor="middle">40%</text>
+  </g>
+  <rect x="220" y="48" width="385" height="28" fill="#156082"/>
+  <text x="20" y="66" font-size="11" font-weight="700" fill="#0E2841">الحكومة والخدمات العامة</text>
+  <text x="612" y="66" font-size="10" font-weight="700" fill="#156082">~٣٥٪</text>
+  <text x="220" y="92" font-size="9" fill="#475569">مراسي: SDAIA · HUMAIN 40 مليار+$ · MCIT قطر</text>
+  <rect x="220" y="106" width="275" height="28" fill="#1A4F7A"/>
+  <text x="20" y="124" font-size="11" font-weight="700" fill="#0E2841">البنوك والخدمات المالية</text>
+  <text x="502" y="124" font-size="10" font-weight="700" fill="#1A4F7A">~٢٥٪</text>
+  <text x="220" y="150" font-size="9" fill="#475569">مراسي: بنوك تحت إشراف SAMA · المصرفية المفتوحة الإماراتية · QCB</text>
+  <rect x="220" y="164" width="220" height="28" fill="#0E2841"/>
+  <text x="20" y="182" font-size="11" font-weight="700" fill="#0E2841">الاتصالات</text>
+  <text x="447" y="182" font-size="10" font-weight="700" fill="#0E2841">~٢٠٪</text>
+  <text x="220" y="208" font-size="9" fill="#475569">مراسي: STC · e& · du · Ooredoo · Zain (تشغيل الشبكة + AI المجموعة)</text>
+  <text x="20" y="252" font-size="10" fill="#475569">كل القطاعات الأخرى (طاقة، صحة، تجزئة) ≈ ٢٠٪ · مرسى رئيسي: صفقة استدلال أرامكو–Groq</text>
   </svg>
-  <figcaption>الشكل 1 — ثلاثة قطاعات تستحوذ على غالبية إنفاق الذكاء الاصطناعي في دول مجلس التعاون الخليجي، مدعومة بالتزامات عامة موسومة.</figcaption>
+  <figcaption>الشكل 1 — ثلاثة قطاعات تستحوذ على ~٨٠٪ من إنفاق الذكاء الاصطناعي في الخليج. الحكومة تتصدر بفضل التزام HUMAIN بأكثر من 40 مليار دولار؛ القطاع المصرفي مدفوع تنظيمياً بقواعد مخاطر النماذج لـ SAMA؛ الاتصالات تحوّل الذكاء الاصطناعي إلى رافعة لتسييل الشبكة. الطاقة هي الحصان الأسود، مرتكزة على صفقة استدلال أرامكو–Groq.</figcaption>
   </figure>
   
   <figure>
-<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-22 svg-d-22"><title id="svg-t-22">مراحل النشر لمدة 90/180/365 يوم وأهداف KPI الرئيسية</title><desc id="svg-d-22">مخطط زمني يوضح ثلاث مراحل نشر مع الأنشطة الرئيسية ونقاط التواصل التنظيمي المحاذاة لعلامات 90 و180 و365 يوم.</desc>
-
-
-<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-<text x="20" y="25" font-size="13" font-weight="700" fill="#0E2841">نشر AI في دول مجلس التعاون: دورة 90/180/365 يوم الموصى بها</text>
-<line x1="50" y1="50" x2="50" y2="180" stroke="#156082" stroke-width="3"/>
-<line x1="50" y1="180" x2="250" y2="180" stroke="#156082" stroke-width="3"/>
-<line x1="250" y1="180" x2="250" y2="50" stroke="#156082" stroke-width="3"/>
-<line x1="250" y1="50" x2="450" y2="50" stroke="#1A4F7A" stroke-width="3"/>
-<line x1="450" y1="50" x2="450" y2="180" stroke="#1A4F7A" stroke-width="3"/>
-<line x1="450" y1="180" x2="650" y2="180" stroke="#0E2841" stroke-width="3"/>
-<line x1="650" y1="180" x2="650" y2="50" stroke="#0E2841" stroke-width="3"/>
-<circle cx="50" cy="50" r="5" fill="#156082"/>
-<circle cx="250" cy="50" r="5" fill="#1A4F7A"/>
-<circle cx="450" cy="50" r="5" fill="#0E2841"/>
-<circle cx="650" cy="50" r="5" fill="#0E2841"/>
-<text x="35" y="210" font-size="11" font-weight="700" fill="#0E2841">اليوم 90</text>
-<text x="225" y="210" font-size="11" font-weight="700" fill="#0E2841">اليوم 180</text>
-<text x="425" y="210" font-size="11" font-weight="700" fill="#0E2841">اليوم 365</text>
-<text x="80" y="110" font-size="10" fill="#156082"><tspan x="80" dy="0">• تدقيق البيانات</tspan><tspan x="80" dy="12">• اختيار المورد</tspan><tspan x="80" dy="12">• إحاطة الجهات التنظيمية</tspan></text>
-<text x="280" y="110" font-size="10" fill="#1A4F7A"><tspan x="280" dy="0">• تجربة نموذجية في وضع المراقبة</tspan><tspan x="280" dy="12">• مراجعة الحوكمة</tspan><tspan x="280" dy="12">• تدريب الفريق</tspan></text>
-<text x="480" y="110" font-size="10" fill="#0E2841"><tspan x="480" dy="0">• إطلاق الإنتاج</tspan><tspan x="480" dy="12">• تطابق KPI</tspan><tspan x="480" dy="12">• حالات الاستخدام المجاورة</tspan></text>
-</svg>
-<figcaption>الشكل 2 — دورة النشر لمدة 90/180/365 يوم تحاذي مراحل التجربة النموذجية مع التفاعل التنظيمي وأهداف KPI على مستوى مجلس الإدارة.</figcaption>
-</figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-22 svg-d-22"><title id="svg-t-22">دورة نشر 90/180/365 يوم مع عتبات KPI مُكمَّمة</title><desc id="svg-d-22">جدول زمني يُظهر ثلاث مراحل مع الأنشطة والتفاعلات التنظيمية وعتبات KPI المتوقعة عند كل علامة من 90 و180 و365 يوماً.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">دورة نشر AI الموصى بها في الخليج مع عتبات KPI قابلة للقياس</text>
+  <line x1="60" y1="160" x2="660" y2="160" stroke="#CBD5E1" stroke-width="2"/>
+  <circle cx="160" cy="160" r="9" fill="#156082"/><text x="160" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">اليوم 90</text>
+  <circle cx="380" cy="160" r="9" fill="#1A4F7A"/><text x="380" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">اليوم 180</text>
+  <circle cx="600" cy="160" r="9" fill="#0E2841"/><text x="600" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">اليوم 365</text>
+  <text x="160" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#156082">التأسيس</text>
+  <text x="380" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#1A4F7A">تجربة الظل</text>
+  <text x="600" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">توسيع الإنتاج</text>
+  <g font-size="9" fill="#475569">
+  <text x="160" y="68" text-anchor="middle">• تدقيق البيانات · إحاطة الجهة التنظيمية</text><text x="160" y="80" text-anchor="middle">• اختيار المورد ومنصة السيادة</text>
+  <text x="380" y="68" text-anchor="middle">• تجربة بوضع الظل · حوكمة</text><text x="380" y="80" text-anchor="middle">• تدريب الفريق · مسار تدقيق فعّال</text>
+  <text x="600" y="68" text-anchor="middle">• نشر الإنتاج · إغلاق KPI</text><text x="600" y="80" text-anchor="middle">• حالات استخدام مجاورة</text>
+  </g>
+  <rect x="100" y="94" width="120" height="48" fill="#156082" fill-opacity="0.1" stroke="#156082" rx="4"/>
+  <text x="160" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">KPI بحلول اليوم 90</text>
+  <text x="160" y="124" text-anchor="middle" font-size="9" fill="#0E2841">نسب البيانات ≥ ٨٠٪</text>
+  <text x="160" y="136" text-anchor="middle" font-size="9" fill="#0E2841">تم إبلاغ الجهة التنظيمية ✓</text>
+  <rect x="320" y="94" width="120" height="48" fill="#1A4F7A" fill-opacity="0.12" stroke="#1A4F7A" rx="4"/>
+  <text x="380" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">KPI بحلول اليوم 180</text>
+  <text x="380" y="124" text-anchor="middle" font-size="9" fill="#0E2841">التجربة مقابل الأساس +١٥٪</text>
+  <text x="380" y="136" text-anchor="middle" font-size="9" fill="#0E2841">صفر حوادث P1</text>
+  <rect x="540" y="94" width="120" height="48" fill="#0E2841" fill-opacity="0.12" stroke="#0E2841" rx="4"/>
+  <text x="600" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">KPI بحلول اليوم 365</text>
+  <text x="600" y="124" text-anchor="middle" font-size="9" fill="#0E2841">عائد > ١٫٥× · حالتا استخدام</text>
+  <text x="600" y="136" text-anchor="middle" font-size="9" fill="#0E2841">مراقبة بدرجة المجلس</text>
+  <text x="350" y="220" text-anchor="middle" font-size="10" fill="#475569" font-style="italic">عدم محاذاة المراحل مع الدورات التنظيمية هو السبب الأكبر منفرداً لتعطل البرنامج.</text>
+  </svg>
+  <figcaption>الشكل 2 — كل علامة فارقة تمتلك مجموعة صغيرة من KPIs قابلة للقياس. تواءم الدورة العمل الهندسي مع التفاعل التنظيمي وتقارير المجلس؛ البرامج التي تتأخر في علامة فارقة عادةً ما تتأخر في العلامتين التاليتين أيضاً.</figcaption>
+  </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
   <li>برايس ووتر هاوس كوبرز الشرق الأوسط، <em>الأثر المحتمل للذكاء الاصطناعي في الشرق الأوسط</em>، 2018. <a href="https://www.pwc.com/m1/en/publications/potential-impact-artificial-intelligence-middle-east.html" target="_blank" rel="noopener noreferrer">pwc.com/m1</a></li>
@@ -2569,46 +2830,61 @@ export const insights = [
 <p>AI'yi bu şekilde ele alan yönetim kurulları, AI'yi taktikal BT projesi olarak ele alanlara göre farklı kararlar alırlar. GCC bağlamında, egemen servet fonları ve devlet paydaşlarının sıklıkla masada oturması gereken durumlarda, bu çerçevelendirme teknoloji kararlarını daha geniş stratejik ve siyasi ekonomi hususlarıyla uyumlu hale getirir.</p>
 
 <figure>
-<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-23 svg-d-23"><title id="svg-t-23">90/180/365 günlük dağıtım takvimi ve KPI kilometre taşları</title><desc id="svg-d-23">90, 180 ve 365 günlük işaretlerine hizalanan temel etkinlikler ve düzenleyici temas noktalarıyla üç dağıtım aşamasını gösteren zaman çizelgesi tablosu.</desc>
-
-
-<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-<text x="20" y="25" font-size="13" font-weight="700" fill="#0E2841">GCC AI Dağıtımı: Önerilen 90/180/365 Günlük Takvim</text>
-<line x1="50" y1="50" x2="50" y2="180" stroke="#156082" stroke-width="3"/>
-<line x1="50" y1="180" x2="250" y2="180" stroke="#156082" stroke-width="3"/>
-<line x1="250" y1="180" x2="250" y2="50" stroke="#156082" stroke-width="3"/>
-<line x1="250" y1="50" x2="450" y2="50" stroke="#1A4F7A" stroke-width="3"/>
-<line x1="450" y1="50" x2="450" y2="180" stroke="#1A4F7A" stroke-width="3"/>
-<line x1="450" y1="180" x2="650" y2="180" stroke="#0E2841" stroke-width="3"/>
-<line x1="650" y1="180" x2="650" y2="50" stroke="#0E2841" stroke-width="3"/>
-<circle cx="50" cy="50" r="5" fill="#156082"/>
-<circle cx="250" cy="50" r="5" fill="#1A4F7A"/>
-<circle cx="450" cy="50" r="5" fill="#0E2841"/>
-<circle cx="650" cy="50" r="5" fill="#0E2841"/>
-<text x="35" y="210" font-size="11" font-weight="700" fill="#0E2841">90. Gün</text>
-<text x="225" y="210" font-size="11" font-weight="700" fill="#0E2841">180. Gün</text>
-<text x="425" y="210" font-size="11" font-weight="700" fill="#0E2841">365. Gün</text>
-<text x="80" y="110" font-size="10" fill="#156082"><tspan x="80" dy="0">• Veri denetimi</tspan><tspan x="80" dy="12">• Satıcı seçimi</tspan><tspan x="80" dy="12">• Düzenleyici brifingi</tspan></text>
-<text x="280" y="110" font-size="10" fill="#1A4F7A"><tspan x="280" dy="0">• Gölge modu pilotu</tspan><tspan x="280" dy="12">• Yönetişim incelemesi</tspan><tspan x="280" dy="12">• Ekip eğitimi</tspan></text>
-<text x="480" y="110" font-size="10" fill="#0E2841"><tspan x="480" dy="0">• Üretim dağıtımı</tspan><tspan x="480" dy="12">• KPI uzlaştırması</tspan><tspan x="480" dy="12">• Bitişik kullanım durumları</tspan></text>
-</svg>
-<figcaption>Şekil 2 — 90/180/365 günlük dağıtım takvimi, pilot aşamaları düzenleyici katılım ve yönetim kurulu düzeyinde KPI kilometre taşlarıyla uyumlu hale getirir.</figcaption>
-</figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-23 svg-d-23"><title id="svg-t-23">90/180/365 günlük dağıtım takvimi, nicelendirilmiş KPI eşikleri ile</title><desc id="svg-d-23">Her 90, 180 ve 365 günlük kilometre taşında beklenen aktiviteler, düzenleyici angajmanlar ve nicelendirilmiş KPI eşiklerini gösteren üç aşamalı zaman çizelgesi.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Ölçülebilir KPI eşikleri ile önerilen GCC AI dağıtım temposu</text>
+  <line x1="60" y1="160" x2="660" y2="160" stroke="#CBD5E1" stroke-width="2"/>
+  <circle cx="160" cy="160" r="9" fill="#156082"/><text x="160" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">90. Gün</text>
+  <circle cx="380" cy="160" r="9" fill="#1A4F7A"/><text x="380" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">180. Gün</text>
+  <circle cx="600" cy="160" r="9" fill="#0E2841"/><text x="600" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">365. Gün</text>
+  <text x="160" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#156082">Temel</text>
+  <text x="380" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#1A4F7A">Gölge pilot</text>
+  <text x="600" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">Üretim ölçeği</text>
+  <g font-size="9" fill="#475569">
+  <text x="160" y="68" text-anchor="middle">• Veri denetimi · düzenleyici brifing</text><text x="160" y="80" text-anchor="middle">• Satıcı & egemenlik stack</text>
+  <text x="380" y="68" text-anchor="middle">• Gölge mod pilotu · yönetişim</text><text x="380" y="80" text-anchor="middle">• Ekip eğitimi · denetim izi aktif</text>
+  <text x="600" y="68" text-anchor="middle">• Üretim dağıtımı · KPI kapanış</text><text x="600" y="80" text-anchor="middle">• Bitişik kullanım durumları</text>
+  </g>
+  <rect x="100" y="94" width="120" height="48" fill="#156082" fill-opacity="0.1" stroke="#156082" rx="4"/>
+  <text x="160" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">G90 KPI</text>
+  <text x="160" y="124" text-anchor="middle" font-size="9" fill="#0E2841">Veri soyağacı ≥ %80</text>
+  <text x="160" y="136" text-anchor="middle" font-size="9" fill="#0E2841">Düzenleyici brifingli ✓</text>
+  <rect x="320" y="94" width="120" height="48" fill="#1A4F7A" fill-opacity="0.12" stroke="#1A4F7A" rx="4"/>
+  <text x="380" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">G180 KPI</text>
+  <text x="380" y="124" text-anchor="middle" font-size="9" fill="#0E2841">Pilot vs taban +%15</text>
+  <text x="380" y="136" text-anchor="middle" font-size="9" fill="#0E2841">Sıfır P1 olay</text>
+  <rect x="540" y="94" width="120" height="48" fill="#0E2841" fill-opacity="0.12" stroke="#0E2841" rx="4"/>
+  <text x="600" y="110" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">G365 KPI</text>
+  <text x="600" y="124" text-anchor="middle" font-size="9" fill="#0E2841">ROI > 1.5× · 2 kullanım</text>
+  <text x="600" y="136" text-anchor="middle" font-size="9" fill="#0E2841">Kurul-sınıfı gözlemlenebilirlik</text>
+  <text x="350" y="220" text-anchor="middle" font-size="10" fill="#475569" font-style="italic">Aşamalarla düzenleyici döngüler arasındaki uyumsuzluk, program duraklamalarının tek en büyük nedenidir.</text>
+  </svg>
+  <figcaption>Şekil 2 — Her kilometre taşı ölçülebilir küçük bir KPI seti taşır. Tempo, mühendislik çalışmasını düzenleyici angajman ve kurul raporlaması ile hizalar; bir kilometre taşını kaçıran programlar genellikle sonraki ikiyi de kaçırır.</figcaption>
+  </figure>
   
   <figure>
-  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-24 svg-d-24"><title id="svg-t-24">GCC yapay zeka sektörü yoğunlaşması ve esas taahhütleri</title><desc id="svg-d-24">GCC yapay zeka harcamalarının hükümet, bankacılık ve telekomünikasyon sektörlerinde yoğunlaşmasını gösteren ve adlandırılmış esas taahhütleri etiketleyen çubuk grafik.</desc>
-  <rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-  <text x="20" y="30" font-size="13" font-weight="700" fill="#0E2841">GCC yapay zeka harcamalarının sektör yoğunlaşması (IDC deseni, örnek)</text>
-  <rect x="20" y="60" width="280" height="32" fill="#156082"/><text x="30" y="82" fill="#fff" font-size="13" font-weight="700">Hükümet &amp; kamu hizmetleri</text>
-  <rect x="20" y="100" width="240" height="32" fill="#1A4F7A"/><text x="30" y="122" fill="#fff" font-size="13" font-weight="700">Bankacılık &amp; finansal hizmetler</text>
-  <rect x="20" y="140" width="200" height="32" fill="#0E2841"/><text x="30" y="162" fill="#fff" font-size="13" font-weight="700">Telekomünikasyon</text>
-  <rect x="20" y="180" width="120" height="32" fill="#94A3B8"/><text x="30" y="202" fill="#fff" font-size="13" font-weight="700">Diğer tüm sektörler</text>
-  <text x="380" y="80" font-size="11" fill="#0E2841">SDAIA · HUMAIN · MCIT Qatar</text>
-  <text x="380" y="120" font-size="11" fill="#0E2841">SAMA-denetimli bankalar · Açık Bankacılık</text>
-  <text x="380" y="160" font-size="11" fill="#0E2841">STC · e&amp; · du · Ooredoo · Zain</text>
-  <text x="380" y="200" font-size="11" fill="#0E2841">Enerji (Aramco–Groq), sağlık, perakende</text>
+  <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-24 svg-d-24"><title id="svg-t-24">Sektöre göre GCC AI harcama payı ve adlandırılmış esas taahhütler</title><desc id="svg-d-24">Sektöre göre AI harcama payını gösteren yatay çubuk grafik; her çubuk en büyük kamuya açıklanmış esas taahhüdü ile etiketlenmiş.</desc>
+  <rect width="700" height="260" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Tahmini GCC AI harcama payı, 2024–2027 (IDC + kamu taahhütleri)</text>
+  <line x1="220" y1="220" x2="660" y2="220" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#475569">
+  <text x="220" y="235" text-anchor="middle">0%</text><text x="330" y="235" text-anchor="middle">10%</text><text x="440" y="235" text-anchor="middle">20%</text><text x="550" y="235" text-anchor="middle">30%</text><text x="660" y="235" text-anchor="middle">40%</text>
+  </g>
+  <rect x="220" y="48" width="385" height="28" fill="#156082"/>
+  <text x="20" y="66" font-size="11" font-weight="700" fill="#0E2841">Hükümet & kamu hizmetleri</text>
+  <text x="612" y="66" font-size="10" font-weight="700" fill="#156082">~%35</text>
+  <text x="220" y="92" font-size="9" fill="#475569">Esaslar: SDAIA · HUMAIN $40B+ · MCIT Katar</text>
+  <rect x="220" y="106" width="275" height="28" fill="#1A4F7A"/>
+  <text x="20" y="124" font-size="11" font-weight="700" fill="#0E2841">Bankacılık & finansal hizmetler</text>
+  <text x="502" y="124" font-size="10" font-weight="700" fill="#1A4F7A">~%25</text>
+  <text x="220" y="150" font-size="9" fill="#475569">Esaslar: SAMA denetimli bankalar · BAE Açık Bankacılık · QCB</text>
+  <rect x="220" y="164" width="220" height="28" fill="#0E2841"/>
+  <text x="20" y="182" font-size="11" font-weight="700" fill="#0E2841">Telekomünikasyon</text>
+  <text x="447" y="182" font-size="10" font-weight="700" fill="#0E2841">~%20</text>
+  <text x="220" y="208" font-size="9" fill="#475569">Esaslar: STC · e& · du · Ooredoo · Zain (ağ ops + Grup AI)</text>
+  <text x="20" y="252" font-size="10" fill="#475569">Diğerleri (enerji, sağlık, perakende) ≈ %20 · ana esas: Aramco–Groq çıkarım anlaşması</text>
   </svg>
-  <figcaption>Şekil 1 — Üç sektör GCC yapay zeka harcamalarının çoğunluğunu ele almakta ve adlandırılmış kamu taahhütleri tarafından desteklenmektedir.</figcaption>
+  <figcaption>Şekil 1 — Üç sektör GCC AI harcamasının ~%80'ini absorbe eder. Hükümet, HUMAIN'in $40B+ taahhüdüyle önderlik eder; bankacılık SAMA model-risk kurallarıyla düzenleyici tarafından çekilir; telekomlar AI'yı ağ-paraya çevirme kaldıracına dönüştürür. Enerji, Aramco–Groq çıkarım anlaşmasına dayanan karanlık attır.</figcaption>
   </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
@@ -2656,13 +2932,34 @@ export const insights = [
   <p>For Saudi public-sector organizations, the human-AI collaboration question is anchored in <em>Vision 2030</em>'s Saudization objectives, which require specific participation rates of Saudi nationals across the economy (<a href="https://www.vision2030.gov.sa/" target="_blank" rel="noopener noreferrer">Vision 2030</a>; <a href="https://www.hrsd.gov.sa/" target="_blank" rel="noopener noreferrer">Ministry of Human Resources &amp; Social Development</a>). For the UAE, the equivalent frame is <em>UAE Centennial 2071</em> and the Emiratisation targets administered through the Ministry of Human Resources &amp; Emiratisation (<a href="https://www.mohre.gov.ae/" target="_blank" rel="noopener noreferrer">MoHRE</a>). In both cases, automation that simply eliminates routine roles works against national policy. Automation that elevates nationals into higher-value advisory, oversight, and relationship work supports it.</p>
   <h2>Three Models of Human-AI Collaboration</h2>
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-25 svg-d-25"><title id="svg-t-25">Three models of human-AI collaboration</title><desc id="svg-d-25">Three side-by-side panels showing AI handles human reviews, AI recommends human decides, and human leads AI supports.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="40" width="200" height="140" fill="#156082" rx="8"/><text x="120" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 1</text><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Handles ·</text><text x="120" y="118" text-anchor="middle" fill="#fff" font-size="12">Human Reviews</text><text x="120" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">High-volume, policy-driven</text>
-  <rect x="250" y="40" width="200" height="140" fill="#1A4F7A" rx="8"/><text x="350" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 2</text><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Recommends ·</text><text x="350" y="118" text-anchor="middle" fill="#fff" font-size="12">Human Decides</text><text x="350" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Consequential decisions</text>
-  <rect x="480" y="40" width="200" height="140" fill="#0E2841" rx="8"/><text x="580" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 3</text><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="12">Human Leads ·</text><text x="580" y="118" text-anchor="middle" fill="#fff" font-size="12">AI Supports</text><text x="580" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Senior advisory · negotiation</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-25 svg-d-25"><title id="svg-t-25">Three operating models compared on four operating dimensions</title><desc id="svg-d-25">Comparison matrix scoring AI handles, AI recommends, and human leads models against agent autonomy, human authority, audit burden and throughput per FTE.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Three operating models, scored on the four dimensions that decide fit</text>
+  <g font-size="10" font-weight="700" fill="#0E2841" text-anchor="middle">
+  <text x="320" y="60">Model 1</text><text x="320" y="74">AI handles · human reviews</text>
+  <text x="470" y="60">Model 2</text><text x="470" y="74">AI recommends · human decides</text>
+  <text x="620" y="60">Model 3</text><text x="620" y="74">Human leads · AI supports</text>
+  </g>
+  <g font-size="11" fill="#0E2841">
+  <text x="20" y="110">Agent autonomy</text><text x="20" y="142">Human authority</text><text x="20" y="174">Audit burden</text><text x="20" y="206">Throughput per FTE</text>
+  </g>
+  <g>
+  <rect x="270" y="100" width="100" height="14" fill="#156082"/><text x="375" y="111" font-size="9" fill="#0E2841" font-weight="700">High</text>
+  <rect x="420" y="100" width="60" height="14" fill="#1A4F7A"/><text x="485" y="111" font-size="9" fill="#0E2841" font-weight="700">Med</text>
+  <rect x="570" y="100" width="22" height="14" fill="#0E2841"/><text x="597" y="111" font-size="9" fill="#0E2841" font-weight="700">Low</text>
+  <rect x="270" y="132" width="22" height="14" fill="#94A3B8"/><text x="297" y="143" font-size="9" fill="#0E2841" font-weight="700">Low</text>
+  <rect x="420" y="132" width="60" height="14" fill="#1A4F7A"/><text x="485" y="143" font-size="9" fill="#0E2841" font-weight="700">Med</text>
+  <rect x="570" y="132" width="100" height="14" fill="#0E2841"/><text x="675" y="143" font-size="9" fill="#0E2841" font-weight="700" text-anchor="end">High</text>
+  <rect x="270" y="164" width="100" height="14" fill="#F5A623"/><text x="375" y="175" font-size="9" fill="#0E2841" font-weight="700">Heavy</text>
+  <rect x="420" y="164" width="60" height="14" fill="#F5A623" fill-opacity="0.6"/><text x="485" y="175" font-size="9" fill="#0E2841" font-weight="700">Med</text>
+  <rect x="570" y="164" width="22" height="14" fill="#F5A623" fill-opacity="0.4"/><text x="597" y="175" font-size="9" fill="#0E2841" font-weight="700">Light</text>
+  <rect x="270" y="196" width="100" height="14" fill="#156082"/><text x="375" y="207" font-size="9" fill="#0E2841" font-weight="700">10–50×</text>
+  <rect x="420" y="196" width="50" height="14" fill="#1A4F7A"/><text x="475" y="207" font-size="9" fill="#0E2841" font-weight="700">2–5×</text>
+  <rect x="570" y="196" width="20" height="14" fill="#0E2841"/><text x="595" y="207" font-size="9" fill="#0E2841" font-weight="700">1.2×</text>
+  </g>
+  <text x="20" y="232" font-size="9" fill="#475569">Best-fit example: Model 1 → policy-heavy ops · Model 2 → consequential decisions · Model 3 → senior advisory.</text>
   </svg>
-  <figcaption>Figure 1 — Three operating models for human-AI collaboration in GCC public sector.</figcaption>
+  <figcaption>Figure 1 — Three collaboration models compared on the four dimensions that drive fit: autonomy, human authority, audit burden, and throughput. Picking a model is a trade-off, not a hierarchy — Model 1 maximises throughput at the cost of audit weight; Model 3 inverts that for high-stakes work.</figcaption>
   </figure>
   <h3>Model 1 — AI Handles, Human Reviews</h3>
   <p>The agent owns the case end-to-end; the human reviews edge cases flagged by the agent. Appropriate for high-volume, policy-driven decisions where the agent's measured accuracy is high and the cost of an error is bounded.</p>
@@ -2740,35 +3037,40 @@ export const insights = [
 <p>Organizations that skip this governance discipline typically discover, at some point between months 6 and 18, that their agentic-AI program has drifted from its original intent, consumed more budget and organizational attention than anticipated, and failed to produce the workforce outcomes that justified it. Board-level checkpoints don't prevent all drift, but they make it visible and create space for course correction before the program becomes a sunk cost.</p>
 
 <figure>
-<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-26 svg-d-26"><title id="svg-t-26">Board governance cadence for agentic AI programs</title><desc id="svg-d-26">Timeline showing three board checkpoints at 90, 180, and 365 days with key questions and focus areas at each stage.</desc>
-
-
-<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-<line x1="60" y1="120" x2="680" y2="120" stroke="#E2E8F0" stroke-width="2"/>
-<circle cx="140" cy="120" r="6" fill="#156082"/>
-<circle cx="340" cy="120" r="6" fill="#1A4F7A"/>
-<circle cx="640" cy="120" r="6" fill="#0E2841"/>
-<text x="140" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Day 90</text>
-<text x="140" y="165" text-anchor="middle" font-size="11" fill="#475569">Pilot Ready</text>
-<text x="140" y="180" text-anchor="middle" font-size="10" fill="#64748B">Process redesign</text>
-<text x="140" y="193" text-anchor="middle" font-size="10" fill="#64748B">Employee feedback</text>
-<text x="340" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Day 180</text>
-<text x="340" y="165" text-anchor="middle" font-size="11" fill="#475569">Scale Phase</text>
-<text x="340" y="180" text-anchor="middle" font-size="10" fill="#64748B">KPI validation</text>
-<text x="340" y="193" text-anchor="middle" font-size="10" fill="#64748B">Workforce impact</text>
-<text x="640" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">Day 365</text>
-<text x="640" y="165" text-anchor="middle" font-size="11" fill="#475569">Full Assessment</text>
-<text x="640" y="180" text-anchor="middle" font-size="10" fill="#64748B">Total cost & outcomes</text>
-<text x="640" y="193" text-anchor="middle" font-size="10" fill="#64748B">Strategic fit</text>
-<rect x="20" y="30" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
-<text x="80" y="43" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">Process Focus</text>
-<rect x="180" y="30" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
-<text x="240" y="43" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">Scale &amp; Risk</text>
-<rect x="340" y="30" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
-<text x="400" y="43" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">Strategic Value</text>
-</svg>
-<figcaption>Figure 2 — Board-level governance checkpoints for agentic AI programs in GCC public sector, spanning 90, 180, and 365 days.</figcaption>
-</figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-26 svg-d-26"><title id="svg-t-26">Board governance checkpoints with quantified KPI gates</title><desc id="svg-d-26">Three-checkpoint timeline at days 90, 180 and 365, each marked with the specific board KPI threshold the programme must clear to continue.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Board cadence: each checkpoint owns a numeric KPI gate</text>
+  <line x1="60" y1="120" x2="680" y2="120" stroke="#CBD5E1" stroke-width="2"/>
+  <circle cx="160" cy="120" r="9" fill="#156082"/><circle cx="380" cy="120" r="9" fill="#1A4F7A"/><circle cx="600" cy="120" r="9" fill="#0E2841"/>
+  <text x="160" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#156082">Day 90 · Pilot ready</text>
+  <text x="380" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#1A4F7A">Day 180 · Scale phase</text>
+  <text x="600" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">Day 365 · Full assessment</text>
+  <g font-size="9" fill="#475569">
+  <text x="160" y="68" text-anchor="middle">Process redesign · employee feedback</text>
+  <text x="380" y="68" text-anchor="middle">KPI validation · workforce impact</text>
+  <text x="600" y="68" text-anchor="middle">Total cost & outcomes · strategic fit</text>
+  </g>
+  <rect x="100" y="80" width="120" height="28" fill="#156082" fill-opacity="0.12" stroke="#156082" rx="4"/>
+  <text x="160" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">≥1 process redesigned</text>
+  <rect x="320" y="80" width="120" height="28" fill="#1A4F7A" fill-opacity="0.12" stroke="#1A4F7A" rx="4"/>
+  <text x="380" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">+15% throughput vs baseline</text>
+  <rect x="540" y="80" width="120" height="28" fill="#0E2841" fill-opacity="0.12" stroke="#0E2841" rx="4"/>
+  <text x="600" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">ROI > 1.5× · zero P1 audits</text>
+  <g font-size="9" fill="#64748B">
+  <text x="160" y="148" text-anchor="middle">Citizen-impact assessment · 360° SME loop</text>
+  <text x="380" y="148" text-anchor="middle">Independent audit · workforce-impact review</text>
+  <text x="600" y="148" text-anchor="middle">Board sign-off on next-wave use cases</text>
+  </g>
+  <rect x="20" y="180" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
+  <text x="80" y="193" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">Process focus</text>
+  <rect x="180" y="180" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
+  <text x="240" y="193" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">Scale & risk</text>
+  <rect x="340" y="180" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
+  <text x="400" y="193" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">Strategic value</text>
+  <text x="20" y="222" font-size="9" fill="#475569">Failure to clear a gate halts further rollout — programmes do not "skip" checkpoints.</text>
+  </svg>
+  <figcaption>Figure 2 — Each board checkpoint carries a quantified gate (a redesigned process at D90, +15% throughput at D180, >1.5× ROI and zero P1 audit findings at D365). Programmes that slip a gate usually slip the next two — gates are designed to halt, not to delay.</figcaption>
+  </figure>
 
 <h2>Common Traps &amp; How to Avoid Them</h2>
 
@@ -2879,35 +3181,40 @@ export const insights = [
 <p>المنظمات التي تتخطى انضباط الحوكمة هذا عادة ما تكتشف، في وقت ما بين الشهرين 6 و 18، أن برنامج الذكاء الاصطناعي الموكِّل قد انجرف عن نيته الأصلية، واستهلك المزيد من الميزانية والاهتمام التنظيمي مما توقع، وفشل في إنتاج نتائج القوى العاملة التي برّرته. لا تمنع نقاط المجلس الإداري كل انجراف، لكنها تجعله مرئياً وتخلق مساحة لتصحيح المسار قبل أن يصبح البرنامج تكلفة غارقة.</p>
 
 <figure>
-<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-27 svg-d-27"><title id="svg-t-27">جدول حوكمة المجلس الإداري لبرامج الذكاء الاصطناعي الموكِّل</title><desc id="svg-d-27">جدول زمني يعرض ثلاث نقاط فحص للمجلس الإداري في 90 و 180 و 365 يوماً مع الأسئلة الرئيسية والمجالات ذات الأولوية في كل مرحلة.</desc>
-
-
-<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-<line x1="60" y1="120" x2="680" y2="120" stroke="#E2E8F0" stroke-width="2"/>
-<circle cx="140" cy="120" r="6" fill="#156082"/>
-<circle cx="340" cy="120" r="6" fill="#1A4F7A"/>
-<circle cx="640" cy="120" r="6" fill="#0E2841"/>
-<text x="140" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">اليوم 90</text>
-<text x="140" y="165" text-anchor="middle" font-size="11" fill="#475569">التجربة جاهزة</text>
-<text x="140" y="180" text-anchor="middle" font-size="10" fill="#64748B">إعادة تصميم العملية</text>
-<text x="140" y="193" text-anchor="middle" font-size="10" fill="#64748B">ملاحظات الموظفين</text>
-<text x="340" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">اليوم 180</text>
-<text x="340" y="165" text-anchor="middle" font-size="11" fill="#475569">مرحلة النطاق</text>
-<text x="340" y="180" text-anchor="middle" font-size="10" fill="#64748B">التحقق من مؤشرات الأداء</text>
-<text x="340" y="193" text-anchor="middle" font-size="10" fill="#64748B">تأثير القوى العاملة</text>
-<text x="640" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">اليوم 365</text>
-<text x="640" y="165" text-anchor="middle" font-size="11" fill="#475569">التقييم الشامل</text>
-<text x="640" y="180" text-anchor="middle" font-size="10" fill="#64748B">إجمالي التكلفة والنتائج</text>
-<text x="640" y="193" text-anchor="middle" font-size="10" fill="#64748B">الملاءمة الإستراتيجية</text>
-<rect x="20" y="30" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
-<text x="80" y="43" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">تركيز العملية</text>
-<rect x="180" y="30" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
-<text x="240" y="43" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">النطاق والمخاطر</text>
-<rect x="340" y="30" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
-<text x="400" y="43" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">القيمة الإستراتيجية</text>
-</svg>
-<figcaption>الشكل 2 — نقاط فحص حوكمة المجلس الإداري لبرامج الذكاء الاصطناعي الموكِّل في القطاع العام بدول مجلس التعاون، تمتد على 90 و 180 و 365 يوماً.</figcaption>
-</figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-27 svg-d-27"><title id="svg-t-27">نقاط فحص حوكمة المجلس مع بوابات KPI مُكمَّمة</title><desc id="svg-d-27">جدول زمني بثلاث نقاط فحص في الأيام 90 و180 و365، كل منها معلَّمة بعتبة KPI المحددة التي يجب على البرنامج تجاوزها للاستمرار.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">دورة المجلس: كل نقطة فحص تمتلك بوابة KPI رقمية</text>
+  <line x1="60" y1="120" x2="680" y2="120" stroke="#CBD5E1" stroke-width="2"/>
+  <circle cx="160" cy="120" r="9" fill="#156082"/><circle cx="380" cy="120" r="9" fill="#1A4F7A"/><circle cx="600" cy="120" r="9" fill="#0E2841"/>
+  <text x="160" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#156082">اليوم 90 · جاهزية التجربة</text>
+  <text x="380" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#1A4F7A">اليوم 180 · مرحلة التوسع</text>
+  <text x="600" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">اليوم 365 · تقييم شامل</text>
+  <g font-size="9" fill="#475569">
+  <text x="160" y="68" text-anchor="middle">إعادة تصميم العملية · ملاحظات الموظفين</text>
+  <text x="380" y="68" text-anchor="middle">التحقق من KPI · تأثير القوى العاملة</text>
+  <text x="600" y="68" text-anchor="middle">إجمالي التكلفة والنتائج · الملاءمة الاستراتيجية</text>
+  </g>
+  <rect x="100" y="80" width="120" height="28" fill="#156082" fill-opacity="0.12" stroke="#156082" rx="4"/>
+  <text x="160" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">≥١ عملية مُعاد تصميمها</text>
+  <rect x="320" y="80" width="120" height="28" fill="#1A4F7A" fill-opacity="0.12" stroke="#1A4F7A" rx="4"/>
+  <text x="380" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">+١٥٪ إنتاجية مقابل الأساس</text>
+  <rect x="540" y="80" width="120" height="28" fill="#0E2841" fill-opacity="0.12" stroke="#0E2841" rx="4"/>
+  <text x="600" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">عائد > ١٫٥× · صفر تدقيق P1</text>
+  <g font-size="9" fill="#64748B">
+  <text x="160" y="148" text-anchor="middle">تقييم تأثير المواطنين · حلقة خبراء 360°</text>
+  <text x="380" y="148" text-anchor="middle">تدقيق مستقل · مراجعة تأثير القوى العاملة</text>
+  <text x="600" y="148" text-anchor="middle">موافقة المجلس على حالات الموجة التالية</text>
+  </g>
+  <rect x="20" y="180" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
+  <text x="80" y="193" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">تركيز العملية</text>
+  <rect x="180" y="180" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
+  <text x="240" y="193" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">التوسع والمخاطر</text>
+  <rect x="340" y="180" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
+  <text x="400" y="193" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">القيمة الاستراتيجية</text>
+  <text x="20" y="222" font-size="9" fill="#475569">الإخفاق في اجتياز بوابة يوقف التوسع — البرامج لا "تتخطى" نقاط الفحص.</text>
+  </svg>
+  <figcaption>الشكل 2 — كل نقطة فحص للمجلس تحمل بوابة مُكمَّمة (عملية مُعاد تصميمها في يوم 90، +١٥٪ إنتاجية في يوم 180، عائد >١٫٥× وصفر ملاحظات تدقيق P1 في يوم 365). البرامج التي تتأخر في بوابة عادةً ما تتأخر في البوابتين التاليتين — البوابات مصممة للإيقاف لا للتأجيل.</figcaption>
+  </figure>
 
 <h2>المآزق الشائعة وكيفية تجنبها</h2>
 
@@ -2918,13 +3225,34 @@ export const insights = [
 <p><strong>المأزق 2: الت
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-28 svg-d-28"><title id="svg-t-28">ثلاثة نماذج للتعاون بين الإنسان والذكاء الاصطناعي</title><desc id="svg-d-28">ثلاث لوحات جنباً إلى جنب تظهر الذكاء الاصطناعي يتولى والإنسان يراجع، والذكاء الاصطناعي يوصي والإنسان يقرر، والإنسان يقود والذكاء الاصطناعي يدعم.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="40" width="200" height="140" fill="#156082" rx="8"/><text x="120" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">النموذج 1</text><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي يتولى ·</text><text x="120" y="118" text-anchor="middle" fill="#fff" font-size="12">الإنسان يراجع</text><text x="120" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">مدفوع بالسياسة وعالي الحجم</text>
-  <rect x="250" y="40" width="200" height="140" fill="#1A4F7A" rx="8"/><text x="350" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">النموذج 2</text><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي يوصي ·</text><text x="350" y="118" text-anchor="middle" fill="#fff" font-size="12">الإنسان يقرر</text><text x="350" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">القرارات ذات التبعات</text>
-  <rect x="480" y="40" width="200" height="140" fill="#0E2841" rx="8"/><text x="580" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">النموذج 3</text><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="12">الإنسان يقود ·</text><text x="580" y="118" text-anchor="middle" fill="#fff" font-size="12">الذكاء الاصطناعي يدعم</text><text x="580" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">المشورة العليا · التفاوض</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-28 svg-d-28"><title id="svg-t-28">ثلاثة نماذج تشغيلية مقارنة عبر أربعة أبعاد</title><desc id="svg-d-28">مصفوفة مقارنة تقيّم نماذج "الذكاء يتولى" و"الذكاء يوصي" و"الإنسان يقود" مقابل استقلالية الوكيل وسلطة الإنسان وعبء التدقيق والإنتاجية لكل موظف.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">ثلاثة نماذج تشغيلية مُسجَّلة على الأبعاد الأربعة التي تحدد الملاءمة</text>
+  <g font-size="10" font-weight="700" fill="#0E2841" text-anchor="middle">
+  <text x="320" y="60">النموذج 1</text><text x="320" y="74">الذكاء يتولى · الإنسان يراجع</text>
+  <text x="470" y="60">النموذج 2</text><text x="470" y="74">الذكاء يوصي · الإنسان يقرر</text>
+  <text x="620" y="60">النموذج 3</text><text x="620" y="74">الإنسان يقود · الذكاء يدعم</text>
+  </g>
+  <g font-size="11" fill="#0E2841">
+  <text x="20" y="110">استقلالية الوكيل</text><text x="20" y="142">سلطة الإنسان</text><text x="20" y="174">عبء التدقيق</text><text x="20" y="206">إنتاجية لكل موظف</text>
+  </g>
+  <g>
+  <rect x="270" y="100" width="100" height="14" fill="#156082"/><text x="375" y="111" font-size="9" fill="#0E2841" font-weight="700">عالي</text>
+  <rect x="420" y="100" width="60" height="14" fill="#1A4F7A"/><text x="485" y="111" font-size="9" fill="#0E2841" font-weight="700">متوسط</text>
+  <rect x="570" y="100" width="22" height="14" fill="#0E2841"/><text x="597" y="111" font-size="9" fill="#0E2841" font-weight="700">منخفض</text>
+  <rect x="270" y="132" width="22" height="14" fill="#94A3B8"/><text x="297" y="143" font-size="9" fill="#0E2841" font-weight="700">منخفض</text>
+  <rect x="420" y="132" width="60" height="14" fill="#1A4F7A"/><text x="485" y="143" font-size="9" fill="#0E2841" font-weight="700">متوسط</text>
+  <rect x="570" y="132" width="100" height="14" fill="#0E2841"/><text x="675" y="143" font-size="9" fill="#0E2841" font-weight="700" text-anchor="end">عالي</text>
+  <rect x="270" y="164" width="100" height="14" fill="#F5A623"/><text x="375" y="175" font-size="9" fill="#0E2841" font-weight="700">ثقيل</text>
+  <rect x="420" y="164" width="60" height="14" fill="#F5A623" fill-opacity="0.6"/><text x="485" y="175" font-size="9" fill="#0E2841" font-weight="700">متوسط</text>
+  <rect x="570" y="164" width="22" height="14" fill="#F5A623" fill-opacity="0.4"/><text x="597" y="175" font-size="9" fill="#0E2841" font-weight="700">خفيف</text>
+  <rect x="270" y="196" width="100" height="14" fill="#156082"/><text x="375" y="207" font-size="9" fill="#0E2841" font-weight="700">10–50×</text>
+  <rect x="420" y="196" width="50" height="14" fill="#1A4F7A"/><text x="475" y="207" font-size="9" fill="#0E2841" font-weight="700">2–5×</text>
+  <rect x="570" y="196" width="20" height="14" fill="#0E2841"/><text x="595" y="207" font-size="9" fill="#0E2841" font-weight="700">1.2×</text>
+  </g>
+  <text x="20" y="232" font-size="9" fill="#475569">أفضل ملاءمة: النموذج 1 → عمليات مكثفة السياسات · النموذج 2 → قرارات تبعية · النموذج 3 → استشارة عليا.</text>
   </svg>
-  <figcaption>الشكل 1 — ثلاثة نماذج تشغيلية للتعاون بين الإنسان والذكاء الاصطناعي في القطاع العام بدول مجلس التعاون الخليجي.</figcaption>
+  <figcaption>الشكل 1 — ثلاثة نماذج تعاون مقارنة على الأبعاد الأربعة التي تحدد الملاءمة: الاستقلالية، سلطة الإنسان، عبء التدقيق، الإنتاجية. اختيار النموذج هو مبادلة لا هرمية — النموذج 1 يعظّم الإنتاجية على حساب وزن التدقيق؛ النموذج 3 يعكس ذلك للعمل عالي المخاطر.</figcaption>
   </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
@@ -3022,35 +3350,40 @@ export const insights = [
 <p>Kuruluşlar bu yönetişim disiplinini atlayan yerlerde, tipik olarak aylar 6 ile 18 arasında bir noktada, agentic-AI programlarının orijinal amaçlarından sapmış olduğunu, beklenen daha fazla bütçe ve kuruluş dikkatini tüketmiş olduğunu ve işgücü sonuçlarını haklı kılan sonuçları başaramadığını keşfeder. Kurulu düzey kontrol noktaları tüm sapmaları önlemez, ancak onu görünür hale getirirler ve program bir batık maliyet olmadan önce yön değişikliği için alan oluştururlar.</p>
 
 <figure>
-<svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-29 svg-d-29"><title id="svg-t-29">Agentic AI programları için kurulu yönetişim temposu</title><desc id="svg-d-29">90, 180 ve 365 günlerde üç kurulu kontrol noktasını, her aşamada anahtar soruları ve odak alanlarını gösteren zaman çizelgesi.</desc>
-
-
-<rect x="0" y="0" width="700" height="240" fill="#F8FAFC"/>
-<line x1="60" y1="120" x2="680" y2="120" stroke="#E2E8F0" stroke-width="2"/>
-<circle cx="140" cy="120" r="6" fill="#156082"/>
-<circle cx="340" cy="120" r="6" fill="#1A4F7A"/>
-<circle cx="640" cy="120" r="6" fill="#0E2841"/>
-<text x="140" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">90. Gün</text>
-<text x="140" y="165" text-anchor="middle" font-size="11" fill="#475569">Pilot Hazır</text>
-<text x="140" y="180" text-anchor="middle" font-size="10" fill="#64748B">İşlem tasarımı</text>
-<text x="140" y="193" text-anchor="middle" font-size="10" fill="#64748B">Çalışan geri bildirimi</text>
-<text x="340" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">180. Gün</text>
-<text x="340" y="165" text-anchor="middle" font-size="11" fill="#475569">Ölçek Aşaması</text>
-<text x="340" y="180" text-anchor="middle" font-size="10" fill="#64748B">KPI doğrulaması</text>
-<text x="340" y="193" text-anchor="middle" font-size="10" fill="#64748B">İşgücü etkisi</text>
-<text x="640" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#0E2841">365. Gün</text>
-<text x="640" y="165" text-anchor="middle" font-size="11" fill="#475569">Tam Değerlendirme</text>
-<text x="640" y="180" text-anchor="middle" font-size="10" fill="#64748B">Toplam maliyet ve sonuçlar</text>
-<text x="640" y="193" text-anchor="middle" font-size="10" fill="#64748B">Stratejik uyum</text>
-<rect x="20" y="30" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
-<text x="80" y="43" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">İşlem Odağı</text>
-<rect x="180" y="30" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
-<text x="240" y="43" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">Ölçek & Risk</text>
-<rect x="340" y="30" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
-<text x="400" y="43" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">Stratejik Değer</text>
-</svg>
-<figcaption>Şekil 2 — GCC kamu sektöründe agentic AI programları için 90, 180 ve 365 gün süren kuruluş yönetim kurulu düzey yönetişim kontrol noktaları.</figcaption>
-</figure>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-29 svg-d-29"><title id="svg-t-29">Nicelendirilmiş KPI kapıları ile kurul yönetişim kontrol noktaları</title><desc id="svg-d-29">90, 180 ve 365. günlerde üç kontrol noktasının zaman çizelgesi, her biri programın devam etmek için aşması gereken belirli kurul KPI eşiği ile işaretlenmiş.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Kurul temposu: her kontrol noktası sayısal bir KPI kapısı taşır</text>
+  <line x1="60" y1="120" x2="680" y2="120" stroke="#CBD5E1" stroke-width="2"/>
+  <circle cx="160" cy="120" r="9" fill="#156082"/><circle cx="380" cy="120" r="9" fill="#1A4F7A"/><circle cx="600" cy="120" r="9" fill="#0E2841"/>
+  <text x="160" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#156082">90. Gün · Pilot hazır</text>
+  <text x="380" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#1A4F7A">180. Gün · Ölçek aşaması</text>
+  <text x="600" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#0E2841">365. Gün · Tam değerlendirme</text>
+  <g font-size="9" fill="#475569">
+  <text x="160" y="68" text-anchor="middle">İşlem tasarımı · çalışan geri bildirimi</text>
+  <text x="380" y="68" text-anchor="middle">KPI doğrulaması · işgücü etkisi</text>
+  <text x="600" y="68" text-anchor="middle">Toplam maliyet ve sonuçlar · stratejik uyum</text>
+  </g>
+  <rect x="100" y="80" width="120" height="28" fill="#156082" fill-opacity="0.12" stroke="#156082" rx="4"/>
+  <text x="160" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">≥1 yeniden tasarlanmış işlem</text>
+  <rect x="320" y="80" width="120" height="28" fill="#1A4F7A" fill-opacity="0.12" stroke="#1A4F7A" rx="4"/>
+  <text x="380" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">+%15 iş hacmi taban'a karşı</text>
+  <rect x="540" y="80" width="120" height="28" fill="#0E2841" fill-opacity="0.12" stroke="#0E2841" rx="4"/>
+  <text x="600" y="98" text-anchor="middle" font-size="9" fill="#0E2841" font-weight="700">ROI > 1.5× · sıfır P1 denetim</text>
+  <g font-size="9" fill="#64748B">
+  <text x="160" y="148" text-anchor="middle">Vatandaş-etki değerlendirmesi · 360° SME döngüsü</text>
+  <text x="380" y="148" text-anchor="middle">Bağımsız denetim · işgücü-etki incelemesi</text>
+  <text x="600" y="148" text-anchor="middle">Sonraki dalga kullanımları için kurul onayı</text>
+  </g>
+  <rect x="20" y="180" width="120" height="20" fill="none" stroke="#156082" stroke-width="1" rx="3"/>
+  <text x="80" y="193" text-anchor="middle" font-size="10" fill="#156082" font-weight="600">İşlem odağı</text>
+  <rect x="180" y="180" width="120" height="20" fill="none" stroke="#1A4F7A" stroke-width="1" rx="3"/>
+  <text x="240" y="193" text-anchor="middle" font-size="10" fill="#1A4F7A" font-weight="600">Ölçek & risk</text>
+  <rect x="340" y="180" width="120" height="20" fill="none" stroke="#0E2841" stroke-width="1" rx="3"/>
+  <text x="400" y="193" text-anchor="middle" font-size="10" fill="#0E2841" font-weight="600">Stratejik değer</text>
+  <text x="20" y="222" font-size="9" fill="#475569">Bir kapıyı aşmamak daha fazla dağıtımı durdurur — programlar kontrol noktalarını "atlamaz".</text>
+  </svg>
+  <figcaption>Şekil 2 — Her kurul kontrol noktası nicelendirilmiş bir kapı taşır (G90'da yeniden tasarlanmış bir işlem, G180'de +%15 iş hacmi, G365'te >1.5× ROI ve sıfır P1 denetim bulgusu). Bir kapıyı kaçıran programlar genellikle sonraki ikiyi de kaçırır — kapılar geciktirmek için değil, durdurmak için tasarlanmıştır.</figcaption>
+  </figure>
 
 <h2>Yaygın Tuzaklar ve Bunları Nasıl Kaçınabilir</h2>
 
@@ -3067,13 +3400,34 @@ export const insights = [
 <p><strong>Tuzak 5: Arapçayı Bir Çeviri Sorunu Olarak Davranma.</strong> Kuruluşlar sık sık İngilizce üzerinde eğitilen bir ajan dağıtır, ardından çeviri katmanını sarın. Bu başarısız olur çünkü ajanın akıl yürütmesi, eğitimi ve karar mantığı hepsi İngilizce'dir. Çeviri hataları tanıtır ve ajanın sorun alanının anlaşması, Arapça konuşan kullanıcı ile temel olarak yanlış hizalanır. Düzeltme ajan çeviri değil; başlangıçtan itibaren Arapça dil modelleri ve Arapça dil eğitim verileri ile yeniden oluşturmaktır.</p>
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-30 svg-d-30"><title id="svg-t-30">İnsan-AI işbirliğinin üç modeli</title><desc id="svg-d-30">Üç yan yana panel gösterilerek AI insan incelemesini gerçekleştirir, AI önerir insan karar verir ve insan lider AI destekler.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="40" width="200" height="140" fill="#156082" rx="8"/><text x="120" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 1</text><text x="120" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Yürütür ·</text><text x="120" y="118" text-anchor="middle" fill="#fff" font-size="12">İnsan İncelemesi Yapar</text><text x="120" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Yüksek hacimli, politika odaklı</text>
-  <rect x="250" y="40" width="200" height="140" fill="#1A4F7A" rx="8"/><text x="350" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 2</text><text x="350" y="100" text-anchor="middle" fill="#fff" font-size="12">AI Önerir ·</text><text x="350" y="118" text-anchor="middle" fill="#fff" font-size="12">İnsan Karar Verir</text><text x="350" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Sonuç doğuran kararlar</text>
-  <rect x="480" y="40" width="200" height="140" fill="#0E2841" rx="8"/><text x="580" y="75" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Model 3</text><text x="580" y="100" text-anchor="middle" fill="#fff" font-size="12">İnsan Lider ·</text><text x="580" y="118" text-anchor="middle" fill="#fff" font-size="12">AI Destekler</text><text x="580" y="155" text-anchor="middle" fill="#cbd5e1" font-size="10">Üst düzey danışmanlık · müzakere</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-30 svg-d-30"><title id="svg-t-30">Üç işletme modeli dört çalışma boyutunda karşılaştırıldı</title><desc id="svg-d-30">"AI yürütür · insan inceler", "AI önerir · insan karar verir" ve "insan lider · AI destekler" modellerini ajan özerkliği, insan otoritesi, denetim yükü ve FTE başına iş hacmi açısından puanlayan karşılaştırma matrisi.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Üç işletme modeli, uyumu belirleyen dört boyutta puanlanmış</text>
+  <g font-size="10" font-weight="700" fill="#0E2841" text-anchor="middle">
+  <text x="320" y="60">Model 1</text><text x="320" y="74">AI yürütür · insan inceler</text>
+  <text x="470" y="60">Model 2</text><text x="470" y="74">AI önerir · insan karar verir</text>
+  <text x="620" y="60">Model 3</text><text x="620" y="74">İnsan lider · AI destekler</text>
+  </g>
+  <g font-size="11" fill="#0E2841">
+  <text x="20" y="110">Ajan özerkliği</text><text x="20" y="142">İnsan otoritesi</text><text x="20" y="174">Denetim yükü</text><text x="20" y="206">FTE başına iş hacmi</text>
+  </g>
+  <g>
+  <rect x="270" y="100" width="100" height="14" fill="#156082"/><text x="375" y="111" font-size="9" fill="#0E2841" font-weight="700">Yüksek</text>
+  <rect x="420" y="100" width="60" height="14" fill="#1A4F7A"/><text x="485" y="111" font-size="9" fill="#0E2841" font-weight="700">Orta</text>
+  <rect x="570" y="100" width="22" height="14" fill="#0E2841"/><text x="597" y="111" font-size="9" fill="#0E2841" font-weight="700">Düşük</text>
+  <rect x="270" y="132" width="22" height="14" fill="#94A3B8"/><text x="297" y="143" font-size="9" fill="#0E2841" font-weight="700">Düşük</text>
+  <rect x="420" y="132" width="60" height="14" fill="#1A4F7A"/><text x="485" y="143" font-size="9" fill="#0E2841" font-weight="700">Orta</text>
+  <rect x="570" y="132" width="100" height="14" fill="#0E2841"/><text x="675" y="143" font-size="9" fill="#0E2841" font-weight="700" text-anchor="end">Yüksek</text>
+  <rect x="270" y="164" width="100" height="14" fill="#F5A623"/><text x="375" y="175" font-size="9" fill="#0E2841" font-weight="700">Ağır</text>
+  <rect x="420" y="164" width="60" height="14" fill="#F5A623" fill-opacity="0.6"/><text x="485" y="175" font-size="9" fill="#0E2841" font-weight="700">Orta</text>
+  <rect x="570" y="164" width="22" height="14" fill="#F5A623" fill-opacity="0.4"/><text x="597" y="175" font-size="9" fill="#0E2841" font-weight="700">Hafif</text>
+  <rect x="270" y="196" width="100" height="14" fill="#156082"/><text x="375" y="207" font-size="9" fill="#0E2841" font-weight="700">10–50×</text>
+  <rect x="420" y="196" width="50" height="14" fill="#1A4F7A"/><text x="475" y="207" font-size="9" fill="#0E2841" font-weight="700">2–5×</text>
+  <rect x="570" y="196" width="20" height="14" fill="#0E2841"/><text x="595" y="207" font-size="9" fill="#0E2841" font-weight="700">1.2×</text>
+  </g>
+  <text x="20" y="232" font-size="9" fill="#475569">En iyi uyum: Model 1 → politika ağırlıklı ops · Model 2 → sonuç doğuran kararlar · Model 3 → kıdemli danışmanlık.</text>
   </svg>
-  <figcaption>Şekil 1 — GCC kamu sektöründe insan-AI işbirliği için üç işletme modeli.</figcaption>
+  <figcaption>Şekil 1 — Üç işbirliği modeli, uyumu belirleyen dört boyutta karşılaştırılmıştır: özerklik, insan otoritesi, denetim yükü ve iş hacmi. Bir model seçmek bir hiyerarşi değil bir takastır — Model 1 denetim ağırlığı pahasına iş hacmini maksimize eder; Model 3 yüksek riskli iş için bunu tersine çevirir.</figcaption>
   </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
@@ -3110,23 +3464,30 @@ export const insights = [
   <p>Three converging pressures are making the traditional CDO role insufficient. First, AI-related responsibilities are now showing up at board level — McKinsey's <em>State of AI</em> finds that the C-suite is increasingly held accountable for AI risk and value capture (<a href="https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai" target="_blank" rel="noopener noreferrer">McKinsey, 2024</a>). Second, AI governance frameworks — UAE PDPL, Saudi PDPL, NIST AI RMF, and the EU AI Act as a reference standard — require an executive accountable end-to-end for AI risk, with documented model inventories, escalation paths and audit trails (<a href="https://www.nist.gov/itl/ai-risk-management-framework" target="_blank" rel="noopener noreferrer">NIST AI RMF</a>; <a href="https://eur-lex.europa.eu/eli/reg/2024/1689/oj" target="_blank" rel="noopener noreferrer">EU AI Act</a>). Third, Google's <em>2025 DORA State of AI-Assisted Software Development</em> identifies seven distinct team profiles based on AI-adoption maturity — from "Legacy Bottleneck" to "Harmonious High-Achievers" — making the case that one executive must own the cross-cutting capability set (clear AI policy, healthy data ecosystem, quality internal platform, version-controlled artefacts) that determines which profile a team becomes (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, Team Profiles</a>).</p>
   <h2>What the New Mandate Demands</h2>
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-31 svg-d-31"><title id="svg-t-31">CDO to CAO mandate evolution</title><desc id="svg-d-31">Four arrows showing evolution from data governance to AI governance, data platforms to AI infrastructure, internal service to commercial capability, reporting to acting.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="30" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Data governance</text>
-  <rect x="400" y="30" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI governance</text>
-  <rect x="20" y="78" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Data platforms</text>
-  <rect x="400" y="78" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI infrastructure</text>
-  <rect x="20" y="126" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Internal service</text>
-  <rect x="400" y="126" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Commercial capability</text>
-  <rect x="20" y="174" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Reporting</text>
-  <rect x="400" y="174" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Acting</text>
-  <path d="M310 49 L390 49" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 97 L390 97" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 145 L390 145" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 193 L390 193" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-31 svg-d-31"><title id="svg-t-31">Four mandate shifts from CDO to CAO with quantified scope deltas</title><desc id="svg-d-31">Four pairs of bars showing the prior CDO mandate on the left and the expanded CAO mandate on the right, with the multiplier delta in scope shown beside each pair.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="11" font-weight="700" fill="#0E2841">CDO mandate</text>
+  <text x="400" y="22" font-size="11" font-weight="700" fill="#0E2841">CAO mandate</text>
+  <text x="660" y="22" font-size="11" font-weight="700" fill="#0E2841" text-anchor="end">Scope Δ</text>
+  <rect x="20" y="34" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="58" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Data governance</text>
+  <rect x="400" y="34" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="58" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">AI governance · model risk · ethics</text>
+  <text x="660" y="92" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">~3× artefact count</text>
+  <path d="M310 53 L390 53" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="82" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="106" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Data platforms</text>
+  <rect x="400" y="82" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="106" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">AI infrastructure · GPU · sovereignty</text>
+  <text x="660" y="140" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">5–10× capex</text>
+  <path d="M310 101 L390 101" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="130" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="154" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Internal service</text>
+  <rect x="400" y="130" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="154" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Commercial capability · revenue line</text>
+  <text x="660" y="188" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">P&L accountable</text>
+  <path d="M310 149 L390 149" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="178" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="202" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Reporting</text>
+  <rect x="400" y="178" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="202" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Acting · agentic decisions in flight</text>
+  <text x="660" y="232" text-anchor="end" font-size="11" fill="#0E2841" font-weight="700">real-time decisions</text>
+  <path d="M310 197 L390 197" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
   <defs><marker id="a6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
   </svg>
-  <figcaption>Figure 1 — Four shifts in the executive mandate: from CDO to CAO.</figcaption>
+  <figcaption>Figure 1 — The four mandate shifts, with the scope delta that turns the role into a different job. The CAO inherits the CDO's data assets but answers for ~3× the governance artefacts, 5–10× the capex, and a P&L line — and acts in real time rather than reporting after the fact.</figcaption>
   </figure>
   <ul>
   <li><strong>From data governance to AI governance.</strong> Beyond data quality: model risk, agent behaviour, automated-decision ethics.</li>
@@ -3348,23 +3709,30 @@ export const insights = [
   <aside class="maven-note"><h3>وجهة نظر Maven</h3><p>الانتقال من CDO إلى CAO ليس تغيير مسمى، بل إعادة تصميم لحقوق القرار. في تجارب Maven عبر دول مجلس التعاون الخليجي، تكون مجالس الإدارة الأسرع تحركاً هي التي تعيد توجيه جزء من ميزانية مكتب البيانات الحالية نحو منصات الوكلاء، وبنية التقييم، وقدرة المراجعين البشريين، بدلاً من اعتبار الذكاء الاصطناعي بنداً إضافياً. ينبغي أن تُنتج أول تسعين يوماً من ولاية أي CAO جديدة ثلاث مخرجات: تصنيفاً منشوراً لمخاطر الوكلاء، ولوحة تقييم حية، وسرداً ربعياً لمجلس الإدارة يربط قرارات الوكلاء بالنتائج التجارية. بدون هذه الثلاثة، يميل الدور إلى الانجراف مرة أخرى إلى وظيفة جودة بيانات خلال اثني عشر شهراً.</p></aside>
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-34 svg-d-34"><title id="svg-t-34">تطور ولاية CDO إلى CAO</title><desc id="svg-d-34">أربعة أسهم تظهر التطور من حوكمة البيانات إلى حوكمة الذكاء الاصطناعي، ومن منصات البيانات إلى البنية التحتية للذكاء الاصطناعي، ومن الخدمة الداخلية إلى القدرة التجارية، ومن الإبلاغ إلى التنفيذ.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="30" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">حوكمة البيانات</text>
-  <rect x="400" y="30" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">حوكمة الذكاء الاصطناعي</text>
-  <rect x="20" y="78" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">منصات البيانات</text>
-  <rect x="400" y="78" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">البنية التحتية للذكاء الاصطناعي</text>
-  <rect x="20" y="126" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الخدمة الداخلية</text>
-  <rect x="400" y="126" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">القدرة التجارية</text>
-  <rect x="20" y="174" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الإبلاغ</text>
-  <rect x="400" y="174" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">التنفيذ</text>
-  <path d="M310 49 L390 49" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 97 L390 97" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 145 L390 145" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 193 L390 193" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-34 svg-d-34"><title id="svg-t-34">أربعة تحوّلات في الولاية من CDO إلى CAO مع فروق نطاق مُكمَّمة</title><desc id="svg-d-34">أربعة أزواج من الأشرطة تُظهر ولاية CDO السابقة على اليسار وولاية CAO الموسَّعة على اليمين، مع فرق المضاعف في النطاق المعروض بجانب كل زوج.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="11" font-weight="700" fill="#0E2841">ولاية CDO</text>
+  <text x="400" y="22" font-size="11" font-weight="700" fill="#0E2841">ولاية CAO</text>
+  <text x="660" y="22" font-size="11" font-weight="700" fill="#0E2841" text-anchor="end">Δ النطاق</text>
+  <rect x="20" y="34" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="58" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">حوكمة البيانات</text>
+  <rect x="400" y="34" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="58" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">حوكمة AI · مخاطر النموذج · أخلاقيات</text>
+  <text x="660" y="92" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">~٣× عدد القطع</text>
+  <path d="M310 53 L390 53" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="82" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="106" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">منصات البيانات</text>
+  <rect x="400" y="82" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="106" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">بنية AI التحتية · GPU · سيادة</text>
+  <text x="660" y="140" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">٥–١٠× رأسمال</text>
+  <path d="M310 101 L390 101" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="130" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="154" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">خدمة داخلية</text>
+  <rect x="400" y="130" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="154" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">قدرة تجارية · خط إيرادات</text>
+  <text x="660" y="188" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">مساءلة P&L</text>
+  <path d="M310 149 L390 149" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="178" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="202" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">إبلاغ</text>
+  <rect x="400" y="178" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="202" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">تنفيذ · قرارات وكيلة فورية</text>
+  <text x="660" y="232" text-anchor="end" font-size="11" fill="#0E2841" font-weight="700">قرارات لحظية</text>
+  <path d="M310 197 L390 197" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
   <defs><marker id="a6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
   </svg>
-  <figcaption>الشكل 1 — التحولات الأربعة في الولاية التنفيذية: من CDO إلى CAO.</figcaption>
+  <figcaption>الشكل 1 — التحوّلات الأربعة في الولاية، مع فرق النطاق الذي يحوّل الدور إلى وظيفة مختلفة. يرث CAO أصول بيانات CDO لكنه مسؤول عن ~٣× من قطع الحوكمة و٥–١٠× من النفقات الرأسمالية وخط أرباح وخسائر — ويعمل في الزمن الحقيقي بدلاً من الإبلاغ بعد الحدث.</figcaption>
   </figure>
   <h2>المصادر والمراجع</h2>
     <ol class="sources-list">
@@ -3489,23 +3857,30 @@ export const insights = [
   <aside class="maven-note"><h3>Maven görüşü</h3><p>CDO'dan CAO'ya geçiş bir unvan değişikliği değil, karar haklarının yeniden tasarımıdır. GCC genelindeki Maven projelerinde en hızlı hareket eden yönetim kurulları, mevcut veri ofisi bütçesinin bir kısmını agent platformlarına, değerlendirme altyapısına ve insan denetimi kapasitesine açıkça yönlendirenlerdir; AI'ı ek bir kalem olarak ele almak yerine. Yeni bir CAO görevinin ilk doksan günü üç çıktı üretmelidir: yayımlanmış bir agent risk taksonomisi, canlı bir değerlendirme panosu ve agent kararlarını ticari sonuçlara bağlayan üç aylık bir yönetim kurulu anlatısı. Bu üçü olmadan, rol on iki ay içinde tekrar bir veri kalitesi fonksiyonuna kayma eğilimi gösterir.</p></aside>
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-36 svg-d-36"><title id="svg-t-36">CDO'dan CAO'ya görev yetki gelişimi</title><desc id="svg-d-36">Veri yönetişiminden yapay zeka yönetişimine, veri platformlarından yapay zeka altyapısına, dahili hizmetten ticari yeteneğe, raporlamadan eyleme geçişi gösteren dört ok.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="30" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Veri yönetişimi</text>
-  <rect x="400" y="30" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="54" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI yönetişimi</text>
-  <rect x="20" y="78" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Veri platformları</text>
-  <rect x="400" y="78" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="102" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">AI altyapısı</text>
-  <rect x="20" y="126" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Dahili hizmet</text>
-  <rect x="400" y="126" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="150" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Ticari yetenek</text>
-  <rect x="20" y="174" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Raporlama</text>
-  <rect x="400" y="174" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="198" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Eylem</text>
-  <path d="M310 49 L390 49" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 97 L390 97" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 145 L390 145" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
-  <path d="M310 193 L390 193" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-36 svg-d-36"><title id="svg-t-36">CDO'dan CAO'ya dört görev kayması ve nicelendirilmiş kapsam farkları</title><desc id="svg-d-36">Solda eski CDO görevini ve sağda genişletilmiş CAO görevini gösteren dört çubuk çifti, her çiftin yanında kapsamdaki çarpan farkı gösterilmiş.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="11" font-weight="700" fill="#0E2841">CDO görevi</text>
+  <text x="400" y="22" font-size="11" font-weight="700" fill="#0E2841">CAO görevi</text>
+  <text x="660" y="22" font-size="11" font-weight="700" fill="#0E2841" text-anchor="end">Kapsam Δ</text>
+  <rect x="20" y="34" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="58" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Veri yönetişimi</text>
+  <rect x="400" y="34" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="58" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">AI yönetişimi · model risk · etik</text>
+  <text x="660" y="92" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">~3× eser sayısı</text>
+  <path d="M310 53 L390 53" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="82" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="106" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Veri platformları</text>
+  <rect x="400" y="82" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="106" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">AI altyapısı · GPU · egemenlik</text>
+  <text x="660" y="140" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">5–10× capex</text>
+  <path d="M310 101 L390 101" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="130" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="154" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Dahili hizmet</text>
+  <rect x="400" y="130" width="280" height="38" fill="#0E2841" rx="4"/><text x="540" y="154" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Ticari yetenek · gelir hattı</text>
+  <text x="660" y="188" text-anchor="end" font-size="11" fill="#F5A623" font-weight="700">P&L sorumlu</text>
+  <path d="M310 149 L390 149" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
+  <rect x="20" y="178" width="280" height="38" fill="#94A3B8" rx="4"/><text x="160" y="202" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Raporlama</text>
+  <rect x="400" y="178" width="280" height="38" fill="#F5A623" rx="4"/><text x="540" y="202" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Eylem · uçuştaki agentic kararlar</text>
+  <text x="660" y="232" text-anchor="end" font-size="11" fill="#0E2841" font-weight="700">gerçek zamanlı kararlar</text>
+  <path d="M310 197 L390 197" stroke="#0E2841" stroke-width="2" marker-end="url(#a6)"/>
   <defs><marker id="a6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#0E2841"/></marker></defs>
   </svg>
-  <figcaption>Şekil 1 — Yönetici görevindeki dört kayma: CDO'dan CAO'ya.</figcaption>
+  <figcaption>Şekil 1 — Dört görev kayması ve rolü farklı bir işe dönüştüren kapsam farkı. CAO, CDO'nun veri varlıklarını miras alır ancak ~3× yönetişim eseri, 5–10× capex ve bir P&L hattı için cevap verir — ve olaydan sonra raporlamak yerine gerçek zamanlı hareket eder.</figcaption>
   </figure>
   <h2>Kaynaklar &amp; Alıntılar</h2>
   <h2>Kaynaklar ve Referanslar</h2>
@@ -3542,18 +3917,29 @@ export const insights = [
   <p>For GCC national-security clients, intelligence services, and critical-infrastructure operators, the question is not whether to adopt AI but whether AI can be adopted without compromising the sovereignty, security, and secrecy that the mission requires. The answer is yes — but only with a sovereign-first architecture, the right open-weight model stack, and a delivery partner with the capability to execute inside the secure perimeter. This brief sets out the architectural principles and the available regional infrastructure that make sovereign agentic AI deliverable today.</p>
   <h2>Five Architectural Principles</h2>
   <figure>
-  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-37 svg-d-37"><title id="svg-t-37">Sovereign agentic AI architecture</title><desc id="svg-d-37">Concentric perimeter showing model, inference, context, audit and upgrade controls inside a sovereign perimeter.</desc>
-  <rect x="0" y="0" width="700" height="280" fill="#F8FAFC"/>
-  <rect x="40" y="30" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="10"/>
-  <text x="350" y="22" text-anchor="middle" fill="#0E2841" font-size="13" font-weight="700">Sovereign perimeter (on-prem · client-controlled)</text>
-  <rect x="60" y="50" width="180" height="60" fill="#156082" rx="6"/><text x="150" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Model Sovereignty</text><text x="150" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Falcon · Jais · Llama · Mistral</text>
-  <rect x="260" y="50" width="180" height="60" fill="#1A4F7A" rx="6"/><text x="350" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Inference Isolation</text><text x="350" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">On-prem GPU · H100/H200/L40S</text>
-  <rect x="460" y="50" width="180" height="60" fill="#0E2841" rx="6"/><text x="550" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Context Segmentation</text><text x="550" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Permission-aware vector store</text>
-  <rect x="160" y="140" width="180" height="60" fill="#7C3AED" rx="6"/><text x="250" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. Audit &amp; Observability</text><text x="250" y="188" text-anchor="middle" fill="#e9d5ff" font-size="10">No log data leaves perimeter</text>
-  <rect x="360" y="140" width="180" height="60" fill="#F5A623" rx="6"/><text x="450" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Sovereignty on Upgrade</text><text x="450" y="188" text-anchor="middle" fill="#fff" font-size="10">Structured AI security review</text>
-  <text x="350" y="232" text-anchor="middle" fill="#475569" font-size="11">Anchored by: G42 (UAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-37 svg-d-37"><title id="svg-t-37">Sovereign perimeter showing the five nested control zones of agentic AI</title><desc id="svg-d-37">Concentric perimeter diagram with the model and inference compute at the core, surrounded by context segmentation, then audit and observability, then upgrade governance, all wrapped by the sovereign perimeter.</desc>
+  <rect width="700" height="280" fill="#F8FAFC"/>
+  <text x="350" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#0E2841">The five sovereign control zones</text>
+  <rect x="40" y="40" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="14"/>
+  <text x="60" y="58" font-size="10" font-weight="700" fill="#0E2841">Sovereign perimeter · on-prem · client-controlled</text>
+  <rect x="80" y="76" width="540" height="170" fill="#F5A623" fill-opacity="0.10" stroke="#F5A623" stroke-width="1.5" rx="10"/>
+  <text x="92" y="94" font-size="10" font-weight="700" fill="#F5A623">5 · Upgrade governance</text>
+  <text x="92" y="108" font-size="9" fill="#475569">Structured AI security review before any model swap</text>
+  <rect x="110" y="116" width="480" height="120" fill="#7C3AED" fill-opacity="0.10" stroke="#7C3AED" stroke-width="1.5" rx="10"/>
+  <text x="122" y="134" font-size="10" font-weight="700" fill="#7C3AED">4 · Audit & observability</text>
+  <text x="122" y="148" font-size="9" fill="#475569">Logs encrypted; nothing leaves the perimeter</text>
+  <rect x="140" y="156" width="420" height="76" fill="#0E2841" fill-opacity="0.08" stroke="#0E2841" stroke-width="1.5" rx="10"/>
+  <text x="152" y="172" font-size="10" font-weight="700" fill="#0E2841">3 · Context segmentation</text>
+  <text x="152" y="186" font-size="9" fill="#475569">Permission-aware vector store · RBAC at retrieval</text>
+  <rect x="170" y="196" width="170" height="32" fill="#1A4F7A" rx="6"/>
+  <text x="255" y="213" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">2 · Inference isolation</text>
+  <text x="255" y="225" text-anchor="middle" fill="#cbd5e1" font-size="8">On-prem GPU (H100/H200/L40S)</text>
+  <rect x="360" y="196" width="180" height="32" fill="#156082" rx="6"/>
+  <text x="450" y="213" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">1 · Model sovereignty</text>
+  <text x="450" y="225" text-anchor="middle" fill="#cbd5e1" font-size="8">Falcon · Jais · Llama · Mistral (open-weight)</text>
+  <text x="350" y="270" text-anchor="middle" fill="#475569" font-size="10">Anchored by: G42 (UAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
   </svg>
-  <figcaption>Figure 1 — The five architectural principles of sovereign agentic AI, anchored in regional infrastructure.</figcaption>
+  <figcaption>Figure 1 — Sovereignty drawn as five nested control zones, each closer to the data than the last. A breach of any zone is contained by the next; an audit must be able to trace any inference back to its model, context slice, and operator without leaving the perimeter.</figcaption>
   </figure>
   <h3>1. Model Sovereignty</h3>
   <p>The model itself must be controlled by the client. In practice this means open-weight models on client-controlled infrastructure — Meta's Llama family (<a href="https://ai.meta.com/llama/" target="_blank" rel="noopener noreferrer">Llama</a>), Mistral (<a href="https://mistral.ai/" target="_blank" rel="noopener noreferrer">Mistral</a>), TII's Falcon family from Abu Dhabi (<a href="https://falconllm.tii.ae/" target="_blank" rel="noopener noreferrer">Falcon</a>), or Inception/G42's Arabic-capable Jais (<a href="https://inceptioniai.org/jais/" target="_blank" rel="noopener noreferrer">Jais</a>). API-only models from major US providers are excluded from sovereign use cases by definition.</p>
@@ -3827,18 +4213,29 @@ export const insights = [
 <p>ينفصل نمط هجين تمثيلي لعملاء القطاع الحكومي الاستدلال إلى طبقتين: (1) <em>طبقة الاستدلال التشغيلية</em> (وحدات H100 محلية، تتعامل مع السياق المصنف، وصول مقيد)، تخدم تقييم التهديدات الفعلية ودعم القرار التشغيلي مع اتفاقية مستوى الخدمة لزمن الكمون &lt;5 ثوان؛ و(2) <em>طبقة الاستدلال التحليلية</em> (قائمة على السحابة، عادةً ما تكون سحابة سيادية إقليمية مثل G42 أو HUMAIN، تتعامل مع المجاميع غير المصنفة)، تخدم التحليلات الإستراتيجية الأبطأ واكتشاف الاتجاهات والتقارير مع اتفاقية مستوى الخدمة لزمن الكمون من 30-120 ثانية. تستخدم الطبقة التشغيلية نماذج مضبوطة بدقة؛ تستخدم الطبقة التحليلية نماذج أساسية أو مضبوطة قليلاً يتم تدريبها على المجاميع المصنفة من مخرجات الطبقة التشغيلية. تتدفق البيانات في اتجاه واحد من التشغيلي إلى التحليلي: يغذي النظام التشغيلي ملخصات غير مصنفة (إحصائيات المجموع التهديدي و
   
   <figure>
-  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-40 svg-d-40"><title id="svg-t-40">معمارية الذكاء الاصطناعي الوكيل السيادي</title><desc id="svg-d-40">محيط متحدد المركز يوضح نموذج والاستدلال والسياق والتدقيق وعناصر التحكم في الترقية داخل محيط سيادي.</desc>
-  <rect x="0" y="0" width="700" height="280" fill="#F8FAFC"/>
-  <rect x="40" y="30" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="10"/>
-  <text x="350" y="22" text-anchor="middle" fill="#0E2841" font-size="13" font-weight="700">المحيط السيادي (في الموقع · يتحكم به العميل)</text>
-  <rect x="60" y="50" width="180" height="60" fill="#156082" rx="6"/><text x="150" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. سيادة النموذج</text><text x="150" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Falcon · Jais · Llama · Mistral</text>
-  <rect x="260" y="50" width="180" height="60" fill="#1A4F7A" rx="6"/><text x="350" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. عزل الاستدلال</text><text x="350" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">وحدة معالجة الرسومات في الموقع · H100/H200/L40S</text>
-  <rect x="460" y="50" width="180" height="60" fill="#0E2841" rx="6"/><text x="550" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. تقسيم السياق</text><text x="550" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">متجر ناقل مدرك للأذونات</text>
-  <rect x="160" y="140" width="180" height="60" fill="#7C3AED" rx="6"/><text x="250" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. التدقيق والمراقبة</text><text x="250" y="188" text-anchor="middle" fill="#e9d5ff" font-size="10">لا تغادر بيانات السجل المحيط</text>
-  <rect x="360" y="140" width="180" height="60" fill="#F5A623" rx="6"/><text x="450" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. السيادة عند الترقية</text><text x="450" y="188" text-anchor="middle" fill="#fff" font-size="10">مراجعة أمان الذكاء الاصطناعي المنظمة</text>
-  <text x="350" y="232" text-anchor="middle" fill="#475569" font-size="11">مثبت بواسطة: G42 (UAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-40 svg-d-40"><title id="svg-t-40">محيط سيادي يُظهر مناطق التحكم الخمس المتداخلة للذكاء الاصطناعي الوكيل</title><desc id="svg-d-40">مخطط محيط متحد المركز مع حساب النموذج والاستدلال في النواة، محاطاً بتقسيم السياق ثم التدقيق والمراقبة ثم حوكمة الترقية، الكل مُغلَّف بالمحيط السيادي.</desc>
+  <rect width="700" height="280" fill="#F8FAFC"/>
+  <text x="350" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#0E2841">المناطق الخمس للتحكم السيادي</text>
+  <rect x="40" y="40" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="14"/>
+  <text x="60" y="58" font-size="10" font-weight="700" fill="#0E2841">المحيط السيادي · في الموقع · يتحكم به العميل</text>
+  <rect x="80" y="76" width="540" height="170" fill="#F5A623" fill-opacity="0.10" stroke="#F5A623" stroke-width="1.5" rx="10"/>
+  <text x="92" y="94" font-size="10" font-weight="700" fill="#F5A623">٥ · حوكمة الترقية</text>
+  <text x="92" y="108" font-size="9" fill="#475569">مراجعة أمن AI منظمة قبل أي تبديل للنموذج</text>
+  <rect x="110" y="116" width="480" height="120" fill="#7C3AED" fill-opacity="0.10" stroke="#7C3AED" stroke-width="1.5" rx="10"/>
+  <text x="122" y="134" font-size="10" font-weight="700" fill="#7C3AED">٤ · التدقيق والمراقبة</text>
+  <text x="122" y="148" font-size="9" fill="#475569">سجلات مشفّرة؛ لا شيء يغادر المحيط</text>
+  <rect x="140" y="156" width="420" height="76" fill="#0E2841" fill-opacity="0.08" stroke="#0E2841" stroke-width="1.5" rx="10"/>
+  <text x="152" y="172" font-size="10" font-weight="700" fill="#0E2841">٣ · تقسيم السياق</text>
+  <text x="152" y="186" font-size="9" fill="#475569">متجر متجهات مدرك للأذونات · RBAC عند الاسترجاع</text>
+  <rect x="170" y="196" width="170" height="32" fill="#1A4F7A" rx="6"/>
+  <text x="255" y="213" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">٢ · عزل الاستدلال</text>
+  <text x="255" y="225" text-anchor="middle" fill="#cbd5e1" font-size="8">GPU في الموقع (H100/H200/L40S)</text>
+  <rect x="360" y="196" width="180" height="32" fill="#156082" rx="6"/>
+  <text x="450" y="213" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">١ · سيادة النموذج</text>
+  <text x="450" y="225" text-anchor="middle" fill="#cbd5e1" font-size="8">Falcon · Jais · Llama · Mistral (مفتوح الأوزان)</text>
+  <text x="350" y="270" text-anchor="middle" fill="#475569" font-size="10">مرتكز على: G42 (الإمارات) · HUMAIN (السعودية) · TII Falcon · Inception Jais</text>
   </svg>
-  <figcaption>الشكل 1 — المبادئ المعمارية الخمسة للذكاء الاصطناعي الوكيل السيادي، مثبت في البنية الأساسية الإقليمية.</figcaption>
+  <figcaption>الشكل 1 — السيادة مرسومة كخمس مناطق تحكم متداخلة، كل واحدة أقرب إلى البيانات من سابقتها. اختراق أي منطقة تحتويه التالية؛ يجب أن يتمكن التدقيق من تتبع أي استدلال إلى نموذجه وشريحة سياقه ومُشغِّله دون مغادرة المحيط.</figcaption>
   </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
@@ -3981,30 +4378,41 @@ export const insights = [
 
 <p>Saf egemen mimari — tüm çıkarım, tüm veriler, tüm gözlemlenebilirlik şirket içi — operasyonel olarak temizdir ancak karışık veri duyarlılık seviyeleri veya gelişen misyon gereksinimleri olan müşteriler için genellikle uygulanmaz. Hibrit mimariler, sınıflandırılmış veri ve gerçek zamanlı çıkarımı egemen altyapıda tutarken ticari altyapıyı hassas olmayan analitikler, model eğitimi veya bilgi tabanı oluşturma için kullanan, pratik olarak daha yaygın şekilde dağıtılır.</p>
 
-<p>Hükümet sektörü müşterileri için temsilci bir hibrit desen, çıkarımı iki katmana ayırır: (1) <em>operasyonel çıkarım katmanı</em> (şirket içi H100'ler, sınıflandırılmış bağlam ele alır, kısıtlı erişim), <5 saniyeli gecikme SLA'sı ile gerçek zamanlı tehdit değerlendirmesi ve operasyonel karar desteği sunarak; ve (2) <em>analitik çıkarım katmanı</em> (bulut tabanlı, tipik olarak G42 veya HUMAIN gibi bölgesel egemen bulut, hassas olmayan toplamlar ele alır), 30–120 saniye gecikme SLA'sı ile daha yavaş stratejik analiz, trend tespit ve raporlama sunarak. Operasyonel katman ince ayarlanmış modeller kullanır; analitik katman operasyonel katmandan toplu, gizli çıktılar üzerinde eğitilmiş temel veya hafifçe ayarlanmış modeller kullanır. Veri operasyoneldan analitike tek yönlü akar: operasyonel sistem, gizli özetler (tehdit toplam istatistikleri, redakte edilmiş durum örnekleri) analitik katmana besler uzun vadeli trend analizi için, ancak analitik katmanın sınıflandırılmış veriye veya gerçek zamanlı çıkarım bağlamına erişimi yoktur.</p>
+<p>Hükümet sektörü müşterileri için temsilci bir hibrit desen, çıkarımı iki katmana ayırır: (1) <em>operasyonel çıkarım katmanı</em> (şirket içi H100'ler, sınıflandırılmış bağlam ele alır, kısıtlı erişim), &lt;5 saniyeli gecikme SLA'sı ile gerçek zamanlı tehdit değerlendirmesi ve operasyonel karar desteği sunarak; ve (2) <em>analitik çıkarım katmanı</em> (bulut tabanlı, tipik olarak G42 veya HUMAIN gibi bölgesel egemen bulut, hassas olmayan toplamlar ele alır), 30–120 saniye gecikme SLA'sı ile daha yavaş stratejik analiz, trend tespit ve raporlama sunarak. Operasyonel katman ince ayarlanmış modeller kullanır; analitik katman operasyonel katmandan toplu, gizli çıktılar üzerinde eğitilmiş temel veya hafifçe ayarlanmış modeller kullanır. Veri operasyoneldan analitike tek yönlü akar: operasyonel sistem, gizli özetler (tehdit toplam istatistikleri, redakte edilmiş durum örnekleri) analitik katmana besler uzun vadeli trend analizi için, ancak analitik katmanın sınıflandırılmış veriye veya gerçek zamanlı çıkarım bağlamına erişimi yoktur.</p>
 
 <p>Bu desen, gizli operasyonel verisi ve gizli olmayan analitik özeti arasındaki sınır olan gizli açıklama arabiriminin dikkatli tasarımını gerektirir. Operasyonel sistem, gizli operasyonel detayı kaldırırken istatistiksel ve stratejik değeri koruyarak sterilize edilmiş, toplu çıktılar yayınlamak için açıkça yapılandırılmalıdır. Tehdit istihbaratından bir örnek: operasyonel sistem, ortaya çıkan tehdit grupları hakkında sınıflandırılmış istihbarat işleyebilir ve gizli kaynakları, hedefleri veya TTP'leri (taktikler, teknikler, prosedürler) ortaya çıkarmadan "X tehdit grubundan aktivite Y sektöründe ay-üzerinde-ay %40 arttı" ifadesi gizli olmayan özet çıkarabilir. Analitik sistem daha sonra bu gizli olmayan özetlerden binlercesini alarak sektörler arası desenleri ve uzun vadeli eğilimleri belirler. Bu gizli açıklama arabirimi hem güvenlik sınırıdır (sınıflandırılmış veriler bulut altyapısına sızamamıştır) hem de bilgi-mimarisi sınırıdır (analitik sistem operasyonel sistemden farklı veri semantikleri üzerinde çalışır).</p>
 
 <p>Uygulama gerektirir: (1) müşteri güvenlik liderliği tarafından onaylanan, hangi veri öğelerinin ve hangi biçimde dışa aktarılabileceğini belirten açık bir gizli açıklama politikası belgesi; (2) operasyonel sistem içine gömülü otomatik gizli açıklama mantığı, sınıflandırılmış çıktıları dışa aktarılmadan önce gizli olmayan özetlere dönüştürerek; (3) orijinal sınıflandırılmış çıktı ve gizli olmayan özet arasında kriptografik bütünlük bağlama, dışa aktarılan verinin onaylı gizli açıklama politikasına karşılık geldiğini doğrulamak üzere adli doğrulamayı sağlayarak; ve (4) gizli açıklama arabiriminin düzenli denetimi, dışa aktarılan verinin kalıp çıkarımı veya istatistiksel çıkarım saldırıları aracılığıyla sınıflandırılmış detayları yanlışlıkla ortaya çıkarmadığını doğrulayarak.</p>
 
-<p>BFSI müşterileri tarafından kullanılan ikinci ortak hibrit desen, toplu ve gerçek zamanlı çıkarımı ayırır: (1) <em>gerçek zamanlı çıkarım</em> (şirket içi, canlı müşteri işlemlerini ve PII'yi ele alır) AML uyarıları ve işlem engelleme için, <200ms gecikme SLA'sı ile; ve (2) <em>toplu çıkarım</em> (bulut tabanlı, geçmiş toplamları ve anonimleştirilmiş kohort analizini ele alır) model yeniden eğitimi, strateji optimizasyonu ve düzenleme raporlaması için, gece veya haftalık olarak çalışan. Gerçek zamanlı sistem üretim modelini kullanır; toplu sistem aynı model ağırlıklarını kullanır ancak anonimleştirilmiş geçmiş veriler üzerinde çalışır ve toplu istatistikler (örneğin, işlem türüne göre uyarı hassaslığı, yanlış pozitif eğilimleri) oluşturur bireysel işlem değerlendirmeleri yerine. Toplu çıktı operasyonel panoları ve model-yeniden eğitimi hatlarına geri besler ancak düzenleme gözden geçirmesi olmaksızın dış taraflara akmaz.</p>
+<p>BFSI müşterileri tarafından kullanılan ikinci ortak hibrit desen, toplu ve gerçek zamanlı çıkarımı ayırır: (1) <em>gerçek zamanlı çıkarım</em> (şirket içi, canlı müşteri işlemlerini ve PII'yi ele alır) AML uyarıları ve işlem engelleme için, &lt;200ms gecikme SLA'sı ile; ve (2) <em>toplu çıkarım</em> (bulut tabanlı, geçmiş toplamları ve anonimleştirilmiş kohort analizini ele alır) model yeniden eğitimi, strateji optimizasyonu ve düzenleme raporlaması için, gece veya haftalık olarak çalışan. Gerçek zamanlı sistem üretim modelini kullanır; toplu sistem aynı model ağırlıklarını kullanır ancak anonimleştirilmiş geçmiş veriler üzerinde çalışır ve toplu istatistikler (örneğin, işlem türüne göre uyarı hassaslığı, yanlış pozitif eğilimleri) oluşturur bireysel işlem değerlendirmeleri yerine. Toplu çıktı operasyonel panoları ve model-yeniden eğitimi hatlarına geri besler ancak düzenleme gözden geçirmesi olmaksızın dış taraflara akmaz.</p>
 
 <p>Bu hibrit desenler ekonomik olarak verimlidir çünkü egemen altyapıyı gerçekten hassas iş yüküne sağ şekilde ölçeklendirir. Bir ulusal güvenlik kuruluşu aylık 100.000 belge işleyebilir ancak yalnızca 1'i sınıflandırılmış ve şirket içi çıkarım gerektir; kalanı bulut altyapısında daha düşük maliyetle analiz edilebilir. Benzer şekilde, bir banka günlük milyonlarca işlem işleyebilir ancak yalnızca 10–15'i risk değerlendirmesi modellerini tetikler; işlemlerin çoğu düşük risk ve daha hafif, ucuz çıkarımla ele alınabilir. İş yüklerini veri duyarlılığı ve gecikme gerekliliklerine göre dikkatli bir şekilde bölümlendirerek, müşteriler saf egemen mimari konusunda 30–50% maliyet tasarrufu elde edebilir ve sınıflandırılmış veya hassas verinin güvenliğini tehlikeye atmaz.</p>
 
   
   <figure>
-  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-42 svg-d-42"><title id="svg-t-42">Egemen agentic AI mimarisi</title><desc id="svg-d-42">Egemen bir çevre içinde model, çıkarım, bağlam, denetim ve yükseltme kontrolleri gösteren eşmerkezli çevre.</desc>
-  <rect x="0" y="0" width="700" height="280" fill="#F8FAFC"/>
-  <rect x="40" y="30" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="10"/>
-  <text x="350" y="22" text-anchor="middle" fill="#0E2841" font-size="13" font-weight="700">Egemen çevre (şirket içi · istemci tarafından kontrol edilen)</text>
-  <rect x="60" y="50" width="180" height="60" fill="#156082" rx="6"/><text x="150" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Model Egemenliği</text><text x="150" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Falcon · Jais · Llama · Mistral</text>
-  <rect x="260" y="50" width="180" height="60" fill="#1A4F7A" rx="6"/><text x="350" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Çıkarım İzolasyonu</text><text x="350" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">Şirket içi GPU · H100/H200/L40S</text>
-  <rect x="460" y="50" width="180" height="60" fill="#0E2841" rx="6"/><text x="550" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Bağlam Segmentasyonu</text><text x="550" y="98" text-anchor="middle" fill="#cbd5e1" font-size="10">İzin farkında vektör depo</text>
-  <rect x="160" y="140" width="180" height="60" fill="#7C3AED" rx="6"/><text x="250" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. Denetim ve Gözlemlenebilirlik</text><text x="250" y="188" text-anchor="middle" fill="#e9d5ff" font-size="10">Hiçbir günlük veri çevreyi terk etmez</text>
-  <rect x="360" y="140" width="180" height="60" fill="#F5A623" rx="6"/><text x="450" y="170" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Yükseltmede Egemenlik</text><text x="450" y="188" text-anchor="middle" fill="#fff" font-size="10">Yapılandırılmış AI güvenlik incelemesi</text>
-  <text x="350" y="232" text-anchor="middle" fill="#475569" font-size="11">Tarafından desteklenen: G42 (UAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-42 svg-d-42"><title id="svg-t-42">Agentic AI'nin beş iç içe kontrol bölgesini gösteren egemen çevre</title><desc id="svg-d-42">Çekirdekte model ve çıkarım hesaplama, etrafında bağlam segmentasyonu, sonra denetim ve gözlemlenebilirlik, sonra yükseltme yönetişimi olan eşmerkezli çevre diyagramı; hepsi egemen çevre ile sarılı.</desc>
+  <rect width="700" height="280" fill="#F8FAFC"/>
+  <text x="350" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#0E2841">Beş egemen kontrol bölgesi</text>
+  <rect x="40" y="40" width="620" height="220" fill="none" stroke="#0E2841" stroke-width="2" stroke-dasharray="6 4" rx="14"/>
+  <text x="60" y="58" font-size="10" font-weight="700" fill="#0E2841">Egemen çevre · şirket içi · istemci kontrollü</text>
+  <rect x="80" y="76" width="540" height="170" fill="#F5A623" fill-opacity="0.10" stroke="#F5A623" stroke-width="1.5" rx="10"/>
+  <text x="92" y="94" font-size="10" font-weight="700" fill="#F5A623">5 · Yükseltme yönetişimi</text>
+  <text x="92" y="108" font-size="9" fill="#475569">Herhangi bir model değişiminden önce yapılandırılmış AI güvenlik incelemesi</text>
+  <rect x="110" y="116" width="480" height="120" fill="#7C3AED" fill-opacity="0.10" stroke="#7C3AED" stroke-width="1.5" rx="10"/>
+  <text x="122" y="134" font-size="10" font-weight="700" fill="#7C3AED">4 · Denetim & gözlemlenebilirlik</text>
+  <text x="122" y="148" font-size="9" fill="#475569">Loglar şifrelenmiş; hiçbir şey çevreyi terk etmez</text>
+  <rect x="140" y="156" width="420" height="76" fill="#0E2841" fill-opacity="0.08" stroke="#0E2841" stroke-width="1.5" rx="10"/>
+  <text x="152" y="172" font-size="10" font-weight="700" fill="#0E2841">3 · Bağlam segmentasyonu</text>
+  <text x="152" y="186" font-size="9" fill="#475569">İzin farkında vektör depo · getirmede RBAC</text>
+  <rect x="170" y="196" width="170" height="32" fill="#1A4F7A" rx="6"/>
+  <text x="255" y="213" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">2 · Çıkarım izolasyonu</text>
+  <text x="255" y="225" text-anchor="middle" fill="#cbd5e1" font-size="8">Şirket içi GPU (H100/H200/L40S)</text>
+  <rect x="360" y="196" width="180" height="32" fill="#156082" rx="6"/>
+  <text x="450" y="213" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">1 · Model egemenliği</text>
+  <text x="450" y="225" text-anchor="middle" fill="#cbd5e1" font-size="8">Falcon · Jais · Llama · Mistral (açık-ağırlık)</text>
+  <text x="350" y="270" text-anchor="middle" fill="#475569" font-size="10">Tarafından desteklenir: G42 (BAE) · HUMAIN (KSA) · TII Falcon · Inception Jais</text>
   </svg>
-  <figcaption>Şekil 1 — Egemen agentic AI'nin beş mimari ilkesi, bölgesel altyapı tarafından desteklenen.</figcaption>
+  <figcaption>Şekil 1 — Egemenlik beş iç içe kontrol bölgesi olarak çizilmiştir, her biri verilere bir öncekinden daha yakındır. Herhangi bir bölgenin ihlali bir sonraki tarafından kontrol altına alınır; bir denetim, herhangi bir çıkarımı çevreyi terk etmeden modeline, bağlam dilimine ve operatörüne kadar takip edebilmelidir.</figcaption>
   </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
@@ -4760,15 +5168,33 @@ export const insights = [
   <p>The Tier-1 pyramid — in our delivery experience, partners selling the work and a much larger pool of junior consultants doing it — creates a structural disconnect between the people who shape the engagement and the people who build it. Clients buy access to a Partner with twenty years of experience; the day-to-day delivery team is staffed at meaningfully more junior levels. In AI delivery, where the difference between a working architecture and a non-working one frequently turns on judgment at the point of build, that gap is consequential.</p>
   <h2>Four Levers Boutiques Pull</h2>
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-48 svg-d-48"><title id="svg-t-48">Four levers boutique AI firms pull</title><desc id="svg-d-48">Four colored panels showing the senior delivery, speed to value, pricing, and partner leverage levers.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="40" width="155" height="140" fill="#156082" rx="8"/><text x="97" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 1</text><text x="97" y="105" text-anchor="middle" fill="#fff" font-size="12">Senior</text><text x="97" y="123" text-anchor="middle" fill="#fff" font-size="12">Delivery</text>
-  <rect x="195" y="40" width="155" height="140" fill="#1A4F7A" rx="8"/><text x="272" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 2</text><text x="272" y="105" text-anchor="middle" fill="#fff" font-size="12">Speed</text><text x="272" y="123" text-anchor="middle" fill="#fff" font-size="12">to Value</text>
-  <rect x="370" y="40" width="155" height="140" fill="#0E2841" rx="8"/><text x="447" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 3</text><text x="447" y="105" text-anchor="middle" fill="#fff" font-size="12">Pricing</text>
-  <rect x="545" y="40" width="135" height="140" fill="#F5A623" rx="8"/><text x="612" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Lever 4</text><text x="612" y="105" text-anchor="middle" fill="#fff" font-size="12">Partner</text><text x="612" y="123" text-anchor="middle" fill="#fff" font-size="12">Leverage</text>
-  <text x="350" y="205" text-anchor="middle" fill="#475569" font-size="11">Tier-1 structural overhead vs boutique senior-delivery model</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-48 svg-d-48"><title id="svg-t-48">Four boutique levers and their contribution to the MVP delivery delta</title><desc id="svg-d-48">Bar chart quantifying how each of the four boutique levers (senior delivery, speed to value, pricing, partner leverage) contributes days saved or cost reduction relative to a typical Tier-1 plan.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Where the boutique speed advantage actually comes from</text>
+  <text x="20" y="38" font-size="10" fill="#475569">Quantified contribution to the typical 90-day vs Tier-1 ~270-day MVP gap.</text>
+  <line x1="220" y1="220" x2="660" y2="220" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#475569">
+  <text x="220" y="234" text-anchor="middle">0</text><text x="330" y="234" text-anchor="middle">20d</text><text x="440" y="234" text-anchor="middle">40d</text><text x="550" y="234" text-anchor="middle">60d</text><text x="660" y="234" text-anchor="middle">80d</text>
+  </g>
+  <text x="440" y="252" text-anchor="middle" font-size="10" font-weight="700" fill="#0E2841">Days saved vs Tier-1 baseline (per lever)</text>
+  <text x="20" y="68" font-size="11" font-weight="700" fill="#0E2841">L1 · Senior delivery</text>
+  <text x="20" y="82" font-size="9" fill="#64748B">No analyst hand-offs · partners ship code</text>
+  <rect x="220" y="58" width="385" height="28" fill="#156082"/>
+  <text x="612" y="76" font-size="11" font-weight="700" fill="#156082">~70d</text>
+  <text x="20" y="118" font-size="11" font-weight="700" fill="#0E2841">L2 · Speed to value</text>
+  <text x="20" y="132" font-size="9" fill="#64748B">Pre-built playbooks · sovereign stacks ready</text>
+  <rect x="220" y="108" width="302" height="28" fill="#1A4F7A"/>
+  <text x="529" y="126" font-size="11" font-weight="700" fill="#1A4F7A">~55d</text>
+  <text x="20" y="168" font-size="11" font-weight="700" fill="#0E2841">L3 · Pricing model</text>
+  <text x="20" y="182" font-size="9" fill="#64748B">Outcome-linked · 35–55% lower TCO</text>
+  <rect x="220" y="158" width="192" height="28" fill="#0E2841"/>
+  <text x="419" y="176" font-size="11" font-weight="700" fill="#0E2841">~35d-equiv</text>
+  <text x="20" y="210" font-size="11" font-weight="700" fill="#0E2841">L4 · Partner leverage</text>
+  <text x="20" y="222" font-size="9" fill="#64748B">Pre-integrated G42 · HUMAIN · TII · cloud</text>
+  <rect x="220" y="200" width="165" height="14" fill="#F5A623"/>
+  <text x="392" y="212" font-size="11" font-weight="700" fill="#F5A623">~30d</text>
   </svg>
-  <figcaption>Figure 1 — The four levers boutiques can pull that Tier-1 firms structurally cannot.</figcaption>
+  <figcaption>Figure 1 — The four levers, plotted by the days they each save against a typical Tier-1 plan. Senior delivery alone closes the largest single chunk of the gap; combined with speed-to-value playbooks it accounts for ~70% of the 180-day differential.</figcaption>
   </figure>
   <h3>Lever 1 — Senior Delivery</h3>
   <p>Every Maven engagement has a Partner or Principal as the day-to-day delivery lead — in the working sessions, the architecture reviews, and the troubleshooting calls when something breaks. The seniority sold is the seniority delivered.</p>
@@ -4973,15 +5399,33 @@ export const insights = [
   <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-50 svg-d-50"><title id="svg-t-50">آفاق سرعة MVP</title><desc id="svg-d-50">آفاق سرعة MVP</desc><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="190" x2="660" y2="190" stroke="#0E2841" stroke-width="1.5"/><polyline fill="none" stroke="#156082" stroke-width="3" points="80,170 220,130 400,90 620,55"/><polyline fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5 4" points="80,170 220,160 400,150 620,140"/><circle cx="220" cy="130" r="6" fill="#F5A623"/><circle cx="400" cy="90" r="6" fill="#F5A623"/><circle cx="620" cy="55" r="6" fill="#F5A623"/><text x="220" y="115" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">٩٠ يوم</text><text x="400" y="75" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">١٨٠ يوم</text><text x="620" y="40" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">٣٦٥ يوم</text><text x="370" y="215" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">الأيام منذ الانطلاق</text><text x="660" y="60" font-family="Inter,Arial" font-size="10" fill="#156082" text-anchor="end">مجموعة Maven</text><text x="660" y="135" font-family="Inter,Arial" font-size="10" fill="#1A4F7A" text-anchor="end">وسيط دول الخليج</text></svg><figcaption>معايير سرعة MVP عبر آفاق 90 / 180 / 365 يوماً</figcaption></figure>
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-51 svg-d-51"><title id="svg-t-51">أربعة رافعات تستخدمها شركات الذكاء الاصطناعي البوتيك</title><desc id="svg-d-51">أربع لوحات ملونة توضح رافعات التسليم الأول للمديرين التنفيذيين، والسرعة في تحقيق القيمة، والتسعير، والاستفادة من الشركاء.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="40" width="155" height="140" fill="#156082" rx="8"/><text x="97" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 1</text><text x="97" y="105" text-anchor="middle" fill="#fff" font-size="12">التسليم</text><text x="97" y="123" text-anchor="middle" fill="#fff" font-size="12">الأول</text>
-  <rect x="195" y="40" width="155" height="140" fill="#1A4F7A" rx="8"/><text x="272" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 2</text><text x="272" y="105" text-anchor="middle" fill="#fff" font-size="12">السرعة في</text><text x="272" y="123" text-anchor="middle" fill="#fff" font-size="12">تحقيق القيمة</text>
-  <rect x="370" y="40" width="155" height="140" fill="#0E2841" rx="8"/><text x="447" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 3</text><text x="447" y="105" text-anchor="middle" fill="#fff" font-size="12">التسعير</text>
-  <rect x="545" y="40" width="135" height="140" fill="#F5A623" rx="8"/><text x="612" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">الرافعة 4</text><text x="612" y="105" text-anchor="middle" fill="#fff" font-size="12">الاستفادة</text><text x="612" y="123" text-anchor="middle" fill="#fff" font-size="12">من الشركاء</text>
-  <text x="350" y="205" text-anchor="middle" fill="#475569" font-size="11">النفقات الهيكلية من الشركات من الفئة الأولى مقابل نموذج التسليم الأول البوتيك</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-51 svg-d-51"><title id="svg-t-51">أربع رافعات بوتيكية ومساهماتها في فرق تسليم MVP</title><desc id="svg-d-51">رسم بياني يُكمّم مساهمة كل من الرافعات الأربع (تسليم بقيادة كبار، سرعة الوصول للقيمة، التسعير، استفادة من الشركاء) في الأيام الموفّرة أو خفض التكلفة مقارنةً بخطة الفئة الأولى التقليدية.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">من أين تأتي ميزة السرعة البوتيكية فعلياً</text>
+  <text x="20" y="38" font-size="10" fill="#475569">مساهمة مُكمَّمة في فجوة الـ MVP التقليدية بين 90 يوم البوتيك و~270 يوم للفئة الأولى.</text>
+  <line x1="220" y1="220" x2="660" y2="220" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#475569">
+  <text x="220" y="234" text-anchor="middle">0</text><text x="330" y="234" text-anchor="middle">20d</text><text x="440" y="234" text-anchor="middle">40d</text><text x="550" y="234" text-anchor="middle">60d</text><text x="660" y="234" text-anchor="middle">80d</text>
+  </g>
+  <text x="440" y="252" text-anchor="middle" font-size="10" font-weight="700" fill="#0E2841">الأيام الموفَّرة مقابل أساس الفئة الأولى (لكل رافعة)</text>
+  <text x="20" y="68" font-size="11" font-weight="700" fill="#0E2841">الرافعة 1 · تسليم بقيادة كبار</text>
+  <text x="20" y="82" font-size="9" fill="#64748B">لا تسليمات للمحللين · الشركاء يسلّمون الشفرة</text>
+  <rect x="220" y="58" width="385" height="28" fill="#156082"/>
+  <text x="612" y="76" font-size="11" font-weight="700" fill="#156082">~٧٠ يوم</text>
+  <text x="20" y="118" font-size="11" font-weight="700" fill="#0E2841">الرافعة 2 · سرعة الوصول للقيمة</text>
+  <text x="20" y="132" font-size="9" fill="#64748B">كتب لعب جاهزة · منصات سيادية</text>
+  <rect x="220" y="108" width="302" height="28" fill="#1A4F7A"/>
+  <text x="529" y="126" font-size="11" font-weight="700" fill="#1A4F7A">~٥٥ يوم</text>
+  <text x="20" y="168" font-size="11" font-weight="700" fill="#0E2841">الرافعة 3 · نموذج التسعير</text>
+  <text x="20" y="182" font-size="9" fill="#64748B">مرتبط بالنتائج · TCO أقل ٣٥–٥٥٪</text>
+  <rect x="220" y="158" width="192" height="28" fill="#0E2841"/>
+  <text x="419" y="176" font-size="11" font-weight="700" fill="#0E2841">~٣٥ يوم-مكافئ</text>
+  <text x="20" y="210" font-size="11" font-weight="700" fill="#0E2841">الرافعة 4 · استفادة الشركاء</text>
+  <text x="20" y="222" font-size="9" fill="#64748B">تكامل مسبق G42 · HUMAIN · TII · سحابة</text>
+  <rect x="220" y="200" width="165" height="14" fill="#F5A623"/>
+  <text x="392" y="212" font-size="11" font-weight="700" fill="#F5A623">~٣٠ يوم</text>
   </svg>
-  <figcaption>الشكل 1 — الرافعات الأربع التي يمكن للشركات البوتيك استخدامها والتي لا يمكن للشركات من الفئة الأولى استخدامها هيكليًا.</figcaption>
+  <figcaption>الشكل 1 — الرافعات الأربع، مرسومة حسب الأيام التي توفّرها مقابل خطة الفئة الأولى التقليدية. تسليم بقيادة كبار يغلق وحده أكبر قطعة من الفجوة؛ مدموجاً مع كتب لعب سرعة الوصول للقيمة يمثّل ~٧٠٪ من فرق الـ١٨٠ يوماً.</figcaption>
   </figure>
   <h2>المصادر والمراجع</h2>
   <ol class="sources-list">
@@ -5094,15 +5538,33 @@ export const insights = [
   <figure><svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-52 svg-d-52"><title id="svg-t-52">MVP hız ufukları</title><desc id="svg-d-52">MVP hız ufukları</desc><rect width="700" height="240" fill="#F8FAFC"/><line x1="60" y1="190" x2="660" y2="190" stroke="#0E2841" stroke-width="1.5"/><polyline fill="none" stroke="#156082" stroke-width="3" points="80,170 220,130 400,90 620,55"/><polyline fill="none" stroke="#1A4F7A" stroke-width="2" stroke-dasharray="5 4" points="80,170 220,160 400,150 620,140"/><circle cx="220" cy="130" r="6" fill="#F5A623"/><circle cx="400" cy="90" r="6" fill="#F5A623"/><circle cx="620" cy="55" r="6" fill="#F5A623"/><text x="220" y="115" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">90g</text><text x="400" y="75" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">180g</text><text x="620" y="40" font-family="Inter,Arial" font-size="11" fill="#0E2841" text-anchor="middle">365g</text><text x="370" y="215" font-family="Inter,Arial" font-size="12" fill="#0E2841" text-anchor="middle">Başlangıçtan itibaren günler</text><text x="660" y="60" font-family="Inter,Arial" font-size="10" fill="#156082" text-anchor="end">Maven kohortu</text><text x="660" y="135" font-family="Inter,Arial" font-size="10" fill="#1A4F7A" text-anchor="end">GCC ortancası</text></svg><figcaption>MVP hız kıyaslamaları 90 / 180 / 365 günlük ufuklarda</figcaption></figure>
   
   <figure>
-  <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-53 svg-d-53"><title id="svg-t-53">Butik AI firmalarının çektiği dört kaldıraç</title><desc id="svg-d-53">Kıdemli teslimat, değere ulaşma hızı, fiyatlandırma ve ortak kaldıracını gösteren dört renkli panel.</desc>
-  <rect x="0" y="0" width="700" height="220" fill="#F8FAFC"/>
-  <rect x="20" y="40" width="155" height="140" fill="#156082" rx="8"/><text x="97" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 1</text><text x="97" y="105" text-anchor="middle" fill="#fff" font-size="12">Kıdemli</text><text x="97" y="123" text-anchor="middle" fill="#fff" font-size="12">Teslimat</text>
-  <rect x="195" y="40" width="155" height="140" fill="#1A4F7A" rx="8"/><text x="272" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 2</text><text x="272" y="105" text-anchor="middle" fill="#fff" font-size="12">Değere</text><text x="272" y="123" text-anchor="middle" fill="#fff" font-size="12">Ulaşma Hızı</text>
-  <rect x="370" y="40" width="155" height="140" fill="#0E2841" rx="8"/><text x="447" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 3</text><text x="447" y="105" text-anchor="middle" fill="#fff" font-size="12">Fiyatlandırma</text>
-  <rect x="545" y="40" width="135" height="140" fill="#F5A623" rx="8"/><text x="612" y="80" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Kaldıraç 4</text><text x="612" y="105" text-anchor="middle" fill="#fff" font-size="12">Ortak</text><text x="612" y="123" text-anchor="middle" fill="#fff" font-size="12">Kaldıracı</text>
-  <text x="350" y="205" text-anchor="middle" fill="#475569" font-size="11">Tier-1 yapısal genel gider vs butik kıdemli teslimat modeli</text>
+  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-53 svg-d-53"><title id="svg-t-53">Dört butik kaldıraç ve MVP teslimat farkına katkıları</title><desc id="svg-d-53">Dört butik kaldıracın (kıdemli teslimat, değere ulaşma hızı, fiyatlandırma, ortak kaldıracı) tipik bir Tier-1 plana kıyasla kazandırdığı gün veya maliyet azalmasını nicelendiren çubuk grafik.</desc>
+  <rect width="700" height="240" fill="#F8FAFC"/>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Butik hız avantajı gerçekte nereden geliyor</text>
+  <text x="20" y="38" font-size="10" fill="#475569">Tipik 90-gün vs Tier-1 ~270-gün MVP açığına nicelendirilmiş katkı.</text>
+  <line x1="220" y1="220" x2="660" y2="220" stroke="#0E2841" stroke-width="1.5"/>
+  <g font-size="9" fill="#475569">
+  <text x="220" y="234" text-anchor="middle">0</text><text x="330" y="234" text-anchor="middle">20d</text><text x="440" y="234" text-anchor="middle">40d</text><text x="550" y="234" text-anchor="middle">60d</text><text x="660" y="234" text-anchor="middle">80d</text>
+  </g>
+  <text x="440" y="252" text-anchor="middle" font-size="10" font-weight="700" fill="#0E2841">Tier-1 tabanına karşı kazanılan günler (kaldıraç başına)</text>
+  <text x="20" y="68" font-size="11" font-weight="700" fill="#0E2841">K1 · Kıdemli teslimat</text>
+  <text x="20" y="82" font-size="9" fill="#64748B">Analist devirleri yok · partnerler kod gönderir</text>
+  <rect x="220" y="58" width="385" height="28" fill="#156082"/>
+  <text x="612" y="76" font-size="11" font-weight="700" fill="#156082">~70g</text>
+  <text x="20" y="118" font-size="11" font-weight="700" fill="#0E2841">K2 · Değere ulaşma hızı</text>
+  <text x="20" y="132" font-size="9" fill="#64748B">Önceden inşa edilmiş playbook'lar · egemen stack'ler hazır</text>
+  <rect x="220" y="108" width="302" height="28" fill="#1A4F7A"/>
+  <text x="529" y="126" font-size="11" font-weight="700" fill="#1A4F7A">~55g</text>
+  <text x="20" y="168" font-size="11" font-weight="700" fill="#0E2841">K3 · Fiyatlandırma modeli</text>
+  <text x="20" y="182" font-size="9" fill="#64748B">Sonuç bağlantılı · %35–55 daha düşük TCO</text>
+  <rect x="220" y="158" width="192" height="28" fill="#0E2841"/>
+  <text x="419" y="176" font-size="11" font-weight="700" fill="#0E2841">~35g-eşd.</text>
+  <text x="20" y="210" font-size="11" font-weight="700" fill="#0E2841">K4 · Ortak kaldıracı</text>
+  <text x="20" y="222" font-size="9" fill="#64748B">Önceden entegre G42 · HUMAIN · TII · bulut</text>
+  <rect x="220" y="200" width="165" height="14" fill="#F5A623"/>
+  <text x="392" y="212" font-size="11" font-weight="700" fill="#F5A623">~30g</text>
   </svg>
-  <figcaption>Şekil 1 — Butiklerin çekebileceği dört kaldıraç ki Tier-1 firmalar yapısal olarak çekemez.</figcaption>
+  <figcaption>Şekil 1 — Dört kaldıraç, tipik bir Tier-1 plana karşı her birinin kazandırdığı günler ile çizilmiştir. Kıdemli teslimat tek başına açığın en büyük tek parçasını kapatır; değere-hız playbook'ları ile birleştirildiğinde 180-günlük farkın ~%70'ini açıklar.</figcaption>
   </figure>
   <h2>Kaynaklar ve Referanslar</h2>
   <ol class="sources-list">
