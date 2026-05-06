@@ -29,10 +29,22 @@ export default function ChatThread({ onConsideredChange, onNavigate }: Props) {
   const isAr = lang === "ar";
   const { personaId, setPersonaId, setOpenSourceId, appendAudit } = useEkcData();
 
-  const QUICK_PROMPTS = [
-    t("prompt1", chat), t("prompt2", chat), t("prompt3", chat), t("prompt4", chat),
-    t("prompt5", chat), t("prompt6", chat), t("prompt7", chat), t("prompt8", chat),
-  ];
+  const QUICK_PROMPTS = (() => {
+    const k = (key: string) => t(key, chat);
+    switch (personaId) {
+      case "treasury":
+        return [k("promptHedging"), k("prompt1"), k("prompt3"), k("prompt2"), k("prompt5"), k("prompt4"), k("prompt7"), k("prompt8")];
+      case "legal":
+        return [k("promptArbitration"), k("prompt2"), k("prompt1"), k("prompt3"), k("prompt5"), k("prompt4"), k("prompt7"), k("prompt8")];
+      case "junior":
+        return [k("promptArAgeing"), k("prompt1"), k("prompt7"), k("prompt2"), k("prompt4"), k("prompt8"), k("prompt3"), k("promptHedging")];
+      case "consultant":
+        return [k("prompt1"), k("prompt2"), k("prompt5"), k("prompt6"), k("prompt4"), k("prompt8"), k("prompt7"), k("prompt3")];
+      case "cfo":
+      default:
+        return [k("prompt1"), k("prompt3"), k("prompt2"), k("promptArbitration"), k("promptArAgeing"), k("prompt5"), k("prompt4"), k("prompt8")];
+    }
+  })();
 
   const [messages, setMessages] = useState<Message[]>(() => [
     {
