@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard, FileSearch, ClipboardCheck, GitBranch, ScrollText, FileText,
-  ChevronLeft, ChevronRight, Languages, ArrowLeft, MessageCircle, Sparkles,
+  ChevronLeft, ChevronRight, Languages, ArrowLeft, MessageCircle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { PwrDemoLangProvider, usePwrLang, usePwrT } from "./DemoLangContext";
@@ -57,23 +57,52 @@ function ConsoleInner() {
   };
 
   return (
-    <div dir={isAr ? "rtl" : "ltr"} className="min-h-screen flex bg-gray-50" style={{ fontFamily: "Inter, system-ui, -apple-system" }}>
+    <div dir={isAr ? "rtl" : "ltr"} className="min-h-screen flex flex-col bg-gray-50" style={{ fontFamily: "Inter, system-ui, -apple-system" }}>
+      <DemoTopBar
+        marketplaceSlug="programme-war-room"
+        accent={getDemoAccent("programme-war-room")}
+        brandTag={t("brandTag", shell)}
+        platformTitle={t("platformTitle", shell)}
+        backLabel={t("back", shell)}
+        lang={lang}
+        setLang={setLang}
+        persona={{
+          initials: t("personaInitials", shell),
+          name: t("personaName", shell),
+          title: t("personaTitle", shell),
+        }}
+        actionButton={
+          <button
+            onClick={() => setView("approvals")}
+            className="text-[11px] font-semibold px-2.5 py-1 rounded-full text-white"
+            style={{ background: BRAND }}
+            data-testid="button-pending-approvals"
+          >
+            {pendingCount} {t("pendingApprovals", shell)}
+          </button>
+        }
+        notifications={{
+          panelTitle: t("agentAlerts", shell),
+          seeAllLabel: t("seeAllAlerts", shell),
+          onSeeAll: () => setView("approvals"),
+          unreadCount: pendingCount,
+          items: alerts.map((a) => ({
+            id: a.id,
+            severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
+            title: a.title[lang],
+            detail: a.detail[lang],
+            onClick: () => openProgramme(a.programmeId),
+          })),
+        }}
+        onSwitchView={() => setLocation("/demo/programme-war-room")}
+        switchViewLabel={t("switchView", shell)}
+      />
+
+      <div className="flex-1 flex overflow-hidden">
       {/* Sidebar */}
       <aside
         className={`${collapsed ? "w-16" : "w-64"} flex-shrink-0 border-gray-200 ${isAr ? "border-l" : "border-r"} bg-white flex flex-col transition-all`}
       >
-        <div className="px-4 py-4 flex items-center gap-2 border-b border-gray-100" style={{ minHeight: 56 }}>
-          <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center text-white font-extrabold text-xs" style={{ background: BRAND }}>
-            EP
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="text-[12px] font-extrabold leading-tight" style={{ color: BRAND_INK }}>{t("platformTitle", shell)}</p>
-              <p className="text-[10px] text-gray-500">v1 · console</p>
-            </div>
-          )}
-        </div>
-
         <nav className="flex-1 px-2 py-3 space-y-1">
           {navItems.map((n) => {
             const active = view === n.id;
@@ -109,48 +138,15 @@ function ConsoleInner() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <DemoTopBar
-          marketplaceSlug="programme-war-room"
-          accent={getDemoAccent("programme-war-room")}
-          brandTag={t("brandTag", shell)}
-          platformTitle={t("platformTitle", shell)}
-          backLabel={t("back", shell)}
-          lang={lang}
-          setLang={setLang}
-
-          persona={{
-            initials: t("personaInitials", shell),
-            name: t("personaName", shell),
-            title: t("personaTitle", shell),
-          }}
-          notifications={{
-            panelTitle: t("agentAlerts", shell),
-            seeAllLabel: t("seeAllAlerts", shell),
-            onSeeAll: () => setView("approvals"),
-            unreadCount: pendingCount,
-            items: alerts.map((a) => ({
-              id: a.id,
-              severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
-              title: a.title[lang],
-              detail: a.detail[lang],
-              onClick: () => openProgramme(a.programmeId),
-            })),
-          }}
-          onSwitchView={() => setLocation("/demo/programme-war-room")}
-          switchViewLabel={t("switchView", shell)}
-        />
-
-        {/* View body */}
-        <div className="flex-1 overflow-y-auto">
-          {view === "portfolio" && <PortfolioView onOpenProgramme={openProgramme} onOpenView={(v) => setView(v as View)} />}
-          {view === "programme" && <ProgrammeDetailView />}
-          {view === "approvals" && <ApprovalsView />}
-          {view === "dependency" && <DependencyMapView focusProgrammeId={dependencyFocus} />}
-          {view === "decisions" && <DecisionLogView />}
-          {view === "audit" && <AuditLogView />}
-        </div>
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {view === "portfolio" && <PortfolioView onOpenProgramme={openProgramme} onOpenView={(v) => setView(v as View)} />}
+        {view === "programme" && <ProgrammeDetailView />}
+        {view === "approvals" && <ApprovalsView />}
+        {view === "dependency" && <DependencyMapView focusProgrammeId={dependencyFocus} />}
+        {view === "decisions" && <DecisionLogView />}
+        {view === "audit" && <AuditLogView />}
       </main>
+      </div>
 
       {/* Floating AI button */}
       {!chatOpen && (
