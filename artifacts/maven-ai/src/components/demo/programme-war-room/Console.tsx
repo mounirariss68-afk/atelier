@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, FileSearch, ClipboardCheck, GitBranch, ScrollText, FileText,
-  ChevronLeft, ChevronRight, Languages, ArrowLeft, MessageCircle,
+  ArrowLeft, MessageCircle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { PwrDemoLangProvider, usePwrLang, usePwrT } from "./DemoLangContext";
@@ -20,6 +20,10 @@ import DecisionLogView from "./views/DecisionLogView";
 import AuditLogView from "./views/AuditLogView";
 import AiChat from "./AiChat";
 import { generateAlerts } from "@/data/programme-war-room-agent";
+import {
+  UserDemoShell, DemoBrandBlock, DemoSidebarNav, DemoLangToggle, DemoCollapseToggle,
+  type DemoNavItem,
+} from "@/components/demo/_shell";
 
 type View = "portfolio" | "programme" | "approvals" | "dependency" | "decisions" | "audit";
 
@@ -37,7 +41,7 @@ function ConsoleInner() {
   const alerts = generateAlerts();
   const pendingCount = recommendations.filter((r) => r.status === "pending").length;
 
-  const navItems: { id: View; icon: React.ReactNode; label: string }[] = [
+  const navItems: DemoNavItem<View>[] = [
     { id: "portfolio", icon: <LayoutDashboard size={16} />, label: t("navPortfolio", shell) },
     { id: "programme", icon: <FileSearch size={16} />, label: t("navProgramme", shell) },
     { id: "approvals", icon: <ClipboardCheck size={16} />, label: t("navApprovals", shell) },
@@ -56,8 +60,45 @@ function ConsoleInner() {
     else if (target === "programme" && opts?.programmeId) openProgramme(opts.programmeId);
   };
 
+  const sidebar = (
+    <div className={`${collapsed ? "w-16" : "w-64"} h-full border-gray-200 ${isAr ? "border-l" : "border-r"} bg-white flex flex-col transition-all`}>
+      <DemoBrandBlock initials="EP" title={t("platformTitle", shell)} subtitle="v1 · console" accent={BRAND} ink={BRAND_INK} collapsed={collapsed} />
+      <DemoSidebarNav items={navItems} activeId={view} onSelect={setView} accent={BRAND} collapsed={collapsed} />
+      <div className="px-2 py-2 border-t border-gray-100 space-y-1">
+        <DemoLangToggle lang={lang} setLang={setLang} variant="sidebar-icon" collapsed={collapsed} />
+        <DemoCollapseToggle collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} isAr={isAr} label={t("collapseMenu", shell)} />
+        <Link href="/marketplace/programme-war-room" className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-semibold text-gray-500 hover:bg-gray-50">
+          <ArrowLeft size={16} className="rtl:rotate-180" />
+          {!collapsed && <span>{t("back", shell)}</span>}
+        </Link>
+      </div>
+    </div>
+  );
+
+  const drawers = (
+    <>
+      <AnimatePresence>
+        {chatOpen && <AiChat onClose={() => setChatOpen(false)} onNavigate={handleAiNavigate} />}
+      </AnimatePresence>
+    </>
+  );
+
+  const fab = !chatOpen ? (
+    <button
+      onClick={() => setChatOpen(true)}
+      className={`fixed bottom-6 ${isAr ? "left-6" : "right-6"} w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white z-30 hover:scale-110 transition-transform`}
+      style={{ background: BRAND }}
+      aria-label={t("fabAskAi", shell)}
+    >
+      <MessageCircle size={20} />
+      <span className="absolute -top-1 -end-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full text-white" style={{ background: BRAND_INK }}>
+        {t("aiBadge", shell)}
+      </span>
+    </button>
+  ) : null;
+
   return (
-    <div dir={isAr ? "rtl" : "ltr"} className="min-h-screen flex flex-col bg-gray-50" style={{ fontFamily: "Inter, system-ui, -apple-system" }}>
+    <UserDemoShell lang={lang} sidebar={sidebar} topbar={
       <DemoTopBar
         marketplaceSlug="programme-war-room"
         accent={getDemoAccent("programme-war-room")}
@@ -66,6 +107,7 @@ function ConsoleInner() {
         backLabel={t("back", shell)}
         lang={lang}
         setLang={setLang}
+
         persona={{
           initials: t("personaInitials", shell),
           name: t("personaName", shell),
@@ -97,77 +139,16 @@ function ConsoleInner() {
         onSwitchView={() => setLocation("/demo/programme-war-room")}
         switchViewLabel={t("switchView", shell)}
       />
-
-      <div className="flex-1 flex overflow-hidden">
-      {/* Sidebar */}
-      <aside
-        className={`${collapsed ? "w-16" : "w-64"} flex-shrink-0 border-gray-200 ${isAr ? "border-l" : "border-r"} bg-white flex flex-col transition-all`}
-      >
-        <nav className="flex-1 px-2 py-3 space-y-1">
-          {navItems.map((n) => {
-            const active = view === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => setView(n.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-semibold transition-colors ${active ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
-                style={active ? { background: BRAND } : undefined}
-                title={n.label}
-              >
-                <span className="flex-shrink-0">{n.icon}</span>
-                {!collapsed && <span className="truncate">{n.label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="px-2 py-2 border-t border-gray-100 space-y-1">
-          <button onClick={() => setLang(lang === "en" ? "ar" : "en")} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-semibold text-gray-600 hover:bg-gray-50">
-            <Languages size={16} />
-            {!collapsed && <span>{lang === "en" ? "العربية" : "English"}</span>}
-          </button>
-          <button onClick={() => setCollapsed((c) => !c)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-semibold text-gray-500 hover:bg-gray-50">
-            {collapsed ? (isAr ? <ChevronLeft size={16} /> : <ChevronRight size={16} />) : (isAr ? <ChevronRight size={16} /> : <ChevronLeft size={16} />)}
-            {!collapsed && <span>{t("collapseMenu", shell)}</span>}
-          </button>
-          <Link href="/marketplace/programme-war-room" className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-semibold text-gray-500 hover:bg-gray-50">
-            <ArrowLeft size={16} className="rtl:rotate-180" />
-            {!collapsed && <span>{t("back", shell)}</span>}
-          </Link>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+    } drawers={drawers} fab={fab} background="#F9FAFB" height="min">
+      <div className="flex-1 overflow-y-auto">
         {view === "portfolio" && <PortfolioView onOpenProgramme={openProgramme} onOpenView={(v) => setView(v as View)} />}
         {view === "programme" && <ProgrammeDetailView />}
         {view === "approvals" && <ApprovalsView />}
         {view === "dependency" && <DependencyMapView focusProgrammeId={dependencyFocus} />}
         {view === "decisions" && <DecisionLogView />}
         {view === "audit" && <AuditLogView />}
-      </main>
       </div>
-
-      {/* Floating AI button */}
-      {!chatOpen && (
-        <button
-          onClick={() => setChatOpen(true)}
-          className={`fixed bottom-6 ${isAr ? "left-6" : "right-6"} w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white z-30 hover:scale-110 transition-transform`}
-          style={{ background: BRAND }}
-          aria-label={t("fabAskAi", shell)}
-        >
-          <MessageCircle size={20} />
-          <span className="absolute -top-1 -end-1 px-1.5 py-0.5 text-[9px] font-bold rounded-full text-white" style={{ background: BRAND_INK }}>
-            {t("aiBadge", shell)}
-          </span>
-        </button>
-      )}
-
-      {/* AI chat panel */}
-      <AnimatePresence>
-        {chatOpen && <AiChat onClose={() => setChatOpen(false)} onNavigate={handleAiNavigate} />}
-      </AnimatePresence>
-    </div>
+    </UserDemoShell>
   );
 }
 

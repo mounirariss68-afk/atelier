@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  LogOut, Sparkles,
+  Sparkles,
   Filter, FileText, Inbox, ShieldCheck, CalendarClock, History, MessageSquare,
 } from "lucide-react";
 import { SamaComplianceDataProvider, useSamaComplianceData } from "@/hooks/useSamaComplianceData";
@@ -20,6 +20,7 @@ import ControlsLibraryView from "./views/ControlsLibraryView";
 import ReturnsCalendarView from "./views/ReturnsCalendarView";
 import AuditLogView from "./views/AuditLogView";
 import AiChat from "./AiChat";
+import { UserDemoShell } from "@/components/demo/_shell";
 
 type View = "register" | "circular" | "approvals" | "controls" | "returns" | "audit";
 
@@ -77,7 +78,6 @@ function ConsoleInner() {
     }
   };
 
-  // KPI tiles
   const obligations = data.obligations;
   const failingControls = data.controls.filter((c) => c.lastTestResult === "fail" || c.lastTestResult === "overdue").length;
   const newCirculars = data.circulars.filter((c) => new Date(c.publishedAt) >= new Date("2026-04-01")).length;
@@ -94,133 +94,140 @@ function ConsoleInner() {
     { key: "aedImpact", value: formatAed(cumulativeImpact, lang), sub: isAr ? "عبر 12 إيداعاً" : "across 12 returns" },
   ];
 
-  return (
-    <div className="h-screen flex flex-col bg-[#F4F6F8] text-[#0E2841]" dir={isAr ? "rtl" : "ltr"}>
-      <DemoTopBar
-        marketplaceSlug="sama-compliance-sentinel"
-        accent={getDemoAccent("sama-compliance-sentinel")}
-        brandTag={t("brandTag", shell)}
-        platformTitle={t("platformTitle", shell)}
-        backLabel={t("back", shell)}
-        lang={lang}
-        setLang={setLang}
-
-        persona={{
-          initials: t("croInitials", shell),
-          name: t("croName", shell),
-          title: t("croTitle", shell),
-        }}
-        notifications={{
-          panelTitle: t("notifications", shell),
-          urgentLabel: isAr ? "جديد" : "new",
-          emptyLabel: t("noAlerts", shell),
-          seeAllLabel: t("seeAll", shell),
-          onSeeAll: () => navigateTo("audit"),
-          unreadCount: unread,
-          items: alerts.map((a) => ({
-            id: a.id,
-            severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
-            title: a.title[lang] ?? a.title.en,
-            detail: a.detail[lang] ?? a.detail.en,
-            timestamp: relativeTime(a.timestamp, lang),
-            onClick: () => {
-              setNotifRead((p) => ({ ...p, [a.id]: true }));
-              if (a.href) navigateTo(a.href.view, a.href.id);
-            },
-          })),
-        }}
-        onSwitchView={() => setLocation("/demo/sama-compliance-sentinel")}
-        switchViewLabel={t("switchView", shell)}
-      />
-
-      <div className="flex-1 min-h-0 flex">
-        {/* Sidebar */}
-        <nav className="flex-shrink-0 w-52 bg-white border-r border-gray-200 flex flex-col">
-          <div className="flex-1 py-2">
-            {NAV.map((n) => {
-              const Icon = n.icon;
-              const active = view === n.id;
-              const badge = n.id === "approvals" ? recs.length : null;
-              return (
-                <button
-                  key={n.id}
-                  onClick={() => setView(n.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold border-l-2 transition-colors ${active ? "bg-amber-50 border-amber-500" : "text-gray-600 border-transparent hover:bg-gray-50"}`}
-                  style={active ? { color: BRAND_INK } : undefined}
-                >
-                  <Icon size={16} style={active ? { color: BRAND } : undefined} />
-                  <span className="flex-1 text-left rtl:text-right">{t(n.key, shell)}</span>
-                  {badge ? (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: BRAND, color: BRAND_INK }}>{badge}</span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="p-3 border-t border-gray-100">
+  const sidebar = (
+    <nav className="w-52 h-full bg-white border-r border-gray-200 flex flex-col">
+      <div className="flex-1 py-2">
+        {NAV.map((n) => {
+          const Icon = n.icon;
+          const active = view === n.id;
+          const badge = n.id === "approvals" ? recs.length : null;
+          return (
             <button
-              onClick={() => setChatOpen(true)}
-              className="w-full px-3 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-2 justify-center"
-              style={{ background: BRAND_INK }}
+              key={n.id}
+              onClick={() => setView(n.id)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold border-l-2 transition-colors ${active ? "bg-amber-50 border-amber-500" : "text-gray-600 border-transparent hover:bg-gray-50"}`}
+              style={active ? { color: BRAND_INK } : undefined}
             >
-              <Sparkles size={12} style={{ color: BRAND }} />{t("aiAssistant", shell)}
+              <Icon size={16} style={active ? { color: BRAND } : undefined} />
+              <span className="flex-1 text-left rtl:text-right">{t(n.key, shell)}</span>
+              {badge ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: BRAND, color: BRAND_INK }}>{badge}</span>
+              ) : null}
             </button>
-          </div>
-        </nav>
-
-        {/* Content */}
-        <main className="flex-1 min-w-0 overflow-y-auto">
-          <div className="max-w-[1400px] mx-auto p-6 space-y-6">
-            {/* Persona + KPI strip */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: BRAND }}>{t("brandTag", shell)}</p>
-                  <h1 className="text-lg font-bold" style={{ color: BRAND_INK }}>
-                    {isAr ? `صباح الخير، ${t("croName", shell)}` : `Good morning, ${t("croName", shell)}`}
-                  </h1>
-                  <p className="text-xs text-gray-500">{isAr ? "5 مايو 2026 · أربع قرارات حرجة بانتظار توقيعك" : "May 5, 2026 · 4 critical decisions waiting on you"}</p>
-                </div>
-                <button onClick={() => { setView("approvals"); }} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white" style={{ background: BRAND }}>
-                  {recs.length} {t("decisionsWaiting", shell)} →
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {kpiTiles.map((k) => (
-                  <div key={k.key} className="border border-gray-100 rounded-xl p-2.5">
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500">{t(k.key, kpis)}</p>
-                    <p className="text-base font-bold mt-0.5" style={{ color: BRAND_INK }}>{k.value}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5 truncate">{k.sub}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {view === "register" && <ObligationsRegisterView onNavigate={navigateTo} />}
-            {view === "circular" && <CircularDetailView circularId={circularId} onNavigate={navigateTo} />}
-            {view === "approvals" && <ApprovalsView />}
-            {view === "controls" && <ControlsLibraryView />}
-            {view === "returns" && <ReturnsCalendarView onNavigate={navigateTo} />}
-            {view === "audit" && <AuditLogView />}
-          </div>
-        </main>
+          );
+        })}
       </div>
-
-      {/* AI FAB */}
-      {!chatOpen && (
+      <div className="p-3 border-t border-gray-100">
         <button
           onClick={() => setChatOpen(true)}
-          className={`fixed bottom-6 ${isAr ? "left-6" : "right-6"} h-12 px-4 rounded-full text-white shadow-2xl flex items-center gap-2 z-40 hover:scale-105 transition-transform`}
-          style={{ background: BRAND, color: BRAND_INK }}
+          className="w-full px-3 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-2 justify-center"
+          style={{ background: BRAND_INK }}
         >
-          <MessageSquare size={16} />
-          <span className="text-xs font-bold">{t("fabAskAi", shell)}</span>
+          <Sparkles size={12} style={{ color: BRAND }} />{t("aiAssistant", shell)}
         </button>
-      )}
+      </div>
+    </nav>
+  );
 
-      <AnimatePresence>
-        {chatOpen && <AiChat onClose={() => setChatOpen(false)} onNavigate={navigateTo} />}
-      </AnimatePresence>
-    </div>
+  const fab = !chatOpen ? (
+    <button
+      onClick={() => setChatOpen(true)}
+      className={`fixed bottom-6 ${isAr ? "left-6" : "right-6"} h-12 px-4 rounded-full text-white shadow-2xl flex items-center gap-2 z-40 hover:scale-105 transition-transform`}
+      style={{ background: BRAND, color: BRAND_INK }}
+    >
+      <MessageSquare size={16} />
+      <span className="text-xs font-bold">{t("fabAskAi", shell)}</span>
+    </button>
+  ) : null;
+
+  const drawers = (
+    <AnimatePresence>
+      {chatOpen && <AiChat onClose={() => setChatOpen(false)} onNavigate={navigateTo} />}
+    </AnimatePresence>
+  );
+
+  return (
+    <UserDemoShell
+      lang={lang}
+      header={
+        <DemoTopBar
+          marketplaceSlug="sama-compliance-sentinel"
+          accent={getDemoAccent("sama-compliance-sentinel")}
+          brandTag={t("brandTag", shell)}
+          platformTitle={t("platformTitle", shell)}
+          backLabel={t("back", shell)}
+          lang={lang}
+          setLang={setLang}
+          persona={{
+            initials: t("croInitials", shell),
+            name: t("croName", shell),
+            title: t("croTitle", shell),
+          }}
+          notifications={{
+            panelTitle: t("notifications", shell),
+            urgentLabel: isAr ? "جديد" : "new",
+            emptyLabel: t("noAlerts", shell),
+            seeAllLabel: t("seeAll", shell),
+            onSeeAll: () => navigateTo("audit"),
+            unreadCount: unread,
+            items: alerts.map((a) => ({
+              id: a.id,
+              severity: a.severity as "critical" | "high" | "medium" | "low" | "info",
+              title: a.title[lang] ?? a.title.en,
+              detail: a.detail[lang] ?? a.detail.en,
+              timestamp: relativeTime(a.timestamp, lang),
+              onClick: () => {
+                setNotifRead((p) => ({ ...p, [a.id]: true }));
+                if (a.href) navigateTo(a.href.view, a.href.id);
+              },
+            })),
+          }}
+          onSwitchView={() => setLocation("/demo/sama-compliance-sentinel")}
+          switchViewLabel={t("switchView", shell)}
+        />
+      }
+      sidebar={sidebar}
+      fab={fab}
+      drawers={drawers}
+      background="#F4F6F8"
+      textColor="#0E2841"
+      applyInterFont={false}
+      height="min"
+    >
+      <main className="flex-1 min-w-0 overflow-y-auto">
+        <div className="max-w-[1400px] mx-auto p-6 space-y-6">
+          <div className="bg-white border border-gray-200 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: BRAND }}>{t("brandTag", shell)}</p>
+                <h1 className="text-lg font-bold" style={{ color: BRAND_INK }}>
+                  {isAr ? `صباح الخير، ${t("croName", shell)}` : `Good morning, ${t("croName", shell)}`}
+                </h1>
+                <p className="text-xs text-gray-500">{isAr ? "5 مايو 2026 · أربع قرارات حرجة بانتظار توقيعك" : "May 5, 2026 · 4 critical decisions waiting on you"}</p>
+              </div>
+              <button onClick={() => { setView("approvals"); }} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white" style={{ background: BRAND }}>
+                {recs.length} {t("decisionsWaiting", shell)} →
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              {kpiTiles.map((k) => (
+                <div key={k.key} className="border border-gray-100 rounded-xl p-2.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500">{t(k.key, kpis)}</p>
+                  <p className="text-base font-bold mt-0.5" style={{ color: BRAND_INK }}>{k.value}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5 truncate">{k.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {view === "register" && <ObligationsRegisterView onNavigate={navigateTo} />}
+          {view === "circular" && <CircularDetailView circularId={circularId} onNavigate={navigateTo} />}
+          {view === "approvals" && <ApprovalsView />}
+          {view === "controls" && <ControlsLibraryView />}
+          {view === "returns" && <ReturnsCalendarView onNavigate={navigateTo} />}
+          {view === "audit" && <AuditLogView />}
+        </div>
+      </main>
+    </UserDemoShell>
   );
 }
