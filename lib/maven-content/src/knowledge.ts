@@ -873,6 +873,24 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     accent: "#196B24",
     icon: "FileText",
     relatedService: "ai-product-studio",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Technical Monitoring Panel", ar: "لوحة المراقبة التقنية" },
+        audience: { en: "Technical teams", ar: "الفرق التقنية" },
+        description: { en: "Agent cockpit showing the Bid Conductor, specialist agents, tool calls, and the full event trace — for technical teams monitoring agent performance.", ar: "لوحة قيادة الوكلاء تعرض منسّق العطاء والوكلاء المتخصّصين واستدعاءات الأدوات وسلسلة الأحداث الكاملة — للفرق التقنية." },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "studio",
+        label: { en: "Bid Manager Studio", ar: "استوديو مدير العطاءات" },
+        audience: { en: "Head of Bid Management", ar: "رئيس إدارة العطاءات" },
+        description: { en: "Bid manager workspace — pipeline of active tenders, question drafting, approvals, compliance gates, content library, and audit log.", ar: "مساحة عمل مدير العطاءات — مسار المناقصات النشطة، وصياغة الأسئلة، والموافقات، وبوابات الامتثال، ومكتبة المحتوى، وسجل التدقيق." },
+        icon: "ClipboardCheck",
+        route: "studio",
+      },
+    ],
   },
   {
     id: "procurement-negotiation-agent",

@@ -15,6 +15,7 @@ import SourcingDesk from "@/components/demo/procurement-negotiation/SourcingDesk
 import CroConsole from "@/components/demo/sama-compliance/CroConsole";
 import CdoConsole from "@/components/demo/sovereign-data/CdoConsole";
 import CareDesk from "@/components/demo/customer-care/CareDesk";
+import BidStudio from "@/components/demo/tender-response-studio/BidStudio";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -83,6 +84,10 @@ export default function Demo() {
   // don't fit DemoExperience's "agent trace + workspace widgets" template.
   if (slug === "customer-care-hive" && variant === "desk") {
     return <CareDesk />;
+  }
+
+  if (slug === "tender-response-studio" && variant === "studio") {
+    return <BidStudio />;
   }
 
   if (slug === "maven-personal-agent" && variant === "cockpit") {
