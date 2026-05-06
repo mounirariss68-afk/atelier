@@ -8,6 +8,7 @@ import ManagerDashboardShell from "@/components/demo/tasama/ManagerDashboardShel
 import { TasamaDemoLangProvider } from "@/components/demo/tasama/DemoLangContext";
 import Cockpit from "@/components/demo/personal-agent/Cockpit";
 import Mind from "@/components/demo/personal-agent/Mind";
+import ProgrammeWarRoomConsole from "@/components/demo/programme-war-room/Console";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLang, tStr } from "@/lib/lang";
 import { ArcelikDataProvider } from "@/hooks/useArcelikData";
@@ -62,6 +63,10 @@ export default function Demo() {
   }
   if (slug === "maven-personal-agent" && variant === "mind") {
     return <Mind />;
+  }
+
+  if (slug === "programme-war-room" && variant === "console") {
+    return <ProgrammeWarRoomConsole />;
   }
 
   const scenario = getScenario(slug, variant);

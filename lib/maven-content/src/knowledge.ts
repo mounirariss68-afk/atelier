@@ -764,6 +764,24 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     accent: "#156082",
     icon: "ClipboardList",
     relatedService: "agentic-ai-transformation",
+    demoVariants: [
+      {
+        id: "teknik",
+        label: { en: "Agent Cockpit", ar: "قمرة الوكلاء" },
+        audience: { en: "Technical teams", ar: "الفرق التقنية" },
+        description: { en: "Cockpit view of the orchestrator + four specialist agents producing the weekly steering pack — for technical teams monitoring agent performance.", ar: "عرض المنسّق والوكلاء الأربعة المتخصّصين أثناء إعداد عبوة التوجيه الأسبوعية — للفرق التقنية." },
+        icon: "Activity",
+        route: "teknik",
+      },
+      {
+        id: "console",
+        label: { en: "EPMO Command Console", ar: "قمرة قيادة المكتب التنفيذي" },
+        audience: { en: "EPMO Director (Mariam Saleh)", ar: "مديرة المكتب التنفيذي (مريم صالح)" },
+        description: { en: "Operator console with portfolio heatmap, programme detail, approvals queue, dependency map, decision log and audit log — for the EPMO Director running the Tuesday Steerco war room.", ar: "وحدة تشغيل تجمع خريطة المحفظة وتفاصيل البرنامج وقائمة الموافقات وخريطة الاعتماديات وسجل القرارات وسجل التدقيق — لمديرة المكتب التنفيذي." },
+        icon: "LayoutDashboard",
+        route: "console",
+      },
+    ],
   },
   {
     id: "tender-response-studio",
