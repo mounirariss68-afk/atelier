@@ -25,6 +25,12 @@ export const REGISTERED_DEMO_SLUGS: readonly string[] = [
   "arcelik-fiyat-istihbarati",
   "tasama-payroll-hub",
   "maven-personal-agent",
+  "dge-catalogue-channel",
+  "dge-complaint-recovery",
+  "dge-effortless-qr",
+  "dge-red-team",
+  "dge-service-redesign",
+  "dge-spokes-review",
 ] as const;
 
 export const REGISTERED_DEMO_SLUG_SET: ReadonlySet<string> = new Set(

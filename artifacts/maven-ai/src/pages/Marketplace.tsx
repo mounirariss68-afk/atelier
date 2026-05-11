@@ -17,6 +17,7 @@ import {
   Headphones,
   Database,
   BookOpen,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -42,6 +43,7 @@ const ICONS: Record<string, LucideIcon> = {
   Headphones,
   Database,
   BookOpen,
+  MessageSquare,
 };
 
 type ClassFilter = "all" | (typeof marketplaceClasses)[number]["id"];
@@ -167,53 +169,6 @@ export default function Marketplace() {
               {tStr(COPY.povLink, lang)} <ArrowRight size={14} />
             </Link>
           </div>
-        </div>
-      </section>
-
-      {/* DGE Effortless 2.0 — featured agentic CX demonstrator */}
-      <section className="bg-[#FBF8F2] border-b border-[#E5DFD3] py-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link
-            href="/marketplace/dge-effortless"
-            className="block bg-white rounded-2xl border border-[#E5DFD3] p-6 sm:p-8 hover:shadow-md transition-shadow"
-            data-testid="link-dge-hub"
-          >
-            <div className="flex flex-col md:flex-row gap-6 items-start">
-              <div className="flex-1">
-                <p className="text-[#006A6A] font-bold text-xs uppercase tracking-widest mb-2">
-                  {tStr({ en: "Featured · DGE × Publicis Sapient × Maven AI", ar: "مميَّز · DGE × Publicis Sapient × Maven AI" }, lang)}
-                </p>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-[#024F4F] mb-2">
-                  <span className="italic text-[#B98A4D]">{tStr({ en: "DGE Effortless 2.0", ar: "DGE الجهد المنعدم 2.0" }, lang)}</span>{" "}
-                  — {tStr({ en: "Agentic CX Demonstrator", ar: "عرض تجربة الذكاء الوكيلي" }, lang)}
-                </h2>
-                <p className="text-sm text-[#475259] leading-relaxed max-w-2xl mb-3">
-                  {tStr({
-                    en: "Six self-contained agentic CX demos in the TAMM/ADGE design system. HAPA H1–H6 contracts, AUTHORIZE cards naming the human committing to each consequential action, and an immutable audit log on every step.",
-                    ar: "ستة عروض ذكاء وكيلي مستقلة بنظام TAMM/ADGE. عقود HAPA من H1 إلى H6، وبطاقات اعتماد تُسمّي الشخص الملتزم، وسجل تدقيق غير قابل للتعديل لكل خطوة.",
-                  }, lang)}
-                </p>
-                <span className="inline-flex items-center gap-2 text-sm font-bold text-[#006A6A]">
-                  {tStr({ en: "Open the DGE hub", ar: "افتح مركز DGE" }, lang)}
-                  <ArrowRight size={14} className="rtl:rotate-180" />
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px] md:w-72 flex-shrink-0">
-                {[
-                  { en: "Catalogue & Channel", ar: "الكتالوج والقناة" },
-                  { en: "Complaint Recovery", ar: "استرداد الشكاوى" },
-                  { en: "Effortless QR Feedback", ar: "ملاحظات QR" },
-                  { en: "Red Team Console", ar: "كونسول الاستجابة" },
-                  { en: "Service Redesign", ar: "إعادة تصميم الخدمة" },
-                  { en: "Spokes Review", ar: "مراجعة الجهات" },
-                ].map((t, i) => (
-                  <span key={i} className="px-2 py-1.5 rounded-md bg-[#E1F2EE] text-[#024F4F] font-semibold">
-                    {String(i + 1).padStart(2, "0")} · {tStr(t, lang)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </Link>
         </div>
       </section>
 
