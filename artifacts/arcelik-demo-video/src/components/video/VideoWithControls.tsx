@@ -189,7 +189,7 @@ function FloatingMutePill({
     <button
       onClick={onToggle}
       className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-white text-sm font-medium hover:bg-black/85 transition-all ${
-        hidden && !muted ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        hidden && !pulseOnce ? 'opacity-0 pointer-events-none' : 'opacity-100'
       } ${pulseOnce && muted ? 'animate-pulse ring-2 ring-[#F5A623]/70' : ''}`}
       aria-label={muted ? 'Sesi aç' : 'Sesi kapat'}
     >
