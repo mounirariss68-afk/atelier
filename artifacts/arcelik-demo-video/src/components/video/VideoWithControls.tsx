@@ -4,7 +4,11 @@ import VideoTemplate, { SCENE_DURATIONS } from './VideoTemplate';
 import { useSceneControls } from './useSceneControls';
 
 const PROGRESS_TICK_MS = 60;
-const AUDIO_FADE_MS = 400;
+// Short fade-in on new audio. We deliberately do NOT fade the previous
+// audio out -- by the time the scene flips, the previous narration MP3 has
+// already ended (scene tail = ~0.25s). Fading silence-out wastes 400ms of
+// dead air and creates the audible "cut" the user hears.
+const AUDIO_FADE_IN_MS = 200;
 
 interface ControlBarProps {
   visible: boolean;
@@ -224,62 +228,35 @@ export default function VideoWithControls() {
   const [muted, setMuted] = useState(true);
 
   const activeSceneKey = sceneKeys[activeIndex];
-  const desiredSrc = `${import.meta.env.BASE_URL}audio/${activeSceneKey}.mp3`;
-  const [currentAudioSrc, setCurrentAudioSrc] = useState(desiredSrc);
+  const audioSrc = `${import.meta.env.BASE_URL}audio/${activeSceneKey}.mp3`;
 
-  // Audio cross-fade on scene change: ramp out -> swap src -> play -> ramp in.
-  // src is bound to currentAudioSrc (state) and only changes after fade-out
-  // completes, so the swap is truly controlled.
+  // On scene change: swap src immediately, play, ramp volume 0->1 over
+  // AUDIO_FADE_IN_MS. No fade-out -- the previous narration MP3 has
+  // already ended by the time the scene flips (scene tail ~0.25s).
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    if (desiredSrc === currentAudioSrc) return;
     if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
 
-    const clamp = (v: number) => Math.max(0, Math.min(1, v));
-    const startVol = clamp(el.volume);
-    const fadeStart = performance.now();
-
-    const fadeOut = (now: number) => {
-      const t = Math.min(1, (now - fadeStart) / AUDIO_FADE_MS);
-      el.volume = clamp(startVol * (1 - t));
-      if (t < 1) {
-        fadeRafRef.current = requestAnimationFrame(fadeOut);
-      } else {
-        el.volume = 0;
-        // Swap src via state -- React updates the <audio> element's src,
-        // then we play and fade in once metadata is ready (or immediately).
-        setCurrentAudioSrc(desiredSrc);
-      }
-    };
-    fadeRafRef.current = requestAnimationFrame(fadeOut);
-
-    return () => {
-      if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
-    };
-  }, [desiredSrc, currentAudioSrc]);
-
-  // After src actually changes, play and fade in.
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
     el.currentTime = 0;
     el.volume = 0;
     const playPromise = el.play().catch(() => {});
-    const inStart = performance.now();
+
     const clamp = (v: number) => Math.max(0, Math.min(1, v));
-    const fadeIn = (inNow: number) => {
-      const ti = Math.min(1, (inNow - inStart) / AUDIO_FADE_MS);
-      el.volume = clamp(ti);
-      if (ti < 1) fadeRafRef.current = requestAnimationFrame(fadeIn);
+    const start = performance.now();
+    const fadeIn = (now: number) => {
+      const t = Math.min(1, (now - start) / AUDIO_FADE_IN_MS);
+      el.volume = clamp(t);
+      if (t < 1) fadeRafRef.current = requestAnimationFrame(fadeIn);
     };
     Promise.resolve(playPromise).then(() => {
       fadeRafRef.current = requestAnimationFrame(fadeIn);
     });
+
     return () => {
       if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
     };
-  }, [currentAudioSrc]);
+  }, [activeSceneKey, mountKey]);
 
   const toggleMute = useCallback(() => {
     setMuted((m) => {
@@ -339,7 +316,7 @@ export default function VideoWithControls() {
       />
       <audio
         ref={audioRef}
-        src={currentAudioSrc}
+        src={audioSrc}
         autoPlay
         muted={muted}
         preload="auto"

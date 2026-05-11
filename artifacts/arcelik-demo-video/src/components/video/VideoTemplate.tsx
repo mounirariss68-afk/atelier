@@ -7,18 +7,20 @@ import { Scene3 } from './video_scenes/Scene3';
 import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
 
-// Re-timed to match actual MP3 narration lengths + ~0.8s tail.
+// Re-timed to match actual MP3 narration lengths + ~0.25s tail (kept short
+// so the scene flip lands close to the last spoken word, eliminating the
+// audible "cut" between sections). Audio cross-fade in VideoWithControls
+// is also kept short (200ms in only) for the same reason.
 // Sales-rep-on-a-demo-call rewrite (May 11), best of two takes per scene
 // targeting ~13.5 chars/sec natural Turkish conversational rate:
-//   situation 18.91s (13.43 cps), complication 17.02s (13.58 cps),
-//   resolution1 18.31s (14.25 cps), resolution2 20.06s (13.41 cps),
-//   closing 9.82s (12.33 cps). Total ~84s narration.
+//   situation 18.91s, complication 17.02s, resolution1 18.31s,
+//   resolution2 20.06s, closing 9.82s. Total ~84s narration.
 export const SCENE_DURATIONS = {
-  situation: 19700,
-  complication: 17800,
-  resolution1: 19100,
-  resolution2: 20900,
-  closing: 10600,
+  situation: 19150,
+  complication: 17250,
+  resolution1: 18550,
+  resolution2: 20300,
+  closing: 10050,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
