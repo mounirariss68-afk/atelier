@@ -153,13 +153,18 @@ function ControlBar({
 function FloatingMutePill({
   muted,
   onToggle,
-  pulse,
 }: {
   muted: boolean;
   onToggle: () => void;
-  pulse: boolean;
 }) {
   const [hidden, setHidden] = useState(false);
+  // One-shot attention pulse on first mount only -- stops after ~3.6s.
+  const [pulseOnce, setPulseOnce] = useState(true);
+
+  useEffect(() => {
+    const stopPulse = window.setTimeout(() => setPulseOnce(false), 3600);
+    return () => window.clearTimeout(stopPulse);
+  }, []);
 
   useEffect(() => {
     let timeoutId: number;
@@ -185,7 +190,7 @@ function FloatingMutePill({
       onClick={onToggle}
       className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-white text-sm font-medium hover:bg-black/85 transition-all ${
         hidden && !muted ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      } ${pulse && muted ? 'animate-pulse ring-2 ring-[#F5A623]/70' : ''}`}
+      } ${pulseOnce && muted ? 'animate-pulse ring-2 ring-[#F5A623]/70' : ''}`}
       aria-label={muted ? 'Sesi aç' : 'Sesi kapat'}
     >
       {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
@@ -219,12 +224,16 @@ export default function VideoWithControls() {
   const [muted, setMuted] = useState(true);
 
   const activeSceneKey = sceneKeys[activeIndex];
-  const audioSrc = `${import.meta.env.BASE_URL}audio/${activeSceneKey}.mp3`;
+  const desiredSrc = `${import.meta.env.BASE_URL}audio/${activeSceneKey}.mp3`;
+  const [currentAudioSrc, setCurrentAudioSrc] = useState(desiredSrc);
 
-  // Audio cross-fade on scene change: ramp out -> swap src -> ramp in.
+  // Audio cross-fade on scene change: ramp out -> swap src -> play -> ramp in.
+  // src is bound to currentAudioSrc (state) and only changes after fade-out
+  // completes, so the swap is truly controlled.
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
+    if (desiredSrc === currentAudioSrc) return;
     if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
 
     const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -237,16 +246,10 @@ export default function VideoWithControls() {
       if (t < 1) {
         fadeRafRef.current = requestAnimationFrame(fadeOut);
       } else {
-        el.currentTime = 0;
         el.volume = 0;
-        el.play().catch(() => {});
-        const inStart = performance.now();
-        const fadeIn = (inNow: number) => {
-          const ti = Math.min(1, (inNow - inStart) / AUDIO_FADE_MS);
-          el.volume = clamp(ti);
-          if (ti < 1) fadeRafRef.current = requestAnimationFrame(fadeIn);
-        };
-        fadeRafRef.current = requestAnimationFrame(fadeIn);
+        // Swap src via state -- React updates the <audio> element's src,
+        // then we play and fade in once metadata is ready (or immediately).
+        setCurrentAudioSrc(desiredSrc);
       }
     };
     fadeRafRef.current = requestAnimationFrame(fadeOut);
@@ -254,7 +257,29 @@ export default function VideoWithControls() {
     return () => {
       if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
     };
-  }, [activeSceneKey, mountKey, tick]);
+  }, [desiredSrc, currentAudioSrc]);
+
+  // After src actually changes, play and fade in.
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.currentTime = 0;
+    el.volume = 0;
+    const playPromise = el.play().catch(() => {});
+    const inStart = performance.now();
+    const clamp = (v: number) => Math.max(0, Math.min(1, v));
+    const fadeIn = (inNow: number) => {
+      const ti = Math.min(1, (inNow - inStart) / AUDIO_FADE_MS);
+      el.volume = clamp(ti);
+      if (ti < 1) fadeRafRef.current = requestAnimationFrame(fadeIn);
+    };
+    Promise.resolve(playPromise).then(() => {
+      fadeRafRef.current = requestAnimationFrame(fadeIn);
+    });
+    return () => {
+      if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
+    };
+  }, [currentAudioSrc]);
 
   const toggleMute = useCallback(() => {
     setMuted((m) => {
@@ -314,7 +339,7 @@ export default function VideoWithControls() {
       />
       <audio
         ref={audioRef}
-        src={audioSrc}
+        src={currentAudioSrc}
         autoPlay
         muted={muted}
         preload="auto"
@@ -345,7 +370,7 @@ export default function VideoWithControls() {
           />
         </div>
       ) : (
-        <FloatingMutePill muted={muted} onToggle={toggleMute} pulse={true} />
+        <FloatingMutePill muted={muted} onToggle={toggleMute} />
       )}
     </div>
   );

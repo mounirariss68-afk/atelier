@@ -17,13 +17,7 @@ export function Scene3() {
   }, []);
 
   return (
-    <motion.div 
-      className="absolute inset-0 flex items-center justify-center bg-[#0B1B2E]"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, x: -100 }}
-      transition={{ duration: 1 }}
-    >
+    <div className="absolute inset-0 flex items-center justify-center bg-[#0B1B2E]">
       {/* Intro Text */}
       <motion.div 
         className="absolute inset-0 flex items-center justify-center z-30"
@@ -85,6 +79,6 @@ export function Scene3() {
         </p>
       </motion.div>
 
-    </motion.div>
+    </div>
   );
 }

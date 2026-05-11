@@ -44,13 +44,7 @@ export function Scene1() {
   }, []);
 
   return (
-    <motion.div
-      className="absolute inset-0 p-12"
-      initial={{ opacity: 0, scale: 1.04 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-    >
+    <div className="absolute inset-0 p-12">
       {/* Left column */}
       <div className="absolute top-12 left-12 w-[44%] max-w-[640px] z-20 flex flex-col gap-8">
         <motion.div
@@ -209,6 +203,6 @@ export function Scene1() {
           </div>
         </motion.div>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }

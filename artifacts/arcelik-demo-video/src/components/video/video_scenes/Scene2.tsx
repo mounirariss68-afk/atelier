@@ -17,13 +17,7 @@ export function Scene2() {
   }, []);
 
   return (
-    <motion.div
-      className="absolute inset-0 flex flex-col items-center p-12"
-      initial={{ opacity: 0, scale: 1.04 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-    >
+    <div className="absolute inset-0 flex flex-col items-center p-12">
       <div className="absolute top-12 text-center w-full z-20">
         <motion.h2
           initial={{ opacity: 0, filter: 'blur(8px)' }}
@@ -146,6 +140,6 @@ export function Scene2() {
           <span className="text-white font-bold">Marj da işte tam o boşluktan sızıyor.</span>
         </motion.p>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }

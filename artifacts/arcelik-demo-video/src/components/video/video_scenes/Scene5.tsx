@@ -15,13 +15,7 @@ export function Scene5() {
   }, []);
 
   return (
-    <motion.div
-      className="absolute inset-0 flex items-center justify-center bg-[#0B1B2E]"
-      initial={{ opacity: 0, scale: 1.03 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.99 }}
-      transition={{ duration: 0.7 }}
-    >
+    <div className="absolute inset-0 flex items-center justify-center bg-[#0B1B2E]">
       <div className="absolute inset-0 opacity-[0.35]">
         <img src={marketplaceImg} alt="" className="w-full h-full object-cover filter blur-xl" />
       </div>
@@ -82,6 +76,6 @@ export function Scene5() {
           </div>
         </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 }

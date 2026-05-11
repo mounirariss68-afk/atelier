@@ -26,13 +26,7 @@ export function Scene4() {
   ];
 
   return (
-    <motion.div 
-      className="absolute inset-0 flex flex-col items-center justify-center bg-[#0B1B2E]"
-      initial={{ opacity: 0, x: 100 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, scale: 1.1 }}
-      transition={{ duration: 1 }}
-    >
+    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0B1B2E]">
       
       {/* Agents Cockpit (Phase 1) */}
       <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-4 p-20 z-10">
@@ -152,6 +146,6 @@ export function Scene4() {
         </motion.div>
       </motion.div>
 
-    </motion.div>
+    </div>
   );
 }
