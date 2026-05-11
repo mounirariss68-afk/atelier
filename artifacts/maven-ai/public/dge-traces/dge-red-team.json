@@ -1,0 +1,13 @@
+{
+  "slug": "dge-red-team",
+  "success": [
+    { "id": "s1", "agent": { "en": "Triage Sentinel", "ar": "حارس الفرز" }, "surface": "operator", "label": { "en": "Incident timelined in 10s.", "ar": "تسلسل الحادث خلال 10 ثوانٍ." }, "hapa": ["H1", "H2"] },
+    { "id": "s2", "agent": { "en": "Workshop Architect", "ar": "مهندس الورشة" }, "surface": "operator", "label": { "en": "3-day workshop generated in 40 min.", "ar": "خطة 3 أيام خلال 40 دقيقة." }, "hapa": ["H6"] },
+    { "id": "s3", "agent": { "en": "Stakeholder Mapper", "ar": "خرائط أصحاب المصلحة" }, "surface": "operator", "label": { "en": "14 must-attend stakeholders mapped.", "ar": "تحديد 14 معنيّاً." }, "hapa": ["H4"] },
+    { "id": "s4", "agent": { "en": "Brief Writer", "ar": "كاتب الموجز" }, "surface": "operator", "label": { "en": "EN+AR kickoff briefs drafted.", "ar": "صياغة الموجزات بالعربية والإنجليزية." }, "hapa": ["H5"] },
+    { "id": "s5", "agent": { "en": "Human", "ar": "إنسان" }, "surface": "operator", "label": { "en": "Faisal authorised mobilisation.", "ar": "اعتمد فيصل الحشد." }, "hapa": ["H6"] }
+  ],
+  "blocked": [
+    { "id": "b1", "agent": { "en": "Workshop Architect", "ar": "مهندس الورشة" }, "surface": "operator", "label": { "en": "Public-holiday scheduling rejected.", "ar": "رفض الجدولة في عطلة." }, "hapa": ["H3"] }
+  ]
+}

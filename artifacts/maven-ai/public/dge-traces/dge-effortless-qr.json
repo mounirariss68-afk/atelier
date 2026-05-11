@@ -1,0 +1,13 @@
+{
+  "slug": "dge-effortless-qr",
+  "success": [
+    { "id": "s1", "agent": { "en": "QR Intake Sentinel", "ar": "حارس استلام QR" }, "surface": "citizen", "label": { "en": "Captured 400 mixed-language submissions.", "ar": "تم التقاط 400 ملاحظة." }, "hapa": ["H1", "H2"] },
+    { "id": "s2", "agent": { "en": "Quality Sentinel", "ar": "حارس الجودة" }, "surface": "operator", "label": { "en": "Filtered 11% noise with cited reasons.", "ar": "تصفية 11% ضوضاء مع الأسباب." }, "hapa": ["H4"] },
+    { "id": "s3", "agent": { "en": "Theme Sentinel", "ar": "حارس المواضيع" }, "surface": "operator", "label": { "en": "Clustered themes; queue-dispenser wait emerging.", "ar": "تجميع المواضيع؛ ناشئ: انتظار الطابور." }, "hapa": ["H1"] },
+    { "id": "s4", "agent": { "en": "Recognition Sentinel", "ar": "حارس التقدير" }, "surface": "operator", "label": { "en": "3 Effortless Maker candidates surfaced.", "ar": "إبراز 3 مرشّحين." }, "hapa": ["H6"] },
+    { "id": "s5", "agent": { "en": "Human", "ar": "إنسان" }, "surface": "operator", "label": { "en": "Saeed authorised Fatima A. nomination.", "ar": "اعتمد سعيد ترشيح فاطمة." }, "hapa": ["H6"] }
+  ],
+  "blocked": [
+    { "id": "b1", "agent": { "en": "Recognition Sentinel", "ar": "حارس التقدير" }, "surface": "operator", "label": { "en": "Nomination without citations — outcome: blocked.", "ar": "ترشيح بلا استشهاد — محظور." }, "hapa": ["H3", "H4"] }
+  ]
+}

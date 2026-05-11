@@ -24,6 +24,9 @@ import AssessmentsIndex from "@/pages/assessments/AssessmentsIndex";
 import AssessmentDetail from "@/pages/assessments/AssessmentDetail";
 import AssessmentResults from "@/pages/assessments/AssessmentResults";
 import TeamAssessment from "@/pages/assessments/TeamAssessment";
+import DgeHub from "@/pages/dge/DgeHub";
+import DgeAbout from "@/pages/dge/DgeAbout";
+import DgeMethod from "@/pages/dge/DgeMethod";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -63,6 +66,9 @@ function Router() {
           <Route path="/insights/:slug" component={InsightDetail} />
           <Route path="/industries" component={Industries} />
           <Route path="/marketplace" component={Marketplace} />
+          <Route path="/marketplace/dge-effortless" component={DgeHub} />
+          <Route path="/dge/about" component={DgeAbout} />
+          <Route path="/dge/method" component={DgeMethod} />
           {/* Catalogue redesign — redirect old slugs to new ones (or to /marketplace if dropped). */}
           <Route path="/marketplace/programme-health-copilot">{() => <Redirect to="/marketplace/programme-war-room" />}</Route>
           <Route path="/marketplace/citizen-services-agent">{() => <Redirect to="/marketplace/citizen-services-concierge" />}</Route>

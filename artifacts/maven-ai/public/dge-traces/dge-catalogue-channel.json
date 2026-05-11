@@ -1,0 +1,12 @@
+{
+  "slug": "dge-catalogue-channel",
+  "success": [
+    { "id": "s1", "agent": { "en": "Catalog Sentinel", "ar": "حارس الكتالوج" }, "surface": "operator", "label": { "en": "Drift detected on pharmacy licence fee.", "ar": "اكتشاف انحراف في رسم رخصة الصيدلة." }, "hapa": ["H1", "H2"], "citations": [{ "en": "DGE Circular 2026-04", "ar": "تعميم DGE 2026-04" }] },
+    { "id": "s2", "agent": { "en": "Validation Sentinel", "ar": "حارس التحقق" }, "surface": "operator", "label": { "en": "Schema check — no breaking changes.", "ar": "فحص المخطط — لا تغييرات مكسورة." }, "hapa": ["H4"] },
+    { "id": "s3", "agent": { "en": "Channel Sentinel", "ar": "حارس القناة" }, "surface": "governance", "label": { "en": "Proposed 105 → 55 email collapse.", "ar": "اقتراح طي 105 → 55 بريد." }, "hapa": ["H5", "H6"] },
+    { "id": "s4", "agent": { "en": "Human", "ar": "إنسان" }, "surface": "operator", "label": { "en": "Director Layla authorised publish to TAMM.", "ar": "اعتمدت المديرة ليلى النشر إلى TAMM." }, "hapa": ["H6"] }
+  ],
+  "blocked": [
+    { "id": "b1", "agent": { "en": "Catalog Sentinel", "ar": "حارس الكتالوج" }, "surface": "operator", "label": { "en": "Attempted push without citation — outcome: blocked.", "ar": "محاولة دفع دون استشهاد — النتيجة: محظور." }, "hapa": ["H3", "H4"] }
+  ]
+}

@@ -1,0 +1,122 @@
+/*
+ * DGE / TAMM / ADGE Design System tokens.
+ * Scoped to `.dge-theme` so the Maven AI marketing chrome is unaffected.
+ *
+ * Sources of truth:
+ *   - Abu Dhabi Government Design System (ADGE): warm-sand surface,
+ *     teal primary (#006A6A family), gold accent (#B98A4D family),
+ *     IBM Plex Sans Arabic primary type-face.  See the published
+ *     ADGE brand guidelines on the DGE / Abu Dhabi Government portal.
+ *   - TAMM mobile app (live citizen surface): paper card stack,
+ *     pill buttons, soft-sand drawer chrome.
+ *
+ * Tokens are mapped here against the published ADGE / TAMM colour
+ * roles (surface, ink, line, primary, accent, semantic) so the
+ * demonstrator stays visually consistent with the citizen surface
+ * Aisha sees in production.
+ */
+.dge-theme {
+  --dge-sand: #F5EFE6;
+  --dge-sand-soft: #FBF8F2;
+  --dge-paper: #FFFFFF;
+  --dge-ink: #1F2A2E;
+  --dge-ink-soft: #475259;
+  --dge-mute: #8A9499;
+  --dge-line: #E5DFD3;
+
+  --dge-teal: #006A6A;
+  --dge-teal-deep: #024F4F;
+  --dge-teal-soft: #E1F2EE;
+
+  --dge-gold: #B98A4D;
+  --dge-gold-soft: #F1E3CD;
+
+  --dge-success: #2F7A4D;
+  --dge-warn: #B6741D;
+  --dge-danger: #B23A3A;
+  --dge-info: #2C6CA8;
+
+  --dge-radius-sm: 10px;
+  --dge-radius-md: 14px;
+  --dge-radius-lg: 20px;
+
+  --dge-shadow-sm: 0 1px 2px rgba(15, 32, 39, 0.05);
+  --dge-shadow-md: 0 6px 24px rgba(15, 32, 39, 0.08);
+
+  font-family: "IBM Plex Sans Arabic", "Inter", system-ui, -apple-system,
+    "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: var(--dge-sand);
+  color: var(--dge-ink);
+}
+
+.dge-theme[dir="rtl"] {
+  font-family: "IBM Plex Sans Arabic", "Cairo", "Frutiger Arabic",
+    "Tahoma", sans-serif;
+}
+
+.dge-theme .dge-card {
+  background: var(--dge-paper);
+  border: 1px solid var(--dge-line);
+  border-radius: var(--dge-radius-md);
+  box-shadow: var(--dge-shadow-sm);
+}
+
+.dge-theme .dge-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: background-color 0.15s ease, transform 0.05s ease;
+}
+.dge-theme .dge-btn-primary {
+  background: var(--dge-teal);
+  color: white;
+}
+.dge-theme .dge-btn-primary:hover {
+  background: var(--dge-teal-deep);
+}
+.dge-theme .dge-btn-ghost {
+  background: transparent;
+  color: var(--dge-teal);
+  border: 1px solid var(--dge-line);
+}
+
+.dge-theme .dge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--dge-teal-soft);
+  color: var(--dge-teal-deep);
+  border: 1px solid rgba(0, 106, 106, 0.18);
+}
+
+.dge-theme .dge-watermark {
+  position: fixed;
+  bottom: 14px;
+  right: 18px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(31, 42, 46, 0.35);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 42, 46, 0.08);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  z-index: 70;
+}
+
+.dge-theme[dir="rtl"] .dge-watermark {
+  right: auto;
+  left: 18px;
+}

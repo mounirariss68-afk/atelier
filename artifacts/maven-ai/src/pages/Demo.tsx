@@ -26,11 +26,19 @@ import OfficerConsole from "@/components/demo/citizen-services/OfficerConsole";
 import { CscDemoLangProvider } from "@/components/demo/citizen-services/DemoLangContext";
 import { CitizenServicesDataProvider } from "@/hooks/useCitizenServicesData";
 import { CscToastProvider } from "@/components/demo/citizen-services/ToastContext";
+import DgeShell from "@/components/demo/dge/_shell/DgeShell";
+import { getDgeDemo } from "@/data/dge/demos";
 
 export default function Demo() {
   const params = useParams();
   const slug = (params as { slug?: string }).slug ?? "";
   const variant = (params as { variant?: string }).variant;
+
+  // DGE Effortless 2.0 — six demos rendered through the shared TAMM/ADGE shell.
+  if (slug.startsWith("dge-")) {
+    const dge = getDgeDemo(slug);
+    if (dge) return <DgeShell demo={dge} />;
+  }
 
   if (slug === "arcelik-fiyat-istihbarati" && variant === "dashboard") {
     return (
