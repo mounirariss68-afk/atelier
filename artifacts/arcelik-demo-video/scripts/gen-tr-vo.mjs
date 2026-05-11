@@ -35,25 +35,24 @@ const client = new OpenAI({
 });
 
 const SYSTEM = [
-  'You are narrating a short product story to a colleague over coffee, in Turkish.',
-  'You are a warm, smiling Turkish woman in your early thirties -- think a friendly product manager, NOT a corporate voice-over actor.',
-  'Tone: casual, conversational, a little playful. Like you actually believe what you are saying.',
-  'Pacing: roughly 135 words per minute. Slow down on the punchlines. Take a real breath between sentences.',
-  'Use natural prosody: lift the pitch on questions, drop it on the closing line, smile audibly on the friendly bits ("kahvesini almadan", "tek bir orkestra gibi").',
-  'Where you see "..." pause briefly. Where you see "—" pause a touch longer.',
-  'Do NOT sound like a TV commercial. Do NOT over-articulate. Soften the consonants the way someone speaking to a friend would.',
+  'You are a Turkish woman in her early thirties chatting with a colleague over coffee about a product you actually use and like.',
+  'Speak the way real people talk in a relaxed work conversation -- NOT like a voice-over, narrator, or TV commercial.',
+  'Pacing: brisk and natural, around 165-175 words per minute. Glide from one sentence into the next; do NOT leave noticeable gaps between sentences. Treat full stops as a tiny breath, not a pause.',
+  'Sentences should feel connected -- string them together with the same energy, the way someone telling a story does.',
+  'Prosody: light, smiling, slightly upward energy. Lift on questions, gentle drop on the closing line. No dramatic pauses, no over-articulation.',
+  'Treat "..." as the briefest natural beat (just a comma-length breath). Treat "—" as a soft connector, not a long stop.',
+  'Soften consonants like casual conversational Turkish (e.g. natural elision between words). Do not sound formal.',
   'Read the Turkish text verbatim. Do not add or remove words.',
 ].join(' ');
 
-// Casual, "talking to a friend" rewrite. Uses contractions ("bi", "diye"),
-// rhetorical asides ("biliyor musunuz", "düşünün bir"), shorter sentences,
-// and softens the corporate phrasing.
+// Casual, "talking to a friend" copy. Pause markers ("..." and "—") are kept
+// minimal so the model glides through sentences instead of stopping.
 const SCRIPTS = {
-  situation: `Türkiye'de beyaz eşya pazarı... her hafta yeniden kurulup duruyor. Hepsiburada, Trendyol, Akakçe, n11 — binlerce fiyat, gün içinde oynayıp duruyor. Ve her pazartesi sabahı, ekibiniz aynı soruyla uyanıyor: "Bugün rakipler nerede?"`,
-  complication: `Şimdi düşünün bir... Bir analist oturup veriyi toparlayana kadar, rakip çoktan kampanyaya girmiş oluyor. Sonuç ortada — marj eriyor, bayilerin telefonu susmuyor, kararlar hep bir adım geriden geliyor. Açıkçası fiyatlandırma artık ekipten hızlı.`,
-  resolution1: `İşte tam burada Maven AI işin içine giriyor. Düşünün, pazartesi sabahı saat altıyı çeyrek geçiyor. Siz daha kahveyi almadan, Fiyat İzleme Ajanı gece olanları çoktan görmüş. Vestel, İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş — bildirim ekranınızda hazır.`,
-  resolution2: `Altı tane uzman ajan var... ve hepsi tek bir orkestra gibi çalışıyor. Talebi tahmin ediyor, rakibi okuyor, kampanyayı kuruyor, bayiyle konuşuyor — saniyeler içinde. Siz "onayla" dediğinizde, üç bin bayiye yeni liste anında düşüyor. POS görselleri kendiliğinden güncelleniyor.`,
-  closing: `Beş günlük döngü... iki saate indi. Yirmi şehir, üç bin bayi, tek bir karar odası. Maven AI — Arçelik için fiyat istihbaratı.`,
+  situation: `Türkiye'de beyaz eşya pazarı her hafta yeniden kuruluyor. Hepsiburada, Trendyol, Akakçe, n11, hepsinde binlerce fiyat gün içinde oynuyor. Ve her pazartesi sabahı ekibiniz aynı soruyla uyanıyor: bugün rakipler nerede?`,
+  complication: `Bir analist oturup veriyi toparlayana kadar rakip çoktan kampanyaya girmiş oluyor. Sonuç ortada, marj eriyor, bayilerin telefonu susmuyor, kararlar hep bir adım geriden geliyor. Açıkçası fiyatlandırma artık ekipten hızlı.`,
+  resolution1: `İşte tam burada Maven AI işin içine giriyor. Pazartesi sabahı saat altıyı çeyrek geçiyor, siz daha kahveyi almadan Fiyat İzleme Ajanı gece olanları çoktan görmüş. Vestel İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş, bildirim ekranınızda hazır.`,
+  resolution2: `Altı uzman ajan var ve hepsi tek bir orkestra gibi çalışıyor. Talebi tahmin ediyor, rakibi okuyor, kampanyayı kuruyor, bayiyle konuşuyor, hepsi saniyeler içinde. Siz onayla dediğinizde üç bin bayiye yeni liste anında düşüyor, POS görselleri kendiliğinden güncelleniyor.`,
+  closing: `Beş günlük döngü iki saate indi. Yirmi şehir, üç bin bayi, tek bir karar odası. Maven AI, Arçelik için fiyat istihbaratı.`,
 };
 
 async function generate(key, text) {
