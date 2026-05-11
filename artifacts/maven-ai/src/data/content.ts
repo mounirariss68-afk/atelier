@@ -5130,55 +5130,55 @@ export const insights = [
 <p>The practical implication is that blended approaches are not a compromise—they are a credible strategy for reporting to boards with multiple constituencies. The C-suite sponsor gets the asset-led quick wins (visible value on day 90) to defend the AI budget; the operational sponsor gets the project-led foundation work (data, governance, core platform) that enables those quick wins to scale. The reporting cadence is: 90 days (first Marketplace agent in production), 180 days (second and third agents live, first project-led MVP approaching), 365 days (project-led system handed to operations, asset-led tools scaling across business units). This narrative is easier to maintain—and more credible to a board—than either "we will spend six months building a system" or "we will use a tool and call it transformation."</p>
 
 <figure>
-  <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-46 svg-d-46"><title id="svg-t-46">Maven AI diagram 46</title><desc id="svg-d-46">Maven AI diagram 46</desc>
+  <svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svg-t-46 svg-d-46"><title id="svg-t-46">Decision matrix: project-led vs asset-led delivery</title><desc id="svg-d-46">A 2x2 matrix mapping starting recommendations against problem specificity (generic to bespoke) on the X axis and sponsorship and AI maturity (low to high) on the Y axis. The four quadrants are asset-led start, project-led discovery, asset-led at scale, and project-led transformation.</desc>
     <!-- Background -->
-    <rect width="700" height="240" fill="#FAFBFC"/>
-    
-    <!-- Grid lines -->
-    <line x1="50" y1="30" x2="50" y2="210" stroke="#E5E7EB" stroke-width="1"/>
-    <line x1="50" y1="210" x2="680" y2="210" stroke="#E5E7EB" stroke-width="1"/>
-    
-    <!-- Axis labels -->
-    <text x="25" y="120" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">Sponsorship &amp;</text>
-    <text x="25" y="133" font-size="11" font-weight="600" fill="#0E2841" text-anchor="end">AI Maturity</text>
-    
-    <text x="365" y="228" font-size="11" font-weight="600" fill="#0E2841" text-anchor="middle">Problem Specificity →</text>
-    
-    <!-- Quadrant 1: Asset-led (Low maturity, Generic) -->
-    <rect x="70" y="50" width="260" height="150" fill="#F5A623" fill-opacity="0.08" stroke="#F5A623" stroke-width="2"/>
-    <text x="85" y="70" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">ASSET-LED START</text>
-    <text x="85" y="95" font-size="12" font-weight="600" fill="#0E2841">Quick proof of concept</text>
-    <text x="85" y="111" font-size="10" fill="#4B5563">Marketplace tool in one function</text>
-    <text x="85" y="126" font-size="10" fill="#4B5563">8–12 weeks to first output</text>
-    <text x="85" y="141" font-size="10" fill="#4B5563">Build board confidence</text>
-    <text x="85" y="156" font-size="10" fill="#4B5563">Lower budget gate; functional sponsor</text>
-    <text x="85" y="171" font-size="10" fill="#4B5563">Iterate and scale if validated</text>
-    
-    <!-- Quadrant 2: Project-led (Low maturity, Bespoke) -->
-    <rect x="370" y="50" width="260" height="150" fill="#1A4F7A" fill-opacity="0.08" stroke="#1A4F7A" stroke-width="2"/>
-    <text x="385" y="70" font-size="10" font-weight="700" fill="#1A4F7A" letter-spacing="1">PROJECT-LED DISCOVERY</text>
-    <text x="385" y="95" font-size="12" font-weight="600" fill="#0E2841">Foundation-first approach</text>
-    <text x="385" y="111" font-size="10" fill="#4B5563">Value-case sprint + data audit</text>
-    <text x="385" y="126" font-size="10" fill="#4B5563">Identify true problem scope</text>
-    <text x="385" y="141" font-size="10" fill="#4B5563">Build governance &amp; pipelines</text>
-    <text x="385" y="156" font-size="10" fill="#4B5563">C-suite sponsorship required</text>
-    <text x="385" y="171" font-size="10" fill="#4B5563">Surfaces use cases for asset rollout</text>
-    
-    <!-- Quadrant 3: Asset scale (High maturity, Generic) -->
-    <rect x="70" y="180" width="260" height="40" fill="#F5A623" fill-opacity="0.12" stroke="#F5A623" stroke-width="2"/>
-    <text x="85" y="200" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">ASSET-LED AT SCALE</text>
-    <text x="85" y="215" font-size="10" fill="#4B5563">Roll tools across business units; fund next wave from savings</text>
-    
-    <!-- Quadrant 4: Project transform (High maturity, Bespoke) -->
-    <rect x="370" y="180" width="260" height="40" fill="#156082" fill-opacity="0.12" stroke="#156082" stroke-width="2"/>
-    <text x="385" y="200" font-size="10" font-weight="700" fill="#156082" letter-spacing="1">PROJECT-LED TRANSFORMATION</text>
-    <text x="385" y="215" font-size="10" fill="#4B5563">Custom build + operating-model reengineering; change muscle required</text>
-    
-    <!-- Arrow labels -->
-    <text x="35" y="85" font-size="10" fill="#4B5563" font-style="italic">Low</text>
-    <text x="15" y="175" font-size="10" fill="#4B5563" font-style="italic">High</text>
-    <text x="75" y="220" font-size="10" fill="#4B5563" font-style="italic">Generic</text>
-    <text x="630" y="220" font-size="10" fill="#4B5563" font-style="italic">Bespoke</text>
+    <rect width="760" height="430" fill="#FAFBFC"/>
+
+    <!-- Y axis title (rotated) -->
+    <text font-size="11" font-weight="600" fill="#0E2841" text-anchor="middle" transform="translate(22 200) rotate(-90)">Sponsorship &amp; AI Maturity →</text>
+
+    <!-- Y axis endpoint markers (aligned to row centres) -->
+    <text x="95" y="112" font-size="10" fill="#4B5563" font-style="italic" text-anchor="end">Low</text>
+    <text x="95" y="287" font-size="10" fill="#4B5563" font-style="italic" text-anchor="end">High</text>
+
+    <!-- Quadrant 1 (top-left): Low maturity, Generic — ASSET-LED START -->
+    <rect x="110" y="30" width="305" height="155" fill="#F5A623" fill-opacity="0.08" stroke="#F5A623" stroke-width="2" rx="4"/>
+    <text x="125" y="50" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">ASSET-LED START</text>
+    <text x="125" y="72" font-size="12" font-weight="600" fill="#0E2841">Quick proof of concept</text>
+    <text x="125" y="92" font-size="10" fill="#4B5563">Marketplace tool in one function</text>
+    <text x="125" y="108" font-size="10" fill="#4B5563">8–12 weeks to first output</text>
+    <text x="125" y="124" font-size="10" fill="#4B5563">Build board confidence</text>
+    <text x="125" y="140" font-size="10" fill="#4B5563">Lower budget gate; functional sponsor</text>
+    <text x="125" y="156" font-size="10" fill="#4B5563">Iterate and scale if validated</text>
+
+    <!-- Quadrant 2 (top-right): Low maturity, Bespoke — PROJECT-LED DISCOVERY -->
+    <rect x="435" y="30" width="305" height="155" fill="#1A4F7A" fill-opacity="0.08" stroke="#1A4F7A" stroke-width="2" rx="4"/>
+    <text x="450" y="50" font-size="10" font-weight="700" fill="#1A4F7A" letter-spacing="1">PROJECT-LED DISCOVERY</text>
+    <text x="450" y="72" font-size="12" font-weight="600" fill="#0E2841">Foundation-first approach</text>
+    <text x="450" y="92" font-size="10" fill="#4B5563">Value-case sprint + data audit</text>
+    <text x="450" y="108" font-size="10" fill="#4B5563">Identify true problem scope</text>
+    <text x="450" y="124" font-size="10" fill="#4B5563">Build governance &amp; pipelines</text>
+    <text x="450" y="140" font-size="10" fill="#4B5563">C-suite sponsorship required</text>
+    <text x="450" y="156" font-size="10" fill="#4B5563">Surfaces use cases for asset rollout</text>
+
+    <!-- Quadrant 3 (bottom-left): High maturity, Generic — ASSET-LED AT SCALE -->
+    <rect x="110" y="205" width="305" height="155" fill="#F5A623" fill-opacity="0.12" stroke="#F5A623" stroke-width="2" rx="4"/>
+    <text x="125" y="225" font-size="10" font-weight="700" fill="#F5A623" letter-spacing="1">ASSET-LED AT SCALE</text>
+    <text x="125" y="247" font-size="10" fill="#4B5563">Roll tools across business units;</text>
+    <text x="125" y="263" font-size="10" fill="#4B5563">fund next wave from savings</text>
+
+    <!-- Quadrant 4 (bottom-right): High maturity, Bespoke — PROJECT-LED TRANSFORMATION -->
+    <rect x="435" y="205" width="305" height="155" fill="#156082" fill-opacity="0.12" stroke="#156082" stroke-width="2" rx="4"/>
+    <text x="450" y="225" font-size="10" font-weight="700" fill="#156082" letter-spacing="1">PROJECT-LED TRANSFORMATION</text>
+    <text x="450" y="247" font-size="10" fill="#4B5563">Custom build + operating-model</text>
+    <text x="450" y="263" font-size="10" fill="#4B5563">reengineering; change muscle required</text>
+
+    <!-- X axis endpoint markers (below quadrants) -->
+    <text x="262" y="382" font-size="10" fill="#4B5563" font-style="italic" text-anchor="middle">Generic</text>
+    <text x="587" y="382" font-size="10" fill="#4B5563" font-style="italic" text-anchor="middle">Bespoke</text>
+
+    <!-- X axis title -->
+    <text x="425" y="412" font-size="11" font-weight="600" fill="#0E2841" text-anchor="middle">Problem Specificity →</text>
   </svg>
   <figcaption><strong>Figure 1:</strong> The Maven decision matrix for project-led versus asset-led delivery in GCC contexts. The two axes—problem specificity and organizational maturity—yield four starting recommendations. Most engagements begin in one quadrant and migrate through others over 12–24 months as maturity increases and use-case specificity sharpens.</figcaption>
 </figure>
