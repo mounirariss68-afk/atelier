@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "zTyLZ6eSWywU6HZqSOOQa"
@@ -102,3 +101,9 @@ id = "m8xdLQ0a2z1Gi2oVzIRBj"
 uri = "file://artifacts/maven-ai/public/images/report-industry-automotive.png"
 type = "image"
 title = "report cover automotive"
+
+[[outputs]]
+id = "5x0h6JPvS_fK_80uoaR6h"
+uri = "file://.local/deliverables/arcelik-demo-video-script.md"
+type = "text"
+title = "Arçelik Demo Video Script (Situation → Complication → Resolution)"
