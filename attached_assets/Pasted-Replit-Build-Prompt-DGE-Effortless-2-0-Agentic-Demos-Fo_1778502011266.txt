@@ -1,0 +1,469 @@
+Replit Build Prompt — DGE Effortless 2.0 Agentic Demos
+For: Department of Government Enablement (DGE), Abu Dhabi
+Pitch context: Publicis Sapient response to RFP "Effortless 2.0" (RFQ 246105000291) and "Effortless Services Redesign" (RFQ 246105000288)
+Built by: Maven AI marketplace standard
+Demo target audience: H.E. Ahmed Tamim Hisham Al Kuttab and the DGE CX leadership; Director General of CX in Abu Dhabi; Executive Director of Design; Executive Director of Strategy
+
+How to use this document
+Paste everything below the line <<<REPLIT PROMPT BEGINS>>> into Replit's AI Agent / "Build an App" prompt. The agent will scaffold one repository containing six runnable demos that share a single brand shell, navigation, governance overlay, and agent runtime. Each demo is independently routable so it can be opened on its own URL during a client meeting.
+Defaults assumed (override at the top of the prompt before pasting if you want different choices):
+
+Visual standard: derived from the live Maven AI website (deep navy + gold, Manrope + Fraunces + JetBrains Mono). The marketplace structure is defined fresh in this prompt, optimized for government CX demos (Citizen view + Operator view + Governance view per demo).
+Demo realism: mock data + real LLM calls (OpenAI by default, swappable to Anthropic or Azure OpenAI via env var). All "DGE data" is synthetic and clearly watermarked.
+Tech stack: Next.js 14 (App Router) + TypeScript + Tailwind + shadcn/ui + Vercel AI SDK for streaming. Single Replit repl, deployable to Replit Deployments or Vercel.
+Bilingual: every UI string in EN + AR, with RTL toggle. Arabic is required for credibility with DGE.
+
+
+<<<REPLIT PROMPT BEGINS>>>
+Project: DGE Agentic CX Demonstrator (Maven AI Marketplace Standard)
+You are the lead engineer building a polished, client-ready agentic CX demonstrator for the Department of Government Enablement (DGE), Abu Dhabi. The demonstrator will be shown in a 60–90 minute working session to DGE's CX leadership. Every interaction must feel like a real, governed, AI-native government workflow — not a chatbot demo.
+This single Replit project hosts a demo shell (the Maven AI Marketplace standard) and six self-contained demos that plug into that shell. Build the shell first, then build the demos one at a time in the order listed.
+0. Non-negotiable principles (apply to every screen)
+
+Human authority is sovereign. Every consequential action shows a named human as the decider, with a clearly labelled "AUTHORIZE" button. Agents prepare; humans commit. Never let an agent send, publish, close, delete, or commit anything without an explicit human click that is logged with name + timestamp + rationale.
+Always show what the agent is doing in the background. Each agent run renders a live "Agent activity" panel: which sub-agent is running, what evidence it pulled, what confidence score, what was blocked by guardrails. This is the heart of the demo — not the chat bubble.
+Audit trail is a first-class UI. Every demo has an "Audit" tab that shows the immutable record of every input, decision, override, and citation in chronological order. Make it look like a system of record, not a debug log.
+Bilingual by construction. EN and AR strings in the same translation file. RTL flips the entire layout, not just text. Default language is English; AR toggle persists in localStorage.
+Watermark everything. A subtle "Demonstration · Synthetic Data" badge sits in the top-right of every screen. No real DGE/TAMM data is used or claimed.
+Never hallucinate authority. If a citation, source, or policy isn't in the seeded fixtures, the agent must say "I don't have an authoritative source for this — would you like me to flag this for human review?" and trigger an escalation card.
+
+
+1. The Maven AI Marketplace Demo Standard (the shell)
+Every demo plugs into this shell so future demos look and behave the same way.
+1.1 Brand / visual system
+Use Tailwind with these CSS variables defined in globals.css:
+css:root {
+  --bg:           #0E1F3D;   /* deep navy */
+  --bg-deep:      #091428;
+  --bg-elevate:   #15294A;
+  --bg-elevate-2: #1D3559;
+  --border:       #243F66;
+  --border-soft:  rgba(255,255,255,0.06);
+  --text:         #F1EEE6;   /* warm cream */
+  --text-mute:    #8FA3C0;
+  --text-faint:   #5E708A;
+  --gold:         #E89E2C;   /* Maven gold */
+  --gold-soft:    #F4BC65;
+  --gold-deep:    #B47817;
+  --success:      #4ADE80;
+  --warn:         #F4BC65;
+  --danger:       #F87171;
+  --grid-line:    rgba(255,255,255,0.025);
+  --shadow:       0 30px 60px -20px rgba(0,0,0,0.5);
+  --radius:       4px;
+  --radius-lg:    8px;
+  --container:    1240px;
+  --ease:         cubic-bezier(0.22, 1, 0.36, 1);
+}
+Fonts (load from Google Fonts in layout.tsx):
+
+Manrope 300/400/500/600/700/800 — body and headings.
+Fraunces italic — used only for accent words inside headings (e.g., the word "reimagined" in gold italic).
+JetBrains Mono — eyebrow labels, audit log entries, agent telemetry.
+
+Layout signatures:
+
+12-column faint vertical grid lines as a global background.
+Subtle SVG noise overlay at 4.5% opacity.
+Eyebrow labels in JetBrains Mono uppercase 11px with a gold leading rule.
+Section pattern: eyebrow → big headline (clamp 48–92px) → italic accent word in gold → 540px lede with a 2px gold left border.
+Cards: --bg-elevate background, 1px --border border, 8px radius, 30/60 shadow.
+All buttons: 999px pill, 14px label, 16/28 padding, gold-outlined hover.
+
+1.2 Information architecture
+/                       → Marketplace landing (grid of the 6 demos)
+/demo/[slug]            → Individual demo shell (3 tabs: Citizen | Operator | Governance)
+/demo/[slug]/audit      → Audit log for that demo
+/about                  → Maven AI + Publicis Sapient + DGE Agent Ecosystem narrative
+/method                 → "How agents work" (HAPA, Behavioural Contract, UX Authority Contract)
+The marketplace landing shows each demo as a card with: demo number, title in EN+AR, one-line value prop, primary KPI delta (e.g., "−68% complaint cycle time"), and the agent stack used (e.g., "Catalog Sentinel + Validation Sentinel"). Hover reveals a 30-word descriptor.
+1.3 Demo shell layout (used by all six demos)
+Three persistent tabs across the top of every demo:
+
+CITIZEN — what the resident/business sees in TAMM Spaces / app / call centre.
+OPERATOR — what the DGE/entity employee sees in the CX Hub.
+GOVERNANCE — what the DGE oversight body sees: agent activity, HAPA contract status, audit trail, KPI dashboard.
+
+Right-side persistent panel (collapsible): Agent Activity Stream. Renders sub-agent steps as they happen, each with:
+
+Agent name (e.g., "Catalog Sentinel")
+Action (e.g., "Validating service field 'fee' against entity policy")
+Confidence (GREEN/AMBER/RED chip)
+Evidence count (clickable → opens evidence drawer with citations)
+Status: running / completed / blocked / escalated
+
+Bottom-right floating control: language toggle (EN | عربي), demo speed slider (1× / 2× / 4× — controls simulated agent latency), and "Reset demo" button.
+Top-right: persona switcher (e.g., Citizen Aisha / Operator Khalid / Governance Director Layla). This drives what each tab shows.
+1.4 Governance overlay (HAPA — Human Authority Protection Architecture)
+A persistent component visible on every Operator and Governance screen. Six chips representing HAPA elements (H1–H6 from the Publicis Sapient deck):
+
+H1 Human Authority Preservation — show as ✓ when current action requires human commit.
+H2 Decision Envelope — shows whether current step is recommend / permissioned-execute / never-decide.
+H3 Behavioural Contract — shows enforcement count: "0 violations attempted in this session."
+H4 UX Authority Contract — shows that all SEND/PUBLISH/COMMIT actions are gated.
+H5 UI authority ladder — shows the active authority level.
+H6 Human checkpoints — shows the named human accountable for the next checkpoint.
+
+Click any chip → opens a side drawer explaining the contract clause and linking to the EU AI Act article it satisfies (Art 9, 11, 13, 14, 17, etc., from the Publicis Sapient HAPA mapping table).
+1.5 Agent runtime (shared)
+Build a single AgentRunner class in lib/agents/runner.ts that:
+
+Accepts an agent definition ({ name, systemPrompt, tools, behaviouralContract, uxAuthorityContract }).
+Streams its work to the Agent Activity Stream via Server-Sent Events.
+Logs every step to a typed AuditEvent[] store (in-memory for the demo, with a clear "Persist to Postgres" comment for production).
+Enforces the behaviouralContract.mustNever list at the runner level — even if the LLM tries to call a forbidden tool, the runner blocks it and logs the attempt.
+Exposes a requireHumanAuthorisation(intent) helper that pauses the agent and surfaces an "AUTHORIZE" card in the Operator tab. The agent does not advance until a human clicks.
+
+Use the Vercel AI SDK (ai and @ai-sdk/openai) for streaming. The default model is gpt-4o-mini. Read the model and provider from process.env.DEMO_MODEL and process.env.DEMO_PROVIDER so it can be swapped to Anthropic (claude-sonnet-4-6) or Azure OpenAI without code changes.
+Provide a fallback: if no API key is present, the runner replays a pre-recorded JSON trace per demo so the demo still works offline. Pre-record one canonical successful trace and one canonical "guardrail blocked" trace per demo.
+1.6 The Eight Agentic Factories (model these as the agent registry)
+Define these eight factories in lib/agents/factories.ts. Each demo activates one or more factories. This mirrors the Publicis Sapient deck.
+#FactoryPurposeUsed by demosF1Hub Service RedesignResearch → As-Is journey → To-Be journey → blueprint → action planDemo 5F2Spokes ReviewReviews spoke service designs against principlesDemo 6F3Life & Journey MomentsCross-service journey design (14 life moments)Demo 5F4TAMM Spaces CompositionUpdates 7 thematic one-stop-shopsDemo 5F5PrototypingWireframes, hi-fi mockups, design system enforcementDemo 5F6Workshopping & FacilitationPlans/runs/documents 400 workshop daysDemo 5, Demo 6F7Cataloguing & ChannelCatalogue currency, channel rationalisationDemo 1F8Recovery & QAComplaint root-cause, mystery shopper, perception surveys, QR feedbackDemo 2, Demo 3
+Each factory has named sub-agents ("Sentinels"). Every Sentinel has a 4-line system prompt, a tool list, a behavioural contract (MAY / MAY ONLY WITH HUMAN / MUST NEVER), and a UX authority contract.
+1.7 The "Sapient Bodhi" orchestrator (cosmetic, but important for narrative)
+The deck references Sapient Bodhi as the orchestration layer and Sapient Sustain for operational telemetry, with Falcon-Arabic / Falcon-H1 (TII) as preferred models for Arabic content, and Azure UAE-North + Core42 sovereign cloud for hosting. Reflect this in the Governance tab's "Stack" panel:
+Orchestration:    Sapient Bodhi
+Telemetry:        Sapient Sustain
+Model (EN):       GPT-4o-mini (demo) → Claude Sonnet 4.6 in production
+Model (AR):       Falcon-Arabic / Falcon-H1 (TII)
+Hosting:          Azure UAE-North · Core42 sovereign cloud
+System of Record: DGE CX Hub (immutable audit + blueprints + journeys)
+This is a static panel for the demo — no real Falcon integration needed — but it must be visible and credible.
+
+2. The six demos
+Build them in this order. Each demo lives at app/demo/[slug]/page.tsx. Each demo is a self-contained scenario with a 3–5 minute runtime when played at 1× speed.
+Demo 1 — Catalogue & Channel Sentinel
+Slug: catalogue-channel
+Factory: F7
+Sub-agents: Catalog Sentinel, Channel Sentinel, Validation Sentinel, Migration Sentinel
+RFP coverage: Effortless 2.0 — Cataloguing (a) and Channel Optimization (b)
+Scenario seeded into the demo:
+
+2,500 services across 55 entities (use a synthetic JSON file with 50 representative services so the UI feels real but loads fast).
+400 channels: 38 service centres, 76 websites, 86 call centres, 51 apps, 105 emails.
+Three "drift events" occur during the demo:
+
+Department of Health updates a fee for service "Renew Pharmacist Licence" but doesn't update the catalogue.
+A new entity ("Abu Dhabi Quality and Conformity Council") wants to onboard 12 services into TAMM.
+The 105 entity emails need to be rationalised to 1-per-entity.
+
+
+
+Citizen tab: A TAMM Spaces mockup. Resident Aisha searches "renew pharmacy licence" and sees an outdated fee. The demo highlights the gap.
+Operator tab: The CX Hub showing Catalog Sentinel detecting the drift, drafting an updated catalogue entry, and waiting for the operator (Khalid, Catalogue Steward) to authorise the change. Show the diff. Show the citation (the entity's policy circular). Khalid clicks AUTHORIZE → catalogue updates → Citizen tab now shows the correct fee.
+Governance tab: Channel rationalisation board. Channel Sentinel proposes consolidating 105 emails → 55 (one per entity). Show a Sankey of the proposed migration. Migration Sentinel simulates impact ("8,400 monthly inbound emails reroute, average response time projected −36%"). Director Layla authorises.
+KPIs to render:
+
+Catalogue freshness: 91% → 99.4% (live ticker as drift is resolved).
+Channel count: 400 → 273 in plan.
+Time-to-update a service entry: 14 days → 6 minutes.
+
+Behavioural contract for Catalog Sentinel:
+
+MAY: detect drift, parse policy circulars, draft catalogue updates, generate diffs, propose taxonomy fixes.
+MAY ONLY WITH HUMAN: publish a catalogue update to the live TAMM index.
+MUST NEVER: edit a catalogue entry without a citation; merge or split entities; change pricing without an entity-confirmed source.
+
+
+Demo 2 — Complaint Recovery & Root-Cause Engine
+Slug: complaint-recovery
+Factory: F8
+Sub-agents: Intake Sentinel, Root-Cause Sentinel, Mystery Shopper Sentinel, Perception Survey Sentinel, Recovery Designer
+RFP coverage: Effortless 2.0 — Design for Recovery (c)
+Scenario seeded:
+
+200 synthetic complaints (last 90 days) across 5 entities, with 4 recurring root-cause clusters.
+One mystery-shopper visit transcript per cluster.
+Two perception surveys (pre and post a previous recovery intervention) to show trendline analysis.
+
+Citizen tab: Resident Omar files a complaint via TAMM about a delayed permit. The Intake Sentinel acknowledges in 8 seconds, classifies it, surfaces the policy SLA, and offers three resolution paths. Omar selects one. The case is logged.
+Operator tab: Complaints Manager Mariam sees a Root-Cause Sentinel cluster view: 47 of the 200 complaints share a root cause ("inspection scheduling tool misroutes after 6pm"). The Sentinel drafts a Complaint Elimination Programme (CEP) workshop brief: governance model, team selection, root-cause analysis tool selection, 3-day workshop agenda, and the 5 pilot cases to attack. Mariam reviews and clicks AUTHORIZE LAUNCH.
+Governance tab: Unified Complaint Management Manual draft (synthetic) — definitions, categories, workflows, escalation protocols, SLA timelines, closure standards, KPIs. Director Layla sees a "Manual coverage" heatmap across the 20+ ADGE complaint systems and the gaps the Sentinel found. Mystery Shopper checklist auto-generated for the next cycle. Perception survey results visualised as before/after.
+KPIs:
+
+Average complaint cycle time: 11 days → 3.5 days.
+Repeat complaints (same root cause within 60 days): 22% → 6%.
+Mystery shopper coverage: 35% of outlets → 100%.
+
+Behavioural contract for Recovery Designer:
+
+MAY: cluster complaints, draft CEP frameworks, propose root-cause hypotheses, generate workshop briefs, analyse perception surveys, draft mystery-shopper scenarios.
+MAY ONLY WITH HUMAN: send any communication to a citizen; close a complaint; escalate to an entity head.
+MUST NEVER: alter complaint records post-decision; modify SLA definitions; re-categorise an entity's complaint type without entity sign-off.
+
+
+Demo 3 — Effortless QR Feedback & "Effortless Makers"
+Slug: effortless-qr
+Factory: F8
+Sub-agents: QR Intake Sentinel, Quality Sentinel (validates qualitative inputs), Theme Sentinel, Recognition Sentinel, Insight Sentinel
+RFP coverage: Effortless 2.0 — Effortless QR (d)
+Scenario seeded:
+
+400 synthetic QR submissions across 20 outlets (mix of EN and AR, mix of high-quality narrative feedback and noise/spam).
+12 named frontline employees with feedback mentioning them by name.
+
+Citizen tab: Resident scans a QR at "TAMM Service Centre — Yas Mall". Mobile-optimised form with one open question: "Tell us about your experience today." Voice input supported. AR keyboard with RTL. Submit → instant thank-you with a humane micro-interaction.
+Operator tab: Outlet manager Saeed sees today's submissions clustered into themes by Theme Sentinel. Quality Sentinel has filtered 11% as noise/spam (with "review reason" expandable per item). Recognition Sentinel surfaces 3 candidates for "Effortless Maker of the Week" with the citation snippets that nominated them. Saeed clicks AUTHORIZE NOMINATION on one.
+Governance tab: The CX Affairs dashboard. Insight Sentinel renders a heatmap of experience drivers per outlet, top emerging themes (with sentiment + memorability score + emotional cue tags), an "Effortless Makers" leaderboard, and a feed of monthly recommendations. Director Layla exports the monthly report to PDF (mocked PDF).
+KPIs:
+
+Qualitative submission volume: 0 → 2,800/week (post-rollout simulated).
+Theme-to-action turnaround: 6 weeks → 4 days.
+Recognition events: 0 → 47/month.
+
+Behavioural contract for Recognition Sentinel:
+
+MAY: identify candidates, surface citation snippets, draft recognition citations.
+MAY ONLY WITH HUMAN: publish a recognition; notify the employee; share to the public dashboard.
+MUST NEVER: identify a citizen by name in a published recognition; recognise based on a single low-confidence submission; bypass the manager's approval.
+
+
+Demo 4 — Red Team Rapid-Response Console
+Slug: red-team
+Factory: F6 + F8
+Sub-agents: Triage Sentinel, Workshop Architect, Prototype Generator, Stakeholder Mapper, Brief Writer
+RFP coverage: Effortless 2.0 — Red Team (e), and the high-priority ad-hoc rate card
+Scenario seeded:
+A breaking situation: "Citizen complaints spiked 380% on TAMM after a system outage in the Driving Licence renewal flow yesterday. Director General has asked for a Red Team intervention by Wednesday."
+Citizen tab: A live ticker of incoming complaints from real-time TAMM. Resident Hessa tries the broken flow and is offered a workaround drafted by the Triage Sentinel.
+Operator tab: Red Team console. Triage Sentinel timelines the incident in 10 seconds: signal sources, affected services, blast radius. Workshop Architect generates a 3-day workshop plan (agenda, attendees, pre-reads, room set-up, materials list, expected deliverables). Stakeholder Mapper identifies the 14 people who must be in the room. Brief Writer drafts the kickoff brief, the post-workshop deliverable template, and the debrief summary template — all in EN + AR. Red Team Lead Faisal reviews each, clicks AUTHORIZE.
+Governance tab: Red Team activity log (last 30 days). Each engagement: 3-day to 3-week sprint with start, status, outcomes, and the human approvals at each gate. SLA tracker: time from request to mobilisation; time to first prototype; time to closure.
+KPIs:
+
+Time from request to Red Team mobilisation: 7 days → 3 hours.
+Workshop preparation effort: 4 days → 40 minutes.
+Cases closed within SLA: 62% → 96%.
+
+Behavioural contract for Workshop Architect:
+
+MAY: draft agendas, propose attendees, generate materials, write briefs, propose facilitation approaches.
+MAY ONLY WITH HUMAN: send invites; book rooms; commit anyone's calendar; commit DGE to a deliverable date.
+MUST NEVER: invite an external party without explicit Red Team Lead authorisation; designate a workshop output as "approved" without the named approver.
+
+
+Demo 5 — Service Redesign Co-Pilot (Hub Service Redesign Factory)
+Slug: service-redesign
+Factory: F1 + F3 + F4 + F5 + F6
+Sub-agents: Research Sentinel, Journey Sentinel, Blueprint Sentinel, Action Plan Sentinel, QA Sentinel, Prototype Sentinel
+RFP coverage: Effortless Services Redesign — User Research & Service Design (a), Prototyping (b), and the Hub Service Redesign Factory pattern from the Publicis Sapient deck (slide 16)
+Scenario seeded:
+A redesign of the service "Issue a New Trade Licence (DED Abu Dhabi)" — one of the top-100 transactional services and a node in the "Start a Business" life moment that touches 4 entities.
+The demo plays through the 5-phase redesign pipeline (matching the Publicis Sapient slide):
+Phase A — Research & Discovery. Research Sentinel ingests synthetic stakeholder interviews, citizen pain-points, policy & regulation, and a benchmarking pack from Singapore GovTech and Estonia e-Residency. Synthesises a Research Pack PDF (mocked). Confidence: AMBER on two findings → flagged for human review.
+Phase B — Journey Mapping. Journey Sentinel drafts the As-Is journey across 9 touchpoints (TAMM web, TAMM app, call centre, DED service centre, third-party PRO, etc.) and the To-Be journey collapsing it to 3 touchpoints. Renders a side-by-side journey map with emotional curve. Highlights the 4 moments of truth. Service Designer Reem edits one stage and clicks COMMIT.
+Phase C — Service Blueprint. Blueprint Sentinel generates frontstage / backstage / support systems / event contracts (EC) — including required events, payload schema, and audit fields. This is rendered as a swim-lane diagram with all the artefacts inline. Reem reviews each event contract.
+Phase D — Action Plan. Action Plan Sentinel drafts the implementation plan with milestones, dependencies, owners across the 4 affected entities, and risk register. Workshop facilitation pack auto-generated for the co-design session.
+Phase E — QA Gate. QA Sentinel runs the To-Be design against TAMM's CX framework, accessibility standards, bilingual requirements, and the 14 life-moments coherence check. Returns a scorecard. If GREEN, advances to publication queue. If AMBER/RED, routes back to the relevant phase.
+Citizen tab: Plays the new TAMM Spaces "Start a Business" experience after redesign — 3 screens, 90 seconds end-to-end, with the agent acting as a guide.
+Operator tab: The Service Designer's cockpit — the 5-phase pipeline view with each artefact opening in a side drawer.
+Governance tab: The Programme Director's view — 500 services in flight, current phase per service, throughput per week, SLA risk, and a "freshness sweep" of services last touched >90 days ago (the trigger from the Publicis Sapient slide 17).
+KPIs:
+
+Redesign cycle time per service: 12 weeks → 18 days.
+Cross-entity workshop preparation: 80 hours → 6 hours.
+Service freshness (touched in last 90 days): 12% → 100%.
+
+Behavioural contract for Blueprint Sentinel:
+
+MAY: draft blueprints, generate event contracts, propose touchpoint reductions.
+MAY ONLY WITH HUMAN: commit a blueprint to the design lab repository; assign owners across entities.
+MUST NEVER: alter an entity's frontstage process without entity sign-off; specify a personal-data flow without explicit data-protection officer review.
+
+
+Demo 6 — Spokes Review Agent
+Slug: spokes-review
+Factory: F2
+Sub-agents: Submission Reader, Coherence Sentinel, Principles Sentinel, Critique Drafter
+RFP coverage: Effortless Services Redesign — Spokes Review (within section a)
+Scenario seeded:
+12 synthetic spoke service design submissions from different entities, of varying quality. Each has a 1-page brief, a To-Be journey, and a list of supporting materials.
+Citizen tab: Not applicable (this is an internal back-office demo) — replace with a "Why this matters to citizens" explainer card.
+Operator tab: Senior Designer Hala's queue. Each submission opens a review pane with: completeness check, principles compliance scorecard, missing artefacts, comparable precedents from prior reviews, and a Critique Drafter's draft feedback in EN + AR. Hala edits, clicks AUTHORIZE FEEDBACK to send back to the submitting team. The follow-up cadence (monthly/bimonthly) auto-schedules the next review.
+Governance tab: Spokes Review programme dashboard — 750 reviews planned, completed, in progress, awaiting iteration. SLA on first-feedback turnaround. Quality trend per entity.
+KPIs:
+
+First-feedback turnaround: 9 days → 12 hours.
+Submissions accepted on first review: 22% → 51%.
+Reviewer load per FTE: 35/month → 120/month.
+
+
+3. Repository structure
+/app
+  /                                marketplace landing
+  /about                           narrative
+  /method                          HAPA + contracts explainer
+  /demo
+    /[slug]
+      page.tsx                     demo shell with 3 tabs
+      audit/page.tsx               audit log view
+/components
+  /shell                           nav, footer, persona switcher, language toggle
+  /agents                          ActivityStream, EvidenceDrawer, AuthoriseCard, HapaChips, StackPanel
+  /demo-1-catalogue-channel
+  /demo-2-complaint-recovery
+  /demo-3-effortless-qr
+  /demo-4-red-team
+  /demo-5-service-redesign
+  /demo-6-spokes-review
+  /ui                              shadcn/ui re-exports
+/lib
+  /agents
+    runner.ts                      shared AgentRunner class (streaming, contracts, audit)
+    factories.ts                   the 8 factories registry
+    contracts.ts                   behavioural + UX authority contract types
+    sentinels/                     one file per sentinel with system prompt + tools + contracts
+  /audit
+    store.ts                       in-memory audit log + typed events
+  /i18n
+    en.ts
+    ar.ts
+    useT.ts
+  /fixtures                        synthetic data (services, complaints, QR submissions, etc.)
+/public
+  /brand                           logos, watermark, favicons
+  /traces                          pre-recorded JSON traces per demo (offline fallback)
+4. Tech stack and packages
+json{
+  "name": "dge-effortless-agents",
+  "private": true,
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "ai": "^3.4.0",
+    "@ai-sdk/openai": "^0.0.66",
+    "@ai-sdk/anthropic": "^0.0.50",
+    "tailwindcss": "^3.4.0",
+    "class-variance-authority": "^0.7.0",
+    "lucide-react": "^0.400.0",
+    "framer-motion": "^11.0.0",
+    "recharts": "^2.12.0",
+    "zod": "^3.23.0",
+    "uuid": "^10.0.0"
+  }
+}
+Add shadcn/ui components: button, card, tabs, dialog, sheet, badge, tooltip, separator, accordion, progress, scroll-area, toast.
+.env (Replit Secrets):
+DEMO_PROVIDER=openai
+DEMO_MODEL=gpt-4o-mini
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+DEMO_OFFLINE_MODE=false
+When DEMO_OFFLINE_MODE=true, the runner replays from /public/traces/<demo-slug>.json instead of calling an LLM. Useful for board meetings and disconnected venues.
+5. Bilingual implementation
+
+All strings live in /lib/i18n/{en,ar}.ts keyed by feature.subkey.
+useT(key) hook returns the right string and exposes dir (ltr / rtl).
+On AR, set <html dir="rtl" lang="ar"> and flip Tailwind utilities via rtl: variants where layout asymmetry matters.
+Use Cairo or IBM Plex Sans Arabic for AR display.
+All persona names, KPI labels, agent names, and audit log messages must be translated. No mixed-language fallbacks visible.
+
+6. Audit log specification
+Every AuditEvent has:
+tstype AuditEvent = {
+  id: string;
+  ts: string;                  // ISO timestamp
+  demoSlug: string;
+  actor: { kind: 'human' | 'agent'; name: string; role?: string };
+  action: string;              // e.g., "AUTHORIZED_PUBLISH", "AGENT_DRAFTED_BLUEPRINT"
+  target?: { kind: string; id: string; label: string };
+  evidence?: { sourceId: string; snippet: string; uri?: string }[];
+  contractsChecked?: string[]; // e.g., ["H1", "H4"]
+  outcome: 'success' | 'blocked' | 'escalated' | 'pending';
+  rationale?: string;          // mandatory for overrides
+};
+The audit view renders these as a vertical timeline grouped by minute. Filterable by actor, action, outcome. Exportable to JSON and PDF (mocked PDF export is fine).
+7. Build sequence (do in this exact order)
+
+Scaffold shell. Next.js + Tailwind + brand tokens + nav + footer + marketplace landing with placeholder cards for the 6 demos.
+Build the AgentRunner. With contract enforcement, audit logging, streaming, and offline-trace fallback. Write a unit test that proves the runner blocks a forbidden action even when the LLM tries to invoke it.
+Build the demo shell layout. 3-tab structure, Agent Activity Stream side panel, HAPA chips, persona switcher, language toggle, watermark.
+Build Demo 1 (Catalogue & Channel). This is the simplest end-to-end and proves the pattern.
+Build Demo 2 (Complaint Recovery). Reuses the same pattern; adds the cluster visualisation.
+Build Demo 3 (Effortless QR). Adds mobile-optimised citizen view and recognition flow.
+Build Demo 4 (Red Team). Adds time-pressure UI.
+Build Demo 5 (Service Redesign). The most complex — 5-phase pipeline, multiple sub-agents, the most artefacts.
+Build Demo 6 (Spokes Review). Internal back-office variant.
+Build the /method page explaining HAPA, Behavioural Contract, UX Authority Contract — pull copy directly from the Publicis Sapient deck slides 28, 43–50.
+Build the /about page with the DGE Agent Ecosystem narrative (5-layer diagram from slide 12, the 8 factories from slide 15, the "Always Fresh / Always Transparent / Always Current, Always Fair" promises from slide 13).
+Pre-record the offline traces. For each demo, run it once with the live LLM, capture the trace, save to /public/traces/. These also act as regression baselines.
+Polish pass. Animations (Framer Motion fade-ups, the Maven AI signature cubic-bezier(0.22, 1, 0.36, 1) ease), loading states, empty states, error states, and the language flip animation.
+
+8. Acceptance criteria (test these before declaring "done")
+
+All six demos open from the marketplace landing and run end-to-end at 1× speed in under 5 minutes each, in EN and AR.
+DEMO_OFFLINE_MODE=true runs every demo with no API key set.
+Every "AUTHORIZE" button gates an action behind a named human and a logged rationale.
+The runner blocks at least one forbidden action per demo and the audit log shows it as outcome: 'blocked'.
+HAPA chips H1–H6 render and link to drawer copy.
+The Stack panel shows Sapient Bodhi / Sustain / Falcon / Azure UAE-North / Core42 / DGE CX Hub.
+The watermark "Demonstration · Synthetic Data" is visible on every screen.
+AR layout flips correctly (sidebars, icons, scroll directions).
+Lighthouse: Performance ≥ 85, Accessibility ≥ 95.
+No console errors. No TypeScript errors. No any types in lib/agents.
+
+9. Tone of voice (use these in copy)
+
+Eyebrow labels: short, all-caps, JetBrains Mono.
+
+"01 · Catalogue & Channel"
+"Always fresh. Always governed."
+
+
+Headline pattern: short statement + italic gold accent.
+
+"Government services that never go out of date."
+"Recovery, re-engineered from root cause to resolution."
+
+
+Subhead: one sentence, present tense, 540px column, gold left rule.
+
+"Catalog Sentinel keeps the 2,500-service Abu Dhabi catalogue accurate to the day — every entry cited, every change human-authorised."
+
+
+Microcopy on AUTHORIZE buttons: always show what the human is committing to.
+
+"Authorise publish to TAMM" (not just "Confirm")
+"Authorise nomination of Mariam K. as Effortless Maker"
+
+
+
+10. What NOT to do
+
+Don't show a chat bubble as the primary surface. The agent's chat is secondary; the artefact (catalogue diff, journey map, blueprint, brief) is primary.
+Don't fabricate any DGE official's name, signature, or quote. Personas (Aisha, Khalid, Layla, Mariam, Saeed, Reem, Hala, Faisal) are clearly fictional.
+Don't use stock photography of real Emirati people. Use abstract avatars or initials.
+Don't claim integration with TAMM, ADERP, or CX Hub. Say "demonstration; would integrate with TAMM/CX Hub in production".
+Don't show emoji-heavy UI. This is government, not a consumer app.
+Don't auto-translate at runtime — every string is human-written EN and AR in the i18n files.
+
+
+11. After build — what the user (Mounir) gets
+A single Replit URL with:
+
+Marketplace landing page that introduces the demonstrator.
+Six demos, each opening in a clean shell with three tabs, an agent activity stream, HAPA chips, and an audit log.
+An /about page explaining the DGE Agent Ecosystem.
+A /method page explaining how authority is preserved.
+An offline mode that works in any meeting room with no internet.
+
+This becomes the spine of the Maven AI Marketplace pattern and a reusable shell for future government CX clients (Dubai Municipality, Tasama, Tahakom, NHC).
+<<<REPLIT PROMPT ENDS>>>
+
+Footnotes for Mounir (not for Replit)
+Source documents reviewed to build this prompt:
+
+RFP – Effortless 2.0 (RFQ 246105000291, 17 pages) — five streams: Cataloguing, Channel Optimization, Design for Recovery, Effortless QR, Red Team.
+RFQ 246105000288 – Effortless Services Redesign (16 pages) — four streams: User Research & Service Design (500 services + 750 spokes review), Prototyping, Project Management, Service Design Training.
+DGE – CoreDeck – May 9.pptx (Publicis Sapient WIP, 54 slides) — the Hybrid Human + AI Government Experience Model, 5-layer DGE Agent Ecosystem, 8 Agentic Factories, Hub Service Redesign Factory phases, HAPA mapping to EU AI Act articles, the Wingman trading scenes pattern (which I translated into the citizen-services context).
+Maven AI website (maven-ai-website.html) — design tokens, type system, motion language, copy voice.
+
+Open questions you may want to answer before sending to Replit:
+
+Confirm the "Maven AI Marketplace" visual standard. If you have screenshots or a URL of an existing demo, I'll incorporate the exact navigation, card grid, and chrome rather than the standard I defined here.
+Confirm whether the LLM should be OpenAI, Anthropic, or Azure OpenAI. The prompt is provider-agnostic but defaults to OpenAI gpt-4o-mini for cost.
+Confirm any DGE-supplied personas you want me to swap in (I used fictional Emirati first names — Aisha, Khalid, Layla, Mariam, Saeed, Reem, Hala, Faisal — clearly marked as personas).
+Confirm whether the demonstrator should be branded "Maven AI" or co-branded "Maven AI · Publicis Sapient" given the Publicis Sapient response context. Right now the prompt assumes Maven AI brand with the DGE Agent Ecosystem narrative borrowed from the Publicis Sapient deck.
+
+Recommended next step after Replit produces the build:
+Run a 30-minute internal walkthrough with Gokhan to test that the agent activity stream and the AUTHORIZE pattern read as "governed" rather than "automated." That single perception is the difference between credible AI-native government and another chatbot demo.

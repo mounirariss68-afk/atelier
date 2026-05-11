@@ -8,14 +8,15 @@ import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
 
 // Re-timed to match actual MP3 narration lengths + ~0.8s tail.
-// situation 25.25s, complication 31.66s, resolution1 35.86s,
-// resolution2 28.42s, closing 11.45s.
+// Friendlier rewrite (May 11): situation 25.51s, complication 19.20s,
+// resolution1 23.76s, resolution2 23.95s, closing 18.72s. Add ~0.8s tail
+// so the scene's last beat doesn't get cut.
 export const SCENE_DURATIONS = {
-  situation: 26100,
-  complication: 32500,
-  resolution1: 36700,
-  resolution2: 29300,
-  closing: 12300,
+  situation: 26300,
+  complication: 20000,
+  resolution1: 24600,
+  resolution2: 24800,
+  closing: 19500,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {

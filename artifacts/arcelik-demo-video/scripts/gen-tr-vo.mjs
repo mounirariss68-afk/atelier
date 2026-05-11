@@ -35,19 +35,25 @@ const client = new OpenAI({
 });
 
 const SYSTEM = [
-  'You are a warm, friendly Turkish female narrator for a B2B product demo.',
-  'Speak with a smile -- conversational, confident, never robotic.',
-  'Pacing: ~140 words per minute, with natural micro-pauses at commas and full stops.',
-  'Address the listener as "siz". Use contractions. Keep energy gently rising into the closing line.',
-  'Do not add filler, do not change the words. Read the user message verbatim in Turkish.',
+  'You are narrating a short product story to a colleague over coffee, in Turkish.',
+  'You are a warm, smiling Turkish woman in your early thirties -- think a friendly product manager, NOT a corporate voice-over actor.',
+  'Tone: casual, conversational, a little playful. Like you actually believe what you are saying.',
+  'Pacing: roughly 135 words per minute. Slow down on the punchlines. Take a real breath between sentences.',
+  'Use natural prosody: lift the pitch on questions, drop it on the closing line, smile audibly on the friendly bits ("kahvesini almadan", "tek bir orkestra gibi").',
+  'Where you see "..." pause briefly. Where you see "—" pause a touch longer.',
+  'Do NOT sound like a TV commercial. Do NOT over-articulate. Soften the consonants the way someone speaking to a friend would.',
+  'Read the Turkish text verbatim. Do not add or remove words.',
 ].join(' ');
 
+// Casual, "talking to a friend" rewrite. Uses contractions ("bi", "diye"),
+// rhetorical asides ("biliyor musunuz", "düşünün bir"), shorter sentences,
+// and softens the corporate phrasing.
 const SCRIPTS = {
-  situation: `Türkiye'de beyaz eşya pazarı her hafta yeniden şekilleniyor. Hepsiburada, Trendyol, Akakçe, n11... Her platformda binlerce fiyat hareketi. Ve her hafta, ekipleriniz aynı soruyla başlıyor güne: "Bugün rakipler nerede?"`,
-  complication: `Manuel raporlar geç kalıyor. Çünkü bir analist veriyi toparlayana kadar, rakip çoktan kampanyaya girmiş oluyor. Sonuç? Marj eriyor, bayi telefonları yanıyor, kararlar geç alınıyor. Fiyatlandırma döngüsü artık ekipten daha hızlı.`,
-  resolution1: `İşte tam burada Maven AI devreye giriyor. Pazartesi sabahı, saat 06:14. Fiyat İzleme Ajanı, gece yaşanan hareketleri çoktan tespit etmiş. Vestel İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş. Ekibiniz daha kahvesini almadan, bildirim ekranınızda.`,
-  resolution2: `Altı uzman ajan, tek bir orkestra gibi çalışıyor. Talep tahminini, rekabet analizini, kampanya stratejisini ve bayi iletişimini saniyeler içinde hazırlıyor. Tek tıkla onayladığınızda, üç bin bayiye yeni fiyat listesi anında iniyor. POS kreatifleri otomatik güncelleniyor.`,
-  closing: `Beş günlük döngü, iki saate düştü. Yirmi şehir, üç bin bayi, tek bir karar odası. Maven AI: Arçelik için fiyat istihbaratı.`,
+  situation: `Türkiye'de beyaz eşya pazarı... her hafta yeniden kurulup duruyor. Hepsiburada, Trendyol, Akakçe, n11 — binlerce fiyat, gün içinde oynayıp duruyor. Ve her pazartesi sabahı, ekibiniz aynı soruyla uyanıyor: "Bugün rakipler nerede?"`,
+  complication: `Şimdi düşünün bir... Bir analist oturup veriyi toparlayana kadar, rakip çoktan kampanyaya girmiş oluyor. Sonuç ortada — marj eriyor, bayilerin telefonu susmuyor, kararlar hep bir adım geriden geliyor. Açıkçası fiyatlandırma artık ekipten hızlı.`,
+  resolution1: `İşte tam burada Maven AI işin içine giriyor. Düşünün, pazartesi sabahı saat altıyı çeyrek geçiyor. Siz daha kahveyi almadan, Fiyat İzleme Ajanı gece olanları çoktan görmüş. Vestel, İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş — bildirim ekranınızda hazır.`,
+  resolution2: `Altı tane uzman ajan var... ve hepsi tek bir orkestra gibi çalışıyor. Talebi tahmin ediyor, rakibi okuyor, kampanyayı kuruyor, bayiyle konuşuyor — saniyeler içinde. Siz "onayla" dediğinizde, üç bin bayiye yeni liste anında düşüyor. POS görselleri kendiliğinden güncelleniyor.`,
+  closing: `Beş günlük döngü... iki saate indi. Yirmi şehir, üç bin bayi, tek bir karar odası. Maven AI — Arçelik için fiyat istihbaratı.`,
 };
 
 async function generate(key, text) {
