@@ -7,12 +7,15 @@ import { Scene3 } from './video_scenes/Scene3';
 import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
 
+// Re-timed to match actual MP3 narration lengths + ~0.8s tail.
+// situation 25.25s, complication 31.66s, resolution1 35.86s,
+// resolution2 28.42s, closing 11.45s.
 export const SCENE_DURATIONS = {
-  situation: 25000,
-  complication: 25000,
-  resolution1: 30000,
-  resolution2: 25000,
-  closing: 10000,
+  situation: 26100,
+  complication: 32500,
+  resolution1: 36700,
+  resolution2: 29300,
+  closing: 12300,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
@@ -43,34 +46,60 @@ export default function VideoTemplate({
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#0B1B2E] text-white">
-      {/* Persistent Background Layer */}
-      <div className="absolute inset-0 z-0">
+      {/* Persistent background — slow drift, never restarts on scene change */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
         <motion.div
-          className="absolute w-[80vw] h-[80vw] rounded-full opacity-10 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #F5A623, transparent)' }}
-          animate={{
-            x: ['-20%', '30%', '-10%'],
-            y: ['-20%', '10%', '-30%'],
-            scale: [1, 1.2, 0.9],
+          className="absolute w-[80vw] h-[80vw] rounded-full opacity-[0.18] blur-3xl"
+          style={{
+            background: 'radial-gradient(circle, #F5A623, transparent 60%)',
+            left: '-10%',
+            top: '-15%',
           }}
-          transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+          animate={{
+            x: ['0%', '20%', '-5%', '0%'],
+            y: ['0%', '15%', '-10%', '0%'],
+            scale: [1, 1.15, 0.95, 1],
+          }}
+          transition={{ duration: 40, repeat: Infinity, ease: 'easeInOut' }}
         />
         <motion.div
-          className="absolute w-[60vw] h-[60vw] rounded-full opacity-20 blur-3xl right-0 bottom-0"
-          style={{ background: 'radial-gradient(circle, #1E3A8A, transparent)' }}
-          animate={{
-            x: ['20%', '-20%', '10%'],
-            y: ['20%', '-40%', '0%'],
+          className="absolute w-[70vw] h-[70vw] rounded-full opacity-[0.22] blur-3xl"
+          style={{
+            background: 'radial-gradient(circle, #1E3A8A, transparent 60%)',
+            right: '-15%',
+            bottom: '-15%',
           }}
-          transition={{ duration: 25, repeat: Infinity, ease: 'easeInOut' }}
+          animate={{
+            x: ['0%', '-15%', '8%', '0%'],
+            y: ['0%', '-10%', '12%', '0%'],
+          }}
+          transition={{ duration: 45, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        {/* Subtle texture grid so empty zones don't look flat */}
+        <div
+          className="absolute inset-0 opacity-[0.04]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)',
+            backgroundSize: '64px 64px',
+          }}
         />
       </div>
 
-      {/* Foreground Scenes */}
+      {/* Foreground scenes — unified gentle cross-fade */}
       <div className="relative z-10 w-full h-full">
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence mode="wait">
           {SceneComponent && (
-            <SceneComponent key={currentSceneKey} />
+            <motion.div
+              key={currentSceneKey}
+              className="absolute inset-0"
+              initial={{ opacity: 0, scale: 1.03 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.99 }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <SceneComponent />
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

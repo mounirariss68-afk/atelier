@@ -4,6 +4,7 @@ import VideoTemplate, { SCENE_DURATIONS } from './VideoTemplate';
 import { useSceneControls } from './useSceneControls';
 
 const PROGRESS_TICK_MS = 60;
+const AUDIO_FADE_MS = 400;
 
 interface ControlBarProps {
   visible: boolean;
@@ -148,6 +149,51 @@ function ControlBar({
   );
 }
 
+/** Floating mute pill for browser-tab viewing (auto-hides after inactivity). */
+function FloatingMutePill({
+  muted,
+  onToggle,
+  pulse,
+}: {
+  muted: boolean;
+  onToggle: () => void;
+  pulse: boolean;
+}) {
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    let timeoutId: number;
+    const reset = () => {
+      setHidden(false);
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => setHidden(true), 4000);
+    };
+    reset();
+    window.addEventListener('mousemove', reset);
+    window.addEventListener('touchstart', reset);
+    window.addEventListener('keydown', reset);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', reset);
+      window.removeEventListener('touchstart', reset);
+      window.removeEventListener('keydown', reset);
+    };
+  }, []);
+
+  return (
+    <button
+      onClick={onToggle}
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-white text-sm font-medium hover:bg-black/85 transition-all ${
+        hidden && !muted ? 'opacity-0 pointer-events-none' : 'opacity-100'
+      } ${pulse && muted ? 'animate-pulse ring-2 ring-[#F5A623]/70' : ''}`}
+      aria-label={muted ? 'Sesi aç' : 'Sesi kapat'}
+    >
+      {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+      <span>{muted ? 'Sesi aç' : 'Sesi kapat'}</span>
+    </button>
+  );
+}
+
 export default function VideoWithControls() {
   const isIframed = typeof window !== 'undefined' && window.self !== window.top;
 
@@ -166,6 +212,7 @@ export default function VideoWithControls() {
 
   const sensorRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fadeRafRef = useRef<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [tapPinned, setTapPinned] = useState(false);
@@ -174,11 +221,39 @@ export default function VideoWithControls() {
   const activeSceneKey = sceneKeys[activeIndex];
   const audioSrc = `${import.meta.env.BASE_URL}audio/${activeSceneKey}.mp3`;
 
+  // Audio cross-fade on scene change: ramp out -> swap src -> ramp in.
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    el.currentTime = 0;
-    el.play().catch(() => {});
+    if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
+
+    const clamp = (v: number) => Math.max(0, Math.min(1, v));
+    const startVol = clamp(el.volume);
+    const fadeStart = performance.now();
+
+    const fadeOut = (now: number) => {
+      const t = Math.min(1, (now - fadeStart) / AUDIO_FADE_MS);
+      el.volume = clamp(startVol * (1 - t));
+      if (t < 1) {
+        fadeRafRef.current = requestAnimationFrame(fadeOut);
+      } else {
+        el.currentTime = 0;
+        el.volume = 0;
+        el.play().catch(() => {});
+        const inStart = performance.now();
+        const fadeIn = (inNow: number) => {
+          const ti = Math.min(1, (inNow - inStart) / AUDIO_FADE_MS);
+          el.volume = clamp(ti);
+          if (ti < 1) fadeRafRef.current = requestAnimationFrame(fadeIn);
+        };
+        fadeRafRef.current = requestAnimationFrame(fadeIn);
+      }
+    };
+    fadeRafRef.current = requestAnimationFrame(fadeOut);
+
+    return () => {
+      if (fadeRafRef.current) cancelAnimationFrame(fadeRafRef.current);
+    };
   }, [activeSceneKey, mountKey, tick]);
 
   const toggleMute = useCallback(() => {
@@ -227,8 +302,6 @@ export default function VideoWithControls() {
     return () => document.removeEventListener('pointerdown', onDocPointerDown);
   }, [collapsed, tapPinned]);
 
-  if (!isIframed) return <VideoTemplate />;
-
   const barVisible = !collapsed || hovering || tapPinned;
 
   return (
@@ -246,30 +319,34 @@ export default function VideoWithControls() {
         muted={muted}
         preload="auto"
       />
-      <div
-        ref={sensorRef}
-        className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end"
-        style={{ height: '25%' }}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-        onPointerDown={handlePointerDown}
-      >
-        <div className="flex-1 w-full" aria-hidden="true" />
-        <ControlBar
-          visible={barVisible}
-          collapsed={collapsed}
-          locked={locked}
-          muted={muted}
-          sceneKeys={sceneKeys}
-          activeIndex={activeIndex}
-          activeDuration={activeDuration}
-          tick={tick}
-          onToggleLock={toggleLock}
-          onToggleMute={toggleMute}
-          onJumpTo={jumpTo}
-          onToggleCollapsed={handleToggleCollapsed}
-        />
-      </div>
+      {isIframed ? (
+        <div
+          ref={sensorRef}
+          className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end"
+          style={{ height: '25%' }}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
+          onPointerDown={handlePointerDown}
+        >
+          <div className="flex-1 w-full" aria-hidden="true" />
+          <ControlBar
+            visible={barVisible}
+            collapsed={collapsed}
+            locked={locked}
+            muted={muted}
+            sceneKeys={sceneKeys}
+            activeIndex={activeIndex}
+            activeDuration={activeDuration}
+            tick={tick}
+            onToggleLock={toggleLock}
+            onToggleMute={toggleMute}
+            onJumpTo={jumpTo}
+            onToggleCollapsed={handleToggleCollapsed}
+          />
+        </div>
+      ) : (
+        <FloatingMutePill muted={muted} onToggle={toggleMute} pulse={true} />
+      )}
     </div>
   );
 }
