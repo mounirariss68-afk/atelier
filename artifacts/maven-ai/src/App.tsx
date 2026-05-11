@@ -83,6 +83,14 @@ function Router() {
           <Route path="/marketplace/hospitality-revenue-optimizer">{() => <Redirect to="/marketplace" />}</Route>
           <Route path="/marketplace/ev-battery-health-agent">{() => <Redirect to="/marketplace" />}</Route>
           <Route path="/marketplace/fpa-rolling-forecast">{() => <Redirect to="/marketplace" />}</Route>
+          {/* DGE Effortless 2.0 — six per-tool marketplace slugs are now unified
+              behind a single dge-effortless card. Old links resolve to the hub. */}
+          <Route path="/marketplace/dge-catalogue-channel">{() => <Redirect to="/marketplace/dge-effortless" />}</Route>
+          <Route path="/marketplace/dge-complaint-recovery">{() => <Redirect to="/marketplace/dge-effortless" />}</Route>
+          <Route path="/marketplace/dge-effortless-qr">{() => <Redirect to="/marketplace/dge-effortless" />}</Route>
+          <Route path="/marketplace/dge-red-team">{() => <Redirect to="/marketplace/dge-effortless" />}</Route>
+          <Route path="/marketplace/dge-service-redesign">{() => <Redirect to="/marketplace/dge-effortless" />}</Route>
+          <Route path="/marketplace/dge-spokes-review">{() => <Redirect to="/marketplace/dge-effortless" />}</Route>
           <Route path="/marketplace/:slug" component={MarketplaceDetail} />
           <Route path="/personal-agent/concept" component={PersonalAgentConcept} />
           <Route path="/demo-kit/tasama" component={DemoKitTasama} />

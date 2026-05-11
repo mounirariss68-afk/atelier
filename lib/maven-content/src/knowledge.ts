@@ -1903,240 +1903,49 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
       ],
     },
 
-  // ─── DGE Effortless 2.0 — six agentic CX demos ──────────────────────────
+  // ─── DGE Effortless 2.0 — unified marketplace card ──────────────────────
+  // One card linking to /marketplace/dge-effortless (DgeHub). The hub
+  // route in App.tsx is registered before the catch-all
+  // /marketplace/:slug, so this slug resolves to the hub instead of
+  // MarketplaceDetail. The six per-demo /demo/dge-* routes still work
+  // because they remain registered in registeredDemoSlugs.ts and have
+  // declarative seed data in src/data/dge/demos.ts.
   {
-    id: "dge-catalogue-channel",
-    slug: "dge-catalogue-channel",
-    title: { en: "DGE · Catalogue & Channel Sentinel", ar: "DGE · حارس الكتالوج والقناة" },
+    id: "dge-effortless",
+    slug: "dge-effortless",
+    title: { en: "DGE Effortless 2.0 — Agentic CX Demonstrator", ar: "DGE الجهد المنعدم 2.0 — عرض تجربة الذكاء الوكيلي" },
     class: "knowledge-decision-copilot",
     industries: ["public-sector"],
     horizontals: [],
-    buyer: { en: "DGE CX Director", ar: "مديرة تجربة العميل — DGE" },
+    buyer: { en: "DGE CX Director · Programme Director · Spokes Programme Director", ar: "مديرة تجربة العميل · مدير البرنامج · مديرة برنامج الجهات — DGE" },
     pitch: {
-      en: "Detects drift on a pharmacist licence fee and rationalises 105 outdated channel emails to 55 — with a citation gate that stops uncited fee changes from reaching TAMM.",
-      ar: "يكتشف الانحراف في رسوم رخصة الصيدلي ويختصر 105 بريد قناة قديم إلى 55 — مع بوابة استشهاد توقف أي تغيير غير موثّق قبل وصوله إلى TAMM.",
+      en: "Six self-contained agentic CX demos sharing one TAMM/ADGE shell — drift-detected catalogue, 200-complaint root-cause clustering, 30-second QR feedback with citation-gated recognition, 3-day red-team mobilisation, 18-day service redesign, 12-hour spokes review — every consequential action gated behind a labelled AUTHORIZE card and recorded against HAPA H1–H6 contracts.",
+      ar: "ستة عروض ذكاء وكيلي مستقلة تتّصل بهيكل TAMM/ADGE مشترك — كتالوج برصد انحراف، تجميع 200 شكوى لأسباب جذرية، ملاحظات QR لـ 30 ثانية بترشيح موثّق، حشد فريق استجابة في 3 أيام، إعادة تصميم خدمة في 18 يوماً، مراجعة جهات في 12 ساعة — كل إجراء يمرّ عبر بطاقة اعتماد مُسمّاة ويُسجَّل على عقود HAPA من H1 إلى H6.",
     },
     longDescription: [
-      { en: "Government service catalogues drift the moment a circular is published. The Catalogue & Channel Sentinel watches every authoritative source — DGE circulars, regulator decrees, sub-entity bulletins — and flags drift on the same day, with the citation already attached.", ar: "تنحرف كتالوجات الخدمات الحكومية لحظة صدور أي تعميم. يراقب الحارس كل مصدر معتمد — تعاميم DGE والمراسيم التنظيمية والنشرات الفرعية — ويرصد الانحراف في اليوم نفسه مع الاستشهاد جاهزاً." },
-      { en: "Channel rationalisation is the second half: 105 broadcast email templates collapse to 55 governed templates with a Sankey showing where each retired template's audience lands. New sub-entity onboarding drops from weeks to minutes.", ar: "الجزء الثاني هو ترشيد القنوات: 105 قوالب بريد تنطوي إلى 55 قالباً محوكَماً مع مخطط يبيّن مسار جمهور كل قالب متقاعد. إدماج الجهات الفرعية الجديدة ينخفض من أسابيع إلى دقائق." },
-      { en: "Built on the TAMM/ADGE design system. Every consequential publish is gated behind a labelled AUTHORIZE card naming the human committing to it, and every step is recorded against HAPA H1–H6 contracts in an immutable audit log.", ar: "مبني على نظام تصميم TAMM/ADGE. كل نشر يمر عبر بطاقة اعتماد تُسمّي الشخص الملتزم به، وكل خطوة تُسجَّل على عقود HAPA من H1 إلى H6 في سجل تدقيق غير قابل للتعديل." },
+      { en: "DGE Effortless 2.0 is an agentic CX demonstrator built for the Department of Government Enablement. Eight Agentic Factories (Catalogue & Channel, Complaint Recovery, QR Feedback & Effortless Makers, Red Team Rapid Response, Service Redesign Co-Pilot, Spokes Review, Perception & Insight, Prototype Factory) underpin six end-to-end demos that share a common TAMM/ADGE shell, persona switcher, EN ⇄ عربي toggle, demo-speed slider and immutable audit timeline.", ar: "DGE Effortless 2.0 هو عرض تجربة عميل وكيلي بُني لدائرة التمكين الحكومي. ثماني مصانع وكيلية تدعم ستة عروض من البداية إلى النهاية تتقاسم هيكل TAMM/ADGE مشترك ومحوِّل أدوار وزرّ تبديل عربي/إنجليزي وشريط سرعة وسجل تدقيق غير قابل للتعديل." },
+      { en: "Every consequential action is gated behind a labelled AUTHORIZE card naming the human committing to it — Director Layla, Mariam, Saeed, Faisal, Reem, Hala — and every step is recorded against HAPA H1–H6 contracts (Honest, Helpful, Harmless, Auditable, Bilingual, Human-gated) tied to EU AI Act articles 9 / 11 / 13 / 14. A behavioural-contract system blocks any action listed under MUST NEVER and records it as outcome: blocked.", ar: "كل إجراء يمرّ عبر بطاقة اعتماد تُسمّي الشخص الملتزم به — المديرة ليلى، مريم، سعيد، فيصل، ريم، هالة — وكل خطوة تُسجَّل على عقود HAPA من H1 إلى H6 (صادق، نافع، غير مؤذٍ، قابل للتدقيق، ثنائي اللغة، بإذن بشري) المرتبطة بمواد قانون الذكاء الاصطناعي الأوروبي 9 / 11 / 13 / 14. ويوقف نظام عقود سلوكية أي إجراء مدرج تحت 'يجب ألا' ويسجّله كـ outcome: blocked." },
+      { en: "Each demo runs from an offline canonical trace (/dge-traces/<slug>.json) so a meeting room with no internet is meeting-room-safe. Open the hub to launch any of the six demos: Catalogue & Channel Sentinel, Complaint Recovery & Root-Cause Engine, Effortless QR Feedback & Effortless Makers, Red Team Rapid-Response Console, Service Redesign Co-Pilot, and Spokes Review Agent.", ar: "يعمل كل عرض من مسار قياسي دون اتصال (/dge-traces/<slug>.json) كي تكون قاعة الاجتماع آمنة بلا إنترنت. افتح المركز لإطلاق أيٍّ من العروض الستة: حارس الكتالوج والقناة، محرّك استرداد الشكاوى والسبب الجذري، ملاحظات QR وصنّاع التجربة، كونسول الاستجابة السريعة، مساعد إعادة تصميم الخدمات، ووكيل مراجعة الجهات الفرعية." },
     ],
     screens: [
-      { title: { en: "TAMM Spaces — citizen surface", ar: "TAMM Spaces — واجهة المواطن" }, caption: { en: "Aisha sees the corrected pharmacist licence fee, citation timestamped 8 minutes ago.", ar: "ترى عائشة رسم رخصة الصيدلة الصحيح مع استشهاد بفارق 8 دقائق." } },
-      { title: { en: "Operator drift console", ar: "كونسول الانحراف للمشغّل" }, caption: { en: "Catalog Sentinel flags the AED 480 → 540 drift with the cited circular and downstream impact simulation.", ar: "يرصد حارس الكتالوج انحراف 480 → 540 درهم مع التعميم ومحاكاة الأثر." } },
-      { title: { en: "Channel rationalisation Sankey", ar: "مخطط ترشيد القنوات" }, caption: { en: "Director Layla approves the 105 → 55 template collapse with audience routing visible per template.", ar: "تعتمد المديرة ليلى طي 105 → 55 قالب مع توجيه الجمهور لكل قالب." } },
+      { title: { en: "DGE Effortless 2.0 hub", ar: "مركز DGE الجهد المنعدم 2.0" }, caption: { en: "Six numbered demo cards in the Maven brand grid, each linking to its TAMM/ADGE shell.", ar: "ستة عروض مرقّمة في شبكة Maven، كل واحد يرتبط بهيكل TAMM/ADGE." } },
+      { title: { en: "Shared agentic shell", ar: "الهيكل الوكيلي المشترك" }, caption: { en: "Citizen / Operator / Governance tabs with Agent Activity Stream, HAPA chips, AUTHORIZE card, audit timeline, persona switcher, EN ⇄ عربي.", ar: "ألسنة المواطن / المشغّل / الحوكمة مع تدفّق نشاط الوكلاء وعقود HAPA وبطاقة الاعتماد وسجل التدقيق ومحوِّل الأدوار وزرّ اللغة." } },
+      { title: { en: "Behavioural contracts in action", ar: "العقود السلوكية في العمل" }, caption: { en: "Forbidden attempts (e.g. push uncited fee, bulk-close complaints) are blocked and recorded as outcome: blocked under HAPA H3 + H4.", ar: "المحاولات المحظورة (دفع رسم بلا استشهاد، إغلاق دفعة) تُحجب وتُسجَّل كـ outcome: blocked تحت H3 و H4." } },
     ],
     dataModel: {
       inputs: [
-        { en: "DGE circulars, regulator decrees, sub-entity service bulletins", ar: "تعاميم DGE والمراسيم التنظيمية ونشرات الجهات الفرعية" },
-        { en: "Live catalogue snapshot from TAMM Spaces and 14 channels", ar: "لقطة الكتالوج الحيّة من TAMM وأربع عشرة قناة" },
+        { en: "DGE circulars · TAMM intake (chat / voice / web) · 20 ADGE source systems · QR submissions · TAMM telemetry · spoke entity submissions across 60 entities", ar: "تعاميم DGE · استلام TAMM (محادثة / صوت / ويب) · 20 نظام ADGE · إرسالات QR · قياسات TAMM · إرسالات الجهات الفرعية عبر 60 جهة" },
       ],
       internal: [
-        { en: "Citation enforcer — every change must cite a published source", ar: "مُلزِم استشهاد — كل تغيير يجب أن يستند إلى مصدر منشور" },
-        { en: "Migration Sentinel — downstream impact simulation across forms and channels", ar: "حارس الترحيل — محاكاة الأثر عبر النماذج والقنوات" },
+        { en: "Eight Agentic Factories on Sapient Bodhi orchestration with Sapient Sustain governance · Falcon-Arabic sovereign LLM · Azure UAE-North (Core42) hosting · DGE CX Hub system of record · HAPA H1–H6 behavioural contracts", ar: "ثماني مصانع وكيلية على تنسيق Sapient Bodhi وحوكمة Sapient Sustain · نموذج Falcon-Arabic السيادي · استضافة Azure UAE-North (Core42) · مركز تجربة العميل · عقود HAPA من H1 إلى H6" },
       ],
       outputs: [
-        { en: "Approved publish to TAMM, retired-template routing map, immutable HAPA-tagged audit pack", ar: "نشر معتمد إلى TAMM، خريطة توجيه للقوالب المتقاعدة، حزمة تدقيق HAPA" },
-      ],
-    },
-    status: "live",
-    accent: "#006A6A",
-    icon: "Database",
-  },
-  {
-    id: "dge-complaint-recovery",
-    slug: "dge-complaint-recovery",
-    title: { en: "DGE · Complaint Recovery & Root-Cause Engine", ar: "DGE · محرّك استرداد الشكاوى والسبب الجذري" },
-    class: "customer-ops-agent",
-    industries: ["public-sector"],
-    horizontals: [],
-    buyer: { en: "DGE CX Director", ar: "مديرة تجربة العميل — DGE" },
-    pitch: {
-      en: "Clusters 200 complaints into 4 root causes, drafts a CEP workshop brief, and overlays mystery-shopper coverage on the Unified Complaint Manual heatmap.",
-      ar: "يجمّع 200 شكوى في 4 أسباب جذرية، ويصوغ موجز ورشة CEP، ويغطّي خريطة دليل الشكاوى الموحّد.",
-    },
-    longDescription: [
-      { en: "Citizen complaints reach DGE faster than the government can route them. The Intake Sentinel acknowledges in seconds with three resolution paths, none of them generic, and hands a fully-typed case to the Recovery Designer.", ar: "تصل شكاوى المواطنين إلى DGE أسرع مما تستطيع الحكومة توجيهها. يستلم حارس الاستلام خلال ثوانٍ بثلاثة مسارات حلّ مخصّصة ويسلّم القضية لمصمّم الاسترداد." },
-      { en: "Root-Cause Sentinel collapses 200 daily complaints into 4 clusters and drafts a CEP workshop brief — 14 attendees, 3 hours, signoff in 7 days — that Mariam reviews instead of authoring from scratch.", ar: "يجمّع حارس السبب الجذري 200 شكوى يومية في 4 مجموعات، ويصوغ موجز ورشة CEP — 14 مشاركاً، 3 ساعات، اعتماد خلال 7 أيام — لمراجعة مريم بدلاً من كتابته من الصفر." },
-      { en: "Mystery-shopper coverage stays at 100% across customer-facing services, with a pre/post perception survey scoring trust impact. Every complaint close is signed by the named owner — no bulk closure, ever.", ar: "تظل تغطية المتسوّق السري 100% عبر الخدمات، مع مسح إدراك قبل/بعد. كل إغلاق شكوى يحمل توقيع المالك المسمّى — لا إغلاق دفعة واحدة." },
-    ],
-    screens: [
-      { title: { en: "Citizen acknowledgement", ar: "إشعار المواطن" }, caption: { en: "Omar files via TAMM and is offered three resolution paths in 8 seconds.", ar: "يقدّم عمر شكواه عبر TAMM ويستلم ثلاثة مسارات خلال 8 ثوانٍ." } },
-      { title: { en: "Cluster cockpit", ar: "كونسول المجموعات" }, caption: { en: "Mariam reviews the 4 clusters; the largest holds 47 complaints sharing one inspection-slot starvation cause.", ar: "تراجع مريم 4 مجموعات؛ الأكبر يضم 47 شكوى لسبب واحد." } },
-      { title: { en: "Mystery-shopper heatmap", ar: "خريطة المتسوّق السري" }, caption: { en: "Director Layla sees 17 green / 2 amber / 1 red services with the trust delta from the pre/post survey.", ar: "ترى المديرة ليلى 17 أخضر / 2 أصفر / 1 أحمر مع فرق الثقة." } },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "TAMM complaint intake (chat, voice, web), 20 ADGE source systems", ar: "استلام شكاوى TAMM (محادثة، صوت، ويب)، 20 نظام ADGE" },
-        { en: "Mystery-shopper visit log, perception survey responses", ar: "سجل زيارات المتسوّق السري، استجابات مسح الإدراك" },
-      ],
-      internal: [
-        { en: "Cluster engine that maps complaints to a single root cause", ar: "محرك تجميع يربط الشكاوى بسبب جذري واحد" },
-        { en: "Workshop brief drafter aligned to the Unified Complaint Manual", ar: "كاتب موجز ورشة متوافق مع دليل الشكاوى الموحّد" },
-      ],
-      outputs: [
-        { en: "Recovery offer to citizen, drafted CEP workshop brief, regulator-grade audit pack", ar: "عرض استرداد للمواطن، موجز ورشة CEP، حزمة تدقيق تنظيمية" },
-      ],
-    },
-    status: "live",
-    accent: "#006A6A",
-    icon: "Headphones",
-  },
-  {
-    id: "dge-effortless-qr",
-    slug: "dge-effortless-qr",
-    title: { en: "DGE · Effortless QR Feedback & Effortless Makers", ar: "DGE · ملاحظات QR وصنّاع التجربة" },
-    class: "customer-ops-agent",
-    industries: ["public-sector"],
-    horizontals: [],
-    buyer: { en: "DGE CX Affairs", ar: "شؤون التجربة — DGE" },
-    pitch: {
-      en: "Reads 400 mixed-language QR submissions from 20 outlets, surfaces 3 frontline 'Effortless Makers', and stops a nomination that lacks a verifiable citation.",
-      ar: "يقرأ 400 ملاحظة من 20 فرعاً، يكشف 3 صنّاع تجربة من الخط الأمامي، ويوقف ترشيحاً يفتقر إلى استشهاد.",
-    },
-    longDescription: [
-      { en: "A 30-second mobile QR landing — one open question, voice input affordance, RTL-perfect Arabic keyboard, and a humane thank-you — turns 0 weekly submissions into ~2,800 across 20 service centres.", ar: "صفحة QR سريعة على الجوال — سؤال واحد، إدخال صوتي، لوحة عربية مثالية، وشكر إنساني — تحوّل صفر إرسال أسبوعياً إلى نحو 2,800 عبر 20 مركز خدمة." },
-      { en: "Theme Sentinel clusters submissions; Quality Sentinel filters 11% noise with cited reasons; Recognition Sentinel surfaces three frontline candidates with verbatim citations attached. No name reaches CX Affairs without a citation.", ar: "يجمّع حارس المواضيع الإرسالات؛ يصفّي حارس الجودة 11% ضوضاء مع تبرير؛ يبرز حارس التقدير ثلاثة مرشّحين مع اقتباسات. لا اسم يصل إلى شؤون التجربة دون استشهاد." },
-      { en: "Outlet managers see emerging themes in days instead of weeks. Director Layla exports a monthly recommendations PDF that drives the Effortless Maker recognition flow and feeds the experience-driver heatmap.", ar: "يرى مديرو الفروع المواضيع الناشئة خلال أيام لا أسابيع. تصدّر المديرة ليلى توصيات شهرية تقود تقدير صنّاع التجربة وتغذي خريطة المحرّكات." },
-    ],
-    screens: [
-      { title: { en: "QR landing", ar: "صفحة QR" }, caption: { en: "30-second open question with voice input, perfect Arabic RTL, no name required.", ar: "سؤال مفتوح خلال 30 ثانية مع إدخال صوتي وعربية مثالية بلا اسم." } },
-      { title: { en: "Outlet theme console", ar: "كونسول مواضيع الفرع" }, caption: { en: "Saeed sees today's clusters, the 11% filtered noise, and three Effortless Maker candidates with citations.", ar: "يرى سعيد المجموعات اليومية والـ11% مصفّاة وثلاثة مرشّحين مع استشهادات." } },
-      { title: { en: "Experience-driver heatmap", ar: "خريطة محرّكات التجربة" }, caption: { en: "CX Affairs sees the per-outlet driver heatmap and the Effortless Maker leaderboard.", ar: "ترى شؤون التجربة خريطة المحرّكات لكل فرع ولوحة صنّاع التجربة." } },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "QR mobile submissions (text + voice, EN/AR mixed)", ar: "إرسالات QR (نص وصوت، مخلوط بالعربية والإنجليزية)" },
-        { en: "Outlet roster, employee directory for recognition flow", ar: "قائمة الفرع، دليل الموظفين لتدفّق التقدير" },
-      ],
-      internal: [
-        { en: "Bilingual theme clusterer with sentiment and memorability scoring", ar: "تجميع مواضيع ثنائي اللغة مع تقييم المشاعر والتذكّر" },
-        { en: "Citation gate that blocks any nomination without a verbatim quote", ar: "بوابة استشهاد توقف أي ترشيح بلا اقتباس" },
-      ],
-      outputs: [
-        { en: "Effortless Maker nomination, monthly recommendations PDF, heatmap data", ar: "ترشيح صانع تجربة، توصيات شهرية PDF، بيانات الخريطة" },
-      ],
-    },
-    status: "live",
-    accent: "#006A6A",
-    icon: "MessageSquare",
-  },
-  {
-    id: "dge-red-team",
-    slug: "dge-red-team",
-    title: { en: "DGE · Red Team Rapid-Response Console", ar: "DGE · كونسول الاستجابة السريعة" },
-    class: "customer-ops-agent",
-    industries: ["public-sector"],
-    horizontals: [],
-    buyer: { en: "DGE Red Team Lead", ar: "قائد فريق الاستجابة — DGE" },
-    pitch: {
-      en: "Driving-licence renewal outage: triages incident in 10s, generates a 3-day workshop plan in 40 minutes, maps 14 stakeholders, drafts kickoff briefs in EN+AR.",
-      ar: "عطل تجديد رخصة القيادة: فرز خلال 10 ثوانٍ، خطة ورشة 3 أيام خلال 40 دقيقة، خريطة 14 معنيّاً، موجزات بالعربية والإنجليزية.",
-    },
-    longDescription: [
-      { en: "When a citizen-facing service breaks, mobilisation time is the only KPI that matters. The Triage Sentinel detects the spike, isolates the root signal, and pushes a workaround to TAMM in under three minutes.", ar: "عند تعطّل أي خدمة، زمن الحشد هو المؤشر الوحيد المهم. يكتشف حارس الفرز الارتفاع ويعزل الإشارة ويدفع الحل البديل إلى TAMM خلال أقل من ثلاث دقائق." },
-      { en: "Workshop Architect drafts a 3-day workshop plan with pre-reads, room set-up and materials in 40 minutes. Stakeholder Mapper identifies the 14 must-attend names. Brief Writer publishes EN+AR kickoff, deliverable and debrief packs.", ar: "يكتب مهندس الورشة خطة 3 أيام مع القراءة المسبقة والإعداد والمواد خلال 40 دقيقة. خرائط أصحاب المصلحة تحدّد 14 اسماً. كاتب الموجز ينشر موجزات بالعربية والإنجليزية." },
-      { en: "Average closure across 9 sprints: 6.4 days, 8 in-SLA, 1 amber. Every mobilisation is gated behind the Red Team Lead's authorisation — no calendar block lands without a name on it.", ar: "متوسط الإغلاق عبر 9 جولات: 6.4 يوم، 8 ضمن SLA، 1 أصفر. كل حشد يمرّ عبر اعتماد قائد الفريق — لا حجز تقويم بلا اسم." },
-    ],
-    screens: [
-      { title: { en: "Citizen workaround", ar: "حلّ بديل للمواطن" }, caption: { en: "Hessa sees the temporary phone-renewal queue with same priority and same fee.", ar: "ترى حصة قائمة التجديد الهاتفية بنفس الأولوية والرسوم." } },
-      { title: { en: "Red Team console", ar: "كونسول فريق الاستجابة" }, caption: { en: "Faisal reviews the 10-second incident timeline, the 3-day plan, and the 14 stakeholders before authorising mobilisation.", ar: "يراجع فيصل تسلسل 10 ثوانٍ، خطة 3 أيام، و14 معنيّاً قبل الاعتماد." } },
-      { title: { en: "30-day governance log", ar: "سجل حوكمة 30 يوماً" }, caption: { en: "Director Layla tracks SLA from request → mobilisation → first prototype → closure across 9 sprints.", ar: "تتابع المديرة ليلى SLA من الطلب إلى الإغلاق عبر 9 جولات." } },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "TAMM incident telemetry, citizen complaint spike signals", ar: "قياسات حوادث TAMM، إشارات ارتفاع الشكاوى" },
-        { en: "DGE entity directory, calendar availability, room inventory", ar: "دليل جهات DGE، توفّر التقاويم، مخزون القاعات" },
-      ],
-      internal: [
-        { en: "Workshop architect with reusable 3-day playbook templates", ar: "مهندس ورشة بقوالب لعب 3 أيام قابلة لإعادة الاستخدام" },
-        { en: "Bilingual brief writer with kickoff / deliverable / debrief patterns", ar: "كاتب موجزات ثنائي اللغة بأنماط افتتاح / تسليم / استخلاص" },
-      ],
-      outputs: [
-        { en: "Citizen workaround, mobilisation plan, EN+AR kickoff packs, audit log", ar: "حلّ بديل للمواطن، خطة حشد، موجزات بالعربية والإنجليزية، سجل تدقيق" },
+        { en: "Authorised TAMM publishes · CEP workshop briefs · Effortless Maker nominations · 3-day mobilisation packs · To-Be journeys + service blueprints · bilingual spoke critiques — every output carries a HAPA-tagged audit pack.", ar: "نشرات TAMM معتمدة · موجزات ورش CEP · ترشيحات صنّاع التجربة · حزم حشد 3 أيام · رحلات المستقبل ومخططات الخدمة · نقد ثنائي اللغة للجهات — كل مخرج يحمل حزمة تدقيق HAPA." },
       ],
     },
     status: "live",
     accent: "#006A6A",
     icon: "ShieldCheck",
-  },
-  {
-    id: "dge-service-redesign",
-    slug: "dge-service-redesign",
-    title: { en: "DGE · Service Redesign Co-Pilot", ar: "DGE · مساعد إعادة تصميم الخدمات" },
-    class: "knowledge-decision-copilot",
-    industries: ["public-sector"],
-    horizontals: [],
-    buyer: { en: "DGE Programme Director", ar: "مدير برنامج — DGE" },
-    pitch: {
-      en: "Five-phase pipeline (Research → Journey → Blueprint → Action Plan → QA Gate) for 'Issue a New Trade Licence' across 4 entities and 9 As-Is touchpoints.",
-      ar: "خط أنابيب من 5 مراحل (بحث → رحلة → مخطّط → خطة عمل → بوابة جودة) لإصدار رخصة تجارية عبر 4 جهات و9 نقاط لمس.",
-    },
-    longDescription: [
-      { en: "Service redesign at government scale used to be a 12-week consulting engagement per service. The Service Redesign Co-Pilot collapses it to 18 days by industrialising the five phases — Research, Journey, Blueprint, Action Plan, QA Gate — into a single agentic pipeline.", ar: "كانت إعادة تصميم الخدمات الحكومية تستغرق 12 أسبوعاً لكل خدمة. يقلّصها المساعد إلى 18 يوماً بتصنيع المراحل الخمس — بحث، رحلة، مخطّط، خطة، بوابة جودة — في خط أنابيب وكيلي." },
-      { en: "The Research Sentinel pulls Singapore and Estonia benchmarks; the Journey Sentinel maps As-Is/To-Be with 4 moments of truth; the Blueprint Sentinel wires Frontstage / Backstage / Support / Event contracts with payload schemas and audit fields.", ar: "يجمع حارس البحث معايير سنغافورة وإستونيا؛ يرسم حارس الرحلة قديم/جديد بأربع لحظات حقيقة؛ يصل حارس المخطّط الواجهة والكواليس والدعم وعقود الأحداث مع المخططات والتدقيق." },
-      { en: "The QA Gate Sentinel scores TAMM CX framework, accessibility, bilingual coverage and 14 life-moments coherence. Nothing publishes with an open AMBER — the rule is enforced by contract, not policy.", ar: "تقيّم بوابة الجودة إطار TAMM والوصول وثنائية اللغة وتماسك 14 لحظة حياتية. لا نشر مع أصفر مفتوح — القاعدة منفّذة بالعقد لا بالسياسة." },
-    ],
-    screens: [
-      { title: { en: "90-second To-Be experience", ar: "تجربة المستقبل 90 ثانية" }, caption: { en: "A new entrepreneur opens a café across 3 screens in 90 seconds — As-Is took 28 days.", ar: "يفتتح ريادي مقهى عبر 3 شاشات في 90 ثانية — القديم 28 يوماً." } },
-      { title: { en: "Service Designer cockpit", ar: "كونسول مصمّمة الخدمات" }, caption: { en: "Reem moves through Research → Journey → Blueprint → Action Plan → QA Gate with QA scorecard and AMBER findings.", ar: "تتنقل ريم بين المراحل الخمس مع بطاقة الجودة وأمبر." } },
-      { title: { en: "Portfolio scoreboard", ar: "لوحة المحفظة" }, caption: { en: "Programme Director sees 22 services / week throughput, 18 stale (>90d), 4 SLA at-risk across 500 services in flight.", ar: "يرى مدير البرنامج 22 خدمة أسبوعياً، 18 متقادمة، 4 معرّضة للمخاطرة، عبر 500 خدمة." } },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "Existing service catalogue, regulator decrees, citizen journey research", ar: "كتالوج الخدمات الحالي، المراسيم التنظيمية، بحث رحلة المواطن" },
-        { en: "Global benchmarks (Singapore Life SG, Estonia X-Road, UK Gov.UK)", ar: "معايير عالمية (سنغافورة، إستونيا، المملكة المتحدة)" },
-      ],
-      internal: [
-        { en: "Five-phase pipeline with payload schemas and audit-field templates", ar: "خط أنابيب 5 مراحل مع مخططات وقوالب تدقيق" },
-        { en: "QA Gate scoring TAMM CX, accessibility, bilingual, 14 life-moments", ar: "تقييم بوابة الجودة لـ TAMM والوصول وثنائية اللغة و14 لحظة حياتية" },
-      ],
-      outputs: [
-        { en: "To-Be journey, service blueprint, action plan, QA scorecard, audit pack", ar: "رحلة المستقبل، مخطّط الخدمة، خطة العمل، بطاقة الجودة، حزمة التدقيق" },
-      ],
-    },
-    status: "live",
-    accent: "#006A6A",
-    icon: "ClipboardList",
-  },
-  {
-    id: "dge-spokes-review",
-    slug: "dge-spokes-review",
-    title: { en: "DGE · Spokes Review Agent", ar: "DGE · وكيل مراجعة الجهات الفرعية" },
-    class: "knowledge-decision-copilot",
-    industries: ["public-sector"],
-    horizontals: [],
-    buyer: { en: "DGE Spokes Programme Director", ar: "مديرة برنامج الجهات — DGE" },
-    pitch: {
-      en: "Reviews 12 synthetic spoke service-design submissions, scores completeness + principles, drafts critique in EN+AR; blocks feedback on a submission missing the To-Be journey.",
-      ar: "يراجع 12 إرسالاً من الجهات الفرعية، يقيّم الاكتمال والمبادئ، ويصوغ نقداً بالعربية والإنجليزية؛ يوقف تغذية على إرسال تنقصه الرحلة المستقبلية.",
-    },
-    longDescription: [
-      { en: "DGE reviews 750 spoke submissions a year — every entity's redesigned service must stay coherent with the 14 life-moments framework. Manual review took 9 days per submission; the Spokes Review Agent drops it to 12 hours while raising first-pass acceptance from 22% to 51%.", ar: "تراجع DGE 750 إرسالاً من الجهات سنوياً — كل تصميم خدمة يجب أن يبقى متّسقاً مع 14 لحظة حياتية. كانت المراجعة اليدوية 9 أيام؛ يخفضها الوكيل إلى 12 ساعة ويرفع القبول من 22% إلى 51%." },
-      { en: "Submission Reader parses the artefacts, Coherence Sentinel cross-checks against the life-moments framework, Principles Sentinel scores the 5 design promises, and Critique Drafter produces EN+AR feedback in 8 minutes.", ar: "يحلّل قارئ الإرسال المرفقات، يفحص حارس التناسق مقابل إطار اللحظات، يقيّم حارس المبادئ الوعود الخمسة، ويكتب كاتب النقد التغذية الراجعة بالعربية والإنجليزية خلال 8 دقائق." },
-      { en: "The agent will not send feedback on a submission whose To-Be journey is missing — the contract blocks it. Hala signs every outgoing critique, and a 30-day follow-up is auto-scheduled at the same time.", ar: "لا يرسل الوكيل تغذية على إرسال تنقصه الرحلة المستقبلية — العقد يمنعه. توقّع هالة كل نقد صادر، وتُجدول متابعة 30 يوماً تلقائياً." },
-    ],
-    screens: [
-      { title: { en: "Citizen-impact summary", ar: "ملخّص أثر المواطن" }, caption: { en: "Why coherent spokes review matters: consistent forms, shared identity, single payment gateway across 60 entities.", ar: "لماذا تهمّ المراجعة المتّسقة: نماذج موحّدة وهوية مشتركة وبوابة دفع واحدة عبر 60 جهة." } },
-      { title: { en: "Reviewer queue", ar: "قائمة المراجعة" }, caption: { en: "Hala reviews submission #07 (ADAA — Trade licence renewal) at 86% completeness, 4/5 principles, EN+AR critique drafted in 8 minutes.", ar: "تراجع هالة الإرسال #07 — اكتمال 86%، مبادئ 4/5، نقد جاهز خلال 8 دقائق." } },
-      { title: { en: "Programme dashboard", ar: "لوحة البرنامج" }, caption: { en: "Director Layla sees 412 completed / 86 in-progress / 28 iterating reviews with median first-feedback SLA of 11 hours.", ar: "ترى المديرة ليلى 412 مكتمل / 86 قيد التنفيذ / 28 تكرار، مع SLA متوسطه 11 ساعة." } },
-    ],
-    dataModel: {
-      inputs: [
-        { en: "Spoke entity submissions (research pack, journey, blueprint, action plan)", ar: "إرسالات الجهات (حزمة بحث، رحلة، مخطّط، خطة)" },
-        { en: "DGE 14 life-moments framework, 5 design principles", ar: "إطار 14 لحظة حياتية، 5 مبادئ تصميم" },
-      ],
-      internal: [
-        { en: "Completeness checker with mandatory-artefact gate", ar: "فاحص اكتمال مع بوابة المرفقات الإلزامية" },
-        { en: "Bilingual critique drafter aligned to DGE editorial standard", ar: "كاتب نقد ثنائي اللغة متوافق مع المعيار التحريري" },
-      ],
-      outputs: [
-        { en: "EN+AR critique, completeness scorecard, 30-day follow-up calendar entry", ar: "نقد بالعربية والإنجليزية، بطاقة اكتمال، إدخال متابعة 30 يوماً" },
-      ],
-    },
-    status: "live",
-    accent: "#006A6A",
-    icon: "BookOpen",
   },
 ];
 

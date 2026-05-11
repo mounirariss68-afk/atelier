@@ -31,6 +31,14 @@ export {
 // than silently 404ing the route.
 import { REGISTERED_DEMO_SLUG_SET as REGISTERED_DEMO_SLUGS } from "./registeredDemoSlugs";
 
+// Marketplace tool slugs whose card opens a dedicated hub route registered
+// in App.tsx ahead of the /marketplace/:slug catch-all. These tools are
+// "live" but legitimately have no entry in the shared MarketplaceDetail
+// demo dispatch, so they are exempt from the registered-demo parity check.
+const HUB_ROUTED_TOOL_SLUGS: ReadonlySet<string> = new Set([
+  "dge-effortless",
+]);
+
 function assertSharedAlignment(
   kind: string,
   localKeys: string[],
@@ -8686,8 +8694,15 @@ assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsight
       }
     }
 
-    // Every live tool must have a registered demo component.
-    if (t.status === "live" && !REGISTERED_DEMO_SLUGS.has(t.slug)) {
+    // Every live tool must have a registered demo component — except for
+    // hub-routed slugs whose marketplace card opens a dedicated hub page
+    // (registered in App.tsx ahead of the /marketplace/:slug catch-all)
+    // rather than the shared MarketplaceDetail demo dispatch.
+    if (
+      t.status === "live" &&
+      !REGISTERED_DEMO_SLUGS.has(t.slug) &&
+      !HUB_ROUTED_TOOL_SLUGS.has(t.slug)
+    ) {
       throw new Error(
         `[content.ts] Marketplace tool "${t.slug}" is marked live but has no entry in REGISTERED_DEMO_SLUGS. Add the demo component to pages/MarketplaceDetail.tsx and update this set.`,
       );

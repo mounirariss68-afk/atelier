@@ -1267,139 +1267,36 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
     },
   },
 
-  // ─── DGE Effortless 2.0 — six agentic CX casts ──────────────────────────
-  "dge-catalogue-channel": {
+  // ─── DGE Effortless 2.0 — unified cast ──────────────────────────────────
+  // One cast covers the whole demonstrator. Each "agent" here represents
+  // an Agentic Factory (per the Publicis Sapient deck) rather than an
+  // individual sentinel — the per-demo sentinel rosters live in
+  // artifacts/maven-ai/src/data/dge/factories.ts and play out in the
+  // shared DgeShell once a buyer launches a specific demo.
+  "dge-effortless": {
     agents: [
-      { id: "catalog-sentinel", name: { en: "Catalog Sentinel", ar: "حارس الكتالوج" }, role: { en: "Watches DGE circulars and regulator decrees and flags fee/eligibility drift with the citation already attached.", ar: "يراقب التعاميم والمراسيم ويرصد انحراف الرسوم والأهلية مع الاستشهاد جاهزاً." }, kind: "monitor", reads: [{ en: "DGE circulars, regulator decrees, sub-entity bulletins", ar: "تعاميم DGE والمراسيم ونشرات الجهات الفرعية" }], writes: [{ en: "Drift callout with cited source", ar: "تنبيه انحراف مع مصدر موثّق" }] },
-      { id: "citation-enforcer", name: { en: "Citation Enforcer", ar: "مُلزِم الاستشهاد" }, role: { en: "Blocks any catalogue change that does not carry a verifiable citation back to a published source.", ar: "يمنع أي تغيير في الكتالوج لا يحمل استشهاداً قابلاً للتحقّق." }, kind: "critic", writes: [{ en: "Pass/fail citation verdict", ar: "قرار اجتياز الاستشهاد" }] },
-      { id: "channel-rationaliser", name: { en: "Channel Rationaliser", ar: "مرشّد القنوات" }, role: { en: "Collapses 105 broadcast email templates to 55 governed templates with a Sankey of audience routing.", ar: "يطوي 105 قوالب بريد إلى 55 قالباً محوكَماً مع مخطط توجيه الجمهور." }, kind: "compiler", writes: [{ en: "Template merge plan + routing map", ar: "خطة دمج القوالب وخريطة التوجيه" }] },
-      { id: "migration-sentinel", name: { en: "Migration Sentinel", ar: "حارس الترحيل" }, role: { en: "Simulates downstream impact across forms, channels and sub-entity inboxes before publish.", ar: "يحاكي الأثر عبر النماذج والقنوات وصناديق الجهات الفرعية قبل النشر." }, kind: "scorer", writes: [{ en: "Impact simulation report", ar: "تقرير محاكاة الأثر" }] },
+      { id: "catalogue-channel-factory", name: { en: "Catalogue & Channel Factory", ar: "مصنع الكتالوج والقناة" }, role: { en: "Catalog / Channel / Validation / Migration sentinels — keeps every TAMM service entry fresh and reachable, citation-gated.", ar: "حُرّاس الكتالوج والقناة والتحقّق والترحيل — يبقي كل خدمة TAMM محدّثة وقابلة للوصول، خلف بوابة استشهاد." }, kind: "monitor", reads: [{ en: "DGE circulars, regulator decrees, TAMM Spaces snapshots, 14 channels", ar: "تعاميم DGE والمراسيم ولقطات TAMM Spaces و14 قناة" }], writes: [{ en: "Drift callouts, channel rationalisation Sankey, downstream impact simulation", ar: "تنبيهات الانحراف، مخطط ترشيد القنوات، محاكاة الأثر" }] },
+      { id: "complaint-recovery-factory", name: { en: "Complaint Recovery Factory", ar: "مصنع استرداد الشكاوى" }, role: { en: "Intake / Root-Cause / Recovery Designer / Mystery Shopper — clusters 200 complaints into 4 root causes and drafts the CEP workshop brief.", ar: "حُرّاس الاستلام والسبب الجذري ومصمّم الاسترداد والمتسوّق السري — يجمّع 200 شكوى في 4 أسباب ويصوغ موجز ورشة CEP." }, kind: "classifier", writes: [{ en: "Cluster set, drafted CEP workshop brief, mystery-shopper heatmap", ar: "مجموعات شكاوى، موجز ورشة CEP مسوّد، خريطة المتسوّق السري" }] },
+      { id: "qr-feedback-factory", name: { en: "QR Feedback & Effortless Makers Factory", ar: "مصنع ملاحظات QR وصنّاع التجربة" }, role: { en: "QR Intake / Quality / Theme / Recognition sentinels — turns 30-second QR submissions into outlet themes and citation-gated Effortless Maker nominations.", ar: "حُرّاس استلام QR والجودة والمواضيع والتقدير — يحوّل ملاحظات QR إلى مواضيع وفرص ترشيح موثّقة." }, kind: "drafter", writes: [{ en: "Theme clusters, filtered submissions with rationale, Effortless Maker shortlist", ar: "مجموعات مواضيع، إرسالات مصفّاة مع التبرير، قائمة صنّاع التجربة" }] },
+      { id: "red-team-factory", name: { en: "Red Team Rapid-Response Factory", ar: "مصنع فريق الاستجابة السريعة" }, role: { en: "Triage / Workshop Architect / Stakeholder Mapper / Brief Writer — moves a citizen-facing outage from incident to a 3-day mobilisation pack in hours.", ar: "حُرّاس الفرز ومهندس الورشة وخرائط المعنيّين وكاتب الموجز — ينقل العطل من حادث إلى حزمة حشد 3 أيام في ساعات." }, kind: "planner", writes: [{ en: "Incident timeline, 3-day workshop plan, 14-stakeholder mobilisation list, EN+AR brief packs", ar: "تسلسل الحادث، خطة ورشة 3 أيام، قائمة 14 معنيّاً، حزم موجز ثنائية اللغة" }] },
+      { id: "service-redesign-factory", name: { en: "Service Redesign Co-Pilot Factory", ar: "مصنع مساعد إعادة تصميم الخدمات" }, role: { en: "Research / Journey / Blueprint / Action Plan / QA Gate — collapses 12 weeks of consulting into an 18-day To-Be journey with audit-grade artefacts.", ar: "حُرّاس البحث والرحلة والمخطّط والخطة وبوابة الجودة — يقلّص 12 أسبوعاً إلى 18 يوماً بمخرجات قابلة للتدقيق." }, kind: "compiler", writes: [{ en: "Research Pack, As-Is/To-Be journey, service blueprint, action plan, QA scorecard", ar: "حزمة بحث، رحلة قديم/جديد، مخطّط خدمة، خطة عمل، بطاقة جودة" }] },
+      { id: "spokes-review-factory", name: { en: "Spokes Review Factory", ar: "مصنع مراجعة الجهات الفرعية" }, role: { en: "Submission Reader / Coherence / Principles / Critique Drafter — bilingual spoke critique in 12 hours; refuses to send if To-Be journey is missing.", ar: "حُرّاس قراءة الإرسال والتناسق والمبادئ وكاتب النقد — نقد ثنائي اللغة خلال 12 ساعة؛ يرفض الإرسال بلا رحلة مستقبلية." }, kind: "critic", writes: [{ en: "Completeness scorecard, principles scorecard, EN+AR critique with 30-day follow-up", ar: "بطاقة اكتمال، بطاقة مبادئ، نقد بالعربية والإنجليزية مع متابعة 30 يوماً" }] },
     ],
     edges: [
-      { from: "catalog-sentinel", to: "citation-enforcer" },
-      { from: "citation-enforcer", to: "channel-rationaliser" },
-      { from: "channel-rationaliser", to: "migration-sentinel" },
+      { from: "catalogue-channel-factory", to: "complaint-recovery-factory" },
+      { from: "complaint-recovery-factory", to: "qr-feedback-factory" },
+      { from: "qr-feedback-factory", to: "red-team-factory" },
+      { from: "red-team-factory", to: "service-redesign-factory" },
+      { from: "service-redesign-factory", to: "spokes-review-factory" },
     ],
     humanCheckpoints: [
-      { id: "director-authorises-publish", name: { en: "DGE CX Director", ar: "مديرة تجربة العميل — DGE" }, decision: { en: "Authorises the catalogue update and the channel-template collapse to publish to TAMM and the 14 channels.", ar: "تعتمد تحديث الكتالوج وطيّ قوالب القناة للنشر إلى TAMM والقنوات الأربع عشرة." } },
+      { id: "dge-cx-director-authorises", name: { en: "DGE CX Director (Director Layla)", ar: "مديرة تجربة العميل (المديرة ليلى) — DGE" }, decision: { en: "Owns the AUTHORIZE card across all six demos: every consequential publish, mobilisation, recognition, redesign or critique carries her named signature and HAPA H1–H6 audit trail.", ar: "تملك بطاقة الاعتماد عبر العروض الستة: كل نشر أو حشد أو تقدير أو إعادة تصميم أو نقد ذي أثر يحمل توقيعها المسمّى ومسار تدقيق HAPA من H1 إلى H6." } },
     ],
     flowOrder: linearFlow(
-      ["catalog-sentinel", "citation-enforcer", "channel-rationaliser", "migration-sentinel"],
-      [{ id: "director-authorises-publish", afterAgent: "migration-sentinel" }],
+      ["catalogue-channel-factory", "complaint-recovery-factory", "qr-feedback-factory", "red-team-factory", "service-redesign-factory", "spokes-review-factory"],
+      [{ id: "dge-cx-director-authorises", afterAgent: "spokes-review-factory" }],
     ),
-    rationale: { en: "A single model that drafts a fee change cannot also be the gate that blocks an uncited one — the citation enforcer is non-optional. Splitting drift detection, citation enforcement, channel rationalisation and downstream simulation makes the publish defensible to a regulator.", ar: "لا يمكن لنموذج يصوغ تغيير رسم أن يكون البوابة التي توقف غير الموثّق — مُلزِم الاستشهاد ليس اختيارياً. فصل الكشف والاستشهاد والترشيد والمحاكاة يجعل النشر قابلاً للدفاع تنظيمياً." },
-  },
-
-  "dge-complaint-recovery": {
-    agents: [
-      { id: "intake-sentinel", name: { en: "Intake Sentinel", ar: "حارس الاستلام" }, role: { en: "Acknowledges every complaint within seconds and offers three concrete resolution paths.", ar: "يستلم كل شكوى خلال ثوانٍ ويقدّم ثلاثة مسارات حلّ ملموسة." }, kind: "router", reads: [{ en: "TAMM complaint intake (chat, voice, web)", ar: "استلام شكاوى TAMM (محادثة، صوت، ويب)" }], writes: [{ en: "Typed complaint case with three resolution paths", ar: "قضيّة مصنّفة بثلاثة مسارات" }] },
-      { id: "root-cause-sentinel", name: { en: "Root-Cause Sentinel", ar: "حارس السبب الجذري" }, role: { en: "Clusters daily complaints into root-cause groups across 20 ADGE source systems.", ar: "يجمّع الشكاوى اليومية في مجموعات أسباب جذرية عبر 20 نظام ADGE." }, kind: "classifier", writes: [{ en: "Cluster set with dominant cause per cluster", ar: "مجموعات مع السبب الغالب لكل مجموعة" }] },
-      { id: "recovery-designer", name: { en: "Recovery Designer", ar: "مصمّم الاسترداد" }, role: { en: "Drafts a CEP workshop brief — attendees, agenda, signoff timeline — for the dominant cluster.", ar: "يصوغ موجز ورشة CEP — المشاركون والأجندة وزمن الاعتماد — للمجموعة الكبرى." }, kind: "drafter", writes: [{ en: "Workshop brief aligned to the Unified Complaint Manual", ar: "موجز ورشة متوافق مع دليل الشكاوى الموحّد" }] },
-      { id: "shopper-sentinel", name: { en: "Mystery-Shopper Sentinel", ar: "حارس المتسوّق السري" }, role: { en: "Maintains 100% mystery-shopper coverage and runs the pre/post perception survey.", ar: "يحافظ على تغطية المتسوّق السري 100% ويجري مسح الإدراك قبل/بعد." }, kind: "monitor", writes: [{ en: "Coverage heatmap + trust delta", ar: "خريطة التغطية وفرق الثقة" }] },
-    ],
-    edges: [
-      { from: "intake-sentinel", to: "root-cause-sentinel" },
-      { from: "root-cause-sentinel", to: "recovery-designer" },
-      { from: "recovery-designer", to: "shopper-sentinel" },
-    ],
-    humanCheckpoints: [
-      { id: "owner-signs-close", name: { en: "Named complaint owner", ar: "المالك المسمّى للشكوى" }, decision: { en: "Signs every complaint close — no bulk closure, ever — and authorises the CEP workshop kickoff.", ar: "يوقّع كل إغلاق — لا إغلاق دفعة واحدة — ويعتمد انطلاق ورشة CEP." } },
-    ],
-    flowOrder: linearFlow(
-      ["intake-sentinel", "root-cause-sentinel", "recovery-designer", "shopper-sentinel"],
-      [{ id: "owner-signs-close", afterAgent: "recovery-designer" }],
-    ),
-    rationale: { en: "Acknowledgement, clustering, recovery design and shopper coverage are independent crafts. The named-owner signature on every close is what stops the silent bulk-closure failure mode that destroys regulator trust.", ar: "الاستلام والتجميع والتصميم وتغطية المتسوّق حِرف مستقلة. توقيع المالك المسمّى على كل إغلاق يوقف وضع الفشل الصامت الذي يدمّر الثقة التنظيمية." },
-  },
-
-  "dge-effortless-qr": {
-    agents: [
-      { id: "qr-receiver", name: { en: "QR Receiver", ar: "مستلم QR" }, role: { en: "Receives 30-second QR submissions in mixed EN/AR (text + voice) and timestamps them per outlet.", ar: "يستلم إرسالات QR لـ 30 ثانية بالعربية والإنجليزية ويختمها زمنياً لكل فرع." }, kind: "router", reads: [{ en: "Mobile QR submissions across 20 outlets", ar: "إرسالات QR عبر 20 فرعاً" }], writes: [{ en: "Normalised submission stream", ar: "تدفق إرسالات موحّد" }] },
-      { id: "theme-sentinel", name: { en: "Theme Sentinel", ar: "حارس المواضيع" }, role: { en: "Clusters submissions into themes with sentiment and memorability scoring.", ar: "يجمّع الإرسالات في مواضيع مع تقييم المشاعر والتذكّر." }, kind: "classifier", writes: [{ en: "Theme clusters per outlet", ar: "مجموعات مواضيع لكل فرع" }] },
-      { id: "quality-sentinel", name: { en: "Quality Sentinel", ar: "حارس الجودة" }, role: { en: "Filters ~11% noise with cited reasons so outlet managers only review signal.", ar: "يصفّي نحو 11% ضوضاء مع تبرير حتى لا يراجع المديرون إلا الإشارة." }, kind: "critic", writes: [{ en: "Filtered submission set + filter rationale", ar: "إرسالات مصفّاة مع تبرير الفلترة" }] },
-      { id: "recognition-sentinel", name: { en: "Recognition Sentinel", ar: "حارس التقدير" }, role: { en: "Surfaces three Effortless Maker candidates per outlet with verbatim citizen quotes attached.", ar: "يبرز ثلاثة مرشّحين لصنّاع التجربة لكل فرع مع اقتباسات حرفية." }, kind: "scorer", writes: [{ en: "Effortless Maker nominations with citations", ar: "ترشيحات صنّاع تجربة مع استشهادات" }] },
-    ],
-    edges: [
-      { from: "qr-receiver", to: "theme-sentinel" },
-      { from: "theme-sentinel", to: "quality-sentinel" },
-      { from: "quality-sentinel", to: "recognition-sentinel" },
-    ],
-    humanCheckpoints: [
-      { id: "cx-affairs-recognises", name: { en: "DGE CX Affairs", ar: "شؤون التجربة — DGE" }, decision: { en: "Authorises Effortless Maker recognition and exports the monthly recommendations PDF.", ar: "تعتمد تقدير صانع التجربة وتصدّر التوصيات الشهرية PDF." } },
-    ],
-    flowOrder: linearFlow(
-      ["qr-receiver", "theme-sentinel", "quality-sentinel", "recognition-sentinel"],
-      [{ id: "cx-affairs-recognises", afterAgent: "recognition-sentinel" }],
-    ),
-    rationale: { en: "Recognition that does not carry a verbatim citation is gossip. Splitting receive, cluster, filter and recognise — and gating recognition on a citation — is what makes a 30-second QR feedback loop trustable at programme scale.", ar: "تقدير بلا اقتباس حرفي هو شائعة. فصل الاستلام والتجميع والفلترة والتقدير — وربط التقدير بالاستشهاد — يجعل حلقة QR لـ 30 ثانية موثوقة على نطاق البرنامج." },
-  },
-
-  "dge-red-team": {
-    agents: [
-      { id: "triage-sentinel", name: { en: "Triage Sentinel", ar: "حارس الفرز" }, role: { en: "Detects the citizen-facing incident, isolates the root signal, and pushes a TAMM workaround in <3 minutes.", ar: "يكتشف الحادث، يعزل الإشارة، ويدفع حلاً بديلاً إلى TAMM خلال أقل من 3 دقائق." }, kind: "monitor", reads: [{ en: "TAMM telemetry, complaint spike signals", ar: "قياسات TAMM وإشارات ارتفاع الشكاوى" }], writes: [{ en: "Incident timeline + workaround", ar: "تسلسل الحادث والحلّ البديل" }] },
-      { id: "workshop-architect", name: { en: "Workshop Architect", ar: "مهندس الورشة" }, role: { en: "Generates a 3-day workshop plan with pre-reads, room set-up and materials in 40 minutes.", ar: "يولّد خطة ورشة 3 أيام مع القراءة المسبقة والإعداد والمواد خلال 40 دقيقة." }, kind: "drafter", writes: [{ en: "3-day workshop plan", ar: "خطة ورشة 3 أيام" }] },
-      { id: "stakeholder-mapper", name: { en: "Stakeholder Mapper", ar: "خرائط أصحاب المصلحة" }, role: { en: "Identifies the 14 must-attend stakeholders across DGE entities for the rapid response.", ar: "يحدّد 14 معنيّاً عبر جهات DGE للاستجابة السريعة." }, kind: "router", writes: [{ en: "Stakeholder mobilisation list", ar: "قائمة حشد المعنيّين" }] },
-      { id: "brief-writer", name: { en: "Brief Writer", ar: "كاتب الموجز" }, role: { en: "Drafts EN+AR kickoff, deliverable and debrief packs aligned to DGE editorial standard.", ar: "يصوغ موجزات الانطلاق والتسليم والاستخلاص بالعربية والإنجليزية." }, kind: "drafter", writes: [{ en: "Bilingual brief packs", ar: "حزم موجزات ثنائية اللغة" }] },
-    ],
-    edges: [
-      { from: "triage-sentinel", to: "workshop-architect" },
-      { from: "workshop-architect", to: "stakeholder-mapper" },
-      { from: "stakeholder-mapper", to: "brief-writer" },
-    ],
-    humanCheckpoints: [
-      { id: "red-team-lead-mobilises", name: { en: "Red Team Lead", ar: "قائد فريق الاستجابة" }, decision: { en: "Authorises mobilisation: blocks 14 calendars, books Hub Room A, sends EN+AR pre-reads, targets Day-3 sign-off.", ar: "يعتمد الحشد: يحجز 14 تقويماً وقاعة A ويرسل الموجزات ويستهدف الاعتماد في اليوم الثالث." } },
-    ],
-    flowOrder: linearFlow(
-      ["triage-sentinel", "workshop-architect", "stakeholder-mapper", "brief-writer"],
-      [{ id: "red-team-lead-mobilises", afterAgent: "brief-writer" }],
-    ),
-    rationale: { en: "Mobilisation time is the only KPI that matters in a citizen-facing outage. Splitting triage, planning, stakeholder mapping and bilingual briefing lets each step run in parallel under a single named-human authorisation — no calendar block lands without a name on it.", ar: "زمن الحشد هو المؤشر الوحيد المهم في عطل المواطن. فصل الفرز والتخطيط والخرائط والموجز يتيح التوازي تحت اعتماد بشري مسمّى — لا حجز تقويم بلا اسم." },
-  },
-
-  "dge-service-redesign": {
-    agents: [
-      { id: "research-sentinel", name: { en: "Research Sentinel", ar: "حارس البحث" }, role: { en: "Pulls Singapore Life SG, Estonia X-Road and Gov.UK benchmarks into a Research Pack.", ar: "يجمع معايير سنغافورة وإستونيا والمملكة المتحدة في حزمة بحث." }, kind: "retriever", reads: [{ en: "Global service-design benchmarks, citizen journey research", ar: "معايير تصميم الخدمات العالمية، بحث رحلة المواطن" }], writes: [{ en: "Research Pack with AMBER findings", ar: "حزمة بحث مع نتائج أمبر" }] },
-      { id: "journey-sentinel", name: { en: "Journey Sentinel", ar: "حارس الرحلة" }, role: { en: "Maps As-Is/To-Be journey with 4 moments of truth across the 9 As-Is touchpoints.", ar: "يرسم رحلة قديم/جديد بأربع لحظات حقيقة عبر 9 نقاط لمس." }, kind: "drafter", writes: [{ en: "As-Is/To-Be journey map", ar: "رحلة قديم/جديد" }] },
-      { id: "blueprint-sentinel", name: { en: "Blueprint Sentinel", ar: "حارس المخطّط" }, role: { en: "Wires Frontstage / Backstage / Support / Event contracts with payload schemas and audit fields.", ar: "يصل عقود الواجهة والكواليس والدعم والأحداث مع المخططات وحقول التدقيق." }, kind: "compiler", writes: [{ en: "Service blueprint with payload schemas", ar: "مخطّط الخدمة مع المخططات" }] },
-      { id: "action-plan-sentinel", name: { en: "Action Plan Sentinel", ar: "حارس خطة العمل" }, role: { en: "Builds milestones, owners, risk register and a facilitation pack across the 4 entities.", ar: "يبني المحطّات والمسؤولين وسجل المخاطر وحزمة التيسير عبر 4 جهات." }, kind: "planner", writes: [{ en: "Action plan with risk register", ar: "خطة عمل مع سجل مخاطر" }] },
-      { id: "qa-gate-sentinel", name: { en: "QA Gate Sentinel", ar: "بوابة الجودة" }, role: { en: "Scores TAMM CX framework, accessibility, bilingual coverage and 14 life-moments coherence; blocks publish on AMBER.", ar: "تقيّم إطار TAMM والوصول وثنائية اللغة وتماسك 14 لحظة؛ تمنع النشر مع أصفر." }, kind: "critic", writes: [{ en: "QA scorecard (4 dimensions)", ar: "بطاقة جودة (4 أبعاد)" }] },
-    ],
-    edges: [
-      { from: "research-sentinel", to: "journey-sentinel" },
-      { from: "journey-sentinel", to: "blueprint-sentinel" },
-      { from: "blueprint-sentinel", to: "action-plan-sentinel" },
-      { from: "action-plan-sentinel", to: "qa-gate-sentinel" },
-    ],
-    humanCheckpoints: [
-      { id: "designer-commits-to-be", name: { en: "Service Designer (DGE)", ar: "مصمّمة خدمات — DGE" }, decision: { en: "Authorises commit of the To-Be journey: promotes to Action Plan, locks 4 entities to milestone calendar, triggers blueprint review.", ar: "تعتمد ترقية رحلة المستقبل: قفل 4 جهات على جدول المحطّات وتفعيل مراجعة المخطّط." } },
-    ],
-    flowOrder: linearFlow(
-      ["research-sentinel", "journey-sentinel", "blueprint-sentinel", "action-plan-sentinel", "qa-gate-sentinel"],
-      [{ id: "designer-commits-to-be", afterAgent: "qa-gate-sentinel" }],
-    ),
-    rationale: { en: "Service redesign is five independent crafts — research, journey, blueprint, plan, QA. Industrialising each as a sentinel and gating publish on the QA Gate is what collapses 12 weeks of consulting into 18 days without losing the design promise.", ar: "إعادة تصميم الخدمة خمس حِرف مستقلة — بحث، رحلة، مخطّط، خطة، جودة. تصنيع كلٍّ كحارس وربط النشر ببوابة الجودة يقلّص 12 أسبوعاً إلى 18 يوماً دون فقد وعد التصميم." },
-  },
-
-  "dge-spokes-review": {
-    agents: [
-      { id: "submission-reader", name: { en: "Submission Reader", ar: "قارئ الإرسال" }, role: { en: "Parses the spoke entity's submission and supporting artefacts (research pack, journey, blueprint, action plan).", ar: "يحلّل إرسال الجهة الفرعية ومرفقاتها." }, kind: "retriever", reads: [{ en: "Spoke submissions across 60 entities", ar: "إرسالات الجهات عبر 60 جهة" }], writes: [{ en: "Parsed submission tree", ar: "شجرة إرسال مفهرسة" }] },
-      { id: "coherence-sentinel", name: { en: "Coherence Sentinel", ar: "حارس التناسق" }, role: { en: "Cross-checks the submission against the DGE 14 life-moments framework.", ar: "يفحص الإرسال مقابل إطار 14 لحظة حياتية." }, kind: "critic", writes: [{ en: "Completeness scorecard with missing-artefact list", ar: "بطاقة اكتمال مع قائمة مفقودات" }] },
-      { id: "principles-sentinel", name: { en: "Principles Sentinel", ar: "حارس المبادئ" }, role: { en: "Scores the submission against the 5 DGE design promises (e.g. Always Fair, Always Coherent).", ar: "يقيّم الإرسال مقابل 5 وعود تصميم DGE." }, kind: "scorer", writes: [{ en: "Principles scorecard (5 dimensions)", ar: "بطاقة مبادئ (5 أبعاد)" }] },
-      { id: "critique-drafter", name: { en: "Critique Drafter", ar: "كاتب النقد" }, role: { en: "Drafts EN+AR feedback in 8 minutes; refuses to send when To-Be journey is missing.", ar: "يكتب التغذية الراجعة بالعربية والإنجليزية خلال 8 دقائق؛ يرفض الإرسال إذا غابت رحلة المستقبل." }, kind: "drafter", writes: [{ en: "Bilingual critique with 30-day follow-up", ar: "نقد ثنائي اللغة مع متابعة 30 يوماً" }] },
-    ],
-    edges: [
-      { from: "submission-reader", to: "coherence-sentinel" },
-      { from: "coherence-sentinel", to: "principles-sentinel" },
-      { from: "principles-sentinel", to: "critique-drafter" },
-    ],
-    humanCheckpoints: [
-      { id: "reviewer-signs-feedback", name: { en: "Spokes Reviewer (DGE)", ar: "مراجعة الجهات — DGE" }, decision: { en: "Signs every outgoing critique and authorises the 30-day follow-up calendar entry.", ar: "توقّع كل نقد صادر وتعتمد إدخال متابعة 30 يوماً." } },
-    ],
-    flowOrder: linearFlow(
-      ["submission-reader", "coherence-sentinel", "principles-sentinel", "critique-drafter"],
-      [{ id: "reviewer-signs-feedback", afterAgent: "critique-drafter" }],
-    ),
-    rationale: { en: "The Critique Drafter must refuse to send feedback on an incomplete submission — that contract is what keeps the spokes coherent across 60 entities. Splitting reading, coherence, principles and drafting makes the refusal auditable instead of editorial.", ar: "يرفض كاتب النقد الإرسال على إرسال غير مكتمل — هذا العقد يحافظ على التناسق عبر 60 جهة. فصل القراءة والتناسق والمبادئ والصياغة يجعل الرفض قابلاً للتدقيق لا تحريرياً." },
+    rationale: { en: "DGE Effortless 2.0 is the demonstrator, not a single agent. Splitting the workload across eight Agentic Factories — each with its own sentinels, behavioural contract and named human checkpoint — is what lets the same shell serve a Citizen, an Operator and a Governance reviewer without collapsing the audit story. The unified marketplace card routes the buyer to the hub so they can pick the demo that matches their decision, then the shared shell takes over.", ar: "DGE Effortless 2.0 هو العرض التجريبي وليس وكيلاً واحداً. تقسيم العمل عبر ثماني مصانع وكيلية — لكل منها حُرّاسه وعقده السلوكي ونقطة اعتماده البشرية المسمّاة — هو ما يتيح للهيكل ذاته خدمة المواطن والمشغّل والمراجع الحوكمي دون انهيار قصة التدقيق. تنقل البطاقة الموحّدة في السوق المشتري إلى المركز ليختار العرض المناسب، ثم يتولّى الهيكل المشترك." },
   },
 };
 
