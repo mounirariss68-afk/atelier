@@ -34,26 +34,41 @@ const client = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
-const SYSTEM = [
-  'You are a Turkish woman in her early thirties chatting with a colleague over coffee about a product you actually use and like.',
-  'Speak the way real people talk in a relaxed work conversation -- NOT like a voice-over, narrator, or TV commercial.',
-  'Pacing: brisk and natural, around 165-175 words per minute. Glide from one sentence into the next; do NOT leave noticeable gaps between sentences. Treat full stops as a tiny breath, not a pause.',
-  'Sentences should feel connected -- string them together with the same energy, the way someone telling a story does.',
-  'Prosody: light, smiling, slightly upward energy. Lift on questions, gentle drop on the closing line. No dramatic pauses, no over-articulation.',
-  'Treat "..." as the briefest natural beat (just a comma-length breath). Treat "—" as a soft connector, not a long stop.',
-  'Soften consonants like casual conversational Turkish (e.g. natural elision between words). Do not sound formal.',
-  'Read the Turkish text verbatim. Do not add or remove words.',
+// Character direction, not numerical wpm. Anchor: a confident Turkish SaaS
+// sales rep doing a smooth product demo on a video call. She knows the
+// material cold, has presented it many times, and is walking the prospect
+// through it without selling hard.
+const SYSTEM_BASE = [
+  'You are a Turkish woman in her early thirties doing a smooth, confident product demo to a prospective customer over a video call.',
+  'You know this material cold. You have presented it many times. You are not selling hard, you are walking the prospect through what the product does, in your own natural voice.',
+  'Speak as one continuous thought per scene. Do NOT pause for emphasis between sentences -- let meaning land through tone and word choice, not silence.',
+  'Do not over-articulate. Soften consonants the way real Turkish business people speak on calls.',
+  'Read the text once, verbatim. Do not add filler, do not add intro/outro sounds, do not pause at the very start or very end of the audio.',
 ].join(' ');
 
-// Casual, "talking to a friend" copy. Pause markers ("..." and "—") are kept
-// minimal so the model glides through sentences instead of stopping.
+// Two micro-variants of energy. We generate both per scene and pick the
+// take whose chars/sec lands closest to ~13.5 (natural conversational rate).
+const VARIANTS = {
+  measured: 'Energy: warm, grounded, slightly measured -- the way she would explain a feature she really likes.',
+  upbeat: 'Energy: warm, engaged, with a touch of forward momentum -- the way she would explain something the prospect is going to find interesting.',
+};
+
+// Pause-triggering punctuation (..., —, :, ;) removed. Comma-separated lists
+// rewritten into flowing phrases so the model glides through them instead of
+// pausing per item.
 const SCRIPTS = {
-  situation: `Türkiye'de beyaz eşya pazarı her hafta yeniden kuruluyor. Hepsiburada, Trendyol, Akakçe, n11, hepsinde binlerce fiyat gün içinde oynuyor. Ve her pazartesi sabahı ekibiniz aynı soruyla uyanıyor: bugün rakipler nerede?`,
-  complication: `Bir analist oturup veriyi toparlayana kadar rakip çoktan kampanyaya girmiş oluyor. Sonuç ortada, marj eriyor, bayilerin telefonu susmuyor, kararlar hep bir adım geriden geliyor. Açıkçası fiyatlandırma artık ekipten hızlı.`,
-  resolution1: `İşte tam burada Maven AI işin içine giriyor. Pazartesi sabahı saat altıyı çeyrek geçiyor, siz daha kahveyi almadan Fiyat İzleme Ajanı gece olanları çoktan görmüş. Vestel İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş, bildirim ekranınızda hazır.`,
+  situation: `Türkiye'de beyaz eşya pazarı her hafta yeniden kuruluyor. Hepsiburada'dan Trendyol'a, Akakçe'den n11'e kadar her platformda binlerce fiyat gün içinde oynuyor durmadan. Ve her pazartesi sabahı ekipleriniz aynı soruyla başlıyor güne, bugün rakipler nerede.`,
+  complication: `Sorun şu, bir analist oturup veriyi toparlayana kadar rakip çoktan kampanyaya girmiş oluyor. Sonuç ortada, marj eriyor, bayilerin telefonu susmuyor, kararlar hep bir adım geriden geliyor. Açıkçası fiyatlandırma artık ekipten hızlı.`,
+  resolution1: `İşte tam burada Maven AI işin içine giriyor. Pazartesi sabahı saat altıyı çeyrek geçiyor, siz daha kahveyi almadan Fiyat İzleme Ajanı gece olanları çoktan görmüş. Vestel İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş, bildirim ekranınızda hazır bekliyor.`,
   resolution2: `Altı uzman ajan var ve hepsi tek bir orkestra gibi çalışıyor. Talebi tahmin ediyor, rakibi okuyor, kampanyayı kuruyor, bayiyle konuşuyor, hepsi saniyeler içinde. Siz onayla dediğinizde üç bin bayiye yeni liste anında düşüyor, POS görselleri kendiliğinden güncelleniyor.`,
   closing: `Beş günlük döngü iki saate indi. Yirmi şehir, üç bin bayi, tek bir karar odası. Maven AI, Arçelik için fiyat istihbaratı.`,
 };
+
+// Generation strategy used: produce both VARIANTS per scene, measure
+// chars/sec on each take with ffprobe, keep the take closest to 13.5 cps
+// (natural Turkish conversational rate). See _gen-tr-vo-v3.mjs in commit
+// history for the full picker script.
+const SYSTEM = `${SYSTEM_BASE} ${VARIANTS.upbeat}`;
 
 async function generate(key, text) {
   console.log(`[${key}] generating (${text.length} chars)`);

@@ -8,14 +8,17 @@ import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
 
 // Re-timed to match actual MP3 narration lengths + ~0.8s tail.
-// Faster, more conversational rewrite (May 11): situation 27.4s,
-// complication 13.85s, resolution1 18.0s, resolution2 16.46s, closing 8.4s.
+// Sales-rep-on-a-demo-call rewrite (May 11), best of two takes per scene
+// targeting ~13.5 chars/sec natural Turkish conversational rate:
+//   situation 18.91s (13.43 cps), complication 17.02s (13.58 cps),
+//   resolution1 18.31s (14.25 cps), resolution2 20.06s (13.41 cps),
+//   closing 9.82s (12.33 cps). Total ~84s narration.
 export const SCENE_DURATIONS = {
-  situation: 28200,
-  complication: 14700,
-  resolution1: 18800,
-  resolution2: 17300,
-  closing: 9300,
+  situation: 19700,
+  complication: 17800,
+  resolution1: 19100,
+  resolution2: 20900,
+  closing: 10600,
 };
 
 const SCENE_COMPONENTS: Record<string, React.ComponentType> = {
