@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import marketplaceImg from '../../../../../attached_assets/arcelik/marketplace.jpg';
+import marketplaceImg from '@assets/arcelik/marketplace.jpg';
 
 export function Scene5() {
   const [phase, setPhase] = useState(0);

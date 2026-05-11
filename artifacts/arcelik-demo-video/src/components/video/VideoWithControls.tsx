@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Repeat } from 'lucide-react';
+import { ChevronDown, ChevronUp, Repeat, Volume2, VolumeX } from 'lucide-react';
 import VideoTemplate, { SCENE_DURATIONS } from './VideoTemplate';
 import { useSceneControls } from './useSceneControls';
 
@@ -9,11 +9,13 @@ interface ControlBarProps {
   visible: boolean;
   collapsed: boolean;
   locked: boolean;
+  muted: boolean;
   sceneKeys: string[];
   activeIndex: number;
   activeDuration: number;
   tick: number;
   onToggleLock: () => void;
+  onToggleMute: () => void;
   onJumpTo: (index: number) => void;
   onToggleCollapsed: () => void;
 }
@@ -72,11 +74,13 @@ function ControlBar({
   visible,
   collapsed,
   locked,
+  muted,
   sceneKeys,
   activeIndex,
   activeDuration,
   tick,
   onToggleLock,
+  onToggleMute,
   onJumpTo,
   onToggleCollapsed,
 }: ControlBarProps) {
@@ -118,6 +122,20 @@ function ControlBar({
       </div>
 
       <button
+        onClick={onToggleMute}
+        className={`w-14 h-14 flex items-center justify-center transition-colors rounded-lg shrink-0 ${
+          muted
+            ? 'text-white/60 hover:text-white hover:bg-white/10'
+            : 'text-white bg-white/15 hover:bg-white/25'
+        }`}
+        title={muted ? 'Unmute Turkish narration' : 'Mute Turkish narration'}
+        aria-label={muted ? 'Unmute Turkish narration' : 'Mute Turkish narration'}
+        aria-pressed={!muted}
+      >
+        {muted ? <VolumeX className="w-8 h-8" /> : <Volume2 className="w-8 h-8" />}
+      </button>
+
+      <button
         onClick={onToggleCollapsed}
         className="w-14 h-14 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors rounded-lg shrink-0"
         title={collapsed ? 'Show controls' : 'Hide controls'}
@@ -147,9 +165,33 @@ export default function VideoWithControls() {
   } = useSceneControls(SCENE_DURATIONS);
 
   const sensorRef = useRef<HTMLDivElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [tapPinned, setTapPinned] = useState(false);
+  const [muted, setMuted] = useState(true);
+
+  const activeSceneKey = sceneKeys[activeIndex];
+  const audioSrc = `${import.meta.env.BASE_URL}audio/${activeSceneKey}.mp3`;
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.currentTime = 0;
+    el.play().catch(() => {});
+  }, [activeSceneKey, mountKey, tick]);
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      const el = audioRef.current;
+      if (el) {
+        el.muted = next;
+        if (!next) el.play().catch(() => {});
+      }
+      return next;
+    });
+  }, []);
 
   const handlePointerEnter = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'mouse') setHovering(true);
@@ -197,6 +239,13 @@ export default function VideoWithControls() {
         loop
         onSceneChange={onSceneChange}
       />
+      <audio
+        ref={audioRef}
+        src={audioSrc}
+        autoPlay
+        muted={muted}
+        preload="auto"
+      />
       <div
         ref={sensorRef}
         className="absolute bottom-0 left-0 right-0 z-50 flex flex-col justify-end"
@@ -210,11 +259,13 @@ export default function VideoWithControls() {
           visible={barVisible}
           collapsed={collapsed}
           locked={locked}
+          muted={muted}
           sceneKeys={sceneKeys}
           activeIndex={activeIndex}
           activeDuration={activeDuration}
           tick={tick}
           onToggleLock={toggleLock}
+          onToggleMute={toggleMute}
           onJumpTo={jumpTo}
           onToggleCollapsed={handleToggleCollapsed}
         />

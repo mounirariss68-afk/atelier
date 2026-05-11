@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import dashboardImg from '../../../../../attached_assets/arcelik/dashboard.jpg';
+import dashboardImg from '@assets/arcelik/dashboard.jpg';
 
 export function Scene3() {
   const [phase, setPhase] = useState(0);

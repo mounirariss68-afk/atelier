@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import dealerImg from '../../../../../attached_assets/arcelik/dealer.jpg';
+import dealerImg from '@assets/arcelik/dealer.jpg';
 
 export function Scene4() {
   const [phase, setPhase] = useState(0);
