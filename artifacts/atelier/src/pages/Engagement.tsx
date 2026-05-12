@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtelierGetEngagement, getAtelierGetEngagementQueryKey } from "@workspace/api-client-react";
-import { SectionHead, PlmPill, MonoChip, Card } from "@/components/ui/primitives";
+import { SectionHead, PageHero, PlmPill, MonoChip, Card } from "@/components/ui/primitives";
 import { Link, useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuditTab } from "@/components/AuditTab";
@@ -31,8 +31,8 @@ export default function Engagement() {
   if (isError || !eng) return <div className="container-atelier py-12 text-danger">Failed to load engagement.</div>;
 
   return (
-    <div className="container-atelier py-8 space-y-8 animate-in fade-in">
-      <div>
+    <div className="animate-in fade-in">
+      <PageHero>
         <Link href="/engagements" className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Engagements
         </Link>
@@ -56,8 +56,9 @@ export default function Engagement() {
             </div>
           </div>
         </div>
-      </div>
+      </PageHero>
 
+      <div className="container-atelier py-8 space-y-8">
       {/* Tabs */}
       <div className="border-b border-border">
         <div className="flex gap-6 overflow-x-auto scrollbar-thin">
@@ -86,6 +87,7 @@ export default function Engagement() {
             <p className="text-text-mute max-w-md">This tab ships in a later workstream. Foundation registers it in the navigation shell.</p>
           </Card>
         )}
+      </div>
       </div>
     </div>
   );

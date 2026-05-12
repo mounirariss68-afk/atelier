@@ -245,7 +245,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex flex-col relative">
       <TopNav />
       <div className="flex flex-1">
-        <main className="flex-1 w-full pb-20 pr-12 lg:pr-80 transition-all duration-300">
+        <main className="page-light flex-1 w-full pb-20 pr-12 lg:pr-80 transition-all duration-300">
           {children}
         </main>
         <RightRail />

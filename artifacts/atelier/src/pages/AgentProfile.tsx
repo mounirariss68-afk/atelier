@@ -1,5 +1,5 @@
 import { useAtelierListAgents } from "@workspace/api-client-react";
-import { SectionHead, Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Link, useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Cpu, Shield, Wrench, UserCheck } from "lucide-react";
@@ -18,8 +18,8 @@ export default function AgentProfile() {
   if (!agent) return <div className="container-atelier py-12 text-text-mute">Agent not found.</div>;
 
   return (
-    <div className="container-atelier py-8 space-y-8 animate-in fade-in">
-      <div>
+    <div className="animate-in fade-in">
+      <PageHero>
         <Link href="/agents" className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Registry
         </Link>
@@ -40,9 +40,9 @@ export default function AgentProfile() {
             <PillButton variant="primary" className="mt-2">View Analytics</PillButton>
           </div>
         </div>
-      </div>
+      </PageHero>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-8">
+      <div className="container-atelier py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <Card className="p-6 space-y-4 border-dashed bg-bg-deep">
             <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">

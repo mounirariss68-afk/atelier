@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAtelierListOpportunities } from "@workspace/api-client-react";
-import { SectionHead, Card, PlmPill, PillButton } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, PlmPill, PillButton } from "@/components/ui/primitives";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LayoutGrid, List as ListIcon, AlertTriangle } from "lucide-react";
@@ -17,28 +17,31 @@ export default function Pipeline() {
   }
 
   return (
-    <div className="container-atelier py-12 space-y-8 flex flex-col h-full min-h-[calc(100vh-3.5rem)]">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <SectionHead 
-          headline="Opportunity Pipeline"
-          lede="Active originations and pursuits."
-        />
-        <div className="flex items-center gap-2 bg-bg-elevate p-1 rounded-full border border-border shrink-0">
-          <button 
-            onClick={() => setView('kanban')}
-            className={`p-2 rounded-full transition-colors ${view === 'kanban' ? 'bg-bg-deep text-gold' : 'text-text-mute hover:text-text'}`}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={() => setView('table')}
-            className={`p-2 rounded-full transition-colors ${view === 'table' ? 'bg-bg-deep text-gold' : 'text-text-mute hover:text-text'}`}
-          >
-            <ListIcon className="w-4 h-4" />
-          </button>
+    <div className="flex flex-col h-full min-h-[calc(100vh-3.5rem)]">
+      <PageHero>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <SectionHead 
+            headline="Opportunity Pipeline"
+            lede="Active originations and pursuits."
+          />
+          <div className="flex items-center gap-2 bg-bg-elevate p-1 rounded-full border border-border shrink-0">
+            <button 
+              onClick={() => setView('kanban')}
+              className={`p-2 rounded-full transition-colors ${view === 'kanban' ? 'bg-bg-deep text-gold' : 'text-text-mute hover:text-text'}`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => setView('table')}
+              className={`p-2 rounded-full transition-colors ${view === 'table' ? 'bg-bg-deep text-gold' : 'text-text-mute hover:text-text'}`}
+            >
+              <ListIcon className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      </div>
+      </PageHero>
 
+      <div className="container-atelier py-10 space-y-8 flex-1 flex flex-col">
       {view === 'kanban' ? (
         <div className="flex-1 flex gap-6 overflow-x-auto pb-6 snap-x">
           {PLM_STAGES.map(stage => {
@@ -121,6 +124,7 @@ export default function Pipeline() {
           </div>
         </Card>
       )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useAtelierListAgents } from "@workspace/api-client-react";
-import { SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip } from "@/components/ui/primitives";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star, Activity, Cpu } from "lucide-react";
@@ -13,13 +13,15 @@ export default function Agents() {
   const groups = Array.from(new Set(agents.map(a => a.group)));
 
   return (
-    <div className="container-atelier py-12 space-y-12 animate-in fade-in">
-      <SectionHead 
-        headline="Agent Registry"
-        lede="The named AI agents available in The Atelier."
-      />
+    <div className="animate-in fade-in">
+      <PageHero>
+        <SectionHead 
+          headline="Agent Registry"
+          lede="The named AI agents available in The Atelier."
+        />
+      </PageHero>
 
-      <div className="space-y-10">
+      <div className="container-atelier py-10 space-y-10">
         {groups.map(group => {
           const groupAgents = agents.filter(a => a.group === group);
           return (

@@ -19,6 +19,20 @@ export const SectionHead = ({ eyebrow, headline, lede, className }: { eyebrow?: 
   </div>
 );
 
+/**
+ * Full-width navy band that contains the page-level header (eyebrow +
+ * headline, optional back link, optional right-aligned meta). Lives at
+ * the top of every workspace page and breaks out of the cream body
+ * surface defined by `.page-light` on <main>.
+ */
+export const PageHero = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+  <div className={cn("page-hero", className)}>
+    <div className="container-atelier">
+      {children}
+    </div>
+  </div>
+);
+
 export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { flat?: boolean }>(({ className, flat, ...props }, ref) => (
   <div ref={ref} className={cn(flat ? "card-flat" : "card", className)} {...props} />
 ));

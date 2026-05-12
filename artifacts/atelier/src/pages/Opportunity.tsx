@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtelierGetOpportunity, getAtelierGetOpportunityQueryKey } from "@workspace/api-client-react";
-import { SectionHead, PlmPill, MonoChip, Card } from "@/components/ui/primitives";
+import { SectionHead, PageHero, PlmPill, MonoChip, Card } from "@/components/ui/primitives";
 import { Link, useRoute, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PromptSheet } from "@/components/PromptSheet";
@@ -32,8 +32,8 @@ export default function Opportunity() {
   if (isError || !opp) return <div className="container-atelier py-12 text-danger">Failed to load opportunity.</div>;
 
   return (
-    <div className="container-atelier py-8 space-y-8 animate-in fade-in">
-      <div>
+    <div className="animate-in fade-in">
+      <PageHero>
         <Link href="/pipeline" className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Pipeline
         </Link>
@@ -56,8 +56,9 @@ export default function Opportunity() {
             </div>
           </div>
         </div>
-      </div>
+      </PageHero>
 
+      <div className="container-atelier py-8 space-y-8">
       {/* Action Toolbar */}
       <div className="flex flex-wrap gap-3 p-4 bg-bg-elevate border border-gold/30 rounded-lg">
         <PromptSheet 
@@ -110,6 +111,7 @@ export default function Opportunity() {
             <p className="text-text-mute max-w-md">This tab ships in a later workstream. Foundation registers it in the navigation shell.</p>
           </Card>
         )}
+      </div>
       </div>
     </div>
   );

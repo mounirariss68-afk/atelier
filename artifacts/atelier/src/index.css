@@ -28,6 +28,16 @@
   --danger:       #F87171;
   --grid-line:    rgba(255, 255, 255, 0.025);
   --shadow:       0 30px 60px -20px rgba(0, 0, 0, 0.5);
+
+  /* Light "page surface" palette — used inside .page-light scope so
+     workspace pages read cream-on-navy headers, then warm-cream body
+     with deep-navy ink. Cards re-swap to the dark theme. */
+  --surface:      #F7F4ED;
+  --surface-soft: #FFFFFF;
+  --ink:          #15294A;
+  --ink-mute:     #5C6E89;
+  --ink-faint:    #8FA0B7;
+  --ink-border:   #DCD4C1;
   --radius:       4px;
   --radius-lg:    8px;
   --container:    1240px;
@@ -258,6 +268,52 @@
     font-weight: 600;
     letter-spacing: -0.025em;
   }
+}
+
+/* ============================================================
+   Light page surface — workspace pages render cream + navy ink
+   while the top nav and each page's hero band stay deep navy.
+   Tokens are re-swapped inside cards / hero so those elements
+   keep their original dark-on-cream theme without any markup
+   changes inside them.
+   ============================================================ */
+
+.page-light {
+  background: var(--surface);
+  color: var(--ink);
+  --text: var(--ink);
+  --text-mute: var(--ink-mute);
+  --text-faint: var(--ink-faint);
+  --border: var(--ink-border);
+  --border-soft: rgba(21, 41, 74, 0.08);
+  --bg: var(--surface);
+  --bg-deep: var(--surface-soft);
+}
+
+/* Restore the navy theme inside dark surfaces (cards + hero band). */
+.page-light .card,
+.page-light .card-flat,
+.page-light .page-hero {
+  --text: #F1EEE6;
+  --text-mute: #8FA3C0;
+  --text-faint: #5E708A;
+  --border: #243F66;
+  --border-soft: rgba(255, 255, 255, 0.06);
+  --bg: #0E1F3D;
+  --bg-deep: #091428;
+  color: var(--text);
+}
+
+/* Page hero band — navy section that contains the eyebrow + headline.
+   Spans the full width of <main>; inner container re-aligns to the
+   1240px page grid. */
+.page-hero {
+  background: var(--bg);
+  padding-block: clamp(2.25rem, 4.5vw, 3.5rem);
+  border-bottom: 1px solid #243F66;
+}
+.page-hero > .container-atelier {
+  /* container-atelier already handles horizontal padding + max-width */
 }
 
 @layer utilities {

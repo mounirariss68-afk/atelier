@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Link, useRoute } from "wouter";
 import { ArrowLeft, Activity } from "lucide-react";
-import { SectionHead, MonoChip, Card } from "@/components/ui/primitives";
+import { SectionHead, PageHero, MonoChip, Card } from "@/components/ui/primitives";
 import { AuditTab } from "@/components/AuditTab";
 
 const TABS = [
@@ -17,8 +17,8 @@ export default function AgentRun() {
   const [activeTab, setActiveTab] = React.useState("trace");
 
   return (
-    <div className="container-atelier py-8 space-y-8 animate-in fade-in">
-      <div>
+    <div className="animate-in fade-in">
+      <PageHero>
         <Link
           href="/agents"
           className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors"
@@ -39,8 +39,9 @@ export default function AgentRun() {
             }
           />
         </div>
-      </div>
+      </PageHero>
 
+      <div className="container-atelier py-8 space-y-8">
       <div className="border-b border-border">
         <div className="flex gap-6 overflow-x-auto scrollbar-thin">
           {TABS.map((tab) => (
@@ -77,6 +78,7 @@ export default function AgentRun() {
             </p>
           </Card>
         )}
+      </div>
       </div>
     </div>
   );

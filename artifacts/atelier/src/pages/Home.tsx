@@ -1,5 +1,5 @@
 import { useAtelierGetHome } from "@workspace/api-client-react";
-import { SectionHead, Card, MonoChip, PlmPill, PillButton } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip, PlmPill, PillButton } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Clock, FileText, ArrowRight, Download } from "lucide-react";
@@ -39,15 +39,17 @@ export default function Home() {
   };
 
   return (
-    <div className="container-atelier py-12 space-y-12 animate-in fade-in duration-500">
-      <SectionHead 
-        eyebrow={home.eyebrowDate}
-        headline={
-          <span dangerouslySetInnerHTML={{ __html: home.greeting.replace(home.persona.name, `<em class="accent">${home.persona.name}</em>`) }} />
-        }
-      />
+    <div className="animate-in fade-in duration-500">
+      <PageHero>
+        <SectionHead 
+          eyebrow={home.eyebrowDate}
+          headline={
+            <span dangerouslySetInnerHTML={{ __html: home.greeting.replace(home.persona.name, `<em class="accent">${home.persona.name}</em>`) }} />
+          }
+        />
+      </PageHero>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div className="container-atelier py-10 space-y-12 grid grid-cols-1 xl:grid-cols-3 gap-8">
         
         {/* PANE A: What needs me today */}
         <div className="xl:col-span-2 space-y-6">

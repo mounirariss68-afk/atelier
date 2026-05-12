@@ -1,5 +1,5 @@
 import { useAtelierGetMe } from "@workspace/api-client-react";
-import { SectionHead, Card } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldAlert, Shield } from "lucide-react";
 
@@ -25,13 +25,15 @@ export default function Admin() {
   }
 
   return (
-    <div className="container-atelier py-12 animate-in fade-in">
-      <SectionHead 
-        headline="Admin Console"
-        lede="Firm-wide configuration, access control, and billing."
-      />
-      
-      <div className="mt-12 max-w-2xl">
+    <div className="animate-in fade-in">
+      <PageHero>
+        <SectionHead 
+          headline="Admin Console"
+          lede="Firm-wide configuration, access control, and billing."
+        />
+      </PageHero>
+
+      <div className="container-atelier py-10 max-w-2xl">
         <Card className="p-12 flex flex-col items-center justify-center text-center border-dashed bg-bg-deep border-gold/30">
           <div className="w-12 h-12 bg-gold/10 rounded-full flex items-center justify-center mb-4 text-gold">
             <Shield className="w-6 h-6" />

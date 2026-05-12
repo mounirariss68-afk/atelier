@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtelierListAssets, getAtelierListAssetsQueryKey } from "@workspace/api-client-react";
-import { SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip } from "@/components/ui/primitives";
 import { Link, useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Search } from "lucide-react";
@@ -98,13 +98,16 @@ export default function AtelierIndex() {
   };
 
   return (
-    <div className="container-atelier py-12 animate-in fade-in">
-      <SectionHead 
-        headline="Knowledge Atelier"
-        lede="The firm's compounded IP and reusable assets."
-      />
-      
-      <div className="mt-8 border-b border-border">
+    <div className="animate-in fade-in">
+      <PageHero>
+        <SectionHead 
+          headline="Knowledge Atelier"
+          lede="The firm's compounded IP and reusable assets."
+        />
+      </PageHero>
+
+      <div className="container-atelier py-10">
+      <div className="border-b border-border">
         <div className="flex gap-6 overflow-x-auto scrollbar-thin">
           {SUB_ROUTES.map(sub => (
             <Link
@@ -119,6 +122,7 @@ export default function AtelierIndex() {
       </div>
 
       {renderContent()}
+      </div>
     </div>
   );
 }

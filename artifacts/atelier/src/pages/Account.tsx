@@ -3,7 +3,7 @@ import {
   useAtelierListOpportunities,
   useAtelierListEngagements,
 } from "@workspace/api-client-react";
-import { SectionHead, Card, PlmPill, MonoChip } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, PlmPill, MonoChip } from "@/components/ui/primitives";
 import { Link, useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Globe, Briefcase, Layers } from "lucide-react";
@@ -37,27 +37,29 @@ export default function Account() {
   const accountEngs = (engs ?? []).filter((e) => e.accountId === accountId);
 
   return (
-    <div className="container-atelier py-8 space-y-8 animate-in fade-in">
-      <Link
-        href="/pipeline"
-        className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-2 transition-colors"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        Back
-      </Link>
+    <div className="animate-in fade-in">
+      <PageHero>
+        <Link
+          href="/pipeline"
+          className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back
+        </Link>
 
-      <SectionHead
-        eyebrow={
-          <span className="inline-flex items-center gap-2">
-            <Globe className="w-3.5 h-3.5" />
-            {account.country} · {account.sector}
-          </span>
-        }
-        headline={account.name}
-        lede={account.notes ?? undefined}
-      />
+        <SectionHead
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Globe className="w-3.5 h-3.5" />
+              {account.country} · {account.sector}
+            </span>
+          }
+          headline={account.name}
+          lede={account.notes ?? undefined}
+        />
+      </PageHero>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="container-atelier py-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="space-y-3">
           <h2 className="text-xs font-mono uppercase tracking-wider text-text-mute flex items-center gap-2">
             <Briefcase className="w-3.5 h-3.5" />
