@@ -39,6 +39,20 @@ const HUB_ROUTED_TOOL_SLUGS: ReadonlySet<string> = new Set([
   "dge-effortless",
 ]);
 
+// Registered /demo/<slug> routes that live under a hub-routed marketplace
+// card rather than a standalone tool entry. The reverse-parity check
+// (REGISTERED_DEMO_SLUGS → marketplace tool) skips these slugs, since they
+// are reachable via the hub (e.g. /marketplace/dge-effortless → DgeHub →
+// /demo/dge-catalogue-channel) instead of via /marketplace/:slug.
+const HUB_SUBSUMED_DEMO_SLUGS: ReadonlySet<string> = new Set([
+  "dge-catalogue-channel",
+  "dge-complaint-recovery",
+  "dge-effortless-qr",
+  "dge-red-team",
+  "dge-service-redesign",
+  "dge-spokes-review",
+]);
+
 function assertSharedAlignment(
   kind: string,
   localKeys: string[],
@@ -8720,9 +8734,13 @@ assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsight
       );
     }
   }
-  // Live demos in REGISTERED_DEMO_SLUGS must each map to an existing tool.
+  // Live demos in REGISTERED_DEMO_SLUGS must each map to an existing tool —
+  // except for demo slugs that are subsumed under a hub-routed marketplace
+  // card (e.g. the six dge-* demos all live under the unified
+  // dge-effortless hub, so they remain registered demo routes without
+  // appearing as standalone marketplace cards).
   for (const liveSlug of REGISTERED_DEMO_SLUGS) {
-    if (!toolSlugSet.has(liveSlug)) {
+    if (!toolSlugSet.has(liveSlug) && !HUB_SUBSUMED_DEMO_SLUGS.has(liveSlug)) {
       throw new Error(
         `[content.ts] REGISTERED_DEMO_SLUGS contains "${liveSlug}" but no marketplace tool with that slug exists.`,
       );
