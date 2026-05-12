@@ -401,10 +401,15 @@ export const atelierAuditEvents = pgTable(
     payload: jsonb("payload").notNull().default({}),
     payloadSummary: text("payload_summary"),
     ts: timestamp("ts").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
   },
   (t) => [
     index("idx_atelier_audit_entity").on(t.entityType, t.entityId),
     index("idx_atelier_audit_ts").on(t.ts),
+    index("idx_atelier_audit_org").on(t.orgId),
   ],
 );
 
@@ -487,8 +492,14 @@ export const atelierNotifications = pgTable(
     payload: jsonb("payload").notNull().default({}),
     readAt: timestamp("read_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
   },
-  (t) => [index("idx_atelier_notif_user").on(t.userId)],
+  (t) => [
+    index("idx_atelier_notif_user").on(t.userId),
+    index("idx_atelier_notif_org").on(t.orgId),
+  ],
 );
 
 // ============================================================
@@ -512,6 +523,11 @@ export const atelierPaneAItems = pgTable(
     resolvedAt: timestamp("resolved_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
   },
-  (t) => [index("idx_atelier_panea_user").on(t.userId)],
+  (t) => [
+    index("idx_atelier_panea_user").on(t.userId),
+    index("idx_atelier_panea_org").on(t.orgId),
+  ],
 );

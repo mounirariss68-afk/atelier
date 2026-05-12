@@ -26,10 +26,6 @@ export default function Opportunity() {
     query: { enabled: !!oppId, queryKey: getAtelierGetOpportunityQueryKey(oppId) },
   });
 
-  // Default to brief tab if just /pipeline/:oppId
-  // Wait, wouter nested routing without nesting:
-  // we'll just handle state locally or via hash for now to keep it simple, 
-  // or use search params. Let's use a local state for tabs in the MVP shell.
   const [activeTab, setActiveTab] = React.useState('brief');
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;

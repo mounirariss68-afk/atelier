@@ -69,6 +69,7 @@ const F: Record<string, T> = {
   howWeWork: { en: "How We Work", ar: "كيف نعمل", tr: "Nasıl Çalışırız" },
   contactUs: { en: "Contact Us", ar: "تواصل معنا", tr: "Bize Ulaşın" },
   mavenInsights: { en: "Maven Insights ↗", ar: "Maven Insights ↗", tr: "Maven Insights ↗" },
+  forEmployees: { en: "For employees ↗", ar: "للموظفين ↗", tr: "Çalışanlar için ↗" },
   // services
   agenticAI: { en: "Agentic AI", ar: "الذكاء الوكيل", tr: "Ajansal AI" },
   aiSdlc: { en: "AI-Driven SDLC", ar: "SDLC مدفوعة بالذكاء الاصطناعي", tr: "AI Öncülüğünde SDLC" },
@@ -107,6 +108,7 @@ export default function Footer() {
     { href: "/about#operating-model", label: F.howWeWork, external: false },
     { href: "/contact", label: F.contactUs, external: false },
     { href: "https://www.maveninsights.com", label: F.mavenInsights, external: true },
+    { href: "/atelier/sign-in", label: F.forEmployees, external: true },
   ];
   const serviceLinks = [
     { href: "/services/agentic-ai-transformation", label: F.agenticAI },
