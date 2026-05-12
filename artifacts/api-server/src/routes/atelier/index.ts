@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, type SQL } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -498,21 +498,27 @@ router.get("/audit", async (req, res) => {
     return;
   }
   const { entityType, entityId, limit } = parsed.data;
-  const conditions = [];
+  const conditions: SQL[] = [];
   if (entityType) conditions.push(eq(atelierAuditEvents.entityType, entityType));
   if (entityId) conditions.push(eq(atelierAuditEvents.entityId, entityId));
-  const rows = await (conditions.length
-    ? db
-        .select()
-        .from(atelierAuditEvents)
-        .where(and(...conditions))
-        .orderBy(desc(atelierAuditEvents.ts))
-        .limit(limit ?? 50)
-    : db
-        .select()
-        .from(atelierAuditEvents)
-        .orderBy(desc(atelierAuditEvents.ts))
-        .limit(limit ?? 50));
+  // Run the read inside a transaction with request-local RLS GUCs so
+  // audit visibility is governed by the same per-request context as the
+  // PDF export endpoint. Never read this table through the global `db`
+  // handle — that would fall back to connection-level defaults.
+  const rows = await withRls(req, async (tx) =>
+    conditions.length
+      ? tx
+          .select()
+          .from(atelierAuditEvents)
+          .where(and(...conditions))
+          .orderBy(desc(atelierAuditEvents.ts))
+          .limit(limit ?? 50)
+      : tx
+          .select()
+          .from(atelierAuditEvents)
+          .orderBy(desc(atelierAuditEvents.ts))
+          .limit(limit ?? 50),
+  );
   res.json(
     AtelierListAuditResponse.parse(
       rows.map((r) => ({
