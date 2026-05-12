@@ -35,9 +35,17 @@ import {
   personaToWire,
   setPersonaCookie,
 } from "./personaCookie";
+import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
+import { auditPdfHandler } from "./auditPdf";
+
+registerAtelierRlsDefaults();
 
 const router: IRouter = Router();
 router.use(attachPersona);
+router.use(attachRls);
+
+// Audit PDF export — registered before /audit JSON to win the route match.
+router.get("/audit/export.pdf", auditPdfHandler);
 
 function ensurePersona(req: any, res: any) {
   if (!req.atelierPersona) {

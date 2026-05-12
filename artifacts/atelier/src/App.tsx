@@ -18,6 +18,8 @@ import AgentProfile from "@/pages/AgentProfile";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
 import Account from "@/pages/Account";
+import Deliverable from "@/pages/Deliverable";
+import AgentRun from "@/pages/AgentRun";
 
 const queryClient = new QueryClient();
 
@@ -31,10 +33,12 @@ function Router() {
         <Route path="/pipeline/:oppId" component={Opportunity} />
         <Route path="/engagements" component={Engagements} />
         <Route path="/engagements/:engId" component={Engagement} />
+        <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
         <Route path="/atelier" component={AtelierIndex} />
         <Route path="/atelier/:section" component={AtelierIndex} />
         <Route path="/accounts/:accountId" component={Account} />
         <Route path="/agents" component={Agents} />
+        <Route path="/agents/runs/:runId" component={AgentRun} />
         <Route path="/agents/:agentId" component={AgentProfile} />
         <Route path="/settings" component={Settings} />
         <Route path="/admin" component={Admin} />

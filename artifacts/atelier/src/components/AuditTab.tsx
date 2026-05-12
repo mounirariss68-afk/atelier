@@ -3,10 +3,21 @@ import { useAtelierListAudit, getAtelierListAuditQueryKey } from "@workspace/api
 import type { AtelierListAuditEntityType } from "@workspace/api-client-react";
 import { MonoChip } from "./ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Download } from "lucide-react";
 
 interface AuditTabProps {
   entityType: AtelierListAuditEntityType;
   entityId: string;
+}
+
+function pdfHref(entityType: string, entityId: string): string {
+  const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+  // The atelier client is path-mounted under /atelier/* and the api-server
+  // is reverse-proxied at /api/atelier. We reach it through the workspace
+  // root, not through BASE_URL — go up one level.
+  void base;
+  const params = new URLSearchParams({ entityType, entityId });
+  return `/api/atelier/audit/export.pdf?${params.toString()}`;
 }
 
 export function AuditTab({ entityType, entityId }: AuditTabProps) {
@@ -43,6 +54,20 @@ export function AuditTab({ entityType, entityId }: AuditTabProps) {
 
   return (
     <div className="py-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="text-xs font-mono text-text-mute uppercase tracking-wider">
+          Immutable audit trail · {auditEvents.length} events
+        </div>
+        <a
+          href={pdfHref(entityType, entityId)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono uppercase tracking-wider border border-gold/40 text-gold hover:bg-gold/10 transition-colors rounded"
+          data-testid="link-export-audit-pdf"
+        >
+          <Download className="w-3.5 h-3.5" /> Export PDF
+        </a>
+      </div>
       <div className="relative border-l border-border ml-3 space-y-8 pb-8">
         {auditEvents.map((event) => (
           <div key={event.id} className="relative pl-8">

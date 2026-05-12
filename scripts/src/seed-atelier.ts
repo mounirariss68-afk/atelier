@@ -942,6 +942,182 @@ const PANE_A = [
     dueLabel: "Fri, 16 May",
     sortKey: 5,
   },
+
+  // Layla Haddad — Engagement Lead
+  {
+    id: "pa_layla_charter",
+    userId: "p_layla_haddad",
+    title: "Tasama charter v3 — your sign-off needed",
+    summary:
+      "Charter Architect tightened the success metrics. Two amber items remain on the Steering RACI.",
+    priority: "high",
+    hrefKind: "engagement",
+    hrefTargetId: TASAMA_ENG_ID,
+    dueLabel: "Today, 5:00 PM",
+    sortKey: 1,
+  },
+  {
+    id: "pa_layla_raid",
+    userId: "p_layla_haddad",
+    title: "RAID review — Tasama week 4",
+    summary:
+      "RAID Watchdog escalated 2 risks to red after vendor delay. Recommend mitigations attached.",
+    priority: "high",
+    hrefKind: "engagement",
+    hrefTargetId: TASAMA_ENG_ID,
+    dueLabel: "Today, EOD",
+    sortKey: 2,
+  },
+  {
+    id: "pa_layla_workplan",
+    userId: "p_layla_haddad",
+    title: "Approve workplan re-baseline — Aldrees scoping",
+    summary:
+      "Workplan Architect produced revised milestones; critical path slipped by 4 working days.",
+    priority: "medium",
+    hrefKind: "opportunity",
+    hrefTargetId: "opp_aldrees_boq",
+    dueLabel: "Tomorrow",
+    sortKey: 3,
+  },
+  {
+    id: "pa_layla_meeting",
+    userId: "p_layla_haddad",
+    title: "Steering deck for Tasama — review draft",
+    summary:
+      "Meeting Scribe prepared the steering pack with last-week decisions and open RAID items.",
+    priority: "medium",
+    hrefKind: "engagement",
+    hrefTargetId: TASAMA_ENG_ID,
+    dueLabel: "Wed, 14 May",
+    sortKey: 4,
+  },
+
+  // Omar Najjar — SME (sector / domain expert)
+  {
+    id: "pa_omar_pov_review",
+    userId: "p_omar_najjar",
+    title: "SME review — STC RFP point-of-view",
+    summary:
+      "POV Author wants your sector lens on the B2B platform pricing argument before partner read.",
+    priority: "high",
+    hrefKind: "opportunity",
+    hrefTargetId: "opp_stc_b2b_platform",
+    dueLabel: "Today, 3:00 PM",
+    sortKey: 1,
+  },
+  {
+    id: "pa_omar_diagnostic",
+    userId: "p_omar_najjar",
+    title: "Diagnostic memo — Dubai Municipality service design",
+    summary:
+      "Diagnostic Memo agent drafted findings; needs your benchmarks against UAE peers.",
+    priority: "medium",
+    hrefKind: "opportunity",
+    hrefTargetId: "opp_dubai_muni_servicedesign",
+    dueLabel: "Tomorrow",
+    sortKey: 2,
+  },
+  {
+    id: "pa_omar_atelier",
+    userId: "p_omar_najjar",
+    title: "Promote new framework to Atelier — Service Blueprint v2",
+    summary:
+      "Atelier Curator queued your authored framework for promotion. Approve and add tags.",
+    priority: "low",
+    hrefKind: "atelier",
+    hrefTargetId: "atelier_assets",
+    dueLabel: "This week",
+    sortKey: 3,
+  },
+
+  // Sara Qureshi — AI Engineer
+  {
+    id: "pa_sara_agent_design",
+    userId: "p_sara_qureshi",
+    title: "Approve agent design — Pricing Analyst v2",
+    summary:
+      "Agent Architect produced an updated tool/guardrail spec. Eval pack staged for review.",
+    priority: "high",
+    hrefKind: "atelier",
+    hrefTargetId: "atelier_agents",
+    dueLabel: "Today, 6:00 PM",
+    sortKey: 1,
+  },
+  {
+    id: "pa_sara_prototype",
+    userId: "p_sara_qureshi",
+    title: "Prototype Forge — Tasama action-tracker UI",
+    summary:
+      "First buildable prototype is up; you marked critique items in last review — ready to re-run.",
+    priority: "high",
+    hrefKind: "engagement",
+    hrefTargetId: TASAMA_ENG_ID,
+    dueLabel: "Tomorrow",
+    sortKey: 2,
+  },
+  {
+    id: "pa_sara_eval",
+    userId: "p_sara_qureshi",
+    title: "Eval failures — Synthesis Critic regressions",
+    summary:
+      "Two regression cases flagged amber after model swap. Suggested prompt diff attached.",
+    priority: "medium",
+    hrefKind: "atelier",
+    hrefTargetId: "atelier_agents",
+    dueLabel: "Wed, 14 May",
+    sortKey: 3,
+  },
+
+  // Khaled Aziz — Business Developer
+  {
+    id: "pa_khaled_pursuit",
+    userId: "p_khaled_aziz",
+    title: "Triage — 4 new pursuits scouted overnight",
+    summary:
+      "Pursuit Scout returned 4 candidates above threshold. Decide promote / park / reject.",
+    priority: "high",
+    hrefKind: "atelier",
+    hrefTargetId: "pipeline",
+    dueLabel: "Today, 10:00 AM",
+    sortKey: 1,
+  },
+  {
+    id: "pa_khaled_proposal",
+    userId: "p_khaled_aziz",
+    title: "Proposal Composer — Aldrees BoQ commercial pack",
+    summary:
+      "Composer prepared sections A–F; pricing window narrowed. Needs your final margin call.",
+    priority: "high",
+    hrefKind: "opportunity",
+    hrefTargetId: "opp_aldrees_boq",
+    dueLabel: "Today, EOD",
+    sortKey: 2,
+  },
+  {
+    id: "pa_khaled_pipeline_review",
+    userId: "p_khaled_aziz",
+    title: "Weekly pipeline hygiene — 3 opps aged red",
+    summary:
+      "Three opportunities have been in stage > 30 days. Triage agent suggests next actions per row.",
+    priority: "medium",
+    hrefKind: "atelier",
+    hrefTargetId: "pipeline",
+    dueLabel: "Tomorrow",
+    sortKey: 3,
+  },
+  {
+    id: "pa_khaled_dubai_prt",
+    userId: "p_khaled_aziz",
+    title: "Confirm PRT recipients — Dubai Municipality",
+    summary:
+      "Partner-Ready Transmittal staged by Proposal Composer. Distribution list awaits your review.",
+    priority: "low",
+    hrefKind: "opportunity",
+    hrefTargetId: "opp_dubai_muni_servicedesign",
+    dueLabel: "This week",
+    sortKey: 4,
+  },
 ];
 
 // ============================================================
