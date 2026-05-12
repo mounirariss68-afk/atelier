@@ -218,6 +218,9 @@ async function persistBriefAndFacts(
     confidence: out.confidence ?? "amber",
   });
   // Insert facts (don't dedupe — run history is the audit).
+  // Every fact emitted by the scout into the brief is by definition
+  // `included_in_brief=true`; the partner can later flip POV inclusion
+  // on a per-fact basis via the promote endpoint.
   if (out.facts?.length) {
     await db.insert(atelierResearchFacts).values(
       out.facts.map((f) => ({
@@ -231,6 +234,7 @@ async function persistBriefAndFacts(
         snippet: f.snippet ?? null,
         confidence: f.confidence,
         retrievedAt: new Date(),
+        includedInBrief: true,
       })),
     );
   }
@@ -453,6 +457,8 @@ router.get("/opportunities/:oppId/research", async (req, res) => {
       confidence: f.confidence as "green" | "amber" | "red",
       promoted: f.promoted,
       promotedAt: f.promotedAt?.toISOString() ?? null,
+      includedInBrief: f.includedInBrief,
+      includedInPov: f.includedInPov,
       createdAt: f.createdAt.toISOString(),
       runId: f.runId,
     })),
@@ -732,6 +738,7 @@ function meetingWire(m: typeof atelierMeetings.$inferSelect, runId: string | nul
   return {
     id: m.id,
     oppId: m.parentId,
+    parentType: m.parentType as "opportunity" | "engagement",
     kind: m.kind as "discovery" | "workshop" | "steering" | "kickoff",
     mode: m.mode as "paste" | "upload" | "live_bot",
     title: m.title,
@@ -740,7 +747,9 @@ function meetingWire(m: typeof atelierMeetings.$inferSelect, runId: string | nul
     summary: m.summary,
     decisions: m.decisions as unknown[],
     actionItems: m.actionItems as unknown[],
-    runId,
+    runId: runId ?? m.runId ?? null,
+    status: m.status as "draft" | "official",
+    committedAt: m.committedAt?.toISOString() ?? null,
     createdAt: m.createdAt.toISOString(),
   };
 }
@@ -824,6 +833,72 @@ router.post("/opportunities/:oppId/meetings", async (req, res) => {
       summary: output.summary,
       decisions: output.decisions as never,
       actionItems: output.actionItems as never,
+      runId,
+      status: "draft",
+      createdByUserId: me.id,
+    })
+    .returning();
+  res.status(201).json(meetingWire(meeting, runId));
+});
+
+// =============================================================
+// Engagement-side meetings (post-contract)
+// =============================================================
+router.get("/engagements/:engId/meetings", async (req, res) => {
+  const rows = await db
+    .select()
+    .from(atelierMeetings)
+    .where(
+      and(
+        eq(atelierMeetings.parentType, "engagement"),
+        eq(atelierMeetings.parentId, req.params.engId),
+        isNull(atelierMeetings.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierMeetings.createdAt));
+  res.json(rows.map((m) => meetingWire(m, null)));
+});
+
+router.post("/engagements/:engId/meetings", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const parsed = AtelierSubmitMeetingBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const transcriptId = rid("trn");
+  await db.insert(atelierTranscripts).values({
+    id: transcriptId,
+    cleanedText: parsed.data.transcript,
+    createdByUserId: me.id,
+  });
+  const { runId, output } = await runMeetingScribe({
+    opportunityId: req.params.engId,
+    opportunityName: parsed.data.title || "Engagement meeting",
+    transcript: parsed.data.transcript,
+    kind: parsed.data.kind,
+    priorBrief: null,
+    triggeredByUserId: me.id,
+    actorLabel: "Meeting Scribe",
+  });
+  const [meeting] = await db
+    .insert(atelierMeetings)
+    .values({
+      id: rid("mtg"),
+      parentType: "engagement",
+      parentId: req.params.engId,
+      mode: parsed.data.mode ?? "paste",
+      kind: parsed.data.kind,
+      title: parsed.data.title || output.title,
+      date: parsed.data.date || new Date().toISOString().slice(0, 10),
+      attendees: output.attendees as never,
+      transcriptId,
+      summary: output.summary,
+      decisions: output.decisions as never,
+      actionItems: output.actionItems as never,
+      runId,
+      status: "draft",
       createdByUserId: me.id,
     })
     .returning();
@@ -882,6 +957,29 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     targetId: r.targetId ?? r.id,
     targetLabel: r.targetLabel ?? r.id,
   });
+  // Server-side state transition: if the human approved AND the run was a
+  // genuine Claude (or mock_config) run (NOT a mock_fallback / blocked run),
+  // flip the linked record's status from 'draft' → 'official'. This is the
+  // only way records become "committed memory".
+  if (parsed.data.decision === "approve" && r.status !== "blocked") {
+    const ts = new Date();
+    if (r.agentId === "pursuit_scout") {
+      await db
+        .update(atelierBriefs)
+        .set({ status: "official", approvedAt: ts, approvedByUserId: me.id, updatedAt: ts })
+        .where(and(eq(atelierBriefs.runId, r.id), isNull(atelierBriefs.deletedAt)));
+    } else if (r.agentId === "meeting_scribe") {
+      await db
+        .update(atelierMeetings)
+        .set({ status: "official", committedAt: ts, committedByUserId: me.id, updatedAt: ts })
+        .where(and(eq(atelierMeetings.runId, r.id), isNull(atelierMeetings.deletedAt)));
+    } else if (r.agentId === "pov_author") {
+      await db
+        .update(atelierPovs)
+        .set({ status: "approved", updatedAt: ts })
+        .where(and(eq(atelierPovs.runId, r.id), isNull(atelierPovs.deletedAt)));
+    }
+  }
   const [r2] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, req.params.runId));
   res.json({
     id: r2.id,

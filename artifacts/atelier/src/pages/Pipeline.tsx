@@ -64,16 +64,23 @@ function OppCard({ opp }: { opp: OppItem }) {
           {opp.name}
         </Link>
         {opp.daysInStage > 30 && (
-          <div className="text-danger flex shrink-0" title={`${opp.daysInStage} days in stage`}>
-            <AlertTriangle className="w-4 h-4" />
-          </div>
+          <span
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-danger/60 bg-danger/15 text-danger text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
+            title={`${opp.daysInStage} days in stage — aging`}
+          >
+            <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d
+          </span>
         )}
       </div>
       <div className="text-sm text-text-mute font-mono">{opp.accountName}</div>
       <div className="flex justify-between items-end pt-2 border-t border-border-soft">
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-text-faint font-mono">Value</span>
-          <span className="text-sm font-semibold text-text">${(opp.dealSizeUsd / 1000).toFixed(0)}k</span>
+          <span className="text-xs text-text-faint font-mono">Value · Weighted</span>
+          <span className="text-sm font-semibold text-text">
+            ${(opp.dealSizeUsd / 1000).toFixed(0)}k
+            <span className="text-text-mute font-normal"> · </span>
+            <span className="text-gold">${((opp.dealSizeUsd * opp.probabilityPct) / 100 / 1000).toFixed(0)}k</span>
+          </span>
         </div>
         <div className="flex -space-x-2">
           <Avatar className="w-6 h-6 border-2 border-bg-elevate">
@@ -249,12 +256,24 @@ export default function Pipeline() {
                       </td>
                       <td className="p-4 text-text-mute">{opp.accountName}</td>
                       <td className="p-4"><PlmPill stage={opp.plmStage} /></td>
-                      <td className="p-4 font-mono">${(opp.dealSizeUsd / 1000).toFixed(0)}k</td>
+                      <td className="p-4 font-mono">
+                        ${(opp.dealSizeUsd / 1000).toFixed(0)}k
+                        <span className="text-text-faint"> · </span>
+                        <span className="text-gold">${((opp.dealSizeUsd * opp.probabilityPct) / 100 / 1000).toFixed(0)}k</span>
+                      </td>
                       <td className="p-4 font-mono text-text-mute">{opp.probabilityPct}%</td>
                       <td className="p-4 text-text-mute">
                         {opp.partnerOwnerName.split(" ")[0]} / {opp.engagementLeadName.split(" ")[0]}
                       </td>
-                      <td className="p-4 font-mono text-xs text-text-mute">{opp.daysInStage}d</td>
+                      <td className="p-4 font-mono text-xs">
+                        {opp.daysInStage > 30 ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-danger/60 bg-danger/15 text-danger text-[10px] uppercase tracking-wider px-2 py-0.5">
+                            <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d
+                          </span>
+                        ) : (
+                          <span className="text-text-mute">{opp.daysInStage}d</span>
+                        )}
+                      </td>
                       <td className="p-4 text-text-mute text-xs truncate max-w-[200px]">{opp.nextMilestone}</td>
                     </tr>
                   ))}
