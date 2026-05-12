@@ -155,7 +155,6 @@ _Why now:_ Qatar's National AI Strategy creates demand; Qatar has capital but la
 
 ---
 
-<<<<<<< HEAD
 ---
 
 ## 6. Regional case studies / lighthouse projects
@@ -283,46 +282,3 @@ The following named deployments supplement any examples referenced above and tog
 [^17]: Ministry of Finance (Saudi Arabia), "Public Procurement Law and Etimad Platform — Supplier Registration Requirements," MoF KSA, 2024, https://etimad.sa/
 
 [^18]: HM Revenue & Customs (HMRC), "Making Tax Digital — AI-Assisted Compliance Architecture Overview," HMRC, 2024, https://www.gov.uk/government/collections/making-tax-digital
-=======
-## 6. Regional case studies / lighthouse projects
-
-### 6.1 SDAIA / IBM — ALLAM Arabic LLM for Saudi e-Government (Absher)
-
-**Player:** SDAIA (Saudi Data & AI Authority) with IBM Research
-**Country:** Saudi Arabia
-**Program:** ALLAM Government Deployment on Absher
-**What they built:** ALLAM (Adapted Large Language Arabic Model) is a bilingual Arabic-English foundation model trained on curated corpora spanning classical Arabic, Modern Standard Arabic, and Gulf dialects. In government deployment, ALLAM powers the natural-language query layer of the Absher e-government portal through a RAG architecture: citizen queries are embedded, matched against a vector index of government service documentation and policy circulars, and answered with policy-cited responses. SDAIA has subsequently fine-tuned domain-specific variants: a ZATCA variant trained on tax regulations and circulars, and an MOH variant trained on health service documentation. The architecture uses a human-escalation layer for queries touching sensitive personal circumstances or requiring discretionary judgment. The system runs within KSA sovereign cloud infrastructure, compliant with NCA ECC data residency requirements.[^4]
-**Reported outcome:** Material improvement in Arabic NLP accuracy on ACVA and Belebele benchmarks vs. baseline multilingual models; _specific CSAT and deflection-rate figures: unsourced — verify or replace._
-**Source:** SDAIA official announcements, 2024; IBM Research, "ALLAM: The Large Arabic Language Model," 2024.[^4]
-
----
-
-### 6.2 Abu Dhabi Digital Authority — TAMM Conversational AI with Falcon Integration
-
-**Player:** Abu Dhabi Digital Authority (ADDA) with TII / G42 ecosystem
-**Country:** UAE (Abu Dhabi)
-**Program:** TAMM AI-Powered Citizen Services
-**What they built:** TAMM's conversational AI layer integrates Falcon-family models from TII for Arabic-language query handling, deployed via RAG over a services knowledge graph spanning 1,000+ Abu Dhabi government services. The architecture uses intent classification (to identify which service or transaction a citizen is seeking), a retrieval layer over the knowledge graph, and API-based transaction initiation for eligible service types (license renewals, permit applications, benefit status queries). Dialectal Arabic input is normalized before retrieval to handle Gulf Arabic colloquialisms. The system runs within G42/Khazna Data Centers' sovereign cloud infrastructure, maintaining UAE PDPL compliance. A human-escalation pathway routes complex or sensitive cases to ADDA's contact center agents, with the AI generating a case pre-summary to reduce agent handling time.[^5]
-**Reported outcome:** _Outcome figures unverified_; UAE government cites TAMM as a contributor to UAE's top-10 UN e-Government ranking (2024).[^12]
-**Source:** UAE Ministry of Cabinet Affairs AI reports 2024–25; TII Falcon public documentation, 2025.[^5][^12]
-
----
-
-### 6.3 Türkiye — e-Devlet (e-Government Gateway) AI Chatbot and Document Processing
-
-**Player:** Cumhurbaşkanlığı Dijital Dönüşüm Ofisi (DTO) / e-Devlet platform
-**Country:** Türkiye
-**Program:** e-Devlet AI-Assisted Services Layer
-**What they built:** The e-Devlet platform integrated a Turkish-language conversational AI assistant for citizen query handling — covering navigation across the platform's 5,000+ government services, document submission guidance, and status enquiry. The underlying architecture uses a RAG pipeline over Turkish-language government service documentation and legislative summaries, with a multilingual LLM (fine-tuned for Turkish) as the generation layer. The system is hosted on domestic Turkish cloud infrastructure to comply with KVKK cross-border data transfer restrictions. A secondary deployment involves automated document classification for incoming citizen submissions — routing tax filings, appeals, and complaints to the appropriate ministry queue with extracted metadata pre-populated. _Architecture details for the document classification component: unverified — verify or replace._
-**Reported outcome:** _Outcome figures unverified._
-**Source:** Cumhurbaşkanlığı Dijital Dönüşüm Ofisi, Ulusal Yapay Zekâ Stratejisi documentation, 2024–2025.[^2]
-
----
-
-### 6.4 ZATCA (Saudi Arabia) — AI-Assisted e-Invoicing Compliance and VAT Analytics
-
-**Player:** Zakat, Tax and Customs Authority (ZATCA)
-**Country:** Saudi Arabia
-**Program:** Fatoorah Phase 2 AI Compliance Analytics
-**What they built:** Following the mandatory e-invoicing (Fatoorah) rollout across Saudi businesses (Phase 1: 2021, Phase 2: 2023–2025 rolling), ZATCA deployed an AI-assisted compliance analytics layer that ingests structured e-invoice data via the ZATCA API, runs anomaly detection models to flag invoices with potential VAT compliance issues (mismatched tax rates, inconsistent supplier data, patterns consistent with split-invoicing evasion), and routes flagged cases to audit queues with a pre-generated case summary. The system operates as an agent pipeline: an ingestion agent parses e-invoice XML, a validation agent cross-
->>>>>>> 2178078 (Hide Maven AI logo on Tasama agent ops top bar)

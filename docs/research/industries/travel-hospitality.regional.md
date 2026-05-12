@@ -147,7 +147,6 @@ Target: Pegasus Airlines commercial technology team. Offering: AI-native ancilla
 
 ---
 
-<<<<<<< HEAD
 ---
 
 ## 6. Regional case studies / lighthouse projects
@@ -334,63 +333,3 @@ The following risks are specific to — or materially amplified in — the MENAT
 
 _Footnotes [^34]–[^55] referenced inline above are pending consolidation; refer to the parallel global dossier ./travel-hospitality.md for source citations on shared topics (IATA, Skift, Phocuswright, ATPCO, OAG, Amadeus, Sabre, STR). Per-region MENAT-specific sources are flagged inline as _unsourced — verify or replace_ where not yet consolidated in this Sources list._
 
-=======
-## 6. Regional case studies / lighthouse projects
-
-### Emirates Engineering — Predictive MRO ML Programme (UAE)
-**Player:** Emirates Group / Emirates Engineering
-**Country:** UAE
-**Program name:** Emirates Engineering Predictive Maintenance Platform
-**What they built:** Emirates Engineering deployed a ML-based predictive maintenance programme integrating QAR (Quick Access Recorder) sensor telemetry and ACARS data from its 777 and A380 fleet into a unified MRO data lake. Time-series anomaly detection models identify component wear-rate deviations and generate condition-based maintenance scheduling recommendations, replacing calendar-based intervals for targeted component classes. The architecture involves sensor data ingestion pipelines, a proprietary MRO data lake (cloud infrastructure partners not publicly confirmed — _architecture details unverified_), and ML models trained per aircraft type.
-**Reported outcome:** Emirates cited improved operational reliability metrics and reduced unscheduled maintenance events in the Emirates Group Annual Report 2024–25 (_outcome figure unverified_).[^37]
-**Source:** Emirates Group Annual Report 2024–25; IATA Ground Handling Conference AI track 2025.
-
----
-
-### Qatar Airways — NDC AI Dynamic Pricing and Offer Construction (Qatar)
-**Player:** Qatar Airways
-**Country:** Qatar
-**Program name:** NDC AI Offer Management (Amadeus Nevio integration)
-**What they built:** Qatar Airways progressed its Amadeus Nevio (next-generation offer and order management) integration through 2024–2025, enabling AI-driven dynamic bundle construction at the offer layer — ancillaries, seats, and fare components assembled in real-time against individual demand signals — decoupled from legacy PSS inventory confirmation. The pricing engine optimises bundle composition, not just base fare, using ML models trained on historical booking patterns and demand signals. Personalised offers are served across direct channels and NDC-connected OTA partners.
-**Reported outcome:** Qatar Airways reported increased direct channel revenue share in 2024–2025 investor communications (_outcome figure unverified_).[^38]
-**Source:** IATA NDC Progress Report 2024; Amadeus press releases on Nevio partnerships 2024–2025; Arab News coverage of Qatar Airways digital strategy.
-
----
-
-### Riyadh Air — AI-Native Carrier Architecture (KSA)
-**Player:** Riyadh Air (PIF subsidiary)
-**Country:** Saudi Arabia
-**Program name:** AI-Native Operating Model (carrier inception design)
-**What they built:** Riyadh Air selected a cloud-native PSS architecture from inception (specific PSS vendor engagement not fully confirmed publicly — _architecture details unverified_), eschewing legacy Amadeus Altéa or Sabre Passenger dependencies. The carrier's digital commercial layer is designed to deploy agentic booking and servicing interfaces as native capabilities, not retrofit additions. AI is embedded in the operating model design across revenue management (AI-native yield optimisation), customer experience (Arabic-first conversational AI for booking and servicing), and operations (AI-assisted crew management and disruption recovery). ALLAM Arabic LLM integration for customer-facing Arabic conversational AI has been discussed in SDAIA and Riyadh Air public communications (_architecture details unverified_).
-**Reported outcome:** Riyadh Air is pre-revenue at time of writing; no operational outcome data available. PSS and AI architecture positions it as the global benchmark for greenfield agentic-native carrier design.[^39]
-**Source:** Riyadh Air press releases 2024–2026; PIF annual report 2024; Arab News, The National coverage of Riyadh Air technology strategy.
-
----
-
-### Turkish Airlines — Revenue Management AI and NDC Modernisation (Türkiye)
-**Player:** Turkish Airlines (Türk Hava Yolları)
-**Country:** Türkiye
-**Program name:** AI Revenue Management Enhancement + NDC Channel Investment
-**What they built:** Turkish Airlines deployed enhanced AI-assisted revenue management models integrated with its existing revenue management system, adding ML-driven demand forecasting and dynamic pricing optimisation across its 340+ destination network. The airline confirmed NDC capability investment enabling offer construction across OTA distribution partners. A separate passenger-facing AI assistant (architecture and LLM underpinning not publicly confirmed — _architecture details unverified_) handles booking assistance and loyalty queries in Turkish, English, and selected other languages.
-**Reported outcome:** Turkish Airlines reported continued revenue per ASK improvement through 2024–2025, with digital channel growth cited in investor materials (_outcome figure unverified_).[^40]
-**Source:** Turkish Airlines Annual Reports 2024–2025; IATA Wings of Change Europe 2025; Anadolu Agency coverage of Turkish Airlines digital strategy.
-
----
-
-### Majid Al Futtaim (MAF) — AI Personalisation Across Hospitality and Retail (UAE)
-**Player:** Majid Al Futtaim Group (Hospitality division)
-**Country:** UAE
-**Program name:** MAF AI Customer Intelligence Platform (hospitality application)
-**What they built:** MAF Group deployed a group-wide AI customer intelligence and personalisation platform that extends across its retail (Carrefour MAF), entertainment, and hospitality verticals. Within the hospitality division (operator of Marriott-branded and own-brand hotels in UAE, KSA, Egypt), the platform ingests loyalty interaction data, in-stay service signals, and retail purchase history to generate cross-vertical personalised offers — e.g., hotel upgrade recommendations surfaced through the My Rewards loyalty app correlated with grocery purchase patterns. The architecture uses Azure cloud services with a UAE-region deployment to maintain PDPL alignment (_architecture details unverified_).
-**Reported outcome:** MAF Group reported My Rewards loyalty member engagement growth in 2024–2025 annual reporting; hospitality-specific AI revenue uplift not separately disclosed (_outcome figure unverified_).[^41]
-**Source:** Majid Al Futtaim Group Annual Report 2024–2025; PwC Middle East AI survey 2025; Gulf News coverage of MAF digital transformation.
-
----
-
-### Almosafer (Seera Group) — AI-Powered Travel Search and Personalisation (KSA)
-**Player:** Almosafer / Seera Group
-**Country:** Saudi Arabia
-**Program name:** AI Travel Personalisation and Arabic-Language Search Enhancement
-**What they built:** Almosafer, the travel OTA subsidiary of Seera Group (KSA's largest travel group, formerly Al Tayyar), invested in AI-powered flight and hotel search personalisation through 2024–2025, incorporating ML-based re-ranking of search results by inferred user preference signals and an Arabic-language search interface enhancement. The system integrates with GDS and NDC feeds and applies session-level behavioural inference to dynamically adjust result ordering. A conversational booking assistance feature in Arabic was in pilot as of late 2025 (_architecture details unverified_).
-**Reported outcome:** Seera Group reported digital channel revenue growth in 2024 financial disclosures (_outcome figure unverified_).[^
->>>>>>> 2178078 (Hide Maven AI logo on Tasama agent ops top bar)

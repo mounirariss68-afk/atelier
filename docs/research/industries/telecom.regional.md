@@ -166,7 +166,6 @@ GCC sovereign cloud initiatives (Saudi Government Cloud, UAE's Khazna, Qatar's G
 
 ---
 
-<<<<<<< HEAD
 ---
 
 ## 7. Risks & blockers unique to MENAT
@@ -272,8 +271,3 @@ GCC sovereign cloud initiatives (Saudi Government Cloud, UAE's Khazna, Qatar's G
 [^33]: Khazna Data Centers, "Khazna Sovereign Cloud: Capacity and Compliance Overview", Khazna Data Centers, Abu Dhabi, 2025, https://www.khazna.ae/ _(specific capacity disclosure unsourced — verify or replace)_; Bulut Türkiye, "Bulut Türkiye Sovereign Cloud Initiative", Republic of Türkiye, 2024–2025, https://www.bulutturkiye.com/ _(GPU capacity figures unsourced — verify or replace)_
 
 [^34]: Saudi Arabia Ministry of Finance / PIF, "Public Investment Fund Portfolio: stc Shareholding and Government Procurement Governance Framework", PIF, 2024, https://www.pif.gov.sa/en/ _(specific procurement governance document unsourced — verify or replace with published PIF or stc governance disclosure)_
-=======
-## 7. Risks & blockers unique to MENAT
-
-- **Data residency fragmentation across MENAT sovereign jurisdictions.** Saudi PDPL, UAE PDPL, Türkiye KVKK, Qatar data governance, and Egypt's data protection framework each impose distinct — and not fully harmonised — data localisation obligations. An agentic AI architecture that processes customer data from multiple MENAT countries in a centralised orchestration layer (e.g., a UAE-hosted multi-agent system serving stc KSA customer data) requires country-by-country legal analysis that frequently results in prohibitive fragmentation. Cross-border data flows for AI training — sending Egyptian customer interaction logs to a UAE-based fine-tuning pipeline — may require explicit consent
->>>>>>> 2178078 (Hide Maven AI logo on Tasama agent ops top bar)

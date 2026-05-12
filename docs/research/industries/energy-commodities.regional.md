@@ -133,7 +133,6 @@ Target customer: EGAS, Egyptian Petrochemicals Company, and private-sector opera
 
 ---
 
-<<<<<<< HEAD
 ---
 
 ## 6. Regional case studies / lighthouse projects
@@ -280,48 +279,3 @@ The following named projects supplement any case references made in §4 and §5 
 
 _Footnotes [^33]–[^41] referenced inline above are pending consolidation; refer to the parallel global dossier ./energy-commodities.md for source citations on shared topics (IEA, BNEF, Wood Mackenzie, Rystad, S&P Global Commodity Insights). Per-region MENAT-specific sources are flagged inline as _unsourced — verify or replace_ where not yet consolidated in this Sources list._
 
-=======
-## 6. Regional case studies / lighthouse projects
-
-### Case Study 1: Saudi Aramco — AI Center & Metabrain Platform (Seismic Interpretation Agent)
-
-**Player:** Saudi Aramco | **Country:** KSA | **Programme:** Metabrain Industrial AI Platform / AI Center, Dhahran
-
-**What they built:** Aramco deployed a convolutional neural network (CNN) ensemble architecture for 3D seismic volume interpretation, running on the AI Center's internal GPU cluster in Dhahran. The system ingests pre-stack depth-migrated seismic volumes and performs automated fault detection, horizon picking, and reservoir property prediction — tasks historically requiring weeks of specialist geophysicist time. The model training pipeline uses proprietary Aramco subsurface datasets that never leave internal infrastructure, satisfying NCA data-residency requirements. Separately, an LLM-based engineering document retrieval agent (architecture: RAG over Aramco's technical standards library, bilingual Arabic/English) was deployed for field engineers to query internal technical documentation in natural language. The Metabrain layer acts as a model registry and inference orchestration platform across these applications. _Architecture details for Metabrain orchestration layer unverified._
-
-**Reported outcome:** Aramco's 2024 Sustainability Report cited material reduction in seismic interpretation cycle time; specific percentage figures _outcome figure unverified_. The seismic AI programme has been referenced in multiple public CTO statements as a flagship productivity initiative.
-
-**Source:** Saudi Aramco Sustainability Report 2024 [^4]; public statements by Aramco CTO Ahmad Al Khowaiter, 2024–2025, Arab News.[^27]
-
----
-
-### Case Study 2: ADNOC — Panorama Digital Command Centre with Embedded AI Agents
-
-**Player:** ADNOC | **Country:** UAE | **Programme:** Panorama Digital Command Centre (AI-enhanced phase, 2023–2025)
-
-**What they built:** ADNOC's Panorama centre in Abu Dhabi aggregates over 2 million data points daily from ADNOC Drilling, ADNOC Upstream, ADNOC Refining, and Borouge into a unified operational intelligence layer. By 2024–2025, AI agents embedded in the Panorama architecture perform: (1) automated anomaly triage on production equipment — flagging deviations from baseline operating envelopes and generating prioritised maintenance work orders without human intervention; (2) production optimisation recommendations across the integrated value chain, suggesting gas lift rate adjustments and separator settings; (3) a demand forecasting agent for refinery crude slate optimisation. The sovereign infrastructure runs on G42 Cloud / Khazna Data Centers, with AI71's Falcon-based models fine-tuned on ADNOC operational data handling Arabic-language reporting and documentation workflows. _Agent orchestration architecture for multi-entity value chain integration unverified in public domain._
-
-**Reported outcome:** ADNOC cited cumulative value creation of >$4 billion attributed to digital and AI programmes through 2024. _Outcome figure unverified — cross-check ADNOC 2024 Annual Review._ ADNOC Drilling separately reported AI-driven improvements in drilling efficiency in 2024 investor communications. _Specific figures outcome figure unverified._
-
-**Source:** ADNOC 2024 Annual Review [^5]; AI71 programme documentation, TII.[^28]
-
----
-
-### Case Study 3: TÜPRAŞ — Predictive Maintenance and Process Optimisation ML Deployments
-
-**Player:** TÜPRAŞ (Türkiye Petrol Rafinerileri A.Ş.) | **Country:** Türkiye | **Programme:** Digital Transformation / Industry 4.0 Programme (Koç Group reporting, 2023–2025)
-
-**What they built:** TÜPRAŞ deployed ML-based predictive maintenance models across rotating equipment (compressors, pumps, heat exchangers) at the İzmit and İzmir refineries, using OSIsoft PI historian data as the primary training source following a data-liberation exercise completed in 2023. The models use multivariate time-series anomaly detection (LSTM-based architecture) to generate early warning alerts 72–96 hours before equipment failure events, integrated into the maintenance management workflow system. A secondary initiative applied ML to crude blend optimisation — using gradient-boosted models to recommend optimal crude slate selection given real-time price differentials and yield targets for each refinery's specific configuration. Deployment is on TÜPRAŞ private cloud infrastructure within Türkiye to satisfy KVKK data requirements. _Architecture details for LSTM implementation and crude optimisation model unverified — source Koç Group annual reporting._
-
-**Reported outcome:** Koç Group's 2024 Sustainability Report referenced digital transformation savings at TÜPRAŞ. _Specific outcome figures outcome figure unverified._
-
-**Source:** Koç Group Sustainability Report 2024 [^10]; TÜPRAŞ Integrated Report 2024. _unsourced — verify or replace_
-
----
-
-### Case Study 4: QatarEnergy — LNG Digital Twin Programme (North Field Expansion)
-
-**Player:** QatarEnergy | **Country:** Qatar | **Programme:** North Field Expansion Digital Twin / Digital Assets Programme
-
-**What they built:** QatarEnergy
->>>>>>> 2178078 (Hide Maven AI logo on Tasama agent ops top bar)
