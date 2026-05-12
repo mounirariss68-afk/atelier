@@ -612,6 +612,23 @@ router.post("/povs/:povId/draft", async (req, res) => {
     res.status(404).json({ error: "pov-not-found" });
     return;
   }
+  // Outline-approval gate: a human must have recorded an `approve` decision
+  // on the outline run before the section/critic/stylist chain may execute.
+  if (!pov.runId) {
+    res.status(412).json({ error: "outline-not-approved", reason: "no outline run on file" });
+    return;
+  }
+  const [outlineRun] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, pov.runId));
+  const outlineDecisions = (outlineRun?.humanDecisions as Array<{ decision?: string }> | null) ?? [];
+  const outlineApproved = outlineDecisions.some((d) => d?.decision === "approve");
+  if (!outlineApproved) {
+    res.status(412).json({
+      error: "outline-not-approved",
+      reason: "POV outline must be approved (human decision row) before draft can run",
+      outlineRunId: pov.runId,
+    });
+    return;
+  }
   const opp = await loadOpp(pov.opportunityId);
   if (!opp) {
     res.status(404).json({ error: "opportunity-not-found" });

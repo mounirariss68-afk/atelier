@@ -190,17 +190,26 @@ interface CompleteRunInput {
   targetType: string;
   targetId: string;
   targetLabel: string;
+  source?: "claude" | "mock_config" | "mock_fallback";
+  warning?: string;
 }
 
 export async function completeRun(input: CompleteRunInput): Promise<void> {
+  const isFallback = input.source === "mock_fallback";
+  // A mock-fallback (Claude error) is NOT a clean success — flag it so the
+  // UI/audit can surface that the data is synthetic and must not be treated
+  // as evidence. We still mark progress 100 so streams complete, but the
+  // `status` becomes `blocked` and `confidence` is forced to red.
   await db
     .update(atelierAgentRuns)
     .set({
-      status: "complete",
-      statusMessage: "complete",
+      status: isFallback ? "blocked" : "complete",
+      statusMessage: isFallback
+        ? (input.warning ?? "mock fallback — Claude unavailable")
+        : "complete",
       progressPct: 100,
       output: input.output as never,
-      confidence: input.confidence,
+      confidence: isFallback ? "red" : input.confidence,
       costUsd: input.costUsd,
       durationMs: input.durationMs,
       sourcesCount: input.sourcesCount,
@@ -213,9 +222,17 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
     entityId: input.targetId,
     actorType: "agent",
     actorLabel: input.actorLabel,
-    action: "agent.complete",
-    payload: { runId: input.runId, confidence: input.confidence, costUsd: input.costUsd },
-    payloadSummary: `${input.actorLabel} completed on ${input.targetLabel} (confidence ${input.confidence}, $${input.costUsd.toFixed(4)})`,
+    action: isFallback ? "agent.mock_fallback" : "agent.complete",
+    payload: {
+      runId: input.runId,
+      confidence: isFallback ? "red" : input.confidence,
+      costUsd: input.costUsd,
+      source: input.source ?? "claude",
+      warning: input.warning,
+    },
+    payloadSummary: isFallback
+      ? `${input.actorLabel} fell back to MOCK on ${input.targetLabel} — Claude unavailable; output flagged synthetic`
+      : `${input.actorLabel} completed on ${input.targetLabel} (confidence ${input.confidence}, $${input.costUsd.toFixed(4)}, source ${input.source ?? "claude"})`,
   });
 }
 
@@ -275,9 +292,9 @@ async function callClaudeJson<T>(
   systemPrompt: string,
   userPrompt: string,
   fallback: () => T,
-): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number }> {
+): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number; source: "claude" | "mock_config" | "mock_fallback"; warning?: string }> {
   if (MOCK_MODE) {
-    return { value: fallback(), costUsd: 0, tokensIn: 0, tokensOut: 0 };
+    return { value: fallback(), costUsd: 0, tokensIn: 0, tokensOut: 0, source: "mock_config" };
   }
   // Lazy import keeps cold-start light when running in mock mode.
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
@@ -310,16 +327,22 @@ async function callClaudeJson<T>(
     const inRate = model.includes("haiku") ? 1 : 3;
     const outRate = model.includes("haiku") ? 5 : 15;
     const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
-    return { value, costUsd, tokensIn, tokensOut };
+    return { value, costUsd, tokensIn, tokensOut, source: "claude" };
   } catch (err) {
-    // Surface clearly so the UI sees `error` status, then fall back so the
-    // demo path still functions.
+    const msg = err instanceof Error ? err.message : String(err);
     // eslint-disable-next-line no-console
     console.warn(
-      "[atelier-agents] Claude call failed, falling back to mock:",
-      err instanceof Error ? err.message : err,
+      "[atelier-agents] Claude call failed; returning mock-fallback flagged output so the UI can warn:",
+      msg,
     );
-    return { value: fallback(), costUsd: 0, tokensIn: 0, tokensOut: 0 };
+    return {
+      value: fallback(),
+      costUsd: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      source: "mock_fallback",
+      warning: `Claude call failed (${msg.slice(0, 160)}); output below is deterministic mock data — do NOT treat as evidence.`,
+    };
   }
 }
 
@@ -401,7 +424,7 @@ export async function runPursuitScout(args: {
   try {
     const system = loadPrompt("pursuit_scout");
     await progressRun(runId, 25, "Planning research lines");
-    const { value, costUsd, tokensIn, tokensOut } = await callClaudeJson<PursuitScoutOutput>(
+    const { value, costUsd, tokensIn, tokensOut, source, warning } = await callClaudeJson<PursuitScoutOutput>(
       "claude-sonnet-4-6",
       system,
       JSON.stringify({
@@ -426,6 +449,8 @@ export async function runPursuitScout(args: {
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
+      source,
+      warning,
     });
     return { runId, output: guarded, costUsd };
   } catch (err) {
@@ -509,7 +534,7 @@ export async function runPovOutline(args: {
   try {
     const system = loadPrompt("pov_author");
     await progressRun(runId, 30, "Drafting outline");
-    const { value, costUsd, tokensIn, tokensOut } = await callClaudeJson<PovOutline>(
+    const { value, costUsd, tokensIn, tokensOut, source, warning } = await callClaudeJson<PovOutline>(
       "claude-haiku-4-5",
       system + "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.",
       JSON.stringify({
@@ -531,6 +556,8 @@ export async function runPovOutline(args: {
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
+      source,
+      warning,
     });
     void tokensIn; void tokensOut;
     return { runId, outline: value, costUsd };
@@ -561,7 +588,7 @@ export async function runPovDraft(args: {
   try {
     const system = loadPrompt("pov_author");
     await progressRun(runId, 40, "Writing sections");
-    const { value, costUsd } = await callClaudeJson<PovDraft>(
+    const { value, costUsd, source, warning } = await callClaudeJson<PovDraft>(
       "claude-sonnet-4-6",
       system + "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.",
       JSON.stringify({ outline: args.outline, facts: args.promotedFacts }),
@@ -579,6 +606,8 @@ export async function runPovDraft(args: {
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
+      source,
+      warning,
     });
     return { runId, draft: value, costUsd };
   } catch (err) {
@@ -654,7 +683,7 @@ export async function runMeetingScribe(args: {
   try {
     const system = loadPrompt("meeting_scribe");
     await progressRun(runId, 35, "Normalising speakers");
-    const { value, costUsd } = await callClaudeJson<MeetingScribeOutput>(
+    const { value, costUsd, source, warning } = await callClaudeJson<MeetingScribeOutput>(
       "claude-haiku-4-5",
       system,
       JSON.stringify({
@@ -676,6 +705,8 @@ export async function runMeetingScribe(args: {
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
+      source,
+      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {

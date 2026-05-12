@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   useAtelierListOpportunities,
   useAtelierUpdateOpportunityStage,
@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SectionHead, PageHero, Card, PlmPill, PillButton } from "@/components/ui/primitives";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LayoutGrid, List as ListIcon, AlertTriangle, Plus } from "lucide-react";
+import { LayoutGrid, List as ListIcon, AlertTriangle, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { QualifierSheet } from "@/components/QualifierSheet";
@@ -92,10 +92,44 @@ function OppCard({ opp }: { opp: OppItem }) {
   );
 }
 
+type SortKey = "name" | "accountName" | "plmStage" | "dealSizeUsd" | "probabilityPct" | "daysInStage";
+
 export default function Pipeline() {
   const { data: opps, isLoading } = useAtelierListOpportunities();
   const [view, setView] = useState<"kanban" | "table">("kanban");
   const [qualifyOpp, setQualifyOpp] = useState<{ id: string; name: string } | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("dealSizeUsd");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const sortedOpps = useMemo(() => {
+    const arr = [...(opps ?? [])];
+    arr.sort((a, b) => {
+      const av = (a as unknown as Record<string, string | number>)[sortKey];
+      const bv = (b as unknown as Record<string, string | number>)[sortKey];
+      if (typeof av === "number" && typeof bv === "number") return sortDir === "asc" ? av - bv : bv - av;
+      return sortDir === "asc"
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av));
+    });
+    return arr;
+  }, [opps, sortKey, sortDir]);
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir("desc"); }
+  }
+  function SortHead({ k, label }: { k: SortKey; label: string }) {
+    const active = sortKey === k;
+    return (
+      <th
+        className={`p-4 font-normal cursor-pointer select-none hover:text-text transition-colors ${active ? "text-gold" : ""}`}
+        onClick={() => toggleSort(k)}
+      >
+        <span className="inline-flex items-center gap-1">
+          {label}
+          {active && (sortDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
+        </span>
+      </th>
+    );
+  }
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const updateStage = useAtelierUpdateOpportunityStage();
   const qc = useQueryClient();
@@ -190,17 +224,18 @@ export default function Pipeline() {
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-bg-deep font-mono text-xs text-text-mute uppercase tracking-wider border-b border-border">
                   <tr>
-                    <th className="p-4 font-normal">Opportunity</th>
-                    <th className="p-4 font-normal">Account</th>
-                    <th className="p-4 font-normal">Stage</th>
-                    <th className="p-4 font-normal">Value</th>
-                    <th className="p-4 font-normal">Probability</th>
+                    <SortHead k="name" label="Opportunity" />
+                    <SortHead k="accountName" label="Account" />
+                    <SortHead k="plmStage" label="Stage" />
+                    <SortHead k="dealSizeUsd" label="Value" />
+                    <SortHead k="probabilityPct" label="Probability" />
                     <th className="p-4 font-normal">Team</th>
+                    <SortHead k="daysInStage" label="Aging" />
                     <th className="p-4 font-normal">Next Milestone</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {opps?.map((opp) => (
+                  {sortedOpps.map((opp) => (
                     <tr key={opp.id} className="hover:bg-bg-elevate-2 transition-colors">
                       <td className="p-4">
                         <Link href={`/pipeline/${opp.id}`} className="font-medium text-text hover:text-gold transition-colors">
@@ -219,6 +254,7 @@ export default function Pipeline() {
                       <td className="p-4 text-text-mute">
                         {opp.partnerOwnerName.split(" ")[0]} / {opp.engagementLeadName.split(" ")[0]}
                       </td>
+                      <td className="p-4 font-mono text-xs text-text-mute">{opp.daysInStage}d</td>
                       <td className="p-4 text-text-mute text-xs truncate max-w-[200px]">{opp.nextMilestone}</td>
                     </tr>
                   ))}

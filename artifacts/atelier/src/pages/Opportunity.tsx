@@ -13,13 +13,14 @@ import { ResearchTab } from "@/components/tabs/ResearchTab";
 import { PovTab } from "@/components/tabs/PovTab";
 import { MeetingsTab } from "@/components/tabs/MeetingsTab";
 import { QualifierSheet } from "@/components/QualifierSheet";
-import { ArrowLeft, Shield } from "lucide-react";
+import { ArrowLeft, Shield, FileText, FilePlus2, Mic, Telescope, Wrench, Folder } from "lucide-react";
 
 const TABS = [
   { id: "brief", label: "Brief" },
   { id: "research", label: "Research" },
   { id: "pov", label: "POV Studio" },
   { id: "meetings", label: "Meetings" },
+  { id: "artifacts", label: "Artifacts" },
   { id: "audit", label: "Audit Trail" },
 ] as const;
 
@@ -70,14 +71,32 @@ export default function Opportunity() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-6">
-        <div className="flex flex-wrap gap-3 p-4 bg-bg-elevate border border-gold/30 rounded-lg items-center justify-between">
-          <div className="text-sm text-text-mute">
-            Opportunity workspace · all agent runs and human decisions are logged to the audit trail.
+        {/* Five-button gold toolbar — the partner's primary action surface. */}
+        <div className="flex flex-wrap gap-2 p-3 bg-gradient-to-b from-bg-elevate to-bg-deep border border-gold/40 rounded-lg shadow-[0_0_0_1px_rgba(212,170,53,0.08)_inset] items-center justify-between">
+          <div className="flex flex-wrap gap-2">
+            <PillButton variant="primary" onClick={() => setActiveTab("pov")}>
+              <span className="inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Draft POV</span>
+            </PillButton>
+            <PillButton variant="ghost" onClick={() => setActiveTab("artifacts")}>
+              <span className="inline-flex items-center gap-1"><FilePlus2 className="w-3 h-3" /> Build proposal</span>
+            </PillButton>
+            <PillButton variant="ghost" onClick={() => setActiveTab("meetings")}>
+              <span className="inline-flex items-center gap-1"><Mic className="w-3 h-3" /> Capture meeting</span>
+            </PillButton>
+            <PillButton variant="ghost" onClick={() => setActiveTab("research")}>
+              <span className="inline-flex items-center gap-1"><Telescope className="w-3 h-3" /> Research account</span>
+            </PillButton>
+            <PillButton variant="ghost" onClick={() => setActiveTab("artifacts")}>
+              <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" /> Prototype</span>
+            </PillButton>
           </div>
           <PillButton variant="ghost" onClick={() => setQualifierOpen(true)}>
             <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3" /> 5C Qualifier</span>
           </PillButton>
         </div>
+        <p className="text-xs text-text-faint font-mono">
+          All agent runs and human decisions are logged to the Audit Trail · run.status=blocked indicates a mock-fallback (Claude unavailable) — output is synthetic and must not be treated as evidence.
+        </p>
 
         <div className="border-b border-border">
           <div className="flex gap-6 overflow-x-auto scrollbar-thin">
@@ -100,6 +119,18 @@ export default function Opportunity() {
           {activeTab === "research" && <ResearchTab oppId={opp.id} />}
           {activeTab === "pov" && <PovTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "meetings" && <MeetingsTab oppId={opp.id} personaName={personaName} />}
+          {activeTab === "artifacts" && (
+            <div className="rounded-lg border border-dashed border-gold/30 bg-bg-deep p-12 text-center">
+              <Folder className="w-8 h-8 text-gold/60 mx-auto mb-3" />
+              <h3 className="text-lg font-semibold text-text mb-1">Artifacts</h3>
+              <p className="text-text-mute text-sm max-w-xl mx-auto">
+                Proposals, decks, prototypes and exports linked to <span className="font-mono text-text">{opp.name}</span> live here. Use the
+                {" "}<span className="text-gold font-mono">Build proposal</span> or <span className="text-gold font-mono">Prototype</span> actions in the
+                gold toolbar to spin up a new artifact, or drag-drop assets to attach existing ones.
+              </p>
+              <p className="text-xs text-text-faint mt-4 font-mono">No artifacts attached yet.</p>
+            </div>
+          )}
           {activeTab === "audit" && <AuditTab entityType="opportunity" entityId={opp.id} />}
         </div>
       </div>

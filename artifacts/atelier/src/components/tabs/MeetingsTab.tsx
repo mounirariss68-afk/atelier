@@ -4,8 +4,10 @@ import {
   useAtelierListOpportunityMeetings,
   useAtelierSubmitMeeting,
   useAtelierRecordAgentDecision,
+  useAtelierGetAgentRun,
   getAtelierListOpportunityMeetingsQueryKey,
   getAtelierListAuditQueryKey,
+  getAtelierGetAgentRunQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, PillButton } from "@/components/ui/primitives";
@@ -16,6 +18,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, FileUp } from "lucide-react";
 import { ApproveEditReject } from "../ApproveEditReject";
+
+function PendingApprovalBanner({ runId }: { runId: string | null }) {
+  const { data: run } = useAtelierGetAgentRun(runId ?? "", {
+    query: { enabled: !!runId, queryKey: getAtelierGetAgentRunQueryKey(runId ?? "") },
+  });
+  if (!runId) return null;
+  const decisions = ((run?.humanDecisions as Array<{ decision?: string }> | undefined) ?? []);
+  const approved = decisions.some((d) => d?.decision === "approve");
+  const isMockFallback = run?.status === "blocked";
+  if (approved && !isMockFallback) {
+    return (
+      <div className="rounded border border-success/40 bg-success/10 px-3 py-2 text-xs font-mono text-success">
+        ✓ Approved · committed to opportunity memory.
+      </div>
+    );
+  }
+  return (
+    <div className={`rounded border px-3 py-2 text-xs font-mono ${
+      isMockFallback ? "border-danger/50 bg-danger/10 text-danger" : "border-gold/40 bg-gold/5 text-gold"
+    }`}>
+      {isMockFallback ? "⚠ MOCK FALLBACK" : "● PENDING APPROVAL"} ·{" "}
+      {isMockFallback
+        ? "Claude was unavailable — scribe output below is synthetic. Review carefully and approve only if the underlying transcript supports each item."
+        : "Decisions and actions below are NOT yet in opportunity memory. Use Approve/Edit/Reject to commit or send back."}
+    </div>
+  );
+}
 
 export function MeetingsTab({ oppId, personaName }: { oppId: string; personaName: string }) {
   const qc = useQueryClient();
@@ -59,7 +88,14 @@ export function MeetingsTab({ oppId, personaName }: { oppId: string; personaName
     }
     await decideMut.mutateAsync({ runId: activeMeeting.runId, data: { decision, rationale } });
     qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
-    toast({ title: `Recorded ${decision}` });
+    qc.invalidateQueries({ queryKey: getAtelierGetAgentRunQueryKey(activeMeeting.runId) });
+    toast({
+      title: `Recorded ${decision}`,
+      description:
+        decision === "approve"
+          ? "Meeting promoted to opportunity memory."
+          : "Meeting kept as draft — not yet in opportunity memory.",
+    });
   }
 
   return (
@@ -130,6 +166,7 @@ export function MeetingsTab({ oppId, personaName }: { oppId: string; personaName
         </Card>
       ) : (
         <div className="space-y-4">
+          <PendingApprovalBanner runId={activeMeeting.runId ?? null} />
           <Card className="p-6 space-y-3">
             <div className="flex items-baseline justify-between">
               <h3 className="text-lg font-semibold text-text">{activeMeeting.title}</h3>

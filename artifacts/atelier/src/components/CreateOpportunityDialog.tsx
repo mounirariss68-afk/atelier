@@ -41,11 +41,19 @@ export function CreateOpportunityDialog({ trigger }: Props) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.accountName.trim()) {
-      toast({ title: "Name & account required", variant: "destructive" });
+    if (!form.name.trim()) {
+      toast({ title: "Opportunity name required", variant: "destructive" });
       return;
     }
-    const res = await create.mutateAsync({ data: { ...form } });
+    const accountName = form.accountName.trim() || form.name.trim();
+    const res = await create.mutateAsync({
+      data: {
+        ...form,
+        accountName,
+        accountCountry: form.accountCountry || "Türkiye",
+        accountSector: form.accountSector || "Cross-sector",
+      },
+    });
     qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
     toast({
       title: "Opportunity created",
@@ -64,62 +72,55 @@ export function CreateOpportunityDialog({ trigger }: Props) {
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">New opportunity</DialogTitle>
           <DialogDescription className="text-text-mute">
-            Lands in <span className="font-mono text-gold">identify</span>. If Pursuit Scout is enabled, an evidence-cited brief is drafted on creation.
+            Type a short opportunity name. Lands in <span className="font-mono text-gold">identify</span>; Pursuit Scout drafts an evidence-cited brief on creation.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4 py-3">
           <div className="grid gap-2">
-            <Label htmlFor="o-name">Opportunity name</Label>
+            <Label htmlFor="o-name" className="text-xs uppercase tracking-widest font-mono text-text-faint">Opportunity name</Label>
             <Input
               id="o-name"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="bg-bg-deep border-border text-text"
-              placeholder="e.g. AI-led pricing diagnostic"
+              onChange={(e) => setForm({ ...form, name: e.target.value, accountName: form.accountName || e.target.value })}
+              className="bg-bg-deep border-border text-text text-lg py-6"
+              placeholder="e.g. Tasama — AI pricing diagnostic"
               autoFocus
             />
+            <p className="text-xs text-text-faint">
+              Account, country, sector and context can be enriched later — leave them blank to let Scout infer from the name.
+            </p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="o-acct">Account</Label>
-              <Input
-                id="o-acct"
-                value={form.accountName}
-                onChange={(e) => setForm({ ...form, accountName: e.target.value })}
-                className="bg-bg-deep border-border text-text"
-                placeholder="Account name"
+          <details className="border border-border-soft rounded p-3 text-sm">
+            <summary className="cursor-pointer text-text-mute font-mono text-xs uppercase tracking-widest">Optional context</summary>
+            <div className="mt-3 grid gap-3">
+              <div className="grid grid-cols-3 gap-2">
+                <Input
+                  value={form.accountName}
+                  onChange={(e) => setForm({ ...form, accountName: e.target.value })}
+                  className="bg-bg-deep border-border text-text"
+                  placeholder="Account"
+                />
+                <Input
+                  value={form.accountCountry}
+                  onChange={(e) => setForm({ ...form, accountCountry: e.target.value })}
+                  className="bg-bg-deep border-border text-text"
+                  placeholder="Country"
+                />
+                <Input
+                  value={form.accountSector}
+                  onChange={(e) => setForm({ ...form, accountSector: e.target.value })}
+                  className="bg-bg-deep border-border text-text"
+                  placeholder="Sector"
+                />
+              </div>
+              <Textarea
+                value={form.contextBlurb}
+                onChange={(e) => setForm({ ...form, contextBlurb: e.target.value })}
+                className="bg-bg-deep border-border text-text min-h-[60px] text-xs"
+                placeholder="Anything the partner knows already…"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="o-country">Country</Label>
-              <Input
-                id="o-country"
-                value={form.accountCountry}
-                onChange={(e) => setForm({ ...form, accountCountry: e.target.value })}
-                className="bg-bg-deep border-border text-text"
-              />
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="o-sector">Sector</Label>
-            <Input
-              id="o-sector"
-              value={form.accountSector}
-              onChange={(e) => setForm({ ...form, accountSector: e.target.value })}
-              className="bg-bg-deep border-border text-text"
-              placeholder="e.g. Industrials, Banking, Healthcare"
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="o-context">Context for the Scout</Label>
-            <Textarea
-              id="o-context"
-              value={form.contextBlurb}
-              onChange={(e) => setForm({ ...form, contextBlurb: e.target.value })}
-              className="bg-bg-deep border-border text-text min-h-[88px]"
-              placeholder="What does the partner know already? Where is the buyer in their thinking?"
-            />
-          </div>
+          </details>
           <label className="flex items-center gap-2 text-sm text-text-mute">
             <input
               type="checkbox"
