@@ -346,6 +346,334 @@ export interface AuditEvent {
   ts: string;
 }
 
+export type Confidence = (typeof Confidence)[keyof typeof Confidence];
+
+export const Confidence = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface AtelierCreateOpportunityInput {
+  name: string;
+  accountName: string;
+  accountCountry: string;
+  accountSector: string;
+  contextBlurb?: string;
+  dealSizeUsd?: number;
+  runScout?: boolean;
+}
+
+export interface AtelierCreateOpportunityResponse {
+  opportunity: Opportunity;
+  /** @nullable */
+  scoutRunId?: string | null;
+}
+
+export interface AtelierStageChangeInput {
+  toStage: PlmStage;
+  rationale?: string;
+}
+
+export interface AtelierFiveC {
+  client: string;
+  competition: string;
+  capability: string;
+  capacity: string;
+  contract: string;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierQualifierDecision = {
+  decision: "go" | "no_go";
+  decider: string;
+  rationale: string;
+  ts: string;
+} | null;
+
+export interface AtelierQualifier {
+  oppId: string;
+  fiveC: AtelierFiveC;
+  /** @nullable */
+  decision?: AtelierQualifierDecision;
+}
+
+export type AtelierQualifierInputDecision =
+  (typeof AtelierQualifierInputDecision)[keyof typeof AtelierQualifierInputDecision];
+
+export const AtelierQualifierInputDecision = {
+  go: "go",
+  no_go: "no_go",
+} as const;
+
+export interface AtelierQualifierInput {
+  fiveC: AtelierFiveC;
+  decision: AtelierQualifierInputDecision;
+  rationale?: string;
+}
+
+export interface AtelierFact {
+  id?: string;
+  topic: string;
+  statement: string;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  sourceTitle?: string | null;
+  /** @nullable */
+  snippet?: string | null;
+  confidence: Confidence;
+}
+
+export type AtelierBriefAccountSnapshot = {
+  oneLiner: string;
+  scaleHint: string;
+  recentMoves: string[];
+};
+
+export type AtelierBriefBuyerLandscapeLikelyBuyersItem = {
+  title: string;
+  rationale: string;
+};
+
+export type AtelierBriefBuyerLandscape = {
+  likelyBuyers: AtelierBriefBuyerLandscapeLikelyBuyersItem[];
+  powerMap: string;
+};
+
+export interface AtelierBrief {
+  accountSnapshot: AtelierBriefAccountSnapshot;
+  buyerLandscape: AtelierBriefBuyerLandscape;
+  fiveCDraft: AtelierFiveC;
+  openQuestions: string[];
+  facts: AtelierFact[];
+  confidence?: Confidence;
+}
+
+export interface AtelierBriefEnvelope {
+  brief?: AtelierBrief;
+  /** @nullable */
+  runId?: string | null;
+  /** @nullable */
+  createdAt?: string | null;
+  confidence?: Confidence;
+}
+
+export interface AtelierScoutInput {
+  contextBlurb?: string;
+}
+
+export interface AtelierResearchFact {
+  id: string;
+  oppId: string;
+  topic: string;
+  statement: string;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  sourceTitle?: string | null;
+  /** @nullable */
+  snippet?: string | null;
+  confidence: Confidence;
+  promoted: boolean;
+  /** @nullable */
+  promotedAt?: string | null;
+  createdAt: string;
+  /** @nullable */
+  runId?: string | null;
+}
+
+export interface AtelierPromoteFactInput {
+  promote: boolean;
+}
+
+export interface AtelierStartPovInput {
+  title: string;
+  audience: string;
+  objective: string;
+}
+
+export interface AtelierPovOutlineSection {
+  id: string;
+  heading: string;
+  intent: string;
+  factIds: string[];
+}
+
+export type AtelierPovStatus =
+  (typeof AtelierPovStatus)[keyof typeof AtelierPovStatus];
+
+export const AtelierPovStatus = {
+  outline: "outline",
+  drafting: "drafting",
+  drafted: "drafted",
+  approved: "approved",
+} as const;
+
+export interface AtelierPov {
+  id: string;
+  oppId: string;
+  title: string;
+  /** @nullable */
+  audience?: string | null;
+  /** @nullable */
+  objective?: string | null;
+  status: AtelierPovStatus;
+  outline: AtelierPovOutlineSection[];
+  /** @nullable */
+  currentVersionId?: string | null;
+  /** @nullable */
+  runId?: string | null;
+  createdAt: string;
+}
+
+export type AtelierPovVersionSectionsItem = {
+  id?: string;
+  heading?: string;
+  body?: string;
+  citationIds?: string[];
+};
+
+export interface AtelierPovVersion {
+  id: string;
+  povId: string;
+  versionNumber: number;
+  body: string;
+  sections: AtelierPovVersionSectionsItem[];
+  citations?: AtelierFact[];
+  /** @nullable */
+  citationCoverage?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export type AtelierMeetingKind =
+  (typeof AtelierMeetingKind)[keyof typeof AtelierMeetingKind];
+
+export const AtelierMeetingKind = {
+  discovery: "discovery",
+  workshop: "workshop",
+  steering: "steering",
+  kickoff: "kickoff",
+} as const;
+
+export type AtelierMeetingMode =
+  (typeof AtelierMeetingMode)[keyof typeof AtelierMeetingMode];
+
+export const AtelierMeetingMode = {
+  paste: "paste",
+  upload: "upload",
+  live_bot: "live_bot",
+} as const;
+
+export type AtelierMeetingAttendeesItem = {
+  name?: string;
+  org?: string;
+};
+
+export type AtelierMeetingDecisionsItem = { [key: string]: unknown };
+
+export type AtelierMeetingActionItemsItem = { [key: string]: unknown };
+
+export interface AtelierMeeting {
+  id: string;
+  oppId: string;
+  kind: AtelierMeetingKind;
+  mode: AtelierMeetingMode;
+  title: string;
+  date: string;
+  attendees: AtelierMeetingAttendeesItem[];
+  /** @nullable */
+  summary: string | null;
+  decisions: AtelierMeetingDecisionsItem[];
+  actionItems: AtelierMeetingActionItemsItem[];
+  /** @nullable */
+  runId?: string | null;
+  createdAt: string;
+}
+
+export type AtelierSubmitMeetingInputKind =
+  (typeof AtelierSubmitMeetingInputKind)[keyof typeof AtelierSubmitMeetingInputKind];
+
+export const AtelierSubmitMeetingInputKind = {
+  discovery: "discovery",
+  workshop: "workshop",
+  steering: "steering",
+  kickoff: "kickoff",
+} as const;
+
+export type AtelierSubmitMeetingInputMode =
+  (typeof AtelierSubmitMeetingInputMode)[keyof typeof AtelierSubmitMeetingInputMode];
+
+export const AtelierSubmitMeetingInputMode = {
+  paste: "paste",
+  upload: "upload",
+  live_bot: "live_bot",
+} as const;
+
+export interface AtelierSubmitMeetingInput {
+  title?: string;
+  kind: AtelierSubmitMeetingInputKind;
+  mode?: AtelierSubmitMeetingInputMode;
+  date?: string;
+  transcript: string;
+}
+
+export type AtelierAgentRunDetailStatus =
+  (typeof AtelierAgentRunDetailStatus)[keyof typeof AtelierAgentRunDetailStatus];
+
+export const AtelierAgentRunDetailStatus = {
+  running: "running",
+  blocked: "blocked",
+  complete: "complete",
+  error: "error",
+} as const;
+
+export interface AtelierAgentRunDetail {
+  id: string;
+  agentId: string;
+  status: AtelierAgentRunDetailStatus;
+  /** @nullable */
+  statusMessage?: string | null;
+  /** @nullable */
+  progressPct?: number | null;
+  /** @nullable */
+  confidence?: string | null;
+  /** @nullable */
+  targetType?: string | null;
+  /** @nullable */
+  targetId?: string | null;
+  /** @nullable */
+  targetLabel?: string | null;
+  output?: unknown;
+  steps?: unknown[];
+  humanDecisions?: unknown[];
+  /** @nullable */
+  costUsd?: number | null;
+  /** @nullable */
+  durationMs?: number | null;
+  /** @nullable */
+  sourcesCount?: number | null;
+  createdAt: string;
+}
+
+export type AtelierAgentDecisionInputDecision =
+  (typeof AtelierAgentDecisionInputDecision)[keyof typeof AtelierAgentDecisionInputDecision];
+
+export const AtelierAgentDecisionInputDecision = {
+  approve: "approve",
+  edit: "edit",
+  reject: "reject",
+} as const;
+
+export interface AtelierAgentDecisionInput {
+  decision: AtelierAgentDecisionInputDecision;
+  rationale?: string;
+}
+
 export type AtelierGetActivityParams = {
   limit?: number;
 };

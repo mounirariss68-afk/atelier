@@ -264,6 +264,27 @@ export const AtelierListOpportunitiesResponse = zod.array(
   AtelierListOpportunitiesResponseItem,
 );
 
+/**
+ * @summary Create a new opportunity (Pursuit Scout auto-runs)
+ */
+export const atelierCreateOpportunityBodyContextBlurbDefault = ``;
+export const atelierCreateOpportunityBodyDealSizeUsdDefault = 250000;
+export const atelierCreateOpportunityBodyRunScoutDefault = true;
+
+export const AtelierCreateOpportunityBody = zod.object({
+  name: zod.string(),
+  accountName: zod.string(),
+  accountCountry: zod.string(),
+  accountSector: zod.string(),
+  contextBlurb: zod
+    .string()
+    .default(atelierCreateOpportunityBodyContextBlurbDefault),
+  dealSizeUsd: zod
+    .number()
+    .default(atelierCreateOpportunityBodyDealSizeUsdDefault),
+  runScout: zod.boolean().default(atelierCreateOpportunityBodyRunScoutDefault),
+});
+
 export const AtelierGetOpportunityParams = zod.object({
   oppId: zod.coerce.string(),
 });
@@ -296,6 +317,497 @@ export const AtelierGetOpportunityResponse = zod.object({
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
   sourceLead: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Move opportunity to a new PLM stage (5C gate enforced for `pursue`)
+ */
+export const AtelierUpdateOpportunityStageParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierUpdateOpportunityStageBodyRationaleDefault = ``;
+
+export const AtelierUpdateOpportunityStageBody = zod.object({
+  toStage: zod.enum([
+    "identify",
+    "shape",
+    "pursue",
+    "mobilize",
+    "deliver",
+    "compound",
+    "won",
+    "lost",
+    "no_go",
+    "closed",
+  ]),
+  rationale: zod
+    .string()
+    .default(atelierUpdateOpportunityStageBodyRationaleDefault),
+});
+
+export const AtelierUpdateOpportunityStageResponse = zod.object({
+  id: zod.string(),
+  slug: zod.string(),
+  name: zod.string(),
+  accountId: zod.string(),
+  accountName: zod.string(),
+  plmStage: zod.enum([
+    "identify",
+    "shape",
+    "pursue",
+    "mobilize",
+    "deliver",
+    "compound",
+    "won",
+    "lost",
+    "no_go",
+    "closed",
+  ]),
+  buyerPersona: zod.string().nullish(),
+  offeringAnchor: zod.string().nullish(),
+  partnerOwnerName: zod.string(),
+  engagementLeadName: zod.string(),
+  dealSizeUsd: zod.number(),
+  probabilityPct: zod.number(),
+  weightedValueUsd: zod.number(),
+  daysInStage: zod.number(),
+  nextMilestone: zod.string(),
+  sourceLead: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+export const AtelierGetQualifierParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierGetQualifierResponse = zod.object({
+  oppId: zod.string(),
+  fiveC: zod.object({
+    client: zod.string(),
+    competition: zod.string(),
+    capability: zod.string(),
+    capacity: zod.string(),
+    contract: zod.string(),
+  }),
+  decision: zod
+    .object({
+      decision: zod.enum(["go", "no_go"]),
+      decider: zod.string(),
+      rationale: zod.string(),
+      ts: zod.coerce.date(),
+    })
+    .nullish(),
+});
+
+export const AtelierSubmitQualifierParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierSubmitQualifierBodyRationaleDefault = ``;
+
+export const AtelierSubmitQualifierBody = zod.object({
+  fiveC: zod.object({
+    client: zod.string(),
+    competition: zod.string(),
+    capability: zod.string(),
+    capacity: zod.string(),
+    contract: zod.string(),
+  }),
+  decision: zod.enum(["go", "no_go"]),
+  rationale: zod.string().default(atelierSubmitQualifierBodyRationaleDefault),
+});
+
+export const AtelierSubmitQualifierResponse = zod.object({
+  oppId: zod.string(),
+  fiveC: zod.object({
+    client: zod.string(),
+    competition: zod.string(),
+    capability: zod.string(),
+    capacity: zod.string(),
+    contract: zod.string(),
+  }),
+  decision: zod
+    .object({
+      decision: zod.enum(["go", "no_go"]),
+      decider: zod.string(),
+      rationale: zod.string(),
+      ts: zod.coerce.date(),
+    })
+    .nullish(),
+});
+
+export const AtelierGetBriefParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierGetBriefResponse = zod.object({
+  brief: zod
+    .object({
+      accountSnapshot: zod.object({
+        oneLiner: zod.string(),
+        scaleHint: zod.string(),
+        recentMoves: zod.array(zod.string()),
+      }),
+      buyerLandscape: zod.object({
+        likelyBuyers: zod.array(
+          zod.object({
+            title: zod.string(),
+            rationale: zod.string(),
+          }),
+        ),
+        powerMap: zod.string(),
+      }),
+      fiveCDraft: zod.object({
+        client: zod.string(),
+        competition: zod.string(),
+        capability: zod.string(),
+        capacity: zod.string(),
+        contract: zod.string(),
+      }),
+      openQuestions: zod.array(zod.string()),
+      facts: zod.array(
+        zod.object({
+          id: zod.string().optional(),
+          topic: zod.string(),
+          statement: zod.string(),
+          sourceUrl: zod.string().nullish(),
+          sourceTitle: zod.string().nullish(),
+          snippet: zod.string().nullish(),
+          confidence: zod.enum(["green", "amber", "red"]),
+        }),
+      ),
+      confidence: zod.enum(["green", "amber", "red"]).optional(),
+    })
+    .optional(),
+  runId: zod.string().nullish(),
+  createdAt: zod.coerce.date().nullish(),
+  confidence: zod.enum(["green", "amber", "red"]).optional(),
+});
+
+/**
+ * @summary (Re)run Pursuit Scout for an opportunity
+ */
+export const AtelierRunPursuitScoutParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierRunPursuitScoutBodyContextBlurbDefault = ``;
+
+export const AtelierRunPursuitScoutBody = zod.object({
+  contextBlurb: zod
+    .string()
+    .default(atelierRunPursuitScoutBodyContextBlurbDefault),
+});
+
+export const AtelierRunPursuitScoutResponse = zod.object({
+  brief: zod
+    .object({
+      accountSnapshot: zod.object({
+        oneLiner: zod.string(),
+        scaleHint: zod.string(),
+        recentMoves: zod.array(zod.string()),
+      }),
+      buyerLandscape: zod.object({
+        likelyBuyers: zod.array(
+          zod.object({
+            title: zod.string(),
+            rationale: zod.string(),
+          }),
+        ),
+        powerMap: zod.string(),
+      }),
+      fiveCDraft: zod.object({
+        client: zod.string(),
+        competition: zod.string(),
+        capability: zod.string(),
+        capacity: zod.string(),
+        contract: zod.string(),
+      }),
+      openQuestions: zod.array(zod.string()),
+      facts: zod.array(
+        zod.object({
+          id: zod.string().optional(),
+          topic: zod.string(),
+          statement: zod.string(),
+          sourceUrl: zod.string().nullish(),
+          sourceTitle: zod.string().nullish(),
+          snippet: zod.string().nullish(),
+          confidence: zod.enum(["green", "amber", "red"]),
+        }),
+      ),
+      confidence: zod.enum(["green", "amber", "red"]).optional(),
+    })
+    .optional(),
+  runId: zod.string().nullish(),
+  createdAt: zod.coerce.date().nullish(),
+  confidence: zod.enum(["green", "amber", "red"]).optional(),
+});
+
+export const AtelierListResearchFactsParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierListResearchFactsResponseItem = zod.object({
+  id: zod.string(),
+  oppId: zod.string(),
+  topic: zod.string(),
+  statement: zod.string(),
+  sourceUrl: zod.string().nullish(),
+  sourceTitle: zod.string().nullish(),
+  snippet: zod.string().nullish(),
+  confidence: zod.enum(["green", "amber", "red"]),
+  promoted: zod.boolean(),
+  promotedAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+  runId: zod.string().nullish(),
+});
+export const AtelierListResearchFactsResponse = zod.array(
+  AtelierListResearchFactsResponseItem,
+);
+
+export const AtelierPromoteResearchFactParams = zod.object({
+  oppId: zod.coerce.string(),
+  factId: zod.coerce.string(),
+});
+
+export const AtelierPromoteResearchFactBody = zod.object({
+  promote: zod.boolean(),
+});
+
+export const AtelierPromoteResearchFactResponse = zod.object({
+  id: zod.string(),
+  oppId: zod.string(),
+  topic: zod.string(),
+  statement: zod.string(),
+  sourceUrl: zod.string().nullish(),
+  sourceTitle: zod.string().nullish(),
+  snippet: zod.string().nullish(),
+  confidence: zod.enum(["green", "amber", "red"]),
+  promoted: zod.boolean(),
+  promotedAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+  runId: zod.string().nullish(),
+});
+
+export const AtelierListPovsParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierListPovsResponseItem = zod.object({
+  id: zod.string(),
+  oppId: zod.string(),
+  title: zod.string(),
+  audience: zod.string().nullish(),
+  objective: zod.string().nullish(),
+  status: zod.enum(["outline", "drafting", "drafted", "approved"]),
+  outline: zod.array(
+    zod.object({
+      id: zod.string(),
+      heading: zod.string(),
+      intent: zod.string(),
+      factIds: zod.array(zod.string()),
+    }),
+  ),
+  currentVersionId: zod.string().nullish(),
+  runId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListPovsResponse = zod.array(AtelierListPovsResponseItem);
+
+/**
+ * @summary Start a POV — generates outline (POV Author phase A)
+ */
+export const AtelierStartPovParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierStartPovBody = zod.object({
+  title: zod.string(),
+  audience: zod.string(),
+  objective: zod.string(),
+});
+
+/**
+ * @summary Generate full draft after outline approval (Phases B/C/D)
+ */
+export const AtelierDraftPovParams = zod.object({
+  povId: zod.coerce.string(),
+});
+
+export const AtelierDraftPovResponse = zod.object({
+  id: zod.string(),
+  povId: zod.string(),
+  versionNumber: zod.number(),
+  body: zod.string(),
+  sections: zod.array(
+    zod.object({
+      id: zod.string().optional(),
+      heading: zod.string().optional(),
+      body: zod.string().optional(),
+      citationIds: zod.array(zod.string()).optional(),
+    }),
+  ),
+  citations: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        topic: zod.string(),
+        statement: zod.string(),
+        sourceUrl: zod.string().nullish(),
+        sourceTitle: zod.string().nullish(),
+        snippet: zod.string().nullish(),
+        confidence: zod.enum(["green", "amber", "red"]),
+      }),
+    )
+    .optional(),
+  citationCoverage: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+export const AtelierListPovVersionsParams = zod.object({
+  povId: zod.coerce.string(),
+});
+
+export const AtelierListPovVersionsResponseItem = zod.object({
+  id: zod.string(),
+  povId: zod.string(),
+  versionNumber: zod.number(),
+  body: zod.string(),
+  sections: zod.array(
+    zod.object({
+      id: zod.string().optional(),
+      heading: zod.string().optional(),
+      body: zod.string().optional(),
+      citationIds: zod.array(zod.string()).optional(),
+    }),
+  ),
+  citations: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        topic: zod.string(),
+        statement: zod.string(),
+        sourceUrl: zod.string().nullish(),
+        sourceTitle: zod.string().nullish(),
+        snippet: zod.string().nullish(),
+        confidence: zod.enum(["green", "amber", "red"]),
+      }),
+    )
+    .optional(),
+  citationCoverage: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListPovVersionsResponse = zod.array(
+  AtelierListPovVersionsResponseItem,
+);
+
+export const AtelierListOpportunityMeetingsParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierListOpportunityMeetingsResponseItem = zod.object({
+  id: zod.string(),
+  oppId: zod.string(),
+  kind: zod.enum(["discovery", "workshop", "steering", "kickoff"]),
+  mode: zod.enum(["paste", "upload", "live_bot"]),
+  title: zod.string(),
+  date: zod.string(),
+  attendees: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      org: zod.string().optional(),
+    }),
+  ),
+  summary: zod.string().nullable(),
+  decisions: zod.array(zod.object({}).passthrough()),
+  actionItems: zod.array(zod.object({}).passthrough()),
+  runId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListOpportunityMeetingsResponse = zod.array(
+  AtelierListOpportunityMeetingsResponseItem,
+);
+
+/**
+ * @summary Paste/upload a transcript and run Meeting Scribe
+ */
+export const AtelierSubmitMeetingParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierSubmitMeetingBodyTitleDefault = `Untitled meeting`;
+export const atelierSubmitMeetingBodyModeDefault = `paste`;
+export const atelierSubmitMeetingBodyDateDefault = ``;
+
+export const AtelierSubmitMeetingBody = zod.object({
+  title: zod.string().default(atelierSubmitMeetingBodyTitleDefault),
+  kind: zod.enum(["discovery", "workshop", "steering", "kickoff"]),
+  mode: zod
+    .enum(["paste", "upload", "live_bot"])
+    .default(atelierSubmitMeetingBodyModeDefault),
+  date: zod.string().default(atelierSubmitMeetingBodyDateDefault),
+  transcript: zod.string(),
+});
+
+export const AtelierGetAgentRunParams = zod.object({
+  runId: zod.coerce.string(),
+});
+
+export const AtelierGetAgentRunResponse = zod.object({
+  id: zod.string(),
+  agentId: zod.string(),
+  status: zod.enum(["running", "blocked", "complete", "error"]),
+  statusMessage: zod.string().nullish(),
+  progressPct: zod.number().nullish(),
+  confidence: zod.string().nullish(),
+  targetType: zod.string().nullish(),
+  targetId: zod.string().nullish(),
+  targetLabel: zod.string().nullish(),
+  output: zod.unknown().optional(),
+  steps: zod.array(zod.unknown()).optional(),
+  humanDecisions: zod.array(zod.unknown()).optional(),
+  costUsd: zod.number().nullish(),
+  durationMs: zod.number().nullish(),
+  sourcesCount: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Record an Approve / Edit / Reject checkpoint decision
+ */
+export const AtelierRecordAgentDecisionParams = zod.object({
+  runId: zod.coerce.string(),
+});
+
+export const atelierRecordAgentDecisionBodyRationaleDefault = ``;
+
+export const AtelierRecordAgentDecisionBody = zod.object({
+  decision: zod.enum(["approve", "edit", "reject"]),
+  rationale: zod
+    .string()
+    .default(atelierRecordAgentDecisionBodyRationaleDefault),
+});
+
+export const AtelierRecordAgentDecisionResponse = zod.object({
+  id: zod.string(),
+  agentId: zod.string(),
+  status: zod.enum(["running", "blocked", "complete", "error"]),
+  statusMessage: zod.string().nullish(),
+  progressPct: zod.number().nullish(),
+  confidence: zod.string().nullish(),
+  targetType: zod.string().nullish(),
+  targetId: zod.string().nullish(),
+  targetLabel: zod.string().nullish(),
+  output: zod.unknown().optional(),
+  steps: zod.array(zod.unknown()).optional(),
+  humanDecisions: zod.array(zod.unknown()).optional(),
+  costUsd: zod.number().nullish(),
+  durationMs: zod.number().nullish(),
+  sourcesCount: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 

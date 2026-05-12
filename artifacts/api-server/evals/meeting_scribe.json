@@ -1,0 +1,44 @@
+{
+  "agent_id": "meeting_scribe",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "ms_01_discovery_basic",
+      "input": { "kind": "discovery", "transcript": "Anchored discovery between AICo and Arçelik on pricing pilot, 30 minutes…" },
+      "asserts": [
+        { "kind": "summary_word_count_between", "min": 150, "max": 250 },
+        { "kind": "decisions_min", "value": 0 },
+        { "kind": "actions_have_owner_or_unowned" }
+      ]
+    },
+    {
+      "id": "ms_02_workshop_decisions",
+      "input": { "kind": "workshop", "transcript": "Decision A: we will adopt the unified taxonomy. Decision B: parking the v3 pricing engine." },
+      "asserts": [
+        { "kind": "decisions_min", "value": 2 },
+        { "kind": "every_green_decision_has_we_will_phrase" }
+      ]
+    },
+    {
+      "id": "ms_03_unowned_action",
+      "input": { "kind": "discovery", "transcript": "Someone needs to draft the data sharing memo before next Tuesday." },
+      "asserts": [
+        { "kind": "action_owner_equals", "value": "UNOWNED" }
+      ]
+    },
+    {
+      "id": "ms_04_attendee_unknown",
+      "input": { "kind": "discovery", "transcript": "Speaker 1: ... Speaker 2: ... no names given." },
+      "asserts": [
+        { "kind": "no_invented_attendee_names" }
+      ]
+    },
+    {
+      "id": "ms_05_5c_delta_no_prior",
+      "input": { "kind": "steering", "transcript": "Status update; no big change.", "priorBrief": null },
+      "asserts": [
+        { "kind": "five_c_delta_marks_no_prior_brief" }
+      ]
+    }
+  ]
+}

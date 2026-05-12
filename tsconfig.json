@@ -17,6 +17,9 @@
     },
     {
       "path": "./lib/maven-content"
+    },
+    {
+      "path": "./lib/integrations-anthropic-ai"
     }
   ]
 }

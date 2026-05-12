@@ -1,0 +1,50 @@
+{
+  "agent_id": "pov_author",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "pov_01_outline_4_to_6_sections",
+      "phase": "outline",
+      "input": { "audience": "CIO", "objective": "Argue for unified pricing platform", "factsCount": 8 },
+      "asserts": [
+        { "kind": "outline_section_count_between", "min": 4, "max": 6 },
+        { "kind": "every_section_maps_to_fact" }
+      ]
+    },
+    {
+      "id": "pov_02_section_word_band",
+      "phase": "sections",
+      "input": { "sectionsCount": 5 },
+      "asserts": [
+        { "kind": "each_section_word_count_between", "min": 150, "max": 280 }
+      ]
+    },
+    {
+      "id": "pov_03_citation_coverage",
+      "phase": "synthesis_critic",
+      "input": { "factsCount": 10 },
+      "asserts": [
+        { "kind": "coverage_at_least", "value": 0.8 }
+      ]
+    },
+    {
+      "id": "pov_04_voice_flags",
+      "phase": "synthesis_critic",
+      "input": { "draftHasBuzzwords": true },
+      "asserts": [
+        { "kind": "voice_flags_min", "value": 1 },
+        { "kind": "verdict_equals", "value": "revise" }
+      ]
+    },
+    {
+      "id": "pov_05_html_render",
+      "phase": "stylist",
+      "input": {},
+      "asserts": [
+        { "kind": "html_has_h1" },
+        { "kind": "html_citations_use_sup_tag" },
+        { "kind": "word_count_within", "min": 600, "max": 1800 }
+      ]
+    }
+  ]
+}

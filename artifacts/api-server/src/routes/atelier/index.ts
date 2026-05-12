@@ -37,6 +37,7 @@ import {
 } from "./personaCookie";
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler } from "./auditPdf";
+import agentRoutes from "./agentRoutes";
 
 registerAtelierRlsDefaults();
 
@@ -46,6 +47,9 @@ router.use(attachRls);
 
 // Audit PDF export — registered before /audit JSON to win the route match.
 router.get("/audit/export.pdf", auditPdfHandler);
+
+// Mount agent / opportunity write routes (Task #221).
+router.use(agentRoutes);
 
 function ensurePersona(
   req: Request,

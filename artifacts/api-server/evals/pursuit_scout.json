@@ -1,0 +1,48 @@
+{
+  "agent_id": "pursuit_scout",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "ps_01_arcelik",
+      "input": { "accountName": "Arçelik", "accountCountry": "TR", "accountSector": "Consumer Durables", "opportunityName": "Pricing Intelligence — EU", "contextBlurb": "Re-engaging after demo feedback in March." },
+      "asserts": [
+        { "kind": "min_facts", "value": 6 },
+        { "kind": "every_5c_cell_filled" },
+        { "kind": "all_facts_have_url" },
+        { "kind": "confidence_set" },
+        { "kind": "open_questions_min", "value": 3 }
+      ]
+    },
+    {
+      "id": "ps_02_first_gulf_bank",
+      "input": { "accountName": "First Abu Dhabi Bank", "accountCountry": "AE", "accountSector": "Financial Services", "opportunityName": "Wealth Tech Modernisation", "contextBlurb": "Inbound from CIO contact." },
+      "asserts": [
+        { "kind": "min_facts", "value": 6 },
+        { "kind": "every_5c_cell_filled" },
+        { "kind": "all_facts_have_url" }
+      ]
+    },
+    {
+      "id": "ps_03_vague_account",
+      "input": { "accountName": "Sigma Holdings", "accountCountry": "MT", "accountSector": "Diversified", "opportunityName": "AI Operating Model", "contextBlurb": "Unknown account; expect amber confidence." },
+      "asserts": [
+        { "kind": "confidence_at_most", "value": "amber" },
+        { "kind": "open_questions_min", "value": 4 }
+      ]
+    },
+    {
+      "id": "ps_04_competitive_landscape_named",
+      "input": { "accountName": "Banco BPI", "accountCountry": "PT", "accountSector": "Banking", "opportunityName": "Digital Channels Rebuild", "contextBlurb": "Known to be talking to McKinsey + AWS." },
+      "asserts": [
+        { "kind": "five_c_mentions", "cell": "competition", "needles": ["McKinsey", "AWS"] }
+      ]
+    },
+    {
+      "id": "ps_05_no_invented_revenue",
+      "input": { "accountName": "Private Co XYZ", "accountCountry": "CH", "accountSector": "Industrials", "opportunityName": "Operating Model", "contextBlurb": "Privately held, no public financials." },
+      "asserts": [
+        { "kind": "no_invented_revenue" }
+      ]
+    }
+  ]
+}

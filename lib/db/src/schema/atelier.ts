@@ -503,6 +503,102 @@ export const atelierNotifications = pgTable(
 );
 
 // ============================================================
+// BRIEFS (Pursuit Scout output, per opportunity)
+// ============================================================
+export const atelierBriefs = pgTable(
+  "atelier_briefs",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    opportunityId: text("opportunity_id").notNull(),
+    runId: text("run_id"),
+    accountSnapshot: jsonb("account_snapshot").notNull().default({}),
+    buyerLandscape: jsonb("buyer_landscape").notNull().default({}),
+    fiveCDraft: jsonb("five_c_draft").notNull().default({}),
+    openQuestions: jsonb("open_questions").notNull().default([]).$type<string[]>(),
+    citations: jsonb("citations").notNull().default([]),
+    confidence: text("confidence"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_briefs_opp").on(t.opportunityId)],
+);
+
+// ============================================================
+// RESEARCH FACTS (one row per researched fact, with promotion)
+// ============================================================
+export const atelierResearchFacts = pgTable(
+  "atelier_research_facts",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    opportunityId: text("opportunity_id").notNull(),
+    runId: text("run_id"),
+    topic: text("topic").notNull(),
+    statement: text("statement").notNull(),
+    sourceUrl: text("source_url"),
+    sourceTitle: text("source_title"),
+    retrievedAt: timestamp("retrieved_at"),
+    confidence: text("confidence").notNull().default("amber"),
+    snippet: text("snippet"),
+    promoted: boolean("promoted").notNull().default(false),
+    promotedAt: timestamp("promoted_at"),
+    promotedByUserId: text("promoted_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_facts_opp").on(t.opportunityId)],
+);
+
+// ============================================================
+// POVS + POV VERSIONS (POV Author chain output)
+// ============================================================
+export const atelierPovs = pgTable(
+  "atelier_povs",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    opportunityId: text("opportunity_id").notNull(),
+    title: text("title").notNull(),
+    audience: text("audience"),
+    objective: text("objective"),
+    status: text("status").notNull().default("outline"),
+    outline: jsonb("outline").notNull().default([]),
+    currentVersionId: text("current_version_id"),
+    runId: text("run_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_povs_opp").on(t.opportunityId)],
+);
+
+export const atelierPovVersions = pgTable(
+  "atelier_pov_versions",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    povId: text("pov_id").notNull(),
+    versionNumber: integer("version_number").notNull(),
+    body: text("body").notNull().default(""),
+    sections: jsonb("sections").notNull().default([]),
+    citations: jsonb("citations").notNull().default([]),
+    citationCoverage: doublePrecision("citation_coverage"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_povv_pov").on(t.povId)],
+);
+
+// ============================================================
 // PANE A — Triage queue (one row per "what needs me" item)
 // Materialized by the Triage Agent stub; lives in DB so it
 // survives reloads and feeds the audit trail.

@@ -20,13 +20,29 @@ import type {
   Account,
   AgentActivityItem,
   AgentCatalogEntry,
+  AtelierAgentDecisionInput,
+  AtelierAgentRunDetail,
   AtelierAsset,
+  AtelierBriefEnvelope,
+  AtelierCreateOpportunityInput,
+  AtelierCreateOpportunityResponse,
   AtelierError,
   AtelierGetActivityParams,
   AtelierHome,
   AtelierListAuditParams,
+  AtelierMeeting,
   AtelierPersona,
   AtelierPersonaSwitchInput,
+  AtelierPov,
+  AtelierPovVersion,
+  AtelierPromoteFactInput,
+  AtelierQualifier,
+  AtelierQualifierInput,
+  AtelierResearchFact,
+  AtelierScoutInput,
+  AtelierStageChangeInput,
+  AtelierStartPovInput,
+  AtelierSubmitMeetingInput,
   AuditEvent,
   ChatError,
   ChatRequest,
@@ -693,6 +709,96 @@ export function useAtelierListOpportunities<
   return { ...query, queryKey: queryOptions.queryKey };
 }
 
+/**
+ * @summary Create a new opportunity (Pursuit Scout auto-runs)
+ */
+export const getAtelierCreateOpportunityUrl = () => {
+  return `/api/atelier/opportunities`;
+};
+
+export const atelierCreateOpportunity = async (
+  atelierCreateOpportunityInput: AtelierCreateOpportunityInput,
+  options?: RequestInit,
+): Promise<AtelierCreateOpportunityResponse> => {
+  return customFetch<AtelierCreateOpportunityResponse>(
+    getAtelierCreateOpportunityUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCreateOpportunityInput),
+    },
+  );
+};
+
+export const getAtelierCreateOpportunityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateOpportunity>>,
+    TError,
+    { data: BodyType<AtelierCreateOpportunityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateOpportunity>>,
+  TError,
+  { data: BodyType<AtelierCreateOpportunityInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateOpportunity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateOpportunity>>,
+    { data: BodyType<AtelierCreateOpportunityInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateOpportunity(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateOpportunityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateOpportunity>>
+>;
+export type AtelierCreateOpportunityMutationBody =
+  BodyType<AtelierCreateOpportunityInput>;
+export type AtelierCreateOpportunityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new opportunity (Pursuit Scout auto-runs)
+ */
+export const useAtelierCreateOpportunity = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateOpportunity>>,
+    TError,
+    { data: BodyType<AtelierCreateOpportunityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateOpportunity>>,
+  TError,
+  { data: BodyType<AtelierCreateOpportunityInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateOpportunityMutationOptions(options));
+};
+
 export const getAtelierGetOpportunityUrl = (oppId: string) => {
   return `/api/atelier/opportunities/${oppId}`;
 };
@@ -774,6 +880,1283 @@ export function useAtelierGetOpportunity<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Move opportunity to a new PLM stage (5C gate enforced for `pursue`)
+ */
+export const getAtelierUpdateOpportunityStageUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/stage`;
+};
+
+export const atelierUpdateOpportunityStage = async (
+  oppId: string,
+  atelierStageChangeInput: AtelierStageChangeInput,
+  options?: RequestInit,
+): Promise<Opportunity> => {
+  return customFetch<Opportunity>(getAtelierUpdateOpportunityStageUrl(oppId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierStageChangeInput),
+  });
+};
+
+export const getAtelierUpdateOpportunityStageMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateOpportunityStage>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierStageChangeInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateOpportunityStage>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierStageChangeInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateOpportunityStage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateOpportunityStage>>,
+    { oppId: string; data: BodyType<AtelierStageChangeInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierUpdateOpportunityStage(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateOpportunityStageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateOpportunityStage>>
+>;
+export type AtelierUpdateOpportunityStageMutationBody =
+  BodyType<AtelierStageChangeInput>;
+export type AtelierUpdateOpportunityStageMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Move opportunity to a new PLM stage (5C gate enforced for `pursue`)
+ */
+export const useAtelierUpdateOpportunityStage = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateOpportunityStage>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierStageChangeInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateOpportunityStage>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierStageChangeInput> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateOpportunityStageMutationOptions(options));
+};
+
+export const getAtelierGetQualifierUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/qualifier`;
+};
+
+export const atelierGetQualifier = async (
+  oppId: string,
+  options?: RequestInit,
+): Promise<AtelierQualifier> => {
+  return customFetch<AtelierQualifier>(getAtelierGetQualifierUrl(oppId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetQualifierQueryKey = (oppId: string) => {
+  return [`/api/atelier/opportunities/${oppId}/qualifier`] as const;
+};
+
+export const getAtelierGetQualifierQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetQualifier>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetQualifier>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetQualifierQueryKey(oppId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetQualifier>>
+  > = ({ signal }) => atelierGetQualifier(oppId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!oppId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetQualifier>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetQualifierQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetQualifier>>
+>;
+export type AtelierGetQualifierQueryError = ErrorType<unknown>;
+
+export function useAtelierGetQualifier<
+  TData = Awaited<ReturnType<typeof atelierGetQualifier>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetQualifier>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetQualifierQueryOptions(oppId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierSubmitQualifierUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/qualifier`;
+};
+
+export const atelierSubmitQualifier = async (
+  oppId: string,
+  atelierQualifierInput: AtelierQualifierInput,
+  options?: RequestInit,
+): Promise<AtelierQualifier> => {
+  return customFetch<AtelierQualifier>(getAtelierSubmitQualifierUrl(oppId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierQualifierInput),
+  });
+};
+
+export const getAtelierSubmitQualifierMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSubmitQualifier>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierQualifierInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSubmitQualifier>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierQualifierInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierSubmitQualifier"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSubmitQualifier>>,
+    { oppId: string; data: BodyType<AtelierQualifierInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierSubmitQualifier(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSubmitQualifierMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSubmitQualifier>>
+>;
+export type AtelierSubmitQualifierMutationBody =
+  BodyType<AtelierQualifierInput>;
+export type AtelierSubmitQualifierMutationError = ErrorType<unknown>;
+
+export const useAtelierSubmitQualifier = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSubmitQualifier>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierQualifierInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSubmitQualifier>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierQualifierInput> },
+  TContext
+> => {
+  return useMutation(getAtelierSubmitQualifierMutationOptions(options));
+};
+
+export const getAtelierGetBriefUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/brief`;
+};
+
+export const atelierGetBrief = async (
+  oppId: string,
+  options?: RequestInit,
+): Promise<AtelierBriefEnvelope> => {
+  return customFetch<AtelierBriefEnvelope>(getAtelierGetBriefUrl(oppId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetBriefQueryKey = (oppId: string) => {
+  return [`/api/atelier/opportunities/${oppId}/brief`] as const;
+};
+
+export const getAtelierGetBriefQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetBrief>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetBrief>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetBriefQueryKey(oppId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof atelierGetBrief>>> = ({
+    signal,
+  }) => atelierGetBrief(oppId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!oppId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetBrief>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetBriefQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetBrief>>
+>;
+export type AtelierGetBriefQueryError = ErrorType<unknown>;
+
+export function useAtelierGetBrief<
+  TData = Awaited<ReturnType<typeof atelierGetBrief>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetBrief>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetBriefQueryOptions(oppId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary (Re)run Pursuit Scout for an opportunity
+ */
+export const getAtelierRunPursuitScoutUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/scout`;
+};
+
+export const atelierRunPursuitScout = async (
+  oppId: string,
+  atelierScoutInput?: AtelierScoutInput,
+  options?: RequestInit,
+): Promise<AtelierBriefEnvelope> => {
+  return customFetch<AtelierBriefEnvelope>(
+    getAtelierRunPursuitScoutUrl(oppId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierScoutInput),
+    },
+  );
+};
+
+export const getAtelierRunPursuitScoutMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRunPursuitScout>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierScoutInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRunPursuitScout>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierScoutInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRunPursuitScout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRunPursuitScout>>,
+    { oppId: string; data: BodyType<AtelierScoutInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierRunPursuitScout(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRunPursuitScoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRunPursuitScout>>
+>;
+export type AtelierRunPursuitScoutMutationBody = BodyType<AtelierScoutInput>;
+export type AtelierRunPursuitScoutMutationError = ErrorType<unknown>;
+
+/**
+ * @summary (Re)run Pursuit Scout for an opportunity
+ */
+export const useAtelierRunPursuitScout = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRunPursuitScout>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierScoutInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRunPursuitScout>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierScoutInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRunPursuitScoutMutationOptions(options));
+};
+
+export const getAtelierListResearchFactsUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/research`;
+};
+
+export const atelierListResearchFacts = async (
+  oppId: string,
+  options?: RequestInit,
+): Promise<AtelierResearchFact[]> => {
+  return customFetch<AtelierResearchFact[]>(
+    getAtelierListResearchFactsUrl(oppId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListResearchFactsQueryKey = (oppId: string) => {
+  return [`/api/atelier/opportunities/${oppId}/research`] as const;
+};
+
+export const getAtelierListResearchFactsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListResearchFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListResearchFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListResearchFactsQueryKey(oppId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListResearchFacts>>
+  > = ({ signal }) =>
+    atelierListResearchFacts(oppId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!oppId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListResearchFacts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListResearchFactsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListResearchFacts>>
+>;
+export type AtelierListResearchFactsQueryError = ErrorType<unknown>;
+
+export function useAtelierListResearchFacts<
+  TData = Awaited<ReturnType<typeof atelierListResearchFacts>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListResearchFacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListResearchFactsQueryOptions(oppId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierPromoteResearchFactUrl = (
+  oppId: string,
+  factId: string,
+) => {
+  return `/api/atelier/opportunities/${oppId}/research/${factId}/promote`;
+};
+
+export const atelierPromoteResearchFact = async (
+  oppId: string,
+  factId: string,
+  atelierPromoteFactInput: AtelierPromoteFactInput,
+  options?: RequestInit,
+): Promise<AtelierResearchFact> => {
+  return customFetch<AtelierResearchFact>(
+    getAtelierPromoteResearchFactUrl(oppId, factId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPromoteFactInput),
+    },
+  );
+};
+
+export const getAtelierPromoteResearchFactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPromoteResearchFact>>,
+    TError,
+    { oppId: string; factId: string; data: BodyType<AtelierPromoteFactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierPromoteResearchFact>>,
+  TError,
+  { oppId: string; factId: string; data: BodyType<AtelierPromoteFactInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierPromoteResearchFact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierPromoteResearchFact>>,
+    { oppId: string; factId: string; data: BodyType<AtelierPromoteFactInput> }
+  > = (props) => {
+    const { oppId, factId, data } = props ?? {};
+
+    return atelierPromoteResearchFact(oppId, factId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierPromoteResearchFactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierPromoteResearchFact>>
+>;
+export type AtelierPromoteResearchFactMutationBody =
+  BodyType<AtelierPromoteFactInput>;
+export type AtelierPromoteResearchFactMutationError = ErrorType<unknown>;
+
+export const useAtelierPromoteResearchFact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPromoteResearchFact>>,
+    TError,
+    { oppId: string; factId: string; data: BodyType<AtelierPromoteFactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierPromoteResearchFact>>,
+  TError,
+  { oppId: string; factId: string; data: BodyType<AtelierPromoteFactInput> },
+  TContext
+> => {
+  return useMutation(getAtelierPromoteResearchFactMutationOptions(options));
+};
+
+export const getAtelierListPovsUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/povs`;
+};
+
+export const atelierListPovs = async (
+  oppId: string,
+  options?: RequestInit,
+): Promise<AtelierPov[]> => {
+  return customFetch<AtelierPov[]>(getAtelierListPovsUrl(oppId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListPovsQueryKey = (oppId: string) => {
+  return [`/api/atelier/opportunities/${oppId}/povs`] as const;
+};
+
+export const getAtelierListPovsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPovs>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPovs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListPovsQueryKey(oppId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof atelierListPovs>>> = ({
+    signal,
+  }) => atelierListPovs(oppId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!oppId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPovs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPovsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPovs>>
+>;
+export type AtelierListPovsQueryError = ErrorType<unknown>;
+
+export function useAtelierListPovs<
+  TData = Awaited<ReturnType<typeof atelierListPovs>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPovs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPovsQueryOptions(oppId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Start a POV — generates outline (POV Author phase A)
+ */
+export const getAtelierStartPovUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/povs`;
+};
+
+export const atelierStartPov = async (
+  oppId: string,
+  atelierStartPovInput: AtelierStartPovInput,
+  options?: RequestInit,
+): Promise<AtelierPov> => {
+  return customFetch<AtelierPov>(getAtelierStartPovUrl(oppId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierStartPovInput),
+  });
+};
+
+export const getAtelierStartPovMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierStartPov>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierStartPovInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierStartPov>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierStartPovInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierStartPov"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierStartPov>>,
+    { oppId: string; data: BodyType<AtelierStartPovInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierStartPov(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierStartPovMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierStartPov>>
+>;
+export type AtelierStartPovMutationBody = BodyType<AtelierStartPovInput>;
+export type AtelierStartPovMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start a POV — generates outline (POV Author phase A)
+ */
+export const useAtelierStartPov = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierStartPov>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierStartPovInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierStartPov>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierStartPovInput> },
+  TContext
+> => {
+  return useMutation(getAtelierStartPovMutationOptions(options));
+};
+
+/**
+ * @summary Generate full draft after outline approval (Phases B/C/D)
+ */
+export const getAtelierDraftPovUrl = (povId: string) => {
+  return `/api/atelier/povs/${povId}/draft`;
+};
+
+export const atelierDraftPov = async (
+  povId: string,
+  options?: RequestInit,
+): Promise<AtelierPovVersion> => {
+  return customFetch<AtelierPovVersion>(getAtelierDraftPovUrl(povId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAtelierDraftPovMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDraftPov>>,
+    TError,
+    { povId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDraftPov>>,
+  TError,
+  { povId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDraftPov"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDraftPov>>,
+    { povId: string }
+  > = (props) => {
+    const { povId } = props ?? {};
+
+    return atelierDraftPov(povId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDraftPovMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDraftPov>>
+>;
+
+export type AtelierDraftPovMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Generate full draft after outline approval (Phases B/C/D)
+ */
+export const useAtelierDraftPov = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDraftPov>>,
+    TError,
+    { povId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDraftPov>>,
+  TError,
+  { povId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDraftPovMutationOptions(options));
+};
+
+export const getAtelierListPovVersionsUrl = (povId: string) => {
+  return `/api/atelier/povs/${povId}/versions`;
+};
+
+export const atelierListPovVersions = async (
+  povId: string,
+  options?: RequestInit,
+): Promise<AtelierPovVersion[]> => {
+  return customFetch<AtelierPovVersion[]>(getAtelierListPovVersionsUrl(povId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListPovVersionsQueryKey = (povId: string) => {
+  return [`/api/atelier/povs/${povId}/versions`] as const;
+};
+
+export const getAtelierListPovVersionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPovVersions>>,
+  TError = ErrorType<unknown>,
+>(
+  povId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPovVersions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPovVersionsQueryKey(povId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPovVersions>>
+  > = ({ signal }) =>
+    atelierListPovVersions(povId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!povId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPovVersions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPovVersionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPovVersions>>
+>;
+export type AtelierListPovVersionsQueryError = ErrorType<unknown>;
+
+export function useAtelierListPovVersions<
+  TData = Awaited<ReturnType<typeof atelierListPovVersions>>,
+  TError = ErrorType<unknown>,
+>(
+  povId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPovVersions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPovVersionsQueryOptions(povId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierListOpportunityMeetingsUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/meetings`;
+};
+
+export const atelierListOpportunityMeetings = async (
+  oppId: string,
+  options?: RequestInit,
+): Promise<AtelierMeeting[]> => {
+  return customFetch<AtelierMeeting[]>(
+    getAtelierListOpportunityMeetingsUrl(oppId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListOpportunityMeetingsQueryKey = (oppId: string) => {
+  return [`/api/atelier/opportunities/${oppId}/meetings`] as const;
+};
+
+export const getAtelierListOpportunityMeetingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListOpportunityMeetings>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListOpportunityMeetings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListOpportunityMeetingsQueryKey(oppId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListOpportunityMeetings>>
+  > = ({ signal }) =>
+    atelierListOpportunityMeetings(oppId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!oppId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListOpportunityMeetings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListOpportunityMeetingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListOpportunityMeetings>>
+>;
+export type AtelierListOpportunityMeetingsQueryError = ErrorType<unknown>;
+
+export function useAtelierListOpportunityMeetings<
+  TData = Awaited<ReturnType<typeof atelierListOpportunityMeetings>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListOpportunityMeetings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListOpportunityMeetingsQueryOptions(
+    oppId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Paste/upload a transcript and run Meeting Scribe
+ */
+export const getAtelierSubmitMeetingUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/meetings`;
+};
+
+export const atelierSubmitMeeting = async (
+  oppId: string,
+  atelierSubmitMeetingInput: AtelierSubmitMeetingInput,
+  options?: RequestInit,
+): Promise<AtelierMeeting> => {
+  return customFetch<AtelierMeeting>(getAtelierSubmitMeetingUrl(oppId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierSubmitMeetingInput),
+  });
+};
+
+export const getAtelierSubmitMeetingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSubmitMeeting>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierSubmitMeetingInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSubmitMeeting>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierSubmitMeetingInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierSubmitMeeting"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSubmitMeeting>>,
+    { oppId: string; data: BodyType<AtelierSubmitMeetingInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierSubmitMeeting(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSubmitMeetingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSubmitMeeting>>
+>;
+export type AtelierSubmitMeetingMutationBody =
+  BodyType<AtelierSubmitMeetingInput>;
+export type AtelierSubmitMeetingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Paste/upload a transcript and run Meeting Scribe
+ */
+export const useAtelierSubmitMeeting = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSubmitMeeting>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierSubmitMeetingInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSubmitMeeting>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierSubmitMeetingInput> },
+  TContext
+> => {
+  return useMutation(getAtelierSubmitMeetingMutationOptions(options));
+};
+
+export const getAtelierGetAgentRunUrl = (runId: string) => {
+  return `/api/atelier/agent-runs/${runId}`;
+};
+
+export const atelierGetAgentRun = async (
+  runId: string,
+  options?: RequestInit,
+): Promise<AtelierAgentRunDetail> => {
+  return customFetch<AtelierAgentRunDetail>(getAtelierGetAgentRunUrl(runId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetAgentRunQueryKey = (runId: string) => {
+  return [`/api/atelier/agent-runs/${runId}`] as const;
+};
+
+export const getAtelierGetAgentRunQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAgentRun>>,
+  TError = ErrorType<unknown>,
+>(
+  runId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAgentRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAgentRunQueryKey(runId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAgentRun>>
+  > = ({ signal }) => atelierGetAgentRun(runId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!runId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAgentRun>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAgentRunQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAgentRun>>
+>;
+export type AtelierGetAgentRunQueryError = ErrorType<unknown>;
+
+export function useAtelierGetAgentRun<
+  TData = Awaited<ReturnType<typeof atelierGetAgentRun>>,
+  TError = ErrorType<unknown>,
+>(
+  runId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAgentRun>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAgentRunQueryOptions(runId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Record an Approve / Edit / Reject checkpoint decision
+ */
+export const getAtelierRecordAgentDecisionUrl = (runId: string) => {
+  return `/api/atelier/agent-runs/${runId}/decision`;
+};
+
+export const atelierRecordAgentDecision = async (
+  runId: string,
+  atelierAgentDecisionInput: AtelierAgentDecisionInput,
+  options?: RequestInit,
+): Promise<AtelierAgentRunDetail> => {
+  return customFetch<AtelierAgentRunDetail>(
+    getAtelierRecordAgentDecisionUrl(runId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierAgentDecisionInput),
+    },
+  );
+};
+
+export const getAtelierRecordAgentDecisionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRecordAgentDecision>>,
+    TError,
+    { runId: string; data: BodyType<AtelierAgentDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRecordAgentDecision>>,
+  TError,
+  { runId: string; data: BodyType<AtelierAgentDecisionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRecordAgentDecision"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRecordAgentDecision>>,
+    { runId: string; data: BodyType<AtelierAgentDecisionInput> }
+  > = (props) => {
+    const { runId, data } = props ?? {};
+
+    return atelierRecordAgentDecision(runId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRecordAgentDecisionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRecordAgentDecision>>
+>;
+export type AtelierRecordAgentDecisionMutationBody =
+  BodyType<AtelierAgentDecisionInput>;
+export type AtelierRecordAgentDecisionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record an Approve / Edit / Reject checkpoint decision
+ */
+export const useAtelierRecordAgentDecision = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRecordAgentDecision>>,
+    TError,
+    { runId: string; data: BodyType<AtelierAgentDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRecordAgentDecision>>,
+  TError,
+  { runId: string; data: BodyType<AtelierAgentDecisionInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRecordAgentDecisionMutationOptions(options));
+};
 
 /**
  * @summary Active engagements

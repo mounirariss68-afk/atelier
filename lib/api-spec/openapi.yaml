@@ -156,6 +156,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Opportunity"
+    post:
+      operationId: atelierCreateOpportunity
+      tags: [atelier]
+      summary: Create a new opportunity (Pursuit Scout auto-runs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierCreateOpportunityInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierCreateOpportunityResponse"
   /atelier/opportunities/{oppId}:
     get:
       operationId: atelierGetOpportunity
@@ -178,6 +195,309 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+  /atelier/opportunities/{oppId}/stage:
+    patch:
+      operationId: atelierUpdateOpportunityStage
+      tags: [atelier]
+      summary: Move opportunity to a new PLM stage (5C gate enforced for `pursue`)
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierStageChangeInput"
+      responses:
+        "200":
+          description: Updated opportunity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Opportunity"
+        "412":
+          description: Gate not satisfied (5C qualifier missing or no_go)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/opportunities/{oppId}/qualifier:
+    get:
+      operationId: atelierGetQualifier
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 5C qualifier + go/no-go decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierQualifier"
+    post:
+      operationId: atelierSubmitQualifier
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierQualifierInput"
+      responses:
+        "200":
+          description: Persisted qualifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierQualifier"
+  /atelier/opportunities/{oppId}/brief:
+    get:
+      operationId: atelierGetBrief
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Latest Pursuit Scout brief, or null when never run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierBriefEnvelope"
+  /atelier/opportunities/{oppId}/scout:
+    post:
+      operationId: atelierRunPursuitScout
+      tags: [atelier]
+      summary: (Re)run Pursuit Scout for an opportunity
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierScoutInput"
+      responses:
+        "200":
+          description: Scout brief (synchronously synthesised)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierBriefEnvelope"
+  /atelier/opportunities/{oppId}/research:
+    get:
+      operationId: atelierListResearchFacts
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: All research facts (promoted + unpromoted)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierResearchFact"
+  /atelier/opportunities/{oppId}/research/{factId}/promote:
+    post:
+      operationId: atelierPromoteResearchFact
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: factId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPromoteFactInput"
+      responses:
+        "200":
+          description: Updated fact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierResearchFact"
+  /atelier/opportunities/{oppId}/povs:
+    get:
+      operationId: atelierListPovs
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: POVs for this opportunity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierPov"
+    post:
+      operationId: atelierStartPov
+      tags: [atelier]
+      summary: Start a POV — generates outline (POV Author phase A)
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierStartPovInput"
+      responses:
+        "201":
+          description: POV with outline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPov"
+  /atelier/povs/{povId}/draft:
+    post:
+      operationId: atelierDraftPov
+      tags: [atelier]
+      summary: Generate full draft after outline approval (Phases B/C/D)
+      parameters:
+        - in: path
+          name: povId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: New POV version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPovVersion"
+  /atelier/povs/{povId}/versions:
+    get:
+      operationId: atelierListPovVersions
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: povId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: All versions of this POV
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierPovVersion"
+  /atelier/opportunities/{oppId}/meetings:
+    get:
+      operationId: atelierListOpportunityMeetings
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: All meetings on this opportunity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierMeeting"
+    post:
+      operationId: atelierSubmitMeeting
+      tags: [atelier]
+      summary: Paste/upload a transcript and run Meeting Scribe
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierSubmitMeetingInput"
+      responses:
+        "201":
+          description: Created meeting with structured output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMeeting"
+  /atelier/agent-runs/{runId}:
+    get:
+      operationId: atelierGetAgentRun
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierAgentRunDetail"
+  /atelier/agent-runs/{runId}/decision:
+    post:
+      operationId: atelierRecordAgentDecision
+      tags: [atelier]
+      summary: Record an Approve / Edit / Reject checkpoint decision
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierAgentDecisionInput"
+      responses:
+        "200":
+          description: Updated run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierAgentRunDetail"
 
   /atelier/engagements:
     get:
@@ -559,3 +879,283 @@ components:
         action: { type: string }
         payloadSummary: { type: ["string", "null"] }
         ts: { type: string, format: date-time }
+
+    Confidence:
+      type: string
+      enum: [green, amber, red]
+
+    AtelierCreateOpportunityInput:
+      type: object
+      required: [name, accountName, accountCountry, accountSector]
+      properties:
+        name: { type: string }
+        accountName: { type: string }
+        accountCountry: { type: string }
+        accountSector: { type: string }
+        contextBlurb: { type: string, default: "" }
+        dealSizeUsd: { type: number, default: 250000 }
+        runScout: { type: boolean, default: true }
+
+    AtelierCreateOpportunityResponse:
+      type: object
+      required: [opportunity]
+      properties:
+        opportunity: { $ref: "#/components/schemas/Opportunity" }
+        scoutRunId: { type: ["string", "null"] }
+
+    AtelierStageChangeInput:
+      type: object
+      required: [toStage]
+      properties:
+        toStage: { $ref: "#/components/schemas/PlmStage" }
+        rationale: { type: string, default: "" }
+
+    AtelierFiveC:
+      type: object
+      required: [client, competition, capability, capacity, contract]
+      properties:
+        client: { type: string }
+        competition: { type: string }
+        capability: { type: string }
+        capacity: { type: string }
+        contract: { type: string }
+
+    AtelierQualifier:
+      type: object
+      required: [oppId, fiveC]
+      properties:
+        oppId: { type: string }
+        fiveC: { $ref: "#/components/schemas/AtelierFiveC" }
+        decision:
+          type: ["object", "null"]
+          required: [decision, decider, rationale, ts]
+          properties:
+            decision: { type: string, enum: [go, no_go] }
+            decider: { type: string }
+            rationale: { type: string }
+            ts: { type: string, format: date-time }
+
+    AtelierQualifierInput:
+      type: object
+      required: [fiveC, decision]
+      properties:
+        fiveC: { $ref: "#/components/schemas/AtelierFiveC" }
+        decision: { type: string, enum: [go, no_go] }
+        rationale: { type: string, default: "" }
+
+    AtelierFact:
+      type: object
+      required: [topic, statement, confidence]
+      properties:
+        id: { type: string }
+        topic: { type: string }
+        statement: { type: string }
+        sourceUrl: { type: ["string", "null"] }
+        sourceTitle: { type: ["string", "null"] }
+        snippet: { type: ["string", "null"] }
+        confidence: { $ref: "#/components/schemas/Confidence" }
+
+    AtelierBrief:
+      type: object
+      required: [accountSnapshot, buyerLandscape, fiveCDraft, openQuestions, facts]
+      properties:
+        accountSnapshot:
+          type: object
+          required: [oneLiner, scaleHint, recentMoves]
+          properties:
+            oneLiner: { type: string }
+            scaleHint: { type: string }
+            recentMoves:
+              type: array
+              items: { type: string }
+        buyerLandscape:
+          type: object
+          required: [likelyBuyers, powerMap]
+          properties:
+            likelyBuyers:
+              type: array
+              items:
+                type: object
+                required: [title, rationale]
+                properties:
+                  title: { type: string }
+                  rationale: { type: string }
+            powerMap: { type: string }
+        fiveCDraft: { $ref: "#/components/schemas/AtelierFiveC" }
+        openQuestions:
+          type: array
+          items: { type: string }
+        facts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierFact" }
+        confidence: { $ref: "#/components/schemas/Confidence" }
+
+    AtelierBriefEnvelope:
+      type: object
+      properties:
+        brief: { $ref: "#/components/schemas/AtelierBrief" }
+        runId: { type: ["string", "null"] }
+        createdAt: { type: ["string", "null"], format: date-time }
+        confidence: { $ref: "#/components/schemas/Confidence" }
+      required: []
+
+    AtelierScoutInput:
+      type: object
+      properties:
+        contextBlurb: { type: string, default: "" }
+
+    AtelierResearchFact:
+      type: object
+      required: [id, oppId, topic, statement, confidence, promoted, createdAt]
+      properties:
+        id: { type: string }
+        oppId: { type: string }
+        topic: { type: string }
+        statement: { type: string }
+        sourceUrl: { type: ["string", "null"] }
+        sourceTitle: { type: ["string", "null"] }
+        snippet: { type: ["string", "null"] }
+        confidence: { $ref: "#/components/schemas/Confidence" }
+        promoted: { type: boolean }
+        promotedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        runId: { type: ["string", "null"] }
+
+    AtelierPromoteFactInput:
+      type: object
+      required: [promote]
+      properties:
+        promote: { type: boolean }
+
+    AtelierStartPovInput:
+      type: object
+      required: [title, audience, objective]
+      properties:
+        title: { type: string }
+        audience: { type: string }
+        objective: { type: string }
+
+    AtelierPovOutlineSection:
+      type: object
+      required: [id, heading, intent, factIds]
+      properties:
+        id: { type: string }
+        heading: { type: string }
+        intent: { type: string }
+        factIds:
+          type: array
+          items: { type: string }
+
+    AtelierPov:
+      type: object
+      required: [id, oppId, title, status, outline, createdAt]
+      properties:
+        id: { type: string }
+        oppId: { type: string }
+        title: { type: string }
+        audience: { type: ["string", "null"] }
+        objective: { type: ["string", "null"] }
+        status: { type: string, enum: [outline, drafting, drafted, approved] }
+        outline:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPovOutlineSection" }
+        currentVersionId: { type: ["string", "null"] }
+        runId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierPovVersion:
+      type: object
+      required: [id, povId, versionNumber, body, sections, createdAt]
+      properties:
+        id: { type: string }
+        povId: { type: string }
+        versionNumber: { type: integer }
+        body: { type: string }
+        sections:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              heading: { type: string }
+              body: { type: string }
+              citationIds:
+                type: array
+                items: { type: string }
+        citations:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierFact" }
+        citationCoverage: { type: ["number", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierMeeting:
+      type: object
+      required: [id, oppId, kind, mode, title, date, attendees, summary, decisions, actionItems, createdAt]
+      properties:
+        id: { type: string }
+        oppId: { type: string }
+        kind: { type: string, enum: [discovery, workshop, steering, kickoff] }
+        mode: { type: string, enum: [paste, upload, live_bot] }
+        title: { type: string }
+        date: { type: string }
+        attendees:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              org: { type: string }
+        summary: { type: ["string", "null"] }
+        decisions:
+          type: array
+          items:
+            type: object
+        actionItems:
+          type: array
+          items:
+            type: object
+        runId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierSubmitMeetingInput:
+      type: object
+      required: [transcript, kind]
+      properties:
+        title: { type: string, default: "Untitled meeting" }
+        kind: { type: string, enum: [discovery, workshop, steering, kickoff] }
+        mode: { type: string, enum: [paste, upload, live_bot], default: paste }
+        date: { type: string, default: "" }
+        transcript: { type: string }
+
+    AtelierAgentRunDetail:
+      type: object
+      required: [id, agentId, status, createdAt]
+      properties:
+        id: { type: string }
+        agentId: { type: string }
+        status: { type: string, enum: [running, blocked, complete, error] }
+        statusMessage: { type: ["string", "null"] }
+        progressPct: { type: ["integer", "null"] }
+        confidence: { type: ["string", "null"] }
+        targetType: { type: ["string", "null"] }
+        targetId: { type: ["string", "null"] }
+        targetLabel: { type: ["string", "null"] }
+        output: {}
+        steps:
+          type: array
+          items: {}
+        humanDecisions:
+          type: array
+          items: {}
+        costUsd: { type: ["number", "null"] }
+        durationMs: { type: ["integer", "null"] }
+        sourcesCount: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierAgentDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, edit, reject] }
+        rationale: { type: string, default: "" }
