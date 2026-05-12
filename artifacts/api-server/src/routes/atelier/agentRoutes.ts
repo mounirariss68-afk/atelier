@@ -479,6 +479,9 @@ router.post("/opportunities/:oppId/research/:factId/promote", async (req, res) =
       promoted: parsed.data.promote,
       promotedAt: parsed.data.promote ? new Date() : null,
       promotedByUserId: parsed.data.promote ? me.id : null,
+      // Promotion is the partner-explicit signal that this fact is now part
+      // of the dossier carried into POV generation. Demotion clears it.
+      includedInPov: parsed.data.promote,
       updatedAt: new Date(),
     })
     .where(
@@ -514,9 +517,39 @@ router.post("/opportunities/:oppId/research/:factId/promote", async (req, res) =
     confidence: updated.confidence as "green" | "amber" | "red",
     promoted: updated.promoted,
     promotedAt: updated.promotedAt?.toISOString() ?? null,
+    includedInBrief: updated.includedInBrief,
+    includedInPov: updated.includedInPov,
     createdAt: updated.createdAt.toISOString(),
     runId: updated.runId,
   });
+});
+
+// Unsourced-claim risk acceptance — the partner explicitly takes ownership
+// of a red/unsourced fact and the action is logged in the audit trail.
+router.post("/opportunities/:oppId/research/:factId/accept-risk", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const rationale = typeof req.body?.rationale === "string" ? req.body.rationale.slice(0, 500) : "";
+  const [fact] = await db
+    .select()
+    .from(atelierResearchFacts)
+    .where(and(eq(atelierResearchFacts.id, req.params.factId), eq(atelierResearchFacts.opportunityId, req.params.oppId)));
+  if (!fact) {
+    res.status(404).json({ error: "fact-not-found" });
+    return;
+  }
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: req.params.oppId,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "fact.risk_accepted",
+    payload: { factId: fact.id, topic: fact.topic, confidence: fact.confidence, rationale },
+    payloadSummary: `${me.name} accepted risk on unsourced fact "${fact.topic}"${rationale ? ` — "${rationale.slice(0, 120)}"` : ""}.`,
+  });
+  res.status(201).json({ accepted: true, factId: fact.id, ts: new Date().toISOString() });
 });
 
 // =============================================================

@@ -17,7 +17,7 @@
  */
 
 import { db, atelierAgentRuns, atelierAuditEvents } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
 
 // ------- shared types -------
@@ -122,7 +122,35 @@ interface StartRunInput {
   actorLabel: string;
 }
 
+// Per-user-per-day token budget. Soft USD ceiling; throws BudgetExceededError
+// before any Claude call so cost is bounded even with retries / parallel runs.
+const DAILY_BUDGET_USD = Number(process.env.ATELIER_DAILY_BUDGET_USD ?? 10);
+export class BudgetExceededError extends Error {
+  spentUsd: number;
+  budgetUsd: number;
+  constructor(spent: number, budget: number) {
+    super(`atelier-budget-exceeded: $${spent.toFixed(4)} / $${budget.toFixed(2)}`);
+    this.name = "BudgetExceededError";
+    this.spentUsd = spent;
+    this.budgetUsd = budget;
+  }
+}
+async function assertBudget(userId: string | null): Promise<void> {
+  if (!userId) return;
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  const rows = await db
+    .select({ costUsd: atelierAgentRuns.costUsd })
+    .from(atelierAgentRuns)
+    .where(and(eq(atelierAgentRuns.triggeredByUserId, userId), gte(atelierAgentRuns.createdAt, since)));
+  const spent = rows.reduce((s, r) => s + (Number(r.costUsd) || 0), 0);
+  if (spent >= DAILY_BUDGET_USD) {
+    throw new BudgetExceededError(spent, DAILY_BUDGET_USD);
+  }
+}
+
 export async function startRun(input: StartRunInput): Promise<string> {
+  await assertBudget(input.triggeredByUserId);
   const id = rid("run");
   await db.insert(atelierAgentRuns).values({
     id,
