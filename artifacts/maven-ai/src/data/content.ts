@@ -7506,6 +7506,8 @@ export const industries = [
     heroStatLabelTr: "Suudi Arabistan'ın 2030 GSYH'sine öngörülen AI katkısı — Orta Doğu'daki ülke düzeyinde en büyük katkı",
     heroStatSource: SOURCES.pwcImpact,
     description: "GCC governments are not just adopting AI — they are building national AI infrastructure. Vision 2030, UAE AI Charter, Qatar AI Roadmap — these programs represent the largest coordinated AI investment in public sector history. Maven AI is built to deliver in this environment.",
+    descriptionAr: "حكومات دول الخليج لا تتبنّى الذكاء الاصطناعي فحسب — بل تبني بنية تحتية وطنية له. تمثّل برامج رؤية 2030 وميثاق الإمارات للذكاء الاصطناعي وخارطة طريق قطر للذكاء الاصطناعي أكبر استثمار حكومي منسّق في تاريخ القطاع العام. صُمِّمت Maven AI للتسليم في هذه البيئة.",
+    descriptionTr: "Körfez hükümetleri yapay zekâyı yalnızca benimsemiyor — ulusal yapay zekâ altyapısı kuruyor. Vizyon 2030, BAE YZ Şartı ve Katar YZ Yol Haritası, kamu sektörü tarihindeki en büyük koordineli YZ yatırımını temsil ediyor. Maven AI, bu ortamda teslim etmek için kuruldu.",
     challenges: [
       "Sovereign data requirements preclude public cloud deployment for many critical workloads",
       "Complex organizational structures and approval chains slow delivery timelines",
@@ -7596,6 +7598,8 @@ export const industries = [
     heroStatLabelTr: "Mevcut sistemleri sürdürmek için global olarak tüketilen BT bütçesi payı (sektörler arası, telekomlar üst sınırda)",
     heroStatSource: SOURCES.eyTelcoLegacy,
     description: "GCC telecoms are at a critical inflection point. 5G monetization requires AI-native operations. Legacy system debt is consuming 60–80% of IT budgets. Customer experience competition is intensifying. Maven AI brings the combination of legacy modernization capability and agentic AI delivery that telecoms need.",
+    descriptionAr: "اتصالات الخليج عند نقطة تحوّل حاسمة. تحقيق إيرادات 5G يتطلب عمليات مبنية على الذكاء الاصطناعي. تستهلك ديون الأنظمة القديمة 60–80٪ من ميزانيات تكنولوجيا المعلومات. والمنافسة على تجربة العميل تشتدّ. تجمع Maven AI بين قدرة تحديث الإرث وتسليم الذكاء الاصطناعي الوكيلي التي تحتاجها شركات الاتصالات.",
+    descriptionTr: "Körfez telekomları kritik bir kırılma noktasında. 5G gelirleştirmesi AI-yerli operasyonlar gerektiriyor. Eski sistem borcu BT bütçelerinin %60–80'ini tüketiyor. Müşteri deneyimi rekabeti yoğunlaşıyor. Maven AI, telekomların ihtiyaç duyduğu eski sistem modernizasyonu ve ajanik AI teslimat yetkinliklerini bir araya getiriyor.",
     challenges: [
       "Massive legacy estates — Siebel CRM, custom BSS/OSS, COBOL billing — consuming IT budget at unsustainable levels",
       "5G monetization requires AI-native network operations and customer experience capabilities not present in current systems",
@@ -7686,6 +7690,8 @@ export const industries = [
     heroStatLabelTr: "2030 yılına kadar öngörülen Körfez kurumsal & yatırım bankacılığı geliri",
     heroStatSource: SOURCES.mckinseyGccCIB,
     description: "GCC financial services institutions operate under some of the world's most demanding AI governance requirements — SAMA guidelines, CBUAE frameworks, and PDPL compliance — while simultaneously investing in AI at a pace that matches global financial centers. Maven AI brings the rare combination of deep financial services domain knowledge and AI governance expertise.",
+    descriptionAr: "تعمل مؤسسات الخدمات المالية في الخليج تحت بعض أكثر متطلبات حوكمة الذكاء الاصطناعي صرامةً في العالم — إرشادات SAMA وأُطر CBUAE والامتثال لقانون حماية البيانات الشخصية — مع استثمار في الذكاء الاصطناعي بوتيرة توازي المراكز المالية العالمية. تجمع Maven AI بين المعرفة العميقة بمجال الخدمات المالية والخبرة النادرة في حوكمة الذكاء الاصطناعي.",
+    descriptionTr: "Körfez finansal hizmet kurumları, dünyanın en zorlu AI yönetişim gereksinimlerinden bazıları altında — SAMA kılavuzları, CBUAE çerçeveleri ve PDPL uyumu — küresel finans merkezleriyle eşleşen bir hızda AI'ya yatırım yaparak faaliyet gösteriyor. Maven AI, derin finansal hizmetler alan bilgisi ve AI yönetişim uzmanlığının nadir bileşimini sunar.",
     challenges: [
       "SAMA and CBUAE AI governance requirements demand model explainability, fairness testing, and audit trails that most organizations are not yet able to produce",
       "Islamic finance structures create unique AI modeling challenges not addressed by standard financial AI frameworks",
@@ -7776,6 +7782,8 @@ export const industries = [
     heroStatLabelTr: "Saudi Aramco'nun yalnızca 2024'te raporladığı AI öncülüğünde Teknoloji Gerçekleşen Değeri",
     heroStatSource: SOURCES.aramcoAI,
     description: "Aramco, ADNOC, KPC, QatarEnergy, and the region's commodities trading houses are deploying AI at industrial scale — across upstream operations, refinery optimization, trading floors, and the energy transition portfolio. Sovereignty, safety classification, and decades-old operational technology make this the most demanding industrial AI environment in the GCC. Maven AI is built for it.",
+    descriptionAr: "تنشر أرامكو وأدنوك ومؤسسة البترول الكويتية وقطر للطاقة وبيوت تداول السلع في المنطقة الذكاء الاصطناعي على نطاق صناعي — عبر عمليات الإنتاج الأولي، وتحسين المصافي، ومنصات التداول، ومحفظة تحول الطاقة. السيادة وتصنيف السلامة والتكنولوجيا التشغيلية التي يبلغ عمرها عقوداً تجعل هذه أكثر بيئات الذكاء الاصطناعي الصناعي تطلباً في الخليج. صُمِّمت Maven AI لها.",
+    descriptionTr: "Aramco, ADNOC, KPC, QatarEnergy ve bölgenin emtia ticaret evleri AI'yı endüstriyel ölçekte — yukarı akış operasyonları, rafineri optimizasyonu, ticaret katları ve enerji geçişi portföyü genelinde — devreye alıyor. Egemenlik, güvenlik sınıflandırması ve onlarca yıllık operasyonel teknoloji bunu Körfez'in en zorlu endüstriyel AI ortamı yapıyor. Maven AI bunun için kuruldu.",
     challenges: [
       "Operational technology (OT) data is siloed across upstream, midstream, and downstream estates — difficult to unify for AI without compromising plant safety",
       "Sovereign and national-security classifications on energy infrastructure data preclude public cloud AI for the most valuable workloads",
@@ -7866,6 +7874,8 @@ export const industries = [
     heroStatLabelTr: "2030 yılına kadar tüm sektörler bir arada Körfez genelinde öngörülen yıllık GenAI ekonomik etkisi",
     heroStatSource: SOURCES.strategyAndGenAI,
     description: "GCC retail is in dramatic flux. Q-commerce platforms, premium D2C brands, and digitally-native marketplaces are taking share from established hypermarket and department-store groups, while LuLu, Almarai, Al-Futtaim, and the region's family-owned conglomerates modernize legacy ERP and merchandising systems they have run for two decades. Maven AI delivers AI across both ends of this transition — Arabic-first, GCC-native.",
+    descriptionAr: "تجزئة الخليج في تحوّل دراماتيكي. منصات التجارة السريعة والعلامات الفاخرة المباشرة للمستهلك والأسواق الرقمية الأصلية تأخذ حصة من مجموعات الهايبر ماركت والمتاجر المتعددة الأقسام القائمة، بينما تحدّث لولو والمراعي والفطيم وتكتلات المنطقة العائلية أنظمة ERP والترويج التجاري التي أدارتها لعقدين. تُسلّم Maven AI الذكاء الاصطناعي عبر طرفَي هذا التحوّل — بالعربية أولاً، ومن قلب الخليج.",
+    descriptionTr: "Körfez perakendesi dramatik bir akış içinde. Q-ticaret platformları, premium D2C markaları ve dijital-yerli pazaryerleri yerleşik hipermarket ve mağaza gruplarından pay alırken LuLu, Almarai, Al-Futtaim ve bölgenin aile holdingleri yirmi yıldır çalıştırdıkları eski ERP ve merchandising sistemlerini modernize ediyor. Maven AI, bu geçişin her iki ucunda da AI sunar — Arapça-öncelikli, Körfez-yerli.",
     challenges: [
       "Customer data is fragmented across physical stores, e-commerce, marketplaces, and loyalty platforms — preventing the unified view that personalization requires",
       "Arabic-first NLP for product search, customer service, and review analysis remains underdeveloped relative to English equivalents",
@@ -7956,6 +7966,8 @@ export const industries = [
     heroStatLabelTr: "Suudi Arabistan'ın 2030 yılına kadar revize edilmiş yıllık ziyaretçi hedefi",
     heroStatSource: SOURCES.saudiTourism,
     description: "NEOM, Diriyah, Red Sea Project, Qiddiya, AlUla — the GCC's tourism ambitions are unprecedented in scale and pace. National carriers (Emirates, Qatar Airways, Saudia, Etihad) operate at the leading edge of global aviation. Established hospitality groups (Jumeirah, Rotana, Mövenpick) compete intensely for the high-margin regional and inbound traveller. Maven AI delivers the AI behind these flagship experiences — for both greenfield megaprojects and legacy modernization.",
+    descriptionAr: "نيوم والدرعية ومشروع البحر الأحمر والقدية والعُلا — طموحات السياحة في الخليج غير مسبوقة في الحجم والوتيرة. تعمل الناقلات الوطنية (طيران الإمارات والقطرية والسعودية والاتحاد) على الحافة الأمامية للطيران العالمي. وتتنافس مجموعات الضيافة القائمة (جميرا وروتانا وموفنبيك) بشدّة على المسافر الإقليمي والوافد عالي الهامش. تُسلّم Maven AI الذكاء الاصطناعي خلف هذه التجارب الرائدة — للمشاريع الكبرى الجديدة وتحديث الإرث على حدّ سواء.",
+    descriptionTr: "NEOM, Diriyah, Kızıldeniz Projesi, Qiddiya, AlUla — Körfez'in turizm hedefleri ölçek ve hızda emsalsiz. Ulusal taşıyıcılar (Emirates, Qatar Airways, Saudia, Etihad) küresel havacılığın ön saflarında çalışıyor. Yerleşik konaklama grupları (Jumeirah, Rotana, Mövenpick) yüksek marjlı bölgesel ve gelen yolcu için yoğun şekilde rekabet ediyor. Maven AI, bu amiral gemisi deneyimlerin arkasındaki AI'ı — hem yeşil alan mega projeler hem de eski sistem modernizasyonu için — sunar.",
     challenges: [
       "Tourism megaproject operating models are being designed greenfield — no playbook exists for AI-native hospitality at this scale or with this guest profile",
       "Multi-language guest engagement (Arabic, English, Mandarin, Russian, Hindi) demands sophisticated conversational AI that mainstream platforms cannot deliver",
@@ -8046,6 +8058,8 @@ export const industries = [
     heroStatLabelTr: "Suudi Arabistan'ın 2030 yılına kadar Riyad için elektrikli araç benimseme hedefi",
     heroStatSource: SOURCES.saudiEvVision,
     description: "The GCC automotive landscape is being rebuilt. Saudi Arabia's 30% EV target by 2030, Lucid's local manufacturing, the Ceer national EV brand, and UAE autonomous-mobility programs in Dubai and Abu Dhabi are reshaping demand. Established dealer groups (Al-Futtaim, Petromin, Juffali, AlGhanim) are modernizing legacy DMS estates while EV-natives build greenfield platforms. Maven AI delivers AI across the entire value chain.",
+    descriptionAr: "يُعاد بناء مشهد السيارات في الخليج. هدف المملكة العربية السعودية بنسبة 30٪ للسيارات الكهربائية بحلول 2030، وتصنيع Lucid المحلي، وعلامة Ceer الوطنية للسيارات الكهربائية، وبرامج التنقل الذاتي الإماراتية في دبي وأبوظبي تُعيد تشكيل الطلب. تحدّث مجموعات الوكلاء القائمة (الفطيم وبترومين وجفالي والغانم) ممتلكات أنظمة إدارة الوكلاء القديمة، بينما يبني روّاد السيارات الكهربائية منصات جديدة. تُسلّم Maven AI الذكاء الاصطناعي عبر سلسلة القيمة بأكملها.",
+    descriptionTr: "Körfez otomotiv manzarası yeniden inşa ediliyor. Suudi Arabistan'ın 2030'a kadar %30 EV hedefi, Lucid'in yerel üretimi, Ceer ulusal EV markası ve Dubai ile Abu Dabi'deki BAE otonom mobilite programları talebi yeniden şekillendiriyor. Yerleşik bayilik grupları (Al-Futtaim, Petromin, Juffali, AlGhanim) eski DMS mülklerini modernize ederken EV-yerlileri yeşil alan platformlar inşa ediyor. Maven AI, değer zincirinin tamamında AI sunar.",
     challenges: [
       "Connected-vehicle telemetry generates data volumes that legacy dealer management systems cannot ingest, store, or monetize at scale",
       "EV battery health, charging, and energy-grid AI requires integration across vehicle, charging infrastructure, and utility systems that no single vendor controls",
@@ -8633,13 +8647,23 @@ const INDUSTRY_TRANSLATIONS: Record<string, Record<string, unknown>> = {
 // can keep reading the same `services`/`industries` exports with the new
 // suffixed fields populated. Done after the EN array literals so a missing
 // key in the translation map is visible in this file's diff, not buried.
+// Fill-only-missing merge: inline *Ar / *Tr fields on the EN entries above
+// (e.g. the refreshed industry approachAr / caseVignetteAr from Parts 1–3)
+// take precedence; the legacy translation tables below only supply keys the
+// inline entry has not already populated. This lets us migrate translations
+// inline industry-by-industry without tearing out the legacy table.
+function mergeMissing(target: Record<string, unknown>, source: Record<string, unknown>) {
+  for (const key of Object.keys(source)) {
+    if (!(key in target)) target[key] = source[key];
+  }
+}
 for (const s of services as Array<Record<string, unknown>>) {
   const t = SERVICE_TRANSLATIONS[s.id as string];
-  if (t) Object.assign(s, t);
+  if (t) mergeMissing(s, t);
 }
 for (const i of industries as Array<Record<string, unknown>>) {
   const t = INDUSTRY_TRANSLATIONS[i.id as string];
-  if (t) Object.assign(i, t);
+  if (t) mergeMissing(i, t);
 }
 
 assertSharedAlignment("service slug", services.map((s) => s.slug), sharedServices.map((s) => s.slug));
