@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc, isNull, type SQL } from "drizzle-orm";
 import {
   db,
@@ -47,12 +47,15 @@ router.use(attachRls);
 // Audit PDF export — registered before /audit JSON to win the route match.
 router.get("/audit/export.pdf", auditPdfHandler);
 
-function ensurePersona(req: any, res: any) {
+function ensurePersona(
+  req: Request,
+  res: Response,
+): typeof atelierUsers.$inferSelect | null {
   if (!req.atelierPersona) {
     res.status(401).json({ error: "no-active-persona" });
     return null;
   }
-  return req.atelierPersona as typeof atelierUsers.$inferSelect;
+  return req.atelierPersona;
 }
 
 // =============================================================

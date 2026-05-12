@@ -48,9 +48,7 @@ export function AuditTab({ entityType, entityId }: AuditTabProps) {
     return <div className="py-6 text-danger">Failed to load audit trail.</div>;
   }
 
-  if (auditEvents.length === 0) {
-    return <div className="py-8 text-center text-text-mute italic">No audit events found.</div>;
-  }
+  const isEmpty = auditEvents.length === 0;
 
   return (
     <div className="py-6">
@@ -68,6 +66,11 @@ export function AuditTab({ entityType, entityId }: AuditTabProps) {
           <Download className="w-3.5 h-3.5" /> Export PDF
         </a>
       </div>
+      {isEmpty && (
+        <div className="py-8 text-center text-text-mute italic">
+          No audit events recorded yet for this entity.
+        </div>
+      )}
       <div className="relative border-l border-border ml-3 space-y-8 pb-8">
         {auditEvents.map((event) => (
           <div key={event.id} className="relative pl-8">
