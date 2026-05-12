@@ -80,3 +80,289 @@ export interface ChatError {
   error: string;
   retryAfterSeconds?: number;
 }
+
+export interface AtelierError {
+  error: string;
+}
+
+export type AtelierPersonaRole =
+  (typeof AtelierPersonaRole)[keyof typeof AtelierPersonaRole];
+
+export const AtelierPersonaRole = {
+  partner: "partner",
+  engagement_lead: "engagement_lead",
+  sme: "sme",
+  ai_engineer: "ai_engineer",
+  business_developer: "business_developer",
+} as const;
+
+export interface AtelierPersona {
+  id: string;
+  name: string;
+  email: string;
+  role: AtelierPersonaRole;
+  roleLabel: string;
+  title: string;
+  initials: string;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
+
+export interface AtelierPersonaSwitchInput {
+  personaId: string;
+}
+
+export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
+
+export const PlmStage = {
+  identify: "identify",
+  shape: "shape",
+  pursue: "pursue",
+  mobilize: "mobilize",
+  deliver: "deliver",
+  compound: "compound",
+  won: "won",
+  lost: "lost",
+  no_go: "no_go",
+  closed: "closed",
+} as const;
+
+export interface Account {
+  id: string;
+  name: string;
+  country: string;
+  sector: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface Opportunity {
+  id: string;
+  slug: string;
+  name: string;
+  accountId: string;
+  accountName: string;
+  plmStage: PlmStage;
+  /** @nullable */
+  buyerPersona?: string | null;
+  /** @nullable */
+  offeringAnchor?: string | null;
+  partnerOwnerName: string;
+  engagementLeadName: string;
+  dealSizeUsd: number;
+  probabilityPct: number;
+  weightedValueUsd: number;
+  daysInStage: number;
+  nextMilestone: string;
+  sourceLead: string;
+  createdAt: string;
+}
+
+export type EngagementRaidStatus =
+  (typeof EngagementRaidStatus)[keyof typeof EngagementRaidStatus];
+
+export const EngagementRaidStatus = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface Engagement {
+  id: string;
+  slug: string;
+  name: string;
+  accountId: string;
+  accountName: string;
+  plmStage: PlmStage;
+  partnerOwnerName: string;
+  engagementLeadName: string;
+  startDate: string;
+  plannedEndDate: string;
+  raidStatus: EngagementRaidStatus;
+  deliverablesDueThisWeek: number;
+}
+
+export type AgentCatalogEntryStatus =
+  (typeof AgentCatalogEntryStatus)[keyof typeof AgentCatalogEntryStatus];
+
+export const AgentCatalogEntryStatus = {
+  registered: "registered",
+  mvp: "mvp",
+  stub: "stub",
+} as const;
+
+export interface AgentCatalogEntry {
+  id: string;
+  name: string;
+  group: string;
+  stage: string;
+  purpose: string;
+  model: string;
+  starred: boolean;
+  status: AgentCatalogEntryStatus;
+  runsLast30d: number;
+}
+
+export type AgentActivityItemStatus =
+  (typeof AgentActivityItemStatus)[keyof typeof AgentActivityItemStatus];
+
+export const AgentActivityItemStatus = {
+  running: "running",
+  blocked: "blocked",
+  complete: "complete",
+  error: "error",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AgentActivityItemConfidence =
+  | (typeof AgentActivityItemConfidence)[keyof typeof AgentActivityItemConfidence]
+  | null;
+
+export const AgentActivityItemConfidence = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface AgentActivityItem {
+  id: string;
+  agentId: string;
+  agentName: string;
+  status: AgentActivityItemStatus;
+  /** @nullable */
+  confidence?: AgentActivityItemConfidence;
+  message: string;
+  /** @nullable */
+  targetType?: string | null;
+  /** @nullable */
+  targetId?: string | null;
+  /** @nullable */
+  targetLabel?: string | null;
+  startedAt: string;
+  /** @nullable */
+  progressPct?: number | null;
+  /** @nullable */
+  sourcesCount?: number | null;
+}
+
+export type AtelierAssetKind =
+  (typeof AtelierAssetKind)[keyof typeof AtelierAssetKind];
+
+export const AtelierAssetKind = {
+  pov: "pov",
+  prompt: "prompt",
+  framework: "framework",
+  case_study: "case_study",
+  template: "template",
+  code: "code",
+  learning: "learning",
+} as const;
+
+export interface AtelierAsset {
+  id: string;
+  kind: AtelierAssetKind;
+  title: string;
+  abstract: string;
+  provenance: string;
+  tags: string[];
+  createdAt: string;
+  /** @nullable */
+  bodyOrFileUrl?: string | null;
+}
+
+export type PaneAItemPriority =
+  (typeof PaneAItemPriority)[keyof typeof PaneAItemPriority];
+
+export const PaneAItemPriority = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export type PaneAItemHrefKind =
+  (typeof PaneAItemHrefKind)[keyof typeof PaneAItemHrefKind];
+
+export const PaneAItemHrefKind = {
+  opportunity: "opportunity",
+  engagement: "engagement",
+  deliverable: "deliverable",
+  atelier: "atelier",
+} as const;
+
+export interface PaneAItem {
+  id: string;
+  title: string;
+  summary: string;
+  priority: PaneAItemPriority;
+  hrefKind: PaneAItemHrefKind;
+  hrefTargetId: string;
+  dueLabel: string;
+}
+
+export interface PipelineStageCount {
+  stage: PlmStage;
+  count: number;
+  weightedValueUsd: number;
+  agedRedCount: number;
+}
+
+export interface EngagementSummary {
+  activeCount: number;
+  deliverablesDueThisWeek: number;
+  raidAmberCount: number;
+  raidRedCount: number;
+}
+
+export interface AtelierHome {
+  eyebrowDate: string;
+  greeting: string;
+  persona: AtelierPersona;
+  paneA: PaneAItem[];
+  pipeline: PipelineStageCount[];
+  engagements: EngagementSummary;
+  paneC: AtelierAsset[];
+}
+
+export type AuditEventActorType =
+  (typeof AuditEventActorType)[keyof typeof AuditEventActorType];
+
+export const AuditEventActorType = {
+  human: "human",
+  agent: "agent",
+  system: "system",
+} as const;
+
+export interface AuditEvent {
+  id: string;
+  entityType: string;
+  entityId: string;
+  actorType: AuditEventActorType;
+  actorLabel: string;
+  action: string;
+  /** @nullable */
+  payloadSummary?: string | null;
+  ts: string;
+}
+
+export type AtelierGetActivityParams = {
+  limit?: number;
+};
+
+export type AtelierListAuditParams = {
+  entityType?: AtelierListAuditEntityType;
+  entityId?: string;
+  limit?: number;
+};
+
+export type AtelierListAuditEntityType =
+  (typeof AtelierListAuditEntityType)[keyof typeof AtelierListAuditEntityType];
+
+export const AtelierListAuditEntityType = {
+  opportunity: "opportunity",
+  engagement: "engagement",
+  deliverable: "deliverable",
+  agent_run: "agent_run",
+  atelier: "atelier",
+} as const;

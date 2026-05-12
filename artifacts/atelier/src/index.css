@@ -1,0 +1,279 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+/* ============================================================
+   THE ATELIER — Brand system
+   Carries over the public AICo / Maven AI brand: deep navy + gold,
+   warm cream text, Manrope body, Fraunces italic accent, JetBrains
+   Mono eyebrows / audit log / agent telemetry.
+   ============================================================ */
+
+:root {
+  /* Spec §1 — exact tokens */
+  --bg:           #0E1F3D;
+  --bg-deep:      #091428;
+  --bg-elevate:   #15294A;
+  --bg-elevate-2: #1D3559;
+  --border:       #243F66;
+  --border-soft:  rgba(255, 255, 255, 0.06);
+  --text:         #F1EEE6;
+  --text-mute:    #8FA3C0;
+  --text-faint:   #5E708A;
+  --gold:         #E89E2C;
+  --gold-soft:    #F4BC65;
+  --gold-deep:    #B47817;
+  --success:      #4ADE80;
+  --warn:         #F4BC65;
+  --danger:       #F87171;
+  --grid-line:    rgba(255, 255, 255, 0.025);
+  --shadow:       0 30px 60px -20px rgba(0, 0, 0, 0.5);
+  --radius:       4px;
+  --radius-lg:    8px;
+  --container:    1240px;
+  --ease:         cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font-sans: 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-elevate: var(--bg-elevate);
+  --color-bg-elevate-2: var(--bg-elevate-2);
+  --color-border: var(--border);
+  --color-border-soft: var(--border-soft);
+  --color-text: var(--text);
+  --color-text-mute: var(--text-mute);
+  --color-text-faint: var(--text-faint);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-deep: var(--gold-deep);
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: 2px;
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+}
+
+@layer base {
+  html, body, #root { min-height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'ss01', 'cv02', 'cv11';
+  }
+
+  ::selection { background: var(--gold); color: var(--bg-deep); }
+
+  /* 12-column faint vertical grid + 4.5% noise overlay (global background) */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc((100vw - 32px) / 12 - 1px),
+      var(--grid-line) calc((100vw - 32px) / 12 - 1px),
+      var(--grid-line) calc((100vw - 32px) / 12)
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.045;
+    z-index: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>");
+  }
+  #root { position: relative; z-index: 1; }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  /* Fraunces italic accent inside headings */
+  em.accent, .accent-italic {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--gold);
+  }
+}
+
+/* ============================================================
+   Reusable primitives — used across every page.
+   ============================================================ */
+
+@layer components {
+  /* Eyebrow: JetBrains Mono uppercase 11px with a 24px gold leading rule */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-mute);
+  }
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    background: var(--gold);
+  }
+
+  .gold-rule {
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    background: var(--gold);
+  }
+
+  /* 540px lede with 2px gold left border */
+  .lede {
+    max-width: 540px;
+    padding-left: 16px;
+    border-left: 2px solid var(--gold);
+    color: var(--text-mute);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* Card: --bg-elevate background, 1px --border, 8px radius, soft shadow */
+  .card {
+    background: var(--bg-elevate);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+  }
+  .card-flat {
+    background: var(--bg-elevate);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+
+  /* 999px pill button */
+  .pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 10px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1;
+    transition: all 180ms var(--ease);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pill-btn-primary {
+    background: var(--gold);
+    color: var(--bg-deep);
+    border: 1px solid var(--gold);
+  }
+  .pill-btn-primary:hover {
+    background: var(--gold-soft);
+    border-color: var(--gold-soft);
+  }
+  .pill-btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .pill-btn-ghost:hover {
+    border-color: var(--gold);
+    color: var(--gold-soft);
+  }
+
+  /* Mono telemetry chip — used in agent activity, audit, plm stage */
+  .mono-chip {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 2px;
+    background: var(--bg-elevate-2);
+    color: var(--text-mute);
+    border: 1px solid var(--border);
+  }
+  .mono-chip.gold { color: var(--gold); border-color: var(--gold-deep); }
+  .mono-chip.green { color: var(--success); border-color: rgba(74, 222, 128, 0.4); }
+  .mono-chip.amber { color: var(--warn); border-color: rgba(244, 188, 101, 0.4); }
+  .mono-chip.red { color: var(--danger); border-color: rgba(248, 113, 113, 0.4); }
+
+  /* PLM gold pill */
+  .plm-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(232, 158, 44, 0.08);
+    color: var(--gold);
+    border: 1px solid rgba(232, 158, 44, 0.3);
+  }
+
+  /* Section head pattern: eyebrow → headline → italic accent → lede */
+  .headline {
+    font-size: clamp(28px, 3.6vw, 48px);
+    line-height: 1.06;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .headline-xl {
+    font-size: clamp(36px, 4.6vw, 64px);
+    line-height: 1.04;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer utilities {
+  .container-atelier { max-width: var(--container); margin-inline: auto; padding-inline: clamp(16px, 3vw, 32px); }
+  .text-text { color: var(--text); }
+  .text-mute { color: var(--text-mute); }
+  .text-faint { color: var(--text-faint); }
+  .text-gold { color: var(--gold); }
+  .bg-bg { background: var(--bg); }
+  .bg-elevate { background: var(--bg-elevate); }
+  .bg-elevate-2 { background: var(--bg-elevate-2); }
+  .border-atelier { border-color: var(--border); }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+}

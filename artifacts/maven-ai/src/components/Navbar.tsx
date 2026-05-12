@@ -18,8 +18,14 @@ const NAV: Record<string, T> = {
   allInsights: { en: "All Insights", ar: "جميع الرؤى", tr: "Tüm İçgörüler" },
   freeAssessment: { en: "Free Assessment", ar: "تقييم مجاني", tr: "Ücretsiz Değerlendirme" },
   talkToUs: { en: "Talk to Us", ar: "تواصل معنا", tr: "Bize Ulaşın" },
+  signIn: { en: "Sign in", ar: "تسجيل الدخول", tr: "Giriş yap" },
   toggleMenu: { en: "Toggle menu", ar: "تبديل القائمة", tr: "Menüyü aç/kapat" },
 };
+
+// The Atelier (employee portal) lives at /atelier/sign-in. We use a normal
+// anchor (not wouter Link) because the portal is a separate artifact mounted
+// at a different base path on the same origin.
+const ATELIER_SIGN_IN = "/atelier/sign-in";
 
 const SERVICE_LINKS: { href: string; label: T }[] = [
   { href: "/services/agentic-ai-transformation", label: { en: "Agentic AI Transformation", ar: "تحول الذكاء الوكيل", tr: "Ajansal AI Dönüşümü" } },
@@ -137,6 +143,9 @@ export default function Navbar() {
           {/* Desktop CTA + LanguageSwitcher */}
           <div className="hidden lg:flex items-center gap-3">
             <LanguageSwitcher variant="navbar" />
+            <a href={ATELIER_SIGN_IN} className="text-gray-300 hover:text-white text-sm font-medium transition-colors" data-testid="link-atelier-signin">
+              {t(NAV.signIn)}
+            </a>
             <Link href="/assessments" className="border border-[#0F9ED5] text-[#0F9ED5] hover:bg-[#0F9ED5] hover:text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors">
               {t(NAV.freeAssessment)}
             </Link>
@@ -180,6 +189,9 @@ export default function Navbar() {
                 <Link href="/contact" className="block text-center bg-[#F5A623] text-white font-semibold py-3 rounded-lg">
                   {t(NAV.talkToUs)}
                 </Link>
+                <a href={ATELIER_SIGN_IN} className="block text-center text-gray-300 hover:text-white text-sm font-medium py-2">
+                  {t(NAV.signIn)}
+                </a>
               </div>
             </div>
           </motion.div>

@@ -14,3 +14,9 @@ pnpm --filter @workspace/maven-content exec tsc -p tsconfig.json
 if [ "${SKIP_TASAMA_SEED:-0}" != "1" ]; then
   pnpm --filter @workspace/scripts run seed:tasama
 fi
+
+# Re-seed The Atelier (employee portal) on every merge so the demo data is
+# always present. TRUNCATE-then-INSERT in dependency order; deterministic.
+if [ "${SKIP_ATELIER_SEED:-0}" != "1" ]; then
+  pnpm --filter @workspace/scripts run seed:atelier
+fi

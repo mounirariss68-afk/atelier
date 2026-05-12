@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: chat
     description: Site-wide AI chat assistant
+  - name: atelier
+    description: The Atelier — AICo Employee Portal
 paths:
   /healthz:
     get:
@@ -60,6 +62,234 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatError"
+
+  /atelier/me:
+    get:
+      operationId: atelierGetMe
+      tags: [atelier]
+      summary: Current persona for The Atelier session
+      responses:
+        "200":
+          description: Current persona
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPersona"
+  /atelier/personas:
+    get:
+      operationId: atelierListPersonas
+      tags: [atelier]
+      summary: List the seeded personas (Partner, Lead, SME, Engineer, BD)
+      responses:
+        "200":
+          description: All seeded personas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierPersona"
+  /atelier/personas/switch:
+    post:
+      operationId: atelierSwitchPersona
+      tags: [atelier]
+      summary: Switch the active persona (mock auth for MVP shell)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPersonaSwitchInput"
+      responses:
+        "200":
+          description: Active persona after switch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPersona"
+
+  /atelier/home:
+    get:
+      operationId: atelierGetHome
+      tags: [atelier]
+      summary: The Atelier Home — Pane A / B / C bundle for the active persona
+      responses:
+        "200":
+          description: Home dashboard payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierHome"
+
+  /atelier/activity:
+    get:
+      operationId: atelierGetActivity
+      tags: [atelier]
+      summary: Persistent Agent Activity Stream (right rail)
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Recent agent activity items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentActivityItem"
+
+  /atelier/opportunities:
+    get:
+      operationId: atelierListOpportunities
+      tags: [atelier]
+      summary: All opportunities across PLM stages
+      responses:
+        "200":
+          description: Opportunities with stage + account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Opportunity"
+  /atelier/opportunities/{oppId}:
+    get:
+      operationId: atelierGetOpportunity
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Single opportunity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Opportunity"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+
+  /atelier/engagements:
+    get:
+      operationId: atelierListEngagements
+      tags: [atelier]
+      summary: Active engagements
+      responses:
+        "200":
+          description: Engagements with stage + account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Engagement"
+  /atelier/engagements/{engId}:
+    get:
+      operationId: atelierGetEngagement
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Single engagement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Engagement"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+
+  /atelier/accounts:
+    get:
+      operationId: atelierListAccounts
+      tags: [atelier]
+      summary: Firm accounts
+      responses:
+        "200":
+          description: All accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+
+  /atelier/agents:
+    get:
+      operationId: atelierListAgents
+      tags: [atelier]
+      summary: The full agent catalog (22 named agents)
+      responses:
+        "200":
+          description: Agent registry
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentCatalogEntry"
+
+  /atelier/assets:
+    get:
+      operationId: atelierListAssets
+      tags: [atelier]
+      summary: Knowledge Atelier reusable assets
+      responses:
+        "200":
+          description: Reusable assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierAsset"
+
+  /atelier/audit:
+    get:
+      operationId: atelierListAudit
+      tags: [atelier]
+      summary: Append-only audit feed for an entity
+      parameters:
+        - in: query
+          name: entityType
+          schema:
+            type: string
+            enum: [opportunity, engagement, deliverable, agent_run, atelier]
+        - in: query
+          name: entityId
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Audit events (newest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEvent"
+
 components:
   schemas:
     HealthStatus:
@@ -67,21 +297,13 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
     ChatMessage:
       type: object
       properties:
-        role:
-          type: string
-          enum: [user, assistant]
-        content:
-          type: string
-          minLength: 1
-          maxLength: 4000
-      required:
-        - role
-        - content
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string, minLength: 1, maxLength: 4000 }
+      required: [role, content]
     ChatRequest:
       type: object
       properties:
@@ -95,44 +317,245 @@ components:
           type: string
           enum: [en, ar]
           default: en
-      required:
-        - messages
+      required: [messages]
     ChatSuggestion:
       type: object
       properties:
-        kind:
-          type: string
-          enum: [service, insight, assessment, industry, page]
-        href:
-          type: string
-        label:
-          type: string
-      required:
-        - kind
-        - href
-        - label
+        kind: { type: string, enum: [service, insight, assessment, industry, page] }
+        href: { type: string }
+        label: { type: string }
+      required: [kind, href, label]
     ChatStreamEvent:
       type: object
       properties:
-        type:
-          type: string
-          enum: [token, done, error]
-        token:
-          type: string
+        type: { type: string, enum: [token, done, error] }
+        token: { type: string }
         suggestions:
           type: array
           items:
             $ref: "#/components/schemas/ChatSuggestion"
-        message:
-          type: string
-      required:
-        - type
+        message: { type: string }
+      required: [type]
     ChatError:
       type: object
       properties:
-        error:
-          type: string
-        retryAfterSeconds:
-          type: number
+        error: { type: string }
+        retryAfterSeconds: { type: number }
+      required: [error]
+
+    # ===================== ATELIER =====================
+    AtelierError:
+      type: object
+      properties:
+        error: { type: string }
+      required: [error]
+
+    AtelierPersonaRole:
+      type: string
+      enum: [partner, engagement_lead, sme, ai_engineer, business_developer]
+
+    AtelierPersona:
+      type: object
+      required: [id, name, email, role, roleLabel, title, initials]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/AtelierPersonaRole" }
+        roleLabel: { type: string }
+        title: { type: string }
+        initials: { type: string }
+        avatarUrl: { type: ["string", "null"] }
+
+    AtelierPersonaSwitchInput:
+      type: object
+      required: [personaId]
+      properties:
+        personaId: { type: string }
+
+    PlmStage:
+      type: string
+      enum: [identify, shape, pursue, mobilize, deliver, compound, won, lost, no_go, closed]
+
+    Account:
+      type: object
+      required: [id, name, country, sector]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        country: { type: string }
+        sector: { type: string }
+        notes: { type: ["string", "null"] }
+
+    Opportunity:
+      type: object
       required:
-        - error
+        - id
+        - slug
+        - name
+        - accountId
+        - accountName
+        - plmStage
+        - partnerOwnerName
+        - engagementLeadName
+        - dealSizeUsd
+        - probabilityPct
+        - weightedValueUsd
+        - daysInStage
+        - nextMilestone
+        - sourceLead
+        - createdAt
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        accountId: { type: string }
+        accountName: { type: string }
+        plmStage: { $ref: "#/components/schemas/PlmStage" }
+        buyerPersona: { type: ["string", "null"] }
+        offeringAnchor: { type: ["string", "null"] }
+        partnerOwnerName: { type: string }
+        engagementLeadName: { type: string }
+        dealSizeUsd: { type: number }
+        probabilityPct: { type: number }
+        weightedValueUsd: { type: number }
+        daysInStage: { type: integer }
+        nextMilestone: { type: string }
+        sourceLead: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Engagement:
+      type: object
+      required:
+        - id
+        - slug
+        - name
+        - accountId
+        - accountName
+        - plmStage
+        - partnerOwnerName
+        - engagementLeadName
+        - startDate
+        - plannedEndDate
+        - raidStatus
+        - deliverablesDueThisWeek
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        accountId: { type: string }
+        accountName: { type: string }
+        plmStage: { $ref: "#/components/schemas/PlmStage" }
+        partnerOwnerName: { type: string }
+        engagementLeadName: { type: string }
+        startDate: { type: string }
+        plannedEndDate: { type: string }
+        raidStatus: { type: string, enum: [green, amber, red] }
+        deliverablesDueThisWeek: { type: integer }
+
+    AgentCatalogEntry:
+      type: object
+      required: [id, name, group, stage, purpose, model, starred, status, runsLast30d]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        group: { type: string }
+        stage: { type: string }
+        purpose: { type: string }
+        model: { type: string }
+        starred: { type: boolean }
+        status: { type: string, enum: [registered, mvp, stub] }
+        runsLast30d: { type: integer }
+
+    AgentActivityItem:
+      type: object
+      required: [id, agentId, agentName, status, message, startedAt]
+      properties:
+        id: { type: string }
+        agentId: { type: string }
+        agentName: { type: string }
+        status: { type: string, enum: [running, blocked, complete, error] }
+        confidence: { type: ["string", "null"], enum: [green, amber, red, null] }
+        message: { type: string }
+        targetType: { type: ["string", "null"] }
+        targetId: { type: ["string", "null"] }
+        targetLabel: { type: ["string", "null"] }
+        startedAt: { type: string, format: date-time }
+        progressPct: { type: ["integer", "null"] }
+        sourcesCount: { type: ["integer", "null"] }
+
+    AtelierAsset:
+      type: object
+      required: [id, kind, title, abstract, provenance, tags, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [pov, prompt, framework, case_study, template, code, learning] }
+        title: { type: string }
+        abstract: { type: string }
+        provenance: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        bodyOrFileUrl: { type: ["string", "null"] }
+
+    PaneAItem:
+      type: object
+      required: [id, title, summary, priority, hrefKind, hrefTargetId, dueLabel]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        priority: { type: string, enum: [high, medium, low] }
+        hrefKind: { type: string, enum: [opportunity, engagement, deliverable, atelier] }
+        hrefTargetId: { type: string }
+        dueLabel: { type: string }
+
+    PipelineStageCount:
+      type: object
+      required: [stage, count, weightedValueUsd, agedRedCount]
+      properties:
+        stage: { $ref: "#/components/schemas/PlmStage" }
+        count: { type: integer }
+        weightedValueUsd: { type: number }
+        agedRedCount: { type: integer }
+
+    EngagementSummary:
+      type: object
+      required: [activeCount, deliverablesDueThisWeek, raidAmberCount, raidRedCount]
+      properties:
+        activeCount: { type: integer }
+        deliverablesDueThisWeek: { type: integer }
+        raidAmberCount: { type: integer }
+        raidRedCount: { type: integer }
+
+    AtelierHome:
+      type: object
+      required: [eyebrowDate, greeting, persona, paneA, pipeline, engagements, paneC]
+      properties:
+        eyebrowDate: { type: string }
+        greeting: { type: string }
+        persona: { $ref: "#/components/schemas/AtelierPersona" }
+        paneA:
+          type: array
+          items: { $ref: "#/components/schemas/PaneAItem" }
+        pipeline:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineStageCount" }
+        engagements: { $ref: "#/components/schemas/EngagementSummary" }
+        paneC:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAsset" }
+
+    AuditEvent:
+      type: object
+      required: [id, entityType, entityId, actorType, actorLabel, action, ts]
+      properties:
+        id: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        actorType: { type: string, enum: [human, agent, system] }
+        actorLabel: { type: string }
+        action: { type: string }
+        payloadSummary: { type: ["string", "null"] }
+        ts: { type: string, format: date-time }

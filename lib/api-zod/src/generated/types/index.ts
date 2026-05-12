@@ -6,6 +6,24 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./account";
+export * from "./agentActivityItem";
+export * from "./agentActivityItemConfidence";
+export * from "./agentActivityItemStatus";
+export * from "./agentCatalogEntry";
+export * from "./agentCatalogEntryStatus";
+export * from "./atelierAsset";
+export * from "./atelierAssetKind";
+export * from "./atelierError";
+export * from "./atelierGetActivityParams";
+export * from "./atelierHome";
+export * from "./atelierListAuditEntityType";
+export * from "./atelierListAuditParams";
+export * from "./atelierPersona";
+export * from "./atelierPersonaRole";
+export * from "./atelierPersonaSwitchInput";
+export * from "./auditEvent";
+export * from "./auditEventActorType";
 export * from "./chatError";
 export * from "./chatMessage";
 export * from "./chatMessageRole";
@@ -15,4 +33,13 @@ export * from "./chatStreamEvent";
 export * from "./chatStreamEventType";
 export * from "./chatSuggestion";
 export * from "./chatSuggestionKind";
+export * from "./engagement";
+export * from "./engagementRaidStatus";
+export * from "./engagementSummary";
 export * from "./healthStatus";
+export * from "./opportunity";
+export * from "./paneAItem";
+export * from "./paneAItemHrefKind";
+export * from "./paneAItemPriority";
+export * from "./pipelineStageCount";
+export * from "./plmStage";

@@ -1,0 +1,1 @@
+export const FIRM_NAME = "AICO · THE ATELIER";

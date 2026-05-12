@@ -40,3 +40,405 @@ export const ChatBody = zod.object({
     .max(chatBodyMessagesMax),
   language: zod.enum(["en", "ar"]).default(chatBodyLanguageDefault),
 });
+
+/**
+ * @summary Current persona for The Atelier session
+ */
+export const AtelierGetMeResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "partner",
+    "engagement_lead",
+    "sme",
+    "ai_engineer",
+    "business_developer",
+  ]),
+  roleLabel: zod.string(),
+  title: zod.string(),
+  initials: zod.string(),
+  avatarUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary List the seeded personas (Partner, Lead, SME, Engineer, BD)
+ */
+export const AtelierListPersonasResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "partner",
+    "engagement_lead",
+    "sme",
+    "ai_engineer",
+    "business_developer",
+  ]),
+  roleLabel: zod.string(),
+  title: zod.string(),
+  initials: zod.string(),
+  avatarUrl: zod.string().nullish(),
+});
+export const AtelierListPersonasResponse = zod.array(
+  AtelierListPersonasResponseItem,
+);
+
+/**
+ * @summary Switch the active persona (mock auth for MVP shell)
+ */
+export const AtelierSwitchPersonaBody = zod.object({
+  personaId: zod.string(),
+});
+
+export const AtelierSwitchPersonaResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "partner",
+    "engagement_lead",
+    "sme",
+    "ai_engineer",
+    "business_developer",
+  ]),
+  roleLabel: zod.string(),
+  title: zod.string(),
+  initials: zod.string(),
+  avatarUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary The Atelier Home — Pane A / B / C bundle for the active persona
+ */
+export const AtelierGetHomeResponse = zod.object({
+  eyebrowDate: zod.string(),
+  greeting: zod.string(),
+  persona: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "partner",
+      "engagement_lead",
+      "sme",
+      "ai_engineer",
+      "business_developer",
+    ]),
+    roleLabel: zod.string(),
+    title: zod.string(),
+    initials: zod.string(),
+    avatarUrl: zod.string().nullish(),
+  }),
+  paneA: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      summary: zod.string(),
+      priority: zod.enum(["high", "medium", "low"]),
+      hrefKind: zod.enum([
+        "opportunity",
+        "engagement",
+        "deliverable",
+        "atelier",
+      ]),
+      hrefTargetId: zod.string(),
+      dueLabel: zod.string(),
+    }),
+  ),
+  pipeline: zod.array(
+    zod.object({
+      stage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      count: zod.number(),
+      weightedValueUsd: zod.number(),
+      agedRedCount: zod.number(),
+    }),
+  ),
+  engagements: zod.object({
+    activeCount: zod.number(),
+    deliverablesDueThisWeek: zod.number(),
+    raidAmberCount: zod.number(),
+    raidRedCount: zod.number(),
+  }),
+  paneC: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "pov",
+        "prompt",
+        "framework",
+        "case_study",
+        "template",
+        "code",
+        "learning",
+      ]),
+      title: zod.string(),
+      abstract: zod.string(),
+      provenance: zod.string(),
+      tags: zod.array(zod.string()),
+      createdAt: zod.coerce.date(),
+      bodyOrFileUrl: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Persistent Agent Activity Stream (right rail)
+ */
+export const atelierGetActivityQueryLimitDefault = 20;
+
+export const AtelierGetActivityQueryParams = zod.object({
+  limit: zod.coerce.number().default(atelierGetActivityQueryLimitDefault),
+});
+
+export const AtelierGetActivityResponseItem = zod.object({
+  id: zod.string(),
+  agentId: zod.string(),
+  agentName: zod.string(),
+  status: zod.enum(["running", "blocked", "complete", "error"]),
+  confidence: zod
+    .union([
+      zod.literal("green"),
+      zod.literal("amber"),
+      zod.literal("red"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  message: zod.string(),
+  targetType: zod.string().nullish(),
+  targetId: zod.string().nullish(),
+  targetLabel: zod.string().nullish(),
+  startedAt: zod.coerce.date(),
+  progressPct: zod.number().nullish(),
+  sourcesCount: zod.number().nullish(),
+});
+export const AtelierGetActivityResponse = zod.array(
+  AtelierGetActivityResponseItem,
+);
+
+/**
+ * @summary All opportunities across PLM stages
+ */
+export const AtelierListOpportunitiesResponseItem = zod.object({
+  id: zod.string(),
+  slug: zod.string(),
+  name: zod.string(),
+  accountId: zod.string(),
+  accountName: zod.string(),
+  plmStage: zod.enum([
+    "identify",
+    "shape",
+    "pursue",
+    "mobilize",
+    "deliver",
+    "compound",
+    "won",
+    "lost",
+    "no_go",
+    "closed",
+  ]),
+  buyerPersona: zod.string().nullish(),
+  offeringAnchor: zod.string().nullish(),
+  partnerOwnerName: zod.string(),
+  engagementLeadName: zod.string(),
+  dealSizeUsd: zod.number(),
+  probabilityPct: zod.number(),
+  weightedValueUsd: zod.number(),
+  daysInStage: zod.number(),
+  nextMilestone: zod.string(),
+  sourceLead: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListOpportunitiesResponse = zod.array(
+  AtelierListOpportunitiesResponseItem,
+);
+
+export const AtelierGetOpportunityParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierGetOpportunityResponse = zod.object({
+  id: zod.string(),
+  slug: zod.string(),
+  name: zod.string(),
+  accountId: zod.string(),
+  accountName: zod.string(),
+  plmStage: zod.enum([
+    "identify",
+    "shape",
+    "pursue",
+    "mobilize",
+    "deliver",
+    "compound",
+    "won",
+    "lost",
+    "no_go",
+    "closed",
+  ]),
+  buyerPersona: zod.string().nullish(),
+  offeringAnchor: zod.string().nullish(),
+  partnerOwnerName: zod.string(),
+  engagementLeadName: zod.string(),
+  dealSizeUsd: zod.number(),
+  probabilityPct: zod.number(),
+  weightedValueUsd: zod.number(),
+  daysInStage: zod.number(),
+  nextMilestone: zod.string(),
+  sourceLead: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Active engagements
+ */
+export const AtelierListEngagementsResponseItem = zod.object({
+  id: zod.string(),
+  slug: zod.string(),
+  name: zod.string(),
+  accountId: zod.string(),
+  accountName: zod.string(),
+  plmStage: zod.enum([
+    "identify",
+    "shape",
+    "pursue",
+    "mobilize",
+    "deliver",
+    "compound",
+    "won",
+    "lost",
+    "no_go",
+    "closed",
+  ]),
+  partnerOwnerName: zod.string(),
+  engagementLeadName: zod.string(),
+  startDate: zod.string(),
+  plannedEndDate: zod.string(),
+  raidStatus: zod.enum(["green", "amber", "red"]),
+  deliverablesDueThisWeek: zod.number(),
+});
+export const AtelierListEngagementsResponse = zod.array(
+  AtelierListEngagementsResponseItem,
+);
+
+export const AtelierGetEngagementParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const AtelierGetEngagementResponse = zod.object({
+  id: zod.string(),
+  slug: zod.string(),
+  name: zod.string(),
+  accountId: zod.string(),
+  accountName: zod.string(),
+  plmStage: zod.enum([
+    "identify",
+    "shape",
+    "pursue",
+    "mobilize",
+    "deliver",
+    "compound",
+    "won",
+    "lost",
+    "no_go",
+    "closed",
+  ]),
+  partnerOwnerName: zod.string(),
+  engagementLeadName: zod.string(),
+  startDate: zod.string(),
+  plannedEndDate: zod.string(),
+  raidStatus: zod.enum(["green", "amber", "red"]),
+  deliverablesDueThisWeek: zod.number(),
+});
+
+/**
+ * @summary Firm accounts
+ */
+export const AtelierListAccountsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  country: zod.string(),
+  sector: zod.string(),
+  notes: zod.string().nullish(),
+});
+export const AtelierListAccountsResponse = zod.array(
+  AtelierListAccountsResponseItem,
+);
+
+/**
+ * @summary The full agent catalog (22 named agents)
+ */
+export const AtelierListAgentsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  group: zod.string(),
+  stage: zod.string(),
+  purpose: zod.string(),
+  model: zod.string(),
+  starred: zod.boolean(),
+  status: zod.enum(["registered", "mvp", "stub"]),
+  runsLast30d: zod.number(),
+});
+export const AtelierListAgentsResponse = zod.array(
+  AtelierListAgentsResponseItem,
+);
+
+/**
+ * @summary Knowledge Atelier reusable assets
+ */
+export const AtelierListAssetsResponseItem = zod.object({
+  id: zod.string(),
+  kind: zod.enum([
+    "pov",
+    "prompt",
+    "framework",
+    "case_study",
+    "template",
+    "code",
+    "learning",
+  ]),
+  title: zod.string(),
+  abstract: zod.string(),
+  provenance: zod.string(),
+  tags: zod.array(zod.string()),
+  createdAt: zod.coerce.date(),
+  bodyOrFileUrl: zod.string().nullish(),
+});
+export const AtelierListAssetsResponse = zod.array(
+  AtelierListAssetsResponseItem,
+);
+
+/**
+ * @summary Append-only audit feed for an entity
+ */
+export const atelierListAuditQueryLimitDefault = 50;
+
+export const AtelierListAuditQueryParams = zod.object({
+  entityType: zod
+    .enum(["opportunity", "engagement", "deliverable", "agent_run", "atelier"])
+    .optional(),
+  entityId: zod.coerce.string().optional(),
+  limit: zod.coerce.number().default(atelierListAuditQueryLimitDefault),
+});
+
+export const AtelierListAuditResponseItem = zod.object({
+  id: zod.string(),
+  entityType: zod.string(),
+  entityId: zod.string(),
+  actorType: zod.enum(["human", "agent", "system"]),
+  actorLabel: zod.string(),
+  action: zod.string(),
+  payloadSummary: zod.string().nullish(),
+  ts: zod.coerce.date(),
+});
+export const AtelierListAuditResponse = zod.array(AtelierListAuditResponseItem);

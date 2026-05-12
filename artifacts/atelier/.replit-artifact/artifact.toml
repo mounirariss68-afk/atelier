@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/atelier/"
+title = "The Atelier — AICo Employee Portal"
+version = "1.0.0"
+id = "artifacts/atelier"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/atelier/" ]
+localPort = 24797
+
+[services.development]
+run = "pnpm --filter @workspace/atelier run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/atelier", "run", "build" ]
+publicDir = "artifacts/atelier/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24797"
+BASE_PATH = "/atelier/"

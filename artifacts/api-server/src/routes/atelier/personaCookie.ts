@@ -1,0 +1,98 @@
+import type { Request, Response, NextFunction } from "express";
+import { db, atelierUsers } from "@workspace/db";
+import { eq, and, isNull } from "drizzle-orm";
+
+/**
+ * Mock persona-based auth for the Atelier MVP shell.
+ *
+ * The single source of truth for the active persona is the `atelier_persona`
+ * cookie. Real OAuth (Replit Auth or Clerk + Google/Microsoft) is the
+ * follow-up workstream — see #221.
+ *
+ * Default persona on a fresh session is the firm's founding Partner so the
+ * portal is never blank on first visit.
+ */
+export const PERSONA_COOKIE = "atelier_persona";
+export const DEFAULT_PERSONA_ID = "p_mounir_ariss";
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      atelierPersonaId?: string;
+      atelierPersona?: typeof atelierUsers.$inferSelect;
+    }
+  }
+}
+
+export async function attachPersona(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const fromCookie = req.cookies?.[PERSONA_COOKIE] as string | undefined;
+    const personaId = fromCookie?.trim() || DEFAULT_PERSONA_ID;
+
+    const [persona] = await db
+      .select()
+      .from(atelierUsers)
+      .where(
+        and(eq(atelierUsers.id, personaId), isNull(atelierUsers.deletedAt)),
+      );
+
+    if (!persona) {
+      // Persona referenced by cookie no longer exists — clear it and fall back.
+      res.clearCookie(PERSONA_COOKIE, { path: "/" });
+      const [fallback] = await db
+        .select()
+        .from(atelierUsers)
+        .where(
+          and(
+            eq(atelierUsers.id, DEFAULT_PERSONA_ID),
+            isNull(atelierUsers.deletedAt),
+          ),
+        );
+      if (fallback) {
+        req.atelierPersonaId = fallback.id;
+        req.atelierPersona = fallback;
+      }
+      next();
+      return;
+    }
+
+    req.atelierPersonaId = persona.id;
+    req.atelierPersona = persona;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+export function setPersonaCookie(res: Response, personaId: string): void {
+  res.cookie(PERSONA_COOKIE, personaId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 1000 * 60 * 60 * 24 * 30,
+  });
+}
+
+export function personaToWire(p: typeof atelierUsers.$inferSelect) {
+  return {
+    id: p.id,
+    name: p.name,
+    email: p.email,
+    role: p.role as
+      | "partner"
+      | "engagement_lead"
+      | "sme"
+      | "ai_engineer"
+      | "business_developer",
+    roleLabel: p.roleLabel,
+    title: p.title,
+    initials: p.initials,
+    avatarUrl: p.avatarUrl,
+  };
+}
