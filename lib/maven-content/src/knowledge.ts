@@ -1947,6 +1947,90 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
     accent: "#006A6A",
     icon: "ShieldCheck",
   },
+  {
+    id: "agentic-cx-studio",
+    slug: "agentic-cx-studio",
+    title: { en: "Agentic CX Studio", ar: "استوديو تجربة العميل الوكيلي", tr: "Ajansal CX Stüdyosu" },
+    class: "customer-ops-agent",
+    industries: ["financial-services", "telecom", "retail-consumer"],
+    horizontals: [],
+    buyer: {
+      en: "Chief Customer / Experience Officer",
+      ar: "كبير مسؤولي تجربة العملاء",
+      tr: "Müşteri / Deneyim Direktörü",
+    },
+    pitch: {
+      en: "Seventeen named CX agents in five squads — Listening, Design, Operations, Outcomes and Governance — coordinated by a Mission Control conductor and stitched together by a shared Experience Graph. The whole studio runs an end-to-end SME onboarding case for Falcon Bank you can step through live.",
+      ar: "سبعة عشر وكيلاً مسمّى لتجربة العميل في خمس فِرَق — الإصغاء، التصميم، العمليات، النتائج، والحوكمة — ينسّقها قائد مركز المهمة ويربطها رسم تجربة عميل مشترك. الاستوديو بأكمله يدير حالة استقبال شركة صغيرة لبنك فالكون يمكنك تتبّعها مباشرة.",
+      tr: "Dinleme, Tasarım, Operasyon, Sonuçlar ve Yönetişim olmak üzere beş takımda on yedi adlandırılmış CX ajanı — bir Görev Kontrol şefi tarafından koordine edilir ve paylaşılan bir Deneyim Grafiği ile birbirine dikilir. Stüdyonun tamamı, canlı olarak adım adım geçebileceğiniz uçtan uca bir Falcon Bank KOBİ onboarding vakası çalıştırır.",
+    },
+    longDescription: [
+      {
+        en: "Agentic CX Studio is the workspace a Chief Customer Officer actually runs the function from. It is not a chatbot and it is not an analytics dashboard — it is a multi-agent operating system where every CX competency is staffed by a named agent with its own brief, inputs, workbench and human checkpoint. The studio anchors the whole org around a single source of truth: the Experience Graph, which links voice-of-customer signals to journey stages, to operational moments, to KPIs, to change actions. Every agent reads from and writes to that graph, and every human signoff is auditable.",
+        ar: "استوديو تجربة العميل الوكيلي هو مساحة العمل التي يدير منها مسؤول تجربة العملاء وظيفته فعلياً. إنه ليس روبوت محادثة ولا لوحة تحليلات — بل نظام تشغيل متعدد الوكلاء حيث كل كفاءة CX يديرها وكيل مسمّى له صلاحياته ومدخلاته ومنصة عمله ونقطة موافقة بشرية. يثبّت الاستوديو المؤسسة بأكملها حول مصدر حقيقة واحد: رسم تجربة العميل، الذي يربط إشارات صوت العميل برحلاته بلحظات التشغيل بمؤشرات الأداء بإجراءات التغيير. كل وكيل يقرأ من الرسم ويكتب إليه، وكل موافقة بشرية قابلة للتدقيق.",
+        tr: "Agentic CX Stüdyosu, bir Müşteri Direktörünün işlevi gerçekten yönettiği çalışma alanıdır. Ne sohbet botu ne de analitik panodur — her CX yetkinliğinin kendi briefi, girdileri, çalışma tezgâhı ve insan kontrol noktası olan adlandırılmış bir ajan tarafından yürütüldüğü çok ajanlı bir işletim sistemidir. Stüdyo, tüm organizasyonu tek bir doğruluk kaynağı etrafında sabitler: müşteri sesi sinyallerini yolculuk aşamalarına, operasyonel anlara, KPI'lara ve değişim eylemlerine bağlayan Deneyim Grafiği. Her ajan o grafikten okur ve ona yazar, her insan onayı denetlenebilir.",
+      },
+      {
+        en: "The cast is split into five squads. Listening & Insight (Customer Insight Synthesizer, Ethnographic Researcher, Ecosystem Mapper, Persona Modeler) turns transcripts, field-study sessions and competitive mystery-shops into structured customer truth. Service Design (Journey Mapper, Service Blueprinter, Moments-of-Truth Designer, Usability & Testing Lead) translates that truth into a redesigned journey, blueprint, moments catalogue and usability-tested concepts. Operations & Channels (Channel Orchestrator, Touchpoint Designer, Staff Experience Lead) allocates channels, designs the 4-branch / 6-week pilot and lands it with the frontline. Outcomes & Value (KPI Tree Compiler, CX Strategist, NPS/CSAT Forecaster) ties every redesign to a measurable KPI, a cost-to-serve number and a forecastable NPS lift. Governance & Change (Compliance Sentinel, Emotion & Sentiment Auditor, Change Manager) makes the redesign safe to deploy and easy to roll out. The Mission Control conductor sequences them and surfaces the glass-box trace.",
+        ar: "تنقسم الفرقة إلى خمس فِرَق. الإصغاء والاستبصار (مُلخّص رؤى العميل، الباحث الإثنوغرافي، مُحلِّل المنظومة، نمذجة الشخصيات) يحوّل النصوص والجلسات الميدانية وتجارب التسوّق السرّية إلى حقيقة منظّمة عن العميل. تصميم الخدمة (رسم الرحلات، مصمّم الخدمة، مصمّم لحظات الحقيقة، قائد قابلية الاستخدام) يترجم تلك الحقيقة إلى رحلة مُعاد تصميمها ومخطط ولحظات حقيقة ونماذج مختبرة. العمليات والقنوات (منسّق القنوات، مصمّم نقاط التواصل، قائد تجربة الموظف) يخصّص القنوات ويصمّم تجربة 4 فروع / 6 أسابيع. النتائج والقيمة (مُجمّع شجرة المؤشرات، خبير استراتيجية CX، متنبّئ NPS/CSAT) يربط كل إعادة تصميم بمؤشر ورقم وتوقّع. الحوكمة والتغيير (حارس الامتثال، مدقّق المشاعر والإحساس، مدير التغيير) يجعل النظام آمناً للنشر وسهل التطبيق.",
+        tr: "Kadro beş takıma ayrılır. Dinleme ve İçgörü (Müşteri İçgörü Sentezleyici, Etnografik Araştırmacı, Ekosistem Haritacısı, Persona Modelleyici) transkriptleri, saha oturumlarını ve gizli müşteri turlarını yapılandırılmış gerçeğe dönüştürür. Hizmet Tasarımı (Yolculuk Haritacısı, Hizmet Blueprint'çisi, Hakikat Anı Tasarımcısı, Kullanılabilirlik & Test Lideri) bunu yeniden tasarlanmış yolculuğa, blueprint'e, an kataloğuna ve test edilmiş konseptlere çevirir. Operasyon ve Kanallar (Kanal Orkestratörü, Temas Noktası Tasarımcısı, Personel Deneyimi Lideri) kanal tahsis eder, 4-şube / 6-hafta pilotu tasarlar ve ön saflarla yerleştirir. Sonuçlar ve Değer (KPI Ağaç Derleyicisi, CX Stratejisti, NPS/CSAT Tahmincisi) her yeniden tasarımı ölçülebilir bir göstergeye bağlar. Yönetişim ve Değişim (Uyumluluk Bekçisi, Duygu & His Denetçisi, Değişim Yöneticisi) sistemi güvenli kılar.",
+      },
+      {
+        en: "The studio ships with two full scenarios — Falcon Bank SME onboarding (anchor) and Etisalat enterprise account activation — selectable from the sidebar. Switching the scenario re-skins the Mission Control header, customer-voice cards (Khalid, Mariam, Elif as named personas), VoC themes and journey artefacts, so the same 17 agents demonstrate portability across industries. You can switch the operator persona between four roles — CX Director, Service Designer, Operations Lead, Executive Sponsor — each with its own pinned-agent shortcuts; switch language across English, Arabic (RTL) and Turkish; and run the case end-to-end in scripted ~3-minute mode with a narrator caption track, pause and skip. Every workbench is real software, not a slideshow.",
+        ar: "يأتي الاستوديو بسيناريوهين كاملين — استقبال شركة صغيرة لبنك فالكون (مرجع) وتفعيل حسابات اتصالات للمؤسّسات — يمكن اختيارهما من الشريط الجانبي. أربع شخصيات مُشغِّل (مدير CX، مصمّم الخدمة، قائد العمليات، الراعي التنفيذي)، ثلاث لغات، وضع تشغيل مكتوب ~3 دقائق مع شريط سرد.",
+        tr: "Stüdyo iki tam senaryo ile gelir — Falcon Bank KOBİ onboarding (çıpa) ve Etisalat kurumsal hesap aktivasyonu — kenar çubuğundan seçilebilir. Dört operatör persona (CX Direktörü, Hizmet Tasarımcısı, Operasyon Lideri, Yönetici Sponsor), üç dil, anlatıcı altyazılı ~3 dakikalık senaryolu çalıştırma modu.",
+      },
+    ],
+    screens: [
+      {
+        title: { en: "Mission Control", ar: "مركز المهمة", tr: "Görev Kontrol" },
+        caption: {
+          en: "The CX conductor's home — case header, squad-by-squad status, glass-box trace, next checkpoint, and a single-button \"Run the case\" mode.",
+          ar: "موطن قائد تجربة العميل — ترويسة الحالة، حالة كل فرقة على حدة، السلسلة الزجاجية، نقطة الموافقة التالية، وزر واحد لتشغيل الحالة.",
+          tr: "CX şefinin ana ekranı — vaka başlığı, takım takım durum, cam-kutu iz, sonraki kontrol noktası ve tek butonla \"Vakayı çalıştır\" modu.",
+        },
+      },
+      {
+        title: { en: "Experience Graph", ar: "رسم تجربة العميل", tr: "Deneyim Grafiği" },
+        caption: {
+          en: "The studio's shared substrate — VoC signals → journey stages → moments of truth → KPIs → change actions, navigable as a graph.",
+          ar: "الركيزة المشتركة للاستوديو — إشارات صوت العميل ← مراحل الرحلة ← لحظات الحقيقة ← المؤشرات ← إجراءات التغيير، قابلة للتنقّل كرسم.",
+          tr: "Stüdyonun paylaşılan zemini — VoC sinyalleri → yolculuk aşamaları → hakikat anları → KPI'lar → değişim eylemleri, bir grafik olarak gezilebilir.",
+        },
+      },
+      {
+        title: { en: "Per-agent panels", ar: "لوحات الوكلاء الفردية", tr: "Ajan başına paneller" },
+        caption: {
+          en: "Each of the 17 agents has its own panel — header, inputs, workbench artefact (blueprint, persona card, KPI tree, etc.), reasoning trace, and a named human checkpoint.",
+          ar: "كل من الوكلاء الـ17 له لوحته الخاصة — ترويسة، مدخلات، نتاج منصة العمل (مخطط، بطاقة شخصية، شجرة مؤشرات، إلخ)، سلسلة التفكير، ونقطة موافقة بشرية مسمّاة.",
+          tr: "17 ajanın her birinin kendi paneli vardır — başlık, girdiler, çalışma tezgâhı çıktısı (blueprint, persona kartı, KPI ağacı vb.), akıl yürütme izi ve adlandırılmış bir insan kontrol noktası.",
+        },
+      },
+      {
+        title: { en: "Run-the-case mode", ar: "وضع تشغيل الحالة", tr: "Vakayı çalıştır modu" },
+        caption: {
+          en: "Falcon Bank SME onboarding scripted across all five squads — auto-advances agent by agent so a buyer can watch the multi-agent system work end-to-end.",
+          ar: "حالة استقبال شركة صغيرة لبنك فالكون مكتوبة عبر الفرق الخمس — تتقدّم تلقائياً وكيلاً تلو الآخر ليشاهد المشتري النظام متعدد الوكلاء يعمل من البداية إلى النهاية.",
+          tr: "Beş takımın hepsinde senaryolanmış Falcon Bank KOBİ onboarding — bir alıcının çok ajanlı sistemi uçtan uca çalışırken izleyebilmesi için ajan ajan otomatik ilerler.",
+        },
+      },
+    ],
+    dataModel: {
+      inputs: [
+        { en: "Customer transcripts (calls, chat, branch notes), survey verbatims, complaint logs, journey analytics, KPI definitions, regulatory rule libraries", ar: "نصوص العملاء (مكالمات، محادثات، ملاحظات الفروع)، إجابات الاستبيانات، سجلات الشكاوى، تحليلات الرحلات، تعريفات المؤشرات، مكتبات القواعد التنظيمية", tr: "Müşteri transkriptleri (aramalar, sohbet, şube notları), anket cevapları, şikayet kayıtları, yolculuk analitikleri, KPI tanımları, regülatör kural kütüphaneleri" },
+      ],
+      internal: [
+        { en: "Mission Control conductor, 17 named CX agents in 5 squads, shared Experience Graph store, per-agent workbench renderers, glass-box trace, persona switcher, scripted case runner", ar: "قائد مركز المهمة، 17 وكيلاً مسمّى في 5 فِرَق، مخزن مشترك لرسم تجربة العميل، عارضات منصات العمل لكل وكيل، السلسلة الزجاجية، مبدّل الشخصيات، مشغّل الحالة المكتوبة", tr: "Görev Kontrol şefi, 5 takımda 17 adlandırılmış CX ajanı, paylaşılan Deneyim Grafiği deposu, ajan başına çalışma tezgâhı render'ları, cam-kutu iz, persona değiştirici, senaryolu vaka çalıştırıcı" },
+      ],
+      outputs: [
+        { en: "Drafted journey blueprints, KPI trees, change plans, agent-resolved interactions, compliance signoffs, executive narrative — every artefact with a named human owner", ar: "مخططات رحلات مسوّدة، أشجار مؤشرات، خطط تغيير، تفاعلات محلولة بالوكلاء، موافقات امتثال، سرد تنفيذي — كل نتاج مع مالك بشري مسمّى", tr: "Taslaklanmış yolculuk blueprint'leri, KPI ağaçları, değişim planları, ajanla çözülmüş etkileşimler, uyumluluk imzaları, yönetici anlatısı — her çıktının adlandırılmış bir insan sahibi vardır" },
+      ],
+    },
+    status: "live",
+    accent: "#0E7C7B",
+    icon: "Network",
+    relatedService: "agentic-ai-transformation",
+  },
 ];
 
 // Attach the agent cast for each tool so the consumer-facing

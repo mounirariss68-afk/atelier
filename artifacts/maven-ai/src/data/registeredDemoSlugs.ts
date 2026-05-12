@@ -31,6 +31,7 @@ export const REGISTERED_DEMO_SLUGS: readonly string[] = [
   "dge-red-team",
   "dge-service-redesign",
   "dge-spokes-review",
+  "agentic-cx-studio",
 ] as const;
 
 export const REGISTERED_DEMO_SLUG_SET: ReadonlySet<string> = new Set(

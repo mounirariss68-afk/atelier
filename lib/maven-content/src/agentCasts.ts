@@ -1298,6 +1298,82 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
     ),
     rationale: { en: "DGE Effortless 2.0 is the demonstrator, not a single agent. Splitting the workload across eight Agentic Factories — each with its own sentinels, behavioural contract and named human checkpoint — is what lets the same shell serve a Citizen, an Operator and a Governance reviewer without collapsing the audit story. The unified marketplace card routes the buyer to the hub so they can pick the demo that matches their decision, then the shared shell takes over.", ar: "DGE Effortless 2.0 هو العرض التجريبي وليس وكيلاً واحداً. تقسيم العمل عبر ثماني مصانع وكيلية — لكل منها حُرّاسه وعقده السلوكي ونقطة اعتماده البشرية المسمّاة — هو ما يتيح للهيكل ذاته خدمة المواطن والمشغّل والمراجع الحوكمي دون انهيار قصة التدقيق. تنقل البطاقة الموحّدة في السوق المشتري إلى المركز ليختار العرض المناسب، ثم يتولّى الهيكل المشترك." },
   },
+
+  // ─── Agentic CX Studio ──────────────────────────────────────────────────
+  // 17 named agents in 5 squads, conducted by Mission Control. Falcon Bank
+  // SME onboarding is the anchor scenario.
+  "agentic-cx-studio": {
+    agents: [
+      // Squad 1 — Listening & Insight
+      { id: "customer-insight", name: { en: "Customer Insight Synthesizer", ar: "مُلخّص رؤى العميل", tr: "Müşteri İçgörü Sentezleyici" }, role: { en: "Clusters complaint, survey and call-transcript verbatims into ranked themes with NPS impact.", ar: "يجمّع الشكاوى والاستبيانات ونصوص المكالمات في موضوعات مرتّبة مع أثر NPS.", tr: "Şikayet, anket ve çağrı transkriptlerini NPS etkili sıralı temalara kümeler." }, kind: "classifier", writes: [{ en: "Ranked VoC themes with sample quotes", ar: "موضوعات صوت العميل المرتّبة", tr: "Sıralı VoC temaları" }] },
+      { id: "ethnographic-researcher", name: { en: "Ethnographic Researcher", ar: "الباحث الإثنوغرافي", tr: "Etnografik Araştırmacı" }, role: { en: "Generates field-study notes from session recordings — what customers do, not what they say.", ar: "يولّد ملاحظات ميدانية من تسجيلات الجلسات.", tr: "Oturum kayıtlarından saha notları üretir." }, kind: "drafter", writes: [{ en: "Field-study note set with behaviour codes", ar: "ملاحظات ميدانية برموز السلوك", tr: "Davranış kodlu saha notları" }] },
+      { id: "ecosystem-mapper", name: { en: "Ecosystem Mapper", ar: "مُحلِّل المنظومة", tr: "Ekosistem Haritacısı" }, role: { en: "Maps every actor in the customer's ecosystem — 6 peers, 4 fintechs, 3 govt registries — and scores Falcon's relative position on each stage.", ar: "يرسم منظومة العميل ويقيّم موقع فالكون.", tr: "Müşterinin ekosistemini haritalar." }, kind: "scorer", writes: [{ en: "Benchmark grid (peers × stages) with deltas", ar: "شبكة معايير", tr: "Kıyaslama ızgarası" }] },
+      { id: "persona-modeler", name: { en: "Persona Modeler", ar: "نمذجة الشخصيات", tr: "Persona Modelleyici" }, role: { en: "Builds 3 evidence-backed personas (Khalid, Mariam, Elif) tied to themes and behaviour codes.", ar: "يبني 3 شخصيات مدعومة بالأدلة.", tr: "3 kanıtlı persona oluşturur." }, kind: "drafter", writes: [{ en: "Persona cards (jobs, pains, gains)", ar: "بطاقات الشخصيات", tr: "Persona kartları" }] },
+      // Squad 2 — Service Design
+      { id: "journey-mapper", name: { en: "Journey Mapper", ar: "رسم الرحلات", tr: "Yolculuk Haritacısı" }, role: { en: "Reconstructs the actual end-to-end journey from event logs and stitches it to personas.", ar: "يعيد بناء الرحلة الفعلية من السجلات.", tr: "Loglardan gerçek yolculuğu yeniden inşa eder." }, kind: "compiler", writes: [{ en: "Stage-by-stage journey with friction scores", ar: "رحلة مع درجات الاحتكاك", tr: "Sürtüşme skorlu yolculuk" }] },
+      { id: "service-blueprinter", name: { en: "Service Blueprinter", ar: "مصمّم الخدمة", tr: "Hizmet Blueprint'çisi" }, role: { en: "Drafts the front-stage / back-stage blueprint for each journey stage with system + actor lanes.", ar: "يصوغ المخطط الأمامي/الخلفي لكل مرحلة.", tr: "Her aşama için ön/arka-sahne blueprint." }, kind: "drafter", writes: [{ en: "Service blueprint with system + actor lanes", ar: "مخطط مع المسارات", tr: "Sistem + aktör koridorlu blueprint" }] },
+      { id: "moments-designer", name: { en: "Moments-of-Truth Designer", ar: "مصمّم لحظات الحقيقة", tr: "Hakikat Anı Tasarımcısı" }, role: { en: "Identifies the 3–5 moments that disproportionately drive NPS and designs interventions.", ar: "يحدّد لحظات الحقيقة ويصمّم التدخّلات.", tr: "NPS'i belirleyen 3–5 anı tespit eder." }, kind: "drafter", writes: [{ en: "Moments-of-truth catalogue with intervention briefs", ar: "كتالوج لحظات الحقيقة", tr: "Hakikat anı kataloğu" }] },
+      { id: "usability-tester", name: { en: "Usability & Testing Lead", ar: "قائد قابلية الاستخدام", tr: "Kullanılabilirlik & Test Lideri" }, role: { en: "Drafts 3 redesign concepts per moment and runs unmoderated remote tests with 12 SME owners — concepts ranked by usability score × NPS lift.", ar: "يصوغ 3 نماذج لكل لحظة ويختبرها مع 12 صاحب أعمال.", tr: "An başına 3 konsept taslar ve 12 KOBİ sahibiyle test eder." }, kind: "drafter", writes: [{ en: "Concept boards (3 per moment) with feasibility scores", ar: "لوحات النماذج", tr: "Konsept panoları" }] },
+      // Squad 3 — Operations & Channels
+      { id: "channel-orchestrator", name: { en: "Channel Orchestrator", ar: "منسّق القنوات", tr: "Kanal Orkestratörü" }, role: { en: "Decides which channel owns each moment — branch, app, call centre, WhatsApp, RM.", ar: "يقرر القناة لكل لحظة.", tr: "Her anın kanalına karar verir." }, kind: "router", writes: [{ en: "Channel allocation matrix per moment", ar: "مصفوفة تخصيص القنوات", tr: "Kanal tahsis matrisi" }] },
+      { id: "touchpoint-designer", name: { en: "Touchpoint Designer", ar: "مصمّم نقاط التواصل", tr: "Temas Noktası Tasarımcısı" }, role: { en: "Designs every touchpoint that lands the redesign — 4-branch / 6-week launch matrix with treatment + holdout arms, success criteria, and stop-conditions.", ar: "يصمّم نقاط التواصل التي تنفّذ التصميم.", tr: "Yeniden tasarımı taşıyan her temas noktasını tasarlar." }, kind: "drafter", writes: [{ en: "Pilot plan with arms, holdout, success criteria", ar: "خطة تجربة", tr: "Pilot planı" }] },
+      { id: "staff-experience", name: { en: "Staff Experience Lead", ar: "قائد تجربة الموظف", tr: "Personel Deneyimi Lideri" }, role: { en: "Owns the staff side of the experience — coaching nudges, adoption telemetry, and frontline sentiment by branch.", ar: "يملك جانب الموظف من التجربة.", tr: "Deneyimin personel tarafını sahiplenir." }, kind: "monitor", writes: [{ en: "Coaching nudges + branch adoption telemetry", ar: "توجيهات + قياسات التبنّي", tr: "Koçluk + benimseme telemetrisi" }] },
+      // Squad 4 — Outcomes & Value
+      { id: "kpi-tree-compiler", name: { en: "KPI Tree Compiler", ar: "مُجمّع شجرة المؤشرات", tr: "KPI Ağaç Derleyicisi" }, role: { en: "Compiles a KPI tree from north-star NPS down to per-moment leading indicators.", ar: "يجمّع شجرة من NPS إلى المؤشرات.", tr: "NPS'ten öncü göstergelere ağaç." }, kind: "compiler", writes: [{ en: "KPI tree with current vs target deltas", ar: "شجرة مؤشرات", tr: "KPI ağacı" }] },
+      { id: "cx-strategist", name: { en: "CX Strategist", ar: "خبير استراتيجية تجربة العميل", tr: "CX Stratejisti" }, role: { en: "Owns the strategic CX narrative — links cost-to-serve, NPS forecast and KPI tree into the board-level case for the redesign.", ar: "يملك السرد الاستراتيجي.", tr: "Stratejik CX anlatısını sahiplenir." }, kind: "scorer", writes: [{ en: "Cost-to-serve waterfall + scenario deltas", ar: "شلال تكلفة الخدمة", tr: "Maliyet şelalesi" }] },
+      { id: "csat-forecaster", name: { en: "NPS / CSAT Forecaster", ar: "متنبّئ رضا العملاء", tr: "NPS / CSAT Tahmincisi" }, role: { en: "Forecasts NPS and CSAT shift if proposed designs land — sensitivity-tested.", ar: "يتنبّأ بتغيّر NPS و CSAT.", tr: "NPS / CSAT değişimini tahmin eder." }, kind: "scorer", writes: [{ en: "NPS / CSAT forecast + sensitivity bands", ar: "توقّع + نطاقات الحساسية", tr: "Tahmin + duyarlılık bantları" }] },
+      // Squad 5 — Governance & Change
+      { id: "compliance-sentinel", name: { en: "Compliance Sentinel", ar: "حارس الامتثال", tr: "Uyumluluk Bekçisi" }, role: { en: "Maps every change to SAMA / CBUAE / CBRT / PDPL clauses and flags conflicts.", ar: "يربط كل تغيير ببنود تنظيمية.", tr: "Her değişimi regülatör maddelerine eşler." }, kind: "critic", writes: [{ en: "Compliance map + open clause conflicts", ar: "خريطة امتثال", tr: "Uyumluluk haritası" }] },
+      { id: "emotion-sentiment", name: { en: "Emotion & Sentiment Auditor", ar: "مدقّق المشاعر والإحساس", tr: "Duygu & His Denetçisi" }, role: { en: "Audits every drafted resolution for emotional tone — flags dialect, gender or sentiment bias incidents.", ar: "يدقّق المسوّدات للنبرة العاطفية.", tr: "Her taslağı duygusal ton için denetler." }, kind: "critic", writes: [{ en: "Bias incidents + remediation prompts", ar: "حوادث تحيّز", tr: "Önyargı olayları" }] },
+      { id: "change-manager", name: { en: "Change Manager", ar: "مدير التغيير", tr: "Değişim Yöneticisi" }, role: { en: "Drafts the 90/180/365-day change plan tied to journey, KPI tree, pilot, and squads.", ar: "يصوغ خطة التغيير 90/180/365.", tr: "90/180/365 günlük değişim planı taslar." }, kind: "compiler", writes: [{ en: "Phased change plan with owners + dates", ar: "خطة تغيير مرحلية", tr: "Sahipli kademeli plan" }] },
+    ],
+    edges: [
+      { from: "customer-insight", to: "persona-modeler" },
+      { from: "ethnographic-researcher", to: "persona-modeler" },
+      { from: "ecosystem-mapper", to: "moments-designer" },
+      { from: "persona-modeler", to: "journey-mapper" },
+      { from: "customer-insight", to: "journey-mapper" },
+      { from: "journey-mapper", to: "service-blueprinter" },
+      { from: "service-blueprinter", to: "moments-designer" },
+      { from: "moments-designer", to: "usability-tester" },
+      { from: "usability-tester", to: "channel-orchestrator" },
+      { from: "channel-orchestrator", to: "touchpoint-designer" },
+      { from: "touchpoint-designer", to: "staff-experience" },
+      { from: "moments-designer", to: "kpi-tree-compiler" },
+      { from: "kpi-tree-compiler", to: "cx-strategist" },
+      { from: "kpi-tree-compiler", to: "csat-forecaster" },
+      { from: "channel-orchestrator", to: "compliance-sentinel" },
+      { from: "usability-tester", to: "emotion-sentiment" },
+      { from: "csat-forecaster", to: "change-manager" },
+      { from: "cx-strategist", to: "change-manager" },
+      { from: "compliance-sentinel", to: "change-manager" },
+      { from: "change-manager", to: "staff-experience" },
+    ],
+    humanCheckpoints: [
+      { id: "cco-signs-blueprint", name: { en: "Chief Customer Officer", ar: "كبير مسؤولي العملاء", tr: "Müşteri Direktörü" }, decision: { en: "Approves the journey blueprint and the moments-of-truth catalogue before any change goes live.", ar: "يعتمد المخطط والكتالوج.", tr: "Blueprint ve katalogu onaylar." } },
+      { id: "ops-lead-signs-pilot", name: { en: "Operations Lead", ar: "قائد العمليات", tr: "Operasyon Lideri" }, decision: { en: "Approves the pilot scope, branch selection, and stop-conditions before the 6-week run begins.", ar: "يعتمد نطاق التجربة وشروط الإيقاف.", tr: "Pilot kapsamını ve durdurma koşullarını onaylar." } },
+      { id: "compliance-lead-signs", name: { en: "Compliance Lead", ar: "قائد الامتثال", tr: "Uyumluluk Lideri" }, decision: { en: "Signs the compliance map and clears every flagged clause conflict before the change plan is published.", ar: "يوقّع خريطة الامتثال.", tr: "Uyumluluk haritasını imzalar." } },
+    ],
+    flowOrder: linearFlow(
+      [
+        "customer-insight", "ethnographic-researcher", "ecosystem-mapper", "persona-modeler",
+        "journey-mapper", "service-blueprinter", "moments-designer", "usability-tester",
+        "channel-orchestrator", "touchpoint-designer", "staff-experience",
+        "kpi-tree-compiler", "cx-strategist", "csat-forecaster",
+        "compliance-sentinel", "emotion-sentiment", "change-manager",
+      ],
+      [
+        { id: "cco-signs-blueprint", afterAgent: "moments-designer" },
+        { id: "ops-lead-signs-pilot", afterAgent: "touchpoint-designer" },
+        { id: "compliance-lead-signs", afterAgent: "compliance-sentinel" },
+      ],
+    ),
+    rationale: {
+      en: "CX is not one job — it is seventeen independent disciplines that have to share a single source of truth. A monolithic chatbot collapses them and loses the audit trail; this cast — service-design heavy, with named personas (Khalid, Mariam, Elif) and a 4-branch pilot before any rollout — keeps every discipline named, every artefact owned, and every human signoff in the right place on the journey.",
+      ar: "تجربة العميل ليست مهمّة واحدة — بل سبع عشرة كفاءة مستقلّة. هذا الفريق ذو طابع تصميم خدمة، بشخصيات مسمّاة (خالد، مريم، إليف) وتجربة 4 فروع قبل أي نشر.",
+      tr: "CX tek bir iş değildir — on yedi bağımsız disiplindir. Bu kadro hizmet-tasarım ağırlıklıdır; isimli personalar (Khalid, Mariam, Elif) ve dağıtım öncesi 4-şube pilot içerir.",
+    },
+  },
 };
 
 /** Returns the cast for a tool slug, or undefined if none registered. */

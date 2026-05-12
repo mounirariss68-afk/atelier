@@ -18,6 +18,7 @@ import {
   Database,
   BookOpen,
   MessageSquare,
+  Network,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -44,6 +45,7 @@ const ICONS: Record<string, LucideIcon> = {
   Database,
   BookOpen,
   MessageSquare,
+  Network,
 };
 
 type ClassFilter = "all" | (typeof marketplaceClasses)[number]["id"];

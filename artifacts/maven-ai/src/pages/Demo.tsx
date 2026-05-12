@@ -17,6 +17,7 @@ import CdoConsole from "@/components/demo/sovereign-data/CdoConsole";
 import CareDesk from "@/components/demo/customer-care/CareDesk";
 import BidStudio from "@/components/demo/tender-response-studio/BidStudio";
 import KnowledgeChat from "@/components/demo/enterprise-knowledge/KnowledgeChat";
+import CxStudio from "@/components/demo/cx-studio/Studio";
 import { getScenario } from "@/lib/sim/scenarios";
 import { useLocation } from "wouter";
 import { useLang, tStr } from "@/lib/lang";
@@ -33,6 +34,12 @@ export default function Demo() {
   const params = useParams();
   const slug = (params as { slug?: string }).slug ?? "";
   const variant = (params as { variant?: string }).variant;
+
+  // Agentic CX Studio — bespoke 17-agent / 5-squad workspace anchored on the
+  // Falcon Bank SME onboarding case. Bypasses the generic scenario engine.
+  if (slug === "agentic-cx-studio") {
+    return <CxStudio />;
+  }
 
   // DGE Effortless 2.0 — six demos rendered through the shared TAMM/ADGE shell.
   if (slug.startsWith("dge-")) {
