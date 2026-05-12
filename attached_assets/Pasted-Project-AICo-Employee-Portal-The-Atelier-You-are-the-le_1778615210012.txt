@@ -1,0 +1,519 @@
+Project: AICo Employee Portal — "The Atelier"
+You are the lead engineer building the internal operating system for a senior-led, agentic-native AI consulting firm. The portal is where every employee — Partner, Principal, Engagement Lead, Engineer, Designer — runs the full project lifecycle, with named AI agents preparing work at each step. Humans always decide; agents prepare, draft, research, review.
+The portal is the logged-in companion to the public AICo / Maven AI website. Visitors clicking "Sign in" on the public site land here.
+Build the shell + MVP modules described below. The shell must be production-quality. The MVP modules must be demo-quality and end-to-end clickable with realistic seeded data; the deeper agent runtime is real (Claude API), not faked.
+
+0. Non-negotiable principles (apply to every screen)
+
+Senior-led, not seat-filled. Every workspace shows the named Partner and Engagement Lead on the engagement. The portal does not optimize for utilization graphs; it optimizes for partner judgment leverage. No "available bench" view in MVP.
+Agents prepare; humans commit. Every agent action ends in a human "Approve / Edit / Reject" panel with a named decider, timestamp, rationale, and an audit entry. No silent autonomous writes to client folders or external systems.
+Show the work. Every agent run renders a live "Agent activity" stream — sub-agent name, what it's reading, citations pulled, confidence chip, what it's blocked on. The stream is collapsible but never hidden.
+Source-grounded by construction. Agents cite sources for every claim. If a citation is missing, the UI renders a red "unsourced claim" pill and the human must either accept the risk (logged) or send it back. No silent fabrication.
+Reusable IP compounds. Every artifact produced (POV, proposal section, deliverable, prompt) is tagged for reuse and pushed into the Knowledge Atelier. Reuse is one click, with provenance.
+Bilingual-aware. EN is default. The portal does not auto-translate Arabic client documents; instead, when a non-English source is detected, the system labels it and surfaces a "Translate with citation" flow that preserves the original in the audit log.
+Audit trail is a first-class object. Every entity (Opportunity, Engagement, Deliverable, Agent Run) has an immutable audit feed that looks like a system of record, not a debug log. The audit is exportable to PDF for governance/insurance reasons.
+Confidentiality is the default. Client data is isolated per engagement. The cross-engagement Knowledge Atelier only ingests artifacts that the engagement Partner has explicitly marked "share to firm" — never silent.
+
+
+1. Brand / visual system (carry over from the AICo / Maven AI website)
+Use the same Tailwind theme as the live website. Reproduce the exact CSS variables in globals.css:
+css:root {
+  --bg:           #0E1F3D;   /* deep navy */
+  --bg-deep:      #091428;
+  --bg-elevate:   #15294A;
+  --bg-elevate-2: #1D3559;
+  --border:       #243F66;
+  --border-soft:  rgba(255,255,255,0.06);
+  --text:         #F1EEE6;   /* warm cream */
+  --text-mute:    #8FA3C0;
+  --text-faint:   #5E708A;
+  --gold:         #E89E2C;
+  --gold-soft:    #F4BC65;
+  --gold-deep:    #B47817;
+  --success:      #4ADE80;
+  --warn:         #F4BC65;
+  --danger:       #F87171;
+  --grid-line:    rgba(255,255,255,0.025);
+  --shadow:       0 30px 60px -20px rgba(0,0,0,0.5);
+  --radius:       4px;
+  --radius-lg:    8px;
+  --container:    1240px;
+  --ease:         cubic-bezier(0.22, 1, 0.36, 1);
+}
+Fonts (Google Fonts in layout.tsx): Manrope 300–800 body/headings; Fraunces italic for accent words inside headings; JetBrains Mono for eyebrows, audit log, agent telemetry.
+Layout signatures (identical to public site):
+
+12-column faint vertical grid lines as a global background.
+Subtle SVG noise overlay at 4.5% opacity.
+Eyebrow labels: JetBrains Mono uppercase 11px with a 24px gold leading rule.
+Section pattern: eyebrow → headline (clamp 36–64px in app chrome; bigger only on welcome/empty states) → italic accent word in gold → 540px lede with a 2px gold left border.
+Cards: --bg-elevate background, 1px --border, 8px radius, 30/60 shadow.
+Buttons: 999px pill, 14px label, 16/28 padding, gold-outlined hover. Primary = gold fill, secondary = ghost.
+
+Naming: the portal is internally called "The Atelier" (a senior workshop, not a factory floor). The brand "AICo" / "Maven AI" is provisional — store the firm name in a single constant FIRM_NAME so it can be renamed once the final brand lands.
+
+2. Information architecture
+/                                  → Atelier home (employee dashboard)
+/sign-in                           → Login (linked from public site)
+
+/pipeline                          → Opportunity pipeline (all open opps, kanban + table)
+/pipeline/[oppId]                  → Single opportunity workspace (tabs below)
+  ├── /brief                       → Opportunity brief (auto-drafted by Pursuit Scout)
+  ├── /research                    → Account & client research dossier (sources, citations)
+  ├── /pov                         → Point-of-view drafting (POV Studio)
+  ├── /proposal                    → Proposal drafting (Proposal Studio)
+  ├── /meetings                    → Meeting capture, transcripts, follow-ups
+  ├── /artifacts                   → Files attached to this opportunity
+  └── /audit                       → Immutable audit feed
+
+/engagements                       → Active engagements (post-signature)
+/engagements/[engId]               → Engagement workspace (tabs below)
+  ├── /charter                     → Engagement charter, RACI, hypothesis tree
+  ├── /workplan                    → Workstreams, milestones, RAID log
+  ├── /deliverables                → Deliverable register + drafting workspaces
+  ├── /agents                      → Engagement-specific agent runtime
+  ├── /processes                   → Process discovery + agent design canvas
+  ├── /meetings                    → Client meeting log
+  ├── /artifacts                   → Files in this engagement
+  └── /audit                       → Immutable audit feed
+
+/atelier                           → Knowledge Atelier (firm-wide IP)
+  ├── /assets                      → Reusable artifacts (POVs, frameworks, code, prompts)
+  ├── /prompts                     → Prompt library
+  ├── /credentials                 → Anonymized case studies
+  └── /people                      → Skill graph (who knows what)
+
+/agents                            → Agent registry (catalog of all named agents)
+/agents/[agentId]                  → Agent profile (purpose, runs, eval scores)
+
+/settings                          → Personal preferences, MCP connections, model defaults
+/admin                             → Admin: users, roles, tenants, audit, billing (gated)
+
+3. Personas the portal must serve
+The portal must work for these five named personas. Build a persona switcher in the top-right that swaps the seeded data (real auth applies in prod):
+
+The Partner (e.g., Mounir / Gökhan) — owns origination, client relationships, partner-level judgment, go/no-go calls, deliverable sign-off, pricing decisions. Spends 20% in the portal; needs zero-click dashboards and one-click approvals.
+The Engagement Lead (Principal) — runs the engagement day-to-day. Drives the work plan, manages the agent fleet, edits deliverables, owns client comms. Lives in the portal 60% of the day.
+The Subject Matter Lead — pulled in for specific expertise (data architecture, agent design, change management). Drops in/out of multiple engagements; needs fast context loading.
+The AI Engineer — builds custom agents and prototypes for client work. Uses the portal to scaffold projects, push prompts into the Atelier, and run evals.
+The Business Developer / Pursuit Lead — owns the pipeline, qualifies opportunities, drives proposal production. Lives in /pipeline.
+
+Each persona has a tailored Atelier Home (see §5).
+
+4. The PLM model the portal enforces
+The firm runs a 6-stage Project Lifecycle (PLM) with explicit gates. Every opportunity and engagement carries a plm_stage field. The UI surfaces the current stage as a gold-pill badge with a tooltip showing the gate criteria.
+#StageEntry conditionGate criteria to advanceSystem of record1IdentifyLead exists (account known, decision-maker hypothesized)Partner confirms strategic fit; account research completeOpportunity2ShapeIdentify gate passedClient problem articulated; POV draft exists; budget hypothesis loggedOpportunity3PursueShape gate passed; client meeting scheduled or RFP receivedProposal drafted; pricing approved; Partner-signed go/no-go for submissionOpportunity4MobilizeEngagement signed (LOI / SOW)Charter approved by client; team named; kickoff held; RAID baseline setEngagement5DeliverMobilize gate passedAll deliverables accepted; value case quantified; client reference secured (or attempted)Engagement6CompoundDelivery closedCase study published internally; reusable IP harvested; client renewal hypothesis loggedEngagement (closed)
+A "Qualify" decision (5Cs — Client, Competition, Capability, Capacity, Contract) must be logged at the Shape→Pursue gate. The system blocks advance until the Partner records a Qualify verdict and rationale.
+The PLM is intentionally hybrid: stage-gated enough for governance and pipeline hygiene, but lean enough that a single Partner + Principal can run an opportunity from Identify to Mobilize in days, not months. This matches AICo's "three-day scope, three-week prototype, 90-day MVP" promise.
+
+5. The Atelier Home (employee dashboard)
+The landing page after sign-in. Renders three persona-shaped panes:
+Pane A — "What needs me today"
+A prioritized list of items that require a human decision from this user in the next 24h. Examples:
+
+"Approve POV draft for Tasama before 4pm" (gold pill: HIGH)
+"Sign off on go/no-go for STC RFP"
+"Review Engagement Charter v2 — Aldrees"
+
+Each row has one-click "Open" and a 30-word summary auto-generated by the Triage Agent. The Triage Agent runs every 15 minutes against the user's open assignments and re-prioritizes.
+Pane B — "Pipeline & engagements at a glance"
+
+Pipeline: count by PLM stage, total weighted value (probability × deal size), aged opps >30 days in same stage flagged red.
+Engagements: active count, deliverables due this week, RAID items at AMBER/RED.
+
+Pane C — "From the Atelier"
+A feed of newly published reusable assets (POVs, prompts, frameworks) with provenance and a one-click "Pull into current workspace" action. Powered by the Atelier Curator agent.
+A persistent right rail on every page renders the Agent Activity Stream (see §7).
+
+6. Pipeline & Opportunity workspace (/pipeline/[oppId])
+The most-used module after login. An opportunity is the unit of pre-contract work.
+6.1 Opportunity data model
+tsOpportunity {
+  id, slug, name,
+  account_id,                     // FK → Account
+  buyer_persona,                  // 'CEO' | 'COO' | 'CIO' | 'CDO' | 'CXO' | 'business_head'
+  offering_anchor,                // 'agentic_ai' | 'legacy_modernization' | 'data_foundations' | 'ai_product'
+  plm_stage,                      // 'identify' | 'shape' | 'pursue' | 'won' | 'lost' | 'no_go'
+  partner_owner_id,
+  engagement_lead_id,
+  deal_size_hypothesis,           // numeric, USD
+  probability_pct,                // numeric
+  qualify_5c,                     // jsonb: { client, competition, capability, capacity, contract }
+  go_no_go_decision,              // null | 'go' | 'no_go', with rationale + decider + ts
+  next_milestone,                 // text + date
+  source_lead,                    // 'warm_intro' | 'rfp' | 'referral' | 'outbound' | 'other'
+  created_at, updated_at,
+  org_id                          // for multi-tenant RLS
+}
+6.2 Tabs and what each does
+/brief — A one-page brief that is auto-drafted by the Pursuit Scout agent (see §8) the moment an opportunity is created. The brief includes: client snapshot, decision-maker map (with LinkedIn/Wikipedia citations), known initiatives, AICo's hypothesis on the angle, comparable engagements from the Atelier, risks, recommended next move. Human edits with track-changes; agent re-runs on demand.
+/research — A structured dossier with citation-bound facts. Each fact is a row: claim | source | retrieved_at | confidence | included_in_brief? | included_in_pov?. Sources are clickable. Facts can be promoted into the brief, the POV, or the proposal — promotion carries the citation.
+/pov — POV Studio (see §8 — the POV Author agent). Drafts a 6–10 page point-of-view document in either HTML (Tasama-style, the live web POV pattern) or DOCX. The HTML POV uses the same brand system; DOCX uses the AICo report template. Versioned. Side-by-side diff between versions.
+/proposal — Proposal Studio. Section-by-section drafting, each section owned by a sub-agent (Context, Approach, Workplan, Team, Pricing, Case Studies, Terms). Sections marked GREEN/AMBER/RED for completeness. Composer assembles the final DOCX/PDF.
+/meetings — Meeting log. Each meeting row: title, date, attendees, transcript (uploaded or captured via the Meeting Scribe), summary, decisions, action items, requirements identified, follow-ups owed. The Meeting Scribe agent processes uploaded transcripts/audio and produces all of the above; the human approves before any of it is written to the engagement record.
+/artifacts — File attachments. Box / Replit Object Storage connector. Drag-and-drop. Each artifact gets an AI-generated 40-word abstract (Atelier Curator) and is tagged.
+/audit — Append-only event log: every agent run, every human action, every status change.
+6.3 The opportunity workspace toolbar
+A gold-bordered toolbar at the top of the opportunity workspace surfaces five primary actions, each backed by an agent:
+
+Draft a POV → POV Author
+Build the proposal → Proposal Composer
+Capture this meeting → Meeting Scribe
+Research this account → Pursuit Scout (deeper run)
+Prototype this → Prototype Forge (generates a Replit prompt + repo scaffold for a client prototype)
+
+Each button opens a "prompt sheet" — a structured form (not a free chat) that captures the parameters the agent needs (objective, audience, length, must-include themes, must-cite sources, deadline). The structured form prevents shallow prompting and produces consistent agent input. A "raw prompt" advanced mode is hidden behind a toggle for power users.
+
+7. Engagement workspace (/engagements/[engId])
+Engagements are post-signature. They inherit all data from the parent opportunity and add delivery-side structure.
+7.1 Engagement data model
+tsEngagement {
+  id, slug, name,
+  opportunity_id,                 // FK
+  client_id,
+  plm_stage,                      // 'mobilize' | 'deliver' | 'compound' | 'closed'
+  partner_owner_id, engagement_lead_id,
+  charter,                        // jsonb: objectives, scope, out-of-scope, success metrics
+  workstreams,                    // jsonb[] of {name, lead, milestones, status}
+  raid_items,                     // FK → RaidItem[]
+  hypothesis_tree,                // jsonb tree of issues & hypotheses
+  value_case,                     // jsonb: baseline, target, realized, methodology
+  start_date, planned_end_date,
+  ...audit, org_id
+}
+7.2 Tabs
+
+/charter — Engagement charter. Drafted by the Charter Architect agent from the won proposal + kickoff transcript. Lays out: objectives, scope, out-of-scope, governance, success metrics, value hypothesis. The Charter Architect proposes a hypothesis tree (MECE issue decomposition) that becomes the spine of the work plan.
+/workplan — Workstreams, milestones, RAID log. Kanban + Gantt views. Each milestone has a deliverable. Each RAID item has an owner, severity, target date.
+/deliverables — Deliverable register. Click into any deliverable opens a drafting workspace identical to POV/Proposal Studio. Deliverable types: Diagnostic, Design, Build artifact, Adoption asset, Decision memo, Final readout.
+/agents — Engagement-specific agent runtime (see §8). Spin up custom agents bound to this engagement's data only — e.g., a "Tasama policy interpreter" agent trained on the client's policy library. These never leak to other engagements unless explicitly promoted to the Atelier.
+/processes — Process discovery + agent design canvas (see §8 — the Agent Architect). Lets the team draw the current process (BPMN-lite), mark agentifiable steps, and auto-generate high-level agent designs.
+/meetings — Client meeting log, same as opportunity meetings.
+/artifacts — Files.
+/audit — Immutable feed.
+
+7.3 Quality gates inside delivery
+Two automated gate reviews trigger on the deliverable workspace:
+
+Hypothesis check — Before a deliverable is sent to the client, the Synthesis Critic agent reads it against the engagement hypothesis tree and flags claims that lack evidence, sections that drift off-hypothesis, and pyramid-principle violations (governing thought missing, MECE breaks).
+Partner review — A Partner must explicitly approve every external client deliverable. The system blocks "Send to client" until a named Partner has clicked Approve with a 1-line rationale. This is the human counterpart to HAPA — call it the Partner Authority Lock.
+
+
+8. The agent runtime (the heart of the portal)
+8.1 Architecture
+A single typed agent framework. Every named agent is a registered class in /lib/agents/ with this shape:
+tsinterface Agent {
+  id: string;                           // e.g., 'pursuit_scout'
+  name: string;                         // 'Pursuit Scout'
+  purpose: string;                      // one-line
+  inputs: AgentInputSchema;             // Zod schema
+  outputs: AgentOutputSchema;           // Zod schema
+  tools: ToolRef[];                     // ['web_search','box.read','knowledge.search', ...]
+  systemPrompt: string;                 // versioned in /prompts/
+  model: 'claude-sonnet-4-6' | 'claude-haiku-4-5' | 'claude-opus-4-6';
+  guardrails: GuardrailRef[];           // ['must_cite_sources','no_pii_to_third_party', ...]
+  humanCheckpoints: CheckpointSpec[];   // where the human MUST approve before continuing
+  evals: EvalRef[];                     // tests in /evals/agents/[id]/
+}
+Agent runs are first-class objects (AgentRun) with: agent_id, triggered_by_user_id, engagement_id or opportunity_id, inputs, tool_calls[], intermediate_steps[], output, human_decisions[], status, cost_usd, duration_ms.
+The Agent Activity Stream (persistent right rail) is a live view of the user's active AgentRuns. Each step renders as a card with: sub-agent name, tool call, evidence/citations pulled, confidence chip (GREEN/AMBER/RED), status. Clicking a step opens the evidence drawer (full source + retrieved text + retrieved time).
+8.2 Tools / MCP connectors the agents must support (MVP stubs OK)
+Implement working integrations for the starred ones in MVP; the rest can be typed stubs with realistic mock responses behind a MOCK_MODE=true env flag.
+
+★ web_search — Anthropic-supplied web search.
+★ web_fetch — fetch a URL.
+★ knowledge.search — vector search across the firm Atelier (Postgres pgvector).
+★ knowledge.write — write an asset to the Atelier (requires Partner approval).
+★ file.read / file.write — Replit Object Storage.
+★ transcribe.audio — whisper-style transcription (use OpenAI Whisper or Anthropic-equivalent; mocked first).
+★ docx.generate / html.generate / pdf.generate — render structured content into branded files using server-side templates.
+★ bpmn.render — render a process diagram from JSON (use Mermaid in MVP, BPMN.io stub for v2).
+box.read / box.write — Box API (env: BOX_TOKEN).
+linkedin.lookup — LinkedIn person/company lookup (stub; v2 connector).
+crm.opportunity_sync — HubSpot/Salesforce two-way (stub; v2).
+replit.scaffold — generate a Replit prompt + repo scaffold for a client prototype.
+slack.notify — post to an internal channel (stub).
+mcp.connect — generic MCP client allowing any registered MCP server to be wired in.
+
+8.3 Agent catalog (full firm-wide list — 22 agents)
+GroupAgentStagePurpose (one line)PipelinePipeline TriagerIdentifyWatches inbound leads + Mounir's calendar, files them into the right account and prioritizes Pane A.PipelinePursuit Scout★Identify, ShapeResearches the client, decision-maker map, recent news, comparable AICo work; produces the opportunity brief.PipelineQualifierShape→Pursue gateRuns a structured 5C qualification interview with the Partner and records the verdict.POV/ProposalPOV Author★ShapeDrafts a 6–10 page POV (HTML or DOCX) for a named client/buyer.POV/ProposalProposal Composer★PursueSection-by-section proposal drafting; orchestrates sub-agents below.POV/ProposalPricing AnalystPursueBuilds the price model from team mix, day rates, duration; compares to the pricing wedge target margin.POV/ProposalCase Study PickerPursuePulls 3 most-relevant credentials from the Atelier; produces a 1-pager per credential.POV/ProposalCompliance ReviewerPursueChecks proposal against the RFP requirements matrix; flags non-compliance.MeetingsMeeting Scribe★AllTranscribes, summarizes, extracts decisions, action items, requirements, and risks from a recorded meeting.MeetingsPre-Meeting PrepAll24h before a meeting, drafts a 1-page brief: who is in the room, what was last discussed, recommended openings, anticipated objections.DeliveryCharter Architect★MobilizeFrom the won proposal + kickoff transcript, drafts the charter and a hypothesis tree.DeliveryWorkplan PlannerMobilizeGenerates workstreams, milestones, RACI; matches deliverables to the value case.DeliveryRAID WatchdogDeliverWatches the engagement for new risks/issues from meetings, agent runs, and missed milestones.DeliveryAgent Architect★DeliverFrom a captured client process, identifies agentifiable steps and produces high-level agent designs + BPMN diagrams.DeliveryPrototype Forge★DeliverGenerates a Replit prompt + repo scaffold to stand up a client-facing prototype in days (the DGE prompt pattern, generalized).DeliverySynthesis Critic★DeliverReviews a deliverable for evidence gaps, pyramid-principle violations, and hypothesis drift before client release.DeliveryValue Case TrackerDeliver, CompoundTracks the engagement value case vs. baseline; produces the monthly value readout.AtelierAtelier CuratorCompound, cross-cuttingReviews every artifact and proposes which to harvest into the Atelier; tags, abstracts, links provenance.AtelierKnowledge ConciergeAllQ&A across the Atelier — answer "have we ever done X" with citations to prior engagements.AtelierPrompt LibrarianAllCurates the prompt library; suggests new prompts when patterns repeat.AtelierSkill MapperAllMaintains the firm skill graph (who knows what, who has done what).OpsAudit SentinelAllTamper-evident audit log; emits anomalies (e.g., agent ran without a human checkpoint).
+Build the ★ starred 8 to full depth in MVP (see §9 deep specs). Implement the rest as registered stubs with placeholder UIs so the registry feels complete.
+8.4 Detailed specs — the MVP 8
+Each agent below ships with: a Zod input schema, a Zod output schema, a versioned system prompt in /prompts/[agent_id]/v1.md, a guardrail set, defined human checkpoints, and at least 5 evals.
+8.4.1 Pursuit Scout
+
+Purpose: Produce a 1-page opportunity brief for a named account + buyer that a Partner could read in 90 seconds and decide whether to pursue.
+Inputs: { account_name, buyer_name?, buyer_role?, hypothesized_offering, depth: 'quick'|'deep' }
+Output: { executive_summary, decision_maker_map[], recent_initiatives[], comparable_aico_work[], hypothesis, risks[], recommended_next_move, sources[] } — all claims tied to a sources[].id.
+Tools: web_search, web_fetch, knowledge.search, linkedin.lookup (stub).
+Model: Sonnet 4.6 for deep, Haiku 4.5 for quick.
+Guardrails: Every claim must cite at least one source; if a source is older than 18 months it is flagged AMBER; PII about decision-makers limited to public role + recent public statements.
+Human checkpoints: Brief is rendered as a draft; Partner clicks Approve before brief becomes the opportunity's official brief.
+Evals: seed accounts (Tasama, Dubai Municipality, STC) with golden briefs; eval scores citation precision, hallucination rate, and Partner-acceptance rate.
+
+8.4.2 POV Author
+
+Purpose: Draft a client-ready POV (the Tasama/Dogan-style HTML one-pager, or a DOCX equivalent) for a named buyer that articulates AICo's view on the buyer's problem and the move AICo recommends.
+Inputs: { opportunity_id, audience: { name, role, org }, format: 'html'|'docx', length_pages: 4|6|8|10, must_include_themes[], must_cite_sources[], banned_topics[], deadline }
+Output: { rendered_file_url, outline, sections[], citations[], reusable_blocks_suggested[] }. The HTML output uses the same brand system as the public site and the Tasama POV; the DOCX uses the AICo report template.
+Tools: knowledge.search (pull comparable POVs), web_search (current evidence), html.generate, docx.generate.
+Model: Sonnet 4.6 draft → Opus 4.6 polish pass on demand (toggle in the prompt sheet).
+Sub-agents (chained): Outline Designer → Section Writers (one per section, parallel) → Citation Binder → Brand Stylist → Synthesis Critic (pre-release review).
+Guardrails: Pyramid-principle structure (governing thought up top); every section closes with a 1-line "so what"; no claim without a citation; client-name handling rules (don't promise what's not in the proposal).
+Human checkpoints: (1) Approve outline before writing; (2) Approve final draft before "Save as official POV." Human edits are tracked.
+Evals: golden POV set (Tasama, Dogan, DGE Effortless), measure brand-compliance score, citation-coverage %, partner-acceptance rate, time-to-first-readable-draft.
+
+8.4.3 Proposal Composer
+
+Purpose: From a defined opportunity + RFP (if any), produce a client-ready proposal DOCX/PDF with the AICo proposal sections.
+Inputs: { opportunity_id, rfp_file_id?, sections_required[], team_proposed[], pricing_intent, deadline }
+Output: { proposal_file_url, sections[]: { id, name, owner_agent, status, content, citations }, pricing_model, win_themes[], compliance_matrix }
+Sub-agents: Context Writer, Approach Writer, Workplan Writer, Team & Bios Writer, Case Study Picker, Pricing Analyst, Terms & Risk Writer, Compliance Reviewer.
+Tools: knowledge.search, web_search, file.read (RFP), docx.generate, pdf.generate.
+Model: Sonnet 4.6 throughout; Opus 4.6 for the Approach section on demand.
+Guardrails: Every promise made in the proposal must map to a deliverable in the workplan; pricing must hit the configured target margin or trigger a Partner override; compliance matrix must be 100% green or rendered red.
+Human checkpoints: (1) Section assignments confirmed; (2) Pricing approved by Partner; (3) Final read by Partner; (4) Explicit "Send to client" click on the submission action.
+Evals: golden proposals (Tasama BPO, DGE Effortless), measure compliance-matrix accuracy, win-theme coverage, partner-acceptance rate.
+
+8.4.4 Meeting Scribe
+
+Purpose: Turn a client meeting (uploaded audio/video, or a paste-in transcript, or a live bot recording — last option v2) into structured engagement memory.
+Inputs: { source: { type: 'upload'|'paste'|'live_bot', file_id?, text?, meeting_id? }, meeting_metadata: { title, attendees, date, opportunity_or_engagement_id }, scribe_mode: 'discovery'|'workshop'|'steering'|'kickoff' }
+Output: { transcript_clean, summary, decisions[], action_items[]: { owner, due, description }, requirements_captured[], risks_raised[], topics_to_research[], suggested_followups[], suggested_prototype_brief? }
+Sub-agents: Transcript Cleaner, Summarizer, Decision Extractor, Requirement Extractor, Risk Extractor, Follow-up Composer, Prototype Brief Drafter (only fires in discovery mode when a viable prototype is implied).
+Tools: transcribe.audio, knowledge.search (look up adjacent prior context), web_search (best-practice references for the topics raised), replit.scaffold (only when prototype brief is generated — drafts a Replit prompt, does NOT send it).
+Model: Haiku 4.5 for transcript clean + extraction; Sonnet 4.6 for synthesis and prototype brief.
+Guardrails: Speaker attribution must be preserved or marked "unclear"; client-confidential terms detected via a configurable redaction list are flagged before any cross-engagement write; auto-research is scoped to the meeting's topics only.
+Human checkpoints: (1) Summary + action items reviewed before they are pushed to the engagement record; (2) Prototype brief, if generated, is presented as a draft for explicit "Generate prototype" action.
+Evals: seeded meetings (Tasama discovery, Aldrees BOQ workshop), measure action-item recall, decision recall, no-hallucination rate.
+
+8.4.5 Charter Architect
+
+Purpose: Within 24h of engagement signature, draft the engagement charter and a hypothesis tree.
+Inputs: { engagement_id, won_proposal_file_id, kickoff_transcript_id? }
+Output: { charter: { objectives, scope, out_of_scope, success_metrics, governance, value_hypothesis }, hypothesis_tree: { rootIssue, branches[]: { hypothesis, sub_hypotheses[], evidence_required[] } }, raid_baseline[], proposed_workstreams[] }
+Sub-agents: Objective Distiller, Scope Boundarist, Hypothesis Tree Builder (MECE check), RAID Baseliner.
+Tools: knowledge.search (comparable charters), file.read.
+Model: Sonnet 4.6; Opus 4.6 for the hypothesis tree polish on demand.
+Guardrails: Every objective must be paired with a measurable success metric; scope and out-of-scope must be MECE; hypothesis tree limited to 3 levels deep by default (configurable).
+Human checkpoints: Engagement Lead reviews; Partner signs off before charter goes to the client.
+Evals: golden charters; measure MECE-violations-flagged, objective↔metric pairing rate, partner-acceptance rate.
+
+8.4.6 Agent Architect
+
+Purpose: From a captured process (text description, meeting transcript, uploaded BPMN, or hand-drawn flowchart photo), produce: (a) a clean process diagram, (b) an "agentifiable" annotation per step, (c) a set of candidate agent designs with their tools, guardrails, and human checkpoints.
+Inputs: { source: text|file|image|transcript, scope_hint, depth: 'sketch'|'design' }
+Output: { process_diagram_mermaid, steps[]: { id, name, current_owner, agentifiable: 'yes'|'partial'|'no', rationale, candidate_agent_id? }, candidate_agents[]: { id, name, purpose, inputs, outputs, tools, guardrails, human_checkpoints } }
+Sub-agents: Process Reader, Step Classifier, Agentifiability Judge, Agent Designer.
+Tools: bpmn.render (Mermaid in MVP), knowledge.search (pull comparable agent designs from the Atelier).
+Model: Sonnet 4.6.
+Guardrails: Agentifiability classification must include rationale; no candidate agent without a human checkpoint defined; high-risk agents (financial commitment, customer communication, irreversible action) flagged for Partner attention.
+Human checkpoints: Partner / Engagement Lead reviews each candidate agent design before it is added to the engagement's agent runtime.
+Evals: seeded processes (Aldrees BOQ, Tasama shared services intake, DGE service catalog), measure agentifiability classification accuracy, agent-design completeness, partner-acceptance.
+
+8.4.7 Prototype Forge
+
+Purpose: When a discovery / workshop produces a viable prototype idea, generate a Replit-ready build prompt (the same pattern as the DGE Effortless prompt) and optionally scaffold the repo.
+Inputs: { engagement_or_opportunity_id, prototype_brief: { name, audience, problem, agentic_thesis, demos[], constraints, brand_overrides? }, deliverable_target_date }
+Output: { replit_prompt_md, repo_scaffold_url?, build_plan, demo_storyboard }
+Sub-agents: Architecture Drafter, Demo Storyboarder, Brand Translator (inherits the AICo brand by default; can override), Prompt Composer.
+Tools: knowledge.search (pull prior prototype prompts), replit.scaffold (stub in MVP — generates the markdown only).
+Model: Sonnet 4.6 → Opus 4.6 polish.
+Guardrails: Generated prompts must include the AICo non-negotiables block (human authority sovereign; show the work; audit trail; bilingual-aware; watermark synthetic data). No real client data referenced in the generated prompt unless the engagement Partner has approved.
+Human checkpoints: Engagement Lead approves the brief before generation; Partner approves the generated prompt before it goes to Replit.
+Evals: golden prompts (DGE Effortless, Tasama BPO concept), measure structural completeness, brand-compliance, no-leak rate.
+
+8.4.8 Synthesis Critic
+
+Purpose: Quality-gate every external deliverable before client release. The agentic equivalent of a peer / partner review pass.
+Inputs: { deliverable_id, hypothesis_tree_id?, audience }
+Output: { issues[]: { type, severity, location, suggestion }, pyramid_score, evidence_coverage_pct, off_hypothesis_sections[], readiness: 'green'|'amber'|'red' }
+Tools: knowledge.search (comparable past readouts), file.read.
+Model: Opus 4.6 (high-stakes, low-volume).
+Guardrails: Critic does not edit; it only flags. Edits require a human or an explicit re-run of the originating writer agent.
+Human checkpoints: Engagement Lead reviews the issues; "Send to client" is blocked until readiness is GREEN or a Partner has logged an override rationale.
+Evals: golden deliverables with seeded defects; measure precision/recall of issue detection, pyramid-score correlation with partner judgment.
+
+8.5 Prompt library structure
+Every agent's system prompt lives at /prompts/[agent_id]/v[n].md. Each prompt has YAML front matter: agent_id, version, author, created, model, eval_set_id, status (draft|active|deprecated). Activating a new version requires the eval suite to pass at or above the current active version's score.
+A prompt_library table indexes everything and is the source for the /atelier/prompts UI. Every prompt is annotated with: when it should fire, what it produces, who owns it. A "Prompt Librarian" agent watches for prompt patterns repeating across engagements and proposes new library entries.
+
+9. MVP scope (what ships in v1 — build all of this)
+9.1 Modules in MVP
+
+Auth + shell + Atelier Home (Pane A/B/C, persona switcher, agent activity stream).
+Pipeline list + opportunity workspace, with tabs: /brief, /research, /pov, /meetings, /artifacts, /audit. (Proposal tab is stub in MVP — Proposal Composer is implemented but the full sub-agent fan-out is v1; engagements tab below picks up the heavy delivery side.)
+Engagement list + engagement workspace, with tabs: /charter, /deliverables (one drafting flow end-to-end), /processes, /meetings, /artifacts, /audit. /workplan and /agents ship as functional skeletons with seed data; full RAID watchdog is v2.
+Agent runtime + registry with the 8 ★ starred agents fully implemented.
+Knowledge Atelier — assets + prompts + Knowledge Concierge agent. Credentials and skill graph are stubs in MVP.
+Audit trail on every entity.
+
+9.2 Seed data the build must include
+Pre-seed Postgres with the firm's real working context (synthetic where needed, anonymized where not):
+
+Accounts: Tasama, Dubai Municipality, DGE, Tahakom, NHC, STC, Aldrees. (From cowork_project_context.md and the workspace folder.)
+Opportunities: at least one per account in varying PLM stages so the kanban looks realistic on first load.
+Engagements: one fully-populated engagement (Tasama Agentic BPO) seeded with charter, hypothesis tree, two deliverables, three meetings, and a process discovery sketch.
+Atelier assets: the live Tasama POV HTML, the Maven AI website HTML (as a brand reference), the DGE Effortless replit prompt (as a prototype prompt reference), the Aldrees BOQ learning DOCX (as a delivery learning).
+Prompts: seeded prompts for the 8 ★ agents.
+Personas: five named user accounts (one per persona).
+
+9.3 Acceptance criteria for MVP (must all be true to ship v1)
+A reviewer should be able to:
+
+Sign in and land on the Atelier Home, see a Pane A populated with at least 3 prioritized items.
+Create a new opportunity from a single field ("client name + 1-line context") and watch the Pursuit Scout populate the brief within 60s, with citations.
+From an opportunity, click "Draft a POV", complete the structured prompt sheet, and receive a brand-correct HTML POV draft with at least 4 sections, each citation-bound, in under 5 minutes wall-clock.
+Upload a 30-minute meeting recording to an engagement, watch the Meeting Scribe produce a transcript + decisions + action items + 3 captured requirements; click Approve and see the action items land on the engagement workplan skeleton.
+From the engagement, open the /processes tab, paste a process description, and receive a Mermaid process diagram with agentifiability annotations on each step + at least 3 candidate agent designs.
+From an engagement deliverable, click "Send to client" and be blocked until a named Partner clicks Approve, with the Synthesis Critic having pre-flagged at least one issue.
+From the Atelier, search "Tasama" and find the seeded POV + a Charter, with provenance.
+Every action above produced a row in the entity's /audit tab.
+
+9.4 Non-functional requirements
+
+Performance: First meaningful paint < 1.5s; agent first token < 4s for Haiku-backed agents, < 8s for Sonnet, < 15s for Opus; long-running agent runs stream incrementally and are resumable.
+Auth: Replit Auth or Clerk; OAuth (Google + Microsoft) ready; per-user MFA; per-role permissions (Partner / Lead / SME / Engineer / BD).
+Tenancy: All tables carry org_id; row-level security enforced in Postgres so the codebase is ready to host a future "Client Portal" tenant.
+Confidentiality: Engagement data is partitioned. Cross-engagement reads require an Atelier promotion record. The audit log records every cross-engagement read.
+Cost controls: Per-user per-day token budget; per-agent token budget; admin can disable Opus. Cost is rendered on every agent run card.
+Observability: Every agent run logged with model, tokens in/out, cost, duration, tool calls. Errors surface as user-facing cards with retry.
+Compliance: Data residency configurable (Postgres region); PII-redaction pass before any cross-engagement write; export-to-PDF of the audit log for any entity.
+Accessibility: WCAG 2.2 AA on the shell; keyboard-navigable agent activity stream; color contrast respected against the deep navy.
+
+9.5 Out of scope for MVP (explicitly defer)
+
+Live bot that joins Zoom/Teams (Meeting Scribe handles uploaded recordings only).
+Full Salesforce / HubSpot two-way sync (read stub only).
+Multi-tenancy as a paying product (the codebase is ready; the billing/admin product is not in MVP).
+Mobile native — responsive web only.
+Workplan Gantt / resource leveling / utilization analytics.
+AR/EN auto-translation of client documents (we surface the flow, not the translation).
+The 14 non-starred agents — registered as catalog entries, no functional implementation.
+
+
+10. Data model (high-level, MVP)
+A single Postgres schema with the following tables (Drizzle). All tables carry id (uuid pk), org_id, created_at, updated_at, created_by_user_id, and standard soft-delete.
+
+users (id, email, name, role, persona, avatar_url)
+accounts (id, name, country, sector, notes)
+opportunities (per §6.1)
+engagements (per §7.1)
+deliverables (id, engagement_id, type, name, status, hypothesis_id, current_version_id)
+deliverable_versions (id, deliverable_id, body, format, citations jsonb, synthesis_critic_report jsonb)
+meetings (id, opp_or_eng_id, mode, kind, date, attendees, transcript_id, summary, decisions jsonb, action_items jsonb)
+transcripts (id, source_file_id, cleaned_text, speaker_map)
+artifacts (id, parent_type, parent_id, file_url, title, abstract, tags[], source, atelier_promoted bool)
+atelier_assets (id, kind, title, abstract, body_or_file, provenance, tags[])
+prompts (id, agent_id, version, body, status, eval_score)
+agents (id, name, purpose, model, status, version)
+agent_runs (id, agent_id, triggered_by, target_type, target_id, inputs jsonb, output jsonb, steps jsonb, tool_calls jsonb, cost_usd, duration_ms, status, human_decisions jsonb)
+audit_events (id, entity_type, entity_id, actor_type, actor_id, action, payload jsonb, ts) — append-only, no updates allowed
+raid_items (id, engagement_id, kind, severity, owner_id, status, due_date, description)
+hypothesis_trees (id, engagement_id, root jsonb)
+processes (id, engagement_id, diagram, steps jsonb)
+agent_designs (id, engagement_id, process_step_id, design jsonb, status)
+notifications (id, user_id, kind, payload jsonb, read_at)
+
+Row-level security (org_id and, where relevant, engagement_id ACL) enforced in Postgres policies, not just in app code.
+
+11. Cross-cutting UX patterns
+
+Prompt sheets, not chat boxes. Every agent action opens a structured form with the inputs the agent needs. A "raw prompt" advanced toggle is one click away but hidden by default.
+Approve / Edit / Reject triad on every agent output, with the human's name and rationale captured.
+Citation-first surfaces. Any claim a user can act on shows a citation badge. Clicking opens the evidence drawer.
+Diff-by-default. Every deliverable version is rendered as a diff against the prior version.
+Provenance pills on Atelier assets — "Used in Tasama 2026" etc. — never anonymous reuse.
+One-click "Pull into current workspace" on every Atelier asset.
+Agent activity stream is the same component everywhere — collapse, but never disappear.
+
+
+12. Build order (suggested for the Replit agent)
+
+Auth + shell + brand system + persona switcher + nav.
+Postgres schema + Drizzle + seed data.
+Agent runtime framework (Agent interface, AgentRun lifecycle, activity stream component).
+Opportunity workspace shell + /brief + Pursuit Scout.
+POV Studio + POV Author.
+Meeting Scribe + meeting tab.
+Engagement workspace shell + Charter Architect.
+Deliverable drafting flow + Synthesis Critic + Partner Authority Lock.
+Process discovery + Agent Architect.
+Prototype Forge.
+Atelier shell + Knowledge Concierge + Atelier Curator (basic).
+Audit feed everywhere.
+Acceptance-criteria walkthrough; ship.
+
+
+13. Visual reference — what the home screen should feel like
+Pseudo-wireframe (top to bottom, deep navy canvas, gold accents):
+┌─────────────────────────────────────────────────────────────────────────┐
+│ AICO · THE ATELIER                              [Mounir Ariss · Partner ▾] │  ← top nav, JetBrains Mono brand mark
+├─────────────────────────────────────────────────────────────────────────┤
+│ EYEBROW: 12 MAY 2026 · TUESDAY                                          │
+│                                                                         │
+│ Good morning, Mounir.                                                   │
+│ Here's what *needs you* today.                              ← Fraunces italic accent  │
+│ ──┃ 4 items waiting for your approval. 2 deliverables move today.       │
+│                                                                         │
+│ ┌─ PANE A — What needs me ─────────────┐  ┌─ PANE B — At a glance ───┐ │
+│ │ ◆ Approve POV — Tasama  · HIGH       │  │  PIPELINE                │ │
+│ │ ◆ Sign go/no-go — STC RFP            │  │   Identify: 4            │ │
+│ │ ◆ Review charter v2 — Aldrees        │  │   Shape:    3            │ │
+│ │ ◆ Send PRT to Dubai Muni             │  │   Pursue:   2  ($1.4M)   │ │
+│ └──────────────────────────────────────┘  │  ENGAGEMENTS             │ │
+│                                            │   Active: 3              │ │
+│ ┌─ PANE C — From the Atelier ────────────┐│   At risk: 1 (AMBER)     │ │
+│ │ ‣ New POV pattern — "spec-from-legacy" ││                          │ │
+│ │ ‣ Prompt: Diagnostic Memo v3           ││                          │ │
+│ │ ‣ Case study — Aldrees BOQ learnings   ││                          │ │
+│ └────────────────────────────────────────┘└──────────────────────────┘ │
+│                                                                         │
+│ AGENT ACTIVITY STREAM (right rail, collapsible)                         │
+│  ▸ Pursuit Scout · scanning Tahakom news — 12 sources                   │
+│  ▸ Meeting Scribe · transcribing Aldrees workshop — 41% complete        │
+└─────────────────────────────────────────────────────────────────────────┘
+Render this exact pattern as the home page. The two-pane + right-rail layout is the dominant pattern across the app.
+
+14. Where the public site links into the portal
+On the public AICo / Maven AI website, the existing nav already shows a small placeholder "Sign in" CTA. Wire it to /sign-in on this portal. The post-sign-in redirect lands on / (Atelier Home).
+Add a second link from the public site footer — "For employees" — that points to the same /sign-in.
+Cookies / session domain should be configured so the public site and the portal can share an authenticated session if Replit hosts both under the same parent domain (*.aico.ai once branded; *.replit.dev while in dev).
+
+15. Open decisions for the founder (do not implement; surface as TODO comments)
+
+Final firm name (the constant FIRM_NAME is the only place to change it).
+Whether the portal hosts a client-side view in v2 (engagement-specific guest access) — design now so v2 is cheap.
+Box vs. Replit Object Storage as the canonical file store — MVP supports both; final choice is a Partner decision.
+Whether AR is in-scope for client-facing outputs in v2 (MVP: UI chrome only).
+Pricing of the agent-run cost — internal cost-only in MVP; client-billable agent-runs is a v2 commercial conversation.
+
+
+16. v2 backlog (do NOT implement now — listed so the agent does not silently scope-creep)
+
+Live meeting bot (Zoom / Teams / Google Meet) — replaces upload pattern.
+Full Salesforce / HubSpot two-way sync.
+Workplan Gantt + resource leveling + utilization views.
+Client Portal tenant — engagement-specific guest access for clients.
+Eval suite UI + auto-canary for new prompt versions.
+AR-language deliverables (full bilingual outputs).
+Procurement-grade RFP intake (the inverse of proposal — supplier evaluation).
+Compliance pack — SOC2-ready evidence binder generated from the audit log.
+Embedded marketplace of client-facing prototypes (link to the DGE-style standard).
+Skill graph + bench planning (only once the firm has > 15 staff).
+
+
+17. Reading list the agent should consult before starting
+Pinned in /seed/references/:
+
+maven-ai-website.html — brand reference, voice reference, layout reference. Mirror these patterns.
+Tasama_AICo_Business_Case.html — the deliverable pattern for HTML POVs.
+replit-prompt-dge-effortless-agents.md — the deliverable pattern for prototype-build prompts.
+cowork_project_context.md — firm positioning, partner structure, account list.
+
+Do not invent positioning or terminology. Mirror the language in these files (e.g., "From AI ambition to AI in production", "agents that own outcomes", "senior delivery, no bench-warming", "three-day scope, three-week prototype, 90-day MVP", "value case at the bottom, adoption at the top").
+
+18. One-paragraph north star (paste into the agent's first system prompt)
+
+AICo is a senior-led, agentic-native AI advisory and engineering firm in the GCC. The Atelier is the portal where every Partner, Principal, and Engineer runs the full project lifecycle — from spotting an opportunity to harvesting reusable IP after delivery — with named AI agents preparing the work at every step. Humans always decide; agents prepare, draft, research, review. The portal must feel like a senior workshop, not a factory floor. Quality, citations, and partner judgment are first-class. Reuse compounds. The brand is deep navy and gold, the voice is confident and commercial, and every deliverable looks like it was made by a partner — because it was, with leverage.
+
