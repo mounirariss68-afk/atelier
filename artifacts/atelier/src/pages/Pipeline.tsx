@@ -226,6 +226,15 @@ export default function Pipeline() {
                   </PillButton>
                 }
               />
+              {/* Win Themes Library lives here (not in the top nav) because it
+                  is the post-mortem of an opportunity. Won/Lost transitions
+                  open the per-opportunity debrief; this link surfaces the
+                  cross-deal library for trend analysis. */}
+              <Link href="/win-loss">
+                <PillButton variant="ghost">
+                  <span className="inline-flex items-center gap-1.5">Win Themes Library</span>
+                </PillButton>
+              </Link>
               <PillButton variant="ghost" onClick={refreshForecast} disabled={runForecaster.isPending}>
                 <span className="inline-flex items-center gap-1.5">
                   <RefreshCw className={`w-3 h-3 ${runForecaster.isPending ? "animate-spin" : ""}`} />

@@ -78,6 +78,11 @@ function Router() {
         <Route path="/agents/:agentId" component={AgentProfile} />
         <Route path="/settings" component={Settings} />
         <Route path="/admin" component={Admin} />
+        {/* Finance: rate cards + margin policy (Partner-only). The legacy
+            /pricing path stays as a back-compat alias so deep-linked rows
+            (audit links, dossier exports) keep resolving. */}
+        <Route path="/finance" component={Pricing} />
+        <Route path="/finance/:section" component={Pricing} />
         <Route path="/pricing" component={Pricing} />
         <Route component={NotFound} />
       </Switch>

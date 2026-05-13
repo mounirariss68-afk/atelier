@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, Search, Bell } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, Search, Bell, FileText, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfidenceChip } from "../ui/primitives";
 import { Progress } from "@/components/ui/progress";
@@ -41,6 +41,13 @@ export function TopNav() {
   // Task #254 — Roster nav visible to Partner / Operations / Engagement Lead only.
   const ROSTER_ROLES = new Set(["partner", "operations", "engagement_lead"]);
   const canSeeRoster = !!me?.role && ROSTER_ROLES.has(me.role);
+  // Finance (rate cards / margin policy) is Partner-only — same access scope
+  // the Pricing page already enforces. Per-engagement pricing lives inside
+  // the Opportunity → Commercials tab; per-firm rate cards live here.
+  // Win Themes and Reports were removed from the top nav — Win Themes lives
+  // inside the Opportunities header (library link + auto-open on won/lost
+  // transitions), and Reports is now a tab in the right rail.
+  const isPartner = me?.role === "partner";
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/crm", label: "CRM" },
@@ -48,11 +55,9 @@ export function TopNav() {
     { href: "/engagements", label: "Engagements" },
     ...(canSeeRoster ? [{ href: "/roster/people", label: "Roster" }] : []),
     { href: "/forecast", label: "Forecast" },
-    { href: "/win-loss", label: "Win Themes" },
     { href: "/atelier", label: "Atelier" },
     { href: "/agents", label: "Agents" },
-    { href: "/reports", label: "Reports" },
-    { href: "/pricing", label: "Pricing" },
+    ...(isPartner ? [{ href: "/finance", label: "Finance" }] : []),
   ];
 
   return (
@@ -151,8 +156,97 @@ const RailContext = React.createContext<{
   setCollapsed: (v: boolean) => void;
 }>({ collapsed: false, setCollapsed: () => {} });
 
+// Compact saved-reports list for the right rail "Reports" tab. Reads the
+// same /api/atelier/reports endpoint the full Reports page uses, but renders
+// only name + last-run + quick actions, plus a link to the full library.
+interface RailReportRow {
+  id: string;
+  name: string;
+  templateId: string;
+  lastRunAt: string | null;
+  schedule: string;
+}
+
+function ReportsRailPanel() {
+  const [items, setItems] = React.useState<RailReportRow[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    fetch("/api/atelier/reports", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
+      .then((j: { items: RailReportRow[] }) => {
+        if (alive) setItems(j.items);
+      })
+      .catch((e) => {
+        if (alive) setError(String(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (error) {
+    return <div className="text-xs text-danger font-mono p-3">Reports unavailable: {error}</div>;
+  }
+  if (!items) {
+    return <div className="text-xs text-text-faint font-mono p-3">Loading reports…</div>;
+  }
+  if (items.length === 0) {
+    return (
+      <div className="text-center text-text-faint text-sm italic py-8 px-3">
+        No saved reports yet.
+        <div className="mt-3">
+          <Link
+            href="/reports"
+            className="text-xs font-mono uppercase tracking-wider text-gold hover:underline inline-flex items-center gap-1"
+          >
+            Open Report Library <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {items.map((r) => (
+        <div
+          key={r.id}
+          className="bg-bg-elevate border border-border rounded-md p-2.5 text-sm"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="font-medium text-text leading-tight truncate" title={r.name}>
+              {r.name}
+            </div>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint shrink-0">
+              {r.schedule}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between text-[11px] font-mono text-text-faint">
+            <span className="truncate" title={r.templateId}>
+              {r.templateId}
+            </span>
+            <span>{r.lastRunAt ? new Date(r.lastRunAt).toLocaleDateString() : "never"}</span>
+          </div>
+        </div>
+      ))}
+      <div className="pt-2 border-t border-border-soft">
+        <Link
+          href="/reports"
+          className="text-xs font-mono uppercase tracking-wider text-gold hover:underline inline-flex items-center gap-1"
+        >
+          Open Report Library <ExternalLink className="w-3 h-3" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+type RailTab = "activity" | "reports";
+
 export function RightRail() {
   const { collapsed, setCollapsed } = React.useContext(RailContext);
+  const [tab, setTab] = React.useState<RailTab>("activity");
   const { data: activities } = useAtelierGetActivity(
     { limit: 15 },
     {
@@ -175,15 +269,37 @@ export function RightRail() {
     >
       <div className="flex items-center justify-between p-3 border-b border-border">
         {!collapsed && (
-          <div className="flex items-center gap-2 font-mono text-xs font-semibold text-text uppercase tracking-widest">
-            <Activity className="w-3.5 h-3.5 text-gold" />
-            Agent Activity
-            {activeCount > 0 && (
-              <span className="flex h-2 w-2 relative ml-1">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-gold"></span>
-              </span>
-            )}
+          // Tab strip: Activity is the primary tab (live agent feed); Reports
+          // is the secondary tab (saved-report list, pulled from full library).
+          <div className="flex items-center gap-1 font-mono text-[11px] font-semibold uppercase tracking-widest">
+            <button
+              type="button"
+              onClick={() => setTab("activity")}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded transition-colors",
+                tab === "activity" ? "text-gold bg-bg-elevate-2" : "text-text-mute hover:text-text",
+              )}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              Activity
+              {activeCount > 0 && (
+                <span className="flex h-2 w-2 relative ml-0.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-gold"></span>
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("reports")}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded transition-colors",
+                tab === "reports" ? "text-gold bg-bg-elevate-2" : "text-text-mute hover:text-text",
+              )}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Reports
+            </button>
           </div>
         )}
         {collapsed && (
@@ -203,7 +319,7 @@ export function RightRail() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
-        {!collapsed && activities && activities.map(item => (
+        {!collapsed && tab === "activity" && activities && activities.map(item => (
           <div key={item.id} className="bg-bg-elevate border border-border rounded-md p-3 text-sm animate-in fade-in zoom-in-95 duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="font-mono text-xs text-gold font-medium">{item.agentName}</span>
@@ -237,11 +353,12 @@ export function RightRail() {
             </div>
           </div>
         ))}
-        {!collapsed && activities?.length === 0 && (
+        {!collapsed && tab === "activity" && activities?.length === 0 && (
           <div className="text-center text-text-faint text-sm italic py-8">
             No recent agent activity.
           </div>
         )}
+        {!collapsed && tab === "reports" && <ReportsRailPanel />}
       </div>
     </aside>
   );
