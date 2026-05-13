@@ -6,6 +6,7 @@ import {
   useAtelierGetMarginPolicy,
   useAtelierUpdateMarginPolicy,
   useAtelierAddRateCardRow,
+  useAtelierCreateRateCard,
   getAtelierGetRateCardQueryKey,
   getAtelierGetMarginPolicyQueryKey,
   getAtelierListRateCardsQueryKey,
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, Lock } from "lucide-react";
+import { ShieldAlert, Lock, Trash2, Archive, Plus } from "lucide-react";
 
 const SENIORITY_BANDS = [
   "Partner",
@@ -66,6 +67,57 @@ export default function Pricing() {
       },
     },
   });
+  const createCard = useAtelierCreateRateCard({
+    mutation: {
+      onSuccess: (created) => {
+        qc.invalidateQueries({ queryKey: getAtelierListRateCardsQueryKey() });
+        toast({ title: "Rate card created" });
+        setShowNewCard(false);
+        setNewCard({ name: "", geography: "KSA + UAE", currency: "USD" });
+        if (created?.id) setSelectedId(created.id);
+      },
+    },
+  });
+  const [showNewCard, setShowNewCard] = React.useState(false);
+  const [newCard, setNewCard] = React.useState({ name: "", geography: "KSA + UAE", currency: "USD" });
+
+  // The DELETE endpoints aren't typed in api-client-react (admin-only),
+  // so we use a thin direct-fetch wrapper that mirrors the codegen base
+  // path and invalidates the same React Query keys on success.
+  const apiBase = `${import.meta.env.BASE_URL ?? "/"}api/atelier`.replace(/\/+/g, "/");
+  async function deleteRow(rowId: string) {
+    if (!selectedId) return;
+    if (!confirm("Delete this rate-card row?")) return;
+    const r = await fetch(`${apiBase}/rate-cards/${selectedId}/rows/${rowId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (r.status === 204) {
+      qc.invalidateQueries({ queryKey: getAtelierGetRateCardQueryKey(selectedId) });
+      toast({ title: "Row removed" });
+    } else {
+      toast({ title: "Could not remove row", variant: "destructive" });
+    }
+  }
+  async function archiveCard(cardId: string) {
+    if (!confirm("Archive this rate card? It will no longer appear in active card lists.")) return;
+    const r = await fetch(`${apiBase}/rate-cards/${cardId}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (r.status === 204) {
+      qc.invalidateQueries({ queryKey: getAtelierListRateCardsQueryKey() });
+      setSelectedId(null);
+      toast({ title: "Rate card archived" });
+    } else {
+      const msg = await r.json().catch(() => ({}));
+      toast({
+        title: "Could not archive",
+        description: msg?.hint ?? msg?.error ?? "Try again.",
+        variant: "destructive",
+      });
+    }
+  }
 
   const [target, setTarget] = React.useState("");
   const [amber, setAmber] = React.useState("");
@@ -115,22 +167,77 @@ export default function Pricing() {
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-mono text-sm tracking-widest uppercase text-gold">Rate Cards</h3>
-              <MonoChip>{cards?.length ?? 0} card(s)</MonoChip>
+              <div className="flex items-center gap-2">
+                <MonoChip>{cards?.length ?? 0} card(s)</MonoChip>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowNewCard((v) => !v)}
+                  data-testid="button-new-card"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" /> New card
+                </Button>
+              </div>
             </div>
+            {showNewCard && (
+              <div className="grid grid-cols-12 gap-2 p-3 bg-bg-elevate/40 border border-border-soft rounded-md">
+                <Input
+                  placeholder="Name (e.g. AICo 2027 KSA v1)"
+                  value={newCard.name}
+                  onChange={(e) => setNewCard({ ...newCard, name: e.target.value })}
+                  className="col-span-5 bg-bg border-border text-text"
+                  data-testid="input-new-card-name"
+                />
+                <Input
+                  placeholder="Geography"
+                  value={newCard.geography}
+                  onChange={(e) => setNewCard({ ...newCard, geography: e.target.value })}
+                  className="col-span-3 bg-bg border-border text-text"
+                  data-testid="input-new-card-geo"
+                />
+                <Input
+                  placeholder="Currency"
+                  value={newCard.currency}
+                  onChange={(e) => setNewCard({ ...newCard, currency: e.target.value })}
+                  className="col-span-2 bg-bg border-border text-text"
+                  data-testid="input-new-card-ccy"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => createCard.mutate({ data: newCard })}
+                  disabled={!newCard.name || !newCard.geography}
+                  className="col-span-2"
+                  data-testid="button-create-card"
+                >
+                  Create
+                </Button>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {(cards ?? []).map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedId(c.id)}
-                  className={`px-3 py-1.5 rounded-md border text-xs font-mono transition-colors ${
-                    selectedId === c.id
-                      ? "border-gold/60 bg-gold/10 text-gold"
-                      : "border-border-soft text-text-mute hover:text-text"
-                  }`}
-                  data-testid={`button-card-${c.id}`}
-                >
-                  {c.name} · {c.geography}
-                </button>
+                <div key={c.id} className="flex items-center gap-1">
+                  <button
+                    onClick={() => setSelectedId(c.id)}
+                    className={`px-3 py-1.5 rounded-md border text-xs font-mono transition-colors ${
+                      selectedId === c.id
+                        ? "border-gold/60 bg-gold/10 text-gold"
+                        : "border-border-soft text-text-mute hover:text-text"
+                    }`}
+                    data-testid={`button-card-${c.id}`}
+                  >
+                    {c.name} · {c.geography}
+                  </button>
+                  {selectedId === c.id && (
+                    <button
+                      onClick={() => archiveCard(c.id)}
+                      className="p-1.5 text-text-faint hover:text-danger transition-colors"
+                      title="Archive rate card"
+                      data-testid={`button-archive-card-${c.id}`}
+                    >
+                      <Archive className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
             {card && (
@@ -141,18 +248,29 @@ export default function Pricing() {
                 <div className="border border-border-soft rounded-md divide-y divide-border-soft text-sm">
                   <div className="grid grid-cols-12 gap-2 px-4 py-2 text-[10px] font-mono uppercase tracking-widest text-text-faint bg-bg-elevate/40">
                     <div className="col-span-3">Seniority</div>
-                    <div className="col-span-3">Role</div>
+                    <div className="col-span-2">Role</div>
                     <div className="col-span-2 text-right">Cost/day</div>
                     <div className="col-span-2 text-right">Price/day</div>
                     <div className="col-span-2 text-right">Overhead</div>
+                    <div className="col-span-1"></div>
                   </div>
                   {(card.rows ?? []).map((r) => (
-                    <div key={r.id} className="grid grid-cols-12 gap-2 px-4 py-2" data-testid={`row-card-${r.id}`}>
+                    <div key={r.id} className="grid grid-cols-12 gap-2 px-4 py-2 items-center" data-testid={`row-card-${r.id}`}>
                       <div className="col-span-3 text-text">{r.seniority}</div>
-                      <div className="col-span-3 text-text-mute">{r.role}</div>
+                      <div className="col-span-2 text-text-mute">{r.role}</div>
                       <div className="col-span-2 text-right font-mono text-text">${r.dayRateInternalCost.toFixed(0)}</div>
                       <div className="col-span-2 text-right font-mono text-text">${r.dayRateClientPrice.toFixed(0)}</div>
                       <div className="col-span-2 text-right font-mono text-text-mute">{(r.overheadPct * 100).toFixed(0)}%</div>
+                      <div className="col-span-1 flex justify-end">
+                        <button
+                          onClick={() => deleteRow(r.id)}
+                          className="p-1 text-text-faint hover:text-danger transition-colors"
+                          title="Delete row"
+                          data-testid={`button-delete-row-${r.id}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {(!card.rows || card.rows.length === 0) && (

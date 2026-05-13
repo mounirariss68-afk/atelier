@@ -359,22 +359,59 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
   const rateCardId: string = typeof req.body?.rateCardId === "string" ? req.body.rateCardId : existing.rateCardId;
   const rateCardRows = await loadRateCardRows(rateCardId);
   const compute = computePricing({ teamMix, durationWeeks, rateCardRows, policy });
+
+  // Governance: if any economic input changed, invalidate prior
+  // single-Partner override + two-Partner countersign so a stale approval
+  // can never carry over to materially different commercial terms.
+  const economicInputChanged =
+    JSON.stringify(existing.teamMix ?? []) !== JSON.stringify(teamMix) ||
+    existing.durationWeeks !== durationWeeks ||
+    existing.pricingModel !== pricingModel ||
+    existing.rateCardId !== rateCardId;
+  const hadPriorApproval = !!existing.partnerOverrideId || !!existing.countersignPartnerId;
+
+  const updateSet: Record<string, unknown> = {
+    teamMix,
+    durationWeeks,
+    pricingModel,
+    rateCardId,
+    computedCostUsd: compute.computedCostUsd,
+    computedPriceUsd: compute.computedPriceUsd,
+    computedMarginPct: compute.computedMarginPct,
+    marginLockStatus: compute.marginLockStatus,
+    targetMarginPct: policy.targetMarginPct,
+    updatedAt: new Date(),
+  };
+  if (economicInputChanged && hadPriorApproval) {
+    updateSet.partnerOverrideId = null;
+    updateSet.partnerOverrideAt = null;
+    updateSet.partnerOverrideRationale = null;
+    updateSet.countersignPartnerId = null;
+    updateSet.countersignAt = null;
+    updateSet.countersignRationale = null;
+  }
   const [updated] = await db
     .update(atelierDealPricings)
-    .set({
-      teamMix,
-      durationWeeks,
-      pricingModel,
-      rateCardId,
-      computedCostUsd: compute.computedCostUsd,
-      computedPriceUsd: compute.computedPriceUsd,
-      computedMarginPct: compute.computedMarginPct,
-      marginLockStatus: compute.marginLockStatus,
-      targetMarginPct: policy.targetMarginPct,
-      updatedAt: new Date(),
-    })
+    .set(updateSet)
     .where(eq(atelierDealPricings.id, existing.id))
     .returning();
+  if (economicInputChanged && hadPriorApproval) {
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "opportunity",
+      entityId: req.params.oppId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "pricing.approval_invalidated",
+      payload: {
+        priorOverrideId: existing.partnerOverrideId,
+        priorCountersignId: existing.countersignPartnerId,
+        reason: "economic-input-changed",
+      },
+      payloadSummary: `${me.name} edited deal pricing — prior override/countersign cleared (terms changed).`,
+    });
+  }
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: "opportunity",
@@ -413,7 +450,14 @@ router.post("/opportunities/:oppId/pricing/whatif", async (req, res) => {
   res.json({ ...compute, policy });
 });
 
-// Strategist
+// Strategist — accepts the canonical agent input contract:
+//   { opportunity_id?, primary_intent?, target_margin_pct?, alternative_lenses? }
+// (opportunity_id from path takes precedence; the body fields are forwarded
+// to the runner as hints alongside persisted pricing.) Output is returned
+// in BOTH the implementation shape (`primary`, `talkingPoints`) and the
+// spec-canonical aliases (`primary_pricing`, `talking_points_for_partner`)
+// so existing UI keeps working while spec-conformant integrations can read
+// the snake_case fields directly.
 router.post("/opportunities/:oppId/pricing/strategist", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -425,7 +469,10 @@ router.post("/opportunities/:oppId/pricing/strategist", async (req, res) => {
     res.status(404).json({ error: "opportunity-not-found" });
     return;
   }
-  const policy = await loadDefaultPolicy();
+  let policy = await loadDefaultPolicy();
+  if (typeof req.body?.target_margin_pct === "number") {
+    policy = { ...policy, targetMarginPct: req.body.target_margin_pct };
+  }
   const existing = await loadOrInitDealPricing(opp.id, policy);
   if (!existing) {
     res.status(409).json({ error: "no-active-rate-card" });
@@ -440,8 +487,18 @@ router.post("/opportunities/:oppId/pricing/strategist", async (req, res) => {
       rateCardRows,
       actorId: me.id,
       actorLabel: me.name,
+      primaryIntent: typeof req.body?.primary_intent === "string" ? req.body.primary_intent : undefined,
+      alternativeLenses: Array.isArray(req.body?.alternative_lenses) ? req.body.alternative_lenses : undefined,
     });
-    res.json(result);
+    // Dual-shape output: implementation camelCase + spec snake_case aliases.
+    res.json({
+      ...result,
+      primary_pricing: result.primary,
+      talking_points_for_partner: result.talkingPoints,
+      margin_lock_chip: result.marginLockChip,
+      partner_override_required: result.partnerOverrideRequired,
+      two_partner_required: result.twoPartnerRequired,
+    });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "strategist-failed" });
   }

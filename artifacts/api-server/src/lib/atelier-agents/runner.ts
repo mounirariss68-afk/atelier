@@ -2711,6 +2711,10 @@ export async function runPricingStrategist(args: {
   rateCardRows: PricingRateCardRowLite[];
   actorId: string;
   actorLabel: string;
+  /** Optional spec-contract hint forwarded to the LLM narrative prompt. */
+  primaryIntent?: string;
+  /** Optional spec-contract hint — restricts which alternative lenses to surface. */
+  alternativeLenses?: string[];
 }): Promise<PricingStrategistResult> {
   const t0 = Date.now();
   const runId = await startRun({
