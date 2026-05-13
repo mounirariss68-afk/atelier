@@ -31,10 +31,33 @@ interface PartnerFirmInvoice {
   status: string;
   evidenceFirmHourIds: string[];
 }
+interface ContractorPayeeGroup {
+  payeeUserId: string;
+  payeeName: string;
+  totalUsd: number;
+  weekCount: number;
+  rows: ContractorPayment[];
+}
+interface PartnerFirmGroup {
+  partnerFirmId: string;
+  partnerFirmName: string;
+  totalUsd: number;
+  weekCount: number;
+  rows: PartnerFirmInvoice[];
+}
 interface ApprovalsResp {
   contractorPayments: ContractorPayment[];
   partnerFirmInvoices: PartnerFirmInvoice[];
-  totals: { contractorCount: number; partnerFirmCount: number; contractorUsd: number; partnerFirmUsd: number };
+  contractorPayeeGroups: ContractorPayeeGroup[];
+  partnerFirmGroups: PartnerFirmGroup[];
+  totals: {
+    contractorCount: number;
+    partnerFirmCount: number;
+    contractorPayeeCount: number;
+    partnerFirmPayeeCount: number;
+    contractorUsd: number;
+    partnerFirmUsd: number;
+  };
 }
 interface Me { id: string; name: string; role: string }
 
@@ -155,65 +178,85 @@ export default function WalletApprovals() {
         {msg && <Card className="p-3 text-sm border-gold/40 text-gold">{msg}</Card>}
         {loading && <Card className="p-4 text-text-mute">Loading…</Card>}
 
-        {data && data.contractorPayments.length > 0 && (
-          <Card className="p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-text-mute">Contractor / employee payments</h3>
-            <div className="space-y-2">
-              {data.contractorPayments.map((p) => (
-                <div key={p.id} className="flex items-start justify-between gap-4 border-t border-border/50 pt-2" data-testid={`row-cp-${p.id}`}>
-                  <div className="space-y-0.5">
-                    <div className="font-semibold">{p.payeeName} <span className="text-xs text-text-mute font-mono">({p.payeePersonType})</span></div>
-                    <div className="text-xs font-mono text-text-mute">
-                      {p.weekIso} · {p.hours.toFixed(1)} hrs × {fmtUsd(p.ratePerHour)}/hr · {p.evidenceEntryIds.length} entry(s) · eng {p.engagementId.slice(0, 12)}…
-                    </div>
+        {data && data.contractorPayeeGroups.length > 0 && (
+          <Card className="p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-text-mute">
+              Contractor payments · {data.totals.contractorPayeeCount} payee(s)
+            </h3>
+            {data.contractorPayeeGroups.map((g) => (
+              <div key={g.payeeUserId} className="border-t border-border/50 pt-3 space-y-2" data-testid={`group-cp-${g.payeeUserId}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{g.payeeName}</div>
+                    <div className="text-xs font-mono text-text-mute">{g.weekCount} week(s) · contractor</div>
                   </div>
-                  <div className="text-right shrink-0 space-y-2">
-                    <div className="font-mono text-text">{fmtUsd(p.usdAmount)}</div>
-                    <div className="flex gap-1 justify-end">
-                      <MonoChip tone={p.status === "proposed" ? "gold" : p.status === "partner_approved" ? "green" : p.status === "rejected" ? "red" : undefined}>{p.status}</MonoChip>
-                      {p.requiresPartnerApproval && p.status === "proposed" && <MonoChip tone="gold">partner-required</MonoChip>}
-                    </div>
-                    {isPartner && p.status === "proposed" && (
-                      <div className="flex gap-2 justify-end">
-                        <PillButton onClick={() => decide("contractor", p.id, "approve")} disabled={!!busy} data-testid={`btn-approve-${p.id}`}>Approve</PillButton>
-                        <PillButton onClick={() => decide("contractor", p.id, "reject")} disabled={!!busy} data-testid={`btn-reject-${p.id}`}>Reject</PillButton>
-                      </div>
-                    )}
-                  </div>
+                  <div className="font-mono text-text text-right">{fmtUsd(g.totalUsd)}</div>
                 </div>
-              ))}
-            </div>
+                <div className="pl-3 space-y-1">
+                  {g.rows.map((p) => (
+                    <div key={p.id} className="flex items-start justify-between gap-3 text-sm" data-testid={`row-cp-${p.id}`}>
+                      <div className="text-xs font-mono text-text-mute">
+                        {p.weekIso} · {p.hours.toFixed(1)} hrs × {fmtUsd(p.ratePerHour)}/hr · eng {p.engagementId.slice(0, 12)}…
+                      </div>
+                      <div className="text-right shrink-0 space-y-1">
+                        <div className="font-mono">{fmtUsd(p.usdAmount)}</div>
+                        <div className="flex gap-1 justify-end">
+                          <MonoChip tone={p.status === "proposed" ? "gold" : p.status === "partner_approved" ? "green" : p.status === "rejected" ? "red" : undefined}>{p.status}</MonoChip>
+                          {p.requiresPartnerApproval && p.status === "proposed" && <MonoChip tone="gold">partner-required</MonoChip>}
+                        </div>
+                        {isPartner && p.status === "proposed" && (
+                          <div className="flex gap-2 justify-end">
+                            <PillButton onClick={() => decide("contractor", p.id, "approve")} disabled={!!busy} data-testid={`btn-approve-${p.id}`}>Approve</PillButton>
+                            <PillButton onClick={() => decide("contractor", p.id, "reject")} disabled={!!busy} data-testid={`btn-reject-${p.id}`}>Reject</PillButton>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </Card>
         )}
 
-        {data && data.partnerFirmInvoices.length > 0 && (
-          <Card className="p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-text-mute">Partner-firm invoices</h3>
-            <div className="space-y-2">
-              {data.partnerFirmInvoices.map((p) => (
-                <div key={p.id} className="flex items-start justify-between gap-4 border-t border-border/50 pt-2" data-testid={`row-pfi-${p.id}`}>
-                  <div className="space-y-0.5">
-                    <div className="font-semibold">{p.partnerFirmName}</div>
-                    <div className="text-xs font-mono text-text-mute">
-                      {p.weekIso} · {p.hours.toFixed(1)} hrs · {p.evidenceFirmHourIds.length} row(s) · eng {p.engagementId.slice(0, 12)}…
-                    </div>
+        {data && data.partnerFirmGroups.length > 0 && (
+          <Card className="p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-text-mute">
+              Partner-firm invoices · {data.totals.partnerFirmPayeeCount} firm(s)
+            </h3>
+            {data.partnerFirmGroups.map((g) => (
+              <div key={g.partnerFirmId} className="border-t border-border/50 pt-3 space-y-2" data-testid={`group-pfi-${g.partnerFirmId}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{g.partnerFirmName}</div>
+                    <div className="text-xs font-mono text-text-mute">{g.weekCount} week(s)</div>
                   </div>
-                  <div className="text-right shrink-0 space-y-2">
-                    <div className="font-mono text-text">{fmtUsd(p.usdAmount)} <span className="text-xs text-text-mute">({p.costCurrency} {p.costAmount.toFixed(2)})</span></div>
-                    <div className="flex gap-1 justify-end">
-                      <MonoChip tone={p.status === "proposed" ? "gold" : p.status === "partner_approved" ? "green" : p.status === "rejected" ? "red" : undefined}>{p.status}</MonoChip>
-                      <MonoChip tone="gold">partner-required</MonoChip>
-                    </div>
-                    {isPartner && p.status === "proposed" && (
-                      <div className="flex gap-2 justify-end">
-                        <PillButton onClick={() => decide("partner-firm", p.id, "approve")} disabled={!!busy} data-testid={`btn-approve-pfi-${p.id}`}>Approve</PillButton>
-                        <PillButton onClick={() => decide("partner-firm", p.id, "reject")} disabled={!!busy} data-testid={`btn-reject-pfi-${p.id}`}>Reject</PillButton>
-                      </div>
-                    )}
-                  </div>
+                  <div className="font-mono text-text text-right">{fmtUsd(g.totalUsd)}</div>
                 </div>
-              ))}
-            </div>
+                <div className="pl-3 space-y-1">
+                  {g.rows.map((p) => (
+                    <div key={p.id} className="flex items-start justify-between gap-3 text-sm" data-testid={`row-pfi-${p.id}`}>
+                      <div className="text-xs font-mono text-text-mute">
+                        {p.weekIso} · {p.hours.toFixed(1)} hrs · eng {p.engagementId.slice(0, 12)}…
+                      </div>
+                      <div className="text-right shrink-0 space-y-1">
+                        <div className="font-mono">{fmtUsd(p.usdAmount)} <span className="text-xs text-text-mute">({p.costCurrency} {p.costAmount.toFixed(2)})</span></div>
+                        <div className="flex gap-1 justify-end">
+                          <MonoChip tone={p.status === "proposed" ? "gold" : p.status === "partner_approved" ? "green" : p.status === "rejected" ? "red" : undefined}>{p.status}</MonoChip>
+                          <MonoChip tone="gold">partner-required</MonoChip>
+                        </div>
+                        {isPartner && p.status === "proposed" && (
+                          <div className="flex gap-2 justify-end">
+                            <PillButton onClick={() => decide("partner-firm", p.id, "approve")} disabled={!!busy} data-testid={`btn-approve-pfi-${p.id}`}>Approve</PillButton>
+                            <PillButton onClick={() => decide("partner-firm", p.id, "reject")} disabled={!!busy} data-testid={`btn-reject-pfi-${p.id}`}>Reject</PillButton>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </Card>
         )}
 

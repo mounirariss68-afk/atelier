@@ -1307,12 +1307,49 @@ router.get("/wallet/approvals", async (req, res) => {
       ),
     )
     .orderBy(desc(atelierPartnerFirmInvoices.createdAt));
+  // Group by payee so the partner sees one row per contractor / firm,
+  // not a flat list. Per-payee totals + child rows make weekly approval
+  // a one-click decision per person.
+  type CpRow = (typeof cps)[number];
+  type PfRow = (typeof pfis)[number];
+  const cpByPayee = new Map<string, { payeeUserId: string; payeeName: string; totalUsd: number; weekCount: number; rows: CpRow[] }>();
+  for (const r of cps) {
+    const g = cpByPayee.get(r.payeeUserId) ?? {
+      payeeUserId: r.payeeUserId,
+      payeeName: r.payeeName,
+      totalUsd: 0,
+      weekCount: 0,
+      rows: [],
+    };
+    g.totalUsd = +(g.totalUsd + r.usdAmount).toFixed(2);
+    g.weekCount += 1;
+    g.rows.push(r);
+    cpByPayee.set(r.payeeUserId, g);
+  }
+  const pfByFirm = new Map<string, { partnerFirmId: string; partnerFirmName: string; totalUsd: number; weekCount: number; rows: PfRow[] }>();
+  for (const r of pfis) {
+    const g = pfByFirm.get(r.partnerFirmId) ?? {
+      partnerFirmId: r.partnerFirmId,
+      partnerFirmName: r.partnerFirmName,
+      totalUsd: 0,
+      weekCount: 0,
+      rows: [],
+    };
+    g.totalUsd = +(g.totalUsd + r.usdAmount).toFixed(2);
+    g.weekCount += 1;
+    g.rows.push(r);
+    pfByFirm.set(r.partnerFirmId, g);
+  }
   res.json({
     contractorPayments: cps,
     partnerFirmInvoices: pfis,
+    contractorPayeeGroups: Array.from(cpByPayee.values()).sort((a, b) => b.totalUsd - a.totalUsd),
+    partnerFirmGroups: Array.from(pfByFirm.values()).sort((a, b) => b.totalUsd - a.totalUsd),
     totals: {
       contractorCount: cps.length,
       partnerFirmCount: pfis.length,
+      contractorPayeeCount: cpByPayee.size,
+      partnerFirmPayeeCount: pfByFirm.size,
       contractorUsd: +cps.reduce((s, r) => s + r.usdAmount, 0).toFixed(2),
       partnerFirmUsd: +pfis.reduce((s, r) => s + r.usdAmount, 0).toFixed(2),
     },

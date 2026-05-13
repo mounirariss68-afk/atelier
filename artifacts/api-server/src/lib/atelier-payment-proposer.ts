@@ -133,7 +133,11 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
     notificationsSent: 0,
   };
 
-  // ----- Contractor / employee proposals from timesheet entries -----
+  // ----- Contractor proposals from timesheet entries -----
+  // PRD: contractor payments compose from *lead-approved* entries (Mon
+  // weekly run) so partner has a queue ready before payroll. Employees
+  // are paid on the standard payroll cycle, NOT through this proposer —
+  // we filter them out in the bucket loop below.
   const entries = await db
     .select()
     .from(atelierTimesheetEntries)
@@ -141,7 +145,7 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
       and(
         isNull(atelierTimesheetEntries.deletedAt),
         eq(atelierTimesheetEntries.billable, true),
-        eq(atelierTimesheetEntries.status, "approved"),
+        eq(atelierTimesheetEntries.status, "lead_approved"),
         inArray(atelierTimesheetEntries.weekId, weeksIso),
       ),
     );
@@ -175,6 +179,12 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
       continue;
     }
     const meta = await payeeHourlyCostUsd(b.payeeUserId);
+    // Contractor-only queue: skip employees (they're on payroll, not
+    // a per-week disbursement proposal).
+    if (meta.personType !== "contractor") {
+      summary.contractorProposals.skipped++;
+      continue;
+    }
     const costAmount = +(b.hours * meta.ratePerHour).toFixed(2);
     const fx = await convertToUsd(costAmount, meta.rateCurrency, new Date());
     const usdAmount = +fx.usdAmount.toFixed(2);

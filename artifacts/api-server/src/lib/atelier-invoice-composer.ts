@@ -25,6 +25,8 @@ import {
   atelierDealPricings,
   atelierRateCards,
   atelierRateCardRows,
+  atelierEmployees,
+  atelierContractors,
   atelierAuditEvents,
   type InvoiceLineDraftLine,
 } from "@workspace/db";
@@ -120,6 +122,33 @@ export async function runInvoiceComposer(args: RunArgs): Promise<InvoiceComposer
       ? rateBySeniority.values().next().value ?? DEFAULT_BILL_RATE_USD
       : DEFAULT_BILL_RATE_USD;
 
+  // Pre-resolve seniority for every person we'll bill so each hours bucket
+  // can use the *applicable* rate-card row, not a single fallback rate.
+  // Atelier persons live in either atelier_employees (consultants/staff)
+  // or atelier_contractors (1099/T&M). Both expose a `seniority` column;
+  // we look the person up by id against both tables and pick whichever
+  // resolves first.
+  async function resolveSeniorityRate(personId: string): Promise<{
+    seniority: string;
+    rate: number;
+  }> {
+    const [emp] = await db.select().from(atelierEmployees).where(eq(atelierEmployees.id, personId));
+    if (emp?.seniority) {
+      return {
+        seniority: emp.seniority,
+        rate: rateBySeniority.get(emp.seniority) ?? fallbackRate,
+      };
+    }
+    const [con] = await db.select().from(atelierContractors).where(eq(atelierContractors.id, personId));
+    if (con?.seniority) {
+      return {
+        seniority: con.seniority,
+        rate: rateBySeniority.get(con.seniority) ?? fallbackRate,
+      };
+    }
+    return { seniority: "unknown", rate: fallbackRate };
+  }
+
   // ---- Hours lines (per timesheet entry, grouped by personId+activityCode) ----
   const entries = await db
     .select()
@@ -151,17 +180,17 @@ export async function runInvoiceComposer(args: RunArgs): Promise<InvoiceComposer
   }
   for (const agg of byBucket.values()) {
     if (agg.hours <= 0) continue;
-    const unit = fallbackRate;
+    const { seniority, rate: unit } = await resolveSeniorityRate(agg.personId);
     const amount = +(agg.hours * unit).toFixed(2);
     hoursUsd += amount;
     lines.push({
       kind: "hours",
       sourceId: agg.entryIds[0],
-      description: `Billable hours — ${agg.personId} (${agg.month})`,
+      description: `Billable hours — ${agg.personId} (${seniority}) (${agg.month})`,
       qty: +agg.hours.toFixed(2),
       unitPriceUsd: unit,
       amountUsd: amount,
-      meta: { personId: agg.personId, month: agg.month, entryIds: agg.entryIds },
+      meta: { personId: agg.personId, seniority, month: agg.month, entryIds: agg.entryIds },
     });
   }
 
