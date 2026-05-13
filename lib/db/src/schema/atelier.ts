@@ -7,6 +7,7 @@ import {
   integer,
   boolean,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -115,6 +116,27 @@ export const atelierOpportunities = pgTable(
     index("idx_atelier_opps_org").on(t.orgId),
     index("idx_atelier_opps_stage").on(t.plmStage),
     index("idx_atelier_opps_account").on(t.accountId),
+  ],
+);
+
+// ============================================================
+// ENGAGEMENT ACCESS (engagement-id ACL partition)
+// ============================================================
+// Non-partner personas only see engagements they have an explicit
+// access row for. Partners bypass this in route logic.
+export const atelierEngagementAccess = pgTable(
+  "atelier_engagement_access",
+  {
+    id: text("id").primaryKey(),
+    engagementId: text("engagement_id").notNull(),
+    userId: text("user_id").notNull(),
+    role: text("role").notNull().default("member"), // partner_owner | lead | member
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_eng_access").on(t.engagementId, t.userId),
+    index("idx_atelier_eng_access_user").on(t.userId),
   ],
 );
 

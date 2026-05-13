@@ -24,6 +24,7 @@ import {
   atelierAccounts,
   atelierOpportunities,
   atelierEngagements,
+  atelierEngagementAccess,
   atelierDeliverables,
   atelierDeliverableVersions,
   atelierMeetings,
@@ -1457,6 +1458,7 @@ async function truncateAll() {
   // the schema does not declare hard FKs (text PKs let us be loose).
   const tables = [
     "atelier_pane_a_items",
+    "atelier_engagement_access",
     "atelier_audit_events",
     "atelier_agent_runs",
     "atelier_notifications",
@@ -1596,6 +1598,34 @@ async function main() {
       deliverablesDueThisWeek: e.deliverablesDueThisWeek,
     })),
   );
+
+  console.log("[seed-atelier] engagement access grants…");
+  // Engagement-id ACL: every non-partner persona must have an explicit
+  // grant per engagement they can see. Partner has firm-wide access via
+  // route logic and does NOT need rows here. We grant access to the
+  // engagement's named lead, plus the SME (Omar) and AI engineer (Sara)
+  // on their staffed Tasama engagement.
+  const accessRows: { id: string; engagementId: string; userId: string; role: string }[] = [];
+  for (const e of ENGAGEMENTS) {
+    if (e.engagementLeadId && e.engagementLeadId !== "p_mounir_ariss") {
+      accessRows.push({
+        id: `access_${e.id}_${e.engagementLeadId}`,
+        engagementId: e.id,
+        userId: e.engagementLeadId,
+        role: "lead",
+      });
+    }
+  }
+  // SME + AI engineer staffed on Tasama (the showcase engagement).
+  for (const uid of ["p_omar_najjar", "p_sara_qureshi"]) {
+    accessRows.push({
+      id: `access_${TASAMA_ENG_ID}_${uid}`,
+      engagementId: TASAMA_ENG_ID,
+      userId: uid,
+      role: "member",
+    });
+  }
+  if (accessRows.length) await db.insert(atelierEngagementAccess).values(accessRows);
 
   console.log("[seed-atelier] deliverables + versions…");
   await db.insert(atelierDeliverables).values(

@@ -18,6 +18,7 @@ import { eq, and, desc, isNull } from "drizzle-orm";
 import {
   db,
   atelierEngagements,
+  atelierEngagementAccess,
   atelierUsers,
   atelierAuditEvents,
   atelierAgentRuns,
@@ -67,16 +68,13 @@ async function loadEng(id: string) {
 }
 
 /**
- * Per-engagement ACL gate.
+ * Per-engagement ACL gate (engagement-id partition).
  *
- * Resolves the parent engagement of any object referenced by id (deliverable,
- * artifact, charter version, etc.) and rejects with 404 when the engagement
- * is missing/soft-deleted. Personas with the `partner` role bypass scoping
- * (firm-wide visibility); all others must have an `engagementIds` allow-list
- * on their persona row that contains the target engagement id. When a
- * persona has no list at all, we treat them as firm-wide (current seed
- * behaviour) — the gate still blocks IDs pointing at missing/deleted
- * engagements, closing the cross-engagement IDOR path the architect flagged.
+ * Partners have firm-wide visibility and bypass scoping. Every other
+ * persona must have an explicit row in `atelier_engagement_access` for
+ * the target engagement; otherwise the gate returns 403. Missing or
+ * soft-deleted engagements return 404. This is the single chokepoint
+ * for confidentiality — both reads and writes route through it.
  */
 async function ensureEngAccess(
   res: Response,
@@ -92,9 +90,19 @@ async function ensureEngAccess(
     res.status(404).json({ error: "engagement-not-found" });
     return null;
   }
-  const allowed = (me as { engagementIds?: string[] | null }).engagementIds ?? null;
-  if (me.role !== "partner" && Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(eng.id)) {
-    res.status(403).json({ error: "engagement-forbidden" });
+  if (me.role === "partner") return eng;
+  const [grant] = await db
+    .select()
+    .from(atelierEngagementAccess)
+    .where(
+      and(
+        eq(atelierEngagementAccess.engagementId, eng.id),
+        eq(atelierEngagementAccess.userId, me.id),
+        isNull(atelierEngagementAccess.deletedAt),
+      ),
+    );
+  if (!grant) {
+    res.status(403).json({ error: "engagement-forbidden", reason: "Persona has no access grant for this engagement." });
     return null;
   }
   return eng;
@@ -136,7 +144,10 @@ const router: IRouter = Router();
 // Charter Architect
 // =============================================================
 
-function charterVersionWire(v: typeof atelierCharterVersions.$inferSelect) {
+function charterVersionWire(
+  v: typeof atelierCharterVersions.$inferSelect,
+  nameById: Map<string, string> = new Map(),
+) {
   return {
     id: v.id,
     engagementId: v.engagementId,
@@ -148,13 +159,26 @@ function charterVersionWire(v: typeof atelierCharterVersions.$inferSelect) {
     raidBaseline: v.raidBaseline as never,
     proposedWorkstreams: v.proposedWorkstreams as never,
     meceFlags: (v.meceFlags as string[]) ?? [],
-    leadApprovedByName: v.leadApprovedByUserId ?? null,
+    leadApprovedByName: v.leadApprovedByUserId ? nameById.get(v.leadApprovedByUserId) ?? null : null,
     leadApprovedAt: v.leadApprovedAt?.toISOString() ?? null,
-    partnerApprovedByName: v.partnerApprovedByName ?? null,
+    partnerApprovedByName: v.partnerApprovedByName ?? (v.partnerApprovedByUserId ? nameById.get(v.partnerApprovedByUserId) ?? null : null),
     partnerApprovedAt: v.partnerApprovedAt?.toISOString() ?? null,
     notes: v.notes ?? null,
     createdAt: v.createdAt.toISOString(),
   };
+}
+
+async function loadApproverNames(
+  rows: (typeof atelierCharterVersions.$inferSelect)[],
+): Promise<Map<string, string>> {
+  const ids = Array.from(
+    new Set(
+      rows.flatMap((r) => [r.leadApprovedByUserId, r.partnerApprovedByUserId].filter((x): x is string => !!x)),
+    ),
+  );
+  if (!ids.length) return new Map();
+  const users = await db.select().from(atelierUsers);
+  return new Map(users.filter((u) => ids.includes(u.id)).map((u) => [u.id, u.name]));
 }
 
 router.get("/engagements/:engId/charter/versions", async (req, res) => {
@@ -167,7 +191,8 @@ router.get("/engagements/:engId/charter/versions", async (req, res) => {
     .from(atelierCharterVersions)
     .where(and(eq(atelierCharterVersions.engagementId, eng.id), isNull(atelierCharterVersions.deletedAt)))
     .orderBy(desc(atelierCharterVersions.versionNumber));
-  res.json(rows.map(charterVersionWire));
+  const names = await loadApproverNames(rows);
+  res.json(rows.map((r) => charterVersionWire(r, names)));
 });
 
 router.post("/engagements/:engId/charter/redraft", async (req, res) => {
@@ -227,7 +252,7 @@ router.post("/engagements/:engId/charter/redraft", async (req, res) => {
     payload: { runId, versionId: id, versionNumber: nextNumber, meceFlags: output.meceFlags },
     summary: `Charter v${nextNumber} drafted by Charter Architect (${output.meceFlags.length ? "MECE flags raised" : "MECE clean"})`,
   });
-  res.json(charterVersionWire(row));
+  res.json(charterVersionWire(row, await loadApproverNames([row])));
 });
 
 router.post("/engagements/:engId/charter/versions/:versionId/approve", async (req, res) => {
@@ -256,6 +281,26 @@ router.post("/engagements/:engId/charter/versions/:versionId/approve", async (re
   }
   if (parsed.data.role === "lead" && me.role !== "engagement_lead" && me.role !== "partner") {
     res.status(403).json({ error: "role-forbidden", reason: "Only the engagement lead (or partner) can record lead approval." });
+    return;
+  }
+  // Two-checkpoint sequence: Lead review → Partner sign-off → live.
+  // Partner sign-off is only valid once Lead has approved (status === lead_approved).
+  if (parsed.data.role === "partner" && v.status !== "lead_approved") {
+    res.status(409).json({
+      error: "approval-out-of-order",
+      reason: `Partner sign-off requires prior Lead approval. Current charter status: ${v.status}.`,
+      currentStatus: v.status,
+    });
+    return;
+  }
+  // A version can only be lead-approved while still in draft (idempotent
+  // guard so a second lead-approve doesn't overwrite a live charter).
+  if (parsed.data.role === "lead" && v.status !== "draft") {
+    res.status(409).json({
+      error: "approval-out-of-order",
+      reason: `Lead approval is only valid on draft charters. Current charter status: ${v.status}.`,
+      currentStatus: v.status,
+    });
     return;
   }
   const ts = new Date();
@@ -323,7 +368,7 @@ router.post("/engagements/:engId/charter/versions/:versionId/approve", async (re
     .select()
     .from(atelierCharterVersions)
     .where(eq(atelierCharterVersions.id, v.id));
-  res.json(charterVersionWire(refreshed));
+  res.json(charterVersionWire(refreshed, await loadApproverNames([refreshed])));
 });
 
 // =============================================================
