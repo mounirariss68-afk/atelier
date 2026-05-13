@@ -42,6 +42,18 @@ export function ProcessesTab({ engId }: { engId: string }) {
   const [name, setName] = React.useState("");
   const [scopeHint, setScopeHint] = React.useState("");
   const [source, setSource] = React.useState("");
+  const [sourceType, setSourceType] = React.useState<"text" | "transcript" | "bpmn" | "image">("text");
+  const [imageName, setImageName] = React.useState<string | null>(null);
+
+  const onPickImage = React.useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSource(typeof reader.result === "string" ? reader.result : "");
+      setImageName(file.name);
+      setSourceType("image");
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
   const list = (processes ?? []) as AtelierProcess[];
@@ -72,19 +84,57 @@ export function ProcessesTab({ engId }: { engId: string }) {
             className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text"
           />
         </div>
-        <textarea
-          data-testid="input-process-source"
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-          rows={6}
-          placeholder="Paste the process description (≥10 chars). Use periods or new lines between steps."
-          className="w-full rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text font-mono"
-        />
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="text-text-mute font-mono uppercase">source:</span>
+          {(["text", "transcript", "bpmn", "image"] as const).map((t) => (
+            <label key={t} className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="radio"
+                name="sourceType"
+                value={t}
+                checked={sourceType === t}
+                onChange={() => { setSourceType(t); if (t !== "image") setImageName(null); }}
+                data-testid={`radio-source-${t}`}
+              />
+              <span>{t}</span>
+            </label>
+          ))}
+        </div>
+        {sourceType === "image" ? (
+          <div className="flex items-center gap-3">
+            <input
+              type="file"
+              accept="image/*"
+              data-testid="input-process-image"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickImage(f); }}
+              className="text-xs text-text-mute"
+            />
+            {imageName && <span className="text-xs text-text-mute font-mono">{imageName}</span>}
+          </div>
+        ) : (
+          <textarea
+            data-testid="input-process-source"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            rows={6}
+            placeholder={
+              sourceType === "transcript"
+                ? "Paste meeting transcript (Speaker: text). Lines without colons are kept verbatim."
+                : sourceType === "bpmn"
+                  ? "Paste BPMN XML. <userTask name=…>/<task name=…> nodes will be extracted in order."
+                  : "Paste the process description (≥10 chars). Use periods or new lines between steps."
+            }
+            className="w-full rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text font-mono"
+          />
+        )}
         <div className="flex justify-end">
           <PillButton
             variant="primary"
             data-testid="button-analyze-process"
-            disabled={analyze.isPending || source.trim().length < 10}
+            disabled={
+              analyze.isPending ||
+              (sourceType === "image" ? source.length < 50 : source.trim().length < 10)
+            }
             onClick={() =>
               analyze.mutate({
                 engId,
@@ -92,6 +142,7 @@ export function ProcessesTab({ engId }: { engId: string }) {
                   name: name || undefined,
                   scopeHint: scopeHint || undefined,
                   source,
+                  sourceType,
                   depth: "design",
                 },
               })

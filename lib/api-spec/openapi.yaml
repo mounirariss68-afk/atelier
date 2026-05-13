@@ -2084,10 +2084,7 @@ components:
       properties:
         name: { type: string }
         source: { type: string, minLength: 10 }
-        sourceType:
-          type: string
-          enum: [text, transcript, bpmn]
-          default: text
+        sourceType: { type: string, enum: [text, transcript, bpmn, image], default: text }
         scopeHint: { type: string }
         depth: { type: string, enum: [sketch, design], default: design }
     AtelierAnalyzeProcessResponse:

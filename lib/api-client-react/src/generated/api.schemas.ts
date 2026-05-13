@@ -1198,6 +1198,7 @@ export const AtelierAnalyzeProcessInputSourceType = {
   text: "text",
   transcript: "transcript",
   bpmn: "bpmn",
+  image: "image",
 } as const;
 
 export type AtelierAnalyzeProcessInputDepth =

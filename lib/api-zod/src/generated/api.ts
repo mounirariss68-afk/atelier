@@ -1633,7 +1633,7 @@ export const AtelierAnalyzeProcessBody = zod.object({
   name: zod.string().optional(),
   source: zod.string().min(atelierAnalyzeProcessBodySourceMin),
   sourceType: zod
-    .enum(["text", "transcript", "bpmn"])
+    .enum(["text", "transcript", "bpmn", "image"])
     .default(atelierAnalyzeProcessBodySourceTypeDefault),
   scopeHint: zod.string().optional(),
   depth: zod

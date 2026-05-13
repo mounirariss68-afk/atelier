@@ -3,7 +3,9 @@ import {
   useAtelierGetProposal,
   useAtelierComposeProposal,
   useAtelierApproveProposalSection,
+  useAtelierApproveProposalPricing,
   useAtelierSendProposal,
+  useAtelierGetMe,
   getAtelierGetProposalQueryKey,
   type AtelierProposalDetail,
 } from "@workspace/api-client-react";
@@ -35,6 +37,12 @@ export function ProposalTab({ oppId }: { oppId: string }) {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
     },
   });
+  const approvePricing = useAtelierApproveProposalPricing({
+    mutation: {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
+    },
+  });
+  const { data: me } = useAtelierGetMe();
   const send = useAtelierSendProposal({
     mutation: {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
@@ -66,6 +74,10 @@ export function ProposalTab({ oppId }: { oppId: string }) {
   const pricing = proposal.pricingModel as
     | { totalRevenueUsd: number; totalCostUsd: number; marginPct: number; verdict: string }
     | undefined;
+  const pricingApprovedAt = (proposal.pricingIntent as { pricingApprovedAt?: string } | null)
+    ?.pricingApprovedAt;
+  const isPartner = me?.role === "partner";
+  const pricingNeedsOverride = pricing?.verdict === "partner_override_required";
   const matrix = (proposal.complianceMatrix ?? []) as { rfpReqId: string; requirement: string; status: string; evidence: string }[];
 
   return (
@@ -84,6 +96,26 @@ export function ProposalTab({ oppId }: { oppId: string }) {
               disabled={compose.isPending}
             >
               Recompose
+            </PillButton>
+            <PillButton
+              variant={pricingApprovedAt ? "ghost" : "primary"}
+              data-testid="button-approve-pricing"
+              onClick={() => approvePricing.mutate({ proposalId: proposal.id })}
+              disabled={
+                !isPartner ||
+                approvePricing.isPending ||
+                !!pricingApprovedAt ||
+                pricingNeedsOverride
+              }
+              title={
+                !isPartner ? "Partner-only checkpoint"
+                : pricingNeedsOverride ? "Margin below target — override required"
+                : pricingApprovedAt ? `Approved ${new Date(pricingApprovedAt).toLocaleString()}`
+                : "Approve pricing before sending"
+              }
+            >
+              {pricingApprovedAt ? "Pricing approved" :
+                approvePricing.isPending ? "Approving…" : "Approve pricing"}
             </PillButton>
             <PillButton
               variant="primary"

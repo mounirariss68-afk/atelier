@@ -31,6 +31,10 @@ import {
   runPrototypeForge,
   runProposalComposer,
 } from "../../lib/atelier-agents/runner.js";
+import { generateProposalDocs, ATELIER_ARTIFACT_DIR } from "../../lib/atelier-agents/proposal-docs.js";
+import { createReadStream, existsSync } from "node:fs";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { ensureEngAccess, audit } from "./engagementRoutes.js";
 
 function rid(prefix: string): string {
@@ -103,30 +107,51 @@ router.post("/engagements/:engId/processes", async (req, res) => {
   const body = req.body as {
     name?: string;
     source?: string;
-    sourceType?: "text" | "transcript" | "bpmn";
+    sourceType?: "text" | "transcript" | "bpmn" | "image";
     scopeHint?: string;
     depth?: "sketch" | "design";
   };
-  if (!body.source || body.source.trim().length < 10) {
+  const sourceType = body.sourceType ?? "text";
+  if (sourceType !== "image" && (!body.source || body.source.trim().length < 10)) {
     res.status(400).json({ error: "source-too-short" });
+    return;
+  }
+  if (sourceType === "image" && (!body.source || body.source.length < 50)) {
+    res.status(400).json({ error: "image-payload-required" });
     return;
   }
   // Normalize each accepted sourceType into the canonical text the runner
   // expects. Transcripts are line-stripped of speaker tags; BPMN XML is
   // extracted into ordered task names so step extraction still works.
-  let normalizedSource = body.source;
-  const sourceType = body.sourceType ?? "text";
+  // Images use a deterministic mock OCR (hash-of-bytes → pinned step labels)
+  // so the demo loop is reproducible without an actual vision model.
+  let normalizedSource = body.source ?? "";
   if (sourceType === "transcript") {
-    normalizedSource = body.source
+    normalizedSource = (body.source ?? "")
       .split(/\r?\n/)
       .map((l) => l.replace(/^\s*[A-Za-z][\w .'-]{0,40}:\s*/, "").trim())
       .filter(Boolean)
       .join(". ");
   } else if (sourceType === "bpmn") {
     const taskNames = Array.from(
-      body.source.matchAll(/<bpmn:?(?:userTask|task|serviceTask|sendTask)[^>]*name="([^"]+)"/gi),
+      (body.source ?? "").matchAll(/<bpmn:?(?:userTask|task|serviceTask|sendTask)[^>]*name="([^"]+)"/gi),
     ).map((m) => m[1]);
     if (taskNames.length) normalizedSource = taskNames.join(". ");
+  } else if (sourceType === "image") {
+    // Mock OCR: derive a stable step-count from a SHA-256 of the bytes,
+    // emit pinned step labels suitable for the Process Reader sub-agent.
+    const b64 = (body.source ?? "").replace(/^data:[^;]+;base64,/, "");
+    const digest = createHash("sha256").update(b64).digest();
+    const stepCount = 4 + (digest[0]! % 3); // 4..6 steps
+    const palette = [
+      "Inbound request received",
+      "Owner triages and classifies",
+      "Specialist enriches with system data",
+      "Quote or response is drafted",
+      "Approver reviews against policy",
+      "Outbound reply is sent to customer",
+    ];
+    normalizedSource = palette.slice(0, stepCount).join(". ");
   }
   const { runId, output } = await runAgentArchitect({
     engagementId: eng.id,
@@ -679,10 +704,26 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
     res.status(409).json({ error: "pricing-not-yet-approved" });
     return;
   }
-  // Deterministic stub artifact URL — real DOCX/PDF assembly is wired
-  // through the artifacts pipeline in a follow-up. Path encodes proposal
-  // id so downstream artifact retrieval can locate the rendered file.
-  const artifactUrl = `/api/atelier/artifacts/proposal-${proposal.id}.pdf`;
+  // Render real DOCX + PDF artifacts via the proposal-docs pipeline and
+  // persist their public URLs on the proposal row.
+  const { pdfFile, docxFile } = await generateProposalDocs({
+    proposalId: proposal.id,
+    title: proposal.title,
+    winThemes: (proposal.winThemes as string[] | null) ?? [],
+    sections: sections.map((s) => ({
+      sectionId: s.sectionId,
+      name: s.name,
+      ownerAgent: s.ownerAgent ?? "agent",
+      status: s.status,
+      content: s.content as string | null,
+    })),
+    pricingModel: proposal.pricingModel as ProposalDocsInputPricing,
+    complianceMatrix: (proposal.complianceMatrix as Array<{
+      rfpReqId: string; requirement: string; status: string; evidence: string;
+    }> | null) ?? [],
+  });
+  const pdfUrl = `/api/atelier/artifacts/${pdfFile}`;
+  const docxUrl = `/api/atelier/artifacts/${docxFile}`;
   const [updated] = await db
     .update(atelierProposals)
     .set({ status: "sent", updatedAt: new Date() })
@@ -693,10 +734,32 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
     entityId: proposal.opportunityId,
     actor: me,
     action: "proposal.send",
-    payload: { proposalId: proposal.id, artifactUrl },
+    payload: { proposalId: proposal.id, pdfUrl, docxUrl },
     summary: `${me.name} sent proposal "${proposal.title}" to client`,
   });
-  res.json({ proposal: updated, artifactUrl });
+  res.json({ proposal: updated, pdfUrl, docxUrl });
 });
+
+// Static-ish file server for generated proposal artifacts. Files live in
+// os.tmpdir()/atelier-artifacts and are name-prefixed with proposal-id, so
+// access control falls back on the unguessable id (the same posture used
+// for other generated artifacts in the workspace).
+router.get("/artifacts/:filename", (req, res) => {
+  const safe = req.params.filename.replace(/[^A-Za-z0-9._-]/g, "");
+  if (!safe || safe !== req.params.filename) {
+    res.status(400).json({ error: "bad-filename" });
+    return;
+  }
+  const full = join(ATELIER_ARTIFACT_DIR, safe);
+  if (!existsSync(full)) { res.status(404).json({ error: "not-found" }); return; }
+  const ct = safe.endsWith(".pdf") ? "application/pdf"
+    : safe.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    : "application/octet-stream";
+  res.setHeader("content-type", ct);
+  res.setHeader("content-disposition", `inline; filename="${safe}"`);
+  createReadStream(full).pipe(res);
+});
+
+type ProposalDocsInputPricing = Parameters<typeof generateProposalDocs>[0]["pricingModel"];
 
 export default router;
