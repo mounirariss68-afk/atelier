@@ -262,7 +262,7 @@ export default function Admin() {
                     data-testid="switch-ip-allowlist"
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-border-soft">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-border-soft">
                   <div className="flex items-start gap-2">
                     <KeyRound className="w-4 h-4 text-gold mt-0.5" />
                     <div>
@@ -279,6 +279,15 @@ export default function Admin() {
                       <div className="text-xs text-text-mute" data-testid="text-audit-retention">
                         {posture.immutableAuditEnabled ? "Append-only" : "Disabled"} ·{" "}
                         {posture.immutableAuditRetentionYears}y retention
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Lock className="w-4 h-4 text-gold mt-0.5" />
+                    <div>
+                      <div className="text-text text-sm font-semibold">Data Residency</div>
+                      <div className="text-xs text-text-mute" data-testid="text-residency-region">
+                        {posture.residencyRegion}
                       </div>
                     </div>
                   </div>

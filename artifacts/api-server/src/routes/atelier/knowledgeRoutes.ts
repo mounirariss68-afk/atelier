@@ -464,13 +464,17 @@ router.get("/admin/founder-todos", async (req, res) => {
     res.status(403).json({ error: "partner-only" });
     return;
   }
+  // PRD §10 — founder decision defaults. These are the firm-wide
+  // defaults the founding partner must lock in pre-GA; the operator
+  // console resolves them, but they surface here so partners see the
+  // pending defaults at a glance.
   res.json({
     items: [
-      "Sign DPA + sub-processor list with model providers",
-      "Confirm primary data-residency region with each anchor client",
-      "Activate per-engagement RLS enforcement in production cluster",
-      "Wire SOC 2 Type II audit evidence collector to immutable-audit stream",
-      "Validate Arabic-first deliverable variants with Tasama + Aldrees stakeholders",
+      "Set firm-wide target margin % (default 55% pending founder lock)",
+      "Lock QBR cadence (default quarterly · founder to confirm cadence + format)",
+      "Charter the Deal Review Board (membership + quorum + escalation path)",
+      "Approve async-video as a first-class deliverable channel (default on; founder sign-off)",
+      "Activate Client-Side Discovery Agent v3 in production (default off pending founder go-live)",
     ],
   });
 });
