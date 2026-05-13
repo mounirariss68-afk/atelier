@@ -29,6 +29,7 @@ import {
 } from "@workspace/db";
 import {
   computePricing,
+  classifyMarginGate,
   type MarginPolicy,
   type RateCardRowLite,
   type TeamMixEntry,
@@ -464,7 +465,12 @@ router.post("/opportunities/:oppId/pricing/override", async (req, res) => {
     res.status(404).json({ error: "pricing-not-found" });
     return;
   }
-  if (pricing.marginLockStatus === "green") {
+  // Re-classify against the *current* policy so a tightened/loosened
+  // policy is honoured immediately. Override is required when the live
+  // gate flags partnerOverrideRequired, regardless of the snapshot.
+  const livePolicyForOverride = await loadDefaultPolicy();
+  const liveGateForOverride = classifyMarginGate(pricing.computedMarginPct, livePolicyForOverride);
+  if (!liveGateForOverride.partnerOverrideRequired) {
     res.status(409).json({ error: "no-override-needed" });
     return;
   }
@@ -489,8 +495,8 @@ router.post("/opportunities/:oppId/pricing/override", async (req, res) => {
     payload: { rationale, marginLockStatus: pricing.marginLockStatus, marginPct: pricing.computedMarginPct },
     payloadSummary: `${me.name} overrode ${pricing.marginLockStatus.toUpperCase()} margin (${(pricing.computedMarginPct * 100).toFixed(1)}%) — "${rationale.slice(0, 80)}"`,
   });
-  // If we're in RED and the policy demands a second partner, queue Pane A.
-  if (pricing.marginLockStatus === "red") {
+  // If the live two-Partner threshold demands a second partner, queue Pane A.
+  if (liveGateForOverride.twoPartnerRequired) {
     const otherPartners = await db
       .select()
       .from(atelierUsers)
@@ -539,10 +545,12 @@ router.post("/opportunities/:oppId/pricing/countersign", async (req, res) => {
     return;
   }
   // Honour the configurable two-Partner threshold (PRD §2.4) — refuse a
-  // countersign on a margin that doesn't actually require one. Avoids
-  // accidentally generating audit noise on AMBER deals.
+  // countersign on a margin that doesn't actually require one. Uses the
+  // shared classifyMarginGate helper so submit / override / countersign
+  // can never deadlock under non-default policy settings.
   const policyForCountersign = await loadDefaultPolicy();
-  if (pricing.computedMarginPct >= policyForCountersign.twoPartnerThresholdPct) {
+  const gateForCountersign = classifyMarginGate(pricing.computedMarginPct, policyForCountersign);
+  if (!gateForCountersign.twoPartnerRequired) {
     res.status(409).json({
       error: "countersign-not-required",
       hint: `Margin ${(pricing.computedMarginPct * 100).toFixed(1)}% is at or above two-Partner threshold (${(policyForCountersign.twoPartnerThresholdPct * 100).toFixed(0)}%).`,

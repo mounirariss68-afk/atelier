@@ -100,6 +100,37 @@ export function classifyMarginStatus(
   return "red";
 }
 
+/**
+ * Single source of truth for the Atelier v2 margin-lock workflow.
+ *
+ * - `status` — chip colour (uses targetMarginPct + redThresholdPct).
+ * - `partnerOverrideRequired` — true when the deal is below target margin
+ *   (AMBER or RED). Single-Partner override is always required when below
+ *   target, regardless of where the two-Partner threshold sits.
+ * - `twoPartnerRequired` — true when the deal is below the configurable
+ *   `twoPartnerThresholdPct`. This may differ from `redThresholdPct`, and
+ *   is the *only* signal used by countersign / submit-gate / Pane A escalation.
+ *
+ * Use this helper everywhere the margin gate is evaluated (pricingRoutes
+ * override + countersign, proposalRoutes send-gate, agent runner) so that
+ * non-default policy combinations cannot deadlock or escalate incorrectly.
+ */
+export function classifyMarginGate(
+  margin: number,
+  policy: MarginPolicy,
+): {
+  status: "green" | "amber" | "red";
+  partnerOverrideRequired: boolean;
+  twoPartnerRequired: boolean;
+} {
+  const status = classifyMarginStatus(margin, policy);
+  return {
+    status,
+    partnerOverrideRequired: status !== "green",
+    twoPartnerRequired: margin < policy.twoPartnerThresholdPct,
+  };
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }

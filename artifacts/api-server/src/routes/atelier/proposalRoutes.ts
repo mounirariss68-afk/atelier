@@ -38,6 +38,7 @@ import {
   type CharterArchitectOutput,
 } from "../../lib/atelier-agents/runner.js";
 import { generateProposalDocs, ATELIER_ARTIFACT_DIR } from "../../lib/atelier-agents/proposal-docs.js";
+import { classifyMarginGate, type MarginPolicy } from "../../lib/atelier-pricing.js";
 import { createReadStream, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -1079,47 +1080,40 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
     .from(atelierDealPricings)
     .where(and(eq(atelierDealPricings.opportunityId, proposal.opportunityId), isNull(atelierDealPricings.deletedAt)));
   if (dealPricing) {
-    // Re-classify against the *current* margin policy so a tightened policy
-    // immediately closes the gate on previously-saved deal pricing rows.
-    const [livePolicy] = await db
+    // Re-classify against the *current* margin policy via the shared
+    // classifyMarginGate helper so submit / override / countersign all
+    // share one source of truth and cannot deadlock when targetMarginPct,
+    // redThresholdPct and twoPartnerThresholdPct are independently tuned.
+    const [livePolicyRow] = await db
       .select()
       .from(atelierMarginPolicies)
       .where(and(eq(atelierMarginPolicies.isDefault, true), isNull(atelierMarginPolicies.deletedAt)));
     const margin = dealPricing.computedMarginPct;
-    let liveStatus: "green" | "amber" | "red" = dealPricing.marginLockStatus as "green" | "amber" | "red";
-    if (livePolicy) {
-      liveStatus = margin >= livePolicy.targetMarginPct
-        ? "green"
-        : margin >= livePolicy.redThresholdPct
-          ? "amber"
-          : "red";
-    }
-    if (liveStatus === "amber" && !dealPricing.partnerOverrideId) {
+    const livePolicy: MarginPolicy = livePolicyRow ?? {
+      targetMarginPct: 0.55,
+      amberThresholdPct: 0.5,
+      redThresholdPct: 0.45,
+      twoPartnerThresholdPct: 0.45,
+    };
+    const gate = classifyMarginGate(margin, livePolicy);
+    if (gate.partnerOverrideRequired && !dealPricing.partnerOverrideId) {
       res.status(409).json({
-        error: "margin-lock-amber",
+        error: gate.status === "red" ? "margin-lock-red" : "margin-lock-amber",
         hint: "Use POST /opportunities/:id/pricing/override (Partner) with rationale",
         marginPct: margin,
+        twoPartnerRequired: gate.twoPartnerRequired,
       });
       return;
     }
-    if (liveStatus === "red") {
-      if (!dealPricing.partnerOverrideId) {
-        res.status(409).json({
-          error: "margin-lock-red",
-          hint: "Use POST /opportunities/:id/pricing/override (Partner) then countersign",
-          marginPct: margin,
-        });
-        return;
-      }
-      if (!dealPricing.countersignPartnerId) {
-        res.status(409).json({
-          error: "margin-lock-red-countersign-required",
-          hint: "Use POST /opportunities/:id/pricing/countersign (different Partner) with rationale",
-          marginPct: margin,
-          firstOverrideBy: dealPricing.partnerOverrideId,
-        });
-        return;
-      }
+    if (gate.twoPartnerRequired && !dealPricing.countersignPartnerId) {
+      res.status(409).json({
+        error: "margin-lock-countersign-required",
+        hint: "Use POST /opportunities/:id/pricing/countersign (different Partner) with rationale",
+        marginPct: margin,
+        firstOverrideBy: dealPricing.partnerOverrideId,
+        twoPartnerThresholdPct: livePolicy.twoPartnerThresholdPct,
+      });
+      return;
     }
   }
   // Render real DOCX + PDF artifacts via the proposal-docs pipeline and
