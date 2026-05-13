@@ -43,6 +43,7 @@ export function TopNav() {
     { href: "/crm", label: "CRM" },
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
+    { href: "/roster/people", label: "Roster" },
     { href: "/forecast", label: "Forecast" },
     { href: "/win-loss", label: "Win Themes" },
     { href: "/atelier", label: "Atelier" },

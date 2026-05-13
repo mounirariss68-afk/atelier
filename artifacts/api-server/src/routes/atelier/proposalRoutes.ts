@@ -113,6 +113,9 @@ async function canAccessEngagement(
       and(
         eq(atelierEngagementAccess.engagementId, eng.id),
         eq(atelierEngagementAccess.userId, me.id),
+        // Task #254 — Sentinel writes status='revoked' on revoke; ACL
+        // must enforce status='active' so revocation actually denies reads.
+        eq(atelierEngagementAccess.status, "active"),
         isNull(atelierEngagementAccess.deletedAt),
       ),
     );

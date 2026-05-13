@@ -33,6 +33,11 @@ import {
   atelierAgents,
   atelierAgentRuns,
   atelierAuditEvents,
+  atelierEmployees,
+  atelierContractors,
+  atelierPartnerFirms,
+  atelierPartnerFirmResources,
+  atelierPersonDocuments,
   atelierRaidItems,
   atelierHypothesisTrees,
   atelierProcesses,
@@ -1296,6 +1301,28 @@ const AGENTS: AgentSeed[] = [
     guardrails: ["Approver role required for any 'approve' transition"],
     humanCheckpoints: ["Approver decision is final"],
     runsLast30d: 9,
+  },
+  // Task #254 — v3 Roster: the Access Sentinel.
+  {
+    id: "ag_access_sentinel",
+    name: "Access Sentinel",
+    group: "Operations",
+    stage: "Govern",
+    purpose:
+      "Validates engagement-access grants. Blocks pricing/margin scope for non-employees, freezes grants on closed engagements, and writes an audit row for every grant or revoke.",
+    model: "claude-sonnet-4-6",
+    starred: false,
+    status: "mvp",
+    tools: ["roster.grant", "roster.revoke", "audit.write"],
+    guardrails: [
+      "Pricing and margin scope are denied for contractors and partner-firm resources",
+      "Grants on closed engagements are frozen — Sentinel proposes revocation instead",
+      "Only Partner / Operations / Engagement Lead may write grants",
+    ],
+    humanCheckpoints: [
+      "Operations confirms revocation when an engagement closes",
+    ],
+    runsLast30d: 0,
   },
 ];
 
@@ -3050,8 +3077,258 @@ async function main() {
     { id: "sr_2", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, kind: "meeting",      title: "Workshop on residency & identity controls",detail: "Block 90 minutes with Layla and Omar in the next two weeks.",status: "in_progress",raisedBySalonUserId: "su_tasama_approver", raisedByName: NAME_OF.su_tasama_approver, raisedAt: DAYS_AGO(1) },
   ]);
 
+  // ============================================================
+  // Task #254 — v3 Roster: employees, contractors, partner-firm resources.
+  // ============================================================
+  console.log("[seed-atelier] v3 roster: employees…");
+  // Backfill the 5 v1/v2 personas as employees with sensible defaults.
+  // Comp/banking fields are populated so Partner/Operations personas have
+  // realistic data to view; non-Partner personas see them stripped.
+  const EMPLOYEES = [
+    {
+      id: "emp_p_mounir_ariss",
+      userId: "p_mounir_ariss",
+      fullName: "Mounir Ariss",
+      email: "mounir@aico.example",
+      role: "partner",
+      seniority: "founding_partner",
+      title: "Founding Partner",
+      country: "AE",
+      employmentType: "FTE",
+      homeOffice: "Dubai",
+      payrollCountry: "AE",
+      employeeIdExternal: "AICO-0001",
+      iban: "AE070331234567890123456",
+      swift: "EBILAEAD",
+      noticePeriodDays: 90,
+      startDate: "2023-01-15",
+      status: "active",
+    },
+    {
+      id: "emp_p_layla_haddad",
+      userId: "p_layla_haddad",
+      fullName: "Layla Haddad",
+      email: "layla@aico.example",
+      role: "engagement_lead",
+      seniority: "principal",
+      title: "Engagement Lead",
+      country: "SA",
+      employmentType: "FTE",
+      homeOffice: "Riyadh",
+      payrollCountry: "SA",
+      employeeIdExternal: "AICO-0002",
+      iban: "SA0380000000608010167519",
+      swift: "RJHISARI",
+      noticePeriodDays: 60,
+      startDate: "2023-04-01",
+      status: "active",
+    },
+    {
+      id: "emp_p_omar_najjar",
+      userId: "p_omar_najjar",
+      fullName: "Omar Najjar",
+      email: "omar@aico.example",
+      role: "sme",
+      seniority: "senior_consultant",
+      title: "Subject-Matter Expert — Operations",
+      country: "AE",
+      employmentType: "FTE",
+      homeOffice: "Dubai",
+      payrollCountry: "AE",
+      employeeIdExternal: "AICO-0003",
+      iban: "AE070331234567890999111",
+      swift: "EBILAEAD",
+      noticePeriodDays: 30,
+      startDate: "2024-02-12",
+      status: "active",
+    },
+    {
+      id: "emp_p_sara_qureshi",
+      userId: "p_sara_qureshi",
+      fullName: "Sara Qureshi",
+      email: "sara@aico.example",
+      role: "ai_engineer",
+      seniority: "consultant",
+      title: "AI Engineer",
+      country: "AE",
+      employmentType: "FTE",
+      homeOffice: "Dubai",
+      payrollCountry: "AE",
+      employeeIdExternal: "AICO-0004",
+      iban: "AE070331234567899911234",
+      swift: "EBILAEAD",
+      noticePeriodDays: 30,
+      startDate: "2024-08-19",
+      status: "active",
+    },
+    {
+      id: "emp_p_youssef_idrissi",
+      userId: "p_youssef_idrissi",
+      fullName: "Youssef Idrissi",
+      email: "youssef@aico.example",
+      role: "business_developer",
+      seniority: "associate",
+      title: "Business Developer",
+      country: "SA",
+      employmentType: "FTE",
+      homeOffice: "Riyadh",
+      payrollCountry: "SA",
+      employeeIdExternal: "AICO-0005",
+      iban: "SA0380000000608010189999",
+      swift: "RJHISARI",
+      noticePeriodDays: 30,
+      startDate: "2025-01-06",
+      status: "active",
+    },
+  ];
+  // Only insert employees whose userId actually exists in atelier_users.
+  const existingUserIds = new Set(
+    (await db.select({ id: atelierUsers.id }).from(atelierUsers)).map(
+      (u) => u.id,
+    ),
+  );
+  const employeesToInsert = EMPLOYEES.filter((e) =>
+    existingUserIds.has(e.userId),
+  );
+  if (employeesToInsert.length > 0) {
+    await db.insert(atelierEmployees).values(employeesToInsert);
+  }
+
+  console.log("[seed-atelier] v3 roster: contractors…");
+  const CONTRACTORS = [
+    {
+      id: "ct_hadeel_aljarrah",
+      fullName: "Hadeel Al-Jarrah",
+      email: "hadeel.contract@aico.example",
+      vendorEntity: "Al-Jarrah Consulting LLC",
+      country: "SA",
+      dayRateAmount: 12500_00, // SAR cents
+      dayRateCurrency: "SAR",
+      startDate: "2025-09-01",
+      endDate: "2026-02-28",
+      status: "active",
+      notes:
+        "Six-month contractor on Tasama phase-1 — operations design support.",
+    },
+    {
+      id: "ct_rami_haddad",
+      fullName: "Rami Haddad",
+      email: "rami.contract@aico.example",
+      vendorEntity: "Levant Digital FZ-LLC",
+      country: "AE",
+      dayRateAmount: 9800_00, // AED cents
+      dayRateCurrency: "AED",
+      startDate: "2025-11-15",
+      endDate: "2026-05-15",
+      status: "active",
+      notes:
+        "Frontend contractor on Aldrees workshop tooling.",
+    },
+  ];
+  await db.insert(atelierContractors).values(CONTRACTORS);
+
+  console.log("[seed-atelier] v3 roster: partner firms…");
+  const PARTNER_FIRMS = [
+    {
+      id: "pf_bgts",
+      name: "BGTS",
+      country: "SA",
+      contractStatus: "active",
+      notes: "Saudi delivery partner — agentic operations.",
+    },
+    {
+      id: "pf_thoughtworks",
+      name: "Thoughtworks",
+      country: "AE",
+      contractStatus: "active",
+      notes: "Global engineering partner — embedded squads.",
+    },
+    {
+      id: "pf_mobven",
+      name: "Mobven",
+      country: "TR",
+      contractStatus: "active",
+      notes: "Turkish mobile-first partner — front-of-house apps.",
+    },
+  ];
+  await db.insert(atelierPartnerFirms).values(PARTNER_FIRMS);
+
+  console.log("[seed-atelier] v3 roster: partner-firm resources…");
+  const PARTNER_RESOURCES = [
+    {
+      id: "pfr_bgts_yara",
+      partnerFirmId: "pf_bgts",
+      fullName: "Yara Al-Suwaidi",
+      email: "yara.suwaidi@bgts.example",
+      role: "Senior Consultant",
+      seniority: "senior_consultant",
+      country: "SA",
+      dayRateAmount: 15000_00,
+      dayRateCurrency: "SAR",
+      startDate: "2025-09-01",
+      endDate: "2026-08-31",
+      status: "active",
+    },
+    {
+      id: "pfr_bgts_khalid",
+      partnerFirmId: "pf_bgts",
+      fullName: "Khalid Al-Otaibi",
+      email: "khalid.otaibi@bgts.example",
+      role: "Solution Architect",
+      seniority: "principal",
+      country: "SA",
+      dayRateAmount: 18500_00,
+      dayRateCurrency: "SAR",
+      startDate: "2025-10-15",
+      endDate: "2026-04-15",
+      status: "active",
+    },
+    {
+      id: "pfr_tw_priya",
+      partnerFirmId: "pf_thoughtworks",
+      fullName: "Priya Iyer",
+      email: "priya.iyer@thoughtworks.example",
+      role: "Lead Engineer",
+      seniority: "principal",
+      country: "AE",
+      dayRateAmount: 14800_00,
+      dayRateCurrency: "AED",
+      startDate: "2025-11-01",
+      endDate: "2026-10-31",
+      status: "active",
+    },
+    {
+      id: "pfr_mobven_can",
+      partnerFirmId: "pf_mobven",
+      fullName: "Can Demir",
+      email: "can.demir@mobven.example",
+      role: "Mobile Engineer",
+      seniority: "consultant",
+      country: "TR",
+      dayRateAmount: 6800_00,
+      dayRateCurrency: "EUR",
+      startDate: "2026-01-15",
+      endDate: "2026-12-31",
+      status: "active",
+    },
+  ];
+  await db.insert(atelierPartnerFirmResources).values(PARTNER_RESOURCES);
+
+  console.log("[seed-atelier] v3 roster: a placeholder document on Mounir…");
+  await db.insert(atelierPersonDocuments).values([
+    {
+      id: "doc_mounir_nda_2025",
+      personType: "employee",
+      personId: "emp_p_mounir_ariss",
+      kind: "nda",
+      title: "Founder NDA — 2025",
+      fileUrl: null,
+      uploadedByUserId: "p_mounir_ariss",
+    },
+  ]);
+
   console.log(
-    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published).`,
+    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published) · ${employeesToInsert.length} employees · ${CONTRACTORS.length} contractors · ${PARTNER_FIRMS.length} partner firms · ${PARTNER_RESOURCES.length} partner-firm resources.`,
   );
 }
 

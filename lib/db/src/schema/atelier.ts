@@ -317,13 +317,26 @@ export const atelierEngagementAccess = pgTable(
     id: text("id").primaryKey(),
     engagementId: text("engagement_id").notNull(),
     userId: text("user_id").notNull(),
-    role: text("role").notNull().default("member"), // partner_owner | lead | member
+    role: text("role").notNull().default("member"), // partner_owner | lead | member | reviewer | partner_resource | contractor
+    // v3 Roster extensions (Task #254). The legacy `role` column above is the
+    // engagement-side role (lead/member/reviewer/partner_resource/contractor)
+    // and is what the Access Sentinel writes when granting access.
+    allocationPct: integer("allocation_pct").notNull().default(0), // 0..100
+    scope: jsonb("scope") // capability tokens (e.g., ["can_view_pricing","can_view_charter"])
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    status: text("status").notNull().default("active"), // active | expired | revoked
+    grantedByUserId: text("granted_by_user_id"),
+    grantedAt: timestamp("granted_at").notNull().defaultNow(),
+    endDate: timestamp("end_date"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     deletedAt: timestamp("deleted_at"),
   },
   (t) => [
     uniqueIndex("uniq_atelier_eng_access").on(t.engagementId, t.userId),
     index("idx_atelier_eng_access_user").on(t.userId),
+    index("idx_atelier_eng_access_status").on(t.status),
   ],
 );
 
@@ -1535,3 +1548,195 @@ export const atelierAdminSettings = pgTable("atelier_admin_settings", {
   value: jsonb("value").notNull().default({}).$type<Record<string, unknown>>(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// ============================================================
+// v3 ROSTER (Task #254) — Employees / Contractors / Partner-firm
+// resources, plus partner economics, conflict disclosures, and
+// person documents. See PRD §2.1.
+// ============================================================
+export const atelierEmployees = pgTable(
+  "atelier_employees",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    userId: text("user_id"), // FK → atelier_users (nullable: pre-login hires)
+    employeeIdExternal: text("employee_id_external"),
+    fullName: text("full_name").notNull(),
+    preferredName: text("preferred_name"),
+    email: text("email").notNull(),
+    role: text("role").notNull(), // mirrors atelier_users.role
+    seniority: text("seniority").notNull().default("consultant"),
+    // 'analyst' | 'consultant' | 'senior_consultant' | 'manager' | 'principal' | 'partner'
+    title: text("title"),
+    homeOffice: text("home_office"),
+    country: text("country"),
+    payrollCountry: text("payroll_country"),
+    employmentType: text("employment_type").notNull().default("FTE"), // FTE | fixed_term | intern
+    startDate: text("start_date"), // ISO date
+    endDate: text("end_date"),
+    status: text("status").notNull().default("active"), // active | on_leave | offboarded
+    iban: text("iban"),
+    swift: text("swift"),
+    noticePeriodDays: integer("notice_period_days").notNull().default(30),
+    partnerEconomicsId: text("partner_economics_id"),
+    avatarUrl: text("avatar_url"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_employees_org").on(t.orgId),
+    index("idx_atelier_employees_user").on(t.userId),
+    index("idx_atelier_employees_status").on(t.status),
+    uniqueIndex("uniq_atelier_employees_email").on(t.orgId, t.email),
+  ],
+);
+
+export const atelierContractors = pgTable(
+  "atelier_contractors",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    fullName: text("full_name").notNull(),
+    email: text("email").notNull(),
+    country: text("country"),
+    vendorEntity: text("vendor_entity"),
+    masterAgreementRef: text("master_agreement_ref"),
+    dayRateAmount: doublePrecision("day_rate_amount"),
+    dayRateCurrency: text("day_rate_currency").notNull().default("USD"),
+    startDate: text("start_date"),
+    endDate: text("end_date"),
+    status: text("status").notNull().default("active"), // active | paused | offboarded
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_contractors_org").on(t.orgId),
+    index("idx_atelier_contractors_status").on(t.status),
+  ],
+);
+
+export const atelierPartnerFirms = pgTable(
+  "atelier_partner_firms",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    name: text("name").notNull(),
+    country: text("country"),
+    masterAgreementRef: text("master_agreement_ref"),
+    masterAgreementUrl: text("master_agreement_url"),
+    contactName: text("contact_name"),
+    contactEmail: text("contact_email"),
+    status: text("status").notNull().default("active"), // active | paused | terminated
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_partner_firms_org").on(t.orgId)],
+);
+
+export const atelierPartnerFirmResources = pgTable(
+  "atelier_partner_firm_resources",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    fullName: text("full_name").notNull(),
+    email: text("email"),
+    role: text("role"),
+    seniority: text("seniority"),
+    country: text("country"),
+    dayRateAmount: doublePrecision("day_rate_amount"),
+    dayRateCurrency: text("day_rate_currency").notNull().default("USD"),
+    startDate: text("start_date"),
+    endDate: text("end_date"),
+    status: text("status").notNull().default("active"), // active | paused | offboarded
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_partner_firm_res_org").on(t.orgId),
+    index("idx_atelier_partner_firm_res_firm").on(t.partnerFirmId),
+  ],
+);
+
+// Placeholder per PRD §2.1 — full schema lands in a later task.
+export const atelierPartnerEconomics = pgTable(
+  "atelier_partner_economics",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    employeeId: text("employee_id").notNull(),
+    profitShareBps: integer("profit_share_bps").notNull().default(0),
+    vestingSchedule: jsonb("vesting_schedule")
+      .$type<Array<{ date: string; bps: number }>>()
+      .notNull()
+      .default([]),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_partner_econ_org").on(t.orgId),
+    index("idx_atelier_partner_econ_emp").on(t.employeeId),
+  ],
+);
+
+export const atelierConflictDisclosures = pgTable(
+  "atelier_conflict_disclosures",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor | partner_firm_resource
+    personId: text("person_id").notNull(),
+    disclosureText: text("disclosure_text").notNull(),
+    disclosedAt: timestamp("disclosed_at").notNull().defaultNow(),
+    status: text("status").notNull().default("active"), // active | cleared | escalated
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_conflict_org").on(t.orgId),
+    index("idx_atelier_conflict_person").on(t.personType, t.personId),
+  ],
+);
+
+export const atelierPersonDocuments = pgTable(
+  "atelier_person_documents",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor | partner_firm_resource
+    personId: text("person_id").notNull(),
+    kind: text("kind").notNull(), // contract | nda | id | tax | cert | other
+    title: text("title").notNull(),
+    fileUrl: text("file_url"),
+    uploadedByUserId: text("uploaded_by_user_id"),
+    uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_person_docs_org").on(t.orgId),
+    index("idx_atelier_person_docs_person").on(t.personType, t.personId),
+  ],
+);

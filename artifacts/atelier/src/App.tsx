@@ -26,6 +26,9 @@ import WinLoss from "@/pages/WinLoss";
 import WinLossLibrary from "@/pages/WinLossLibrary";
 import Forecast from "@/pages/Forecast";
 import Reports from "@/pages/Reports";
+import RosterPeople from "@/pages/roster/RosterPeople";
+import RosterPerson from "@/pages/roster/RosterPerson";
+import RosterAccessMatrix from "@/pages/roster/RosterAccessMatrix";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
@@ -57,6 +60,10 @@ function Router() {
         <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
         <Route path="/atelier" component={AtelierIndex} />
         <Route path="/atelier/:section" component={AtelierIndex} />
+        <Route path="/roster/access-matrix" component={RosterAccessMatrix} />
+        <Route path="/roster/people" component={RosterPeople} />
+        <Route path="/roster/people/:id" component={RosterPerson} />
+        <Route path="/roster/people/:id/:tab" component={RosterPerson} />
         <Route path="/accounts/:accountId" component={Account} />
         <Route path="/agents" component={Agents} />
         <Route path="/agents/runs/:runId" component={AgentRun} />

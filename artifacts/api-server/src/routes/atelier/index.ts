@@ -56,6 +56,7 @@ import engagementRoutes, {
 import winLossRoutes from "./winLossRoutes";
 import forecastRoutes from "./forecastRoutes";
 import reportsRoutes from "./reportsRoutes";
+import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -103,6 +104,10 @@ router.use(pricingRoutes);
 router.use(winLossRoutes);
 router.use(forecastRoutes);
 router.use(reportsRoutes);
+// Mount v3 Roster routes (Task #254). Roster endpoints accept any
+// authenticated persona — comp/bank fields are stripped server-side
+// for non-Partner/Operations callers.
+router.use(rosterRoutes);
 
 function ensurePersona(
   req: Request,
@@ -207,7 +212,7 @@ function greetingFor(name: string, hour: number): string {
   return `${period}, ${first}.`;
 }
 
-router.get("/home", async (req, res) => {
+router.get("/home", rejectNonEmployeePersona, async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
 
@@ -307,7 +312,7 @@ router.get("/home", async (req, res) => {
 // =============================================================
 // Activity stream
 // =============================================================
-router.get("/activity", async (req, res) => {
+router.get("/activity", rejectNonEmployeePersona, async (req, res) => {
   const parsed = AtelierGetActivityQueryParams.safeParse(req.query);
   const limit = parsed.success ? (parsed.data.limit ?? 20) : 20;
 
@@ -400,7 +405,7 @@ async function buildOpportunityWire(
   };
 }
 
-router.get("/opportunities", async (req, res) => {
+router.get("/opportunities", rejectNonEmployeePersona, async (req, res) => {
   // Optional query filters: ?stage=&owner=&sector=&account= (CSV allowed).
   // Filtering happens after buildOpportunityWire because salesStage may be
   // derived at read time for legacy rows that pre-date the v2 column.
@@ -431,13 +436,13 @@ router.get("/opportunities", async (req, res) => {
   res.json(AtelierListOpportunitiesResponse.parse(wire));
 });
 
-router.get("/opportunities/:oppId", async (req, res) => {
+router.get("/opportunities/:oppId", rejectNonEmployeePersona, async (req, res) => {
   const [row] = await db
     .select()
     .from(atelierOpportunities)
     .where(
       and(
-        eq(atelierOpportunities.id, req.params.oppId),
+        eq(atelierOpportunities.id, req.params.oppId as string),
         isNull(atelierOpportunities.deletedAt),
       ),
     );
@@ -549,7 +554,7 @@ router.get("/agents", async (_req, res) => {
   );
 });
 
-router.get("/assets", async (_req, res) => {
+router.get("/assets", rejectNonEmployeePersona, async (_req, res) => {
   const rows = await db
     .select()
     .from(atelierAssets)

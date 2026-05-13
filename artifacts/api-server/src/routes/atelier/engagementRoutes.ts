@@ -93,6 +93,9 @@ export async function accessibleEngagementIds(
     .where(
       and(
         eq(atelierEngagementAccess.userId, me.id),
+        // Task #254 — Sentinel sets status='revoked' on revoke, so the ACL
+        // must check status (not just deletedAt) to enforce effective revocation.
+        eq(atelierEngagementAccess.status, "active"),
         isNull(atelierEngagementAccess.deletedAt),
       ),
     );
@@ -121,6 +124,8 @@ export async function ensureEngAccess(
       and(
         eq(atelierEngagementAccess.engagementId, eng.id),
         eq(atelierEngagementAccess.userId, me.id),
+        // Task #254 — see accessibleEngagementIds for rationale.
+        eq(atelierEngagementAccess.status, "active"),
         isNull(atelierEngagementAccess.deletedAt),
       ),
     );
