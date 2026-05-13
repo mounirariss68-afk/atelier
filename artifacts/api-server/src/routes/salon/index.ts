@@ -756,7 +756,7 @@ router.post("/deliverables/:id/download-attempt", async (req, res, next) => {
           isNull(atelierSalonUserEngagementAccess.deletedAt),
         ),
       );
-    if (!access) {
+    if (!access || access.revokedAt) {
       res.status(403).json({ error: "no-engagement-access" });
       return;
     }
