@@ -21,7 +21,7 @@ export default function RosterAccessMatrix() {
   React.useEffect(() => {
     fetch("/api/atelier/roster/access-matrix", { credentials: "include" })
       .then(async (r) => {
-        if (r.status === 403) throw new Error("Partner / Operations only.");
+        if (r.status === 403) throw new Error("Partner only.");
         return r.json();
       })
       .then((d) => setGrants(d.grants ?? []))

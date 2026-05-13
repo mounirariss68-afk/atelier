@@ -149,7 +149,7 @@ function ProfileTab({
           Compensation & banking
           {!viewerCanSeeComp && (
             <MonoChip className="text-warning border-warning/40">
-              hidden — Partner / Operations only
+              hidden — Partner / Operations only (comp-policy lock)
             </MonoChip>
           )}
         </h3>

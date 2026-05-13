@@ -18,6 +18,8 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, desc, eq, isNull, or, ilike, inArray, sql } from "drizzle-orm";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { ensureEngAccess } from "./engagementRoutes.js";
 import {
   db,
   atelierUsers,
@@ -700,17 +702,114 @@ router.get("/roster/people/:id/documents", async (req, res, next) => {
         ),
       )
       .orderBy(desc(atelierPersonDocuments.uploadedAt));
-    // Document files are placeholder metadata in this task — fileUrl is
-    // surfaced as-is (never streamed). Storage wiring lands in #255.
+    // Task #254 round-10 — return list metadata + a short-lived signed
+    // download URL. Real object-storage streaming lands in #255; for now
+    // we emit a tokenized URL whose contract (HMAC + expiry) is stable so
+    // the frontend wiring does not change later.
     res.json({
       documents: docs.map((d) => ({
         id: d.id,
         kind: d.kind,
         title: d.title,
-        fileUrl: d.fileUrl,
         uploadedAt: d.uploadedAt.toISOString(),
         expiresAt: d.expiresAt?.toISOString() ?? null,
+        downloadUrl: `/api/atelier/roster/people/${person.id}/documents/${d.id}/download?${signDocToken(person.id, d.id, me.id)}`,
       })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -----------------------------------------------------------------
+// Signed document download — Task #254 (PRD §2.1, §6 doc surface).
+// HMAC-signed, short-lived (5min), persona-bound URLs. The handler
+// re-validates the token, the persona, and the doc ownership, then
+// streams the file (placeholder until #255 wires real object storage).
+// -----------------------------------------------------------------
+const DOC_TOKEN_TTL_MS = 5 * 60 * 1000;
+function docTokenSecret(): string {
+  return process.env.ATELIER_DOC_TOKEN_SECRET ?? "atelier-dev-doc-secret";
+}
+function signDocToken(personId: string, docId: string, personaId: string): string {
+  const exp = Date.now() + DOC_TOKEN_TTL_MS;
+  const payload = `${personId}|${docId}|${personaId}|${exp}`;
+  const sig = createHmac("sha256", docTokenSecret()).update(payload).digest("hex");
+  return `exp=${exp}&p=${encodeURIComponent(personaId)}&sig=${sig}`;
+}
+function verifyDocToken(
+  personId: string,
+  docId: string,
+  exp: string | undefined,
+  personaId: string | undefined,
+  sig: string | undefined,
+): boolean {
+  if (!exp || !personaId || !sig) return false;
+  const expNum = Number(exp);
+  if (!Number.isFinite(expNum) || expNum < Date.now()) return false;
+  const payload = `${personId}|${docId}|${personaId}|${expNum}`;
+  const expected = createHmac("sha256", docTokenSecret()).update(payload).digest("hex");
+  const a = Buffer.from(sig, "hex");
+  const b = Buffer.from(expected, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+router.get("/roster/people/:id/documents/:docId/download", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const exp = typeof req.query.exp === "string" ? req.query.exp : undefined;
+    const personaParam = typeof req.query.p === "string" ? req.query.p : undefined;
+    const sig = typeof req.query.sig === "string" ? req.query.sig : undefined;
+    if (personaParam !== me.id) {
+      res.status(403).json({ error: "doc-token-persona-mismatch" });
+      return;
+    }
+    if (!verifyDocToken(req.params.id, req.params.docId, exp, personaParam, sig)) {
+      res.status(403).json({ error: "doc-token-invalid-or-expired" });
+      return;
+    }
+    const person = await getPerson(req.params.id, canSeeComp(me.role));
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const [doc] = await db
+      .select()
+      .from(atelierPersonDocuments)
+      .where(
+        and(
+          eq(atelierPersonDocuments.id, req.params.docId),
+          eq(atelierPersonDocuments.personId, person.id),
+          isNull(atelierPersonDocuments.deletedAt),
+        ),
+      );
+    if (!doc) {
+      res.status(404).json({ error: "doc-not-found" });
+      return;
+    }
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "person_document",
+      entityId: doc.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "document.downloaded",
+      payload: { personId: person.id, docId: doc.id, kind: doc.kind },
+      payloadSummary: `${me.name} downloaded ${doc.kind} document for ${person.fullName}`,
+    });
+    if (doc.fileUrl) {
+      res.redirect(302, doc.fileUrl);
+      return;
+    }
+    // Storage wiring lands in #255; until then return the metadata so the
+    // contract is exercised end-to-end. Once object-storage is in place,
+    // swap this for a stream / 302 to the resolved object key.
+    res.json({
+      ok: true,
+      placeholder: true,
+      doc: { id: doc.id, kind: doc.kind, title: doc.title, fileRef: doc.fileRef },
     });
   } catch (err) {
     next(err);
@@ -796,8 +895,9 @@ router.get("/roster/access-matrix", async (req, res, next) => {
     // Task #254 round-9 — Partner|Operations align with the frontend copy
     // ("Partner / Operations only"); both have firm-wide roster scope per
     // PRD §8.1 and need the matrix view to audit grants.
-    if (me.role !== "partner" && me.role !== "operations") {
-      res.status(403).json({ error: "access-matrix-partner-or-operations-only" });
+    // Task #254 acceptance — Partner-only per PRD §8.1.
+    if (me.role !== "partner") {
+      res.status(403).json({ error: "access-matrix-partner-only" });
       return;
     }
     const grants = await db
@@ -851,6 +951,14 @@ router.post("/roster/access", async (req, res, next) => {
     if (!person) {
       res.status(404).json({ error: "person-not-found" });
       return;
+    }
+    // Task #254 round-10 — engagement-scoped authz on the grant/revoke
+    // endpoint itself (closes a privilege-escalation path where an
+    // engagement_lead could mutate the access graph for engagements they
+    // are not on). Partner / Operations retain firm-wide scope.
+    if (me.role === "engagement_lead") {
+      const eng = await ensureEngAccess(res, me, body.engagementId);
+      if (!eng) return;
     }
     const result = await runAccessSentinel({
       actor: me,
