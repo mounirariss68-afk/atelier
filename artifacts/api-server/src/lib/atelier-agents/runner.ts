@@ -2729,7 +2729,18 @@ export async function runPricingStrategist(args: {
   });
 
   try {
-    await progressRun(runId, 25, "Loading rate card + comparable closed deals");
+    await progressRun(runId, 15, "Loading rate card + comparable closed deals");
+
+    // Tool-contract evidence (Task #240): qualitative grounding only.
+    // Numeric math stays deterministic in computePricing(). These tools
+    // attach references the Partner can audit alongside the brief.
+    const { knowledgeSearch, pricingRulesLookup, rateCardRead } = await import(
+      "./pricing-strategist-tools.js"
+    );
+    const knowledgeHits = knowledgeSearch(args.opportunity.name);
+    const rateCardEvidence = await rateCardRead(args.pricing.rateCardId);
+
+    await progressRun(runId, 25, "Applying pricing rules + computing primary structure");
 
     const teamMix = (Array.isArray(args.pricing.teamMix) ? args.pricing.teamMix : []) as PricingTeamMixEntry[];
     const primaryCompute = computePricingFn({
@@ -2790,6 +2801,12 @@ export async function runPricingStrategist(args: {
       };
     });
 
+    const pricingRules = pricingRulesLookup({
+      pricingModel: args.pricing.pricingModel,
+      marginPct: primaryCompute.computedMarginPct,
+      status: primaryCompute.marginLockStatus,
+    });
+
     await progressRun(runId, 80, "Drafting Partner narrative (Sonnet)");
 
     // Deterministic talking-points / risks stay as the mock baseline so the
@@ -2833,6 +2850,13 @@ export async function runPricingStrategist(args: {
         marginLockStatus: primaryCompute.marginLockStatus,
       },
       alternatives,
+      // Tool-contract evidence — the LLM weaves these into prose, never
+      // re-derives numbers from them.
+      tools: {
+        knowledgeHits,
+        pricingRules,
+        rateCard: rateCardEvidence ? { id: rateCardEvidence.cardId, name: rateCardEvidence.name } : null,
+      },
       askFor: {
         narrative: "1-2 paragraph Partner-facing recommendation",
         talkingPoints: "3-5 short bullets a Partner can repeat verbatim",

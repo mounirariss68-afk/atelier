@@ -1,0 +1,75 @@
+{
+  "name": "pricing_strategist deterministic numeric + margin-lock chip",
+  "description": "Verifies that the deterministic pricing engine produces stable cost/price/margin outputs and that classifyMarginGate maps margin to the correct chip + override/countersign requirements under three policy configurations (default, tightened red, distinct two-partner threshold).",
+  "rateCard": {
+    "id": "rc_aico_2026_ksa_uae_v1",
+    "rows": [
+      { "seniority": "Partner",    "role": "Partner",           "costPerHourUsd": 250, "billRatePerHourUsd": 850, "utilisationPct": 0.55, "overheadMultiplier": 1.35 },
+      { "seniority": "Principal",  "role": "Principal",         "costPerHourUsd": 200, "billRatePerHourUsd": 650, "utilisationPct": 0.65, "overheadMultiplier": 1.35 },
+      { "seniority": "Manager",    "role": "EngagementManager", "costPerHourUsd": 150, "billRatePerHourUsd": 475, "utilisationPct": 0.75, "overheadMultiplier": 1.35 },
+      { "seniority": "AIEngineer", "role": "AIEngineer",        "costPerHourUsd": 120, "billRatePerHourUsd": 375, "utilisationPct": 0.80, "overheadMultiplier": 1.35 },
+      { "seniority": "Designer",   "role": "Designer",          "costPerHourUsd": 95,  "billRatePerHourUsd": 295, "utilisationPct": 0.80, "overheadMultiplier": 1.35 },
+      { "seniority": "Analyst",    "role": "Analyst",           "costPerHourUsd": 70,  "billRatePerHourUsd": 225, "utilisationPct": 0.85, "overheadMultiplier": 1.35 }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "s_green_default",
+      "policy": { "targetMarginPct": 0.55, "amberThresholdPct": 0.50, "redThresholdPct": 0.45, "twoPartnerThresholdPct": 0.45 },
+      "teamMix": [
+        { "seniority": "Principal", "ftePct": 0.5 },
+        { "seniority": "AIEngineer", "ftePct": 1.0 },
+        { "seniority": "Analyst", "ftePct": 1.0 }
+      ],
+      "durationWeeks": 8,
+      "expect": {
+        "marginLockStatus": "green",
+        "partnerOverrideRequired": false,
+        "twoPartnerRequired": false
+      }
+    },
+    {
+      "id": "s_amber_default",
+      "policy": { "targetMarginPct": 0.55, "amberThresholdPct": 0.50, "redThresholdPct": 0.45, "twoPartnerThresholdPct": 0.45 },
+      "marginPctOverride": 0.48,
+      "expect": {
+        "marginLockStatus": "amber",
+        "partnerOverrideRequired": true,
+        "twoPartnerRequired": false
+      }
+    },
+    {
+      "id": "s_red_default",
+      "policy": { "targetMarginPct": 0.55, "amberThresholdPct": 0.50, "redThresholdPct": 0.45, "twoPartnerThresholdPct": 0.45 },
+      "marginPctOverride": 0.40,
+      "expect": {
+        "marginLockStatus": "red",
+        "partnerOverrideRequired": true,
+        "twoPartnerRequired": true
+      }
+    },
+    {
+      "id": "s_split_thresholds",
+      "description": "redThreshold 0.50 but twoPartnerThreshold 0.40 — proves no deadlock between submit-gate, override and countersign when thresholds differ.",
+      "policy": { "targetMarginPct": 0.55, "amberThresholdPct": 0.52, "redThresholdPct": 0.50, "twoPartnerThresholdPct": 0.40 },
+      "marginPctOverride": 0.45,
+      "expect": {
+        "marginLockStatus": "red",
+        "partnerOverrideRequired": true,
+        "twoPartnerRequired": false,
+        "submitRequiresCountersign": false,
+        "countersignEndpointShouldRefuse": true
+      }
+    },
+    {
+      "id": "s_split_thresholds_below_two_partner",
+      "policy": { "targetMarginPct": 0.55, "amberThresholdPct": 0.52, "redThresholdPct": 0.50, "twoPartnerThresholdPct": 0.40 },
+      "marginPctOverride": 0.35,
+      "expect": {
+        "marginLockStatus": "red",
+        "partnerOverrideRequired": true,
+        "twoPartnerRequired": true
+      }
+    }
+  ]
+}

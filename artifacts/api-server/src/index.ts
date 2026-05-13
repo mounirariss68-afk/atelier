@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
+import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 
 const rawPort = process.env["PORT"];
 
@@ -24,4 +25,7 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   startScheduler();
+  // Idempotent — guarantees Pricing module is usable on first boot
+  // without a manual Partner setup step (Task #240 acceptance).
+  void ensureAtelierPricingSeed();
 });
