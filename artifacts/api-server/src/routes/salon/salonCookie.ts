@@ -32,7 +32,17 @@ export function rejectInternalRealm(
   next: NextFunction,
 ): void {
   const internal = req.cookies?.[ATELIER_PERSONA_COOKIE];
-  if (typeof internal === "string" && internal.length > 0) {
+  const salon = req.cookies?.[SALON_PERSONA_COOKIE];
+  // Only reject when the request carries an internal cookie WITHOUT an
+  // accompanying salon cookie. Mixed-cookie sessions defer to
+  // ensureSalonPersona, which authenticates against the salon_persona
+  // identity (salon role) — preserving the realm boundary while letting
+  // demo flows recover from leftover internal cookies.
+  if (
+    typeof internal === "string" &&
+    internal.length > 0 &&
+    !(typeof salon === "string" && salon.length > 0)
+  ) {
     res.status(403).json({
       error: "wrong-realm",
       message: "Internal AICo personas must use /api/atelier/*",

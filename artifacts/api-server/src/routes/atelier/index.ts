@@ -715,11 +715,12 @@ router.post("/deliverables/:id/publish", async (req, res, next) => {
     } else if (sentinelStatus === "fail") {
       allowed = false; // hard block — override forbidden
     } else if (sentinelStatus === "warn") {
-      allowed =
-        sentinel.output.publishAllowed ||
-        (isPartner && !!overrideRationale && overrideRationale.length >= 10);
+      // Warn requires Partner persona + ≥10-char rationale. Sentinel's own
+      // publishAllowed flag is intentionally ignored here so non-Partner
+      // callers cannot silently slip warns past the gate.
+      allowed = isPartner && !!overrideRationale && overrideRationale.length >= 10;
     }
-    if (!allowed && (sentinelStatus === "fail" || (sentinelStatus === "warn" && overrideRationale && !isPartner))) {
+    if (!allowed) {
       res.status(409).json({
         error: "sentinel-blocked",
         status: sentinelStatus,

@@ -575,6 +575,12 @@ router.post("/deliverables/:id/decision", async (req, res, next) => {
       res.status(404).json({ error: "deliverable-not-found" });
       return;
     }
+    // Salon clients can only act on deliverables that are explicitly visible
+    // to them. Anything in internal/draft state is not Salon-actionable.
+    if (!["review", "published", "final"].includes(d.clientVisibility ?? "")) {
+      res.status(404).json({ error: "deliverable-not-visible" });
+      return;
+    }
     const [workspace] = await db
       .select()
       .from(atelierSalonWorkspaces)
