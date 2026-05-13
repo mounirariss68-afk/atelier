@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PillButton } from "./ui/primitives";
+import { ReferenceCombobox } from "@/components/ReferenceCombobox";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAtelierCreateAccount,
@@ -36,31 +37,16 @@ const LANGS = [
   { value: "ar", label: "Arabic" },
 ] as const;
 const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "EGP", "TRY"];
-const COUNTRIES = [
-  "United Arab Emirates",
-  "Saudi Arabia",
-  "Qatar",
-  "Kuwait",
-  "Bahrain",
-  "Oman",
-  "Egypt",
-  "Türkiye",
-  "United Kingdom",
-  "United States",
-  "Germany",
-  "France",
-  "Singapore",
-  "India",
-  "Other…",
-];
+// Task #290 — the legacy hard-coded country list and free-text "Other…" /
+// "__custom__" sector branches were removed when this dialog was migrated
+// to <ReferenceCombobox/>. The reference-data API is now the single source
+// of truth for both lookups.
 
 type FormState = {
   name: string;
   brandName: string;
   sector: string;
-  sectorCustom: string;
   country: string;
-  countryCustom: string;
   hqCity: string;
   size: "" | (typeof SIZES)[number];
   tier: (typeof TIERS)[number];
@@ -80,9 +66,7 @@ function makeInitial(opts: { partnerOwnerId?: string }): FormState {
     name: "",
     brandName: "",
     sector: "",
-    sectorCustom: "",
     country: "United Arab Emirates",
-    countryCustom: "",
     hqCity: "",
     size: "",
     tier: "C",
@@ -112,12 +96,6 @@ export function CreateAccountDialog({ trigger }: Props) {
     () => (personas ?? []).filter((p) => p.role === "partner"),
     [personas],
   );
-  const sectors = React.useMemo(() => {
-    const s = new Set<string>();
-    (accounts ?? []).forEach((a: AtelierAccountSummary) => a.sector && s.add(a.sector));
-    return Array.from(s).sort();
-  }, [accounts]);
-
   const defaultPartnerId =
     me?.role === "partner" ? me.id : partners[0]?.id ?? "";
 
@@ -136,9 +114,9 @@ export function CreateAccountDialog({ trigger }: Props) {
   const update = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const sectorValue = form.sector === "__custom__" ? form.sectorCustom.trim() : form.sector;
-  const countryValue =
-    form.country === "Other…" ? form.countryCustom.trim() : form.country;
+  // Both fields are now driven by <ReferenceCombobox/> (free text disabled).
+  const sectorValue = form.sector.trim();
+  const countryValue = form.country.trim();
 
   const errors = React.useMemo(() => {
     const e: Partial<Record<keyof FormState | "primaryCurrency", string>> = {};
@@ -247,49 +225,35 @@ export function CreateAccountDialog({ trigger }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            {/*
+              Task #290 — Reference-data PoC wire-in. The accounts.sector column
+              is still a free-text field (the FK migration ships in Task #291),
+              so the combobox runs in valueMode="display": we store the EN
+              display name into the existing column. The combobox itself
+              prevents free-text entries, giving us a controlled vocabulary
+              before the schema migration.
+            */}
             <Field label="Industry / sector" required error={errors.sector}>
-              <select
+              <ReferenceCombobox
+                kind="industry"
+                valueMode="display"
                 value={form.sector}
-                onChange={(e) => update("sector", e.target.value)}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
-                data-testid="select-account-sector"
-              >
-                <option value="">Select…</option>
-                {sectors.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-                <option value="__custom__">Custom…</option>
-              </select>
-              {form.sector === "__custom__" && (
-                <Input
-                  className="mt-2 bg-bg-deep border-border text-text"
-                  placeholder="Enter sector"
-                  value={form.sectorCustom}
-                  onChange={(e) => update("sectorCustom", e.target.value)}
-                  data-testid="input-account-sector-custom"
-                />
-              )}
+                onChange={(v) => update("sector", v)}
+                placeholder="Select industry…"
+                size="lg"
+                testIdPrefix="select-account-sector"
+              />
             </Field>
             <Field label="Country" required error={errors.country}>
-              <select
+              <ReferenceCombobox
+                kind="country"
+                valueMode="display"
                 value={form.country}
-                onChange={(e) => update("country", e.target.value)}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
-                data-testid="select-account-country"
-              >
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              {form.country === "Other…" && (
-                <Input
-                  className="mt-2 bg-bg-deep border-border text-text"
-                  placeholder="Enter country"
-                  value={form.countryCustom}
-                  onChange={(e) => update("countryCustom", e.target.value)}
-                  data-testid="input-account-country-custom"
-                />
-              )}
+                onChange={(v) => update("country", v)}
+                placeholder="Select country…"
+                size="lg"
+                testIdPrefix="select-account-country"
+              />
             </Field>
           </div>
 

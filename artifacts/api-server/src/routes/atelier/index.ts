@@ -61,6 +61,7 @@ import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
 import ledgerRoutes from "./ledgerRoutes";
 import walletRoutes from "./walletRoutes";
+import referenceRoutes from "./referenceRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -163,6 +164,8 @@ router.use(skillGraphRoutes);
 router.use(ledgerRoutes);
 // Task #259 — v3 Wallet: Expenses + Auditor + Policy + FX + VAT.
 router.use(walletRoutes);
+// Task #290 — Reference-data lookups (countries / industries / sub-industries).
+router.use(referenceRoutes);
 
 function ensurePersona(
   req: Request,

@@ -1,0 +1,474 @@
+import * as React from "react";
+import { useAtelierGetMe } from "@workspace/api-client-react";
+import {
+  PageHero,
+  SectionHead,
+  Card,
+  MonoChip,
+  PillButton,
+} from "@/components/ui/primitives";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import {
+  invalidateReferenceBootstrap,
+  useReferenceBootstrap,
+} from "@/components/ReferenceCombobox";
+import {
+  sortCountries,
+  sortIndustries,
+  sortSubIndustries,
+  type CountryRow,
+  type IndustryRow,
+  type SubIndustryRow,
+} from "@/lib/reference-data";
+
+// TODO (Task #292): replace with `me.role === 'partner' || me.role === 'operations'`
+// once the 9-persona enum migration lands.
+const ADMIN_ROLES = new Set(["partner", "operations"]);
+
+type Tab = "countries" | "industries" | "sub_industries";
+
+export default function ReferenceData() {
+  const { data: me, isLoading: meLoading } = useAtelierGetMe();
+  const canAdmin = !!me && ADMIN_ROLES.has(me.role);
+  const [tab, setTab] = React.useState<Tab>("countries");
+
+  if (meLoading) {
+    return (
+      <div className="container-atelier py-10">
+        <Skeleton className="h-64 bg-bg-elevate" />
+      </div>
+    );
+  }
+  if (!canAdmin) {
+    return (
+      <div className="container-atelier py-12">
+        <Card className="p-8 text-center">
+          <div className="text-base font-semibold text-text">Reference data is partner-only</div>
+          <div className="text-sm text-text-mute mt-2">
+            Contact a Founding Partner to update countries or industries.
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-in fade-in">
+      <PageHero>
+        <SectionHead
+          headline="Reference data"
+          lede="Canonical countries and industries used everywhere in the portal. Edits are versioned and audit-logged; deprecate instead of delete to preserve historical references."
+        />
+        <div className="flex items-center gap-2 mt-4">
+          {(["countries", "industries", "sub_industries"] as Tab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              data-testid={`tab-${t}`}
+              className={`text-[11px] font-mono uppercase tracking-widest px-3 py-1 rounded border ${
+                tab === t
+                  ? "border-gold/60 text-gold bg-bg-elevate"
+                  : "border-border text-text-mute hover:text-text"
+              }`}
+            >
+              {t === "sub_industries" ? "Sub-industries" : t}
+            </button>
+          ))}
+        </div>
+      </PageHero>
+
+      <div className="container-atelier py-10">
+        {tab === "countries" && <CountriesPanel />}
+        {tab === "industries" && <IndustriesPanel />}
+        {tab === "sub_industries" && <SubIndustriesPanel />}
+      </div>
+    </div>
+  );
+}
+
+// =============================================================
+// Countries
+// =============================================================
+function CountriesPanel() {
+  const { data, loading, refetch } = useReferenceBootstrap();
+  const { toast } = useToast();
+  const [q, setQ] = React.useState("");
+  const [region, setRegion] = React.useState<string>("");
+  const [showDeprecated, setShowDeprecated] = React.useState(false);
+
+  const filtered = React.useMemo(() => {
+    if (!data) return [] as CountryRow[];
+    let list: CountryRow[] = data.countries;
+    if (!showDeprecated) list = list.filter((c) => c.status === "active");
+    if (region) list = list.filter((c) => c.region === region);
+    if (q) {
+      const n = q.toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.isoAlpha2.toLowerCase().includes(n) ||
+          c.displayNameEn.toLowerCase().includes(n) ||
+          (c.aliases ?? []).some((a) => a.toLowerCase().includes(n)),
+      );
+    }
+    return sortCountries(list);
+  }, [data, q, region, showDeprecated]);
+
+  async function patch(iso: string, body: Record<string, unknown>) {
+    const res = await fetch(`/api/atelier/reference/countries/${iso}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      toast({ title: "Update failed", description: res.statusText, variant: "destructive" });
+      return;
+    }
+    invalidateReferenceBootstrap();
+    await refetch();
+    toast({ title: "Country updated", description: iso });
+  }
+
+  if (loading) return <Skeleton className="h-64 bg-bg-elevate" />;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search by name, ISO, alias…"
+          className="w-72 bg-bg-elevate border-border text-text"
+        />
+        <select
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
+        >
+          <option value="">All regions</option>
+          {["MENA", "Africa", "Asia", "Europe", "Americas", "Oceania", "Antarctica"].map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showDeprecated}
+            onChange={(e) => setShowDeprecated(e.target.checked)}
+          />
+          Show deprecated
+        </label>
+        <span className="ml-auto text-text-mute">{filtered.length} of {data?.countries.length ?? 0}</span>
+      </div>
+
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-[80px_1fr_120px_60px_60px_120px] gap-2 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-text-faint border-b border-border">
+          <span>ISO</span>
+          <span>Name (EN / AR)</span>
+          <span>Region</span>
+          <span>GCC</span>
+          <span>Target</span>
+          <span>Status</span>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto">
+          {filtered.map((c) => (
+            <div
+              key={c.isoAlpha2}
+              className="grid grid-cols-[80px_1fr_120px_60px_60px_120px] gap-2 px-3 py-2 text-xs border-b border-border-soft items-center hover:bg-bg-elevate/40"
+              data-testid={`country-row-${c.isoAlpha2}`}
+            >
+              <span className="font-mono text-text">
+                {c.flagEmoji} {c.isoAlpha2}
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-text">{c.displayNameEn}</div>
+                {c.displayNameAr && (
+                  <div dir="rtl" className="text-text-faint text-[11px] truncate">{c.displayNameAr}</div>
+                )}
+              </div>
+              <span className="text-text-mute">{c.region}</span>
+              <span>{c.isGcc ? <MonoChip tone="gold">GCC</MonoChip> : null}</span>
+              <span>{c.isAicoTargetMarket ? <MonoChip tone="green">T1</MonoChip> : null}</span>
+              <span className="flex items-center gap-2">
+                <MonoChip tone={c.status === "active" ? "green" : "amber"}>{c.status}</MonoChip>
+                <button
+                  type="button"
+                  onClick={() =>
+                    patch(c.isoAlpha2, { status: c.status === "active" ? "deprecated" : "active" })
+                  }
+                  className="text-text-mute hover:text-gold underline text-[10px]"
+                  data-testid={`toggle-deprecate-${c.isoAlpha2}`}
+                >
+                  {c.status === "active" ? "Deprecate" : "Restore"}
+                </button>
+              </span>
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="p-6 text-center text-text-mute text-sm">No countries match these filters.</div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// =============================================================
+// Industries
+// =============================================================
+function IndustriesPanel() {
+  const { data, loading, refetch } = useReferenceBootstrap();
+  const { toast } = useToast();
+  const [showDeprecated, setShowDeprecated] = React.useState(false);
+
+  const list = React.useMemo<IndustryRow[]>(() => {
+    if (!data) return [];
+    const filtered = showDeprecated
+      ? data.industries
+      : data.industries.filter((i) => i.status === "active");
+    return sortIndustries(filtered);
+  }, [data, showDeprecated]);
+
+  async function patch(code: string, body: Record<string, unknown>) {
+    const res = await fetch(`/api/atelier/reference/industries/${code}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      toast({ title: "Update failed", description: res.statusText, variant: "destructive" });
+      return;
+    }
+    invalidateReferenceBootstrap();
+    await refetch();
+  }
+
+  if (loading) return <Skeleton className="h-64 bg-bg-elevate" />;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showDeprecated}
+            onChange={(e) => setShowDeprecated(e.target.checked)}
+          />
+          Show deprecated
+        </label>
+      </div>
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-[80px_1fr_60px_120px] gap-2 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-text-faint border-b border-border">
+          <span>Code</span>
+          <span>Name / description</span>
+          <span>Order</span>
+          <span>Status</span>
+        </div>
+        {list.map((i) => (
+          <div
+            key={i.code}
+            className="grid grid-cols-[80px_1fr_60px_120px] gap-2 px-3 py-3 text-xs border-b border-border-soft items-center"
+            data-testid={`industry-row-${i.code}`}
+          >
+            <span className="font-mono text-gold">{i.code}</span>
+            <div className="min-w-0">
+              <div className="text-text">{i.displayNameEn}</div>
+              {i.shortDescription && (
+                <div className="text-text-faint text-[11px] truncate">{i.shortDescription}</div>
+              )}
+            </div>
+            <span className="text-text-mute">{i.displayOrder}</span>
+            <span className="flex items-center gap-2">
+              <MonoChip tone={i.status === "active" ? "green" : "amber"}>{i.status}</MonoChip>
+              <button
+                type="button"
+                onClick={() =>
+                  patch(i.code, { status: i.status === "active" ? "deprecated" : "active" })
+                }
+                className="text-text-mute hover:text-gold underline text-[10px]"
+              >
+                {i.status === "active" ? "Deprecate" : "Restore"}
+              </button>
+            </span>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+// =============================================================
+// Sub-industries
+// =============================================================
+function SubIndustriesPanel() {
+  const { data, loading, refetch } = useReferenceBootstrap();
+  const { toast } = useToast();
+  const [parent, setParent] = React.useState<string>("");
+  const [showDeprecated, setShowDeprecated] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
+  const [form, setForm] = React.useState({
+    code: "",
+    industryCode: "",
+    displayNameEn: "",
+    shortDescription: "",
+    defaultOfferingAnchor: "agentic_ai",
+    displayOrder: "99",
+  });
+
+  const list = React.useMemo<SubIndustryRow[]>(() => {
+    if (!data) return [];
+    let filtered = showDeprecated
+      ? data.subIndustries
+      : data.subIndustries.filter((s) => s.status === "active");
+    if (parent) filtered = filtered.filter((s) => s.industryCode === parent);
+    return sortSubIndustries(filtered);
+  }, [data, parent, showDeprecated]);
+
+  async function patch(code: string, body: Record<string, unknown>) {
+    const res = await fetch(`/api/atelier/reference/sub-industries/${code}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      toast({ title: "Update failed", description: res.statusText, variant: "destructive" });
+      return;
+    }
+    invalidateReferenceBootstrap();
+    await refetch();
+  }
+
+  async function create() {
+    const res = await fetch(`/api/atelier/reference/sub-industries`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...form,
+        displayOrder: Number(form.displayOrder) || 99,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Create failed", description: err.message ?? res.statusText, variant: "destructive" });
+      return;
+    }
+    invalidateReferenceBootstrap();
+    await refetch();
+    setAdding(false);
+    setForm({
+      code: "",
+      industryCode: "",
+      displayNameEn: "",
+      shortDescription: "",
+      defaultOfferingAnchor: "agentic_ai",
+      displayOrder: "99",
+    });
+    toast({ title: "Sub-industry added" });
+  }
+
+  if (loading) return <Skeleton className="h-64 bg-bg-elevate" />;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
+        <select
+          value={parent}
+          onChange={(e) => setParent(e.target.value)}
+          className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
+        >
+          <option value="">All primary industries</option>
+          {(data?.industries ?? []).map((i) => (
+            <option key={i.code} value={i.code}>{i.code} · {i.displayNameEn}</option>
+          ))}
+        </select>
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showDeprecated}
+            onChange={(e) => setShowDeprecated(e.target.checked)}
+          />
+          Show deprecated
+        </label>
+        <PillButton
+          variant={adding ? "ghost" : "primary"}
+          onClick={() => setAdding((v) => !v)}
+          className="ml-auto"
+        >
+          {adding ? "Cancel" : "Add sub-industry"}
+        </PillButton>
+      </div>
+
+      {adding && (
+        <Card className="p-4 grid gap-2 grid-cols-2">
+          <Input placeholder="Code (e.g. FS_DIGITAL_BANKING)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+          <select
+            value={form.industryCode}
+            onChange={(e) => setForm({ ...form, industryCode: e.target.value })}
+            className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+          >
+            <option value="">Parent industry…</option>
+            {(data?.industries ?? []).map((i) => (
+              <option key={i.code} value={i.code}>{i.code} · {i.displayNameEn}</option>
+            ))}
+          </select>
+          <Input placeholder="Display name (EN)" value={form.displayNameEn} onChange={(e) => setForm({ ...form, displayNameEn: e.target.value })} />
+          <select
+            value={form.defaultOfferingAnchor}
+            onChange={(e) => setForm({ ...form, defaultOfferingAnchor: e.target.value })}
+            className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+          >
+            {["agentic_ai", "legacy_modernization", "data_foundations", "ai_product"].map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <Input
+            placeholder="Short description (required)"
+            value={form.shortDescription}
+            onChange={(e) => setForm({ ...form, shortDescription: e.target.value })}
+            className="col-span-2"
+          />
+          <PillButton variant="primary" onClick={create} className="col-span-2">
+            Create sub-industry
+          </PillButton>
+        </Card>
+      )}
+
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-[160px_80px_1fr_60px_120px] gap-2 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-text-faint border-b border-border">
+          <span>Code</span>
+          <span>Parent</span>
+          <span>Name</span>
+          <span>Order</span>
+          <span>Status</span>
+        </div>
+        {list.map((s) => (
+          <div
+            key={s.code}
+            className="grid grid-cols-[160px_80px_1fr_60px_120px] gap-2 px-3 py-2 text-xs border-b border-border-soft items-center"
+            data-testid={`sub-industry-row-${s.code}`}
+          >
+            <span className="font-mono text-text-mute truncate">{s.code}</span>
+            <span className="font-mono text-gold text-[10px]">{s.industryCode}</span>
+            <span className="text-text">{s.displayNameEn}</span>
+            <span className="text-text-mute">{s.displayOrder}</span>
+            <span className="flex items-center gap-2">
+              <MonoChip tone={s.status === "active" ? "green" : "amber"}>{s.status}</MonoChip>
+              <button
+                type="button"
+                onClick={() =>
+                  patch(s.code, { status: s.status === "active" ? "deprecated" : "active" })
+                }
+                className="text-text-mute hover:text-gold underline text-[10px]"
+              >
+                {s.status === "active" ? "Deprecate" : "Restore"}
+              </button>
+            </span>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}

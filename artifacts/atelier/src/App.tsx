@@ -18,6 +18,7 @@ import Agents from "@/pages/Agents";
 import AgentProfile from "@/pages/AgentProfile";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
+import ReferenceData from "@/pages/admin/ReferenceData";
 import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
 import Deliverable from "@/pages/Deliverable";
@@ -133,6 +134,8 @@ function Router() {
         <Route path="/agents/:agentId" component={AgentProfile} />
         <Route path="/settings" component={Settings} />
         <Route path="/admin" component={Admin} />
+        {/* Task #290 — Reference-data admin (countries, industries, sub-industries). */}
+        <Route path="/admin/reference-data" component={ReferenceData} />
         {/* Finance: rate cards + margin policy (Partner-only). The legacy
             /pricing path stays as a back-compat alias so deep-linked rows
             (audit links, dossier exports) keep resolving. */}

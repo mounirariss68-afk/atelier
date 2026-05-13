@@ -2131,7 +2131,18 @@ function aud(
   };
 }
 
+import { seedAtelierReference } from "./seed-atelier-reference.js";
+
 async function main() {
+  // Task #290 — Reference-data lookups (countries / industries / sub-industries)
+  // are seeded BEFORE the per-domain TRUNCATEs so the lookups survive a
+  // re-run of the main atelier seed. Their tables are truncated inside
+  // seedAtelierReference itself.
+  const refCounts = await seedAtelierReference();
+  console.log(
+    `[seed-atelier] reference data: ${refCounts.countries} countries, ${refCounts.industries} industries, ${refCounts.subIndustries} sub-industries.`,
+  );
+
   console.log("[seed-atelier] truncating…");
   await truncateAll();
 

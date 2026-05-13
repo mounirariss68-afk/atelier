@@ -43,7 +43,10 @@ DECLARE
     -- engagement_id ACL is added below via eng_tables for the rows that
     -- carry an engagement_id FK (nullable: non-billable internal time and
     -- firm-overhead expenses are visible to all org users).
-    'atelier_timesheet_entries','atelier_expenses'
+    'atelier_timesheet_entries','atelier_expenses',
+    -- Task #290 — Reference-data lookups (countries, industries, sub_industries).
+    -- Org-scoped reads/writes; deprecation governance is enforced in app code.
+    'atelier_countries','atelier_industries','atelier_sub_industries'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their
