@@ -9,7 +9,7 @@ import {
   PillButton,
 } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, Search, Plus } from "lucide-react";
+import { Globe, Plus } from "lucide-react";
 import { CreateAccountDialog } from "@/components/CreateAccountDialog";
 
 const CREATE_ROLES = new Set(["partner", "engagement_lead"]);
@@ -104,21 +104,12 @@ export default function Crm() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-6">
-        <Card flat className="p-4 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-            <Search className="w-4 h-4 text-text-mute" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search accounts…"
-              className="flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-text-faint"
-              data-testid="input-crm-search"
-            />
-          </div>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
+          <span>Filter</span>
           <select
             value={tier}
             onChange={(e) => setTier(e.target.value)}
-            className="bg-bg-elevate border border-border rounded px-2 py-1 text-xs font-mono uppercase tracking-wider text-text"
+            className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
             data-testid="select-tier"
           >
             <option value="">All tiers</option>
@@ -130,7 +121,7 @@ export default function Crm() {
           <select
             value={sector}
             onChange={(e) => setSector(e.target.value)}
-            className="bg-bg-elevate border border-border rounded px-2 py-1 text-xs font-mono uppercase tracking-wider text-text"
+            className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
             data-testid="select-sector"
           >
             <option value="">All sectors</option>
@@ -140,7 +131,24 @@ export default function Crm() {
               </option>
             ))}
           </select>
-        </Card>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search accounts…"
+            className="bg-bg-elevate border border-border rounded px-2 py-1 text-text placeholder:text-text-faint normal-case tracking-normal"
+            data-testid="input-crm-search"
+          />
+          {(tier !== "" || sector !== "" || q !== "") && (
+            <button
+              type="button"
+              onClick={() => { setTier(""); setSector(""); setQ(""); }}
+              className="text-text-mute hover:text-gold underline"
+            >
+              Clear
+            </button>
+          )}
+          <span className="ml-auto text-text-mute">{filtered.length} of {accounts?.length ?? 0}</span>
+        </div>
 
         {isLoading && <Skeleton className="h-64 bg-bg-elevate" />}
 
