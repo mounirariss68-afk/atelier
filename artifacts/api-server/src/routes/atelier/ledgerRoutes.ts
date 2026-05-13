@@ -19,7 +19,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import multer from "multer";
-import { eq, and, isNull, inArray, gte, desc } from "drizzle-orm";
+import { eq, and, isNull, inArray, desc } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -28,12 +28,13 @@ import {
   atelierTimesheetWeeks,
   atelierTimesheetEntries,
   atelierTimesheetSignals,
-  atelierCalendarEvents,
   atelierPartnerFirmHours,
   atelierEngagements,
   atelierAuditEvents,
+  atelierPartnerFirmResources,
 } from "@workspace/db";
 import { runTimeSteward } from "../../lib/atelier-agents/runner.js";
+import { runLedgerNudgeTick } from "../../lib/atelier-agents/ledgerNudges.js";
 
 const router: IRouter = Router();
 
@@ -55,8 +56,50 @@ function canApproveLead(me: typeof atelierUsers.$inferSelect): boolean {
 function canApprovePartner(me: typeof atelierUsers.$inferSelect): boolean {
   return me.role === "partner";
 }
+// Partner-firm-resource personas (the partner-firm PMs) upload their own
+// firm's hours; partner/operations may also do so on their behalf.
+function canUploadPartnerFirmHours(me: typeof atelierUsers.$inferSelect): boolean {
+  return me.role === "partner_firm_resource" || me.role === "partner" || me.role === "operations";
+}
+// Engagement economics consumers: leadership + the firm whose hours these are.
+function canViewPartnerFirmHours(me: typeof atelierUsers.$inferSelect): boolean {
+  return (
+    me.role === "partner" ||
+    me.role === "operations" ||
+    me.role === "engagement_lead" ||
+    me.role === "partner_firm_resource"
+  );
+}
 function canManagePartnerFirm(me: typeof atelierUsers.$inferSelect): boolean {
   return me.role === "partner" || me.role === "operations";
+}
+
+// Object-level ACL for the partner-firm-hours endpoints. Returns the caller's
+// partner-firm row (firm id + seconded engagements) so callers can scope
+// queries/inserts; returns null when the user is not a partner-firm resource.
+// Leadership roles (partner/operations/engagement_lead) bypass this scoping.
+async function resolvePartnerFirmScope(
+  me: typeof atelierUsers.$inferSelect,
+): Promise<{ partnerFirmId: string; secondedEngagementIds: string[] } | null> {
+  if (me.role !== "partner_firm_resource") return null;
+  const [pfr] = await db
+    .select({
+      partnerFirmId: atelierPartnerFirmResources.partnerFirmId,
+      secondedToEngagementIds: atelierPartnerFirmResources.secondedToEngagementIds,
+    })
+    .from(atelierPartnerFirmResources)
+    .where(
+      and(
+        eq(atelierPartnerFirmResources.partnerFirmPmUserId, me.id),
+        isNull(atelierPartnerFirmResources.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!pfr) return { partnerFirmId: "__none__", secondedEngagementIds: [] };
+  return {
+    partnerFirmId: pfr.partnerFirmId,
+    secondedEngagementIds: (pfr.secondedToEngagementIds as string[] | null) ?? [],
+  };
 }
 
 async function audit(args: {
@@ -285,8 +328,43 @@ router.get("/ledger/timesheets/current", async (req, res) => {
   }
   const { weekIso } = isoWeekOf(new Date());
   const week = await ensureWeekShell(person, weekIso);
+  await maybeAutoDraft(week, me);
   return getWeekResponse(res, week, person);
 });
+
+// Auto-populate the steward draft when an employee opens their week and it
+// has no agent_drafted entries yet. Spec calls for "draft already populated"
+// on /ledger/timesheets — this is the on-load path; the daily steward tick
+// (registerLedgerNudges below) handles the morning prepopulation.
+async function maybeAutoDraft(
+  week: typeof atelierTimesheetWeeks.$inferSelect,
+  me: typeof atelierUsers.$inferSelect,
+): Promise<void> {
+  if (week.status !== "draft" && week.status !== "rejected") return;
+  const [existing] = await db
+    .select({ id: atelierTimesheetEntries.id })
+    .from(atelierTimesheetEntries)
+    .where(
+      and(
+        eq(atelierTimesheetEntries.weekId, week.id),
+        eq(atelierTimesheetEntries.source, "agent_drafted"),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (existing) return;
+  try {
+    await runTimeSteward({
+      weekId: week.id,
+      personId: week.personId,
+      weekStartDate: week.weekStartDate,
+      triggeredByUserId: me.id,
+    });
+  } catch (err) {
+    // Auto-draft is best-effort — never block the week view if the steward fails.
+    console.warn("[ledger] auto-draft failed for week", week.id, err);
+  }
+}
 
 // =====================================================================
 // GET /ledger/timesheets/:personId/:weekIso
@@ -307,6 +385,7 @@ router.get("/ledger/timesheets/:personId/:weekIso", async (req, res) => {
     return;
   }
   const week = await ensureWeekShell(person, req.params.weekIso);
+  if (isSelf) await maybeAutoDraft(week, me);
   return getWeekResponse(res, week, person);
 });
 
@@ -852,9 +931,23 @@ router.get("/ledger/roster/people/:id/timesheet-summary", async (req, res) => {
     if (!weeks.find((w) => w.weekIso === weekIso)) missing.push(weekIso);
   }
 
+  // Last-submitted week (anything past draft) — surfaces "did they actually
+  // submit?" status for the roster dossier signals strip.
+  const lastSubmitted = sorted.find((w) => w.status !== "draft" && w.status !== "rejected") ?? null;
+
   res.json({
     personId: person.id,
     personName: person.fullName,
+    lastSubmittedWeek: lastSubmitted
+      ? {
+          weekIso: lastSubmitted.weekIso,
+          status: lastSubmitted.status,
+          submittedAt: lastSubmitted.submittedAt?.toISOString() ?? null,
+          totalHours: lastSubmitted.totalHours,
+          billableHours: lastSubmitted.billableHours,
+        }
+      : null,
+    lastSubmittedWeekStatus: lastSubmitted?.status ?? "none",
     rolling4Week: {
       weeks: last4.map((w) => ({
         weekIso: w.weekIso,
@@ -891,12 +984,19 @@ const partnerFirmUpload = multer({
 router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single("file"), async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!canManagePartnerFirm(me)) return void res.status(403).json({ error: "forbidden" });
+  if (!canUploadPartnerFirmHours(me)) return void res.status(403).json({ error: "forbidden" });
   const [eng] = await db
     .select()
     .from(atelierEngagements)
     .where(and(eq(atelierEngagements.id, req.params.engagementId), isNull(atelierEngagements.deletedAt)));
   if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
+  // Object-level scope: a partner_firm_resource may only upload to engagements
+  // they're seconded to, and every CSV row's partner_firm_id must equal their
+  // own firm. Partner / operations bypass these checks.
+  const scope = await resolvePartnerFirmScope(me);
+  if (scope && !scope.secondedEngagementIds.includes(eng.id)) {
+    return void res.status(403).json({ error: "engagement-not-in-scope" });
+  }
 
   const csvText: string =
     req.file?.buffer?.toString("utf8") ??
@@ -919,10 +1019,14 @@ router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single
   const inserts: Array<typeof atelierPartnerFirmHours.$inferInsert> = [];
   for (const line of lines.slice(1)) {
     const cells = line.split(",").map((s) => s.trim());
+    const rowFirmId = cells[idx("partner_firm_id")];
+    if (scope && rowFirmId !== scope.partnerFirmId) {
+      return void res.status(403).json({ error: "row-firm-mismatch", reason: `row partner_firm_id ${rowFirmId} != caller firm ${scope.partnerFirmId}` });
+    }
     inserts.push({
       id: rid("pfh"),
       engagementId: eng.id,
-      partnerFirmId: cells[idx("partner_firm_id")],
+      partnerFirmId: rowFirmId,
       resourceName: cells[idx("resource_name")],
       weekIso: cells[idx("week_iso")],
       hours: Number(cells[idx("hours")]) || 0,
@@ -950,12 +1054,25 @@ router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single
 router.get("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Sensitive commercial data — restrict to leadership + partner-firm PMs.
+  if (!canViewPartnerFirmHours(me)) return void res.status(403).json({ error: "forbidden" });
+  // Object-level scope: a partner_firm_resource may only read engagements
+  // they're seconded to, and only rows for their own firm. Leadership reads all.
+  const scope = await resolvePartnerFirmScope(me);
+  if (scope && !scope.secondedEngagementIds.includes(req.params.engagementId)) {
+    return void res.status(403).json({ error: "engagement-not-in-scope" });
+  }
+  const baseFilter = scope
+    ? and(
+        eq(atelierPartnerFirmHours.engagementId, req.params.engagementId),
+        eq(atelierPartnerFirmHours.partnerFirmId, scope.partnerFirmId),
+        isNull(atelierPartnerFirmHours.deletedAt),
+      )
+    : and(eq(atelierPartnerFirmHours.engagementId, req.params.engagementId), isNull(atelierPartnerFirmHours.deletedAt));
   const rows = await db
     .select()
     .from(atelierPartnerFirmHours)
-    .where(
-      and(eq(atelierPartnerFirmHours.engagementId, req.params.engagementId), isNull(atelierPartnerFirmHours.deletedAt)),
-    )
+    .where(baseFilter)
     .orderBy(desc(atelierPartnerFirmHours.weekIso));
   res.json(
     rows.map((r) => ({
@@ -971,8 +1088,17 @@ router.get("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
   );
 });
 
-// Quiet unused-import warnings until a future task wires direct cal lookups.
-void atelierCalendarEvents;
-void gte;
+// Test-only manual nudge trigger (also useful for ops to fire a deadline
+// reminder out-of-band). Gated to partner/operations to avoid abuse.
+router.post("/ledger/nudges/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner" && me.role !== "operations") {
+    return void res.status(403).json({ error: "forbidden" });
+  }
+  const force = req.body?.force as "submit_due" | "approve_due" | undefined;
+  const out = await runLedgerNudgeTick({ force });
+  res.json(out);
+});
 
 export default router;

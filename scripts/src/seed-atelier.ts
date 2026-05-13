@@ -3291,6 +3291,10 @@ async function main() {
       endDate: "2026-08-31",
       status: "active",
       secondedToEngagementIds: ["eng_tasama_bpo_phase1"],
+      // Link to the atelier_users persona for this partner-firm PM so
+      // resolvePartnerFirmScope() in ledgerRoutes can attach object-level
+      // ACL (own firm + own seconded engagements) to /ledger/partner-firm-hours.
+      partnerFirmPmUserId: "u_yara_bgts",
     },
     {
       id: "pfr_bgts_khalid",

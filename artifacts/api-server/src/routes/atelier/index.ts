@@ -101,8 +101,10 @@ router.use((req, res, next) => {
   if (p === "/me" || p.startsWith("/personas")) return next();
   if (p === "/engagements" || p.startsWith("/engagements/")) return next();
   // Contractors may view/submit their OWN timesheet; partner-firm resources
-  // never appear in the ledger UI (their hours come via partner-firm CSV).
+  // never appear in the ledger UI but DO upload their firm's hours via the
+  // partner-firm CSV endpoint and may read their own engagement's economics.
   if (me.role === "contractor" && p.startsWith("/ledger/timesheets")) return next();
+  if (me.role === "partner_firm_resource" && p.startsWith("/ledger/partner-firm-hours")) return next();
   // Allow per-person dossier endpoints only for the caller's OWN identity
   // (no IDOR enumeration of other people's PII / HR metadata). The :id
   // segment must equal the active persona id; bare `/roster/people` and

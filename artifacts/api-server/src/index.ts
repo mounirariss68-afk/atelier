@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
+import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 
 const rawPort = process.env["PORT"];
 
@@ -28,4 +29,7 @@ app.listen(port, (err) => {
   // Idempotent — guarantees Pricing module is usable on first boot
   // without a manual Partner setup step (Task #240 acceptance).
   void ensureAtelierPricingSeed();
+  // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
+  // (writes audit_event rows; idempotent per (week, kind)).
+  startLedgerNudgeJob();
 });

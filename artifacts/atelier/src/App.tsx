@@ -78,6 +78,7 @@ function Router() {
         <Route path="/roster/people/:id/:tab" component={RosterPerson} />
         <Route path="/ledger" component={Timesheet} />
         <Route path="/ledger/timesheet" component={Timesheet} />
+        <Route path="/ledger/timesheets" component={Timesheet} />
         <Route path="/ledger/timesheets/:personId/:weekIso" component={Timesheet} />
         <Route path="/ledger/approvals" component={LedgerApprovals} />
         <Route path="/accounts/:accountId" component={Account} />

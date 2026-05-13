@@ -4195,5 +4195,3 @@ export async function runTimeSteward(args: {
   }
 }
 
-// keep `sql` import in use without polluting other call sites.
-void sql;
