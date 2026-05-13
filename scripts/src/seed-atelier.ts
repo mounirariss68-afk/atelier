@@ -4435,6 +4435,26 @@ async function seedV3Wallet() {
   await db.delete(atelierContractorPayments);
   await db.delete(atelierPartnerFirmInvoices);
   await db.delete(atelierInvoiceLineDrafts);
+  // Recompute the same weekA/weekB anchors used by the v3 ledger block
+  // (those identifiers are scoped to the helper above). Keeping the math
+  // here local avoids a refactor of the prior block.
+  const wpToday = new Date();
+  function wpIsoWeek(d: Date): { weekIso: string; monday: Date } {
+    const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const monday = new Date(d);
+    const md = monday.getUTCDay() || 7;
+    monday.setUTCDate(monday.getUTCDate() - (md - 1));
+    monday.setUTCHours(0, 0, 0, 0);
+    return { weekIso: `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`, monday };
+  }
+  const weekB = wpIsoWeek(wpToday);
+  const wpLastWeek = new Date(wpToday);
+  wpLastWeek.setUTCDate(wpLastWeek.getUTCDate() - 7);
+  const weekA = wpIsoWeek(wpLastWeek);
 
   // 1) Contractor payment proposal awaiting Partner approval (>$250).
   await db.insert(atelierContractorPayments).values([
