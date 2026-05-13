@@ -1,0 +1,44 @@
+ere's a focused UI design review of the opportunity page based on your screenshot.
+
+What's not working
+1. Three-zone color split feels chaotic
+The page reads as three disconnected bands: dark navy header → cream body → dark navy "Account snapshot" card. The eye doesn't know where to settle, and the cream middle band looks like a different product than the dark surfaces around it. Your other Atelier surfaces are dark-on-dark; this one breaks that system.
+
+2. Action bar is doing too many jobs at once
+"Draft POV / Build proposal / Capture meeting / Research account / Prototype / 5C Qualifier" are all rendered as equal-weight pills in one row. In reality these are very different actions (creative drafting vs. data capture vs. a qualifier checklist). The orange highlight on "Draft POV" is the only hierarchy signal, and "5C Qualifier" floats off to the right looking like a stray.
+
+3. The mock-fallback warning is shouting and ignored
+The "All agent runs and human decisions are logged… mock-fallback (Claude unavailable)…" line is long, low-contrast amber-on-cream, all-mono, and stretches across the full width. It's an important provenance disclaimer but it currently reads as decorative chrome that users will tune out.
+
+4. Status row buries the money
+WON · PROB: 100% · $1400k — the deal value is the most important number on the page and it has the least visual weight. The two pills steal the eye away from the dollar figure.
+
+5. Tabs underline is too quiet
+The active "Brief" tab has a thin gold underline that disappears against the cream background, and inactive tabs have nearly the same color as active. There's no clear "you are here."
+
+6. "AMBER — VERIFY · 5/13/2026, 1:37:10 AM · Re-run Scout"
+The amber dot is meaningful (run status), the timestamp is forensic, and "Re-run Scout" is a primary action — but they're laid out as if they were the same thing. The amber chip floats next to ISO-ish timestamp text with no card boundary, and the action sits orphaned on the right.
+
+7. Header right rail wastes the dark canvas
+Partner: Mounir Ariss / Lead: Layla Haddad / Next: Mobilize phase-2 charter — these are key facts but they're set as small mono inline text, not as a structured "people/state" block. The dark header has tons of room for a much clearer ownership panel.
+
+Suggested fixes (in order of impact)
+Pick one surface tone for the page body. Either keep it dark (matches the rest of Atelier and lets the gold accents sing) or commit to a light theme — but don't sandwich light between two dark zones. Easiest win: drop the cream and let the body inherit the dark bg-deep you already use elsewhere.
+Split the action bar into two groups.
+Primary work ("Draft POV", "Build proposal", "Capture meeting", "Prototype") as a card-anchored toolbar near the tabs.
+References / scoring ("Research account", "5C Qualifier") as a smaller secondary row, or move "5C Qualifier" into the Brief tab where it belongs.
+Promote $1400k to a hero stat. Render it as a large gold figure with a small "Deal size · 100% probability · WON" caption underneath. Demote WON / PROB chips to that caption line.
+Re-treat the mock-fallback line as an actual banner.
+Two lines max.
+Sentence case, not all caps.
+Use the existing amber MonoChip + a single explanatory sentence: Mock fallback active — Claude unavailable. Outputs are synthetic and not evidence.
+Optional: collapse to a small pill ("⚠ mock fallback") with a tooltip once the user dismisses it once.
+Make tab state unambiguous. Active tab in text-text + 2px gold underline; inactive tabs in text-text-mute with no underline. A single hover state in between.
+Wrap the run-status row in its own card. Something like:
+Left: amber chip + "Pursuit Scout · last run 5/13 1:37 AM · awaiting verification"
+Right: "Re-run Scout" + "Verify"
+This turns three orphaned elements into one scannable status panel.
+Build a proper header ownership panel. On the dark header right side, render Partner / Lead / Next as a stacked block with subtle dividers and the people's initials as small avatars. Same data, but it becomes a glanceable "who owns this and what's next" rather than three lines of mono text.
+Account snapshot card should drop its navy fill once the body goes dark — it'll naturally distinguish itself with a 1px border and slight elevation, rather than competing with the header for "I'm the dark thing."
+Want me to implement any of these? I'd suggest starting with #1 (unify the surface tone) and #4 (fix the mock-fallback banner) — those two changes alone will make the page feel coherent.
+
