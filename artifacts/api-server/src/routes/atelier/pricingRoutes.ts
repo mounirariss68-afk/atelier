@@ -347,6 +347,10 @@ router.get("/opportunities/:oppId/pricing", async (req, res) => {
 router.put("/opportunities/:oppId/pricing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Governance: only Partners may persist economic terms (teamMix /
+  // durationWeeks / pricingModel / rateCardId). Non-Partner roles can
+  // still drive the read-only `whatif` endpoint to model scenarios.
+  if (!requirePartner(me, res)) return;
   const policy = await loadDefaultPolicy();
   const existing = await loadOrInitDealPricing(req.params.oppId, policy);
   if (!existing) {

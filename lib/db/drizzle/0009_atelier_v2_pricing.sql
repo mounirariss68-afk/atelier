@@ -5,7 +5,7 @@
 
 CREATE TABLE IF NOT EXISTS "atelier_rate_cards" (
   "id" text PRIMARY KEY NOT NULL,
-  "org_id" text NOT NULL DEFAULT 'org_demo',
+  "org_id" text NOT NULL DEFAULT 'aico',
   "name" text NOT NULL,
   "status" text NOT NULL DEFAULT 'active',
   "geography" text NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS "atelier_rate_cards" (
 
 CREATE TABLE IF NOT EXISTS "atelier_rate_card_rows" (
   "id" text PRIMARY KEY NOT NULL,
-  "org_id" text NOT NULL DEFAULT 'org_demo',
+  "org_id" text NOT NULL DEFAULT 'aico',
   "rate_card_id" text NOT NULL,
   "role" text NOT NULL,
   "seniority" text NOT NULL,
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS "idx_atelier_rcrows_card" ON "atelier_rate_card_rows"
 
 CREATE TABLE IF NOT EXISTS "atelier_margin_policies" (
   "id" text PRIMARY KEY NOT NULL,
-  "org_id" text NOT NULL DEFAULT 'org_demo',
+  "org_id" text NOT NULL DEFAULT 'aico',
   "name" text NOT NULL DEFAULT 'default',
   "target_margin_pct" double precision NOT NULL DEFAULT 0.55,
   "amber_threshold_pct" double precision NOT NULL DEFAULT 0.50,
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS "atelier_margin_policies" (
 
 CREATE TABLE IF NOT EXISTS "atelier_deal_pricings" (
   "id" text PRIMARY KEY NOT NULL,
-  "org_id" text NOT NULL DEFAULT 'org_demo',
+  "org_id" text NOT NULL DEFAULT 'aico',
   "opportunity_id" text NOT NULL,
   "rate_card_id" text NOT NULL,
   "pricing_model" text NOT NULL DEFAULT 'time_and_materials',
