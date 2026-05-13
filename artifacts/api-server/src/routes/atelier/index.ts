@@ -720,18 +720,9 @@ router.post("/deliverables/:id/publish", async (req, res, next) => {
       // callers cannot silently slip warns past the gate.
       allowed = isPartner && !!overrideRationale && overrideRationale.length >= 10;
     }
-    if (!allowed) {
-      res.status(409).json({
-        error: "sentinel-blocked",
-        status: sentinelStatus,
-        checks: sentinel.output.checks,
-        message:
-          sentinelStatus === "fail"
-            ? "Publish Sentinel returned fail; override not permitted."
-            : "Warn-tier override requires a Partner persona.",
-      });
-      return;
-    }
+    // Persist EVERY publish attempt (allowed or blocked) so the audit table
+    // matches the schema intent ("records every push"). Blocked rows carry
+    // publishAllowed:false and the Sentinel checks for forensic review.
     const publishId = _rid("dpub");
     await db.insert(atelierDeliverablePublishes).values({
       id: publishId,
@@ -751,6 +742,30 @@ router.post("/deliverables/:id/publish", async (req, res, next) => {
       watermarkRequired: req.body?.watermarkRequired !== false,
       notes: typeof req.body?.notes === "string" ? req.body.notes : null,
     });
+    if (!allowed) {
+      await db.insert(atelierAuditEvents).values({
+        id: _rid("aud"),
+        entityType: "deliverable",
+        entityId: d.id,
+        actorType: "human",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: "deliverable.publish_blocked",
+        payload: { publishId, sentinelStatus: sentinel.output.status, checks: sentinel.output.checks },
+        payloadSummary: `Publish Sentinel BLOCKED ${d.name} (${sentinel.output.status})`,
+      });
+      res.status(409).json({
+        error: "sentinel-blocked",
+        status: sentinelStatus,
+        checks: sentinel.output.checks,
+        publishId,
+        message:
+          sentinelStatus === "fail"
+            ? "Publish Sentinel returned fail; override not permitted."
+            : "Warn-tier override requires a Partner persona.",
+      });
+      return;
+    }
     if (allowed) {
       await db
         .update(_atelierDeliverables)
@@ -777,18 +792,6 @@ router.post("/deliverables/:id/publish", async (req, res, next) => {
         action: "deliverable.publish_to_salon",
         payload: { publishId, fanout, sentinelStatus: sentinel.output.status },
         payloadSummary: `${me.name} published ${d.name} to Salon (${sentinel.output.status}; ${fanout} client notif)`,
-      });
-    } else {
-      await db.insert(atelierAuditEvents).values({
-        id: _rid("aud"),
-        entityType: "deliverable",
-        entityId: d.id,
-        actorType: "human",
-        actorId: me.id,
-        actorLabel: me.name,
-        action: "deliverable.publish_blocked",
-        payload: { publishId, sentinelStatus: sentinel.output.status, checks: sentinel.output.checks },
-        payloadSummary: `Publish Sentinel BLOCKED ${d.name} (${sentinel.output.status})`,
       });
     }
     res.json({
