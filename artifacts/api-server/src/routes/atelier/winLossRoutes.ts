@@ -25,6 +25,7 @@ import {
   atelierWinThemes,
   atelierAuditEvents,
   atelierPaneAItems,
+  atelierAssets,
 } from "@workspace/db";
 import {
   runWinLossInterviewer,
@@ -146,6 +147,19 @@ router.post("/opportunities/:oppId/win-loss/run", async (req, res) => {
     res.status(404).json({ error: "debrief-not-found" });
     return;
   }
+  // Evidence-binding guardrail (PRD §5.2): NO transcript = NO themes.
+  // Server-side enforcement, not just prompt text. The buyer's view must
+  // exist (transcript ≥20 chars) before synthesis can run. Partner override
+  // path is separate.
+  const transcript = (debrief.buyerTranscript ?? "").trim();
+  if (transcript.length < 20) {
+    res.status(409).json({
+      error: "transcript-required",
+      detail:
+        "Win/Loss synthesis requires a buyer transcript (≥20 chars). Upload one or use /win-loss/override for partner-rationale path.",
+    });
+    return;
+  }
   const [opp] = await db
     .select()
     .from(atelierOpportunities)
@@ -258,7 +272,49 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
     payload: { debriefId: debrief.id },
     payloadSummary: `${me.name} approved Win/Loss debrief`,
   });
-  res.json({ debrief: updated });
+  // Publish suggested atelier lessons as atelierAssets with provenance
+  // pointing back to this debrief. PRD §5.2: approval = publish to library.
+  const lessons = (debrief.suggestedAtelierLessons as Array<{
+    title?: string;
+    abstract?: string;
+    kind?: string;
+  }>) ?? [];
+  const publishedAssetIds: string[] = [];
+  for (const lesson of lessons) {
+    if (!lesson.title || !lesson.abstract) continue;
+    const aid = rid("ast");
+    await db.insert(atelierAssets).values({
+      id: aid,
+      orgId: me.orgId,
+      kind: (lesson.kind as string) ?? "learning",
+      title: lesson.title,
+      abstract: lesson.abstract,
+      provenance: `winloss_debrief:${debrief.id}:opp:${req.params.oppId}`,
+      createdByUserId: me.id,
+    });
+    publishedAssetIds.push(aid);
+  }
+  if (publishedAssetIds.length) {
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "opportunity",
+      entityId: req.params.oppId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "winloss.lessons_published",
+      payload: { debriefId: debrief.id, assetIds: publishedAssetIds },
+      payloadSummary: `${me.name} published ${publishedAssetIds.length} atelier lesson(s) from debrief`,
+    });
+  }
+  // Auto-refresh Win Themes — approval is the trigger for re-curation,
+  // no separate manual call required.
+  try {
+    await runThemeCuratorAndPersist(me, "auto_on_approve");
+  } catch (err) {
+    req.log?.warn?.({ err }, "auto-curate after approve failed (non-blocking)");
+  }
+  res.json({ debrief: updated, publishedAssetIds });
 });
 
 // Compliance loop (PRD §5.2): scan for debriefs past their 14-day SLA
@@ -421,10 +477,13 @@ router.get("/win-themes", async (req, res) => {
   res.json({ themes: rows });
 });
 
-router.post("/win-themes/curate", async (req, res) => {
-  const me = ensurePersona(req, res);
-  if (!me) return;
-  // Pull approved debriefs' themes as input.
+// Shared helper: pulls approved-debrief themes, runs the Theme Curator,
+// upserts atelierWinThemes rows AND materializes openProposalSuggestions
+// as Pane A items on the open Pursue-stage opportunities (PRD §5.2).
+async function runThemeCuratorAndPersist(
+  me: typeof atelierUsers.$inferSelect,
+  trigger: "manual" | "auto_on_approve",
+): Promise<{ runId: string; output: import("../../lib/atelier-agents/runner.js").ThemeCuratorOutput }> {
   const debriefs = await db
     .select()
     .from(atelierWinLossDebriefs)
@@ -442,7 +501,8 @@ router.post("/win-themes/curate", async (req, res) => {
     quote: string;
   }> = [];
   for (const d of debriefs) {
-    const arr = (d.themes as Array<{ tag?: string; name?: string; polarity?: string; evidenceQuote?: string }>) ?? [];
+    const arr =
+      (d.themes as Array<{ tag?: string; name?: string; polarity?: string; evidenceQuote?: string }>) ?? [];
     for (const t of arr) {
       if (!t.tag) continue;
       debriefThemes.push({
@@ -454,9 +514,8 @@ router.post("/win-themes/curate", async (req, res) => {
       });
     }
   }
-  // Open opps for suggestion targeting.
   const openOpps = await db
-    .select({ id: atelierOpportunities.id })
+    .select({ id: atelierOpportunities.id, name: atelierOpportunities.name })
     .from(atelierOpportunities)
     .where(
       and(
@@ -469,20 +528,18 @@ router.post("/win-themes/curate", async (req, res) => {
         ]),
       ),
     );
+  const oppNameMap = new Map(openOpps.map((o) => [o.id, o.name]));
   const { runId, output } = await runThemeCurator({
     triggeredByUserId: me.id,
     actorLabel: me.name,
     debriefThemes,
     openOpportunityIds: openOpps.map((o) => o.id),
   });
-  // Upsert win themes in-place.
   for (const t of output.upsertThemes) {
     const [existing] = await db
       .select()
       .from(atelierWinThemes)
-      .where(
-        and(eq(atelierWinThemes.tag, t.tag), isNull(atelierWinThemes.deletedAt)),
-      )
+      .where(and(eq(atelierWinThemes.tag, t.tag), isNull(atelierWinThemes.deletedAt)))
       .limit(1);
     if (existing) {
       await db
@@ -518,6 +575,56 @@ router.post("/win-themes/curate", async (req, res) => {
       });
     }
   }
+  // Materialize Curator's openProposalSuggestions as Pane A items so the
+  // Composer/Pursue-stage owners actually see them (PRD §5.2).
+  for (const sug of output.openProposalSuggestions) {
+    if (!oppNameMap.has(sug.opportunityId)) continue;
+    // Skip if an unresolved theme_suggestion already exists for this
+    // (opp, themeTag) pair to avoid duplicates on every re-curate.
+    const existing = await db
+      .select({ id: atelierPaneAItems.id })
+      .from(atelierPaneAItems)
+      .where(
+        and(
+          eq(atelierPaneAItems.kind, "theme_suggestion"),
+          eq(atelierPaneAItems.hrefKind, "opportunity"),
+          eq(atelierPaneAItems.hrefTargetId, sug.opportunityId),
+          isNull(atelierPaneAItems.resolvedAt),
+        ),
+      )
+      .limit(5);
+    if (existing.some((_e) => true /* dedupe by tag inside payload below */)) {
+      const dup = await db
+        .select()
+        .from(atelierPaneAItems)
+        .where(
+          and(
+            eq(atelierPaneAItems.kind, "theme_suggestion"),
+            eq(atelierPaneAItems.hrefKind, "opportunity"),
+            eq(atelierPaneAItems.hrefTargetId, sug.opportunityId),
+            isNull(atelierPaneAItems.resolvedAt),
+          ),
+        );
+      const already = dup.some(
+        (d) => (d.payload as { themeTag?: string } | null)?.themeTag === sug.themeTag,
+      );
+      if (already) continue;
+    }
+    await db.insert(atelierPaneAItems).values({
+      id: rid("pai"),
+      orgId: me.orgId,
+      ownerUserId: null,
+      kind: "theme_suggestion",
+      priority: "medium",
+      title: `Insert win theme: ${sug.themeTag.replace(/_/g, " ")}`,
+      detail: sug.rationale,
+      hrefKind: "opportunity",
+      hrefTargetId: sug.opportunityId,
+      hrefTargetLabel: oppNameMap.get(sug.opportunityId) ?? sug.opportunityId,
+      payload: { themeTag: sug.themeTag, source: "theme_curator", trigger },
+      sourceAgent: "theme_curator",
+    });
+  }
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: "atelier",
@@ -526,10 +633,101 @@ router.post("/win-themes/curate", async (req, res) => {
     actorId: "theme_curator",
     actorLabel: "Theme Curator",
     action: "winthemes.curated",
-    payload: { runId, upserts: output.upsertThemes.length },
-    payloadSummary: `Theme Curator refreshed ${output.upsertThemes.length} themes`,
+    payload: { runId, upserts: output.upsertThemes.length, suggestions: output.openProposalSuggestions.length, trigger },
+    payloadSummary: `Theme Curator refreshed ${output.upsertThemes.length} themes (${trigger})`,
   });
+  return { runId, output };
+}
+
+router.post("/win-themes/curate", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  // Pull approved debriefs' themes as input.
+  const debriefs = await db
+    .select()
+    .from(atelierWinLossDebriefs)
+    .where(
+      and(
+        eq(atelierWinLossDebriefs.status, "approved"),
+        isNull(atelierWinLossDebriefs.deletedAt),
+      ),
+    );
+  const debriefThemes: Array<{
+    tag: string;
+    name: string;
+    polarity: string;
+    debriefId: string;
+    quote: string;
+  }> = [];
+  for (const d of debriefs) {
+    const arr = (d.themes as Array<{ tag?: string; name?: string; polarity?: string; evidenceQuote?: string }>) ?? [];
+    for (const t of arr) {
+      if (!t.tag) continue;
+      debriefThemes.push({
+        tag: t.tag,
+        name: t.name ?? t.tag,
+        polarity: t.polarity ?? "win",
+        debriefId: d.id,
+        quote: t.evidenceQuote ?? "",
+      });
+    }
+  }
+  void debriefThemes;
+  const { runId, output } = await runThemeCuratorAndPersist(me, "manual");
   res.json({ runId, output });
 });
 
-export default router;
+// Lifecycle status PATCH (PRD §5.2): debriefs progress through
+// pending -> buyer_scheduled -> buyer_done -> seller_done -> closed
+// (or pending -> approved/rejected via approve/override). Allows the UI
+// to mark interim milestones without going through full synthesize+approve.
+const DEBRIEF_LIFECYCLE = new Set([
+  "pending",
+  "buyer_scheduled",
+  "buyer_done",
+  "seller_done",
+  "closed",
+]);
+router.patch("/opportunities/:oppId/win-loss/status", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const next = String(req.body?.status ?? "");
+  if (!DEBRIEF_LIFECYCLE.has(next)) {
+    res.status(400).json({ error: "invalid-status", allowed: [...DEBRIEF_LIFECYCLE] });
+    return;
+  }
+  const debrief = await loadDebrief(req.params.oppId);
+  if (!debrief) {
+    res.status(404).json({ error: "debrief-not-found" });
+    return;
+  }
+  const [updated] = await db
+    .update(atelierWinLossDebriefs)
+    .set({ status: next, updatedAt: new Date() })
+    .where(eq(atelierWinLossDebriefs.id, debrief.id))
+    .returning();
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: req.params.oppId,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "winloss.status_changed",
+    payload: { from: debrief.status, to: next, debriefId: debrief.id },
+    payloadSummary: `${me.name} moved Win/Loss debrief ${debrief.status} → ${next}`,
+  });
+  res.json({ debrief: updated });
+});
+
+// Path aliases — task spec uses both /win-loss/ and /winloss/. Mount the
+// same handlers on the dashed-less variant by registering a sub-router.
+const aliasRouter: IRouter = Router();
+aliasRouter.use((req, _res, next) => {
+  // Rewrite /winloss/* -> /win-loss/* and /opportunities/:id/winloss -> /opportunities/:id/win-loss
+  req.url = req.url.replace(/\/winloss(?=\/|$|\?)/g, "/win-loss");
+  next();
+});
+aliasRouter.use(router);
+
+export default aliasRouter;

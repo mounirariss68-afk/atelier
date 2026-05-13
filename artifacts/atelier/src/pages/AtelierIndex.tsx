@@ -30,7 +30,7 @@ interface WinTheme {
   name: string;
   description: string | null;
   polarity: string;
-  supportingDebriefCount: number;
+  supportCount: number;
   positioningLine: string | null;
   offeringTags: string[] | null;
   sectorTags: string[] | null;
@@ -87,7 +87,7 @@ function WinThemesView() {
             </div>
             <div className="flex gap-1 flex-wrap text-xs">
               <MonoChip>{t.tag}</MonoChip>
-              <MonoChip>{t.supportingDebriefCount} debriefs</MonoChip>
+              <MonoChip>{t.supportCount} debriefs</MonoChip>
             </div>
             {t.description && <p className="text-sm text-text-mute">{t.description}</p>}
             {t.positioningLine && (

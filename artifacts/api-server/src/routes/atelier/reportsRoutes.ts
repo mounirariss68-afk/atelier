@@ -400,9 +400,17 @@ router.post("/reports/:id/run", async (req, res) => {
     res.status(404).json({ error: "report-not-found" });
     return;
   }
+  // PRD §5.4 "View as of [date]" — accept asOfDate parameter override
+  // (ISO 8601). Merged into stored parameters; templates that filter by
+  // date can read parameters.asOfDate to scope their query.
+  const asOfDate = req.body?.asOfDate ?? req.query?.asOfDate ?? null;
+  const baseParams = (row.parameters as Record<string, unknown>) ?? {};
+  const effectiveParams = asOfDate
+    ? { ...baseParams, asOfDate: String(asOfDate) }
+    : baseParams;
   const result = await computeReport(
     row.templateId as TemplateId,
-    (row.parameters as Record<string, unknown>) ?? {},
+    effectiveParams,
   );
   const [updated] = await db
     .update(atelierReports)
@@ -431,6 +439,19 @@ router.get("/reports/:id", async (req, res) => {
     report: row,
     template: TEMPLATES.find((t) => t.id === row.templateId) ?? null,
   });
+});
+
+// Unified export alias (PRD §5): /reports/:id/export?format=pdf|csv.
+// Delegates to the existing export.pdf / export.csv handlers via internal
+// URL rewrite so we keep one source of truth.
+router.get("/reports/:id/export", (req, res, next) => {
+  const fmt = String(req.query.format ?? "").toLowerCase();
+  if (fmt !== "pdf" && fmt !== "csv") {
+    res.status(400).json({ error: "format-required", allowed: ["pdf", "csv"] });
+    return;
+  }
+  req.url = req.url.replace(/\/export(\?.*)?$/, `/export.${fmt}$1`);
+  next("route");
 });
 
 router.get("/reports/:id/export.csv", async (req, res) => {

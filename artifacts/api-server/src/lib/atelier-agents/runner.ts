@@ -3081,14 +3081,15 @@ function mockWinLoss(args: {
   const won = args.outcome === "signed";
   const lost = !won;
   const t = args.transcript ?? "";
-  // Pick a rough verbatim quote from transcript (first short sentence) so
-  // the evidence-binding requirement is satisfied even in mock mode.
+  // Pick a verbatim quote from transcript ONLY. If no transcript, return
+  // an empty quote and the post-call evidence-binding filter will drop the
+  // theme. Mock must NOT fabricate evidence — that would defeat PRD §5.2's
+  // "no transcript = no themes" rule.
   const quote =
     t
       .split(/[.\n!?]/)
       .map((s) => s.trim())
-      .find((s) => s.length >= 12 && s.length <= 180) ??
-    "[no transcript provided — synthesize blocked]";
+      .find((s) => s.length >= 12 && s.length <= 180) ?? "";
 
   return {
     buyerAuthenticReasons: lost
