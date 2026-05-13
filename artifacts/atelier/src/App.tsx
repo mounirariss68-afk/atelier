@@ -24,7 +24,6 @@ import Deliverable from "@/pages/Deliverable";
 import AgentRun from "@/pages/AgentRun";
 import WinLoss from "@/pages/WinLoss";
 import WinLossLibrary from "@/pages/WinLossLibrary";
-import Forecast from "@/pages/Forecast";
 import Reports from "@/pages/Reports";
 import RosterPeople from "@/pages/roster/RosterPeople";
 import RosterPerson from "@/pages/roster/RosterPerson";
@@ -71,7 +70,20 @@ function Router() {
         <Route path="/opportunities/:oppId" component={Opportunity} />
         <Route path="/win-loss/debriefs" component={WinLossLibrary} />
         <Route path="/win-loss" component={WinLossLibrary} />
-        <Route path="/forecast" component={Forecast} />
+        {/* Task #271 — Forecast folded into Opportunities → Forecast tab.
+            Preserve any ?by=… group-by selection so dossier/report deep-links
+            land on the same view they used to. */}
+        <Route path="/forecast">
+          {() => {
+            const search = window.location.search ?? "";
+            const params = new URLSearchParams(search);
+            const by = params.get("by");
+            const target = `/opportunities?view=forecast${by ? `&by=${encodeURIComponent(by)}` : ""}`;
+            window.history.replaceState(null, "", target);
+            window.location.replace(target);
+            return null;
+          }}
+        </Route>
         <Route path="/reports" component={Reports} />
         <Route path="/engagements" component={Engagements} />
         <Route path="/engagements/:engId" component={Engagement} />
@@ -91,7 +103,17 @@ function Router() {
         <Route path="/ledger/timesheet" component={Timesheet} />
         <Route path="/ledger/timesheets" component={Timesheet} />
         <Route path="/ledger/timesheets/:personId/:weekIso" component={Timesheet} />
-        <Route path="/ledger/approvals" component={LedgerApprovals} />
+        {/* Task #271 — Approvals fold into Home → "What needs me today".
+            Redirect deep-links (notification emails, audit logs) to Home. */}
+        <Route path="/ledger/approvals">
+          {() => {
+            window.history.replaceState(null, "", "/");
+            window.location.replace("/");
+            return null;
+          }}
+        </Route>
+        {/* Internal route still mounted for back-compat with any direct callers. */}
+        <Route path="/ledger/approvals/_legacy" component={LedgerApprovals} />
         <Route path="/ledger/engagement-economics/:engagementId" component={EngagementEconomics} />
         <Route path="/ledger/utilization" component={Utilization} />
         <Route path="/ledger/utilization/:personId" component={Utilization} />

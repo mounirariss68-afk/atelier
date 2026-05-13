@@ -38,32 +38,40 @@ export function TopNav() {
     });
   };
 
-  // Task #254 — Roster nav visible to Partner / Operations / Engagement Lead only.
-  const ROSTER_ROLES = new Set(["partner", "operations", "engagement_lead"]);
-  const canSeeRoster = !!me?.role && ROSTER_ROLES.has(me.role);
-  // Finance (rate cards / margin policy) is Partner-only — same access scope
-  // the Pricing page already enforces. Per-engagement pricing lives inside
-  // the Opportunity → Commercials tab; per-firm rate cards live here.
-  // Win Themes and Reports were removed from the top nav — Win Themes lives
-  // inside the Opportunities header (library link + auto-open on won/lost
-  // transitions), and Reports is now a tab in the right rail.
-  const isPartner = me?.role === "partner";
+  // Task #271 — Approvals, Ledger, Roster, Finance, Forecasts removed from
+  // the top nav. Approvals now surface in Home → "What needs me today";
+  // Ledger / Roster / Finance live in the Home → "Workspace" shelf;
+  // Forecasts are an integrated tab inside Opportunities. The underlying
+  // routes still resolve so deep-links from reports/dossiers don't die.
+  const APPROVER_ROLES = new Set(["partner", "operations", "engagement_lead"]);
+  const isApprover = !!me?.role && APPROVER_ROLES.has(me.role);
+  // Pull a small count of timesheets currently waiting on the active
+  // persona so the Home tab can show a peripheral cue (the badge that
+  // used to live on the old Approvals nav item).
+  const [pendingApprovals, setPendingApprovals] = React.useState<number>(0);
+  React.useEffect(() => {
+    if (!isApprover || !me?.role) { setPendingApprovals(0); return; }
+    const stage = me.role === "partner" ? "lead_approved" : "submitted";
+    let alive = true;
+    void fetch(`/api/atelier/ledger/approvals?stage=${stage}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { groups: [] }))
+      .then((j: { groups?: Array<{ weeks?: unknown[] }> }) => {
+        if (!alive) return;
+        const n = (j.groups ?? []).reduce((s, g) => s + (g.weeks?.length ?? 0), 0);
+        setPendingApprovals(n);
+      })
+      .catch(() => { if (alive) setPendingApprovals(0); });
+    return () => { alive = false; };
+  }, [isApprover, me?.role]);
+
   const navItems = [
-    { href: "/", label: "Home" },
+    { href: "/", label: "Home", badge: pendingApprovals },
     { href: "/crm", label: "Accounts" },
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
-    ...(canSeeRoster ? [{ href: "/roster/people", label: "Roster" }] : []),
-    // Ledger UI is hidden from partner_firm_resource personas — their hours
-    // come via the partner-firm CSV upload (engagement-economics passthrough),
-    // not the per-person timesheet surface.
-    ...(me?.role !== "partner_firm_resource" ? [{ href: "/ledger", label: "Ledger" }] : []),
-    ...(canSeeRoster ? [{ href: "/ledger/approvals", label: "Approvals" }] : []),
-    { href: "/forecast", label: "Forecast" },
     { href: "/atelier", label: "Atelier" },
     { href: "/agents", label: "Agents" },
-    ...(isPartner ? [{ href: "/finance", label: "Finance" }] : []),
-  ];
+  ] as Array<{ href: string; label: string; badge?: number }>;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60">
@@ -78,15 +86,24 @@ export function TopNav() {
           {navItems.map(item => {
             const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
             return (
-              <Link 
-                key={item.href} 
+              <Link
+                key={item.href}
                 href={item.href}
                 className={cn(
-                  "transition-colors hover:text-gold",
+                  "transition-colors hover:text-gold inline-flex items-center gap-1.5",
                   isActive ? "text-gold" : "text-text-mute"
                 )}
               >
                 {item.label}
+                {item.badge && item.badge > 0 ? (
+                  <span
+                    className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono font-semibold bg-gold/20 text-gold border border-gold/40"
+                    title={`${item.badge} pending approval${item.badge === 1 ? "" : "s"}`}
+                    data-testid="nav-badge-home-approvals"
+                  >
+                    {item.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
