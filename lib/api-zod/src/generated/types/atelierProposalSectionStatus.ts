@@ -15,4 +15,5 @@ export const AtelierProposalSectionStatus = {
   green: "green",
   red: "red",
   approved: "approved",
+  rejected: "rejected",
 } as const;

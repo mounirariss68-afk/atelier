@@ -1332,13 +1332,19 @@ function mockAgentArchitect(args: {
               ? "irreversible_action"
               : "retrieval";
     const irreversible = cat === "irreversible_action";
+    // Customer communications and any step touching money/contracts are
+    // treated as high-risk surface area: drafts only, never auto-send.
+    const isCustomerComm = cat === "communication";
+    const isFinancialCommit =
+      irreversible && /(refund|sign|commit|payment|invoice|charge|wire)/i.test(line);
     const agentifiable: ProcessStep["agentifiable"] = irreversible
       ? "partial"
-      : cat === "decision" || cat === "retrieval" || cat === "reconciliation"
-        ? "yes"
-        : cat === "communication"
-          ? "partial"
+      : isCustomerComm
+        ? "partial"
+        : cat === "decision" || cat === "retrieval" || cat === "reconciliation"
+          ? "yes"
           : "yes";
+    void isFinancialCommit; // surfaced through the high-risk classifier below
     return {
       id: `step_${i + 1}`,
       name: line.slice(0, 120),
@@ -1396,6 +1402,14 @@ function mockAgentArchitect(args: {
     });
   }
   if (comm || irr) {
+    // Customer comms ALWAYS high-risk per Atelier guardrail spec
+    // (customer-facing surface area = high), regardless of whether an
+    // irreversible-action step also exists. Same for any step that
+    // looks financial (refund/sign/commit/payment/invoice/charge/wire).
+    const financialKeyword = steps.some((s) =>
+      /(refund|sign|commit|payment|invoice|charge|wire)/i.test(s.name),
+    );
+    const isHigh = !!comm || !!irr || financialKeyword;
     candidates.push({
       id: "ag_drafter",
       name: comm ? "Customer-Comms Drafter" : "Action Drafter",
@@ -1409,9 +1423,16 @@ function mockAgentArchitect(args: {
         fld("tone_score", "number", "Tone-fit score in [0,1]."),
       ],
       tools: ["template_library"],
-      guardrails: ["never_auto_send", "bilingual_when_required"],
-      humanCheckpoints: ["operator_approves_each_send"],
-      riskClass: irr ? "high" : "med",
+      guardrails: [
+        "never_auto_send",
+        "bilingual_when_required",
+        ...(isHigh ? ["partner_attention_required_for_first_run"] : []),
+      ],
+      humanCheckpoints: [
+        comm ? "operator_approves_each_send" : "operator_approves_each_action",
+        ...(isHigh ? ["partner_signs_off_on_first_5_sends"] : []),
+      ],
+      riskClass: isHigh ? "high" : "med",
     });
   }
   while (candidates.length < 3) {
@@ -1477,10 +1498,34 @@ export async function runAgentArchitect(args: {
       JSON.stringify({ scopeHint: args.scopeHint, depth: args.depth, source: args.source }),
       () => mockAgentArchitect({ scopeHint: args.scopeHint, source: args.source }),
     );
-    // Guardrail: every candidate must have a human checkpoint.
+    // Server-side post-validation (defense-in-depth, runs even on
+    // real-LLM output). Any candidate whose process touches customer
+    // communications, financial commitments, or irreversible actions
+    // MUST be classified high-risk with the partner-attention guardrail.
+    const hasComm = value.steps.some(
+      (s) => s.category === "communication" || /(reply|email|sms|notify|message)/i.test(s.name),
+    );
+    const hasIrreversible = value.steps.some(
+      (s) => s.category === "irreversible_action" || /(send|publish|commit|sign|refund)/i.test(s.name),
+    );
+    const hasFinancial = value.steps.some((s) =>
+      /(refund|payment|invoice|charge|wire|price|quote)/i.test(s.name),
+    );
+    const requiresHigh = hasComm || hasIrreversible || hasFinancial;
     value.candidateAgents.forEach((c) => {
       if (!c.humanCheckpoints || c.humanCheckpoints.length === 0) {
         c.humanCheckpoints = ["lead_or_partner_signs_off"];
+      }
+      const touchesComm = /comm|drafter|customer|reply|notify/i.test(c.name + " " + c.purpose);
+      const touchesAction = /action|publish|sign|commit|drafter/i.test(c.name + " " + c.purpose);
+      if (requiresHigh && (touchesComm || touchesAction) && c.riskClass !== "high") {
+        c.riskClass = "high";
+        c.guardrails = Array.from(
+          new Set([...(c.guardrails ?? []), "never_auto_send", "partner_attention_required_for_first_run"]),
+        );
+        c.humanCheckpoints = Array.from(
+          new Set([...(c.humanCheckpoints ?? []), "partner_signs_off_on_first_5_sends"]),
+        );
       }
     });
     await completeRun({

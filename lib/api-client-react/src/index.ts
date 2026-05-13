@@ -202,6 +202,8 @@ export {
   getAtelierApproveProposalSectionUrl,
   getAtelierApproveProposalSectionMutationOptions,
   useAtelierApproveProposalSection,
+  useAtelierEditProposalSection,
+  useAtelierRejectProposalSection,
   getAtelierSendProposalUrl,
   getAtelierSendProposalMutationOptions,
   useAtelierSendProposal,

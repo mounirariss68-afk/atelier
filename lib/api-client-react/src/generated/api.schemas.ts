@@ -1288,6 +1288,7 @@ export const AtelierProposalSectionStatus = {
   green: "green",
   red: "red",
   approved: "approved",
+  rejected: "rejected",
 } as const;
 
 export interface AtelierProposalSection {
@@ -1298,7 +1299,7 @@ export interface AtelierProposalSection {
   ownerAgent: string;
   status: AtelierProposalSectionStatus;
   content: string;
-  citations?: string[];
+  citations?: unknown[];
 }
 
 export type AtelierPricingModelVerdict =
@@ -1368,6 +1369,16 @@ export interface AtelierProposal {
 export interface AtelierProposalDetail {
   proposal: AtelierProposal;
   sections: AtelierProposalSection[];
+}
+
+export interface AtelierEditProposalSectionInput {
+  /** @minLength 1 */
+  content: string;
+}
+
+export interface AtelierRejectProposalSectionInput {
+  /** @minLength 5 */
+  reason: string;
 }
 
 export interface AtelierOverrideProposalPricingInput {

@@ -15,5 +15,5 @@ export interface AtelierProposalSection {
   ownerAgent: string;
   status: AtelierProposalSectionStatus;
   content: string;
-  citations?: string[];
+  citations?: unknown[];
 }

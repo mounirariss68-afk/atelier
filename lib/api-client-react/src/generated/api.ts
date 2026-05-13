@@ -43,6 +43,7 @@ import type {
   AtelierDeliverableDraftInput,
   AtelierDeliverableInput,
   AtelierDeliverableVersion,
+  AtelierEditProposalSectionInput,
   AtelierError,
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
@@ -69,6 +70,7 @@ import type {
   AtelierRaidItem,
   AtelierRaidItemInput,
   AtelierRaidItemPatch,
+  AtelierRejectProposalSectionInput,
   AtelierResearchFact,
   AtelierScoutInput,
   AtelierSendDeliverableInput,
@@ -5191,6 +5193,188 @@ export const useAtelierSendProposal = <
   TContext
 > => {
   return useMutation(getAtelierSendProposalMutationOptions(options));
+};
+
+/**
+ * @summary Edit proposal section content (lead/partner). Resets to draft.
+ */
+export const getAtelierEditProposalSectionUrl = (sectionId: string) => {
+  return `/api/atelier/proposal-sections/${sectionId}`;
+};
+
+export const atelierEditProposalSection = async (
+  sectionId: string,
+  atelierEditProposalSectionInput: AtelierEditProposalSectionInput,
+  options?: RequestInit,
+): Promise<AtelierProposalSection> => {
+  return customFetch<AtelierProposalSection>(
+    getAtelierEditProposalSectionUrl(sectionId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierEditProposalSectionInput),
+    },
+  );
+};
+
+export const getAtelierEditProposalSectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierEditProposalSection>>,
+    TError,
+    { sectionId: string; data: BodyType<AtelierEditProposalSectionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierEditProposalSection>>,
+  TError,
+  { sectionId: string; data: BodyType<AtelierEditProposalSectionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierEditProposalSection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierEditProposalSection>>,
+    { sectionId: string; data: BodyType<AtelierEditProposalSectionInput> }
+  > = (props) => {
+    const { sectionId, data } = props ?? {};
+
+    return atelierEditProposalSection(sectionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierEditProposalSectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierEditProposalSection>>
+>;
+export type AtelierEditProposalSectionMutationBody =
+  BodyType<AtelierEditProposalSectionInput>;
+export type AtelierEditProposalSectionMutationError = ErrorType<void>;
+
+/**
+ * @summary Edit proposal section content (lead/partner). Resets to draft.
+ */
+export const useAtelierEditProposalSection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierEditProposalSection>>,
+    TError,
+    { sectionId: string; data: BodyType<AtelierEditProposalSectionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierEditProposalSection>>,
+  TError,
+  { sectionId: string; data: BodyType<AtelierEditProposalSectionInput> },
+  TContext
+> => {
+  return useMutation(getAtelierEditProposalSectionMutationOptions(options));
+};
+
+/**
+ * @summary Reject proposal section with reason (lead/partner)
+ */
+export const getAtelierRejectProposalSectionUrl = (sectionId: string) => {
+  return `/api/atelier/proposal-sections/${sectionId}/reject`;
+};
+
+export const atelierRejectProposalSection = async (
+  sectionId: string,
+  atelierRejectProposalSectionInput: AtelierRejectProposalSectionInput,
+  options?: RequestInit,
+): Promise<AtelierProposalSection> => {
+  return customFetch<AtelierProposalSection>(
+    getAtelierRejectProposalSectionUrl(sectionId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierRejectProposalSectionInput),
+    },
+  );
+};
+
+export const getAtelierRejectProposalSectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRejectProposalSection>>,
+    TError,
+    { sectionId: string; data: BodyType<AtelierRejectProposalSectionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRejectProposalSection>>,
+  TError,
+  { sectionId: string; data: BodyType<AtelierRejectProposalSectionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRejectProposalSection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRejectProposalSection>>,
+    { sectionId: string; data: BodyType<AtelierRejectProposalSectionInput> }
+  > = (props) => {
+    const { sectionId, data } = props ?? {};
+
+    return atelierRejectProposalSection(sectionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRejectProposalSectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRejectProposalSection>>
+>;
+export type AtelierRejectProposalSectionMutationBody =
+  BodyType<AtelierRejectProposalSectionInput>;
+export type AtelierRejectProposalSectionMutationError = ErrorType<void>;
+
+/**
+ * @summary Reject proposal section with reason (lead/partner)
+ */
+export const useAtelierRejectProposalSection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRejectProposalSection>>,
+    TError,
+    { sectionId: string; data: BodyType<AtelierRejectProposalSectionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRejectProposalSection>>,
+  TError,
+  { sectionId: string; data: BodyType<AtelierRejectProposalSectionInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRejectProposalSectionMutationOptions(options));
 };
 
 export const getAtelierApproveProposalSectionUrl = (sectionId: string) => {

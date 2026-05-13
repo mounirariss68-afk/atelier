@@ -536,6 +536,96 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
   res.status(201).json({ proposal, sections: sectionRows, runId });
 });
 
+// PATCH content of a proposal section (lead/partner). Resets status
+// to "draft" so the section must be re-approved after edit. This is
+// the "Edit" half of the Approve/Edit/Reject pattern.
+router.patch("/proposal-sections/:sectionId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "engagement_lead" && me.role !== "partner") {
+    res.status(403).json({ error: "only-lead-or-partner-may-edit" });
+    return;
+  }
+  const body = req.body as { content?: string };
+  if (typeof body.content !== "string" || body.content.trim().length < 1) {
+    res.status(400).json({ error: "content-required" });
+    return;
+  }
+  const [section] = await db
+    .select()
+    .from(atelierProposalSections)
+    .where(eq(atelierProposalSections.id, req.params.sectionId));
+  if (!section) { res.status(404).json({ error: "section-not-found" }); return; }
+  const [parent] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, section.proposalId));
+  if (!parent) { res.status(404).json({ error: "parent-proposal-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, parent.opportunityId))) return;
+  const [updated] = await db
+    .update(atelierProposalSections)
+    .set({ content: body.content, status: "draft", updatedAt: new Date() })
+    .where(eq(atelierProposalSections.id, req.params.sectionId))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: parent.opportunityId,
+    actor: me,
+    action: "proposal_section.edit",
+    payload: { sectionId: updated.id, sectionKey: updated.sectionId, proposalId: updated.proposalId },
+    summary: `${me.name} edited proposal section "${updated.name}" (status reset to draft)`,
+  });
+  res.json(updated);
+});
+
+// REJECT a proposal section (lead/partner). Sets status="rejected" and
+// records the reason on the row's citations meta. The send gate already
+// rejects any non-approved section, so this prevents re-approval until
+// the lead edits + re-approves. Completes the Approve/Edit/Reject set.
+router.post("/proposal-sections/:sectionId/reject", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "engagement_lead" && me.role !== "partner") {
+    res.status(403).json({ error: "only-lead-or-partner-may-reject" });
+    return;
+  }
+  const body = req.body as { reason?: string };
+  const reason = (body.reason ?? "").trim();
+  if (reason.length < 5) {
+    res.status(400).json({ error: "reason-required" });
+    return;
+  }
+  const [section] = await db
+    .select()
+    .from(atelierProposalSections)
+    .where(eq(atelierProposalSections.id, req.params.sectionId));
+  if (!section) { res.status(404).json({ error: "section-not-found" }); return; }
+  const [parent] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, section.proposalId));
+  if (!parent) { res.status(404).json({ error: "parent-proposal-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, parent.opportunityId))) return;
+  const newCitations = [
+    ...((section.citations as unknown[] | null) ?? []),
+    { kind: "rejection", reason, by: me.name, at: new Date().toISOString() },
+  ];
+  const [updated] = await db
+    .update(atelierProposalSections)
+    .set({ status: "rejected", citations: newCitations as never, updatedAt: new Date() })
+    .where(eq(atelierProposalSections.id, req.params.sectionId))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: parent.opportunityId,
+    actor: me,
+    action: "proposal_section.reject",
+    payload: { sectionId: updated.id, sectionKey: updated.sectionId, reason },
+    summary: `${me.name} rejected proposal section "${updated.name}": ${reason}`,
+  });
+  res.json(updated);
+});
+
 router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

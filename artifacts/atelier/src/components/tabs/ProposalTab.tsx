@@ -3,6 +3,8 @@ import {
   useAtelierGetProposal,
   useAtelierComposeProposal,
   useAtelierApproveProposalSection,
+  useAtelierEditProposalSection,
+  useAtelierRejectProposalSection,
   useAtelierApproveProposalPricing,
   useAtelierOverrideProposalPricing,
   useAtelierSendProposal,
@@ -38,6 +40,18 @@ export function ProposalTab({ oppId }: { oppId: string }) {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
     },
   });
+  const editSection = useAtelierEditProposalSection({
+    mutation: {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
+    },
+  });
+  const rejectSection = useAtelierRejectProposalSection({
+    mutation: {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
+    },
+  });
+  const [openSectionId, setOpenSectionId] = React.useState<string | null>(null);
+  const [drafts, setDrafts] = React.useState<Record<string, string>>({});
   const approvePricing = useAtelierApproveProposalPricing({
     mutation: {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
@@ -193,29 +207,94 @@ export function ProposalTab({ oppId }: { oppId: string }) {
       <Card className="p-4 space-y-3">
         <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Sections</div>
         <div className="space-y-2">
-          {sections.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center gap-3 py-2 border-b border-border-soft last:border-b-0"
-              data-testid={`proposal-section-${s.sectionId}`}
-            >
-              <MonoChip tone={STATUS_TONE[s.status] ?? "default"}>{s.status}</MonoChip>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-text">{s.name}</div>
-                <div className="text-[11px] text-text-mute font-mono">owner: {s.ownerAgent}</div>
+          {sections.map((s) => {
+            const isOpen = openSectionId === s.id;
+            const draft = drafts[s.id] ?? (s.content ?? "");
+            const lastReject = ((s.citations as unknown as { kind?: string; reason?: string; by?: string }[] | null) ?? [])
+              .filter((c) => c?.kind === "rejection").slice(-1)[0];
+            return (
+              <div
+                key={s.id}
+                className="py-2 border-b border-border-soft last:border-b-0"
+                data-testid={`proposal-section-${s.sectionId}`}
+              >
+                <div className="flex items-center gap-3">
+                  <MonoChip tone={s.status === "rejected" ? "red" : (STATUS_TONE[s.status] ?? "default")}>
+                    {s.status}
+                  </MonoChip>
+                  <button
+                    type="button"
+                    className="flex-1 min-w-0 text-left"
+                    data-testid={`button-open-section-${s.sectionId}`}
+                    onClick={() => setOpenSectionId(isOpen ? null : s.id)}
+                  >
+                    <div className="text-sm text-text">{s.name}</div>
+                    <div className="text-[11px] text-text-mute font-mono">
+                      owner: {s.ownerAgent}{isOpen ? " · close" : " · open drafting workspace"}
+                    </div>
+                  </button>
+                  {s.status !== "approved" && (
+                    <PillButton
+                      variant="ghost"
+                      data-testid={`button-approve-section-${s.sectionId}`}
+                      onClick={() => approve.mutate({ sectionId: s.id })}
+                      disabled={approve.isPending}
+                    >
+                      Approve
+                    </PillButton>
+                  )}
+                </div>
+                {lastReject?.reason && !isOpen && (
+                  <div className="ml-[3.25rem] mt-1 text-[11px] text-danger font-mono">
+                    rejected: {lastReject.reason}{lastReject.by ? ` — ${lastReject.by}` : ""}
+                  </div>
+                )}
+                {isOpen && (
+                  <div className="ml-[3.25rem] mt-2 space-y-2" data-testid={`workspace-section-${s.sectionId}`}>
+                    <textarea
+                      className="w-full min-h-[140px] text-sm bg-bg-deep border border-border-soft rounded p-2 text-text font-mono"
+                      value={draft}
+                      data-testid={`textarea-section-${s.sectionId}`}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [s.id]: e.target.value }))}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <PillButton
+                        variant="primary"
+                        data-testid={`button-save-section-${s.sectionId}`}
+                        onClick={() =>
+                          editSection.mutate(
+                            { sectionId: s.id, data: { content: draft } },
+                            { onSuccess: () => setDrafts((d) => { const n = { ...d }; delete n[s.id]; return n; }) },
+                          )
+                        }
+                        disabled={editSection.isPending || draft.trim().length < 1 || draft === (s.content ?? "")}
+                        title="Saving an edit resets the section to draft"
+                      >
+                        {editSection.isPending ? "Saving…" : "Save edit"}
+                      </PillButton>
+                      <PillButton
+                        variant="ghost"
+                        data-testid={`button-reject-section-${s.sectionId}`}
+                        onClick={() => {
+                          const reason = window.prompt("Reject reason (≥5 chars):");
+                          if (!reason || reason.trim().length < 5) return;
+                          rejectSection.mutate({ sectionId: s.id, data: { reason: reason.trim() } });
+                        }}
+                        disabled={rejectSection.isPending}
+                      >
+                        {rejectSection.isPending ? "Rejecting…" : "Reject"}
+                      </PillButton>
+                      {lastReject?.reason && (
+                        <span className="text-[11px] text-danger font-mono self-center">
+                          last reject: {lastReject.reason}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              {s.status !== "approved" && (
-                <PillButton
-                  variant="ghost"
-                  data-testid={`button-approve-section-${s.sectionId}`}
-                  onClick={() => approve.mutate({ sectionId: s.id })}
-                  disabled={approve.isPending}
-                >
-                  Approve
-                </PillButton>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 

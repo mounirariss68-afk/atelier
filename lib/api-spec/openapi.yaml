@@ -1183,6 +1183,50 @@ paths:
               schema: { $ref: "#/components/schemas/AtelierProposalSendResponse" }
         "409":
           description: Sections or pricing not ready
+  /atelier/proposal-sections/{sectionId}:
+    patch:
+      operationId: atelierEditProposalSection
+      tags: [atelier]
+      summary: Edit proposal section content (lead/partner). Resets to draft.
+      parameters:
+        - in: path
+          name: sectionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierEditProposalSectionInput" }
+      responses:
+        "200":
+          description: Updated section (status=draft)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposalSection" }
+        "400": { description: Content required }
+  /atelier/proposal-sections/{sectionId}/reject:
+    post:
+      operationId: atelierRejectProposalSection
+      tags: [atelier]
+      summary: Reject proposal section with reason (lead/partner)
+      parameters:
+        - in: path
+          name: sectionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierRejectProposalSectionInput" }
+      responses:
+        "200":
+          description: Updated section (status=rejected)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposalSection" }
+        "400": { description: Reason required }
   /atelier/proposal-sections/{sectionId}/approve:
     post:
       operationId: atelierApproveProposalSection
@@ -2183,11 +2227,11 @@ components:
         sectionId: { type: string }
         name: { type: string }
         ownerAgent: { type: string }
-        status: { type: string, enum: [draft, amber, green, red, approved] }
+        status: { type: string, enum: [draft, amber, green, red, approved, rejected] }
         content: { type: string }
         citations:
           type: array
-          items: { type: string }
+          items: {}
     AtelierPricingModel:
       type: object
       required: [totalRevenueUsd, totalCostUsd, marginPct, verdict, wedgeChart]
@@ -2240,6 +2284,16 @@ components:
         sections:
           type: array
           items: { $ref: "#/components/schemas/AtelierProposalSection" }
+    AtelierEditProposalSectionInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1 }
+    AtelierRejectProposalSectionInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 5 }
     AtelierOverrideProposalPricingInput:
       type: object
       required: [rationale]

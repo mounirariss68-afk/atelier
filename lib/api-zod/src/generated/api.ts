@@ -1877,9 +1877,16 @@ export const AtelierGetProposalResponse = zod.object({
       sectionId: zod.string(),
       name: zod.string(),
       ownerAgent: zod.string(),
-      status: zod.enum(["draft", "amber", "green", "red", "approved"]),
+      status: zod.enum([
+        "draft",
+        "amber",
+        "green",
+        "red",
+        "approved",
+        "rejected",
+      ]),
       content: zod.string(),
-      citations: zod.array(zod.string()).optional(),
+      citations: zod.array(zod.unknown()).optional(),
     }),
   ),
 });
@@ -2104,6 +2111,52 @@ export const AtelierSendProposalResponse = zod.object({
   docxUrl: zod.string(),
 });
 
+/**
+ * @summary Edit proposal section content (lead/partner). Resets to draft.
+ */
+export const AtelierEditProposalSectionParams = zod.object({
+  sectionId: zod.coerce.string(),
+});
+
+export const AtelierEditProposalSectionBody = zod.object({
+  content: zod.string().min(1),
+});
+
+export const AtelierEditProposalSectionResponse = zod.object({
+  id: zod.string(),
+  proposalId: zod.string(),
+  sectionId: zod.string(),
+  name: zod.string(),
+  ownerAgent: zod.string(),
+  status: zod.enum(["draft", "amber", "green", "red", "approved", "rejected"]),
+  content: zod.string(),
+  citations: zod.array(zod.unknown()).optional(),
+});
+
+/**
+ * @summary Reject proposal section with reason (lead/partner)
+ */
+export const AtelierRejectProposalSectionParams = zod.object({
+  sectionId: zod.coerce.string(),
+});
+
+export const atelierRejectProposalSectionBodyReasonMin = 5;
+
+export const AtelierRejectProposalSectionBody = zod.object({
+  reason: zod.string().min(atelierRejectProposalSectionBodyReasonMin),
+});
+
+export const AtelierRejectProposalSectionResponse = zod.object({
+  id: zod.string(),
+  proposalId: zod.string(),
+  sectionId: zod.string(),
+  name: zod.string(),
+  ownerAgent: zod.string(),
+  status: zod.enum(["draft", "amber", "green", "red", "approved", "rejected"]),
+  content: zod.string(),
+  citations: zod.array(zod.unknown()).optional(),
+});
+
 export const AtelierApproveProposalSectionParams = zod.object({
   sectionId: zod.coerce.string(),
 });
@@ -2114,7 +2167,7 @@ export const AtelierApproveProposalSectionResponse = zod.object({
   sectionId: zod.string(),
   name: zod.string(),
   ownerAgent: zod.string(),
-  status: zod.enum(["draft", "amber", "green", "red", "approved"]),
+  status: zod.enum(["draft", "amber", "green", "red", "approved", "rejected"]),
   content: zod.string(),
-  citations: zod.array(zod.string()).optional(),
+  citations: zod.array(zod.unknown()).optional(),
 });
