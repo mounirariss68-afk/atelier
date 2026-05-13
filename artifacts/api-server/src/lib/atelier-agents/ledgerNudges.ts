@@ -392,11 +392,19 @@ interface BurnRow {
   thresholds: number[]; // crossed
 }
 
+// PLM stages that represent live, in-flight work. Burn alerts on closed,
+// archived, or pre-sale engagements would just create noise — we only
+// want to flag overruns on engagements where partners can actually act.
+const ACTIVE_BURN_PLM_STAGES = ["mobilize", "deliver", "compound"] as const;
+
 async function computeEngagementBurns(): Promise<BurnRow[]> {
   const engagements = await db
     .select()
     .from(atelierEngagements)
-    .where(isNull(atelierEngagements.deletedAt));
+    .where(and(
+      isNull(atelierEngagements.deletedAt),
+      inArray(atelierEngagements.plmStage, ACTIVE_BURN_PLM_STAGES as unknown as string[]),
+    ));
   const out: BurnRow[] = [];
   for (const eng of engagements) {
     if (!eng.opportunityId) continue;
