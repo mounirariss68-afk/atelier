@@ -42,21 +42,31 @@ SET LOCAL app.user_id = 'p_smoke_restricted';
 
 -- -------------------------------------------------------------------
 -- Case 1 — restricted persona, NO grants → deny-all sentinel.
+-- Validates EVERY engagement-scoped table from atelier-rls.sql's
+-- eng_tables list.
 -- -------------------------------------------------------------------
 SET LOCAL app.engagement_ids = '__atelier_deny_all__';
 
 DO $$
 DECLARE
-  ts_visible bigint;
-  ex_visible bigint;
+  tbl text;
+  visible bigint;
+  eng_tables text[] := ARRAY[
+    'atelier_timesheet_entries',
+    'atelier_expenses',
+    'atelier_deliverables',
+    'atelier_raid_items',
+    'atelier_hypothesis_trees',
+    'atelier_processes',
+    'atelier_agent_designs'
+  ];
 BEGIN
-  SELECT count(*) INTO ts_visible FROM atelier_timesheet_entries;
-  SELECT count(*) INTO ex_visible FROM atelier_expenses;
-  RAISE NOTICE '[case1] ts_visible=%, ex_visible=%', ts_visible, ex_visible;
-  ASSERT ts_visible = 0,
-    format('expected 0 timesheet rows for deny-all sentinel, got %s', ts_visible);
-  ASSERT ex_visible = 0,
-    format('expected 0 expense rows for deny-all sentinel, got %s', ex_visible);
+  FOREACH tbl IN ARRAY eng_tables LOOP
+    EXECUTE format('SELECT count(*) FROM %I', tbl) INTO visible;
+    RAISE NOTICE '[case1] %=%', tbl, visible;
+    ASSERT visible = 0,
+      format('expected 0 rows in %s for deny-all sentinel, got %s', tbl, visible);
+  END LOOP;
 END $$;
 
 -- -------------------------------------------------------------------

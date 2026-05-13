@@ -61,6 +61,57 @@ VALUES
   ('fx_v3_seed_eur', 'aico', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD'), 'USD', 'EUR', 0.9200, 'seed_v3', now())
 ON CONFLICT (id) DO NOTHING;
 
+-- ---------------------------------------------------------------------
+--  Expense policy rules — back the v3 Wallet Expense Auditor.
+-- ---------------------------------------------------------------------
+INSERT INTO atelier_expense_policies
+  (id, org_id, category, applies_to_role, applies_to_country, cap_amount_usd, cap_unit,
+   hard_block_amount_usd, approval_threshold_usd, flight_class_max, rationale, active,
+   created_at, updated_at)
+VALUES
+  ('exp_pol_v3_flight_business',  'aico', 'flight', NULL, NULL, NULL,           NULL,
+     NULL, 5000, 'business', 'Business class allowed for >=8h sectors.', true, now(), now()),
+  ('exp_pol_v3_hotel_per_day',    'aico', 'hotel',  NULL, 'KSA', 350,           'per_day',
+     800, 600, NULL,         'KSA hotel cap (PRD §10).',                   true, now(), now()),
+  ('exp_pol_v3_meal_per_day',     'aico', 'meal',   NULL, NULL,  120,           'per_day',
+     250, 150, NULL,         'Per-diem meal cap firm-wide.',               true, now(), now()),
+  ('exp_pol_v3_gift_per_item',    'aico', 'gift',   NULL, NULL,  100,           'per_item',
+     250, 100, NULL,         'Client-gift cap below FCPA threshold.',      true, now(), now())
+ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+--  Conflict disclosures — at least one active disclosure per worker
+--  type so the v3 Roster dossier shows realistic data.
+--  Records are created only when the referenced person exists; the
+--  unconditional INSERT … SELECT WHERE EXISTS pattern keeps this
+--  idempotent and tolerant of empty roster tables.
+-- ---------------------------------------------------------------------
+INSERT INTO atelier_conflict_disclosures
+  (id, org_id, person_type, person_id, disclosure_text, declared_party, nature,
+   scope_impact, declared_at, last_reviewed_at, disclosed_at, status, notes,
+   created_at, updated_at)
+SELECT 'cd_v3_emp_seed', 'aico', 'employee', e.id,
+       'Spouse holds <0.1% public-market position in a benchmark client. Disclosed for completeness.',
+       'family', 'minor_equity', 'commercials', now(), now(), now(), 'active',
+       'Auto-cleared by Compliance — below materiality threshold.',
+       now(), now()
+FROM atelier_employees e
+ORDER BY e.id LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO atelier_conflict_disclosures
+  (id, org_id, person_type, person_id, disclosure_text, declared_party, nature,
+   scope_impact, declared_at, last_reviewed_at, disclosed_at, status, notes,
+   created_at, updated_at)
+SELECT 'cd_v3_con_seed', 'aico', 'contractor', c.id,
+       'Concurrent advisory engagement with non-competing fintech outside MENA scope.',
+       'self', 'concurrent_engagement', 'time_allocation', now(), now(), now(), 'active',
+       'Acknowledged by engagement lead.',
+       now(), now()
+FROM atelier_contractors c
+ORDER BY c.id LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;
 
 -- =====================================================================

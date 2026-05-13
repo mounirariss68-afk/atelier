@@ -178,6 +178,12 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
     const personEntityTypes = ["person", "employee", "contractor", "partner_firm_resource"];
     const conds = [
       and(inArray(atelierAuditEvents.entityType, personEntityTypes), eq(atelierAuditEvents.entityId, personId)),
+      // Task #261 — "complete" audit pack must also include events the
+      // person AUTHORED (e.g., a contractor submitting their own
+      // timesheet/expense rows where the entity is the timesheet/expense,
+      // not the person). Without this OR clause the pack misses every
+      // mutation the person performed across other entity types.
+      eq(atelierAuditEvents.actorId, personId),
     ];
     if (onbIds.length) {
       conds.push(

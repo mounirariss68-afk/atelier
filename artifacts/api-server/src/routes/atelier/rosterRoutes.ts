@@ -20,6 +20,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { and, desc, eq, isNull, or, ilike, inArray, sql } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { ensureEngAccess } from "./engagementRoutes.js";
+import { assertAuditAction } from "./auditContract.js";
 import {
   db,
   atelierUsers,
@@ -402,6 +403,7 @@ async function runAccessSentinel(input: SentinelInput): Promise<SentinelResult> 
       FORBIDDEN_SCOPE_FOR_NONEMPLOYEE.has(s),
     );
     if (offending.length > 0) {
+      assertAuditAction("access.grant.blocked");
       await db.insert(atelierAuditEvents).values({
         id: rid("aud"),
         entityType: "engagement_access",
@@ -486,6 +488,7 @@ async function runAccessSentinel(input: SentinelInput): Promise<SentinelResult> 
         );
       });
       if (matched.length > 0) {
+        assertAuditAction("access.grant.blocked.conflict");
         await db.insert(atelierAuditEvents).values({
           id: rid("aud"),
           entityType: "engagement_access",
@@ -538,6 +541,7 @@ async function runAccessSentinel(input: SentinelInput): Promise<SentinelResult> 
           eq(atelierEngagementAccess.userId, userId),
         ),
       );
+    assertAuditAction("access.revoke");
     await db.insert(atelierAuditEvents).values({
       id: rid("aud"),
       entityType: "engagement_access",
@@ -592,6 +596,7 @@ async function runAccessSentinel(input: SentinelInput): Promise<SentinelResult> 
     });
   }
 
+  assertAuditAction("access.grant");
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: "engagement_access",
@@ -871,6 +876,7 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
       res.status(404).json({ error: "doc-not-found" });
       return;
     }
+    assertAuditAction("document.downloaded");
     await db.insert(atelierAuditEvents).values({
       id: rid("aud"),
       entityType: "person_document",
@@ -1170,6 +1176,7 @@ export async function revokeNonEmployeeAccessOnEngagementClose(args: {
       ),
     );
   // One audit row per revoke for traceability in the per-person Audit feed.
+  assertAuditAction("access.revoke.auto-on-close");
   await db.insert(atelierAuditEvents).values(
     userIds.map((uid) => ({
       id: rid("aud"),
