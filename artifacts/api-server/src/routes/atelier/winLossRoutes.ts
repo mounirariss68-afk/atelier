@@ -577,52 +577,53 @@ async function runThemeCuratorAndPersist(
   }
   // Materialize Curator's openProposalSuggestions as Pane A items so the
   // Composer/Pursue-stage owners actually see them (PRD §5.2).
+  // Resolve each open opp's owner so the suggestion lands in their Pane A.
+  const oppOwners = openOpps.length
+    ? await db
+        .select({
+          id: atelierOpportunities.id,
+          partnerOwnerId: atelierOpportunities.partnerOwnerId,
+          engagementLeadId: atelierOpportunities.engagementLeadId,
+        })
+        .from(atelierOpportunities)
+        .where(inArray(atelierOpportunities.id, openOpps.map((o) => o.id)))
+    : [];
+  const ownerMap = new Map(
+    oppOwners.map((o) => [o.id, o.partnerOwnerId ?? o.engagementLeadId ?? null]),
+  );
   for (const sug of output.openProposalSuggestions) {
     if (!oppNameMap.has(sug.opportunityId)) continue;
-    // Skip if an unresolved theme_suggestion already exists for this
-    // (opp, themeTag) pair to avoid duplicates on every re-curate.
-    const existing = await db
+    const ownerId = ownerMap.get(sug.opportunityId);
+    if (!ownerId) continue; // Pane A items must have a userId per schema.
+    const titleStr = `Insert win theme: ${sug.themeTag.replace(/_/g, " ")}`;
+    // Dedupe by (userId, hrefTargetId, title) on unresolved items —
+    // the title encodes the themeTag so this is a stable key.
+    const dup = await db
       .select({ id: atelierPaneAItems.id })
       .from(atelierPaneAItems)
       .where(
         and(
-          eq(atelierPaneAItems.kind, "theme_suggestion"),
+          eq(atelierPaneAItems.userId, ownerId),
           eq(atelierPaneAItems.hrefKind, "opportunity"),
           eq(atelierPaneAItems.hrefTargetId, sug.opportunityId),
+          eq(atelierPaneAItems.title, titleStr),
           isNull(atelierPaneAItems.resolvedAt),
         ),
       )
-      .limit(5);
-    if (existing.some((_e) => true /* dedupe by tag inside payload below */)) {
-      const dup = await db
-        .select()
-        .from(atelierPaneAItems)
-        .where(
-          and(
-            eq(atelierPaneAItems.kind, "theme_suggestion"),
-            eq(atelierPaneAItems.hrefKind, "opportunity"),
-            eq(atelierPaneAItems.hrefTargetId, sug.opportunityId),
-            isNull(atelierPaneAItems.resolvedAt),
-          ),
-        );
-      const already = dup.some(
-        (d) => (d.payload as { themeTag?: string } | null)?.themeTag === sug.themeTag,
-      );
-      if (already) continue;
-    }
+      .limit(1);
+    if (dup.length) continue;
     await db.insert(atelierPaneAItems).values({
       id: rid("pai"),
       orgId: me.orgId,
-      ownerUserId: null,
-      kind: "theme_suggestion",
+      userId: ownerId,
+      title: titleStr,
+      summary: sug.rationale,
       priority: "medium",
-      title: `Insert win theme: ${sug.themeTag.replace(/_/g, " ")}`,
-      detail: sug.rationale,
       hrefKind: "opportunity",
       hrefTargetId: sug.opportunityId,
-      hrefTargetLabel: oppNameMap.get(sug.opportunityId) ?? sug.opportunityId,
-      payload: { themeTag: sug.themeTag, source: "theme_curator", trigger },
-      sourceAgent: "theme_curator",
+      dueLabel: "Theme suggestion",
+      sortKey: 60,
+      createdByUserId: "theme_curator",
     });
   }
   await db.insert(atelierAuditEvents).values({
@@ -642,37 +643,6 @@ async function runThemeCuratorAndPersist(
 router.post("/win-themes/curate", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  // Pull approved debriefs' themes as input.
-  const debriefs = await db
-    .select()
-    .from(atelierWinLossDebriefs)
-    .where(
-      and(
-        eq(atelierWinLossDebriefs.status, "approved"),
-        isNull(atelierWinLossDebriefs.deletedAt),
-      ),
-    );
-  const debriefThemes: Array<{
-    tag: string;
-    name: string;
-    polarity: string;
-    debriefId: string;
-    quote: string;
-  }> = [];
-  for (const d of debriefs) {
-    const arr = (d.themes as Array<{ tag?: string; name?: string; polarity?: string; evidenceQuote?: string }>) ?? [];
-    for (const t of arr) {
-      if (!t.tag) continue;
-      debriefThemes.push({
-        tag: t.tag,
-        name: t.name ?? t.tag,
-        polarity: t.polarity ?? "win",
-        debriefId: d.id,
-        quote: t.evidenceQuote ?? "",
-      });
-    }
-  }
-  void debriefThemes;
   const { runId, output } = await runThemeCuratorAndPersist(me, "manual");
   res.json({ runId, output });
 });
