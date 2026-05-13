@@ -32,6 +32,15 @@ export async function attachPersona(
 ): Promise<void> {
   try {
     const fromCookie = req.cookies?.[PERSONA_COOKIE] as string | undefined;
+    const salonCookie = req.cookies?.["salon_persona"] as string | undefined;
+    // Realm guard (Task #242): if a salon (client) session is active and the
+    // caller did NOT explicitly present an internal atelier_persona cookie,
+    // refuse to manufacture an internal default persona for them. They must
+    // route through /api/salon/*.
+    if (!fromCookie?.trim() && salonCookie?.trim()) {
+      next();
+      return;
+    }
     const personaId = fromCookie?.trim() || DEFAULT_PERSONA_ID;
 
     const [persona] = await db

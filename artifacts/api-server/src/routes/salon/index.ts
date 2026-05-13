@@ -559,6 +559,14 @@ router.post("/deliverables/:id/decision", async (req, res, next) => {
       res.status(400).json({ error: "missing-headline" });
       return;
     }
+    // Approve / sign_off require an explicit 1-line rationale (PRD §7.3.x).
+    if ((kind === "approve" || kind === "sign_off") && rationale.length < 8) {
+      res.status(400).json({
+        error: "approval-rationale-required",
+        message: "Approval requires a 1-line rationale (min 8 chars).",
+      });
+      return;
+    }
     const [d] = await db
       .select()
       .from(atelierDeliverables)

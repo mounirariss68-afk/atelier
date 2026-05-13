@@ -705,7 +705,32 @@ router.post("/deliverables/:id/publish", async (req, res, next) => {
       typeof req.body?.overrideRationale === "string"
         ? String(req.body.overrideRationale).trim().slice(0, 1000)
         : null;
-    const allowed = sentinel.output.publishAllowed || !!overrideRationale;
+    // Sentinel policy (Task #242): fail = hard block (no override).
+    // warn = Partner-only override with audited rationale.
+    const sentinelStatus = sentinel.output.status; // "pass" | "warn" | "fail"
+    const isPartner = me.role === "partner";
+    let allowed = false;
+    if (sentinelStatus === "pass") {
+      allowed = true;
+    } else if (sentinelStatus === "fail") {
+      allowed = false; // hard block — override forbidden
+    } else if (sentinelStatus === "warn") {
+      allowed =
+        sentinel.output.publishAllowed ||
+        (isPartner && !!overrideRationale && overrideRationale.length >= 10);
+    }
+    if (!allowed && (sentinelStatus === "fail" || (sentinelStatus === "warn" && overrideRationale && !isPartner))) {
+      res.status(409).json({
+        error: "sentinel-blocked",
+        status: sentinelStatus,
+        checks: sentinel.output.checks,
+        message:
+          sentinelStatus === "fail"
+            ? "Publish Sentinel returned fail; override not permitted."
+            : "Warn-tier override requires a Partner persona.",
+      });
+      return;
+    }
     const publishId = _rid("dpub");
     await db.insert(atelierDeliverablePublishes).values({
       id: publishId,
