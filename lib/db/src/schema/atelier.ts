@@ -777,9 +777,19 @@ export const atelierNotifications = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     userId: text("user_id").notNull(),
-    kind: text("kind").notNull(),
+    kind: text("kind").notNull(), // report_scheduled | report_delivered | winloss_due | theme_suggestion | ...
     payload: jsonb("payload").notNull().default({}),
     readAt: timestamp("read_at"),
+    // Task #241 — report scheduling stub. No real Slack/SMTP wired up;
+    // a queued row is the entire delivery contract for v2.
+    channel: text("channel").default("in_app"), // slack | email | in_app
+    subject: text("subject"),
+    body: text("body"),
+    refType: text("ref_type"), // report | debrief | opportunity
+    refId: text("ref_id"),
+    scheduledFor: timestamp("scheduled_for"),
+    sentAt: timestamp("sent_at"),
+    status: text("status").default("queued"), // queued | sent | failed | stub_no_channel
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
@@ -788,6 +798,7 @@ export const atelierNotifications = pgTable(
   (t) => [
     index("idx_atelier_notif_user").on(t.userId),
     index("idx_atelier_notif_org").on(t.orgId),
+    index("idx_atelier_notifs_status").on(t.status),
   ],
 );
 
@@ -1110,3 +1121,144 @@ export const atelierDealPricings = pgTable(
     index("idx_atelier_dealpricing_status").on(t.marginLockStatus),
   ],
 );
+
+// ============================================================
+// WIN/LOSS DEBRIEFS + WIN THEMES (Task #241)
+// ============================================================
+export const atelierWinLossDebriefs = pgTable(
+  "atelier_winloss_debriefs",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    opportunityId: text("opportunity_id").notNull(),
+    outcome: text("outcome").notNull(), // signed | lost_no_decision | lost_to_competitor | withdrawn
+    status: text("status").notNull().default("pending"),
+    // pending | buyer_scheduled | buyer_done | seller_done | synthesized | closed
+    // --- Seller side: multiple AICo team members may submit responses ---
+    sellerInputs: jsonb("seller_inputs").notNull().default([]).$type<Array<{
+      userId: string;
+      name: string;
+      role: string;
+      perceivedReasons: string[];
+      whatWeWouldDoDifferently: string;
+      notes?: string;
+      submittedAt: string;
+    }>>(),
+    sellerPerceivedReasons: jsonb("seller_perceived_reasons").notNull().default([]).$type<string[]>(),
+    sellerNotes: text("seller_notes"),
+    sellerDoneAt: timestamp("seller_done_at"),
+    partnerOwnerUserId: text("partner_owner_user_id"),
+    engagementLeadUserId: text("engagement_lead_user_id"),
+    // --- Buyer interview (async only — transcript ingest) ---
+    buyerInterviewScheduledAt: timestamp("buyer_interview_scheduled_at"),
+    buyerInterviewConductedByAgentRunId: text("buyer_interview_conducted_by_agent_run_id"),
+    buyerInterviewConductedByUserId: text("buyer_interview_conducted_by_user_id"),
+    buyerTranscript: text("buyer_transcript"),
+    buyerTranscriptUploadedAt: timestamp("buyer_transcript_uploaded_at"),
+    buyerResponses: jsonb("buyer_responses").$type<Array<{
+      question: string;
+      answer: string;
+      quote?: string;
+    }> | null>(),
+    buyerAuthenticReasons: jsonb("buyer_authentic_reasons").notNull().default([]).$type<string[]>(),
+    hiddenCompetitor: text("hidden_competitor"), // direct | partner_firm | status_quo | inhouse | unknown | null
+    // --- Synthesis output (Win/Loss Interviewer) ---
+    themes: jsonb("themes").notNull().default([]).$type<Array<{
+      name: string;
+      tag: string;
+      evidenceQuote: string;
+      polarity: "win" | "loss";
+    }>>(),
+    whatWeWouldDoDifferently: text("what_we_would_do_differently"),
+    lessonsToAtelierAssetIds: jsonb("lessons_to_atelier_asset_ids").notNull().default([]).$type<string[]>(),
+    suggestedAtelierLessons: jsonb("suggested_atelier_lessons").notNull().default([]).$type<Array<{
+      title: string;
+      summary: string;
+      kind: string;
+    }>>(),
+    interviewerRunId: text("interviewer_run_id"),
+    lastRunId: text("last_run_id"),
+    synthesizedAt: timestamp("synthesized_at"),
+    approvedAt: timestamp("approved_at"),
+    approvedByUserId: text("approved_by_user_id"),
+    // --- Conductor guardrail trail ---
+    conductorRole: text("conductor_role"), // agent | partner_off_team | (blocked: deal_team)
+    publishedAt: timestamp("published_at"),
+    publishedByUserId: text("published_by_user_id"),
+    dueAt: timestamp("due_at"), // 14d after stage transition close
+    overdueRedAt: timestamp("overdue_red_at"),
+    closedWithoutDebriefOverrideRationale: text("closed_without_debrief_override_rationale"),
+    closedWithoutDebriefOverrideByUserId: text("closed_without_debrief_override_by_user_id"),
+    closedWithoutDebriefOverrideAt: timestamp("closed_without_debrief_override_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_winloss_opp").on(t.opportunityId),
+    index("idx_atelier_winloss_status").on(t.status),
+    index("idx_atelier_winloss_outcome").on(t.outcome),
+  ],
+);
+
+export const atelierWinThemes = pgTable(
+  "atelier_win_themes",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    tag: text("tag").notNull(), // senior_delivery | speed_to_value | pricing_wedge | partner_leverage | agentic_native | gcc_context | ...
+    polarity: text("polarity").notNull().default("win"), // win | loss
+    supportCount: integer("support_count").notNull().default(0),
+    contributingDebriefIds: jsonb("contributing_debrief_ids").notNull().default([]).$type<string[]>(),
+    offeringTags: jsonb("offering_tags").notNull().default([]).$type<string[]>(),
+    sectorTags: jsonb("sector_tags").notNull().default([]).$type<string[]>(),
+    positioningLine: text("positioning_line"), // ready-to-paste insertion for Composer
+    lastSeenAt: timestamp("last_seen_at"),
+    status: text("status").notNull().default("active"), // active | archived
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_win_themes_tag").on(t.tag),
+    index("idx_atelier_win_themes_polarity").on(t.polarity),
+  ],
+);
+
+// ============================================================
+// REPORTS + NOTIFICATIONS (Task #241 §5)
+// ============================================================
+export const atelierReports = pgTable(
+  "atelier_reports",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    name: text("name").notNull(),
+    templateId: text("template_id").notNull(),
+    // pipeline_waterfall | forecast_by_partner | margin_watch | account_heatmap |
+    // winloss_rate_by_offering | hidden_competitor | salon_health |
+    // atelier_reuse_leaderboard | senior_delivery_proof
+    description: text("description"),
+    parameters: jsonb("parameters").notNull().default({}).$type<Record<string, unknown>>(),
+    ownerUserId: text("owner_user_id"),
+    schedule: text("schedule").notNull().default("none"), // none | weekly_monday | monthly_first
+    scheduleChannels: jsonb("schedule_channels").notNull().default([]).$type<Array<"slack" | "email" | "in_app">>(),
+    pinnedToHome: boolean("pinned_to_home").notNull().default(false),
+    lastRunAt: timestamp("last_run_at"),
+    lastRunSnapshot: jsonb("last_run_snapshot"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_reports_owner").on(t.ownerUserId),
+    index("idx_atelier_reports_template").on(t.templateId),
+  ],
+);
+
+// (atelierNotifications declared above — Task #241 extended its columns.)

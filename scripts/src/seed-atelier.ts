@@ -40,6 +40,10 @@ import {
   atelierContacts,
   atelierContactRelationships,
   atelierCredentials,
+  atelierWinLossDebriefs,
+  atelierWinThemes,
+  atelierReports,
+  atelierNotifications,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
@@ -1173,6 +1177,60 @@ const AGENTS: AgentSeed[] = [
     humanCheckpoints: ["Partner reviews stalled-deal Pane A items"],
     runsLast30d: 12,
   },
+  // ---- Task #241: Win/Loss + Theme Curator + Feedback Distiller stub ----
+  {
+    id: "ag_win_loss_interviewer",
+    name: "Win/Loss Interviewer",
+    group: "After-Action",
+    stage: "Closed",
+    purpose:
+      "Impartial third-party interviewer. Synthesizes async buyer transcript into buyer-authentic reasons + themes bound to verbatim evidence.",
+    model: "claude-sonnet-4-6",
+    starred: true,
+    status: "mvp",
+    tools: ["transcript.read", "knowledge.search"],
+    guardrails: [
+      "Conductor: never identifies as the deal owner",
+      "Distinguish seller-perceived from buyer-authentic reasons",
+      "Every theme must be bound to a verbatim quote",
+      "Hidden competitor: name one of {direct, partner_firm, status_quo, inhouse, unknown}",
+    ],
+    humanCheckpoints: ["Partner reviews and approves before themes feed the curator"],
+    runsLast30d: 4,
+  },
+  {
+    id: "ag_theme_curator",
+    name: "Theme Curator",
+    group: "After-Action",
+    stage: "Atelier",
+    purpose:
+      "Clusters approved debrief themes into the firm-wide Win Themes library. Suggests where to insert positioning lines into open proposals.",
+    model: "claude-sonnet-4-6",
+    starred: false,
+    status: "mvp",
+    tools: ["knowledge.search", "vector.cluster"],
+    guardrails: [
+      "Only ingests themes from APPROVED debriefs (never draft)",
+      "Emergent themes flagged separately from upserts",
+    ],
+    humanCheckpoints: ["Atelier curator reviews emergent themes"],
+    runsLast30d: 2,
+  },
+  {
+    id: "ag_feedback_distiller",
+    name: "Feedback Distiller",
+    group: "After-Action",
+    stage: "Engagement",
+    purpose:
+      "Stub (Task #241 OOS). Will distill in-flight engagement feedback into RAID + lessons.",
+    model: "claude-sonnet-4-6",
+    starred: false,
+    status: "stub",
+    tools: [],
+    guardrails: ["Stub — not wired in v2"],
+    humanCheckpoints: [],
+    runsLast30d: 0,
+  },
 ];
 
 // ============================================================
@@ -2084,6 +2142,9 @@ async function truncateAll() {
   // Truncate child tables before parents to avoid FK weirdness even though
   // the schema does not declare hard FKs (text PKs let us be loose).
   const tables = [
+    "atelier_reports",
+    "atelier_winloss_debriefs",
+    "atelier_win_themes",
     "atelier_pane_a_items",
     "atelier_engagement_access",
     "atelier_audit_events",
@@ -2556,8 +2617,141 @@ async function main() {
   ];
   await db.insert(atelierAuditEvents).values(auditRows);
 
+  // ============================================================
+  // Task #241 — Win Themes + closed-deal debrief + Mounir's Monday morning report
+  // ============================================================
+  console.log("[seed-atelier] win themes (PRD §7.2)…");
+  const WIN_THEMES = [
+    {
+      tag: "senior_delivery",
+      name: "We win on senior delivery",
+      description: "Partner-on-the-pitch presence is the closer in the GCC.",
+      polarity: "win",
+      positioningLine:
+        "AICo partners stay on the engagement — not just the pitch.",
+    },
+    {
+      tag: "speed_to_value",
+      name: "Speed-to-value beats scope",
+      description: "90-day milestones with named owners win over 12-month roadmaps.",
+      polarity: "win",
+      positioningLine: "Production agents in 90 days, not slideware in 12 months.",
+    },
+    {
+      tag: "pricing_wedge",
+      name: "Pricing wedge requires outcome anchor",
+      description: "Without a sharp outcome anchor we lose the CFO conversation.",
+      polarity: "loss",
+      positioningLine:
+        "Outcome-based pricing on slide 1, not slide 12.",
+    },
+    {
+      tag: "partner_leverage",
+      name: "Partner leverage on incumbent stack",
+      description: "Co-sell with hyperscaler/SI partners removes incumbent objection.",
+      polarity: "win",
+      positioningLine:
+        "AICo brings the partner ecosystem; the incumbent brings the tower.",
+    },
+    {
+      tag: "agentic_native",
+      name: "Agentic-native, not bolted-on",
+      description: "Buyers reject 'AI feature' overlays in favor of agentic operating models.",
+      polarity: "win",
+      positioningLine: "Agentic operations from day one — not a chatbot bolted to the side.",
+    },
+    {
+      tag: "gcc_context",
+      name: "GCC regulatory + cultural fluency",
+      description: "On-the-ground context (Arabic, KSA/UAE governance) is non-negotiable.",
+      polarity: "win",
+      positioningLine: "Senior team on the ground in Riyadh + Dubai. Not a flyover model.",
+    },
+  ];
+  await db.insert(atelierWinThemes).values(
+    WIN_THEMES.map((t) => ({
+      id: `wth_${t.tag}`,
+      tag: t.tag,
+      name: t.name,
+      description: t.description,
+      polarity: t.polarity,
+      contributingDebriefIds: [],
+      supportCount: 0,
+      offeringTags: [],
+      sectorTags: [],
+      positioningLine: t.positioningLine,
+      lastSeenAt: DAYS_AGO(7),
+      createdByUserId: "p_mounir_ariss",
+    })),
+  );
+
+  console.log("[seed-atelier] closed-deal Win/Loss debrief (DGE passport)…");
+  await db.insert(atelierWinLossDebriefs).values([
+    {
+      id: "wld_dge_passport",
+      opportunityId: "opp_dge_passport",
+      outcome: "lost_no_decision",
+      status: "pending",
+      sellerPerceivedReasons: [
+        "Champion changed roles mid-cycle.",
+        "Procurement froze on incumbent contract terms.",
+      ],
+      sellerNotes: "Lost momentum after the COO transition; never rebooted the trust ladder.",
+      partnerOwnerUserId: "p_mounir_ariss",
+      engagementLeadUserId: "p_omar_najjar",
+      dueAt: DAYS_FROM_NOW(7),
+      createdByUserId: "p_mounir_ariss",
+    },
+  ]);
+  await db.insert(atelierPaneAItems).values([
+    {
+      id: "pane_wld_dge",
+      userId: "p_mounir_ariss",
+      priority: "high",
+      title: "Win/Loss debrief due — DGE passport",
+      summary:
+        "DGE passport closed as lost (no decision). Capture seller view, schedule buyer interview within 7 days.",
+      hrefKind: "opportunity",
+      hrefTargetId: "opp_dge_passport",
+      dueLabel: "7 days",
+      sortKey: 15,
+    },
+  ]);
+
+  console.log("[seed-atelier] Mounir's Monday morning report…");
+  await db.insert(atelierReports).values([
+    {
+      id: "rpt_mounir_monday_morning",
+      ownerUserId: "p_mounir_ariss",
+      templateId: "forecast_by_partner",
+      name: "Mounir's Monday morning",
+      parameters: {
+        _schedule: { cron: "0 7 * * 1", recipientUserIds: ["p_mounir_ariss"] },
+      },
+      schedule: "weekly_monday",
+      scheduleChannels: ["in_app"],
+      createdByUserId: "p_mounir_ariss",
+    },
+  ]);
+  await db.insert(atelierNotifications).values([
+    {
+      id: "ntf_mounir_monday_seed",
+      userId: "p_mounir_ariss",
+      kind: "report_scheduled",
+      payload: { reportId: "rpt_mounir_monday_morning", cron: "0 7 * * 1" },
+      channel: "in_app",
+      subject: "Scheduled: Mounir's Monday morning",
+      body: "Atelier will deliver the partner forecast each Monday at 07:00. (Slack/SMTP not wired in v2.)",
+      refType: "report",
+      refId: "rpt_mounir_monday_morning",
+      scheduledFor: NOW,
+      status: "queued",
+      createdByUserId: "p_mounir_ariss",
+    },
+  ]);
+
   console.log(
-    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs.`,
+    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report.`,
   );
 }
 

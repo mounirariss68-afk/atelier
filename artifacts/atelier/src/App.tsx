@@ -22,6 +22,10 @@ import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
 import Deliverable from "@/pages/Deliverable";
 import AgentRun from "@/pages/AgentRun";
+import WinLoss from "@/pages/WinLoss";
+import WinLossLibrary from "@/pages/WinLossLibrary";
+import Forecast from "@/pages/Forecast";
+import Reports from "@/pages/Reports";
 
 const queryClient = new QueryClient();
 
@@ -41,7 +45,11 @@ function Router() {
         </Route>
         <Route path="/opportunities" component={Pipeline} />
         <Route path="/pipeline/:oppId" component={Opportunity} />
+        <Route path="/opportunities/:oppId/win-loss" component={WinLoss} />
         <Route path="/opportunities/:oppId" component={Opportunity} />
+        <Route path="/win-loss" component={WinLossLibrary} />
+        <Route path="/forecast" component={Forecast} />
+        <Route path="/reports" component={Reports} />
         <Route path="/engagements" component={Engagements} />
         <Route path="/engagements/:engId" component={Engagement} />
         <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />

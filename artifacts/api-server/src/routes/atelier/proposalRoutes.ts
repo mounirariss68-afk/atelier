@@ -28,6 +28,7 @@ import {
   atelierPrototypes,
   atelierEngagements,
   atelierEngagementAccess,
+  atelierWinThemes,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import {
@@ -542,6 +543,29 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
   const teamFromCharter = proposedWorkstreams.length
     ? proposedWorkstreams.map((w) => ({ role: w.leadRole, alloc: 60 }))
     : null;
+  // Task #241: pull top-3 firm-wide Win Themes for this opp's offering.
+  // Prefer themes whose offeringTags include the opp's offeringAnchor;
+  // fall back to org-wide themes (empty offeringTags).
+  const themeRows = await db
+    .select()
+    .from(atelierWinThemes)
+    .where(
+      and(
+        eq(atelierWinThemes.polarity, "win"),
+        isNull(atelierWinThemes.deletedAt),
+      ),
+    );
+  const offering = opp.offeringAnchor ?? "";
+  const ranked = themeRows
+    .map((t) => {
+      const tags = (t.offeringTags as string[]) ?? [];
+      const matches = tags.length === 0 ? 0 : tags.includes(offering) ? 2 : -1;
+      return { t, score: matches * 100 + (t.supportCount ?? 0) };
+    })
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ t }) => ({ tag: t.tag, name: t.name, positioningLine: t.positioningLine }));
   const { runId, output } = await runProposalComposer({
     opportunityId: opp.id,
     opportunityName: opp.name,
@@ -556,6 +580,7 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
     rfpRequirements: body.rfpRequirements ?? [],
     triggeredByUserId: me.id,
     actorLabel: me.name,
+    curatedWinThemes: ranked,
   });
   const proposalId = rid("prop");
   const [proposal] = await db

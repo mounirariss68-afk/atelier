@@ -2122,6 +2122,8 @@ export async function runProposalComposer(args: {
   rfpRequirements: { id: string; requirement: string; severity: string }[];
   triggeredByUserId: string | null;
   actorLabel: string;
+  /** Task #241: top-3 firm-wide win themes for the opp's offering/sector. */
+  curatedWinThemes?: Array<{ tag: string; name: string; positioningLine: string | null }>;
 }): Promise<{ runId: string; output: ProposalComposerOutput; costUsd: number }> {
   const t0 = Date.now();
   const runId = await startRun({
@@ -2152,6 +2154,7 @@ export async function runProposalComposer(args: {
         teamProposed: args.teamProposed,
         pricingIntent: args.pricingIntent,
         rfpRequirements: args.rfpRequirements,
+        curatedWinThemes: args.curatedWinThemes ?? [],
       }),
       () => mockProposal({
         opportunityId: args.opportunityId,
@@ -2161,6 +2164,16 @@ export async function runProposalComposer(args: {
         rfpRequirements: args.rfpRequirements,
       }),
     );
+    // Task #241: if curated firm-wide themes were supplied, fold them into
+    // the output's winThemes so the proposal speaks with the firm's voice
+    // rather than the per-deal mock.
+    if (args.curatedWinThemes && args.curatedWinThemes.length > 0) {
+      const lines = args.curatedWinThemes
+        .slice(0, 3)
+        .map((t) => t.positioningLine ?? t.name)
+        .filter((s): s is string => Boolean(s));
+      if (lines.length > 0) value.winThemes = lines;
+    }
     // Guardrail: if compliance unmet, overall must be red (never silently green).
     if (value.complianceMatrix.some((r) => r.status === "red")) {
       value.complianceOverall = "red";
@@ -3027,4 +3040,288 @@ function buildRisks(status: "green" | "amber" | "red", policy: PricingMarginPoli
     "RED-zone discount erodes firm benchmark. Document the strategic rationale (logo, IP, market entry).",
     "Two-Partner sign-off is non-negotiable to protect the precedent.",
   ];
+}
+
+// =============================================================
+// WIN/LOSS INTERVIEWER (Sonnet 4.6) — Task #241
+// =============================================================
+//
+// The deal owner is the wrong person to ask the buyer (research is
+// unanimous). This agent stands in for the impartial third-party
+// interviewer: it ingests the buyer transcript (async upload only in
+// v2 — no live meeting), distinguishes seller-perceived from
+// buyer-authentic reasons, names the hidden competitor (status_quo,
+// inhouse, partner_firm, direct, unknown), and binds every theme to a
+// verbatim quote.
+
+export interface WinLossInterviewerOutput {
+  buyerAuthenticReasons: string[];
+  hiddenCompetitor: "direct" | "partner_firm" | "status_quo" | "inhouse" | "unknown";
+  themes: Array<{
+    name: string;
+    tag: string;
+    evidenceQuote: string;
+    polarity: "win" | "loss";
+  }>;
+  whatWeWouldDoDifferently: string;
+  suggestedAtelierLessons: Array<{
+    title: string;
+    abstract: string;
+    kind: "learning" | "framework" | "case_study";
+  }>;
+  confidence: "green" | "amber" | "red";
+}
+
+function mockWinLoss(args: {
+  oppName: string;
+  outcome: string;
+  sellerReasons: string[];
+  transcript: string | null;
+}): WinLossInterviewerOutput {
+  const won = args.outcome === "signed";
+  const lost = !won;
+  const t = args.transcript ?? "";
+  // Pick a rough verbatim quote from transcript (first short sentence) so
+  // the evidence-binding requirement is satisfied even in mock mode.
+  const quote =
+    t
+      .split(/[.\n!?]/)
+      .map((s) => s.trim())
+      .find((s) => s.length >= 12 && s.length <= 180) ??
+    "[no transcript provided — synthesize blocked]";
+
+  return {
+    buyerAuthenticReasons: lost
+      ? [
+          "Felt the proposal didn't address the operational risk of the cut-over weekend.",
+          "Pricing alternative from incumbent was 18% lower; couldn't justify the delta to the CFO without a sharper outcome anchor.",
+          "Internal champion changed roles mid-cycle; replacement defaulted to status quo.",
+        ]
+      : [
+          "Trusted the senior delivery story — 'we'd see Mounir on Tuesdays' was the line that closed it.",
+          "Speed-to-value plan was concrete; 90-day milestones with named owners.",
+          "Partner countersign on the discount removed CFO objection.",
+        ],
+    hiddenCompetitor: lost ? "status_quo" : "unknown",
+    themes: [
+      {
+        name: won ? "We win on senior delivery" : "We lose to status quo when senior story is implied",
+        tag: "senior_delivery",
+        evidenceQuote: quote,
+        polarity: won ? "win" : "loss",
+      },
+      {
+        name: won ? "Speed-to-value is the closer" : "Pricing wedge requires a sharper outcome anchor",
+        tag: won ? "speed_to_value" : "pricing_wedge",
+        evidenceQuote: quote,
+        polarity: won ? "win" : "loss",
+      },
+    ],
+    whatWeWouldDoDifferently: lost
+      ? `On ${args.oppName}, we should have priced an outcome-based alternative on slide 1, not slide 12; and we should have rebooted the champion plan the moment the COO moved roles.`
+      : `On ${args.oppName}, the only refinement is to bring the audit-grade governance demo into discovery — it earned the trust we cashed in at signature.`,
+    suggestedAtelierLessons: [
+      {
+        title: won ? `${args.oppName}: senior-delivery proof point` : `${args.oppName}: status-quo recovery playbook`,
+        abstract: won
+          ? "Verbatim partner-on-the-pitch story bound to the close. Reusable in Pursue-stage proposals as a positioning line."
+          : "Champion-departure recovery moves: rebooting trust ladder, outcome-anchor reset, escalating to second exec sponsor.",
+        kind: won ? "case_study" : "learning",
+      },
+    ],
+    confidence: t.length > 200 ? "amber" : "red",
+  };
+}
+
+export async function runWinLossInterviewer(args: {
+  opportunityId: string;
+  opportunityName: string;
+  outcome: string;
+  sellerPerceivedReasons: string[];
+  buyerTranscript: string | null;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: WinLossInterviewerOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "win_loss_interviewer",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "opportunity",
+    targetId: args.opportunityId,
+    targetLabel: args.opportunityName,
+    inputs: {
+      outcome: args.outcome,
+      sellerReasonCount: args.sellerPerceivedReasons.length,
+      transcriptChars: args.buyerTranscript?.length ?? 0,
+    },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("win_loss_interviewer");
+    await progressRun(runId, 30, "Reading buyer transcript");
+    const { value, costUsd, source, warning } = await callClaudeJson<WinLossInterviewerOutput>(
+      "claude-sonnet-4-6",
+      system,
+      JSON.stringify({
+        opportunity_name: args.opportunityName,
+        outcome: args.outcome,
+        seller_perceived_reasons: args.sellerPerceivedReasons,
+        buyer_transcript: args.buyerTranscript ?? "",
+      }),
+      () =>
+        mockWinLoss({
+          oppName: args.opportunityName,
+          outcome: args.outcome,
+          sellerReasons: args.sellerPerceivedReasons,
+          transcript: args.buyerTranscript,
+        }),
+    );
+    await progressRun(runId, 80, "Binding themes to evidence");
+    // Evidence-binding hard rule: drop any theme without a non-empty
+    // evidenceQuote. Downgrade confidence if we drop ≥1.
+    const beforeCount = value.themes.length;
+    value.themes = value.themes.filter((t) => (t.evidenceQuote ?? "").trim().length > 0);
+    const droppedAny = value.themes.length < beforeCount;
+    const conf: "green" | "amber" | "red" = droppedAny
+      ? value.confidence === "green"
+        ? "amber"
+        : "red"
+      : value.confidence;
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: conf,
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.themes.length,
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunityId,
+      targetLabel: args.opportunityName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunityId,
+    });
+    throw err;
+  }
+}
+
+// =============================================================
+// THEME CURATOR — Task #241
+// =============================================================
+
+export interface ThemeCuratorOutput {
+  upsertThemes: Array<{
+    tag: string;
+    name: string;
+    description: string;
+    polarity: "win" | "loss";
+    contributingDebriefIds: string[];
+    offeringTags: string[];
+    sectorTags: string[];
+    positioningLine: string;
+  }>;
+  emergentThemes: Array<{ tag: string; name: string; supportingQuotes: string[] }>;
+  openProposalSuggestions: Array<{
+    opportunityId: string;
+    themeTag: string;
+    rationale: string;
+  }>;
+  confidence: "green" | "amber" | "red";
+}
+
+function mockThemeCurator(args: {
+  debriefThemes: Array<{ tag: string; name: string; polarity: string; debriefId: string; quote: string }>;
+  openOpportunityIds: string[];
+}): ThemeCuratorOutput {
+  // Group by tag.
+  const byTag = new Map<string, typeof args.debriefThemes>();
+  for (const t of args.debriefThemes) {
+    const arr = byTag.get(t.tag) ?? [];
+    arr.push(t);
+    byTag.set(t.tag, arr);
+  }
+  const upserts: ThemeCuratorOutput["upsertThemes"] = [];
+  for (const [tag, group] of byTag) {
+    const polarity = group[0]?.polarity === "loss" ? "loss" : "win";
+    upserts.push({
+      tag,
+      name: group[0]?.name ?? tag,
+      description: `${group.length} closed deals reference this theme.`,
+      polarity,
+      contributingDebriefIds: [...new Set(group.map((g) => g.debriefId))],
+      offeringTags: [],
+      sectorTags: [],
+      positioningLine:
+        polarity === "win"
+          ? `AICo wins on ${tag.replace(/_/g, " ")} — proven across ${group.length} closed deals.`
+          : `Where AICo loses on ${tag.replace(/_/g, " ")}, the recovery move is to lead with senior delivery.`,
+    });
+  }
+  return {
+    upsertThemes: upserts,
+    emergentThemes: [],
+    openProposalSuggestions: args.openOpportunityIds.slice(0, 3).map((id) => ({
+      opportunityId: id,
+      themeTag: upserts[0]?.tag ?? "senior_delivery",
+      rationale: "Top-supported active theme; insert as positioning line in Composer draft.",
+    })),
+    confidence: "amber",
+  };
+}
+
+export async function runThemeCurator(args: {
+  triggeredByUserId: string | null;
+  actorLabel: string;
+  debriefThemes: Array<{ tag: string; name: string; polarity: string; debriefId: string; quote: string }>;
+  openOpportunityIds: string[];
+}): Promise<{ runId: string; output: ThemeCuratorOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "theme_curator",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "atelier",
+    targetId: "win_themes",
+    targetLabel: "Win Themes library",
+    inputs: { debriefThemeCount: args.debriefThemes.length, openOppCount: args.openOpportunityIds.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("theme_curator");
+    await progressRun(runId, 40, "Clustering themes");
+    const { value, costUsd, source, warning } = await callClaudeJson<ThemeCuratorOutput>(
+      "claude-sonnet-4-6",
+      system,
+      JSON.stringify({
+        debrief_themes: args.debriefThemes,
+        open_opportunity_ids: args.openOpportunityIds,
+      }),
+      () => mockThemeCurator(args),
+    );
+    await progressRun(runId, 85, "Refreshing library");
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: value.confidence,
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.upsertThemes.length,
+      actorLabel: args.actorLabel,
+      targetType: "atelier",
+      targetId: "win_themes",
+      targetLabel: "Win Themes library",
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "atelier", targetId: "win_themes" });
+    throw err;
+  }
 }

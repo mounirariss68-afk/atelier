@@ -21,7 +21,91 @@ const SUB_ROUTES = [
   { id: "prompts", label: "Prompts" },
   { id: "credentials", label: "Credentials" },
   { id: "people", label: "People" },
+  { id: "win-themes", label: "Win Themes" },
 ];
+
+interface WinTheme {
+  id: string;
+  tag: string;
+  name: string;
+  description: string | null;
+  polarity: string;
+  supportingDebriefCount: number;
+  positioningLine: string | null;
+  offeringTags: string[] | null;
+  sectorTags: string[] | null;
+  lastSeenAt: string | null;
+}
+
+function WinThemesView() {
+  const [themes, setThemes] = React.useState<WinTheme[] | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const reload = React.useCallback(() => {
+    fetch("/api/atelier/win-themes", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => setThemes(d.themes ?? []));
+  }, []);
+  React.useEffect(() => {
+    reload();
+  }, [reload]);
+  const curate = async () => {
+    setBusy(true);
+    try {
+      await fetch("/api/atelier/win-themes/curate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!themes) return <div className="py-8 text-text-mute">Loading…</div>;
+  return (
+    <div className="mt-8 space-y-4">
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-text-mute">
+          The firm's library of repeatable win/loss themes — clustered from approved debriefs by
+          the Theme Curator.
+        </p>
+        <button
+          onClick={curate}
+          disabled={busy}
+          className="px-3 py-1 rounded text-xs font-mono bg-gold text-bg disabled:opacity-50"
+        >
+          {busy ? "Curating…" : "Run Theme Curator"}
+        </button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {themes.map((t) => (
+          <Card key={t.id} className="p-4 space-y-2 border-l-4 border-l-gold">
+            <div className="flex items-center justify-between">
+              <div className="font-medium text-text">{t.name}</div>
+              <MonoChip>{t.polarity}</MonoChip>
+            </div>
+            <div className="flex gap-1 flex-wrap text-xs">
+              <MonoChip>{t.tag}</MonoChip>
+              <MonoChip>{t.supportingDebriefCount} debriefs</MonoChip>
+            </div>
+            {t.description && <p className="text-sm text-text-mute">{t.description}</p>}
+            {t.positioningLine && (
+              <p className="text-sm italic text-gold border-l-2 border-l-gold/40 pl-2">
+                "{t.positioningLine}"
+              </p>
+            )}
+          </Card>
+        ))}
+        {themes.length === 0 && (
+          <Card className="p-6 text-text-mute">
+            No themes yet. Run the Theme Curator after approving some debriefs.
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function AssetsView() {
   const { toast } = useToast();
@@ -487,6 +571,7 @@ export default function AtelierIndex() {
         {section === "prompts" && <PromptsView />}
         {section === "credentials" && <CredentialsView />}
         {section === "people" && <PeopleView />}
+        {section === "win-themes" && <WinThemesView />}
       </div>
     </div>
   );

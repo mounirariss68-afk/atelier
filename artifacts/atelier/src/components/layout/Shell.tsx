@@ -43,8 +43,11 @@ export function TopNav() {
     { href: "/crm", label: "CRM" },
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
+    { href: "/forecast", label: "Forecast" },
+    { href: "/win-loss", label: "Win/Loss" },
     { href: "/atelier", label: "Atelier" },
     { href: "/agents", label: "Agents" },
+    { href: "/reports", label: "Reports" },
     { href: "/pricing", label: "Pricing" },
   ];
 

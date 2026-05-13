@@ -26,6 +26,7 @@ import {
   atelierTranscripts,
   atelierOpportunityStageTransitions,
   atelierPaneAItems,
+  atelierWinLossDebriefs,
 } from "@workspace/db";
 import {
   SALES_TO_PLM,
@@ -1175,6 +1176,70 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
     },
     payloadSummary: `${me.name} moved "${opp.name}" ${fromSales} → ${toStage} (prob ${priorProb}% → ${newProb}%): ${rationaleText.slice(0, 120)}`,
   });
+
+  // Task #241 — Closed-opportunity debrief hook.
+  // When an opp closes (signed | lost_no_decision | withdrawn), enqueue a
+  // pending Win/Loss debrief and a Pane A item for the partner owner, with
+  // a 14-day SLA before partner-override-required gate fires (per PRD §5.2).
+  // We do NOT block the close itself — the gate fires elsewhere, 14d after.
+  const CLOSED_STAGES: SalesStage[] = ["signed", "lost_no_decision", "withdrawn"];
+  if (CLOSED_STAGES.includes(toStage as SalesStage)) {
+    // Best-effort: never fail the stage-transition response because of a
+    // debrief-side-effect failure. The 14-day SLA gate fires elsewhere.
+    try {
+      const existing = await db
+        .select({ id: atelierWinLossDebriefs.id })
+        .from(atelierWinLossDebriefs)
+        .where(
+          and(
+            eq(atelierWinLossDebriefs.opportunityId, opp.id),
+            isNull(atelierWinLossDebriefs.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!existing.length) {
+        const debriefId = rid("wld");
+        const dueAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+        await db.insert(atelierWinLossDebriefs).values({
+          id: debriefId,
+          orgId: me.orgId,
+          opportunityId: opp.id,
+          outcome: toStage,
+          status: "pending",
+          sellerPerceivedReasons: [],
+          partnerOwnerUserId: opp.partnerOwnerId,
+          engagementLeadUserId: opp.engagementLeadId,
+          dueAt,
+          createdByUserId: me.id,
+        });
+        await db.insert(atelierPaneAItems).values({
+          id: rid("pane"),
+          orgId: me.orgId,
+          userId: opp.partnerOwnerId,
+          priority: toStage === "signed" ? "medium" : "high",
+          title: `Win/Loss debrief due — ${opp.name}`,
+          summary: `${opp.name} closed as ${toStage.replace(/_/g, " ")}. Capture seller view, schedule buyer interview within 14 days.`,
+          hrefKind: "opportunity",
+          hrefTargetId: opp.id,
+          dueLabel: "14 days",
+          sortKey: toStage === "signed" ? 50 : 20,
+        });
+        await db.insert(atelierAuditEvents).values({
+          id: rid("aud"),
+          entityType: "opportunity",
+          entityId: opp.id,
+          actorType: "system",
+          actorId: "stage-transition-hook",
+          actorLabel: "Atelier",
+          action: "winloss.debrief_enqueued",
+          payload: { debriefId, outcome: toStage, dueAt: dueAt.toISOString() },
+          payloadSummary: `Atelier enqueued Win/Loss debrief for ${opp.name} (due in 14 days)`,
+        });
+      }
+    } catch (err) {
+      req.log?.warn?.({ err, oppId: opp.id }, "winloss debrief enqueue failed (non-blocking)");
+    }
+  }
 
   res.json({
     opportunity: await buildOppWire(updated),

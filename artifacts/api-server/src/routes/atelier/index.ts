@@ -52,6 +52,9 @@ import engagementRoutes, {
   ensureEngAccess,
   audit as engagementAudit,
 } from "./engagementRoutes";
+import winLossRoutes from "./winLossRoutes";
+import forecastRoutes from "./forecastRoutes";
+import reportsRoutes from "./reportsRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -94,6 +97,10 @@ router.use(knowledgeRoutes);
 // Mount pricing routes (Task #240): rate cards, margin policy, deal pricing,
 // pricing strategist, single/two-partner override.
 router.use(pricingRoutes);
+// Mount Win/Loss + Forecast + Reports routes (Task #241).
+router.use(winLossRoutes);
+router.use(forecastRoutes);
+router.use(reportsRoutes);
 
 function ensurePersona(
   req: Request,
