@@ -61,6 +61,7 @@ export const atelierAccounts = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     name: text("name").notNull(),
+    brandName: text("brand_name"),
     country: text("country").notNull(),
     sector: text("sector").notNull(),
     notes: text("notes"),

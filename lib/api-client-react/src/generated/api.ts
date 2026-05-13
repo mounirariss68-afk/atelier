@@ -19,6 +19,7 @@ import type {
 import type {
   AgentActivityItem,
   AgentCatalogEntry,
+  AtelierAccountDuplicateError,
   AtelierAccountSummary,
   AtelierAccountWorkspace,
   AtelierAdminSettings,
@@ -45,6 +46,7 @@ import type {
   AtelierContactDispositionInput,
   AtelierContactGraph,
   AtelierCountersignPricing200,
+  AtelierCreateAccountInput,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
   AtelierCreateStageTransition200,
@@ -4309,6 +4311,100 @@ export function useAtelierListAccounts<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Creates a new account in the active org. Server-side stamps `id`,
+`createdAt`, `updatedAt`, and `createdByUserId`. Auto-triggers an
+Account Cartographer run (fire-and-forget) so the workspace lands
+with research already in flight.
+
+ * @summary Create a new CRM account (Partner / Engagement Lead only)
+ */
+export const getAtelierCreateAccountUrl = () => {
+  return `/api/atelier/accounts`;
+};
+
+export const atelierCreateAccount = async (
+  atelierCreateAccountInput: AtelierCreateAccountInput,
+  options?: RequestInit,
+): Promise<AtelierAccountSummary> => {
+  return customFetch<AtelierAccountSummary>(getAtelierCreateAccountUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierCreateAccountInput),
+  });
+};
+
+export const getAtelierCreateAccountMutationOptions = <
+  TError = ErrorType<AtelierError | AtelierAccountDuplicateError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccount>>,
+    TError,
+    { data: BodyType<AtelierCreateAccountInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateAccount>>,
+  TError,
+  { data: BodyType<AtelierCreateAccountInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateAccount"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateAccount>>,
+    { data: BodyType<AtelierCreateAccountInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateAccount(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateAccountMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateAccount>>
+>;
+export type AtelierCreateAccountMutationBody =
+  BodyType<AtelierCreateAccountInput>;
+export type AtelierCreateAccountMutationError = ErrorType<
+  AtelierError | AtelierAccountDuplicateError
+>;
+
+/**
+ * @summary Create a new CRM account (Partner / Engagement Lead only)
+ */
+export const useAtelierCreateAccount = <
+  TError = ErrorType<AtelierError | AtelierAccountDuplicateError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccount>>,
+    TError,
+    { data: BodyType<AtelierCreateAccountInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateAccount>>,
+  TError,
+  { data: BodyType<AtelierCreateAccountInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateAccountMutationOptions(options));
+};
 
 /**
  * @summary Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)

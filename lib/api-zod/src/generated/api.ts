@@ -1899,6 +1899,7 @@ export const AtelierListAccountsQueryParams = zod.object({
 export const AtelierListAccountsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
+  brandName: zod.string().nullish(),
   country: zod.string(),
   sector: zod.string(),
   tier: zod.enum(["A", "B", "C", "D"]),
@@ -1915,10 +1916,97 @@ export const AtelierListAccountsResponseItem = zod.object({
   lastTouchAt: zod.string().nullish(),
   enrichedAt: zod.string().nullish(),
   pendingUpdateCount: zod.number().optional(),
+  cartographerStatus: zod
+    .union([zod.literal("running"), zod.literal("failed"), zod.literal(null)])
+    .nullish()
+    .describe(
+      "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+    ),
 });
 export const AtelierListAccountsResponse = zod.array(
   AtelierListAccountsResponseItem,
 );
+
+/**
+ * Creates a new account in the active org. Server-side stamps `id`,
+`createdAt`, `updatedAt`, and `createdByUserId`. Auto-triggers an
+Account Cartographer run (fire-and-forget) so the workspace lands
+with research already in flight.
+
+ * @summary Create a new CRM account (Partner / Engagement Lead only)
+ */
+export const atelierCreateAccountBodyNameMax = 200;
+
+export const atelierCreateAccountBodyBrandNameMax = 200;
+
+export const atelierCreateAccountBodySectorMax = 120;
+
+export const atelierCreateAccountBodyCountryMax = 120;
+
+export const atelierCreateAccountBodyHqCityMax = 120;
+
+export const atelierCreateAccountBodyPrimaryCurrencyMin = 3;
+export const atelierCreateAccountBodyPrimaryCurrencyMax = 3;
+
+export const atelierCreateAccountBodyPrimaryCurrencyRegExp = new RegExp(
+  "^[A-Z]{3}$",
+);
+export const atelierCreateAccountBodyStrategicPrioritiesItemMax = 200;
+
+export const atelierCreateAccountBodyStrategicPrioritiesMax = 5;
+
+export const atelierCreateAccountBodyAicoHypothesisMax = 600;
+
+export const atelierCreateAccountBodyNotesMax = 2000;
+
+export const AtelierCreateAccountBody = zod.object({
+  name: zod
+    .string()
+    .min(1)
+    .max(atelierCreateAccountBodyNameMax)
+    .describe("Legal name (stored in `name`)."),
+  brandName: zod
+    .string()
+    .max(atelierCreateAccountBodyBrandNameMax)
+    .nullish()
+    .describe("Optional display label; overrides `name` on cards\/headers."),
+  sector: zod.string().min(1).max(atelierCreateAccountBodySectorMax),
+  country: zod.string().min(1).max(atelierCreateAccountBodyCountryMax),
+  hqCity: zod.string().max(atelierCreateAccountBodyHqCityMax).nullish(),
+  size: zod
+    .union([
+      zod.literal("enterprise"),
+      zod.literal("large"),
+      zod.literal("mid"),
+      zod.literal("small"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  tier: zod.enum(["A", "B", "C", "D"]),
+  status: zod.enum(["active", "dormant", "archived"]),
+  primaryCurrency: zod
+    .string()
+    .min(atelierCreateAccountBodyPrimaryCurrencyMin)
+    .max(atelierCreateAccountBodyPrimaryCurrencyMax)
+    .regex(atelierCreateAccountBodyPrimaryCurrencyRegExp),
+  primaryLanguage: zod.enum(["en", "ar"]),
+  partnerOwnerId: zod.string().nullish(),
+  parentAccountId: zod.string().nullish(),
+  strategicPriorities: zod
+    .array(
+      zod
+        .string()
+        .min(1)
+        .max(atelierCreateAccountBodyStrategicPrioritiesItemMax),
+    )
+    .max(atelierCreateAccountBodyStrategicPrioritiesMax)
+    .optional(),
+  aicoHypothesis: zod
+    .string()
+    .max(atelierCreateAccountBodyAicoHypothesisMax)
+    .nullish(),
+  notes: zod.string().max(atelierCreateAccountBodyNotesMax).nullish(),
+});
 
 /**
  * @summary Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)
@@ -1934,6 +2022,7 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
     .object({
       id: zod.string(),
       name: zod.string(),
+      brandName: zod.string().nullish(),
       country: zod.string(),
       sector: zod.string(),
       tier: zod.enum(["A", "B", "C", "D"]),
@@ -1950,6 +2039,16 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       lastTouchAt: zod.string().nullish(),
       enrichedAt: zod.string().nullish(),
       pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
     })
     .and(
       zod.object({
@@ -2135,6 +2234,7 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
     .object({
       id: zod.string(),
       name: zod.string(),
+      brandName: zod.string().nullish(),
       country: zod.string(),
       sector: zod.string(),
       tier: zod.enum(["A", "B", "C", "D"]),
@@ -2151,6 +2251,16 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       lastTouchAt: zod.string().nullish(),
       enrichedAt: zod.string().nullish(),
       pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
     })
     .and(
       zod.object({
@@ -2437,6 +2547,7 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
     .object({
       id: zod.string(),
       name: zod.string(),
+      brandName: zod.string().nullish(),
       country: zod.string(),
       sector: zod.string(),
       tier: zod.enum(["A", "B", "C", "D"]),
@@ -2453,6 +2564,16 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       lastTouchAt: zod.string().nullish(),
       enrichedAt: zod.string().nullish(),
       pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
     })
     .and(
       zod.object({

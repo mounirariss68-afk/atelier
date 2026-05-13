@@ -968,6 +968,40 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AtelierAccountSummary"
+    post:
+      operationId: atelierCreateAccount
+      tags: [atelier]
+      summary: Create a new CRM account (Partner / Engagement Lead only)
+      description: |
+        Creates a new account in the active org. Server-side stamps `id`,
+        `createdAt`, `updatedAt`, and `createdByUserId`. Auto-triggers an
+        Account Cartographer run (fire-and-forget) so the workspace lands
+        with research already in flight.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierCreateAccountInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierAccountSummary"
+        "403":
+          description: Not allowed (non-partner / non-lead persona)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "409":
+          description: An account with this legal name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierAccountDuplicateError"
   /atelier/accounts/{accountId}:
     get:
       operationId: atelierGetAccountWorkspace
@@ -2018,12 +2052,70 @@ components:
         decision: { type: string, enum: [approve, reject] }
         note: { type: ["string", "null"] }
 
+    AtelierCreateAccountInput:
+      type: object
+      required:
+        - name
+        - sector
+        - country
+        - tier
+        - status
+        - primaryCurrency
+        - primaryLanguage
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Legal name (stored in `name`).
+        brandName:
+          type: ["string", "null"]
+          maxLength: 200
+          description: Optional display label; overrides `name` on cards/headers.
+        sector: { type: string, minLength: 1, maxLength: 120 }
+        country: { type: string, minLength: 1, maxLength: 120 }
+        hqCity: { type: ["string", "null"], maxLength: 120 }
+        size:
+          type: ["string", "null"]
+          enum: [enterprise, large, mid, small, null]
+        tier: { $ref: "#/components/schemas/AtelierAccountTier" }
+        status: { $ref: "#/components/schemas/AtelierAccountStatus" }
+        primaryCurrency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          pattern: "^[A-Z]{3}$"
+        primaryLanguage:
+          type: string
+          enum: [en, ar]
+        partnerOwnerId: { type: ["string", "null"] }
+        parentAccountId: { type: ["string", "null"] }
+        strategicPriorities:
+          type: array
+          maxItems: 5
+          items: { type: string, minLength: 1, maxLength: 200 }
+        aicoHypothesis:
+          type: ["string", "null"]
+          maxLength: 600
+        notes:
+          type: ["string", "null"]
+          maxLength: 2000
+
+    AtelierAccountDuplicateError:
+      type: object
+      required: [error, existingAccountId]
+      properties:
+        error: { type: string, enum: [duplicate-name] }
+        existingAccountId: { type: string }
+        message: { type: ["string", "null"] }
+
     AtelierAccountSummary:
       type: object
       required: [id, name, country, sector, tier, status, relationshipStrength]
       properties:
         id: { type: string }
         name: { type: string }
+        brandName: { type: ["string", "null"] }
         country: { type: string }
         sector: { type: string }
         tier: { $ref: "#/components/schemas/AtelierAccountTier" }
@@ -2040,6 +2132,13 @@ components:
         lastTouchAt: { type: ["string", "null"] }
         enrichedAt: { type: ["string", "null"] }
         pendingUpdateCount: { type: integer }
+        cartographerStatus:
+          type: ["string", "null"]
+          enum: [running, failed, null]
+          description: |
+            Transient flag set while an auto-triggered Account Cartographer
+            run is in flight (or after it has failed). `null` once the run
+            resolves successfully and `enrichedAt` is set.
 
     AtelierContact:
       type: object

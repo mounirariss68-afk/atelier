@@ -1,15 +1,19 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { useAtelierListAccounts } from "@workspace/api-client-react";
+import { useAtelierListAccounts, useAtelierGetMe } from "@workspace/api-client-react";
 import {
   PageHero,
   SectionHead,
   Card,
   MonoChip,
   HeroStat,
+  PillButton,
 } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, Search, Users } from "lucide-react";
+import { Globe, Search, Users, Plus } from "lucide-react";
+import { CreateAccountDialog } from "@/components/CreateAccountDialog";
+
+const CREATE_ROLES = new Set(["partner", "engagement_lead"]);
 
 const TIER_TONE: Record<string, "gold" | "green" | "amber" | "default"> = {
   A: "gold",
@@ -27,6 +31,8 @@ const TIER_LABEL: Record<string, string> = {
 
 export default function Crm() {
   const { data: accounts, isLoading } = useAtelierListAccounts();
+  const { data: me } = useAtelierGetMe();
+  const canCreate = !!me && CREATE_ROLES.has(me.role);
   const [tier, setTier] = useState<string>("");
   const [sector, setSector] = useState<string>("");
   const [q, setQ] = useState("");
@@ -41,7 +47,10 @@ export default function Crm() {
     return (accounts ?? []).filter((a) => {
       if (tier && a.tier !== tier) return false;
       if (sector && a.sector !== sector) return false;
-      if (q && !a.name.toLowerCase().includes(q.toLowerCase())) return false;
+      if (q) {
+        const hay = `${a.brandName ?? ""} ${a.name}`.toLowerCase();
+        if (!hay.includes(q.toLowerCase())) return false;
+      }
       return true;
     });
   }, [accounts, tier, sector, q]);
@@ -76,6 +85,17 @@ export default function Crm() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-6">
+        {canCreate && (
+          <div className="flex justify-end">
+            <CreateAccountDialog
+              trigger={
+                <PillButton variant="primary" data-testid="button-new-account">
+                  <Plus className="w-3.5 h-3.5 mr-1.5 inline" /> New account
+                </PillButton>
+              }
+            />
+          </div>
+        )}
         <Card flat className="p-4 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 flex-1 min-w-[240px]">
             <Search className="w-4 h-4 text-text-mute" />
@@ -128,8 +148,13 @@ export default function Crm() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-base font-semibold text-text group-hover:text-gold transition-colors">
-                      {a.name}
+                      {a.brandName ?? a.name}
                     </div>
+                    {a.brandName && a.brandName !== a.name && (
+                      <div className="text-[11px] font-mono text-text-faint italic mt-0.5">
+                        {a.name}
+                      </div>
+                    )}
                     <div className="text-xs font-mono text-text-mute mt-0.5 flex items-center gap-1.5">
                       <Globe className="w-3 h-3" />
                       {a.country} · {a.sector}

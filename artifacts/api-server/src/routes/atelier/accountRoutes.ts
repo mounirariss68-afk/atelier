@@ -19,6 +19,7 @@ import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
+  atelierAgentRuns,
   atelierContacts,
   atelierContactRelationships,
   atelierCredentials,
@@ -68,6 +69,7 @@ import {
   AtelierDecideProfileUpdateBody as AtelierProfileUpdateDecisionInput,
   AtelierRefreshAccountCartographerBody as AtelierCartographerRefreshInput,
   AtelierCreateCredentialBody as AtelierCredentialInput,
+  AtelierCreateAccountBody as AtelierCreateAccountInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -97,6 +99,27 @@ async function loadAccount(id: string) {
     .from(atelierAccounts)
     .where(and(eq(atelierAccounts.id, id), isNull(atelierAccounts.deletedAt)));
   return row ?? null;
+}
+
+async function loadCartographerStatus(
+  accountId: string,
+): Promise<"running" | "failed" | null> {
+  const [latest] = await db
+    .select({ status: atelierAgentRuns.status })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.targetType, "account"),
+        eq(atelierAgentRuns.targetId, accountId),
+        eq(atelierAgentRuns.agentId, "account_cartographer"),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  if (!latest) return null;
+  if (latest.status === "running") return "running";
+  if (latest.status === "failed") return "failed";
+  return null;
 }
 
 async function summariseAccount(
@@ -146,9 +169,11 @@ async function summariseAccount(
   const pending = (a.pendingProfileUpdates ?? []).filter(
     (u) => u.status === "pending",
   );
+  const cartographerStatus = await loadCartographerStatus(a.id);
   return {
     id: a.id,
     name: a.name,
+    brandName: a.brandName ?? null,
     country: a.country,
     sector: a.sector,
     tier: (a.tier ?? "C") as "A" | "B" | "C" | "D",
@@ -165,6 +190,7 @@ async function summariseAccount(
     lastTouchAt: lastTouch ? new Date(lastTouch.updatedAt).toISOString() : null,
     enrichedAt: a.enrichedAt ? new Date(a.enrichedAt).toISOString() : null,
     pendingUpdateCount: pending.length,
+    cartographerStatus,
   };
 }
 
@@ -194,6 +220,202 @@ router.get("/accounts", async (req, res) => {
   const allowed = visible.filter((r): r is NonNullable<typeof r> => r !== null);
   const out = await Promise.all(allowed.map((a) => summariseAccount(a, access)));
   res.json(out);
+});
+
+// ---------- create ----------
+const CREATE_ROLES = new Set(["partner", "engagement_lead"]);
+
+router.post("/accounts", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({ error: "partner-only", reason: "Only Partner or Engagement Lead personas can create accounts." });
+    return;
+  }
+  const parsed = AtelierCreateAccountInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const input = parsed.data;
+  const orgId = me.orgId ?? "aico";
+  const trimmedName = input.name.trim();
+  const normalisedName = trimmedName.toLowerCase();
+
+  // Duplicate (case-insensitive) within org, excluding soft-deleted rows.
+  const sameOrgRows = await db
+    .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.orgId, orgId), isNull(atelierAccounts.deletedAt)));
+  const dup = sameOrgRows.find((r) => r.name.trim().toLowerCase() === normalisedName);
+  if (dup) {
+    res.status(409).json({
+      error: "duplicate-name",
+      existingAccountId: dup.id,
+      message: `An account with this legal name already exists.`,
+    });
+    return;
+  }
+
+  const accountId = rid("acct");
+  const now = new Date();
+  const inserted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(atelierAccounts)
+      .values({
+        id: accountId,
+        orgId,
+        name: trimmedName,
+        brandName: input.brandName?.trim() || null,
+        country: input.country.trim(),
+        sector: input.sector.trim(),
+        notes: input.notes?.trim() || null,
+        parentAccountId: input.parentAccountId ?? null,
+        size: input.size ?? null,
+        hqCity: input.hqCity?.trim() || null,
+        primaryCurrency: input.primaryCurrency.toUpperCase(),
+        primaryLanguage: input.primaryLanguage,
+        tier: input.tier,
+        status: input.status,
+        partnerOwnerId: input.partnerOwnerId ?? (me.role === "partner" ? me.id : null),
+        relationshipStrength: 0,
+        sourceSignals: [],
+        strategicPriorities: (input.strategicPriorities ?? []).map((s) => s.trim()).filter(Boolean),
+        aicoHypothesis: input.aicoHypothesis?.trim() || null,
+        pendingProfileUpdates: [],
+        createdAt: now,
+        updatedAt: now,
+        createdByUserId: me.id,
+      })
+      .returning();
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: row.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "account.created",
+      payload: {
+        name: row.name,
+        brandName: row.brandName,
+        sector: row.sector,
+        country: row.country,
+        tier: row.tier,
+        status: row.status,
+        partnerOwnerId: row.partnerOwnerId,
+        primaryCurrency: row.primaryCurrency,
+        primaryLanguage: row.primaryLanguage,
+      },
+      payloadSummary: `${me.name} created account "${row.brandName ?? row.name}".`,
+    });
+    return row;
+  });
+
+  // Fire-and-forget Cartographer auto-run. We do not await so the HTTP
+  // response stays snappy; the Profile tab polls for completion.
+  void (async () => {
+    try {
+      await runAccountCartographer({
+        accountId: inserted.id,
+        accountName: inserted.brandName ?? inserted.name,
+        accountSector: inserted.sector,
+        accountCountry: inserted.country,
+        triggeredByUserId: me.id,
+        actorLabel: "Account Cartographer",
+      });
+      // Persist proposals + signals into the account, mirroring the
+      // manual `/cartographer/refresh` path so the standard pending-
+      // update flow can review them.
+      const fresh = await loadAccount(inserted.id);
+      if (!fresh) return;
+      // Pull the latest run output from the agent_runs table.
+      const [latestRun] = await db
+        .select()
+        .from(atelierAgentRuns)
+        .where(
+          and(
+            eq(atelierAgentRuns.targetType, "account"),
+            eq(atelierAgentRuns.targetId, inserted.id),
+            eq(atelierAgentRuns.agentId, "account_cartographer"),
+          ),
+        )
+        .orderBy(desc(atelierAgentRuns.createdAt))
+        .limit(1);
+      const output = (latestRun?.output ?? null) as
+        | {
+            proposedProfileUpdates?: Array<{
+              field: string;
+              fromValue: unknown;
+              toValue: unknown;
+              rationale: string;
+            }>;
+            sourceSignals?: typeof fresh.sourceSignals;
+          }
+        | null;
+      const newProposals = (output?.proposedProfileUpdates ?? []).map((p) => ({
+        id: rid("ppu"),
+        proposedBy: "ag_account_cartographer",
+        proposedAt: new Date().toISOString(),
+        field: p.field,
+        fromValue: p.fromValue,
+        toValue: p.toValue,
+        rationale: p.rationale,
+        status: "pending" as const,
+      }));
+      const mergedSignals = [
+        ...(fresh.sourceSignals ?? []),
+        ...(output?.sourceSignals ?? []),
+      ].slice(-20);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(atelierAccounts)
+          .set({
+            sourceSignals: mergedSignals,
+            pendingProfileUpdates: [...(fresh.pendingProfileUpdates ?? []), ...newProposals],
+            enrichedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(atelierAccounts.id, inserted.id));
+        await tx.insert(atelierAuditEvents).values({
+          id: rid("aud"),
+          entityType: "account",
+          entityId: inserted.id,
+          actorType: "agent",
+          actorId: "ag_account_cartographer",
+          actorLabel: "Account Cartographer",
+          action: "account.cartographer_run",
+          payload: {
+            trigger: "auto_on_create",
+            proposedCount: newProposals.length,
+            signalCount: output?.sourceSignals?.length ?? 0,
+          },
+          payloadSummary: `Cartographer auto-ran on creation and queued ${newProposals.length} proposal(s) for ${inserted.brandName ?? inserted.name}.`,
+        });
+      });
+    } catch (err) {
+      console.warn("[atelier] auto-on-create cartographer failed", err);
+      try {
+        await db.insert(atelierAuditEvents).values({
+          id: rid("aud"),
+          entityType: "account",
+          entityId: inserted.id,
+          actorType: "agent",
+          actorId: "ag_account_cartographer",
+          actorLabel: "Account Cartographer",
+          action: "account.cartographer_run",
+          payload: { trigger: "auto_on_create", error: String((err as Error)?.message ?? err) },
+          payloadSummary: `Cartographer auto-run failed for ${inserted.brandName ?? inserted.name}.`,
+        });
+      } catch {
+        /* best-effort */
+      }
+    }
+  })();
+
+  const access = await accessibleEngagementIds(me);
+  const summary = await summariseAccount(inserted, access);
+  res.status(201).json(summary);
 });
 
 // ---------- workspace ----------

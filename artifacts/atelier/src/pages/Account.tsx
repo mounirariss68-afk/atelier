@@ -86,6 +86,12 @@ export default function Account() {
     query: {
       enabled: !!accountId,
       queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
+      // While Cartographer is auto-running on a freshly-created account
+      // we poll so the Profile tab updates without a manual refresh.
+      refetchInterval: (q) => {
+        const data = q.state.data as AtelierAccountWorkspace | undefined;
+        return data?.account?.cartographerStatus === "running" ? 4000 : false;
+      },
     },
   });
   const refresh = useAtelierRefreshAccountCartographer();
@@ -125,30 +131,52 @@ export default function Account() {
                 {a.hqCity && ` · HQ ${a.hqCity}`}
               </span>
             }
-            headline={a.name}
-            lede={a.notes ?? undefined}
+            headline={a.brandName ?? a.name}
+            lede={
+              a.brandName && a.brandName !== a.name
+                ? `${a.name}${a.notes ? ` — ${a.notes}` : ""}`
+                : a.notes ?? undefined
+            }
           />
           <div className="flex items-center gap-3">
             <MonoChip tone={a.tier === "A" ? "gold" : a.tier === "B" ? "green" : "default"}>
               Tier {a.tier}
             </MonoChip>
             <MonoChip>{a.status}</MonoChip>
-            <button
-              onClick={() =>
-                refresh.mutate(
-                  { accountId, data: {} },
-                  { onSuccess: () => invalidate() },
-                )
-              }
-              disabled={refresh.isPending}
-              className="pill-btn pill-btn-ghost text-xs"
-              data-testid="button-cartographer-refresh"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
-              Cartographer ★
-            </button>
+            {a.cartographerStatus === "running" ? (
+              <span
+                className="pill-btn pill-btn-ghost text-xs cursor-default"
+                data-testid="banner-cartographer-running"
+              >
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Cartographer researching…
+              </span>
+            ) : (
+              <button
+                onClick={() =>
+                  refresh.mutate(
+                    { accountId, data: {} },
+                    { onSuccess: () => invalidate() },
+                  )
+                }
+                disabled={refresh.isPending}
+                className="pill-btn pill-btn-ghost text-xs"
+                data-testid="button-cartographer-refresh"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
+                Cartographer ★
+              </button>
+            )}
           </div>
         </div>
+        {a.cartographerStatus === "failed" && (
+          <div
+            className="mt-4 border border-danger/40 bg-danger/10 rounded p-3 text-xs font-mono text-danger flex items-center justify-between"
+            data-testid="banner-cartographer-failed"
+          >
+            <span>Account Cartographer auto-run failed. Click Cartographer ★ to retry.</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-8">
           <HeroStat value={a.openOpportunityCount} caption="Open opportunities" size="md" />

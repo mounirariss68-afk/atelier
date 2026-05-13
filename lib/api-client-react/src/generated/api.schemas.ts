@@ -219,9 +219,120 @@ export interface AtelierProfileUpdateDecisionInput {
   note?: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type AtelierCreateAccountInputSize =
+  | (typeof AtelierCreateAccountInputSize)[keyof typeof AtelierCreateAccountInputSize]
+  | null;
+
+export const AtelierCreateAccountInputSize = {
+  enterprise: "enterprise",
+  large: "large",
+  mid: "mid",
+  small: "small",
+} as const;
+
+export type AtelierCreateAccountInputPrimaryLanguage =
+  (typeof AtelierCreateAccountInputPrimaryLanguage)[keyof typeof AtelierCreateAccountInputPrimaryLanguage];
+
+export const AtelierCreateAccountInputPrimaryLanguage = {
+  en: "en",
+  ar: "ar",
+} as const;
+
+export interface AtelierCreateAccountInput {
+  /**
+   * Legal name (stored in `name`).
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /**
+   * Optional display label; overrides `name` on cards/headers.
+   * @maxLength 200
+   * @nullable
+   */
+  brandName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  sector: string;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  country: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  hqCity?: string | null;
+  /** @nullable */
+  size?: AtelierCreateAccountInputSize;
+  tier: AtelierAccountTier;
+  status: AtelierAccountStatus;
+  /**
+   * @minLength 3
+   * @maxLength 3
+   * @pattern ^[A-Z]{3}$
+   */
+  primaryCurrency: string;
+  primaryLanguage: AtelierCreateAccountInputPrimaryLanguage;
+  /** @nullable */
+  partnerOwnerId?: string | null;
+  /** @nullable */
+  parentAccountId?: string | null;
+  /** @maxItems 5 */
+  strategicPriorities?: string[];
+  /**
+   * @maxLength 600
+   * @nullable
+   */
+  aicoHypothesis?: string | null;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+}
+
+export type AtelierAccountDuplicateErrorError =
+  (typeof AtelierAccountDuplicateErrorError)[keyof typeof AtelierAccountDuplicateErrorError];
+
+export const AtelierAccountDuplicateErrorError = {
+  "duplicate-name": "duplicate-name",
+} as const;
+
+export interface AtelierAccountDuplicateError {
+  error: AtelierAccountDuplicateErrorError;
+  existingAccountId: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+/**
+ * Transient flag set while an auto-triggered Account Cartographer
+run is in flight (or after it has failed). `null` once the run
+resolves successfully and `enrichedAt` is set.
+
+ * @nullable
+ */
+export type AtelierAccountSummaryCartographerStatus =
+  | (typeof AtelierAccountSummaryCartographerStatus)[keyof typeof AtelierAccountSummaryCartographerStatus]
+  | null;
+
+export const AtelierAccountSummaryCartographerStatus = {
+  running: "running",
+  failed: "failed",
+} as const;
+
 export interface AtelierAccountSummary {
   id: string;
   name: string;
+  /** @nullable */
+  brandName?: string | null;
   country: string;
   sector: string;
   tier: AtelierAccountTier;
@@ -244,6 +355,14 @@ export interface AtelierAccountSummary {
   /** @nullable */
   enrichedAt?: string | null;
   pendingUpdateCount?: number;
+  /**
+   * Transient flag set while an auto-triggered Account Cartographer
+run is in flight (or after it has failed). `null` once the run
+resolves successfully and `enrichedAt` is set.
+
+   * @nullable
+   */
+  cartographerStatus?: AtelierAccountSummaryCartographerStatus;
 }
 
 /**

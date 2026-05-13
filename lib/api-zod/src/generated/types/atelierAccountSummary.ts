@@ -6,11 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierAccountStatus } from "./atelierAccountStatus";
+import type { AtelierAccountSummaryCartographerStatus } from "./atelierAccountSummaryCartographerStatus";
 import type { AtelierAccountTier } from "./atelierAccountTier";
 
 export interface AtelierAccountSummary {
   id: string;
   name: string;
+  /** @nullable */
+  brandName?: string | null;
   country: string;
   sector: string;
   tier: AtelierAccountTier;
@@ -33,4 +36,12 @@ export interface AtelierAccountSummary {
   /** @nullable */
   enrichedAt?: string | null;
   pendingUpdateCount?: number;
+  /**
+   * Transient flag set while an auto-triggered Account Cartographer
+run is in flight (or after it has failed). `null` once the run
+resolves successfully and `enrichedAt` is set.
+
+   * @nullable
+   */
+  cartographerStatus?: AtelierAccountSummaryCartographerStatus;
 }
