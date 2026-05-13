@@ -3276,6 +3276,7 @@ async function main() {
       startDate: "2025-09-01",
       endDate: "2026-08-31",
       status: "active",
+      secondedToEngagementIds: ["eng_tasama_bpo_phase1"],
     },
     {
       id: "pfr_bgts_khalid",
@@ -3290,6 +3291,7 @@ async function main() {
       startDate: "2025-10-15",
       endDate: "2026-04-15",
       status: "active",
+      secondedToEngagementIds: ["eng_tasama_bpo_phase1"],
     },
     {
       id: "pfr_tw_priya",
@@ -3304,6 +3306,7 @@ async function main() {
       startDate: "2025-11-01",
       endDate: "2026-10-31",
       status: "active",
+      secondedToEngagementIds: ["eng_tasama_bpo_phase1"],
     },
     {
       id: "pfr_mobven_can",
@@ -3318,6 +3321,7 @@ async function main() {
       startDate: "2026-01-15",
       endDate: "2026-12-31",
       status: "active",
+      secondedToEngagementIds: ["eng_tasama_bpo_phase1"],
     },
   ];
   await db.insert(atelierPartnerFirmResources).values(PARTNER_RESOURCES).onConflictDoNothing();

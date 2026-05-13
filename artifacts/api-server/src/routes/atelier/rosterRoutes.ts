@@ -729,7 +729,17 @@ router.get("/roster/people/:id/documents", async (req, res, next) => {
 // -----------------------------------------------------------------
 const DOC_TOKEN_TTL_MS = 5 * 60 * 1000;
 function docTokenSecret(): string {
-  return process.env.ATELIER_DOC_TOKEN_SECRET ?? "atelier-dev-doc-secret";
+  // Task #254 round-11 — fail-closed in non-development. The dev fallback
+  // is gated on NODE_ENV !== "production" so a misconfigured deploy can
+  // never mint forgeable HMAC tokens for sensitive HR documents.
+  const fromEnv = process.env.ATELIER_DOC_TOKEN_SECRET;
+  if (fromEnv && fromEnv.length >= 16) return fromEnv;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "ATELIER_DOC_TOKEN_SECRET is required in production (>=16 chars)",
+    );
+  }
+  return "atelier-dev-doc-secret-do-not-use-in-prod";
 }
 function signDocToken(personId: string, docId: string, personaId: string): string {
   const exp = Date.now() + DOC_TOKEN_TTL_MS;

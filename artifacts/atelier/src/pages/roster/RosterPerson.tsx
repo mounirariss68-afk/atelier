@@ -364,7 +364,10 @@ interface DocRow {
   id: string;
   kind: string;
   title: string;
-  fileUrl: string | null;
+  // Task #254 — short-lived HMAC-signed download URL minted by the API
+  // (5-min TTL, persona-bound). Backend audits every download and 302s
+  // to the resolved object key (placeholder until #255 wires storage).
+  downloadUrl: string;
   uploadedAt: string;
   expiresAt: string | null;
 }
@@ -396,7 +399,18 @@ function DocumentsTab({ personId }: { personId: string }) {
               {d.expiresAt && ` · expires ${new Date(d.expiresAt).toLocaleDateString()}`}
             </div>
           </div>
-          <MonoChip>{d.kind}</MonoChip>
+          <div className="flex items-center gap-3">
+            <MonoChip>{d.kind}</MonoChip>
+            <a
+              href={d.downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-xs uppercase text-accent hover:underline"
+              data-testid={`doc-download-${d.id}`}
+            >
+              Download ↓
+            </a>
+          </div>
         </Card>
       ))}
     </div>
