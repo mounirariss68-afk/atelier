@@ -3,6 +3,7 @@ import { Switch, Route, useRoute, useLocation, Link } from "wouter";
 import {
   SalonI18nProvider,
   SalonShell,
+  SalonWatermark,
   useSalonI18n,
   type SalonMe,
   type SalonWorkspace,
@@ -262,7 +263,7 @@ function DeliverablesTab({ slug }: { slug: string }) {
   );
 }
 
-function DeliverableDetail({ slug, deliverableId, ctx }: { slug: string; deliverableId: string; ctx: EngagementCtx }) {
+function DeliverableDetail({ slug, deliverableId, ctx, me }: { slug: string; deliverableId: string; ctx: EngagementCtx; me: SalonMe }) {
   const { t } = useSalonI18n();
   const { data, error, reload } = useApi<{
     deliverable: { id: string; name: string; type: string; status: string; clientVisibility: string; body: string };
@@ -310,9 +311,16 @@ function DeliverableDetail({ slug, deliverableId, ctx }: { slug: string; deliver
     }
   }
   const canDecide = (kind === "approve" ? data.access.canApprove : true);
+  // Per-publish watermark override: if the publish requires a watermark but
+  // the workspace flag is off, render a local overlay so per-deliverable
+  // policy is honored even when the global default is disabled.
+  const needsLocalWatermark = !!(data.publish?.watermarkRequired && !ctx.workspace.watermarkEnabled);
 
   return (
     <div className="space-y-4">
+      {needsLocalWatermark && (
+        <SalonWatermark name={me.name} email={me.email} engagementSlug={slug} />
+      )}
       <Link href={`/salon/${slug}/deliverables`} className="text-xs text-text-mute hover:text-text">← All deliverables</Link>
       <Card>
         <div className="flex items-center justify-between">
@@ -548,7 +556,7 @@ function EngagementRoute(props: { slug: string; me: SalonMe }) {
           <Route path={`/salon/${slug}/workplan`}><WorkplanTab ctx={ctx} /></Route>
           <Route path={`/salon/${slug}/deliverables`}><DeliverablesTab slug={slug} /></Route>
           <Route path={`/salon/${slug}/deliverables/:id`}>
-            {(params) => <DeliverableDetail slug={slug} deliverableId={params.id!} ctx={ctx} />}
+            {(params) => <DeliverableDetail slug={slug} deliverableId={params.id!} ctx={ctx} me={me} />}
           </Route>
           <Route path={`/salon/${slug}/decisions`}><DecisionsTab slug={slug} /></Route>
           <Route path={`/salon/${slug}/meetings`}><MeetingsTab slug={slug} /></Route>
