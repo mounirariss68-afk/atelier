@@ -44,6 +44,12 @@ import {
   atelierWinThemes,
   atelierReports,
   atelierNotifications,
+  atelierSalonWorkspaces,
+  atelierSalonUsers,
+  atelierSalonUserEngagementAccess,
+  atelierSalonDecisions,
+  atelierSalonRequests,
+  atelierDeliverablePublishes,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
@@ -1231,6 +1237,66 @@ const AGENTS: AgentSeed[] = [
     humanCheckpoints: [],
     runsLast30d: 0,
   },
+  // ---- 4 ★ Salon agents (Task #242) ----
+  {
+    id: "ag_publish_sentinel",
+    name: "Publish Sentinel",
+    group: "The Salon",
+    stage: "Deliver",
+    purpose: "DLP scan of every deliverable before it is published to a client workspace.",
+    model: "claude-sonnet-4-6",
+    starred: true,
+    status: "mvp",
+    tools: ["regex.scan", "deliverable.read"],
+    guardrails: [
+      "Hard-block on Saudi national ID, IBAN, PAN; soft-warn on INTERNAL-ONLY markers",
+      "Never auto-redact — surface findings to a human",
+    ],
+    humanCheckpoints: ["Engagement Lead reviews Sentinel output before publish"],
+    runsLast30d: 17,
+  },
+  {
+    id: "ag_salon_concierge",
+    name: "Salon Concierge",
+    group: "The Salon",
+    stage: "Deliver",
+    purpose: "Onboards client users to a Salon workspace; drafts invite copy and IdP records.",
+    model: "claude-sonnet-4-6",
+    starred: true,
+    status: "mvp",
+    tools: ["salon.invite", "email.draft"],
+    guardrails: ["Engagement Lead approves the invitation batch before send"],
+    humanCheckpoints: ["Lead approves invite list"],
+    runsLast30d: 4,
+  },
+  {
+    id: "ag_engagement_curator",
+    name: "Engagement Curator",
+    group: "The Salon",
+    stage: "Deliver",
+    purpose: "Weekly synthesis of decisions, deliverables, and next steps for the client view.",
+    model: "claude-sonnet-4-6",
+    starred: true,
+    status: "mvp",
+    tools: ["salon.read", "summary.compose"],
+    guardrails: ["Synthesised facts always cited to a Salon record"],
+    humanCheckpoints: ["Engagement Lead signs off the weekly digest"],
+    runsLast30d: 6,
+  },
+  {
+    id: "ag_approval_choreographer",
+    name: "Approval Choreographer",
+    group: "The Salon",
+    stage: "Deliver",
+    purpose: "Drives the approval chain state machine — request → reviewers → decision → audit.",
+    model: "claude-sonnet-4-6",
+    starred: true,
+    status: "mvp",
+    tools: ["salon.decisions", "notify"],
+    guardrails: ["Approver role required for any 'approve' transition"],
+    humanCheckpoints: ["Approver decision is final"],
+    runsLast30d: 9,
+  },
 ];
 
 // ============================================================
@@ -1997,6 +2063,39 @@ const TASAMA_DELIVERABLES = [
       },
     ],
   },
+  {
+    id: "del_tasama_value_readout",
+    type: "design",
+    name: "Tasama 30-day Value Readout",
+    status: "approved",
+    hypothesisId: null,
+    dueDate: isoDate(DAYS_AGO(2)),
+    versions: [
+      {
+        id: "delv_tasama_value_readout_v1",
+        versionNumber: 1,
+        body: "<h2>30-day value readout</h2><p>Mean handle time down 22% across the top-3 services; adoption tracking ahead of plan on services 1 and 2.</p>",
+        format: "html",
+      },
+    ],
+  },
+  {
+    id: "del_tasama_residency_brief",
+    type: "design",
+    name: "Tasama Residency & Identity Brief",
+    status: "draft",
+    hypothesisId: null,
+    dueDate: isoDate(DAYS_FROM_NOW(7)),
+    versions: [
+      {
+        id: "delv_tasama_residency_brief_v1",
+        versionNumber: 1,
+        // INTENTIONAL DLP TRAP for Publish Sentinel demo (Saudi national ID + INTERNAL-ONLY marker).
+        body: "<h2>Residency &amp; Identity</h2><p>INTERNAL-ONLY draft. Sample operator profile: Saudi national ID 1234567890, IBAN SA0380000000608010167519.</p>",
+        format: "html",
+      },
+    ],
+  },
 ];
 
 const TASAMA_MEETINGS = [
@@ -2142,6 +2241,14 @@ async function truncateAll() {
   // Truncate child tables before parents to avoid FK weirdness even though
   // the schema does not declare hard FKs (text PKs let us be loose).
   const tables = [
+    "atelier_salon_audit_events",
+    "atelier_salon_notifications",
+    "atelier_salon_requests",
+    "atelier_salon_decisions",
+    "atelier_deliverable_publishes",
+    "atelier_salon_user_engagement_access",
+    "atelier_salon_users",
+    "atelier_salon_workspaces",
     "atelier_reports",
     "atelier_winloss_debriefs",
     "atelier_win_themes",
@@ -2750,8 +2857,132 @@ async function main() {
     },
   ]);
 
+  // ============================================================
+  // The Salon (Task #242) — Tasama client workspace
+  // ============================================================
+  console.log("[seed-atelier] salon workspace + users + access…");
+  const SALON_WS_ID = "salonws_tasama";
+  await db.insert(atelierSalonWorkspaces).values([
+    {
+      id: SALON_WS_ID,
+      slug: "tasama-bpo-phase1",
+      engagementId: TASAMA_ENG_ID,
+      accountId: "acc_tasama",
+      displayName: "Tasama × AICo — Agentic BPO",
+      eyebrowText: "Tasama Agentic BPO · Phase 1",
+      accentColor: "#0F4C5C",
+      defaultLocale: "en",
+      watermarkEnabled: true,
+      watermarkText: "AICo × Tasama — confidential",
+      downloadsAllowedDefault: false,
+    },
+  ]);
+  const SALON_USERS = [
+    { id: "su_tasama_admin",   email: "coo@tasama.example",         name: "Faisal Al-Otaibi", initials: "FA", title: "Chief Operating Officer", role: "admin",    canApprove: true },
+    { id: "su_tasama_approver",email: "ops.director@tasama.example",name: "Reem Al-Harbi",    initials: "RA", title: "Operations Director",     role: "approver", canApprove: true },
+    { id: "su_tasama_viewer",  email: "service.lead@tasama.example",name: "Khaled Al-Mutairi",initials: "KA", title: "Service Lead — Intake",   role: "viewer",   canApprove: false },
+  ];
+  await db.insert(atelierSalonUsers).values(
+    SALON_USERS.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      initials: u.initials,
+      title: u.title,
+      accountId: "acc_tasama",
+      preferredLocale: "en",
+      status: "active" as const,
+    })),
+  );
+  await db.insert(atelierSalonUserEngagementAccess).values(
+    SALON_USERS.map((u) => ({
+      id: `sa_${u.id}_${SALON_WS_ID}`,
+      workspaceId: SALON_WS_ID,
+      engagementId: TASAMA_ENG_ID,
+      salonUserId: u.id,
+      role: u.role,
+      canApprove: u.canApprove,
+      downloadsAllowed: u.role === "admin",
+    })),
+  );
+
+  console.log("[seed-atelier] salon publishes (3 of 4 deliverables; residency brief blocked by Sentinel)…");
+  await db
+    .update(atelierDeliverables)
+    .set({ clientVisibility: "published" })
+    .where(sql`id in ('del_tasama_pov_v2','del_tasama_servicepack_v2','del_tasama_value_readout')`);
+  await db.insert(atelierDeliverablePublishes).values([
+    {
+      id: "pub_tasama_pov_v2_1",
+      deliverableId: "del_tasama_pov_v2",
+      deliverableVersionId: "delv_tasama_pov_v2_v2",
+      engagementId: TASAMA_ENG_ID,
+      workspaceId: SALON_WS_ID,
+      publishedByAtelierUserId: "p_layla_haddad",
+      publishedByName: "Layla Haddad",
+      publishedAt: HOURS_AGO(20),
+      sentinelStatus: "pass",
+      sentinelChecks: [{ name: "pii_scan", status: "pass" as const, detail: "No PII detected." }],
+      publishAllowed: true,
+      downloadsAllowed: false,
+      watermarkRequired: true,
+    },
+    {
+      id: "pub_tasama_servicepack_1",
+      deliverableId: "del_tasama_servicepack_v2",
+      deliverableVersionId: "delv_tasama_servicepack_v1",
+      engagementId: TASAMA_ENG_ID,
+      workspaceId: SALON_WS_ID,
+      publishedByAtelierUserId: "p_layla_haddad",
+      publishedByName: "Layla Haddad",
+      publishedAt: HOURS_AGO(40),
+      sentinelStatus: "warn",
+      sentinelChecks: [{ name: "internal_only_marker", status: "warn" as const, detail: "Watermark required; no PII detected." }],
+      publishAllowed: true,
+      downloadsAllowed: false,
+      watermarkRequired: true,
+    },
+    {
+      id: "pub_tasama_value_readout_1",
+      deliverableId: "del_tasama_value_readout",
+      deliverableVersionId: "delv_tasama_value_readout_v1",
+      engagementId: TASAMA_ENG_ID,
+      workspaceId: SALON_WS_ID,
+      publishedByAtelierUserId: "p_mounir_ariss",
+      publishedByName: "Mounir Ariss",
+      publishedAt: DAYS_AGO(2),
+      sentinelStatus: "pass",
+      sentinelChecks: [{ name: "pii_scan", status: "pass" as const, detail: "Clean." }],
+      publishAllowed: true,
+      downloadsAllowed: true,
+      watermarkRequired: true,
+    },
+  ]);
+  await db.execute(sql`update atelier_deliverables set latest_publish_id = 'pub_tasama_pov_v2_1' where id = 'del_tasama_pov_v2'`);
+  await db.execute(sql`update atelier_deliverables set latest_publish_id = 'pub_tasama_servicepack_1' where id = 'del_tasama_servicepack_v2'`);
+  await db.execute(sql`update atelier_deliverables set latest_publish_id = 'pub_tasama_value_readout_1' where id = 'del_tasama_value_readout'`);
+
+  console.log("[seed-atelier] salon decisions + requests…");
+  const NAME_OF: Record<string, string> = {
+    su_tasama_admin: "Faisal Al-Otaibi",
+    su_tasama_approver: "Reem Al-Harbi",
+    su_tasama_viewer: "Khaled Al-Mutairi",
+  };
+  await db.insert(atelierSalonDecisions).values([
+    { id: "sd_1", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, deliverableId: "del_tasama_pov_v2",        kind: "approve",        headline: "POV pyramid v2 approved",                        rationale: "Aligned with phase-1 value targets.",                       decidedBySalonUserId: "su_tasama_admin",    decidedByName: NAME_OF.su_tasama_admin,    decidedAt: HOURS_AGO(18) },
+    { id: "sd_2", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, deliverableId: "del_tasama_pov_v2",        kind: "comment",        headline: "Add Arabic captions to value chart",             rationale: "Steering audience prefers bilingual readouts.",             decidedBySalonUserId: "su_tasama_approver", decidedByName: NAME_OF.su_tasama_approver, decidedAt: HOURS_AGO(17) },
+    { id: "sd_3", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, deliverableId: "del_tasama_servicepack_v2",kind: "request_change", headline: "Re-cut adoption tail for service-3",             rationale: "Need a 30-day projection, not a snapshot.",                  decidedBySalonUserId: "su_tasama_admin",    decidedByName: NAME_OF.su_tasama_admin,    decidedAt: HOURS_AGO(36) },
+    { id: "sd_4", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, deliverableId: "del_tasama_value_readout",  kind: "approve",        headline: "30-day value readout approved",                  rationale: "Numbers reconcile with our internal MIS.",                   decidedBySalonUserId: "su_tasama_admin",    decidedByName: NAME_OF.su_tasama_admin,    decidedAt: DAYS_AGO(2) },
+    { id: "sd_5", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, deliverableId: null,                        kind: "comment",        headline: "Add a quarterly cadence for steering",           rationale: "Weekly is the right rhythm for ops, monthly for steering.",  decidedBySalonUserId: "su_tasama_approver", decidedByName: NAME_OF.su_tasama_approver, decidedAt: DAYS_AGO(3) },
+    { id: "sd_6", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, deliverableId: null,                        kind: "approve",        headline: "Phase-1 charter ratified",                        rationale: "All workstream leads confirmed.",                            decidedBySalonUserId: "su_tasama_admin",    decidedByName: NAME_OF.su_tasama_admin,    decidedAt: DAYS_AGO(45) },
+  ]);
+  await db.insert(atelierSalonRequests).values([
+    { id: "sr_1", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, kind: "copy_request", title: "Copy of POV v2 for COO offline review",   detail: "Need a watermarked PDF I can share inside Tasama.",         status: "open",       raisedBySalonUserId: "su_tasama_admin",    raisedByName: NAME_OF.su_tasama_admin,    raisedAt: HOURS_AGO(5) },
+    { id: "sr_2", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, kind: "meeting",      title: "Workshop on residency & identity controls",detail: "Block 90 minutes with Layla and Omar in the next two weeks.",status: "in_progress",raisedBySalonUserId: "su_tasama_approver", raisedByName: NAME_OF.su_tasama_approver, raisedAt: DAYS_AGO(1) },
+  ]);
+
   console.log(
-    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report.`,
+    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published).`,
   );
 }
 

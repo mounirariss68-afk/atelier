@@ -101,6 +101,7 @@ export default function Deliverable() {
               </div>
             }
           />
+          <PublishToSalonButton delId={delId} onDone={inv} />
           <SendBar
             delId={delId}
             engId={engId}
@@ -433,5 +434,43 @@ function SendBar({
         </div>
       </div>
     </div>
+  );
+}
+
+function PublishToSalonButton({ delId, onDone }: { delId: string; onDone: () => void }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = React.useState(false);
+  async function publish() {
+    setLoading(true);
+    try {
+      const base = `${import.meta.env.BASE_URL}api/atelier`;
+      const res = await fetch(`${base}/deliverables/${delId}/publish`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const j = (await res.json().catch(() => ({}))) as { ok?: boolean; sentinel?: { status?: string }; reason?: string; findings?: unknown };
+      if (!res.ok || j.ok === false) {
+        toast({
+          title: "Publish blocked by Sentinel",
+          description: j.reason || `Sentinel: ${j.sentinel?.status ?? "fail"}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Published to Salon", description: `Sentinel: ${j.sentinel?.status ?? "pass"}` });
+        onDone();
+      }
+    } catch (e) {
+      toast({ title: "Publish failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <PillButton variant="ghost" onClick={publish} disabled={loading} data-testid="btn-publish-salon">
+      <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+      {loading ? "Publishing…" : "Publish to Salon"}
+    </PillButton>
   );
 }

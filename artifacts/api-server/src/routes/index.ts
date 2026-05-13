@@ -5,6 +5,7 @@ import chatRouter from "./chat";
 import arcelikRouter from "./arcelik";
 import tasamaRouter from "./tasama";
 import atelierRouter from "./atelier";
+import salonRouter from "./salon";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use("/chat", chatRouter);
 router.use("/arcelik", arcelikRouter);
 router.use("/tasama", tasamaRouter);
 router.use("/atelier", atelierRouter);
+router.use("/salon", salonRouter);
 
 export default router;

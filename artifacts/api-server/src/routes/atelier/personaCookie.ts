@@ -69,6 +69,30 @@ export async function attachPersona(
   }
 }
 
+/**
+ * Realm guard for /api/atelier/* — Task #242.
+ *
+ * The Atelier (internal) realm and the Salon (client) realm share schemas
+ * but never share users. A client_user persona cookie must NOT be able to
+ * read internal atelier endpoints, even by accident (or by hand-pasted
+ * cookie). Conversely the Salon router applies a mirror guard rejecting
+ * internal aico_employee personas. See `salonCookie.ts`.
+ */
+export function rejectClientRealm(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (req.atelierPersona && req.atelierPersona.role === "client_user") {
+    res.status(403).json({
+      error: "wrong-realm",
+      message: "client_user personas must use /api/salon/*",
+    });
+    return;
+  }
+  next();
+}
+
 export function setPersonaCookie(res: Response, personaId: string): void {
   res.cookie(PERSONA_COOKIE, personaId, {
     httpOnly: true,

@@ -78,6 +78,13 @@
       "when": 1778900000000,
       "tag": "0010_atelier_v2_winloss",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778980000000,
+      "tag": "0011_atelier_v2_salon",
+      "breakpoints": true
     }
   ]
 }

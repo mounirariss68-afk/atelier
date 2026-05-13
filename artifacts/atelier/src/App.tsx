@@ -26,6 +26,7 @@ import WinLoss from "@/pages/WinLoss";
 import WinLossLibrary from "@/pages/WinLossLibrary";
 import Forecast from "@/pages/Forecast";
 import Reports from "@/pages/Reports";
+import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
 
@@ -69,12 +70,22 @@ function Router() {
   );
 }
 
+function TopLevelRouter() {
+  return (
+    <Switch>
+      <Route path="/salon" component={SalonRoot} />
+      <Route path="/salon/:rest*" component={SalonRoot} />
+      <Route><Router /></Route>
+    </Switch>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <TopLevelRouter />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

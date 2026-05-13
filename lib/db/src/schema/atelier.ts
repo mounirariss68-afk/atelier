@@ -399,6 +399,9 @@ export const atelierDeliverables = pgTable(
     lockOverridden: boolean("lock_overridden").notNull().default(false),
     sentAt: timestamp("sent_at"),
     sentByUserId: text("sent_by_user_id"),
+    // Salon (Task #242) — visibility into client workspace + last published version.
+    clientVisibility: text("client_visibility").notNull().default("internal"), // internal | review | published | final
+    latestPublishId: text("latest_publish_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
@@ -1262,3 +1265,255 @@ export const atelierReports = pgTable(
 );
 
 // (atelierNotifications declared above — Task #241 extended its columns.)
+
+// ============================================================
+// THE SALON (Task #242) — client-facing workspace
+// ============================================================
+
+// One co-branded workspace per engagement (1:1, but in its own table to
+// keep brand assets / accent / locale defaults out of atelier_engagements).
+export const atelierSalonWorkspaces = pgTable(
+  "atelier_salon_workspaces",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    accountId: text("account_id").notNull(),
+    slug: text("slug").notNull(), // mirrors engagement slug for URL routing
+    displayName: text("display_name").notNull(),
+    accentColor: text("accent_color").notNull().default("#0B5CFF"),
+    clientLogoUrl: text("client_logo_url"),
+    aicoLogoUrl: text("aico_logo_url"),
+    eyebrowText: text("eyebrow_text"),
+    defaultLocale: text("default_locale").notNull().default("en"), // en | ar
+    rtlEnabled: boolean("rtl_enabled").notNull().default(false),
+    watermarkEnabled: boolean("watermark_enabled").notNull().default(true),
+    downloadsAllowedDefault: boolean("downloads_allowed_default")
+      .notNull()
+      .default(false),
+    status: text("status").notNull().default("active"), // active | paused | archived
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("ux_atelier_salon_ws_eng").on(t.engagementId),
+    uniqueIndex("ux_atelier_salon_ws_slug").on(t.orgId, t.slug),
+  ],
+);
+
+// Client-side users (role = client_user); kept separate from atelier_users
+// so internal AICo persona space and client persona space cannot collide.
+export const atelierSalonUsers = pgTable(
+  "atelier_salon_users",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    initials: text("initials").notNull(),
+    title: text("title"),
+    avatarUrl: text("avatar_url"),
+    locale: text("locale").notNull().default("en"),
+    status: text("status").notNull().default("active"), // pending_invite | active | suspended
+    invitedByAtelierUserId: text("invited_by_atelier_user_id"),
+    invitedAt: timestamp("invited_at"),
+    activatedAt: timestamp("activated_at"),
+    lastSeenAt: timestamp("last_seen_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("ux_atelier_salon_users_email").on(t.orgId, t.accountId, t.email),
+    index("idx_atelier_salon_users_account").on(t.accountId),
+  ],
+);
+
+// Per-engagement access grants for client users (admin / approver / viewer).
+// downloadsAllowed honors per-grant override of workspace default.
+export const atelierSalonUserEngagementAccess = pgTable(
+  "atelier_salon_user_engagement_access",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    salonUserId: text("salon_user_id").notNull(),
+    engagementId: text("engagement_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    role: text("role").notNull().default("viewer"), // admin | approver | viewer
+    downloadsAllowed: boolean("downloads_allowed"),
+    canApprove: boolean("can_approve").notNull().default(false),
+    grantedByAtelierUserId: text("granted_by_atelier_user_id"),
+    grantedAt: timestamp("granted_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("ux_atelier_salon_access").on(t.salonUserId, t.engagementId),
+    index("idx_atelier_salon_access_eng").on(t.engagementId),
+  ],
+);
+
+// Each [Publish to Salon] action snapshots a deliverable version + Publish
+// Sentinel result. publish_allowed=false rows mean the publish was blocked.
+export const atelierDeliverablePublishes = pgTable(
+  "atelier_deliverable_publishes",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    deliverableId: text("deliverable_id").notNull(),
+    deliverableVersionId: text("deliverable_version_id"),
+    engagementId: text("engagement_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    publishedByAtelierUserId: text("published_by_atelier_user_id").notNull(),
+    publishedByName: text("published_by_name").notNull(),
+    publishedAt: timestamp("published_at").notNull().defaultNow(),
+    sentinelRunId: text("sentinel_run_id"),
+    sentinelStatus: text("sentinel_status").notNull().default("pass"), // pass | warn | fail
+    sentinelChecks: jsonb("sentinel_checks")
+      .notNull()
+      .default([])
+      .$type<
+        Array<{
+          name: string;
+          status: "pass" | "warn" | "fail";
+          detail: string;
+          spans?: Array<{ pattern: string; sample: string }>;
+        }>
+      >(),
+    publishAllowed: boolean("publish_allowed").notNull().default(true),
+    overrideRationale: text("override_rationale"),
+    overriddenByAtelierUserId: text("overridden_by_atelier_user_id"),
+    downloadsAllowed: boolean("downloads_allowed").notNull().default(false),
+    watermarkRequired: boolean("watermark_required").notNull().default(true),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_deliv_publish_deliv").on(t.deliverableId),
+    index("idx_atelier_deliv_publish_eng").on(t.engagementId),
+  ],
+);
+
+// Salon-side decisions: client approvals / change-requests / comments on
+// a published deliverable. Mirrored into atelier_salon_audit_events AND
+// atelier_audit_events so internal teams see the activity.
+export const atelierSalonDecisions = pgTable(
+  "atelier_salon_decisions",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    deliverableId: text("deliverable_id"),
+    publishId: text("publish_id"),
+    kind: text("kind").notNull(), // approve | request_change | comment | sign_off
+    headline: text("headline").notNull(),
+    rationale: text("rationale"),
+    decidedBySalonUserId: text("decided_by_salon_user_id").notNull(),
+    decidedByName: text("decided_by_name").notNull(),
+    decidedAt: timestamp("decided_at").notNull().defaultNow(),
+    status: text("status").notNull().default("recorded"), // recorded | superseded
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_salon_dec_eng").on(t.engagementId),
+    index("idx_atelier_salon_dec_deliv").on(t.deliverableId),
+  ],
+);
+
+// Salon-side requests: client asks AICo for something (copy of artifact,
+// new meeting, additional analysis). Routed to engagement lead.
+export const atelierSalonRequests = pgTable(
+  "atelier_salon_requests",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    kind: text("kind").notNull(), // copy_request | meeting | clarification | other
+    title: text("title").notNull(),
+    detail: text("detail"),
+    relatedDeliverableId: text("related_deliverable_id"),
+    raisedBySalonUserId: text("raised_by_salon_user_id").notNull(),
+    raisedByName: text("raised_by_name").notNull(),
+    raisedAt: timestamp("raised_at").notNull().defaultNow(),
+    status: text("status").notNull().default("open"), // open | in_progress | resolved | declined
+    assignedToAtelierUserId: text("assigned_to_atelier_user_id"),
+    resolvedAt: timestamp("resolved_at"),
+    resolutionNote: text("resolution_note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_salon_req_eng").on(t.engagementId),
+    index("idx_atelier_salon_req_status").on(t.status),
+  ],
+);
+
+// Per-salon-user notification feed (in-app only for MVP).
+export const atelierSalonNotifications = pgTable(
+  "atelier_salon_notifications",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    salonUserId: text("salon_user_id").notNull(),
+    engagementId: text("engagement_id").notNull(),
+    kind: text("kind").notNull(), // deliverable_published | decision_recorded | request_resolved | invite
+    headline: text("headline").notNull(),
+    body: text("body"),
+    href: text("href"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_salon_notif_user").on(t.salonUserId),
+    index("idx_atelier_salon_notif_eng").on(t.engagementId),
+  ],
+);
+
+// Salon-side audit feed (every client view, download attempt, decision).
+// Internal-side audit_events keeps a parallel "agent.* / publish.*" trail.
+export const atelierSalonAuditEvents = pgTable(
+  "atelier_salon_audit_events",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    salonUserId: text("salon_user_id"),
+    actorName: text("actor_name").notNull(),
+    action: text("action").notNull(), // tab.view | deliverable.view | deliverable.download_blocked | decision.record | request.raise
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    payload: jsonb("payload").notNull().default({}),
+    payloadSummary: text("payload_summary"),
+    ts: timestamp("ts").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_salon_audit_eng").on(t.engagementId),
+    index("idx_atelier_salon_audit_user").on(t.salonUserId),
+    index("idx_atelier_salon_audit_ts").on(t.ts),
+  ],
+);

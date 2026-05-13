@@ -3326,3 +3326,395 @@ export async function runThemeCurator(args: {
     throw err;
   }
 }
+
+// ============================================================
+// THE SALON (Task #242) — 4 ★ client-realm agents
+// ============================================================
+//
+// All four are mock-first per ATELIER_MOCK_AGENTS=1; live Claude calls are
+// not wired in this scope. They follow the same startRun → progressRun →
+// completeRun → audit pattern so the Agents tab and audit feed work.
+
+import {
+  atelierDeliverablePublishes,
+  atelierDeliverables,
+  atelierSalonNotifications,
+  atelierSalonUserEngagementAccess,
+  atelierSalonUsers,
+  atelierSalonAuditEvents,
+} from "@workspace/db";
+
+// ---------- Publish Sentinel ----------
+
+export interface PublishSentinelCheck {
+  name: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+  spans?: Array<{ pattern: string; sample: string }>;
+}
+export interface PublishSentinelOutput {
+  publishAllowed: boolean;
+  status: "pass" | "warn" | "fail";
+  checks: PublishSentinelCheck[];
+  redactionProposal: string | null;
+  confidence: "green" | "amber" | "red";
+}
+
+// Forbidden patterns: Saudi national ID (10-digit starting 1 or 2),
+// Iqama (10-digit starting 2), email + password leak, internal-only marker.
+const SENTINEL_PATTERNS: Array<{
+  name: string;
+  re: RegExp;
+  detail: string;
+}> = [
+  {
+    name: "saudi_national_id",
+    re: /\b[12]\d{9}\b/g,
+    detail: "Saudi National ID / Iqama (10 digits)",
+  },
+  {
+    name: "internal_only_marker",
+    re: /\bINTERNAL[ _-]ONLY\b/gi,
+    detail: "Document carries an INTERNAL-ONLY classification marker",
+  },
+  {
+    name: "credit_card_pan",
+    re: /\b(?:\d[ -]?){13,19}\b/g,
+    detail: "Possible payment card PAN",
+  },
+  {
+    name: "iban",
+    re: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g,
+    detail: "IBAN account number",
+  },
+];
+
+export function scanForDlp(text: string): PublishSentinelCheck[] {
+  const checks: PublishSentinelCheck[] = [];
+  for (const p of SENTINEL_PATTERNS) {
+    const matches = Array.from(text.matchAll(p.re)).slice(0, 5);
+    if (matches.length === 0) {
+      checks.push({ name: p.name, status: "pass", detail: `No ${p.detail} found` });
+    } else {
+      checks.push({
+        name: p.name,
+        status: p.name === "credit_card_pan" || p.name === "iban" ? "warn" : "fail",
+        detail: `${matches.length} match(es): ${p.detail}`,
+        spans: matches.map((m) => ({
+          pattern: p.name,
+          sample: m[0].slice(0, 64),
+        })),
+      });
+    }
+  }
+  return checks;
+}
+
+interface RunPublishSentinelArgs {
+  triggeredByUserId: string | null;
+  actorLabel: string;
+  deliverableId: string;
+  deliverableLabel: string;
+  body: string;
+}
+export async function runPublishSentinel(
+  args: RunPublishSentinelArgs,
+): Promise<{ runId: string; output: PublishSentinelOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_publish_sentinel",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "deliverable",
+    targetId: args.deliverableId,
+    targetLabel: args.deliverableLabel,
+    inputs: { bytes: args.body.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    await progressRun(runId, 40, "Scanning for DLP patterns");
+    const checks = scanForDlp(args.body);
+    const failed = checks.some((c) => c.status === "fail");
+    const warned = checks.some((c) => c.status === "warn");
+    const status: "pass" | "warn" | "fail" = failed ? "fail" : warned ? "warn" : "pass";
+    const out: PublishSentinelOutput = {
+      publishAllowed: !failed,
+      status,
+      checks,
+      redactionProposal: failed
+        ? "Auto-redact matched spans before re-publish, or invoke Partner override with rationale."
+        : null,
+      confidence: failed ? "red" : warned ? "amber" : "green",
+    };
+    await progressRun(runId, 90, status === "pass" ? "Clean" : `Found ${checks.filter((c) => c.status !== "pass").length} issue(s)`);
+    await completeRun({
+      runId,
+      output: out as unknown,
+      confidence: out.confidence,
+      costUsd: 0,
+      durationMs: Date.now() - t0,
+      sourcesCount: checks.length,
+      actorLabel: args.actorLabel,
+      targetType: "deliverable",
+      targetId: args.deliverableId,
+      targetLabel: args.deliverableLabel,
+      source: "mock_config",
+    });
+    return { runId, output: out, costUsd: 0 };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "deliverable",
+      targetId: args.deliverableId,
+    });
+    throw err;
+  }
+}
+
+// ---------- Salon Concierge (invitation batch) ----------
+
+export interface SalonConciergeOutput {
+  invited: Array<{ email: string; status: "queued" | "skipped"; reason?: string }>;
+  message: string;
+  confidence: "green" | "amber" | "red";
+}
+
+interface RunSalonConciergeArgs {
+  triggeredByUserId: string | null;
+  actorLabel: string;
+  workspaceId: string;
+  workspaceLabel: string;
+  invitees: Array<{ email: string; name: string; role: "admin" | "approver" | "viewer" }>;
+}
+export async function runSalonConcierge(
+  args: RunSalonConciergeArgs,
+): Promise<{ runId: string; output: SalonConciergeOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_salon_concierge",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "salon_workspace",
+    targetId: args.workspaceId,
+    targetLabel: args.workspaceLabel,
+    inputs: { count: args.invitees.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    await progressRun(runId, 50, `Drafting ${args.invitees.length} invitations`);
+    const invited = args.invitees.map((i) =>
+      /@/.test(i.email)
+        ? { email: i.email, status: "queued" as const }
+        : { email: i.email, status: "skipped" as const, reason: "invalid email" },
+    );
+    const out: SalonConciergeOutput = {
+      invited,
+      message: `Queued ${invited.filter((x) => x.status === "queued").length} invitations (mock IdP).`,
+      confidence: "green",
+    };
+    await completeRun({
+      runId,
+      output: out as unknown,
+      confidence: out.confidence,
+      costUsd: 0,
+      durationMs: Date.now() - t0,
+      sourcesCount: invited.length,
+      actorLabel: args.actorLabel,
+      targetType: "salon_workspace",
+      targetId: args.workspaceId,
+      targetLabel: args.workspaceLabel,
+      source: "mock_config",
+    });
+    return { runId, output: out, costUsd: 0 };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "salon_workspace",
+      targetId: args.workspaceId,
+    });
+    throw err;
+  }
+}
+
+// ---------- Engagement Curator (weekly client digest) ----------
+
+export interface EngagementCuratorOutput {
+  weekOf: string;
+  highlights: string[];
+  upcoming: string[];
+  decisionsLogged: number;
+  openRequests: number;
+  message: string;
+  confidence: "green" | "amber" | "red";
+}
+interface RunEngagementCuratorArgs {
+  triggeredByUserId: string | null;
+  actorLabel: string;
+  engagementId: string;
+  engagementLabel: string;
+  decisionsLogged: number;
+  openRequests: number;
+  highlights: string[];
+  upcoming: string[];
+}
+export async function runEngagementCurator(
+  args: RunEngagementCuratorArgs,
+): Promise<{ runId: string; output: EngagementCuratorOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_engagement_curator",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "engagement",
+    targetId: args.engagementId,
+    targetLabel: args.engagementLabel,
+    inputs: { decisionsLogged: args.decisionsLogged, openRequests: args.openRequests },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    await progressRun(runId, 60, "Composing weekly digest");
+    const out: EngagementCuratorOutput = {
+      weekOf: new Date().toISOString().slice(0, 10),
+      highlights: args.highlights,
+      upcoming: args.upcoming,
+      decisionsLogged: args.decisionsLogged,
+      openRequests: args.openRequests,
+      message: `Weekly digest queued for ${args.engagementLabel}.`,
+      confidence: "green",
+    };
+    await completeRun({
+      runId,
+      output: out as unknown,
+      confidence: out.confidence,
+      costUsd: 0,
+      durationMs: Date.now() - t0,
+      sourcesCount: args.highlights.length + args.upcoming.length,
+      actorLabel: args.actorLabel,
+      targetType: "engagement",
+      targetId: args.engagementId,
+      targetLabel: args.engagementLabel,
+      source: "mock_config",
+    });
+    return { runId, output: out, costUsd: 0 };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "engagement",
+      targetId: args.engagementId,
+    });
+    throw err;
+  }
+}
+
+// ---------- Approval Choreographer ----------
+
+export interface ApprovalChoreographerOutput {
+  state: "awaiting_approver" | "approved" | "blocked";
+  nextActor: { kind: "salon_user"; id: string; name: string } | null;
+  reason: string;
+  confidence: "green" | "amber" | "red";
+}
+interface RunApprovalChoreographerArgs {
+  triggeredByUserId: string | null;
+  actorLabel: string;
+  deliverableId: string;
+  deliverableLabel: string;
+  publishId: string;
+  approvers: Array<{ id: string; name: string; canApprove: boolean }>;
+  decisionsRecorded: Array<{ decidedBySalonUserId: string; kind: string }>;
+}
+export async function runApprovalChoreographer(
+  args: RunApprovalChoreographerArgs,
+): Promise<{ runId: string; output: ApprovalChoreographerOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_approval_choreographer",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "deliverable",
+    targetId: args.deliverableId,
+    targetLabel: args.deliverableLabel,
+    inputs: { publishId: args.publishId },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    await progressRun(runId, 50, "Evaluating approval chain");
+    const approverIds = new Set(args.approvers.filter((a) => a.canApprove).map((a) => a.id));
+    const approved = args.decisionsRecorded.find(
+      (d) => d.kind === "approve" && approverIds.has(d.decidedBySalonUserId),
+    );
+    const blocked = args.decisionsRecorded.find((d) => d.kind === "request_change");
+    const next = !approved && !blocked
+      ? args.approvers.find((a) => a.canApprove) ?? null
+      : null;
+    const out: ApprovalChoreographerOutput = approved
+      ? {
+          state: "approved",
+          nextActor: null,
+          reason: "Approver decision recorded — chain complete.",
+          confidence: "green",
+        }
+      : blocked
+      ? {
+          state: "blocked",
+          nextActor: null,
+          reason: "Change requested — re-publish required before re-evaluation.",
+          confidence: "amber",
+        }
+      : {
+          state: "awaiting_approver",
+          nextActor: next ? { kind: "salon_user", id: next.id, name: next.name } : null,
+          reason: next ? `Awaiting decision from ${next.name}.` : "No designated approver on this engagement.",
+          confidence: next ? "green" : "amber",
+        };
+    await completeRun({
+      runId,
+      output: out as unknown,
+      confidence: out.confidence,
+      costUsd: 0,
+      durationMs: Date.now() - t0,
+      sourcesCount: args.decisionsRecorded.length,
+      actorLabel: args.actorLabel,
+      targetType: "deliverable",
+      targetId: args.deliverableId,
+      targetLabel: args.deliverableLabel,
+      source: "mock_config",
+    });
+    return { runId, output: out, costUsd: 0 };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "deliverable",
+      targetId: args.deliverableId,
+    });
+    throw err;
+  }
+}
+
+// Helper used by salonRoutes.ts after publish succeeds — fans out an
+// in-app notification to every salon user with access to the engagement.
+export async function fanoutSalonNotification(input: {
+  engagementId: string;
+  kind: string;
+  headline: string;
+  body?: string;
+  href?: string;
+}): Promise<number> {
+  const access = await db
+    .select()
+    .from(atelierSalonUserEngagementAccess)
+    .where(
+      and(
+        eq(atelierSalonUserEngagementAccess.engagementId, input.engagementId),
+        isNull(atelierSalonUserEngagementAccess.revokedAt),
+      ),
+    );
+  if (access.length === 0) return 0;
+  const rows = access.map((a) => ({
+    id: rid("snf"),
+    salonUserId: a.salonUserId,
+    engagementId: input.engagementId,
+    kind: input.kind,
+    headline: input.headline,
+    body: input.body ?? null,
+    href: input.href ?? null,
+  }));
+  await db.insert(atelierSalonNotifications).values(rows);
+  return rows.length;
+}

@@ -34,6 +34,7 @@ import {
   attachPersona,
   personaToWire,
   setPersonaCookie,
+  rejectClientRealm,
 } from "./personaCookie";
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler } from "./auditPdf";
@@ -80,6 +81,7 @@ registerAtelierRlsDefaults();
 
 const router: IRouter = Router();
 router.use(attachPersona);
+router.use(rejectClientRealm);
 router.use(attachRls);
 
 // Audit PDF export — registered before /audit JSON to win the route match.
@@ -621,6 +623,246 @@ router.get("/audit", async (req, res) => {
       })),
     ),
   );
+});
+
+// =============================================================
+// Salon-facing agent + publish endpoints (Task #242)
+// =============================================================
+
+import {
+  atelierDeliverables as _atelierDeliverables,
+  atelierDeliverableVersions as _atelierDeliverableVersions,
+  atelierDeliverablePublishes,
+  atelierSalonWorkspaces,
+  atelierSalonNotifications,
+  atelierSalonUserEngagementAccess,
+} from "@workspace/db";
+import {
+  runPublishSentinel,
+  runSalonConcierge,
+  runEngagementCurator,
+  runApprovalChoreographer,
+  fanoutSalonNotification,
+} from "../../lib/atelier-agents/runner.js";
+
+function _rid(p: string): string {
+  return `${p}_${Date.now().toString(36)}_${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+}
+
+router.post("/deliverables/:id/publish", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    const [d] = await db
+      .select()
+      .from(_atelierDeliverables)
+      .where(
+        and(
+          eq(_atelierDeliverables.id, req.params.id),
+          isNull(_atelierDeliverables.deletedAt),
+        ),
+      );
+    if (!d) {
+      res.status(404).json({ error: "deliverable-not-found" });
+      return;
+    }
+    const [workspace] = await db
+      .select()
+      .from(atelierSalonWorkspaces)
+      .where(
+        and(
+          eq(atelierSalonWorkspaces.engagementId, d.engagementId),
+          isNull(atelierSalonWorkspaces.deletedAt),
+        ),
+      );
+    if (!workspace) {
+      res.status(409).json({
+        error: "no-salon-workspace",
+        message: "Engagement has no Salon workspace configured",
+      });
+      return;
+    }
+    const [version] = d.currentVersionId
+      ? await db
+          .select()
+          .from(_atelierDeliverableVersions)
+          .where(eq(_atelierDeliverableVersions.id, d.currentVersionId))
+      : [];
+    const body = (version?.body ?? "") + " " + (d.criticReportSummary ?? "");
+    const sentinel = await runPublishSentinel({
+      triggeredByUserId: me.id,
+      actorLabel: "Publish Sentinel",
+      deliverableId: d.id,
+      deliverableLabel: d.name,
+      body,
+    });
+    const overrideRationale =
+      typeof req.body?.overrideRationale === "string"
+        ? String(req.body.overrideRationale).trim().slice(0, 1000)
+        : null;
+    const allowed = sentinel.output.publishAllowed || !!overrideRationale;
+    const publishId = _rid("dpub");
+    await db.insert(atelierDeliverablePublishes).values({
+      id: publishId,
+      deliverableId: d.id,
+      deliverableVersionId: d.currentVersionId,
+      engagementId: d.engagementId,
+      workspaceId: workspace.id,
+      publishedByAtelierUserId: me.id,
+      publishedByName: me.name,
+      sentinelRunId: sentinel.runId,
+      sentinelStatus: sentinel.output.status,
+      sentinelChecks: sentinel.output.checks,
+      publishAllowed: allowed,
+      overrideRationale,
+      overriddenByAtelierUserId: overrideRationale ? me.id : null,
+      downloadsAllowed: !!req.body?.downloadsAllowed,
+      watermarkRequired: req.body?.watermarkRequired !== false,
+      notes: typeof req.body?.notes === "string" ? req.body.notes : null,
+    });
+    if (allowed) {
+      await db
+        .update(_atelierDeliverables)
+        .set({
+          clientVisibility: "published",
+          latestPublishId: publishId,
+          updatedAt: new Date(),
+        })
+        .where(eq(_atelierDeliverables.id, d.id));
+      const fanout = await fanoutSalonNotification({
+        engagementId: d.engagementId,
+        kind: "deliverable_published",
+        headline: `${d.name} is ready for your review`,
+        body: `${me.name} published a new version. Open it in your Salon.`,
+        href: `/salon/${workspace.slug}/deliverables/${d.id}`,
+      });
+      await db.insert(atelierAuditEvents).values({
+        id: _rid("aud"),
+        entityType: "deliverable",
+        entityId: d.id,
+        actorType: "human",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: "deliverable.publish_to_salon",
+        payload: { publishId, fanout, sentinelStatus: sentinel.output.status },
+        payloadSummary: `${me.name} published ${d.name} to Salon (${sentinel.output.status}; ${fanout} client notif)`,
+      });
+    } else {
+      await db.insert(atelierAuditEvents).values({
+        id: _rid("aud"),
+        entityType: "deliverable",
+        entityId: d.id,
+        actorType: "human",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: "deliverable.publish_blocked",
+        payload: { publishId, sentinelStatus: sentinel.output.status, checks: sentinel.output.checks },
+        payloadSummary: `Publish Sentinel BLOCKED ${d.name} (${sentinel.output.status})`,
+      });
+    }
+    res.json({
+      ok: true,
+      publishId,
+      publishAllowed: allowed,
+      sentinel: sentinel.output,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Manual run endpoints for the four Salon agents (Agents tab + audit feed).
+router.post("/agents/publish-sentinel/run", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    const text = String(req.body?.text ?? "");
+    const result = await runPublishSentinel({
+      triggeredByUserId: me.id,
+      actorLabel: "Publish Sentinel",
+      deliverableId: String(req.body?.deliverableId ?? "manual_scan"),
+      deliverableLabel: String(req.body?.label ?? "Manual scan"),
+      body: text,
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/agents/salon-concierge/run", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    const result = await runSalonConcierge({
+      triggeredByUserId: me.id,
+      actorLabel: "Salon Concierge",
+      workspaceId: String(req.body?.workspaceId ?? ""),
+      workspaceLabel: String(req.body?.workspaceLabel ?? "Workspace"),
+      invitees: Array.isArray(req.body?.invitees) ? req.body.invitees : [],
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/agents/engagement-curator/run", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    const result = await runEngagementCurator({
+      triggeredByUserId: me.id,
+      actorLabel: "Engagement Curator",
+      engagementId: String(req.body?.engagementId ?? ""),
+      engagementLabel: String(req.body?.engagementLabel ?? "Engagement"),
+      decisionsLogged: Number(req.body?.decisionsLogged ?? 0),
+      openRequests: Number(req.body?.openRequests ?? 0),
+      highlights: Array.isArray(req.body?.highlights) ? req.body.highlights : [],
+      upcoming: Array.isArray(req.body?.upcoming) ? req.body.upcoming : [],
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/agents/approval-choreographer/run", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    const result = await runApprovalChoreographer({
+      triggeredByUserId: me.id,
+      actorLabel: "Approval Choreographer",
+      deliverableId: String(req.body?.deliverableId ?? ""),
+      deliverableLabel: String(req.body?.deliverableLabel ?? "Deliverable"),
+      publishId: String(req.body?.publishId ?? ""),
+      approvers: Array.isArray(req.body?.approvers) ? req.body.approvers : [],
+      decisionsRecorded: Array.isArray(req.body?.decisionsRecorded)
+        ? req.body.decisionsRecorded
+        : [],
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;
