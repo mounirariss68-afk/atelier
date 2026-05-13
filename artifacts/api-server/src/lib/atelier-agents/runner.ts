@@ -1829,6 +1829,13 @@ export async function runProposalComposer(args: {
       const sec = value.sections.find((s) => s.id === "compliance");
       if (sec) sec.status = "red";
     }
+    // Guardrail: any margin below the partner's target margin must force a
+    // partner override decision — never silently amber/green it through.
+    if (value.pricingModel.marginPct < args.pricingIntent.targetMarginPct) {
+      value.pricingModel.verdict = "partner_override_required";
+      const sec = value.sections.find((s) => s.id === "pricing");
+      if (sec) sec.status = "red";
+    }
     await completeRun({
       runId,
       output: value as unknown,

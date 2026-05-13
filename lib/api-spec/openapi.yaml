@@ -1080,6 +1080,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierProposalDetail" }
+  /atelier/proposals/{proposalId}/send:
+    post:
+      operationId: atelierSendProposal
+      tags: [atelier]
+      summary: Partner final read → mark proposal sent (gates DOCX/PDF assembly)
+      parameters:
+        - in: path
+          name: proposalId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated proposal + assembled artifact stub
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposalSendResponse" }
+        "409":
+          description: Sections or pricing not ready
   /atelier/proposal-sections/{sectionId}/approve:
     post:
       operationId: atelierApproveProposalSection
@@ -1991,6 +2009,10 @@ components:
       properties:
         name: { type: string }
         source: { type: string, minLength: 10 }
+        sourceType:
+          type: string
+          enum: [text, transcript, bpmn]
+          default: text
         scopeHint: { type: string }
         depth: { type: string, enum: [sketch, design], default: design }
     AtelierAnalyzeProcessResponse:
@@ -2119,6 +2141,12 @@ components:
         sections:
           type: array
           items: { $ref: "#/components/schemas/AtelierProposalSection" }
+    AtelierProposalSendResponse:
+      type: object
+      required: [proposal, artifactUrl]
+      properties:
+        proposal: { $ref: "#/components/schemas/AtelierProposal" }
+        artifactUrl: { type: string }
     AtelierComposeProposalInput:
       type: object
       properties:

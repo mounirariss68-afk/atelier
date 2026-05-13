@@ -202,6 +202,9 @@ export {
   getAtelierApproveProposalSectionUrl,
   getAtelierApproveProposalSectionMutationOptions,
   useAtelierApproveProposalSection,
+  getAtelierSendProposalUrl,
+  getAtelierSendProposalMutationOptions,
+  useAtelierSendProposal,
 } from "./generated/api";
 export type {
   HealthCheckQueryResult,

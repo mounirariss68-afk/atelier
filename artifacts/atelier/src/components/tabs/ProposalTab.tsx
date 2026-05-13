@@ -3,6 +3,7 @@ import {
   useAtelierGetProposal,
   useAtelierComposeProposal,
   useAtelierApproveProposalSection,
+  useAtelierSendProposal,
   getAtelierGetProposalQueryKey,
   type AtelierProposalDetail,
 } from "@workspace/api-client-react";
@@ -34,6 +35,12 @@ export function ProposalTab({ oppId }: { oppId: string }) {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
     },
   });
+  const send = useAtelierSendProposal({
+    mutation: {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
+    },
+  });
+  const [sendError, setSendError] = React.useState<string | null>(null);
 
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
   const detail = data as AtelierProposalDetail | undefined;
@@ -69,15 +76,46 @@ export function ProposalTab({ oppId }: { oppId: string }) {
             <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Proposal</div>
             <div className="font-medium text-text">{proposal.title}</div>
           </div>
-          <PillButton
-            variant="ghost"
-            data-testid="button-recompose-proposal"
-            onClick={() => compose.mutate({ oppId, data: {} })}
-            disabled={compose.isPending}
-          >
-            Recompose
-          </PillButton>
+          <div className="flex items-center gap-2">
+            <PillButton
+              variant="ghost"
+              data-testid="button-recompose-proposal"
+              onClick={() => compose.mutate({ oppId, data: {} })}
+              disabled={compose.isPending}
+            >
+              Recompose
+            </PillButton>
+            <PillButton
+              variant="primary"
+              data-testid="button-send-proposal"
+              onClick={() => {
+                setSendError(null);
+                send.mutate(
+                  { proposalId: proposal.id },
+                  {
+                    onError: async (err: unknown) => {
+                      const e = err as { response?: { json?: () => Promise<{ error?: string }> } };
+                      try {
+                        const body = await e.response?.json?.();
+                        setSendError(body?.error ?? "send-failed");
+                      } catch {
+                        setSendError("send-failed");
+                      }
+                    },
+                  },
+                );
+              }}
+              disabled={send.isPending || proposal.status === "sent"}
+            >
+              {proposal.status === "sent" ? "Sent" : send.isPending ? "Sending…" : "Send to client"}
+            </PillButton>
+          </div>
         </div>
+        {sendError && (
+          <div className="text-xs text-danger font-mono" data-testid="send-error">
+            Cannot send: {sendError}
+          </div>
+        )}
         {(proposal.winThemes ?? []).length > 0 && (
           <div className="flex flex-wrap gap-2 text-xs">
             {(proposal.winThemes ?? []).map((t, i) => (

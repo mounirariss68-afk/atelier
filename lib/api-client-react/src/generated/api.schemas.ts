@@ -1169,6 +1169,15 @@ export interface AtelierAgentDesign {
   createdAt: string;
 }
 
+export type AtelierAnalyzeProcessInputSourceType =
+  (typeof AtelierAnalyzeProcessInputSourceType)[keyof typeof AtelierAnalyzeProcessInputSourceType];
+
+export const AtelierAnalyzeProcessInputSourceType = {
+  text: "text",
+  transcript: "transcript",
+  bpmn: "bpmn",
+} as const;
+
 export type AtelierAnalyzeProcessInputDepth =
   (typeof AtelierAnalyzeProcessInputDepth)[keyof typeof AtelierAnalyzeProcessInputDepth];
 
@@ -1181,6 +1190,7 @@ export interface AtelierAnalyzeProcessInput {
   name?: string;
   /** @minLength 10 */
   source: string;
+  sourceType?: AtelierAnalyzeProcessInputSourceType;
   scopeHint?: string;
   depth?: AtelierAnalyzeProcessInputDepth;
 }
@@ -1331,6 +1341,11 @@ export interface AtelierProposal {
 export interface AtelierProposalDetail {
   proposal: AtelierProposal;
   sections: AtelierProposalSection[];
+}
+
+export interface AtelierProposalSendResponse {
+  proposal: AtelierProposal;
+  artifactUrl: string;
 }
 
 export type AtelierComposeProposalInputTeamProposedItem = {

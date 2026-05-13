@@ -1590,11 +1590,15 @@ export const AtelierAnalyzeProcessParams = zod.object({
 
 export const atelierAnalyzeProcessBodySourceMin = 10;
 
+export const atelierAnalyzeProcessBodySourceTypeDefault = `text`;
 export const atelierAnalyzeProcessBodyDepthDefault = `design`;
 
 export const AtelierAnalyzeProcessBody = zod.object({
   name: zod.string().optional(),
   source: zod.string().min(atelierAnalyzeProcessBodySourceMin),
+  sourceType: zod
+    .enum(["text", "transcript", "bpmn"])
+    .default(atelierAnalyzeProcessBodySourceTypeDefault),
   scopeHint: zod.string().optional(),
   depth: zod
     .enum(["sketch", "design"])
@@ -1818,6 +1822,60 @@ export const AtelierComposeProposalBody = zod.object({
       }),
     )
     .optional(),
+});
+
+/**
+ * @summary Partner final read → mark proposal sent (gates DOCX/PDF assembly)
+ */
+export const AtelierSendProposalParams = zod.object({
+  proposalId: zod.coerce.string(),
+});
+
+export const AtelierSendProposalResponse = zod.object({
+  proposal: zod.object({
+    id: zod.string(),
+    opportunityId: zod.string(),
+    runId: zod.string().nullish(),
+    title: zod.string(),
+    sectionsRequired: zod.array(zod.string()).optional(),
+    teamProposed: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    pricingIntent: zod.record(zod.string(), zod.unknown()).optional(),
+    pricingModel: zod
+      .object({
+        totalRevenueUsd: zod.number(),
+        totalCostUsd: zod.number(),
+        marginPct: zod.number(),
+        verdict: zod.enum([
+          "green",
+          "amber",
+          "red",
+          "partner_override_required",
+        ]),
+        wedgeChart: zod.array(
+          zod.object({
+            role: zod.string().optional(),
+            days: zod.number().optional(),
+            cost: zod.number().optional(),
+            revenue: zod.number().optional(),
+          }),
+        ),
+      })
+      .optional(),
+    winThemes: zod.array(zod.string()).optional(),
+    complianceMatrix: zod
+      .array(
+        zod.object({
+          rfpReqId: zod.string().optional(),
+          requirement: zod.string().optional(),
+          status: zod.enum(["green", "red"]).optional(),
+          evidence: zod.string().optional(),
+        }),
+      )
+      .optional(),
+    status: zod.string(),
+    createdAt: zod.coerce.date(),
+  }),
+  artifactUrl: zod.string(),
 });
 
 export const AtelierApproveProposalSectionParams = zod.object({

@@ -6,11 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierAnalyzeProcessInputDepth } from "./atelierAnalyzeProcessInputDepth";
+import type { AtelierAnalyzeProcessInputSourceType } from "./atelierAnalyzeProcessInputSourceType";
 
 export interface AtelierAnalyzeProcessInput {
   name?: string;
   /** @minLength 10 */
   source: string;
+  sourceType?: AtelierAnalyzeProcessInputSourceType;
   scopeHint?: string;
   depth?: AtelierAnalyzeProcessInputDepth;
 }

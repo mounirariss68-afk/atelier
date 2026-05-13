@@ -58,6 +58,7 @@ import type {
   AtelierPromoteFactInput,
   AtelierProposalDetail,
   AtelierProposalSection,
+  AtelierProposalSendResponse,
   AtelierPrototype,
   AtelierQualifier,
   AtelierQualifierInput,
@@ -4751,6 +4752,93 @@ export const useAtelierComposeProposal = <
   TContext
 > => {
   return useMutation(getAtelierComposeProposalMutationOptions(options));
+};
+
+/**
+ * @summary Partner final read → mark proposal sent (gates DOCX/PDF assembly)
+ */
+export const getAtelierSendProposalUrl = (proposalId: string) => {
+  return `/api/atelier/proposals/${proposalId}/send`;
+};
+
+export const atelierSendProposal = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<AtelierProposalSendResponse> => {
+  return customFetch<AtelierProposalSendResponse>(
+    getAtelierSendProposalUrl(proposalId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierSendProposalMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSendProposal>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSendProposal>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierSendProposal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSendProposal>>,
+    { proposalId: string }
+  > = (props) => {
+    const { proposalId } = props ?? {};
+
+    return atelierSendProposal(proposalId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSendProposalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSendProposal>>
+>;
+
+export type AtelierSendProposalMutationError = ErrorType<void>;
+
+/**
+ * @summary Partner final read → mark proposal sent (gates DOCX/PDF assembly)
+ */
+export const useAtelierSendProposal = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSendProposal>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSendProposal>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  return useMutation(getAtelierSendProposalMutationOptions(options));
 };
 
 export const getAtelierApproveProposalSectionUrl = (sectionId: string) => {

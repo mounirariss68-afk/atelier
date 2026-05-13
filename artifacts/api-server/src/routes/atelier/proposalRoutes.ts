@@ -69,6 +69,7 @@ router.post("/engagements/:engId/processes", async (req, res) => {
   const body = req.body as {
     name?: string;
     source?: string;
+    sourceType?: "text" | "transcript" | "bpmn";
     scopeHint?: string;
     depth?: "sketch" | "design";
   };
@@ -76,11 +77,28 @@ router.post("/engagements/:engId/processes", async (req, res) => {
     res.status(400).json({ error: "source-too-short" });
     return;
   }
+  // Normalize each accepted sourceType into the canonical text the runner
+  // expects. Transcripts are line-stripped of speaker tags; BPMN XML is
+  // extracted into ordered task names so step extraction still works.
+  let normalizedSource = body.source;
+  const sourceType = body.sourceType ?? "text";
+  if (sourceType === "transcript") {
+    normalizedSource = body.source
+      .split(/\r?\n/)
+      .map((l) => l.replace(/^\s*[A-Za-z][\w .'-]{0,40}:\s*/, "").trim())
+      .filter(Boolean)
+      .join(". ");
+  } else if (sourceType === "bpmn") {
+    const taskNames = Array.from(
+      body.source.matchAll(/<bpmn:?(?:userTask|task|serviceTask|sendTask)[^>]*name="([^"]+)"/gi),
+    ).map((m) => m[1]);
+    if (taskNames.length) normalizedSource = taskNames.join(". ");
+  }
   const { runId, output } = await runAgentArchitect({
     engagementId: eng.id,
     engagementName: eng.name,
     scopeHint: body.scopeHint ?? body.name ?? "Process",
-    source: body.source,
+    source: normalizedSource,
     depth: body.depth ?? "design",
     triggeredByUserId: me.id,
     actorLabel: me.name,
@@ -366,15 +384,83 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
     res.status(404).json({ error: "section-not-found" });
     return;
   }
+  // Audit must be filed against the opportunity (the parent business
+  // entity) so it surfaces on the opportunity activity stream.
+  const [parentProposal] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, updated.proposalId));
   await audit({
     entityType: "opportunity",
-    entityId: updated.proposalId,
+    entityId: parentProposal?.opportunityId ?? updated.proposalId,
     actor: me,
     action: "proposal_section.approve",
-    payload: { sectionId: updated.id, sectionKey: updated.sectionId },
+    payload: {
+      sectionId: updated.id,
+      sectionKey: updated.sectionId,
+      proposalId: updated.proposalId,
+    },
     summary: `${me.name} approved proposal section "${updated.name}"`,
   });
   res.json(updated);
+});
+
+// ----------------------------------------------------------------------
+// Proposal SEND — partner-only final read gate. Enforces the workflow:
+// (1) all sections approved, (2) pricing not partner_override_required,
+// then assembles a deterministic DOCX/PDF placeholder artifact and flips
+// proposal.status to "sent".
+// ----------------------------------------------------------------------
+router.post("/proposals/:proposalId/send", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "only-partner-may-send-proposal" });
+    return;
+  }
+  const [proposal] = await db
+    .select()
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, req.params.proposalId));
+  if (!proposal) {
+    res.status(404).json({ error: "proposal-not-found" });
+    return;
+  }
+  const sections = await db
+    .select()
+    .from(atelierProposalSections)
+    .where(eq(atelierProposalSections.proposalId, proposal.id));
+  const unapproved = sections.filter((s) => s.status !== "approved");
+  if (unapproved.length > 0) {
+    res.status(409).json({
+      error: "sections-not-approved",
+      pending: unapproved.map((s) => s.sectionId),
+    });
+    return;
+  }
+  const pricingVerdict = (proposal.pricingModel as { verdict?: string } | null)?.verdict;
+  if (pricingVerdict === "partner_override_required") {
+    res.status(409).json({ error: "pricing-requires-partner-override" });
+    return;
+  }
+  // Deterministic stub artifact URL — real DOCX/PDF assembly is wired
+  // through the artifacts pipeline in a follow-up. Path encodes proposal
+  // id so downstream artifact retrieval can locate the rendered file.
+  const artifactUrl = `/api/atelier/artifacts/proposal-${proposal.id}.pdf`;
+  const [updated] = await db
+    .update(atelierProposals)
+    .set({ status: "sent", updatedAt: new Date() })
+    .where(eq(atelierProposals.id, proposal.id))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: proposal.opportunityId,
+    actor: me,
+    action: "proposal.send",
+    payload: { proposalId: proposal.id, artifactUrl },
+    summary: `${me.name} sent proposal "${proposal.title}" to client`,
+  });
+  res.json({ proposal: updated, artifactUrl });
 });
 
 export default router;
