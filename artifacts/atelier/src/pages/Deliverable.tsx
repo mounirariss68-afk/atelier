@@ -379,7 +379,6 @@ function SendBar({
   sending: boolean;
   onSend: (override: boolean, rationale: string) => Promise<void>;
 }) {
-  const [showOverride, setShowOverride] = React.useState(false);
   const [rationale, setRationale] = React.useState("");
 
   if (sentAt) {
@@ -392,63 +391,55 @@ function SendBar({
     );
   }
 
-  if (readiness === "green") {
+  if (!isPartner) {
     return (
-      <div className="flex flex-col items-end gap-2" data-testid="send-bar-green">
-        <PillButton
-          variant="primary"
-          onClick={() => onSend(false, "")}
-          disabled={sending}
-          data-testid="btn-send-green"
-        >
-          <Send className="w-3.5 h-3.5 mr-1.5" /> {sending ? "Sending…" : "Send to client"}
-        </PillButton>
-        <span className="text-[10px] font-mono uppercase text-positive">Critic GREEN — lock open</span>
+      <div className="flex flex-col items-end gap-2 max-w-sm" data-testid="send-bar-not-partner">
+        <div className="rounded-md border border-amber/40 bg-amber/5 px-3 py-2 text-xs text-amber flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Partner Authority Lock — Critic readiness {readiness?.toUpperCase() ?? "PENDING"}
+        </div>
+        <span className="text-[10px] font-mono text-text-mute uppercase">
+          Only a Partner persona may [Send to client] — switch persona to a partner.
+        </span>
       </div>
     );
   }
 
+  const isGreen = readiness === "green";
+  const tone = isGreen ? "positive" : "amber";
   return (
-    <div className="flex flex-col items-end gap-2 max-w-sm" data-testid="send-bar-locked">
-      <div className="rounded-md border border-amber/40 bg-amber/5 px-3 py-2 text-xs text-amber flex items-center gap-2">
-        <AlertTriangle className="w-3.5 h-3.5" />
+    <div className="flex flex-col items-end gap-2 max-w-sm" data-testid={isGreen ? "send-bar-green" : "send-bar-locked"}>
+      <div className={`rounded-md border px-3 py-2 text-xs flex items-center gap-2 ${
+        isGreen ? "border-positive/40 bg-positive/5 text-positive" : "border-amber/40 bg-amber/5 text-amber"
+      }`}>
+        {isGreen ? <ShieldCheck className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
         Partner Authority Lock — Critic readiness {readiness?.toUpperCase() ?? "PENDING"}
       </div>
-      {!isPartner ? (
-        <span className="text-[10px] font-mono text-text-mute uppercase">
-          Only Partner persona may override
-        </span>
-      ) : !showOverride ? (
-        <PillButton
-          variant="ghost"
-          onClick={() => setShowOverride(true)}
-          data-testid="btn-show-override"
-        >
-          Override as Partner…
-        </PillButton>
-      ) : (
-        <div className="w-full space-y-2 bg-bg-deep border border-border-soft rounded-md p-3">
-          <textarea
-            value={rationale}
-            onChange={(e) => setRationale(e.target.value)}
-            rows={3}
-            placeholder="Rationale (≥ 8 chars; permanently logged in HAPA audit)"
-            className="w-full bg-bg-elevate border border-border rounded-md px-2 py-1.5 text-xs text-text"
-            data-testid="input-override-rationale"
-          />
-          <div className="flex justify-end gap-2">
-            <PillButton variant="ghost" onClick={() => setShowOverride(false)}>Cancel</PillButton>
-            <PillButton
-              variant="primary"
-              onClick={() => onSend(true, rationale)}
-              disabled={sending || rationale.trim().length < 8}
-              data-testid="btn-send-override"
-            >
-              <Send className="w-3.5 h-3.5 mr-1.5" /> {sending ? "Overriding…" : "Override + Send"}
-            </PillButton>
-          </div>
+      <div className="w-full space-y-2 bg-bg-deep border border-border-soft rounded-md p-3">
+        <textarea
+          value={rationale}
+          onChange={(e) => setRationale(e.target.value)}
+          rows={3}
+          placeholder={isGreen
+            ? "Partner rationale (≥ 8 chars; permanently logged in HAPA audit)"
+            : "Override rationale (≥ 8 chars; permanently logged in HAPA audit)"}
+          className="w-full bg-bg-elevate border border-border rounded-md px-2 py-1.5 text-xs text-text"
+          data-testid="input-override-rationale"
+        />
+        <div className="flex justify-end">
+          <PillButton
+            variant="primary"
+            onClick={() => onSend(!isGreen, rationale)}
+            disabled={sending || rationale.trim().length < 8}
+            data-testid={isGreen ? "btn-send-green" : "btn-send-override"}
+          >
+            <Send className="w-3.5 h-3.5 mr-1.5" />
+            {sending
+              ? (isGreen ? "Sending…" : "Overriding…")
+              : (isGreen ? `Send to client (Partner — ${tone})` : "Override + Send (HAPA)")}
+          </PillButton>
         </div>
-      )}
+      </div>
     </div>
   );
 }

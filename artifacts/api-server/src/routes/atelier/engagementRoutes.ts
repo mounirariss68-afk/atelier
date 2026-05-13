@@ -173,11 +173,8 @@ router.get("/engagements/:engId/charter/versions", async (req, res) => {
 router.post("/engagements/:engId/charter/redraft", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const eng = await loadEng(req.params.engId);
-  if (!eng) {
-    res.status(404).json({ error: "engagement-not-found" });
-    return;
-  }
+  const eng = await ensureEngAccess(res, me, req.params.engId);
+  if (!eng) return;
   const parsed = AtelierCharterRedraftInput.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body" });
@@ -403,11 +400,8 @@ router.get("/engagements/:engId/raid", async (req, res) => {
 router.post("/engagements/:engId/raid", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const eng = await loadEng(req.params.engId);
-  if (!eng) {
-    res.status(404).json({ error: "engagement-not-found" });
-    return;
-  }
+  const eng = await ensureEngAccess(res, me, req.params.engId);
+  if (!eng) return;
   const parsed = AtelierRaidItemInput.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body" });
@@ -533,11 +527,8 @@ router.get("/engagements/:engId/deliverables", async (req, res) => {
 router.post("/engagements/:engId/deliverables", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const eng = await loadEng(req.params.engId);
-  if (!eng) {
-    res.status(404).json({ error: "engagement-not-found" });
-    return;
-  }
+  const eng = await ensureEngAccess(res, me, req.params.engId);
+  if (!eng) return;
   const parsed = AtelierDeliverableInput.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body" });
@@ -770,44 +761,77 @@ router.post("/deliverables/:delId/send", async (req, res) => {
   }
   if (!(await ensureEngAccess(res, me, del.engagementId))) return;
   // ---- Partner Authority Lock + HAPA -----------------------------
-  // The lock blocks [Send to client] unless EITHER:
-  //   (a) the most recent critic readiness is GREEN, OR
-  //   (b) the requester is acting as Partner AND has supplied a non-empty
-  //       rationale AND has set override:true.
-  // Both paths emit a HAPA ("Human-As-Partner-Authority") audit row so
-  // the override is permanently traceable.
-  const isGreen = del.criticReadiness === "green";
-  const wantsOverride = parsed.data.override === true;
+  // Send rules (HAPA: Human-As-Partner-Authority):
+  //   1. Only a Partner persona may press [Send to client]. Final
+  //      authority always rests with a partner — even on GREEN.
+  //   2. A Partner rationale (>= 8 chars) is required and permanently
+  //      recorded in the audit trail on every send.
+  //   3. If the Synthesis Critic has not yet reviewed the current
+  //      version, we auto-run it before evaluating the lock so the
+  //      partner sees fresh readiness.
+  //   4. If readiness is not GREEN, the partner must explicitly set
+  //      override:true to acknowledge the HAPA override.
   const isPartner = me.role === "partner";
   const hasRationale = (parsed.data.rationale ?? "").trim().length >= 8;
 
-  if (!isGreen) {
-    if (!wantsOverride) {
-      res.status(423).json({
-        error: "send-blocked",
-        reason: del.criticReadiness
-          ? `Synthesis Critic readiness is ${del.criticReadiness.toUpperCase()}. Re-draft + re-critique, or have a partner override with rationale.`
-          : "Synthesis Critic has not yet reviewed the current version.",
-        readiness: del.criticReadiness,
-      });
-      return;
-    }
-    if (!isPartner) {
-      res.status(423).json({
-        error: "send-blocked",
-        reason: "Only a Partner persona may override the lock.",
-        readiness: del.criticReadiness,
-      });
-      return;
-    }
-    if (!hasRationale) {
-      res.status(423).json({
-        error: "send-blocked",
-        reason: "Partner override requires a rationale (≥ 8 chars).",
-        readiness: del.criticReadiness,
-      });
-      return;
-    }
+  if (!isPartner) {
+    res.status(423).json({
+      error: "send-blocked",
+      reason: "Only a Partner persona may [Send to client] — final authority sits with the partner.",
+      readiness: del.criticReadiness,
+    });
+    return;
+  }
+  if (!hasRationale) {
+    res.status(423).json({
+      error: "send-blocked",
+      reason: "Partner rationale (≥ 8 chars) is required on every send and is permanently logged in the HAPA audit trail.",
+      readiness: del.criticReadiness,
+    });
+    return;
+  }
+  // (3) Auto-run Critic if missing readiness, then re-load.
+  if (!del.criticReadiness && del.currentVersionId) {
+    const [version] = await db
+      .select()
+      .from(atelierDeliverableVersions)
+      .where(eq(atelierDeliverableVersions.id, del.currentVersionId));
+    const tree = await loadTree(del.engagementId);
+    const { runId, output } = await runSynthesisCritic({
+      engagementId: del.engagementId,
+      deliverableId: del.id,
+      deliverableName: del.name,
+      body: version?.body ?? "",
+      hypothesisTree: tree,
+      audience: "Client executive",
+      triggeredByUserId: me.id,
+      actorLabel: "Synthesis Critic (auto-run on send)",
+    });
+    const summary = `Critic: ${output.readiness.toUpperCase()} · pyramid ${Math.round(output.pyramid_score * 100)}% · evidence ${output.evidence_coverage_pct}% · ${output.issues.length} issue(s)`;
+    await db
+      .update(atelierDeliverables)
+      .set({ criticReadiness: output.readiness, criticReportSummary: summary, updatedAt: new Date() })
+      .where(eq(atelierDeliverables.id, del.id));
+    await audit({
+      entityType: "deliverable",
+      entityId: del.id,
+      actor: me,
+      action: "deliverable.critique.auto",
+      payload: { runId, readiness: output.readiness, issues: output.issues.length },
+      summary: `${summary} (auto-run on send)`,
+    });
+    del.criticReadiness = output.readiness;
+  }
+  const isGreen = del.criticReadiness === "green";
+  if (!isGreen && parsed.data.override !== true) {
+    res.status(423).json({
+      error: "send-blocked",
+      reason: del.criticReadiness
+        ? `Synthesis Critic readiness is ${del.criticReadiness.toUpperCase()} — partner must set override:true to acknowledge the HAPA override.`
+        : "Synthesis Critic has no readiness for the current version — partner must set override:true to send anyway.",
+      readiness: del.criticReadiness,
+    });
+    return;
   }
 
   const ts = new Date();
@@ -914,11 +938,8 @@ router.get("/engagements/:engId/artifacts", async (req, res) => {
 router.post("/engagements/:engId/artifacts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const eng = await loadEng(req.params.engId);
-  if (!eng) {
-    res.status(404).json({ error: "engagement-not-found" });
-    return;
-  }
+  const eng = await ensureEngAccess(res, me, req.params.engId);
+  if (!eng) return;
   const parsed = AtelierArtifactInput.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body" });
