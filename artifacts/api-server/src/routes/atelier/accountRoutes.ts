@@ -95,13 +95,14 @@ async function summariseAccount(
       ),
     );
   // Filter engagements by RLS-equivalent persona grants. Opportunities
-  // ride along with their engagement (or are visible to partners only).
+  // ride along with their engagement (an opp is visible if any visible
+  // engagement was spawned from it); partners always see all.
   const engs = allEngs.filter((e) => canSeeEng(access, e.id));
-  const visibleEngIds = new Set(engs.map((e) => e.id));
+  const visibleOppIds = new Set(
+    engs.map((e) => e.opportunityId).filter((x): x is string => !!x),
+  );
   const opps = allOpps.filter(
-    (o) =>
-      access.all ||
-      (o.engagementId ? visibleEngIds.has(o.engagementId) : false),
+    (o) => access.all || visibleOppIds.has(o.id),
   );
   const openOpps = opps.filter(
     (o) => !["won", "lost", "no_go", "closed"].includes(o.plmStage as string),
@@ -202,9 +203,11 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
       ),
     );
   const wsEngs = allEngsWs.filter((e) => canSeeEng(access, e.id));
-  const wsEngIds = new Set(wsEngs.map((e) => e.id));
+  const wsVisibleOppIds = new Set(
+    wsEngs.map((e) => e.opportunityId).filter((x): x is string => !!x),
+  );
   const opps = allOppsWs.filter(
-    (o) => access.all || (o.engagementId ? wsEngIds.has(o.engagementId) : false),
+    (o) => access.all || wsVisibleOppIds.has(o.id),
   );
   const oppLeadIds = Array.from(new Set(opps.map((o) => o.engagementLeadId).filter(Boolean)));
   const oppLeads = oppLeadIds.length
@@ -231,7 +234,7 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
     title: e.name,
     status: (e.plmStage as string) ?? "active",
     leadName: engLeads.find((u) => u.id === e.engagementLeadId)?.name ?? null,
-    startedAt: e.startedAt ? new Date(e.startedAt).toISOString() : null,
+    startedAt: e.startDate ? new Date(e.startDate).toISOString() : null,
   }));
   const audit = await db
     .select()
@@ -594,7 +597,9 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
 });
 
 // ---------- credentials ----------
-router.get("/credentials", async (_req, res) => {
+router.get("/credentials", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
   const rows = await db
     .select()
     .from(atelierCredentials)
