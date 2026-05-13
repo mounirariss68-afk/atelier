@@ -114,8 +114,11 @@ function isoWeekIdFromDate(d: Date): { weekIso: string; weekStartDate: string } 
 
 export async function runLedgerStewardTick(opts: { force?: boolean } = {}): Promise<{ drafted: number }> {
   if (!opts.force) {
-    const { dayOfWeek, hour } = nowInGst();
-    if (dayOfWeek !== 1 || hour !== 6) return { drafted: 0 };
+    // Daily Time Steward draft pass — fires every day at 06:00 GST so each
+    // person finds a populated draft when they open the ledger that
+    // morning. Idempotent: existing agent_drafted entries are skipped.
+    const { hour } = nowInGst();
+    if (hour !== 6) return { drafted: 0 };
   }
   const { weekIso, weekStartDate } = isoWeekIdFromDate(new Date());
   const [emps, cons] = await Promise.all([

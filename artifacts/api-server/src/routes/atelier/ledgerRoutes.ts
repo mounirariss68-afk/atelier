@@ -828,6 +828,18 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
       .update(atelierTimesheetWeeks)
       .set({ status: "lead_approved", leadApprovedAt: new Date(), leadApprovedByUserId: me.id, updatedAt: new Date() })
       .where(eq(atelierTimesheetWeeks.id, week.id));
+    // Cascade: every submitted entry in this week becomes lead_approved so
+    // the entry-level audit trail mirrors the week-level approval state.
+    await db
+      .update(atelierTimesheetEntries)
+      .set({ status: "lead_approved", updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierTimesheetEntries.weekId, week.id),
+          eq(atelierTimesheetEntries.status, "submitted"),
+          isNull(atelierTimesheetEntries.deletedAt),
+        ),
+      );
   } else if (role === "partner") {
     if (!canApprovePartner(me)) return void res.status(403).json({ error: "forbidden" });
     if (week.status !== "lead_approved")
@@ -999,10 +1011,11 @@ router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single
   const me = ensurePersona(req, res);
   if (!me) return;
   if (!canUploadPartnerFirmHours(me)) return void res.status(403).json({ error: "forbidden" });
+  const engagementId = String(req.params.engagementId);
   const [eng] = await db
     .select()
     .from(atelierEngagements)
-    .where(and(eq(atelierEngagements.id, req.params.engagementId), isNull(atelierEngagements.deletedAt)));
+    .where(and(eq(atelierEngagements.id, engagementId), isNull(atelierEngagements.deletedAt)));
   if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
   // Object-level scope: a partner_firm_resource may only upload to engagements
   // they're seconded to, and every CSV row's partner_firm_id must equal their
