@@ -1731,7 +1731,7 @@ export async function runRosterSteward(args: {
     const summary = `Roster Steward · ${r.jurisdiction ?? "—"} · ref ${r.referenceNumberRedacted ?? "—"}${person ? "" : r.partnerFirmId ? ` · firm ${r.partnerFirmId}` : ""}.`;
     for (const uid of args.targetUserIds) {
       const itemId = `pane_steward_${r.id}_${bucket}_${uid}`;
-      await db
+      const inserted = await db
         .insert(atelierPaneAItems)
         .values({
           id: itemId,
@@ -1744,8 +1744,11 @@ export async function runRosterSteward(args: {
           dueLabel: r.expiryDate,
           sortKey: bucket === "expired" ? 0 : bucket === "30" ? 1 : 2,
         })
-        .onConflictDoNothing();
-      emitted++;
+        .onConflictDoNothing()
+        .returning({ id: atelierPaneAItems.id });
+      // Only count rows that were actually inserted; idempotent re-runs that
+      // hit `onConflictDoNothing` must not inflate the emitted metric.
+      if (inserted.length > 0) emitted++;
     }
   }
   const runId = rid("run");
