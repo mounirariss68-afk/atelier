@@ -34,6 +34,8 @@ import {
   atelierAuditEvents,
   atelierContractorPayments,
   atelierPartnerFirmInvoices,
+  atelierPartnerFirmHours,
+  atelierTimesheetEntries,
   atelierInvoiceLineDrafts,
 } from "@workspace/db";
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
@@ -155,85 +157,12 @@ function buildOcrFromExpense(
   return null;
 }
 
-async function buildContractDigest(engagementId: string | null): Promise<{
-  expensesClause?: boolean;
-  expenseMarkupCapPct?: number;
-  permittedCategories?: string[];
-  summary?: string;
-} | null> {
-  if (!engagementId) return null;
-  const [eng] = await db
-    .select()
-    .from(atelierEngagements)
-    .where(and(eq(atelierEngagements.id, engagementId), isNull(atelierEngagements.deletedAt)));
-  if (!eng) return null;
-  // Inspect the engagement charter / workstreams for an actual expense
-  // clause rather than assuming one exists. Closed engagements never
-  // pass through expenses. Charter scope/governance text is searched for
-  // pass-through wording; cap is parsed if present (defaults 10%).
-  if (eng.plmStage === "closed") {
-    return {
-      expensesClause: false,
-      expenseMarkupCapPct: 0,
-      permittedCategories: [],
-      summary: `${eng.name}: closed engagement — no expense pass-through.`,
-    };
-  }
-  const charter = eng.charter ?? null;
-  // No charter on file → fall back to AICo standard MSA (pass-through, 10% cap).
-  // With a charter, require explicit pass-through wording — silence means
-  // no expense clause was negotiated.
-  const charterText = charter
-    ? [
-        charter.governance ?? "",
-        charter.valueHypothesis ?? "",
-        ...(charter.scope ?? []),
-        ...(charter.objectives ?? []),
-        ...(charter.outOfScope ?? []),
-      ]
-        .join(" \n ")
-        .toLowerCase()
-    : "";
-  const workstreamText = (eng.workstreams ?? [])
-    .map((w) => `${w.name} ${w.lead}`)
-    .join(" ")
-    .toLowerCase();
-  const haystack = `${charterText} ${workstreamText}`;
-  let hasClause: boolean;
-  let cap = 10;
-  if (!charter) {
-    // No charter on file → fall back to AICo standard MSA (pass-through, 10% cap).
-    hasClause = true;
-  } else {
-    const negated =
-      /no\s+expense\s+pass[- ]through|expenses?\s+not\s+(reimbursed|billable)|firm[- ]overhead\s+only/.test(
-        haystack,
-      );
-    const explicit =
-      /(pass[- ]through|reimburs|t&e|travel\s*\+\s*expense|expense.*billable|expenses?\s+(at\s+cost|reimbursed|passed|billable))/.test(
-        haystack,
-      );
-    // Charter present: must contain explicit pass-through wording.
-    // Negation always blocks; silence means no clause was negotiated and
-    // expenses are firm-overhead by default.
-    hasClause = negated ? false : explicit;
-    const capMatch = haystack.match(/markup\s*(?:of\s*)?(\d{1,2})\s*%/);
-    if (capMatch) cap = Math.min(20, Number(capMatch[1]));
-  }
-  // Permitted categories: base + extras inferred from charter wording.
-  const base = ["flight", "hotel", "meal", "taxi", "per_diem", "mileage"];
-  const extras: string[] = [];
-  if (/\bgift\b/.test(haystack)) extras.push("gift");
-  if (/\bsoftware\b|\bsubscription\b/.test(haystack)) extras.push("software");
-  return {
-    expensesClause: hasClause,
-    expenseMarkupCapPct: hasClause ? cap : 0,
-    permittedCategories: hasClause ? [...base, ...extras] : [],
-    summary: hasClause
-      ? `${eng.name}: charter contains an expense pass-through clause (cap ${cap}%).`
-      : `${eng.name}: charter has no explicit expense pass-through clause — firm-overhead by default.`,
-  };
-}
+import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
+
+// Inline definition retained as a typed wrapper that delegates to the
+// shared module so existing call sites keep their import.
+// buildContractDigest moved to lib/atelier-contract-digest.ts so it can
+// be reused by the wallet sentinel without creating a route ↔ lib cycle.
 
 // =============================================================
 // EXPENSES
@@ -298,6 +227,45 @@ router.get("/wallet/expenses", async (req, res) => {
   }
 
   res.json({ expenses: rows.map((r) => expenseToWire(r, me)) });
+});
+
+// Evidence inspection endpoints used by the approvals UI to let
+// partners click through from a contractor / partner-firm proposal to
+// the underlying timesheet entry / firm-hours row that justifies it.
+router.get("/wallet/timesheet-entries/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [row] = await db
+    .select()
+    .from(atelierTimesheetEntries)
+    .where(and(eq(atelierTimesheetEntries.id, req.params.id), isNull(atelierTimesheetEntries.deletedAt)));
+  if (!row) {
+    res.status(404).json({ error: "entry-not-found" });
+    return;
+  }
+  if (!isLeadership(me) && row.personId !== me.id) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  res.json({ entry: row });
+});
+
+router.get("/wallet/partner-firm-hours/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isLeadership(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierPartnerFirmHours)
+    .where(and(eq(atelierPartnerFirmHours.id, req.params.id), isNull(atelierPartnerFirmHours.deletedAt)));
+  if (!row) {
+    res.status(404).json({ error: "firm-hours-not-found" });
+    return;
+  }
+  res.json({ firmHours: row });
 });
 
 router.get("/wallet/expenses/:id", async (req, res) => {
@@ -1250,6 +1218,10 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
           status: sentinel.status,
           confidence: sentinel.confidence,
           publishAllowed: sentinel.publishAllowed,
+          // RED rows must surface a redaction proposal so the lead has
+          // a concrete remediation path before re-running the third
+          // gate; AMBER/GREEN rows return null.
+          redactionProposal: sentinel.redactionProposal,
           findings: sentinel.checks
             .filter((c) => c.status !== "pass")
             .map((c) => ({ name: c.name, status: c.status, detail: c.detail })),

@@ -196,7 +196,34 @@ export default function WalletApprovals() {
                   {g.rows.map((p) => (
                     <div key={p.id} className="flex items-start justify-between gap-3 text-sm" data-testid={`row-cp-${p.id}`}>
                       <div className="text-xs font-mono text-text-mute">
-                        {p.weekIso} · {p.hours.toFixed(1)} hrs × {fmtUsd(p.ratePerHour)}/hr · eng {p.engagementId.slice(0, 12)}…
+                        <div>
+                          {p.weekIso} · {p.hours.toFixed(1)} hrs × {fmtUsd(p.ratePerHour)}/hr ·{" "}
+                          <a
+                            href={`/ledger/engagement-economics/${p.engagementId}`}
+                            className="text-gold underline"
+                            data-testid={`link-eng-${p.id}`}
+                          >
+                            eng {p.engagementId.slice(0, 18)}…
+                          </a>
+                        </div>
+                        {p.evidenceEntryIds.length > 0 && (
+                          <div className="mt-0.5 text-[11px] text-text-mute">
+                            evidence:{" "}
+                            {p.evidenceEntryIds.slice(0, 6).map((eid, i) => (
+                              <React.Fragment key={eid}>
+                                {i > 0 && ", "}
+                                <a
+                                  href={`/api/atelier/wallet/timesheet-entries/${eid}`}
+                                  className="underline hover:text-gold"
+                                  data-testid={`link-evidence-${eid}`}
+                                >
+                                  {eid.slice(-10)}
+                                </a>
+                              </React.Fragment>
+                            ))}
+                            {p.evidenceEntryIds.length > 6 && ` +${p.evidenceEntryIds.length - 6} more`}
+                          </div>
+                        )}
                       </div>
                       <div className="text-right shrink-0 space-y-1">
                         <div className="font-mono">{fmtUsd(p.usdAmount)}</div>
@@ -237,7 +264,34 @@ export default function WalletApprovals() {
                   {g.rows.map((p) => (
                     <div key={p.id} className="flex items-start justify-between gap-3 text-sm" data-testid={`row-pfi-${p.id}`}>
                       <div className="text-xs font-mono text-text-mute">
-                        {p.weekIso} · {p.hours.toFixed(1)} hrs · eng {p.engagementId.slice(0, 12)}…
+                        <div>
+                          {p.weekIso} · {p.hours.toFixed(1)} hrs ·{" "}
+                          <a
+                            href={`/ledger/engagement-economics/${p.engagementId}`}
+                            className="text-gold underline"
+                            data-testid={`link-eng-pfi-${p.id}`}
+                          >
+                            eng {p.engagementId.slice(0, 18)}…
+                          </a>
+                        </div>
+                        {p.evidenceFirmHourIds.length > 0 && (
+                          <div className="mt-0.5 text-[11px] text-text-mute">
+                            evidence:{" "}
+                            {p.evidenceFirmHourIds.slice(0, 6).map((fid, i) => (
+                              <React.Fragment key={fid}>
+                                {i > 0 && ", "}
+                                <a
+                                  href={`/api/atelier/wallet/partner-firm-hours/${fid}`}
+                                  className="underline hover:text-gold"
+                                  data-testid={`link-evidence-pfi-${fid}`}
+                                >
+                                  {fid.slice(-10)}
+                                </a>
+                              </React.Fragment>
+                            ))}
+                            {p.evidenceFirmHourIds.length > 6 && ` +${p.evidenceFirmHourIds.length - 6} more`}
+                          </div>
+                        )}
                       </div>
                       <div className="text-right shrink-0 space-y-1">
                         <div className="font-mono">{fmtUsd(p.usdAmount)} <span className="text-xs text-text-mute">({p.costCurrency} {p.costAmount.toFixed(2)})</span></div>

@@ -7,6 +7,7 @@ interface ExpenseSentinel {
   status: "pass" | "warn" | "fail";
   confidence: "green" | "amber" | "red";
   publishAllowed: boolean;
+  redactionProposal: string | null;
   findings: SentinelFinding[];
 }
 interface BillableExpense {
@@ -151,6 +152,19 @@ export default function WalletClientBillable() {
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {e.sentinel.status === "fail" && e.sentinel.redactionProposal && (
+                    <div
+                      className="mt-1 text-xs font-mono text-red-300 border-l-2 border-red-400/60 pl-2"
+                      data-testid={`redaction-${e.id}`}
+                    >
+                      ⚑ Redaction proposal: {e.sentinel.redactionProposal}
+                    </div>
+                  )}
+                  {e.markupPct > 0 && (
+                    <div className="mt-1 text-xs font-mono text-amber-300/80">
+                      ⚑ Markup mismatch warning: re-check {(e.markupPct * 100).toFixed(0)}% markup against engagement contract band.
+                    </div>
                   )}
                 </div>
                 <div className="text-right shrink-0 space-y-1">

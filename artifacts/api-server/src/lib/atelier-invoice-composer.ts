@@ -32,6 +32,7 @@ import {
 } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { convertToUsd } from "./atelier-fx.js";
+import { buildContractDigest } from "./atelier-contract-digest.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -335,32 +336,59 @@ export async function expensePublishSentinelChecks(args: {
     });
   }
 
-  // 3) Markup vs contract band: contract allows 0–15% on T&E; AMBER if outside.
+  // 3) Contract-derived markup cap. Use the engagement charter's
+  // expense-clause cap (resolved by buildContractDigest) instead of a
+  // hardcoded band. Fail (RED) when over cap; warn when expense is
+  // billable but engagement has no clause; pass otherwise.
+  const digest = await buildContractDigest(ex.engagementId ?? null);
+  // markup_pct is stored in percent units (e.g. 10 = 10%) to match the
+  // submit-time check in walletRoutes; the contract digest cap is also
+  // expressed in percent (e.g. 10).
   const mp = ex.markupPct ?? 0;
-  if (mp < 0 || mp > 0.15) {
+  const cap = digest?.expenseMarkupCapPct ?? 0;
+  if (!digest) {
     checks.push({
       name: "markup_band",
       status: "warn",
-      detail: `Markup ${(mp * 100).toFixed(1)}% is outside the standard 0–15% T&E band.`,
+      detail: `Cannot resolve engagement contract for markup check — defaulting to AMBER.`,
+    });
+  } else if (!digest.expensesClause) {
+    checks.push({
+      name: "markup_band",
+      status: "fail",
+      detail: `Engagement has no expense pass-through clause; markup ${mp.toFixed(1)}% cannot be billed.`,
+    });
+  } else if (mp < 0 || mp > cap) {
+    checks.push({
+      name: "markup_band",
+      status: "fail",
+      detail: `Markup ${mp.toFixed(1)}% exceeds contract cap of ${cap.toFixed(0)}% on this engagement.`,
     });
   } else {
     checks.push({
       name: "markup_band",
       status: "pass",
-      detail: `Markup ${(mp * 100).toFixed(1)}% within contract band.`,
+      detail: `Markup ${mp.toFixed(1)}% within contract cap of ${cap.toFixed(0)}%.`,
     });
   }
 
-  // 4) Contract-allowed category — block "alcohol", "personal" outright;
-  // AMBER on "entertainment" (varies per master agreement).
+  // 4) Contract-allowed category — driven by the contract digest's
+  // permitted/blocked/amber category lists rather than a hardcoded set.
   const cat = (ex.category ?? "other").toLowerCase();
-  const blocked = ["alcohol", "personal", "fines"];
-  const ambered = ["entertainment", "gifts"];
+  const permitted = digest?.permittedCategories ?? [];
+  const blocked = digest?.blockedCategories ?? [];
+  const ambered = digest?.amberCategories ?? [];
   if (blocked.includes(cat)) {
     checks.push({
       name: "category_allowed",
       status: "fail",
-      detail: `Category "${cat}" is never client-billable per master contract.`,
+      detail: `Category "${cat}" is never client-billable (contract block-list).`,
+    });
+  } else if (digest && permitted.length > 0 && !permitted.includes(cat)) {
+    checks.push({
+      name: "category_allowed",
+      status: "fail",
+      detail: `Category "${cat}" is outside this engagement's contract pass-through scope (${permitted.join(", ")}).`,
     });
   } else if (ambered.includes(cat)) {
     checks.push({
