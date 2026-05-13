@@ -1395,7 +1395,14 @@ router.get("/ledger/utilization/person/:id", async (req, res) => {
     })),
     engagementMix: mix,
     snapshotsAvailable: snapshots.length > 0,
-    computedAt: snapshots[0]?.computedAt ?? null,
+    // Use the most recent snapshot timestamp across the rolling-4w slice
+    // (or the full set if last4 is empty), not whatever happens to sit in
+    // index 0 of an unsorted array.
+    computedAt: ((last4Snaps.length > 0 ? last4Snaps : snapshots).reduce<Date | null>((acc, s) => {
+      const t = s.computedAt ? new Date(s.computedAt) : null;
+      if (t && (!acc || t > acc)) return t;
+      return acc;
+    }, null))?.toISOString() ?? null,
   });
 });
 
@@ -1824,7 +1831,13 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     sectorSummary,
     engagementRollup,
     snapshotsAvailable: snaps.length > 0,
-    computedAt: snaps[0]?.computedAt ?? null,
+    // Most recent snapshot timestamp across the rolling-4w window, not
+    // index 0 of an unsorted array.
+    computedAt: (snaps.reduce<Date | null>((acc, s) => {
+      const t = s.computedAt ? new Date(s.computedAt) : null;
+      if (t && (!acc || t > acc)) return t;
+      return acc;
+    }, null))?.toISOString() ?? null,
   });
 });
 
