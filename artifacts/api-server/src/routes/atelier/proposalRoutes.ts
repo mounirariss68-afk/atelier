@@ -42,6 +42,37 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
   return req.atelierPersona;
 }
 
+/**
+ * Opportunity-scoped ACL: persona must share the opportunity's org and
+ * be either the partner_owner, the engagement_lead, or any partner-role
+ * user. Returns the row on success, otherwise responds 403/404 and null.
+ */
+async function ensureOppAccess(
+  res: Response,
+  me: typeof atelierUsers.$inferSelect,
+  oppId: string,
+): Promise<typeof atelierOpportunities.$inferSelect | null> {
+  const [opp] = await db
+    .select()
+    .from(atelierOpportunities)
+    .where(and(eq(atelierOpportunities.id, oppId), isNull(atelierOpportunities.deletedAt)));
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return null;
+  }
+  if (opp.orgId !== me.orgId) {
+    res.status(403).json({ error: "cross-org-access-denied" });
+    return null;
+  }
+  const isOwner = opp.partnerOwnerId === me.id || opp.engagementLeadId === me.id;
+  const isPartner = me.role === "partner";
+  if (!isOwner && !isPartner) {
+    res.status(403).json({ error: "no-opportunity-access" });
+    return null;
+  }
+  return opp;
+}
+
 const router: IRouter = Router();
 
 // =============================================================
@@ -187,10 +218,12 @@ router.post("/engagements/:engId/agent-designs/:designId/approve", async (req, r
 router.get("/opportunities/:oppId/prototypes", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const opp = await ensureOppAccess(res, me, req.params.oppId);
+  if (!opp) return;
   const rows = await db
     .select()
     .from(atelierPrototypes)
-    .where(and(eq(atelierPrototypes.opportunityId, req.params.oppId), isNull(atelierPrototypes.deletedAt)))
+    .where(and(eq(atelierPrototypes.opportunityId, opp.id), isNull(atelierPrototypes.deletedAt)))
     .orderBy(desc(atelierPrototypes.createdAt));
   res.json(rows);
 });
@@ -198,14 +231,8 @@ router.get("/opportunities/:oppId/prototypes", async (req, res) => {
 router.post("/opportunities/:oppId/prototype", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const [opp] = await db
-    .select()
-    .from(atelierOpportunities)
-    .where(and(eq(atelierOpportunities.id, req.params.oppId), isNull(atelierOpportunities.deletedAt)));
-  if (!opp) {
-    res.status(404).json({ error: "opportunity-not-found" });
-    return;
-  }
+  const opp = await ensureOppAccess(res, me, req.params.oppId);
+  if (!opp) return;
   const body = req.body as {
     name?: string;
     audience?: string;
@@ -267,10 +294,12 @@ router.post("/opportunities/:oppId/prototype", async (req, res) => {
 router.get("/opportunities/:oppId/proposal", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const opp = await ensureOppAccess(res, me, req.params.oppId);
+  if (!opp) return;
   const [proposal] = await db
     .select()
     .from(atelierProposals)
-    .where(and(eq(atelierProposals.opportunityId, req.params.oppId), isNull(atelierProposals.deletedAt)))
+    .where(and(eq(atelierProposals.opportunityId, opp.id), isNull(atelierProposals.deletedAt)))
     .orderBy(desc(atelierProposals.createdAt));
   if (!proposal) {
     res.status(404).json({ error: "proposal-not-found" });
@@ -286,14 +315,8 @@ router.get("/opportunities/:oppId/proposal", async (req, res) => {
 router.post("/opportunities/:oppId/proposal", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const [opp] = await db
-    .select()
-    .from(atelierOpportunities)
-    .where(and(eq(atelierOpportunities.id, req.params.oppId), isNull(atelierOpportunities.deletedAt)));
-  if (!opp) {
-    res.status(404).json({ error: "opportunity-not-found" });
-    return;
-  }
+  const opp = await ensureOppAccess(res, me, req.params.oppId);
+  if (!opp) return;
   const body = req.body as {
     sectionsRequired?: string[];
     teamProposed?: { role: string; alloc: number }[];
@@ -375,6 +398,25 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
     res.status(403).json({ error: "only-lead-or-partner-may-approve" });
     return;
   }
+  // Resolve parent proposal first so we can ACL-check on its opportunity
+  // before mutating the section row.
+  const [section] = await db
+    .select()
+    .from(atelierProposalSections)
+    .where(eq(atelierProposalSections.id, req.params.sectionId));
+  if (!section) {
+    res.status(404).json({ error: "section-not-found" });
+    return;
+  }
+  const [parentProposal] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, section.proposalId));
+  if (!parentProposal) {
+    res.status(404).json({ error: "parent-proposal-not-found" });
+    return;
+  }
+  if (!(await ensureOppAccess(res, me, parentProposal.opportunityId))) return;
   const [updated] = await db
     .update(atelierProposalSections)
     .set({ status: "approved", updatedAt: new Date() })
@@ -384,12 +426,6 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
     res.status(404).json({ error: "section-not-found" });
     return;
   }
-  // Audit must be filed against the opportunity (the parent business
-  // entity) so it surfaces on the opportunity activity stream.
-  const [parentProposal] = await db
-    .select({ opportunityId: atelierProposals.opportunityId })
-    .from(atelierProposals)
-    .where(eq(atelierProposals.id, updated.proposalId));
   await audit({
     entityType: "opportunity",
     entityId: parentProposal?.opportunityId ?? updated.proposalId,
@@ -401,6 +437,80 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
       proposalId: updated.proposalId,
     },
     summary: `${me.name} approved proposal section "${updated.name}"`,
+  });
+  res.json(updated);
+});
+
+// ----------------------------------------------------------------------
+// Prototype Forge state machine: draft → lead_approved → live (partner).
+// ----------------------------------------------------------------------
+router.post("/prototypes/:prototypeId/approve-brief", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "engagement_lead" && me.role !== "partner") {
+    res.status(403).json({ error: "only-lead-or-partner-may-approve-brief" });
+    return;
+  }
+  const [proto] = await db
+    .select()
+    .from(atelierPrototypes)
+    .where(eq(atelierPrototypes.id, req.params.prototypeId));
+  if (!proto || !proto.opportunityId) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  if (proto.status !== "draft") {
+    res.status(409).json({ error: "brief-not-in-draft", currentStatus: proto.status });
+    return;
+  }
+  const [updated] = await db
+    .update(atelierPrototypes)
+    .set({ status: "lead_approved", leadApprovedAt: new Date(), leadApprovedByUserId: me.id ?? undefined, updatedAt: new Date() })
+    .where(eq(atelierPrototypes.id, req.params.prototypeId))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: proto.opportunityId,
+    actor: me,
+    action: "prototype.lead_approve_brief",
+    payload: { prototypeId: proto.id },
+    summary: `${me.name} approved prototype brief "${proto.name}"`,
+  });
+  res.json(updated);
+});
+
+router.post("/prototypes/:prototypeId/approve-prompt", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "only-partner-may-approve-prompt" });
+    return;
+  }
+  const [proto] = await db
+    .select()
+    .from(atelierPrototypes)
+    .where(eq(atelierPrototypes.id, req.params.prototypeId));
+  if (!proto || !proto.opportunityId) { res.status(404).json({ error: "prototype-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proto.opportunityId))) return;
+  if (proto.status !== "lead_approved") {
+    res.status(409).json({ error: "brief-not-lead-approved", currentStatus: proto.status });
+    return;
+  }
+  const [updated] = await db
+    .update(atelierPrototypes)
+    .set({
+      status: "live",
+      partnerApprovedAt: new Date(),
+      partnerApprovedByUserId: me.id ?? undefined,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierPrototypes.id, req.params.prototypeId))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: proto.opportunityId,
+    actor: me,
+    action: "prototype.partner_approve_prompt",
+    payload: { prototypeId: proto.id },
+    summary: `${me.name} approved prototype prompt "${proto.name}" for client demo`,
   });
   res.json(updated);
 });
@@ -426,6 +536,7 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
     res.status(404).json({ error: "proposal-not-found" });
     return;
   }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
   const sections = await db
     .select()
     .from(atelierProposalSections)
