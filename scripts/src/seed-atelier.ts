@@ -3191,7 +3191,13 @@ async function main() {
     existingUserIds.has(e.userId),
   );
   if (employeesToInsert.length > 0) {
-    await db.insert(atelierEmployees).values(employeesToInsert);
+    // Migration 0014 also backfills 'emp_' || user.id rows from atelier_users;
+    // those collide on PK with our richer seeded rows. Skip silently so the
+    // seed remains re-runnable.
+    await db
+      .insert(atelierEmployees)
+      .values(employeesToInsert)
+      .onConflictDoNothing();
   }
 
   console.log("[seed-atelier] v3 roster: contractors…");
@@ -3225,7 +3231,7 @@ async function main() {
         "Frontend contractor on Aldrees workshop tooling.",
     },
   ];
-  await db.insert(atelierContractors).values(CONTRACTORS);
+  await db.insert(atelierContractors).values(CONTRACTORS).onConflictDoNothing();
 
   console.log("[seed-atelier] v3 roster: partner firms…");
   const PARTNER_FIRMS = [
@@ -3233,25 +3239,25 @@ async function main() {
       id: "pf_bgts",
       name: "BGTS",
       country: "SA",
-      contractStatus: "active",
+      status: "active",
       notes: "Saudi delivery partner — agentic operations.",
     },
     {
       id: "pf_thoughtworks",
       name: "Thoughtworks",
       country: "AE",
-      contractStatus: "active",
+      status: "active",
       notes: "Global engineering partner — embedded squads.",
     },
     {
       id: "pf_mobven",
       name: "Mobven",
       country: "TR",
-      contractStatus: "active",
+      status: "active",
       notes: "Turkish mobile-first partner — front-of-house apps.",
     },
   ];
-  await db.insert(atelierPartnerFirms).values(PARTNER_FIRMS);
+  await db.insert(atelierPartnerFirms).values(PARTNER_FIRMS).onConflictDoNothing();
 
   console.log("[seed-atelier] v3 roster: partner-firm resources…");
   const PARTNER_RESOURCES = [
@@ -3312,7 +3318,7 @@ async function main() {
       status: "active",
     },
   ];
-  await db.insert(atelierPartnerFirmResources).values(PARTNER_RESOURCES);
+  await db.insert(atelierPartnerFirmResources).values(PARTNER_RESOURCES).onConflictDoNothing();
 
   console.log("[seed-atelier] v3 roster: a placeholder document on Mounir…");
   await db.insert(atelierPersonDocuments).values([
@@ -3325,7 +3331,7 @@ async function main() {
       fileUrl: null,
       uploadedByUserId: "p_mounir_ariss",
     },
-  ]);
+  ]).onConflictDoNothing();
 
   console.log(
     `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published) · ${employeesToInsert.length} employees · ${CONTRACTORS.length} contractors · ${PARTNER_FIRMS.length} partner firms · ${PARTNER_RESOURCES.length} partner-firm resources.`,

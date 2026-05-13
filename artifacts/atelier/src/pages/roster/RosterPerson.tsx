@@ -30,6 +30,7 @@ interface Person {
 
 const TABS = [
   { id: "profile", label: "Profile" },
+  { id: "access", label: "Access" },
   { id: "engagements", label: "Engagements" },
   { id: "skills", label: "Skills" },
   { id: "timesheet", label: "Timesheet" },
@@ -102,6 +103,7 @@ export default function RosterPerson() {
         {activeTab === "profile" && (
           <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} />
         )}
+        {activeTab === "access" && <AccessTab personId={personId} />}
         {activeTab === "engagements" && <EngagementsTab personId={personId} />}
         {activeTab === "skills" && <PlaceholderTab title="Skills & competencies" />}
         {activeTab === "timesheet" && <PlaceholderTab title="Timesheet summary" />}
@@ -240,6 +242,71 @@ interface EngagementGrant {
   status: string;
   grantedAt: string | null;
   endDate: string | null;
+}
+
+function AccessTab({ personId }: { personId: string }) {
+  // PRD §1 IA — Access tab shows engagements the person is on with role + scope chips.
+  // Same data shape as /engagements endpoint, but rendered as a flatter access ledger.
+  const [rows, setRows] = React.useState<EngagementGrant[] | null>(null);
+  React.useEffect(() => {
+    fetch(`/api/atelier/roster/people/${personId}/access`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((d) => setRows(d.grants ?? d.access ?? d.engagements ?? []));
+  }, [personId]);
+  if (!rows) return <div className="text-text-mute">Loading…</div>;
+  if (rows.length === 0)
+    return (
+      <Card className="p-6 text-text-mute">
+        No engagement-access grants. Use the Roster admin (Partner-only) to grant access.
+      </Card>
+    );
+  return (
+    <div className="space-y-2" data-testid="access-tab-rows">
+      <div className="text-xs text-text-mute font-mono uppercase mb-2">
+        Access ledger — role · allocation · scope chips · status
+      </div>
+      {rows.map((r) => (
+        <Card key={r.id} className="p-3">
+          <div className="flex justify-between gap-3 items-center">
+            <div className="text-sm text-text">
+              <Link href={`/engagements/${r.engagementId}`} className="hover:text-gold">
+                {r.engagementName ?? r.engagementId}
+              </Link>
+              <span className="text-text-mute"> · {r.accountName ?? ""}</span>
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              <MonoChip>{r.roleOnEngagement}</MonoChip>
+              {r.allocationPct != null && r.allocationPct > 0 && (
+                <MonoChip>{r.allocationPct}%</MonoChip>
+              )}
+              <MonoChip
+                className={
+                  r.status === "active"
+                    ? ""
+                    : "text-warning border-warning/40"
+                }
+              >
+                {r.status}
+              </MonoChip>
+            </div>
+          </div>
+          {r.scope && r.scope.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {r.scope.map((s) => (
+                <MonoChip key={s}>{s}</MonoChip>
+              ))}
+            </div>
+          )}
+          <div className="text-xs text-text-faint mt-1">
+            {r.grantedAt && `granted ${new Date(r.grantedAt).toLocaleDateString()}`}
+            {r.endDate && ` · ends ${new Date(r.endDate).toLocaleDateString()}`}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
 }
 
 function EngagementsTab({ personId }: { personId: string }) {

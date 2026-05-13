@@ -1572,12 +1572,17 @@ export const atelierEmployees = pgTable(
     country: text("country"),
     payrollCountry: text("payroll_country"),
     employmentType: text("employment_type").notNull().default("FTE"), // FTE | fixed_term | intern
+    employmentStatus: text("employment_status").notNull().default("active"), // active | notice | on_leave | terminated (PRD §2.1)
+    employingEntity: text("employing_entity"), // DIFC | ADGM | KSA | Other (PRD §2.1)
     startDate: text("start_date"), // ISO date
     endDate: text("end_date"),
     status: text("status").notNull().default("active"), // active | on_leave | offboarded
     iban: text("iban"),
     swift: text("swift"),
     noticePeriodDays: integer("notice_period_days").notNull().default(30),
+    baseCurrency: text("base_currency"), // PRD §2.1 (policy-locked)
+    baseCompensation: doublePrecision("base_compensation"), // PRD §2.1 (policy-locked)
+    utilizationTargetPct: integer("utilization_target_pct"), // PRD §2.1
     partnerEconomicsId: text("partner_economics_id"),
     avatarUrl: text("avatar_url"),
     notes: text("notes"),
@@ -1604,8 +1609,23 @@ export const atelierContractors = pgTable(
     country: text("country"),
     vendorEntity: text("vendor_entity"),
     masterAgreementRef: text("master_agreement_ref"),
+    contractType: text("contract_type"), // T&M | fixed_fee | retainer (PRD §2.1)
+    contractStart: text("contract_start"),
+    contractEnd: text("contract_end"),
     dayRateAmount: doublePrecision("day_rate_amount"),
+    dayRateInternalCost: doublePrecision("day_rate_internal_cost"), // PRD §2.1 (policy-locked)
     dayRateCurrency: text("day_rate_currency").notNull().default("USD"),
+    paymentTermsDays: integer("payment_terms_days"), // PRD §2.1
+    vatTreatment: text("vat_treatment"), // PRD §2.1 (zero_rated | standard | exempt | reverse_charge)
+    engagementScopeDefault: jsonb("engagement_scope_default")
+      .$type<string[]>()
+      .notNull()
+      .default([]), // PRD §2.1 — default scope chips applied on grant
+    contractingEntity: text("contracting_entity"), // PRD §2.1 (which AICo entity contracts them)
+    conflictsDisclosedJson: jsonb("conflicts_disclosed_json")
+      .$type<Array<{ party: string; nature: string }>>()
+      .notNull()
+      .default([]), // PRD §2.1 (snapshot at contract sign)
     startDate: text("start_date"),
     endDate: text("end_date"),
     status: text("status").notNull().default("active"), // active | paused | offboarded
@@ -1628,8 +1648,16 @@ export const atelierPartnerFirms = pgTable(
     orgId: ORG("org_id"),
     name: text("name").notNull(),
     country: text("country"),
+    hqCountry: text("hq_country"), // PRD §2.1
     masterAgreementRef: text("master_agreement_ref"),
     masterAgreementUrl: text("master_agreement_url"),
+    masterAgreementStatus: text("master_agreement_status").notNull().default("active"), // PRD §2.1: signed | pending | expired
+    masterAgreementEnd: text("master_agreement_end"), // PRD §2.1
+    primaryContactUserId: text("primary_contact_user_id"), // PRD §2.1
+    defaultPaymentTermsDays: integer("default_payment_terms_days"), // PRD §2.1
+    rateCardId: text("rate_card_id"), // PRD §2.1
+    defaultBillingCurrency: text("default_billing_currency"), // PRD §2.1
+    insuranceStatus: text("insurance_status"), // PRD §2.1
     contactName: text("contact_name"),
     contactEmail: text("contact_email"),
     status: text("status").notNull().default("active"), // active | paused | terminated
@@ -1651,8 +1679,17 @@ export const atelierPartnerFirmResources = pgTable(
     fullName: text("full_name").notNull(),
     email: text("email"),
     role: text("role"),
+    roleOnEngagement: text("role_on_engagement"), // PRD §2.1
     seniority: text("seniority"),
+    seniorityBand: text("seniority_band"), // PRD §2.1
     country: text("country"),
+    secondedToEngagementIds: jsonb("seconded_to_engagement_ids")
+      .$type<string[]>()
+      .notNull()
+      .default([]), // PRD §2.1
+    costToAicoPerDay: doublePrecision("cost_to_aico_per_day"), // PRD §2.1 (policy-locked)
+    visibleToClientInTeamTab: boolean("visible_to_client_in_team_tab").notNull().default(false), // PRD §2.1
+    partnerFirmPmUserId: text("partner_firm_pm_user_id"), // PRD §2.1
     dayRateAmount: doublePrecision("day_rate_amount"),
     dayRateCurrency: text("day_rate_currency").notNull().default("USD"),
     startDate: text("start_date"),
@@ -1677,6 +1714,12 @@ export const atelierPartnerEconomics = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     employeeId: text("employee_id").notNull(),
+    model: text("model"), // PRD §2.1: equal_partnership | eat_what_you_kill | base_plus_share
+    revenueSharePct: doublePrecision("revenue_share_pct"), // PRD §2.1
+    baseAmount: doublePrecision("base_amount"), // PRD §2.1
+    currency: text("currency"), // PRD §2.1
+    effectiveFrom: text("effective_from"), // PRD §2.1
+    effectiveTo: text("effective_to"), // PRD §2.1
     profitShareBps: integer("profit_share_bps").notNull().default(0),
     vestingSchedule: jsonb("vesting_schedule")
       .$type<Array<{ date: string; bps: number }>>()
@@ -1702,6 +1745,11 @@ export const atelierConflictDisclosures = pgTable(
     personType: text("person_type").notNull(), // employee | contractor | partner_firm_resource
     personId: text("person_id").notNull(),
     disclosureText: text("disclosure_text").notNull(),
+    declaredParty: text("declared_party"), // PRD §2.1
+    nature: text("nature"), // PRD §2.1
+    scopeImpact: text("scope_impact"), // PRD §2.1 (which engagement-scope chips this conflict touches)
+    declaredAt: timestamp("declared_at").defaultNow(),
+    lastReviewedAt: timestamp("last_reviewed_at"), // PRD §2.1
     disclosedAt: timestamp("disclosed_at").notNull().defaultNow(),
     status: text("status").notNull().default("active"), // active | cleared | escalated
     notes: text("notes"),
@@ -1723,9 +1771,12 @@ export const atelierPersonDocuments = pgTable(
     orgId: ORG("org_id"),
     personType: text("person_type").notNull(), // employee | contractor | partner_firm_resource
     personId: text("person_id").notNull(),
-    kind: text("kind").notNull(), // contract | nda | id | tax | cert | other
+    kind: text("kind").notNull(), // PRD §2.1: contract | nda | client_nda | coi | id | tax | cert | other
+    clientAccountId: text("client_account_id"), // PRD §2.1 — for client_nda etc.
     title: text("title").notNull(),
+    fileRef: text("file_ref"), // PRD §2.1 (object-storage ref; signed-url infra lands later)
     fileUrl: text("file_url"),
+    signedAt: timestamp("signed_at"), // PRD §2.1
     uploadedByUserId: text("uploaded_by_user_id"),
     uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
     expiresAt: timestamp("expires_at"),

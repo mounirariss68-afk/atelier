@@ -17,6 +17,7 @@ import {
   atelierAccounts,
   atelierOpportunityStageTransitions,
 } from "@workspace/db";
+import { rejectNonEmployeePersona } from "./rosterRoutes";
 
 function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferSelect | null {
   if (!req.atelierPersona) {
@@ -27,6 +28,9 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
 }
 
 const router: IRouter = Router();
+// Task #254 — Forecast is firm-internal pipeline math; non-employee personas
+// (contractor / partner-firm resource) are explicitly out of scope.
+router.use(rejectNonEmployeePersona);
 
 function quarterKey(d: Date): string {
   const y = d.getFullYear();

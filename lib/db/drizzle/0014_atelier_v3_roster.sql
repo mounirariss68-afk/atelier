@@ -199,3 +199,93 @@ SELECT
 FROM "atelier_users" u
 WHERE u.deleted_at IS NULL
 ON CONFLICT ("org_id", "email") DO NOTHING;
+
+-- ----- Task #254 follow-up: PRD §2.1 column extensions (idempotent) -----
+ALTER TABLE "atelier_employees"
+  ADD COLUMN IF NOT EXISTS "employment_status" text NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS "employing_entity" text,
+  ADD COLUMN IF NOT EXISTS "base_currency" text,
+  ADD COLUMN IF NOT EXISTS "base_compensation" double precision,
+  ADD COLUMN IF NOT EXISTS "utilization_target_pct" integer;
+
+ALTER TABLE "atelier_contractors"
+  ADD COLUMN IF NOT EXISTS "contract_type" text,
+  ADD COLUMN IF NOT EXISTS "contract_start" text,
+  ADD COLUMN IF NOT EXISTS "contract_end" text,
+  ADD COLUMN IF NOT EXISTS "day_rate_internal_cost" double precision,
+  ADD COLUMN IF NOT EXISTS "payment_terms_days" integer,
+  ADD COLUMN IF NOT EXISTS "vat_treatment" text,
+  ADD COLUMN IF NOT EXISTS "engagement_scope_default" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS "contracting_entity" text,
+  ADD COLUMN IF NOT EXISTS "conflicts_disclosed_json" jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE "atelier_partner_firms"
+  ADD COLUMN IF NOT EXISTS "hq_country" text,
+  ADD COLUMN IF NOT EXISTS "master_agreement_status" text NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS "master_agreement_end" text,
+  ADD COLUMN IF NOT EXISTS "primary_contact_user_id" text,
+  ADD COLUMN IF NOT EXISTS "default_payment_terms_days" integer,
+  ADD COLUMN IF NOT EXISTS "rate_card_id" text,
+  ADD COLUMN IF NOT EXISTS "default_billing_currency" text,
+  ADD COLUMN IF NOT EXISTS "insurance_status" text;
+
+ALTER TABLE "atelier_partner_firm_resources"
+  ADD COLUMN IF NOT EXISTS "role_on_engagement" text,
+  ADD COLUMN IF NOT EXISTS "seniority_band" text,
+  ADD COLUMN IF NOT EXISTS "seconded_to_engagement_ids" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS "cost_to_aico_per_day" double precision,
+  ADD COLUMN IF NOT EXISTS "visible_to_client_in_team_tab" boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "partner_firm_pm_user_id" text;
+
+ALTER TABLE "atelier_partner_economics"
+  ADD COLUMN IF NOT EXISTS "model" text,
+  ADD COLUMN IF NOT EXISTS "revenue_share_pct" double precision,
+  ADD COLUMN IF NOT EXISTS "base_amount" double precision,
+  ADD COLUMN IF NOT EXISTS "currency" text,
+  ADD COLUMN IF NOT EXISTS "effective_from" text,
+  ADD COLUMN IF NOT EXISTS "effective_to" text;
+
+ALTER TABLE "atelier_conflict_disclosures"
+  ADD COLUMN IF NOT EXISTS "declared_party" text,
+  ADD COLUMN IF NOT EXISTS "nature" text,
+  ADD COLUMN IF NOT EXISTS "scope_impact" text,
+  ADD COLUMN IF NOT EXISTS "declared_at" timestamp DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS "last_reviewed_at" timestamp;
+
+ALTER TABLE "atelier_person_documents"
+  ADD COLUMN IF NOT EXISTS "client_account_id" text,
+  ADD COLUMN IF NOT EXISTS "file_ref" text,
+  ADD COLUMN IF NOT EXISTS "signed_at" timestamp;
+
+-- ----- Task #254 follow-up: tighten backfill to internal AICo roles only (PRD §8.1) -----
+-- The original INSERT above is wider; re-running this scoped INSERT is safe
+-- (ON CONFLICT DO NOTHING) and documents the intent for code review.
+INSERT INTO "atelier_employees" ("id", "org_id", "user_id", "full_name", "email", "role", "seniority", "title", "status")
+SELECT
+  'emp_' || u.id,
+  u.org_id,
+  u.id,
+  u.name,
+  u.email,
+  u.role,
+  CASE u.role
+    WHEN 'partner' THEN 'partner'
+    WHEN 'engagement_lead' THEN 'principal'
+    WHEN 'sme' THEN 'manager'
+    WHEN 'ai_engineer' THEN 'senior_consultant'
+    WHEN 'business_developer' THEN 'manager'
+    ELSE 'consultant'
+  END,
+  u.title,
+  'active'
+FROM "atelier_users" u
+WHERE u.deleted_at IS NULL
+  AND u.role IN ('partner', 'engagement_lead', 'sme', 'ai_engineer', 'business_developer', 'operations')
+ON CONFLICT ("org_id", "email") DO NOTHING;
+
+-- Remove any previously backfilled rows whose source persona is NOT an internal AICo role
+-- (e.g. client_user / contractor / partner_firm_resource) to honor PRD §8.1 scope.
+DELETE FROM "atelier_employees" e
+USING "atelier_users" u
+WHERE e.user_id = u.id
+  AND u.role NOT IN ('partner', 'engagement_lead', 'sme', 'ai_engineer', 'business_developer', 'operations');

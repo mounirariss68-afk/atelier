@@ -783,7 +783,7 @@ router.get("/roster/access-matrix", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (me.role !== "partner" && me.role !== "operations") {
+    if (me.role !== "partner") {
       res.status(403).json({ error: "access-matrix-partner-only" });
       return;
     }
@@ -918,6 +918,72 @@ export function rejectNonEmployeePersona(
     return;
   }
   next();
+}
+
+// =============================================================
+// Task #254 — Sentinel side-effect: auto-revoke non-employee grants on close.
+// Exposed for both direct callers (engagement-close transition routes when
+// they land in #257) and the agent runner's emitAccessSentinelEvent dispatch.
+// =============================================================
+export async function revokeNonEmployeeAccessOnEngagementClose(args: {
+  engagementId: string;
+  closedByUserId: string;
+}): Promise<{ revokedCount: number; revokedUserIds: string[] }> {
+  // Active grants on this engagement.
+  const grants = await db
+    .select({
+      userId: atelierEngagementAccess.userId,
+      role: atelierUsers.role,
+    })
+    .from(atelierEngagementAccess)
+    .innerJoin(atelierUsers, eq(atelierUsers.id, atelierEngagementAccess.userId))
+    .where(
+      and(
+        eq(atelierEngagementAccess.engagementId, args.engagementId),
+        eq(atelierEngagementAccess.status, "active"),
+        isNull(atelierEngagementAccess.deletedAt),
+      ),
+    );
+  // Internal AICo roles keep access (PRD §8.1); everyone else is auto-revoked.
+  const INTERNAL = new Set([
+    "partner",
+    "engagement_lead",
+    "sme",
+    "ai_engineer",
+    "business_developer",
+    "operations",
+  ]);
+  const targets = grants.filter((g) => !INTERNAL.has(g.role));
+  if (targets.length === 0) return { revokedCount: 0, revokedUserIds: [] };
+  const userIds = targets.map((t) => t.userId);
+  await db
+    .update(atelierEngagementAccess)
+    .set({ status: "revoked", endDate: new Date() })
+    .where(
+      and(
+        eq(atelierEngagementAccess.engagementId, args.engagementId),
+        inArray(atelierEngagementAccess.userId, userIds),
+      ),
+    );
+  // One audit row per revoke for traceability in the per-person Audit feed.
+  await db.insert(atelierAuditEvents).values(
+    userIds.map((uid) => ({
+      id: rid("aud"),
+      entityType: "engagement_access",
+      entityId: `${args.engagementId}:${uid}`,
+      actorType: "agent" as const,
+      actorId: "ag_access_sentinel",
+      actorLabel: "Access Sentinel",
+      action: "access.revoke.auto-on-close",
+      payload: {
+        engagementId: args.engagementId,
+        userId: uid,
+        closedByUserId: args.closedByUserId,
+      },
+      payloadSummary: `Access Sentinel auto-revoked non-employee access on engagement close.`,
+    })),
+  );
+  return { revokedCount: userIds.length, revokedUserIds: userIds };
 }
 
 // silence unused imports lint that may flag drizzle helpers across versions

@@ -3740,3 +3740,50 @@ export async function fanoutSalonNotification(input: {
   await db.insert(atelierSalonNotifications).values(rows);
   return rows.length;
 }
+
+// =============================================================
+// Task #254 — Access Sentinel agent runner
+// -------------------------------------------------------------
+// PRD §1 + Task §4: Sentinel is the chokepoint for every grant/revoke on
+// atelier_engagement_access. The synchronous validation + audit happens in
+// `runAccessSentinel` inside `routes/atelier/rosterRoutes.ts`. This file
+// exposes the *event-driven* hooks that downstream tasks (engagement-close
+// in #257, conflict change in #255, access-request UX in #258) call into to
+// emit Sentinel proposals as side-effects of those events.
+// =============================================================
+
+export type SentinelEvent =
+  | { kind: "engagement_closed"; engagementId: string; closedByUserId: string }
+  | { kind: "conflict_changed"; personType: "employee" | "contractor" | "partner_firm_resource"; personId: string }
+  | { kind: "access_requested"; personId: string; engagementId: string; requestedScope: string[]; requestedByUserId: string };
+
+/**
+ * Single dispatch surface every server route can call when an event happens
+ * that may require a Sentinel-mediated access change. The implementation is a
+ * v3-foundation stub — it logs the proposal and writes an audit row so the
+ * downstream UX (Pane A items, Roster Audit feed) can already light up. The
+ * real proposal emission lands with the Onboarding/Offboarding task (#257)
+ * which will materialize `atelier_pane_a_items` rows; for now we keep the
+ * call sites stable so #257 is a one-file change.
+ */
+export async function emitAccessSentinelEvent(ev: SentinelEvent): Promise<void> {
+  // Lazy import to avoid circular dep with rosterRoutes.
+  const mod = await import("../../routes/atelier/rosterRoutes");
+  if (ev.kind === "engagement_closed") {
+    const { revokeNonEmployeeAccessOnEngagementClose } = mod;
+    const result = await revokeNonEmployeeAccessOnEngagementClose({
+      engagementId: ev.engagementId,
+      closedByUserId: ev.closedByUserId,
+    });
+    // eslint-disable-next-line no-console
+    console.log(
+      `[access-sentinel] engagement_closed engagementId=${ev.engagementId} revokedCount=${result.revokedCount}`,
+    );
+    return;
+  }
+  // conflict_changed + access_requested are stubs in this task; #255 + #258
+  // wire them to materialize Pane A proposals. For now we log so the call
+  // sites land in #254 already and downstream tasks are drop-in changes.
+  // eslint-disable-next-line no-console
+  console.log("[access-sentinel] (stub)", ev);
+}
