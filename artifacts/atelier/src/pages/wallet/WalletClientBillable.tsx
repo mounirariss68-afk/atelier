@@ -161,9 +161,9 @@ export default function WalletClientBillable() {
                       ⚑ Redaction proposal: {e.sentinel.redactionProposal}
                     </div>
                   )}
-                  {e.markupPct > 0 && (
-                    <div className="mt-1 text-xs font-mono text-amber-300/80">
-                      ⚑ Markup mismatch warning: re-check {(e.markupPct * 100).toFixed(0)}% markup against engagement contract band.
+                  {e.sentinel.findings.some((f) => f.name === "markup_band" && f.status === "warn") && (
+                    <div className="mt-1 text-xs font-mono text-amber-300/80" data-testid={`markup-warn-${e.id}`}>
+                      ⚑ Markup mismatch warning: {e.markupPct}% markup needs verification against engagement contract band.
                     </div>
                   )}
                 </div>
@@ -171,7 +171,7 @@ export default function WalletClientBillable() {
                   <div className="font-mono text-text">${e.usdAmount.toFixed(2)}</div>
                   <div className="flex gap-1 justify-end flex-wrap">
                     <MonoChip tone={e.status === "approved" ? "green" : e.status === "submitted" ? "gold" : undefined}>{e.status}</MonoChip>
-                    <MonoChip tone="gold">+{(e.markupPct * 100).toFixed(0)}%</MonoChip>
+                    <MonoChip tone="gold">+{e.markupPct}%</MonoChip>
                     <MonoChip tone={e.sentinel.confidence}>sentinel {e.sentinel.status}</MonoChip>
                   </div>
                 </div>
@@ -204,7 +204,7 @@ export default function WalletClientBillable() {
                     <td className="py-1 pr-2">{l.description}</td>
                     <td className="py-1 pr-2 text-right font-mono">{l.qty.toFixed(2)}</td>
                     <td className="py-1 pr-2 text-right font-mono">${l.unitPriceUsd.toFixed(2)}</td>
-                    <td className="py-1 pr-2 text-right font-mono">{l.markupPct != null ? `${(l.markupPct * 100).toFixed(0)}%` : "—"}</td>
+                    <td className="py-1 pr-2 text-right font-mono">{l.markupPct != null ? `${l.markupPct}%` : "—"}</td>
                     <td className="py-1 pr-2 text-right font-mono">${l.amountUsd.toFixed(2)}</td>
                   </tr>
                 ))}

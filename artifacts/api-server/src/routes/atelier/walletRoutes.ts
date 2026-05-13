@@ -1242,7 +1242,7 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
     totals: {
       count: rows.length,
       netUsd: +rows.reduce((s, r) => s + r.usdAmount, 0).toFixed(2),
-      markupUsd: +rows.reduce((s, r) => s + r.usdAmount * (r.markupPct ?? 0), 0).toFixed(2),
+      markupUsd: +rows.reduce((s, r) => s + r.usdAmount * ((r.markupPct ?? 0) / 100), 0).toFixed(2),
       sentinel: sentinelStatusCounts,
     },
   });

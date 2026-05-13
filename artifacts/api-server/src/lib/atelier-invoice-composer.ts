@@ -209,8 +209,11 @@ export async function runInvoiceComposer(args: RunArgs): Promise<InvoiceComposer
     );
   for (const ex of expenses) {
     const net = +ex.usdAmount.toFixed(2);
+    // markupPct is stored in percent units (e.g. 10 = 10%); convert to a
+    // fraction before multiplying so the line-markup is a real currency
+    // amount, not 10× the net.
     const markupPct = ex.markupPct ?? 0;
-    const lineMarkup = +(net * markupPct).toFixed(2);
+    const lineMarkup = +(net * (markupPct / 100)).toFixed(2);
     const amount = +(net + lineMarkup).toFixed(2);
     expensesNetUsd += net;
     markupUsd += lineMarkup;
