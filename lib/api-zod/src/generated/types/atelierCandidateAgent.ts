@@ -5,14 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAgentSchemaField } from "./atelierAgentSchemaField";
 import type { AtelierCandidateAgentRiskClass } from "./atelierCandidateAgentRiskClass";
 
 export interface AtelierCandidateAgent {
   id: string;
   name: string;
   purpose: string;
-  inputs: string[];
-  outputs: string[];
+  inputs: AtelierAgentSchemaField[];
+  outputs: AtelierAgentSchemaField[];
   tools: string[];
   guardrails: string[];
   humanCheckpoints: string[];

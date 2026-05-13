@@ -23,6 +23,7 @@ import type {
   AtelierAgentDecisionInput,
   AtelierAgentDesign,
   AtelierAgentRunDetail,
+  AtelierAgentsUsageCounts200Item,
   AtelierAnalyzeProcessInput,
   AtelierAnalyzeProcessResponse,
   AtelierArtifact,
@@ -55,7 +56,9 @@ import type {
   AtelierPov,
   AtelierPovVersion,
   AtelierProcess,
+  AtelierPromoteAgentDesign200,
   AtelierPromoteFactInput,
+  AtelierProposal,
   AtelierProposalDetail,
   AtelierProposalSection,
   AtelierProposalSendResponse,
@@ -4752,6 +4755,263 @@ export const useAtelierComposeProposal = <
   TContext
 > => {
   return useMutation(getAtelierComposeProposalMutationOptions(options));
+};
+
+/**
+ * @summary Org-scoped run counts grouped by agent_id (for the /agents tab)
+ */
+export const getAtelierAgentsUsageCountsUrl = () => {
+  return `/api/atelier/agents/usage-counts`;
+};
+
+export const atelierAgentsUsageCounts = async (
+  options?: RequestInit,
+): Promise<AtelierAgentsUsageCounts200Item[]> => {
+  return customFetch<AtelierAgentsUsageCounts200Item[]>(
+    getAtelierAgentsUsageCountsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierAgentsUsageCountsQueryKey = () => {
+  return [`/api/atelier/agents/usage-counts`] as const;
+};
+
+export const getAtelierAgentsUsageCountsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierAgentsUsageCounts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierAgentsUsageCounts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierAgentsUsageCountsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierAgentsUsageCounts>>
+  > = ({ signal }) => atelierAgentsUsageCounts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierAgentsUsageCounts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierAgentsUsageCountsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierAgentsUsageCounts>>
+>;
+export type AtelierAgentsUsageCountsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Org-scoped run counts grouped by agent_id (for the /agents tab)
+ */
+
+export function useAtelierAgentsUsageCounts<
+  TData = Awaited<ReturnType<typeof atelierAgentsUsageCounts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierAgentsUsageCounts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierAgentsUsageCountsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Partner-only — promote an approved engagement design into the Atelier registry
+ */
+export const getAtelierPromoteAgentDesignUrl = (
+  engId: string,
+  designId: string,
+) => {
+  return `/api/atelier/engagements/${engId}/agent-designs/${designId}/promote`;
+};
+
+export const atelierPromoteAgentDesign = async (
+  engId: string,
+  designId: string,
+  options?: RequestInit,
+): Promise<AtelierPromoteAgentDesign200> => {
+  return customFetch<AtelierPromoteAgentDesign200>(
+    getAtelierPromoteAgentDesignUrl(engId, designId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierPromoteAgentDesignMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPromoteAgentDesign>>,
+    TError,
+    { engId: string; designId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierPromoteAgentDesign>>,
+  TError,
+  { engId: string; designId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierPromoteAgentDesign"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierPromoteAgentDesign>>,
+    { engId: string; designId: string }
+  > = (props) => {
+    const { engId, designId } = props ?? {};
+
+    return atelierPromoteAgentDesign(engId, designId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierPromoteAgentDesignMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierPromoteAgentDesign>>
+>;
+
+export type AtelierPromoteAgentDesignMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Partner-only — promote an approved engagement design into the Atelier registry
+ */
+export const useAtelierPromoteAgentDesign = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPromoteAgentDesign>>,
+    TError,
+    { engId: string; designId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierPromoteAgentDesign>>,
+  TError,
+  { engId: string; designId: string },
+  TContext
+> => {
+  return useMutation(getAtelierPromoteAgentDesignMutationOptions(options));
+};
+
+/**
+ * @summary Partner-only — explicit pricing approval checkpoint (precedes send)
+ */
+export const getAtelierApproveProposalPricingUrl = (proposalId: string) => {
+  return `/api/atelier/proposals/${proposalId}/approve-pricing`;
+};
+
+export const atelierApproveProposalPricing = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<AtelierProposal> => {
+  return customFetch<AtelierProposal>(
+    getAtelierApproveProposalPricingUrl(proposalId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierApproveProposalPricingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveProposalPricing>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierApproveProposalPricing>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierApproveProposalPricing"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierApproveProposalPricing>>,
+    { proposalId: string }
+  > = (props) => {
+    const { proposalId } = props ?? {};
+
+    return atelierApproveProposalPricing(proposalId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierApproveProposalPricingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierApproveProposalPricing>>
+>;
+
+export type AtelierApproveProposalPricingMutationError = ErrorType<void>;
+
+/**
+ * @summary Partner-only — explicit pricing approval checkpoint (precedes send)
+ */
+export const useAtelierApproveProposalPricing = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveProposalPricing>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierApproveProposalPricing>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  return useMutation(getAtelierApproveProposalPricingMutationOptions(options));
 };
 
 /**

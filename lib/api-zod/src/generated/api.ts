@@ -1491,6 +1491,42 @@ export const AtelierListAgentsResponseItem = zod.object({
   starred: zod.boolean(),
   status: zod.enum(["registered", "mvp", "stub"]),
   runsLast30d: zod.number(),
+  inputs: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        type: zod.enum([
+          "string",
+          "number",
+          "boolean",
+          "object",
+          "array",
+          "enum",
+        ]),
+        description: zod.string(),
+        required: zod.boolean().optional(),
+        enumValues: zod.array(zod.string()).optional(),
+      }),
+    )
+    .optional(),
+  outputs: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        type: zod.enum([
+          "string",
+          "number",
+          "boolean",
+          "object",
+          "array",
+          "enum",
+        ]),
+        description: zod.string(),
+        required: zod.boolean().optional(),
+        enumValues: zod.array(zod.string()).optional(),
+      }),
+    )
+    .optional(),
 });
 export const AtelierListAgentsResponse = zod.array(
   AtelierListAgentsResponseItem,
@@ -1617,8 +1653,38 @@ export const AtelierListAgentDesignsResponseItem = zod.object({
     id: zod.string(),
     name: zod.string(),
     purpose: zod.string(),
-    inputs: zod.array(zod.string()),
-    outputs: zod.array(zod.string()),
+    inputs: zod.array(
+      zod.object({
+        name: zod.string(),
+        type: zod.enum([
+          "string",
+          "number",
+          "boolean",
+          "object",
+          "array",
+          "enum",
+        ]),
+        description: zod.string(),
+        required: zod.boolean().optional(),
+        enumValues: zod.array(zod.string()).optional(),
+      }),
+    ),
+    outputs: zod.array(
+      zod.object({
+        name: zod.string(),
+        type: zod.enum([
+          "string",
+          "number",
+          "boolean",
+          "object",
+          "array",
+          "enum",
+        ]),
+        description: zod.string(),
+        required: zod.boolean().optional(),
+        enumValues: zod.array(zod.string()).optional(),
+      }),
+    ),
     tools: zod.array(zod.string()),
     guardrails: zod.array(zod.string()),
     humanCheckpoints: zod.array(zod.string()),
@@ -1644,8 +1710,38 @@ export const AtelierApproveAgentDesignResponse = zod.object({
     id: zod.string(),
     name: zod.string(),
     purpose: zod.string(),
-    inputs: zod.array(zod.string()),
-    outputs: zod.array(zod.string()),
+    inputs: zod.array(
+      zod.object({
+        name: zod.string(),
+        type: zod.enum([
+          "string",
+          "number",
+          "boolean",
+          "object",
+          "array",
+          "enum",
+        ]),
+        description: zod.string(),
+        required: zod.boolean().optional(),
+        enumValues: zod.array(zod.string()).optional(),
+      }),
+    ),
+    outputs: zod.array(
+      zod.object({
+        name: zod.string(),
+        type: zod.enum([
+          "string",
+          "number",
+          "boolean",
+          "object",
+          "array",
+          "enum",
+        ]),
+        description: zod.string(),
+        required: zod.boolean().optional(),
+        enumValues: zod.array(zod.string()).optional(),
+      }),
+    ),
     tools: zod.array(zod.string()),
     guardrails: zod.array(zod.string()),
     humanCheckpoints: zod.array(zod.string()),
@@ -1822,6 +1918,75 @@ export const AtelierComposeProposalBody = zod.object({
       }),
     )
     .optional(),
+});
+
+/**
+ * @summary Org-scoped run counts grouped by agent_id (for the /agents tab)
+ */
+export const AtelierAgentsUsageCountsResponseItem = zod.object({
+  agentId: zod.string(),
+  count: zod.number(),
+});
+export const AtelierAgentsUsageCountsResponse = zod.array(
+  AtelierAgentsUsageCountsResponseItem,
+);
+
+/**
+ * @summary Partner-only — promote an approved engagement design into the Atelier registry
+ */
+export const AtelierPromoteAgentDesignParams = zod.object({
+  engId: zod.coerce.string(),
+  designId: zod.coerce.string(),
+});
+
+export const AtelierPromoteAgentDesignResponse = zod.object({
+  agentId: zod.string(),
+});
+
+/**
+ * @summary Partner-only — explicit pricing approval checkpoint (precedes send)
+ */
+export const AtelierApproveProposalPricingParams = zod.object({
+  proposalId: zod.coerce.string(),
+});
+
+export const AtelierApproveProposalPricingResponse = zod.object({
+  id: zod.string(),
+  opportunityId: zod.string(),
+  runId: zod.string().nullish(),
+  title: zod.string(),
+  sectionsRequired: zod.array(zod.string()).optional(),
+  teamProposed: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  pricingIntent: zod.record(zod.string(), zod.unknown()).optional(),
+  pricingModel: zod
+    .object({
+      totalRevenueUsd: zod.number(),
+      totalCostUsd: zod.number(),
+      marginPct: zod.number(),
+      verdict: zod.enum(["green", "amber", "red", "partner_override_required"]),
+      wedgeChart: zod.array(
+        zod.object({
+          role: zod.string().optional(),
+          days: zod.number().optional(),
+          cost: zod.number().optional(),
+          revenue: zod.number().optional(),
+        }),
+      ),
+    })
+    .optional(),
+  winThemes: zod.array(zod.string()).optional(),
+  complianceMatrix: zod
+    .array(
+      zod.object({
+        rfpReqId: zod.string().optional(),
+        requirement: zod.string().optional(),
+        status: zod.enum(["green", "red"]).optional(),
+        evidence: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  status: zod.string(),
+  createdAt: zod.coerce.date(),
 });
 
 /**

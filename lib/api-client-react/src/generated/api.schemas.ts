@@ -195,6 +195,26 @@ export const AgentCatalogEntryStatus = {
   stub: "stub",
 } as const;
 
+export type AtelierAgentSchemaFieldType =
+  (typeof AtelierAgentSchemaFieldType)[keyof typeof AtelierAgentSchemaFieldType];
+
+export const AtelierAgentSchemaFieldType = {
+  string: "string",
+  number: "number",
+  boolean: "boolean",
+  object: "object",
+  array: "array",
+  enum: "enum",
+} as const;
+
+export interface AtelierAgentSchemaField {
+  name: string;
+  type: AtelierAgentSchemaFieldType;
+  description: string;
+  required?: boolean;
+  enumValues?: string[];
+}
+
 export interface AgentCatalogEntry {
   id: string;
   name: string;
@@ -205,6 +225,8 @@ export interface AgentCatalogEntry {
   starred: boolean;
   status: AgentCatalogEntryStatus;
   runsLast30d: number;
+  inputs?: AtelierAgentSchemaField[];
+  outputs?: AtelierAgentSchemaField[];
 }
 
 export type AgentActivityItemStatus =
@@ -1132,8 +1154,8 @@ export interface AtelierCandidateAgent {
   id: string;
   name: string;
   purpose: string;
-  inputs: string[];
-  outputs: string[];
+  inputs: AtelierAgentSchemaField[];
+  outputs: AtelierAgentSchemaField[];
   tools: string[];
   guardrails: string[];
   humanCheckpoints: string[];
@@ -1391,3 +1413,12 @@ export const AtelierListAuditEntityType = {
   agent_run: "agent_run",
   atelier: "atelier",
 } as const;
+
+export type AtelierAgentsUsageCounts200Item = {
+  agentId: string;
+  count: number;
+};
+
+export type AtelierPromoteAgentDesign200 = {
+  agentId: string;
+};

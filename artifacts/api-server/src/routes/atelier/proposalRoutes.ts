@@ -19,10 +19,13 @@ import {
   atelierOpportunities,
   atelierProcesses,
   atelierAgentDesigns,
+  atelierAgents,
+  atelierAgentRuns,
   atelierProposals,
   atelierProposalSections,
   atelierPrototypes,
 } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import {
   runAgentArchitect,
   runPrototypeForge,
@@ -179,6 +182,74 @@ router.get("/engagements/:engId/agent-designs", async (req, res) => {
     .from(atelierAgentDesigns)
     .where(and(eq(atelierAgentDesigns.engagementId, eng.id), isNull(atelierAgentDesigns.deletedAt)))
     .orderBy(desc(atelierAgentDesigns.createdAt));
+  res.json(rows);
+});
+
+// Promote an approved engagement-scoped design to the Atelier registry.
+// Partner-only (per requirement: "Partner-gated promote to Atelier").
+router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const eng = await ensureEngAccess(res, me, req.params.engId);
+  if (!eng) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "only-partner-may-promote" });
+    return;
+  }
+  const [design] = await db
+    .select()
+    .from(atelierAgentDesigns)
+    .where(and(eq(atelierAgentDesigns.id, req.params.designId), eq(atelierAgentDesigns.engagementId, eng.id)));
+  if (!design) { res.status(404).json({ error: "design-not-found" }); return; }
+  if (design.status !== "approved") {
+    res.status(409).json({ error: "design-not-approved", currentStatus: design.status });
+    return;
+  }
+  const d = (design.design ?? {}) as {
+    name?: string; purpose?: string; tools?: string[];
+    guardrails?: string[]; humanCheckpoints?: string[]; riskClass?: string;
+    inputs?: Array<Record<string, unknown>>;
+    outputs?: Array<Record<string, unknown>>;
+  };
+  const agentId = `agent_${rid("eng").slice(4)}`;
+  await db.insert(atelierAgents).values({
+    id: agentId,
+    name: d.name ?? "Promoted Agent",
+    group: "Engagement",
+    stage: "Deliver",
+    purpose: d.purpose ?? "Promoted from process discovery.",
+    model: "claude-sonnet-4-6",
+    starred: false,
+    status: "mvp",
+    tools: d.tools ?? [],
+    guardrails: d.guardrails ?? [],
+    humanCheckpoints: d.humanCheckpoints ?? [],
+    inputs: (d.inputs ?? []) as never,
+    outputs: (d.outputs ?? []) as never,
+    runsLast30d: 0,
+    createdByUserId: me.id ?? undefined,
+  });
+  await audit({
+    entityType: "engagement",
+    entityId: eng.id,
+    actor: me,
+    action: "agent_design.promote",
+    payload: { designId: design.id, agentId },
+    summary: `${me.name} promoted "${d.name ?? "design"}" into the Atelier registry`,
+  });
+  res.json({ agentId });
+});
+
+// Aggregated run counts grouped by agent_id, scoped to org. Used by the
+// /agents tab to render usage counters next to runtime cards.
+router.get("/agents/usage-counts", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const rows = await db
+    .select({ agentId: atelierAgentRuns.agentId, count: sql<number>`count(*)::int` })
+    .from(atelierAgentRuns)
+    .where(eq(atelierAgentRuns.orgId, me.orgId))
+    .groupBy(atelierAgentRuns.agentId);
   res.json(rows);
 });
 
@@ -516,6 +587,52 @@ router.post("/prototypes/:prototypeId/approve-prompt", async (req, res) => {
 });
 
 // ----------------------------------------------------------------------
+// Pricing approval checkpoint — partner-only. Distinct from final send;
+// records that the partner has explicitly read & accepted the pricing
+// model. Persisted in proposal.pricingIntent so the send gate can
+// require it independently of section approvals.
+// ----------------------------------------------------------------------
+router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "only-partner-may-approve-pricing" });
+    return;
+  }
+  const [proposal] = await db
+    .select()
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, req.params.proposalId));
+  if (!proposal) { res.status(404).json({ error: "proposal-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  const verdict = (proposal.pricingModel as { verdict?: string } | null)?.verdict;
+  if (verdict === "partner_override_required") {
+    res.status(409).json({ error: "pricing-requires-partner-override" });
+    return;
+  }
+  const newIntent = {
+    ...((proposal.pricingIntent ?? {}) as Record<string, unknown>),
+    pricingApprovedAt: new Date().toISOString(),
+    pricingApprovedByUserId: me.id,
+    pricingApprovedByName: me.name,
+  };
+  const [updated] = await db
+    .update(atelierProposals)
+    .set({ pricingIntent: newIntent, updatedAt: new Date() })
+    .where(eq(atelierProposals.id, proposal.id))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: proposal.opportunityId,
+    actor: me,
+    action: "proposal.approve_pricing",
+    payload: { proposalId: proposal.id },
+    summary: `${me.name} approved proposal pricing for "${proposal.title}"`,
+  });
+  res.json(updated);
+});
+
+// ----------------------------------------------------------------------
 // Proposal SEND — partner-only final read gate. Enforces the workflow:
 // (1) all sections approved, (2) pricing not partner_override_required,
 // then assembles a deterministic DOCX/PDF placeholder artifact and flips
@@ -552,6 +669,14 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
   const pricingVerdict = (proposal.pricingModel as { verdict?: string } | null)?.verdict;
   if (pricingVerdict === "partner_override_required") {
     res.status(409).json({ error: "pricing-requires-partner-override" });
+    return;
+  }
+  // Send also requires the explicit pricing-approval checkpoint to have
+  // been recorded (separate from the section approvals above).
+  const pricingApprovedAt =
+    (proposal.pricingIntent as { pricingApprovedAt?: string } | null)?.pricingApprovedAt;
+  if (!pricingApprovedAt) {
+    res.status(409).json({ error: "pricing-not-yet-approved" });
     return;
   }
   // Deterministic stub artifact URL — real DOCX/PDF assembly is wired

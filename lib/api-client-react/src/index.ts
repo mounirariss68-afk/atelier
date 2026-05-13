@@ -205,6 +205,16 @@ export {
   getAtelierSendProposalUrl,
   getAtelierSendProposalMutationOptions,
   useAtelierSendProposal,
+  getAtelierPromoteAgentDesignUrl,
+  getAtelierPromoteAgentDesignMutationOptions,
+  useAtelierPromoteAgentDesign,
+  getAtelierAgentsUsageCountsUrl,
+  getAtelierAgentsUsageCountsQueryKey,
+  getAtelierAgentsUsageCountsQueryOptions,
+  useAtelierAgentsUsageCounts,
+  getAtelierApproveProposalPricingUrl,
+  getAtelierApproveProposalPricingMutationOptions,
+  useAtelierApproveProposalPricing,
 } from "./generated/api";
 export type {
   HealthCheckQueryResult,

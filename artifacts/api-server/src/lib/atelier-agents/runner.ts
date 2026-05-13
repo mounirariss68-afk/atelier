@@ -1248,16 +1248,30 @@ export interface ProcessStep {
   candidateAgentId?: string;
 }
 
+export interface AgentSchemaField {
+  name: string;
+  type: "string" | "number" | "boolean" | "object" | "array" | "enum";
+  description: string;
+  required?: boolean;
+  enumValues?: string[];
+}
+
 export interface CandidateAgentDesign {
   id: string;
   name: string;
   purpose: string;
-  inputs: string[];
-  outputs: string[];
+  /** Zod-shaped input schema (one entry per top-level field). */
+  inputs: AgentSchemaField[];
+  /** Zod-shaped output schema (one entry per top-level field). */
+  outputs: AgentSchemaField[];
   tools: string[];
   guardrails: string[];
   humanCheckpoints: string[];
   riskClass: "low" | "med" | "high";
+}
+
+function fld(name: string, type: AgentSchemaField["type"], description: string, required = true): AgentSchemaField {
+  return { name, type, description, required };
 }
 
 export interface AgentArchitectOutput {
@@ -1333,8 +1347,15 @@ function mockAgentArchitect(args: {
     id: "ag_triage",
     name: "Triage Agent",
     purpose: `Classify each inbound item in scope of "${args.scopeHint}" and route it.`,
-    inputs: ["raw_inbound_payload", "service_catalog"],
-    outputs: ["routed_class", "confidence", "explain_md"],
+    inputs: [
+      fld("raw_inbound_payload", "object", "Original inbound message/payload to classify."),
+      fld("service_catalog", "array", "Permitted route categories with descriptions."),
+    ],
+    outputs: [
+      fld("routed_class", "enum", "Selected service category."),
+      fld("confidence", "number", "Model confidence in [0,1]."),
+      fld("explain_md", "string", "Markdown rationale for the route."),
+    ],
     tools: ["catalog_lookup", "history_search"],
     guardrails: ["confidence_threshold>=0.7_or_escalate", "no_PII_to_third_parties"],
     humanCheckpoints: ["sme_reviews_amber_routes_daily"],
@@ -1345,8 +1366,12 @@ function mockAgentArchitect(args: {
       id: "ag_solver",
       name: calc ? "Calculation Agent" : recon ? "Reconciliation Agent" : "Retrieval Agent",
       purpose: calc ? "Produce calculated outputs (e.g., quotes, BOQs) from inputs." : "Reconcile or fetch authoritative records.",
-      inputs: calc ? ["customer_request", "rate_card"] : ["search_query", "source_systems"],
-      outputs: calc ? ["draft_quote", "assumptions_md"] : ["matched_records", "explain_md"],
+      inputs: calc
+        ? [fld("customer_request", "object", "Customer request payload."), fld("rate_card", "object", "Active pricing rate card.")]
+        : [fld("search_query", "string", "Free-text query."), fld("source_systems", "array", "List of authoritative systems to search.")],
+      outputs: calc
+        ? [fld("draft_quote", "object", "Computed quote (line items, totals, currency)."), fld("assumptions_md", "string", "Markdown of assumptions made.")]
+        : [fld("matched_records", "array", "Records returned from authoritative source."), fld("explain_md", "string", "Markdown rationale for match.")],
       tools: calc ? ["pricing_engine", "rate_card_lookup"] : ["sql_read", "doc_search"],
       guardrails: ["never_commit_without_human_signoff", "show_assumptions"],
       humanCheckpoints: ["lead_approves_before_send"],
@@ -1358,8 +1383,14 @@ function mockAgentArchitect(args: {
       id: "ag_drafter",
       name: comm ? "Customer-Comms Drafter" : "Action Drafter",
       purpose: "Draft outbound communication or action — never sends.",
-      inputs: ["resolved_case_payload", "tone_guide"],
-      outputs: ["draft_reply_md", "tone_score"],
+      inputs: [
+        fld("resolved_case_payload", "object", "Final case state to communicate."),
+        fld("tone_guide", "object", "Brand tone + bilingual guidance."),
+      ],
+      outputs: [
+        fld("draft_reply_md", "string", "Draft outbound message in markdown."),
+        fld("tone_score", "number", "Tone-fit score in [0,1]."),
+      ],
       tools: ["template_library"],
       guardrails: ["never_auto_send", "bilingual_when_required"],
       humanCheckpoints: ["operator_approves_each_send"],
@@ -1371,8 +1402,13 @@ function mockAgentArchitect(args: {
       id: `ag_extra_${candidates.length}`,
       name: "QA Sampler Agent",
       purpose: "Sample a fraction of completed cases and flag drift.",
-      inputs: ["completed_cases", "policy_rules"],
-      outputs: ["drift_report"],
+      inputs: [
+        fld("completed_cases", "array", "Set of recently completed cases to sample."),
+        fld("policy_rules", "array", "Authoritative policy/rule corpus to compare against."),
+      ],
+      outputs: [
+        fld("drift_report", "object", "Findings: drift items, severity, examples."),
+      ],
       tools: ["sql_read"],
       guardrails: ["read_only"],
       humanCheckpoints: ["qa_lead_reviews_weekly"],

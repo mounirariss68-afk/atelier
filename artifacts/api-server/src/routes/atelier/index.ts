@@ -503,6 +503,8 @@ router.get("/agents", async (_req, res) => {
         starred: a.starred,
         status: a.status as "registered" | "mvp" | "stub",
         runsLast30d: a.runsLast30d,
+        inputs: a.inputs,
+        outputs: a.outputs,
       })),
     ),
   );

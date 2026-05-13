@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentCatalogEntryStatus } from "./agentCatalogEntryStatus";
+import type { AtelierAgentSchemaField } from "./atelierAgentSchemaField";
 
 export interface AgentCatalogEntry {
   id: string;
@@ -17,4 +18,6 @@ export interface AgentCatalogEntry {
   starred: boolean;
   status: AgentCatalogEntryStatus;
   runsLast30d: number;
+  inputs?: AtelierAgentSchemaField[];
+  outputs?: AtelierAgentSchemaField[];
 }

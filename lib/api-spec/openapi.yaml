@@ -1080,6 +1080,66 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierProposalDetail" }
+  /atelier/agents/usage-counts:
+    get:
+      operationId: atelierAgentsUsageCounts
+      tags: [atelier]
+      summary: Org-scoped run counts grouped by agent_id (for the /agents tab)
+      responses:
+        "200":
+          description: Aggregated counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [agentId, count]
+                  properties:
+                    agentId: { type: string }
+                    count: { type: integer }
+  /atelier/engagements/{engId}/agent-designs/{designId}/promote:
+    post:
+      operationId: atelierPromoteAgentDesign
+      tags: [atelier]
+      summary: Partner-only — promote an approved engagement design into the Atelier registry
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: designId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Promoted; returns registry agent row id
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId]
+                properties:
+                  agentId: { type: string }
+  /atelier/proposals/{proposalId}/approve-pricing:
+    post:
+      operationId: atelierApproveProposalPricing
+      tags: [atelier]
+      summary: Partner-only — explicit pricing approval checkpoint (precedes send)
+      parameters:
+        - in: path
+          name: proposalId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pricing approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposal" }
+        "409":
+          description: Pricing requires partner override (margin below target)
   /atelier/proposals/{proposalId}/send:
     post:
       operationId: atelierSendProposal
@@ -1292,6 +1352,12 @@ components:
         starred: { type: boolean }
         status: { type: string, enum: [registered, mvp, stub] }
         runsLast30d: { type: integer }
+        inputs:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAgentSchemaField" }
+        outputs:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAgentSchemaField" }
 
     AgentActivityItem:
       type: object
@@ -1968,6 +2034,15 @@ components:
         agentifiable: { type: string, enum: [yes, partial, no] }
         rationale: { type: string }
         candidateAgentId: { type: ["string", "null"] }
+    AtelierAgentSchemaField:
+      type: object
+      required: [name, type, description]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [string, number, boolean, object, array, enum] }
+        description: { type: string }
+        required: { type: boolean }
+        enumValues: { type: array, items: { type: string } }
     AtelierCandidateAgent:
       type: object
       required: [id, name, purpose, inputs, outputs, tools, guardrails, humanCheckpoints, riskClass]
@@ -1975,8 +2050,8 @@ components:
         id: { type: string }
         name: { type: string }
         purpose: { type: string }
-        inputs: { type: array, items: { type: string } }
-        outputs: { type: array, items: { type: string } }
+        inputs: { type: array, items: { $ref: "#/components/schemas/AtelierAgentSchemaField" } }
+        outputs: { type: array, items: { $ref: "#/components/schemas/AtelierAgentSchemaField" } }
         tools: { type: array, items: { type: string } }
         guardrails: { type: array, items: { type: string } }
         humanCheckpoints: { type: array, items: { type: string } }

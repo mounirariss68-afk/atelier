@@ -387,6 +387,20 @@ export const atelierAgents = pgTable(
       .notNull()
       .default([])
       .$type<string[]>(),
+    inputs: jsonb("inputs").notNull().default([]).$type<Array<{
+      name: string;
+      type: "string" | "number" | "boolean" | "object" | "array" | "enum";
+      description: string;
+      required?: boolean;
+      enumValues?: string[];
+    }>>(),
+    outputs: jsonb("outputs").notNull().default([]).$type<Array<{
+      name: string;
+      type: "string" | "number" | "boolean" | "object" | "array" | "enum";
+      description: string;
+      required?: boolean;
+      enumValues?: string[];
+    }>>(),
     runsLast30d: integer("runs_last_30d").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

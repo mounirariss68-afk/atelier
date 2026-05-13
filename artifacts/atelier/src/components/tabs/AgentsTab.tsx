@@ -2,12 +2,17 @@ import * as React from "react";
 import {
   useAtelierListAgents,
   useAtelierListAgentDesigns,
+  useAtelierPromoteAgentDesign,
+  useAtelierAgentsUsageCounts,
+  useAtelierGetMe,
   getAtelierListAgentDesignsQueryKey,
+  getAtelierListAgentsQueryKey,
   type AtelierAgentDesign,
 } from "@workspace/api-client-react";
-import { Card, MonoChip } from "@/components/ui/primitives";
+import { useQueryClient } from "@tanstack/react-query";
+import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bot, Star, ShieldCheck } from "lucide-react";
+import { Bot, Star, ShieldCheck, Activity } from "lucide-react";
 
 const DELIVERY_STAGES = new Set(["Deliver", "Compound", "Mobilize", "Cross-cutting"]);
 
@@ -18,13 +23,37 @@ const RISK_TONE: Record<string, "green" | "amber" | "red"> = {
 };
 
 export function AgentsTab({ engId }: { engId: string }) {
+  const qc = useQueryClient();
   const { data: agents, isLoading, isError } = useAtelierListAgents();
+  const { data: me } = useAtelierGetMe();
   const { data: designs } = useAtelierListAgentDesigns(engId, {
     query: { enabled: !!engId, queryKey: getAtelierListAgentDesignsQueryKey(engId) },
   });
   const approvedDesigns = ((designs ?? []) as AtelierAgentDesign[]).filter(
     (d) => d.status === "approved",
   );
+  const promote = useAtelierPromoteAgentDesign({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getAtelierListAgentsQueryKey() });
+        qc.invalidateQueries({ queryKey: getAtelierListAgentDesignsQueryKey(engId) });
+      },
+    },
+  });
+  const isPartner = me?.role === "partner";
+  const { data: usageRows } = useAtelierAgentsUsageCounts();
+  const designAgents = (agents ?? []).filter((a) => a.group === "Engagement");
+  const usageByName = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of (usageRows ?? []) as Array<{ agentId: string; count: number }>) {
+      counts.set(row.agentId, row.count);
+    }
+    const byName = new Map<string, number>();
+    for (const a of designAgents) {
+      byName.set(a.name, (byName.get(a.name) ?? 0) + (counts.get(a.id) ?? 0));
+    }
+    return byName;
+  }, [usageRows, designAgents]);
 
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
   if (isError) return <div className="text-danger">Failed to load agents.</div>;
@@ -80,8 +109,19 @@ export function AgentsTab({ engId }: { engId: string }) {
                     <ShieldCheck className="w-3 h-3 text-gold" />
                     Human checkpoint: {(design.humanCheckpoints ?? []).join(" · ") || "—"}
                   </div>
-                  <div className="text-[10px] font-mono uppercase text-text-mute mt-2">
-                    promoted · engagement runtime
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="text-[10px] font-mono uppercase text-text-mute flex items-center gap-1">
+                      <Activity className="w-3 h-3" />
+                      runs: {usageByName.get(design.name ?? "") ?? 0}
+                    </div>
+                    <PillButton
+                      variant={isPartner ? "primary" : "ghost"}
+                      data-testid={`promote-${d.id}`}
+                      disabled={!isPartner || promote.isPending}
+                      onClick={() => promote.mutate({ engId, designId: d.id })}
+                    >
+                      {isPartner ? "Promote to Atelier" : "Partner-only"}
+                    </PillButton>
                   </div>
                 </Card>
               );
