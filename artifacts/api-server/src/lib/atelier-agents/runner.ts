@@ -3578,20 +3578,16 @@ export async function runEngagementCurator(
   });
   try {
     await progressRun(runId, 60, "Composing weekly digest");
-    // Task #243 — bilingual stub. Read the engagement's defaultLanguage
-    // (defaults to 'en'); when 'ar', emit an AR variant flag in the run
+    // Task #243 — bilingual variant. Read the engagement's defaultLanguage
+    // ('en' by default); when 'ar', emit an AR variant flag in the run
     // output envelope so downstream rendering can route to the Arabic
-    // weekly digest template + RTL chrome.
-    let languageVariant: "en" | "ar" = "en";
-    try {
-      const [engRow] = await db
-        .select({ lang: atelierEngagements.defaultLanguage })
-        .from(atelierEngagements)
-        .where(eq(atelierEngagements.id, args.engagementId));
-      if (engRow?.lang === "ar") languageVariant = "ar";
-    } catch {
-      // Defensive — pre-migration environments lack the column; default to 'en'.
-    }
+    // weekly digest template + RTL chrome. Errors propagate so callers see
+    // genuine DB failures instead of silently degrading to English.
+    const [engRow] = await db
+      .select({ lang: atelierEngagements.defaultLanguage })
+      .from(atelierEngagements)
+      .where(eq(atelierEngagements.id, args.engagementId));
+    const languageVariant: "en" | "ar" = engRow?.lang === "ar" ? "ar" : "en";
     const out: EngagementCuratorOutput = {
       weekOf: new Date().toISOString().slice(0, 10),
       highlights: args.highlights,

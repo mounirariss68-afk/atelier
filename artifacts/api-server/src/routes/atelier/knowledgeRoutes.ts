@@ -240,6 +240,15 @@ interface AdminSettings {
   piiPatterns: string[];
   residencyRegion: string;
   perUserDailyTokenBudget: number;
+  // Task #243 — Compliance posture. mfaRequired is the only persisted
+  // toggle today; the others reflect platform-level guarantees displayed
+  // for partner assurance.
+  mfaRequired: boolean;
+  encryptionAtRest: string;
+  encryptionInTransit: string;
+  immutableAuditEnabled: boolean;
+  immutableAuditRetentionYears: number;
+  ipAllowlistEnabled: boolean;
 }
 
 const DEFAULT_ADMIN: AdminSettings = {
@@ -252,6 +261,12 @@ const DEFAULT_ADMIN: AdminSettings = {
   ],
   residencyRegion: "GCC (KSA + UAE)",
   perUserDailyTokenBudget: 250000,
+  mfaRequired: true,
+  encryptionAtRest: "AES-256",
+  encryptionInTransit: "TLS 1.3",
+  immutableAuditEnabled: true,
+  immutableAuditRetentionYears: 7,
+  ipAllowlistEnabled: false,
 };
 
 const ADMIN_BY_ORG = new Map<string, AdminSettings>();
@@ -263,6 +278,36 @@ function getAdmin(orgId: string): AdminSettings {
     ADMIN_BY_ORG.set(orgId, s);
   }
   return s;
+}
+
+/**
+ * Task #243 — non-codegen compliance accessors. Exposed as `/admin/compliance`
+ * (raw JSON, not OpenAPI-zod) so the Admin Compliance Posture card can
+ * persist the MFA toggle without triggering a Zod regen across the monorepo.
+ * Read returns the full posture; PATCH accepts `{ mfaRequired?: boolean,
+ * ipAllowlistEnabled?: boolean }`. All other indicators are read-only.
+ */
+export function getCompliancePosture(orgId: string) {
+  const s = getAdmin(orgId);
+  return {
+    mfaRequired: s.mfaRequired,
+    encryptionAtRest: s.encryptionAtRest,
+    encryptionInTransit: s.encryptionInTransit,
+    immutableAuditEnabled: s.immutableAuditEnabled,
+    immutableAuditRetentionYears: s.immutableAuditRetentionYears,
+    ipAllowlistEnabled: s.ipAllowlistEnabled,
+    residencyRegion: s.residencyRegion,
+  };
+}
+
+export function patchCompliancePosture(
+  orgId: string,
+  patch: { mfaRequired?: unknown; ipAllowlistEnabled?: unknown },
+) {
+  const s = getAdmin(orgId);
+  if (typeof patch.mfaRequired === "boolean") s.mfaRequired = patch.mfaRequired;
+  if (typeof patch.ipAllowlistEnabled === "boolean") s.ipAllowlistEnabled = patch.ipAllowlistEnabled;
+  return getCompliancePosture(orgId);
 }
 
 // =============================================================
@@ -360,6 +405,52 @@ router.post("/admin/settings", async (req, res) => {
   if (parsed.data.perUserDailyTokenBudget !== undefined)
     cur.perUserDailyTokenBudget = parsed.data.perUserDailyTokenBudget;
   res.json(AtelierGetAdminSettingsResponse.parse(cur));
+});
+
+// Task #243 — Compliance posture (raw JSON, no OpenAPI/Zod regen).
+// Partner-gated. The Admin Compliance Posture card reads/writes via these
+// endpoints to persist the MFA + IP-allowlist toggles. Other indicators
+// are platform-level and read-only.
+router.get("/admin/compliance", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  res.json(getCompliancePosture(me.orgId));
+});
+
+router.patch("/admin/compliance", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const body = (req.body ?? {}) as { mfaRequired?: unknown; ipAllowlistEnabled?: unknown };
+  res.json(patchCompliancePosture(me.orgId, body));
+});
+
+// Task #243 — Founder TODOs (read-only static list, raw JSON).
+// Surfaces PRD §10 founder-only follow-ups so partners can see what is
+// outstanding pre-GA. Partner-gated to match the rest of /admin.
+router.get("/admin/founder-todos", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  res.json({
+    items: [
+      "Sign DPA + sub-processor list with model providers",
+      "Confirm primary data-residency region with each anchor client",
+      "Activate per-engagement RLS enforcement in production cluster",
+      "Wire SOC 2 Type II audit evidence collector to immutable-audit stream",
+      "Validate Arabic-first deliverable variants with Tasama + Aldrees stakeholders",
+    ],
+  });
 });
 
 // --- Recent runs by agent -------------------------------------------

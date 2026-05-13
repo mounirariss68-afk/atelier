@@ -1536,6 +1536,10 @@ const ENGAGEMENTS = [
     plannedEndDate: isoDate(DAYS_FROM_NOW(120)),
     raidStatus: "amber" as const,
     deliverablesDueThisWeek: 2,
+    // Task #243 — Tasama engagement is configured Arabic-first; the Engagement
+    // Curator emits its weekly digest with the AR variant flag and an Arabic
+    // message, exercising the bilingual code path end-to-end in the seed.
+    defaultLanguage: "ar" as const,
   },
   {
     id: "eng_dge_effortless_v1",
@@ -2463,6 +2467,11 @@ async function main() {
       plannedEndDate: e.plannedEndDate,
       raidStatus: e.raidStatus,
       deliverablesDueThisWeek: e.deliverablesDueThisWeek,
+      // Task #243 — pass through defaultLanguage when set on a seed entry,
+      // otherwise the column default ('en') applies.
+      ...("defaultLanguage" in e && e.defaultLanguage
+        ? { defaultLanguage: e.defaultLanguage }
+        : {}),
     })),
   );
 

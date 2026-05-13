@@ -671,6 +671,23 @@ router.get("/deliverables/:delId", async (req, res) => {
     return;
   }
   if (!(await ensureEngAccess(res, me, row.engagementId))) return;
+  // Task #243 — cross-engagement read audit. Records when a non-owning
+  // persona reads a deliverable that belongs to an engagement they do
+  // not lead/own. No-op for direct owners.
+  const eng = await loadEng(row.engagementId);
+  if (eng) {
+    const isOwner = eng.engagementLeadId === me.id || eng.partnerOwnerId === me.id;
+    if (!isOwner) {
+      await audit({
+        entityType: "engagement",
+        entityId: eng.id,
+        actor: me,
+        action: "engagement.cross_read",
+        payload: { engagementId: eng.id, viewerRole: me.role, via: "deliverable", deliverableId: row.id },
+        summary: `${me.name} viewed deliverable ${row.id} (cross-engagement read)`,
+      });
+    }
+  }
   res.json(await buildDeliverableDetail(row));
 });
 

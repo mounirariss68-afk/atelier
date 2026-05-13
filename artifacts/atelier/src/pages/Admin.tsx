@@ -34,9 +34,45 @@ export default function Admin() {
 
   const [piiDraft, setPiiDraft] = React.useState("");
   const [budgetDraft, setBudgetDraft] = React.useState("");
-  // Task #243 — local-only firm-intent toggle for MFA. Persisted enforcement
-  // happens at the IdP layer; this is a UI signal for partner posture.
-  const [mfaRequired, setMfaRequired] = React.useState<boolean>(true);
+  // Task #243 — Compliance posture is persisted server-side at
+  // /api/atelier/admin/compliance (raw JSON, no codegen). Founder TODOs
+  // are also fetched from the server so the list is sourced from PRD §10
+  // rather than hardcoded in the client.
+  type Posture = {
+    mfaRequired: boolean;
+    encryptionAtRest: string;
+    encryptionInTransit: string;
+    immutableAuditEnabled: boolean;
+    immutableAuditRetentionYears: number;
+    ipAllowlistEnabled: boolean;
+    residencyRegion: string;
+  };
+  const [posture, setPosture] = React.useState<Posture | null>(null);
+  const [todos, setTodos] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    if (me?.role !== "partner") return;
+    void fetch("/api/atelier/admin/compliance", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setPosture(j));
+    void fetch("/api/atelier/admin/founder-todos", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setTodos(j.items ?? []));
+  }, [me?.role]);
+  const patchPosture = (patch: Partial<Posture>) => {
+    void fetch("/api/atelier/admin/compliance", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j) {
+          setPosture(j);
+          toast({ title: "Compliance updated" });
+        }
+      });
+  };
   React.useEffect(() => {
     if (settings) {
       setPiiDraft(settings.piiPatterns.join("\n"));
@@ -195,81 +231,87 @@ export default function Admin() {
               </p>
             </Card>
 
-            {/* Task #243 — Compliance posture (read-only indicators + MFA toggle).
-                Surfaces PRD §10 NFRs that are infrastructural rather than per-feature.
-                MFA toggle is local-state in the MVP; encryption + immutable-audit are
-                platform-level guarantees displayed for assurance. */}
-            <Card className="p-6 space-y-4 border-border-soft">
-              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
-                <Lock className="w-4 h-4" /> Compliance Posture
-              </h3>
-              <div className="flex justify-between items-center">
-                <div>
-                  <div className="text-text font-semibold">Require MFA for Partners + Leads</div>
-                  <div className="text-xs text-text-mute">Enforced at IdP; this toggle records firm intent.</div>
-                </div>
-                <Switch
-                  checked={mfaRequired}
-                  onCheckedChange={setMfaRequired}
-                  data-testid="switch-mfa-required"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-border-soft">
-                <div className="flex items-start gap-2">
-                  <KeyRound className="w-4 h-4 text-gold mt-0.5" />
+            {/* Task #243 — Compliance posture, server-persisted via /admin/compliance.
+                MFA + IP allowlist toggles round-trip to the API; encryption +
+                immutable-audit indicators are platform-level guarantees rendered
+                from the server's compliance posture record. */}
+            {posture && (
+              <Card className="p-6 space-y-4 border-border-soft" data-testid="card-compliance">
+                <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
+                  <Lock className="w-4 h-4" /> Compliance Posture
+                </h3>
+                <div className="flex justify-between items-center">
                   <div>
-                    <div className="text-text text-sm font-semibold">Encryption</div>
-                    <div className="text-xs text-text-mute">AES-256 at rest · TLS 1.3 in transit</div>
+                    <div className="text-text font-semibold">Require MFA for Partners + Leads</div>
+                    <div className="text-xs text-text-mute">Persisted server-side; enforced at IdP.</div>
+                  </div>
+                  <Switch
+                    checked={posture.mfaRequired}
+                    onCheckedChange={(v) => patchPosture({ mfaRequired: v })}
+                    data-testid="switch-mfa-required"
+                  />
+                </div>
+                <div className="flex justify-between items-center pt-3 border-t border-border-soft">
+                  <div>
+                    <div className="text-text font-semibold">IP Allowlist</div>
+                    <div className="text-xs text-text-mute">Restrict access to partner-approved network ranges.</div>
+                  </div>
+                  <Switch
+                    checked={posture.ipAllowlistEnabled}
+                    onCheckedChange={(v) => patchPosture({ ipAllowlistEnabled: v })}
+                    data-testid="switch-ip-allowlist"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-border-soft">
+                  <div className="flex items-start gap-2">
+                    <KeyRound className="w-4 h-4 text-gold mt-0.5" />
+                    <div>
+                      <div className="text-text text-sm font-semibold">Encryption</div>
+                      <div className="text-xs text-text-mute" data-testid="text-encryption">
+                        {posture.encryptionAtRest} at rest · {posture.encryptionInTransit} in transit
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileCheck2 className="w-4 h-4 text-gold mt-0.5" />
+                    <div>
+                      <div className="text-text text-sm font-semibold">Immutable Audit</div>
+                      <div className="text-xs text-text-mute" data-testid="text-audit-retention">
+                        {posture.immutableAuditEnabled ? "Append-only" : "Disabled"} ·{" "}
+                        {posture.immutableAuditRetentionYears}y retention
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <FileCheck2 className="w-4 h-4 text-gold mt-0.5" />
-                  <div>
-                    <div className="text-text text-sm font-semibold">Immutable Audit</div>
-                    <div className="text-xs text-text-mute">Append-only · 7y retention</div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Globe className="w-4 h-4 text-gold mt-0.5" />
-                  <div>
-                    <div className="text-text text-sm font-semibold">IP Allowlist</div>
-                    <div className="text-xs text-text-mute">Configurable per partner request</div>
-                  </div>
-                </div>
-              </div>
-            </Card>
+              </Card>
+            )}
 
-            {/* Task #243 — Founder TODOs (PRD §10).
-                Informational checklist surfacing the 5 founder-only follow-ups
-                that gate full GA. Not actionable in the MVP — clicking does
-                not persist; we render so partners can see what is outstanding. */}
-            <Card className="p-6 space-y-3">
-              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
-                <ListTodo className="w-4 h-4" /> Founder TODOs
-              </h3>
-              <p className="text-xs text-text-mute">
-                Pre-GA founder-only items. Tracked here for partner visibility; resolution happens in the
-                operator console.
-              </p>
-              <ul className="space-y-2 pt-2 border-t border-border-soft">
-                {[
-                  "Sign DPA + sub-processor list with model providers",
-                  "Confirm primary data-residency region with each anchor client",
-                  "Activate per-engagement RLS enforcement in production cluster",
-                  "Wire SOC 2 Type II audit evidence collector to immutable-audit stream",
-                  "Validate Arabic-first deliverable variants with Tasama + Aldrees stakeholders",
-                ].map((item, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-3 text-sm text-text"
-                    data-testid={`founder-todo-${i}`}
-                  >
-                    <span className="font-mono text-xs text-text-mute mt-0.5">{String(i + 1).padStart(2, "0")}</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
+            {/* Task #243 — Founder TODOs (PRD §10), sourced from the server. */}
+            {todos.length > 0 && (
+              <Card className="p-6 space-y-3" data-testid="card-founder-todos">
+                <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
+                  <ListTodo className="w-4 h-4" /> Founder TODOs
+                </h3>
+                <p className="text-xs text-text-mute">
+                  Pre-GA founder-only items. Tracked here for partner visibility; resolution happens in
+                  the operator console.
+                </p>
+                <ul className="space-y-2 pt-2 border-t border-border-soft">
+                  {todos.map((item, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 text-sm text-text"
+                      data-testid={`founder-todo-${i}`}
+                    >
+                      <span className="font-mono text-xs text-text-mute mt-0.5">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
           </>
         )}
       </div>
