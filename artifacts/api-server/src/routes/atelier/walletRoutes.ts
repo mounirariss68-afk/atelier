@@ -229,6 +229,35 @@ router.get("/wallet/expenses", async (req, res) => {
   res.json({ expenses: rows.map((r) => expenseToWire(r, me)) });
 });
 
+// Engagement-lead authorization helper for engagement-scoped wallet
+// endpoints. Returns true when the caller is partner/ops OR is the
+// engagement_lead of the specific engagement. Other roles are denied.
+async function ensureEngagementAccess(
+  req: Request,
+  res: Response,
+  me: typeof atelierUsers.$inferSelect,
+  engagementId: string,
+): Promise<boolean> {
+  if (isPartnerOrOps(me)) return true;
+  if (me.role !== "engagement_lead") {
+    res.status(403).json({ error: "forbidden" });
+    return false;
+  }
+  const [eng] = await db
+    .select()
+    .from(atelierEngagements)
+    .where(and(eq(atelierEngagements.id, engagementId), isNull(atelierEngagements.deletedAt)));
+  if (!eng) {
+    res.status(404).json({ error: "engagement-not-found" });
+    return false;
+  }
+  if (eng.engagementLeadId !== me.id) {
+    res.status(403).json({ error: "not-your-engagement" });
+    return false;
+  }
+  return true;
+}
+
 // Evidence inspection endpoints used by the approvals UI to let
 // partners click through from a contractor / partner-firm proposal to
 // the underlying timesheet entry / firm-hours row that justifies it.
@@ -1174,12 +1203,8 @@ router.post("/wallet/retention/run", async (req, res) => {
 router.get("/wallet/client-billable/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const isLead = me.role === "engagement_lead" || isPartnerOrOps(me);
-  if (!isLead) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
   const eid = req.params.engagementId;
+  if (!(await ensureEngagementAccess(req, res, me, eid))) return;
   // Third-gate queue: only expenses already approved by the lead are
   // candidates for client invoicing. Drafts / submitted / rejected rows
   // are filtered out so the page shows the *invoiceable* set.
@@ -1528,11 +1553,8 @@ router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
 router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!(me.role === "engagement_lead" || isPartnerOrOps(me))) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
   const eid = req.params.engagementId;
+  if (!(await ensureEngagementAccess(req, res, me, eid))) return;
   const [current] = await db
     .select()
     .from(atelierInvoiceLineDrafts)
@@ -1591,9 +1613,27 @@ router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
 router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!(me.role === "engagement_lead" || isPartnerOrOps(me))) {
-    res.status(403).json({ error: "forbidden" });
+  // Resolve the expense's engagement first, then enforce the same
+  // engagement-ownership check used by approve/reject so a lead can't
+  // sentinel an expense on someone else's engagement.
+  const [ex] = await db
+    .select()
+    .from(atelierExpenses)
+    .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
+  if (!ex) {
+    res.status(404).json({ error: "expense-not-found" });
     return;
+  }
+  if (!isPartnerOrOps(me)) {
+    if (me.role !== "engagement_lead") {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    if (!ex.engagementId) {
+      res.status(403).json({ error: "lead-cannot-sentinel-firm-overhead" });
+      return;
+    }
+    if (!(await ensureEngagementAccess(req, res, me, ex.engagementId))) return;
   }
   const expenseChecks = await expensePublishSentinelChecks({ expenseId: req.params.id });
   const sentinel = await runPublishSentinel({
@@ -1619,12 +1659,10 @@ router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
 router.post("/wallet/invoice-drafts/:engagementId/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!(me.role === "engagement_lead" || isPartnerOrOps(me))) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+  const eid = req.params.engagementId;
+  if (!(await ensureEngagementAccess(req, res, me, eid))) return;
   const out = await runInvoiceComposer({
-    engagementId: req.params.engagementId,
+    engagementId: eid,
     composedByUserId: me.id,
   });
   await audit({

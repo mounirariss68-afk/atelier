@@ -362,10 +362,13 @@ export async function expensePublishSentinelChecks(args: {
       detail: `Engagement has no expense pass-through clause; markup ${mp.toFixed(1)}% cannot be billed.`,
     });
   } else if (mp < 0 || mp > cap) {
+    // Soft mismatch: surface AMBER so the lead can confirm/override
+    // before the third gate. Hard disallow (no clause / blocked
+    // category) is RED elsewhere.
     checks.push({
       name: "markup_band",
-      status: "fail",
-      detail: `Markup ${mp.toFixed(1)}% exceeds contract cap of ${cap.toFixed(0)}% on this engagement.`,
+      status: "warn",
+      detail: `Markup ${mp.toFixed(1)}% is outside the contract cap of ${cap.toFixed(0)}% — verify with engagement contract before billing.`,
     });
   } else {
     checks.push({
