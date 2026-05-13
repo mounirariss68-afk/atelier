@@ -62,7 +62,7 @@ export default function Crm() {
         <SectionHead
           eyebrow={
             <span className="inline-flex items-center gap-2">
-              <Users className="w-3.5 h-3.5" /> CRM · Accounts
+              <Users className="w-3.5 h-3.5" /> Accounts
             </span>
           }
           headline="Accounts"

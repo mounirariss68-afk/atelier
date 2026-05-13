@@ -115,7 +115,7 @@ export default function Account() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/crm">Back to CRM</BackLink>
+        <BackLink href="/crm">Back to Accounts</BackLink>
 
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <SectionHead

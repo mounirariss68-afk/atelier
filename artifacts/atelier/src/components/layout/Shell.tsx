@@ -50,7 +50,7 @@ export function TopNav() {
   const isPartner = me?.role === "partner";
   const navItems = [
     { href: "/", label: "Home" },
-    { href: "/crm", label: "CRM" },
+    { href: "/crm", label: "Accounts" },
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
     ...(canSeeRoster ? [{ href: "/roster/people", label: "Roster" }] : []),
