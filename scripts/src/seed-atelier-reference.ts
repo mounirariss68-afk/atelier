@@ -47,7 +47,17 @@ export async function seedAtelierReference(): Promise<{
   );
 
   // ---- COUNTRIES ----
-  const allAlpha2 = Object.keys(countries.getAlpha2Codes());
+  // i18n-iso-countries includes "XK" (Kosovo, user-assigned, not part of
+  // ISO 3166-1). Strip it so we ship exactly the 249 official ISO alpha-2
+  // entries the spec calls for.
+  const allAlpha2 = Object.keys(countries.getAlpha2Codes()).filter(
+    (c) => c !== "XK",
+  );
+  if (allAlpha2.length !== 249) {
+    throw new Error(
+      `[seed-atelier-reference] expected 249 ISO 3166-1 alpha-2 codes, got ${allAlpha2.length}`,
+    );
+  }
   const countryRows = allAlpha2.map((iso2) => {
     const extras = COUNTRY_EXTRAS[iso2] ?? {};
     const region = extras.region ?? REGION_BY_ISO[iso2] ?? "Asia";

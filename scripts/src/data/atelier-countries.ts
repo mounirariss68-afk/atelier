@@ -65,7 +65,7 @@ export const REGION_BY_ISO: Record<string, RegionCode> = {
   BG: "Europe", HR: "Europe", CZ: "Europe", DK: "Europe", EE: "Europe", FO: "Europe",
   FI: "Europe", FR: "Europe", DE: "Europe", GI: "Europe", GR: "Europe", GG: "Europe",
   VA: "Europe", HU: "Europe", IS: "Europe", IE: "Europe", IM: "Europe", IT: "Europe",
-  JE: "Europe", XK: "Europe", LV: "Europe", LI: "Europe", LT: "Europe", LU: "Europe",
+  JE: "Europe", LV: "Europe", LI: "Europe", LT: "Europe", LU: "Europe",
   MT: "Europe", MD: "Europe", MC: "Europe", ME: "Europe", NL: "Europe", MK: "Europe",
   NO: "Europe", PL: "Europe", PT: "Europe", RO: "Europe", RU: "Europe", SM: "Europe",
   RS: "Europe", SK: "Europe", SI: "Europe", ES: "Europe", SJ: "Europe", SE: "Europe",
