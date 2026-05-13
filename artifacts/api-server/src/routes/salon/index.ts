@@ -7,7 +7,7 @@
  *  - writes a row to atelier_salon_audit_events for every read or write
  *    so AICo internals see the client's behavior in their own audit feed.
  */
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 import {
   db,
@@ -199,21 +199,29 @@ router.get("/me", async (req, res, next) => {
   }
 });
 
-router.get("/personas", async (_req, res, next) => {
+router.get("/personas", async (req, res, next) => {
   try {
+    // Redact contact metadata for the unauthenticated sign-in picker; only
+    // expose id/name/initials. Email/title are returned only to a caller who
+    // is already authenticated as a salon persona (i.e. settings/profile).
+    const isAuthed = !!req.salonPersona;
     const rows = await db
       .select()
       .from(atelierSalonUsers)
       .where(isNull(atelierSalonUsers.deletedAt))
       .orderBy(atelierSalonUsers.name);
     res.json({
-      personas: rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        email: r.email,
-        initials: r.initials,
-        title: r.title,
-      })),
+      personas: rows.map((r) =>
+        isAuthed
+          ? {
+              id: r.id,
+              name: r.name,
+              email: r.email,
+              initials: r.initials,
+              title: r.title,
+            }
+          : { id: r.id, name: r.name, initials: r.initials },
+      ),
     });
   } catch (err) {
     next(err);
@@ -696,6 +704,22 @@ router.post("/deliverables/:id/decision", async (req, res, next) => {
     next(err);
   }
 });
+
+// Per-action aliases (PRD contract surface). Each forwards to the unified
+// /decision handler by injecting the appropriate `kind` discriminator and
+// re-emitting the request through the same router so middleware + auth still
+// apply. Restores `/approve | /request-change | /comment` without duplicating
+// the validation/audit logic.
+function decisionAlias(kind: "approve" | "request_change" | "comment") {
+  return (req: Request, res: Response, next: NextFunction) => {
+    req.body = { ...(req.body ?? {}), kind };
+    req.url = `/deliverables/${req.params.id}/decision`;
+    (router as unknown as { handle: (r: Request, s: Response, n: NextFunction) => void }).handle(req, res, next);
+  };
+}
+router.post("/deliverables/:id/approve", decisionAlias("approve"));
+router.post("/deliverables/:id/request-change", decisionAlias("request_change"));
+router.post("/deliverables/:id/comment", decisionAlias("comment"));
 
 router.post("/deliverables/:id/download-attempt", async (req, res, next) => {
   try {
