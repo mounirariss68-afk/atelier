@@ -3800,6 +3800,8 @@ import {
   atelierMeetings,
   atelierDeliverableVersions,
   atelierDeliverables,
+  atelierSalonDecisions,
+  atelierEngagements,
   atelierTimesheetEntries,
   atelierTimesheetSignals,
   atelierTimesheetWeeks,
@@ -3899,20 +3901,84 @@ export async function runTimeSteward(args: {
       : [];
     const editsInWeek = deliverableEdits.filter((d) => d.createdAt < weekEnd);
 
-    // 4) Salon decisions are NOT used as a steward signal: salon decisions
-    //    are recorded on behalf of client (Salon) users, not AICo employees,
-    //    so attributing them to a specific person here would inflate
-    //    unrelated colleagues' drafted hours. A future task can correlate
-    //    AICo participation in salon publishes via meeting attendees.
+    // 4) Salon decisions — client-side decisions on engagements where THIS
+    //    employee is the engagement lead or partner owner (proxy for "you
+    //    were on the call / you authored the deliverable being decided").
+    //    Filtering by ownership avoids the prior over-attribution where
+    //    every employee got credited for every salon decision firm-wide.
+    const ownedEngs = userId
+      ? await db
+          .select({ id: atelierEngagements.id })
+          .from(atelierEngagements)
+          .where(
+            and(
+              isNull(atelierEngagements.deletedAt),
+              sql`(${atelierEngagements.engagementLeadId} = ${userId} OR ${atelierEngagements.partnerOwnerId} = ${userId})`,
+            ),
+          )
+      : [];
+    const ownedEngIds = new Set(ownedEngs.map((e) => e.id));
     const salonHits: Array<{ id: string; engagementId: string; kind: string; headline: string; decidedAt: Date }> = [];
+    if (ownedEngIds.size) {
+      const salonRows = await db
+        .select()
+        .from(atelierSalonDecisions)
+        .where(
+          and(
+            gte(atelierSalonDecisions.decidedAt, weekStart),
+            isNull(atelierSalonDecisions.deletedAt),
+          ),
+        );
+      for (const s of salonRows) {
+        if (s.decidedAt >= weekEnd) continue;
+        if (!ownedEngIds.has(s.engagementId)) continue;
+        salonHits.push({ id: s.id, engagementId: s.engagementId, kind: s.kind, headline: s.headline, decidedAt: s.decidedAt });
+      }
+    }
 
-    // ---- Idempotency: a re-run replaces both prior signals and prior
-    //      agent-drafted entries for THIS week, so the steward never
-    //      stacks duplicate evidence row by row. Human entries are left
-    //      alone (their hours are still included in totals below).
-    await db
-      .delete(atelierTimesheetSignals)
+    // 5) Agent runs triggered BY this user inside the window — these are
+    //    work the employee performed via an agent (Maven, pricing, etc.).
+    const agentRunHits = userId
+      ? await db
+          .select({
+            id: atelierAgentRuns.id,
+            agentId: atelierAgentRuns.agentId,
+            targetType: atelierAgentRuns.targetType,
+            targetId: atelierAgentRuns.targetId,
+            targetLabel: atelierAgentRuns.targetLabel,
+            createdAt: atelierAgentRuns.createdAt,
+            durationMs: atelierAgentRuns.durationMs,
+          })
+          .from(atelierAgentRuns)
+          .where(
+            and(
+              eq(atelierAgentRuns.triggeredByUserId, userId),
+              gte(atelierAgentRuns.createdAt, weekStart),
+              isNull(atelierAgentRuns.deletedAt),
+            ),
+          )
+      : [];
+    const agentRunsInWeek = agentRunHits.filter((r) => r.createdAt < weekEnd && r.agentId !== "ag_time_steward");
+
+    // ---- Signal immutability: signals are append-only audit evidence and
+    //      MUST survive across re-runs (architect: "immutable for audit").
+    //      Dedupe by natural key (sourceRefType + sourceRefId + signalType +
+    //      personId + weekId) — anything we've already recorded for this
+    //      week is skipped, so reruns are idempotent without deleting
+    //      historical evidence rows.
+    const existingSignals = await db
+      .select({
+        signalType: atelierTimesheetSignals.signalType,
+        sourceRefType: atelierTimesheetSignals.sourceRefType,
+        sourceRefId: atelierTimesheetSignals.sourceRefId,
+      })
+      .from(atelierTimesheetSignals)
       .where(eq(atelierTimesheetSignals.weekId, args.weekId));
+    const existingSigKey = new Set(
+      existingSignals.map((s) => `${s.signalType}__${s.sourceRefType}__${s.sourceRefId}`),
+    );
+    const sigNatKey = (s: typeof atelierTimesheetSignals.$inferInsert) =>
+      `${s.signalType}__${s.sourceRefType}__${s.sourceRefId}`;
 
     // ---- Materialize signals (immutable within a run) ----
     const signalRows: Array<typeof atelierTimesheetSignals.$inferInsert> = [];
@@ -3988,25 +4054,56 @@ export async function runTimeSteward(args: {
         runId,
       });
     }
-    if (signalRows.length) {
-      await db.insert(atelierTimesheetSignals).values(signalRows);
+    for (const r of agentRunsInWeek) {
+      const dateIso = r.createdAt.toISOString().slice(0, 10);
+      // Approximate hours from observed duration, floored at 0.25h, capped 2h.
+      const durHours = r.durationMs ? r.durationMs / 3_600_000 : 0;
+      const hours = Math.min(2, Math.max(0.25, Math.round(durHours * 4) / 4));
+      const engHint = r.targetType === "engagement" ? r.targetId : null;
+      signalRows.push({
+        id: sigId(n++),
+        weekId: args.weekId,
+        personId: args.personId,
+        workDate: dateIso,
+        signalType: "agent_run",
+        sourceRefType: "agent_run",
+        sourceRefId: r.id,
+        engagementHint: engHint,
+        evidenceSummary: `${r.agentId} run: ${r.targetLabel ?? r.targetType ?? "task"}`,
+        weightHours: hours,
+        runId,
+      });
     }
+    // Drop any signals we've already persisted in a prior run (signal
+    // immutability + idempotent rerun) before inserting.
+    const newSignalRows = signalRows.filter((s) => !existingSigKey.has(sigNatKey(s)));
+    if (newSignalRows.length) {
+      await db.insert(atelierTimesheetSignals).values(newSignalRows);
+    }
+    // Re-aggregation below operates on the FULL signal set (existing +
+    // newly inserted), not just newSignalRows, so totals stay correct.
 
-    // ---- Aggregate signals into draft entries (one per workDate × engagement) ----
+    // ---- Aggregate signals into draft entries (one per workDate × engagement)
+    //      Read the FULL persisted signal set for the week so reruns
+    //      reflect any historical evidence too (signal immutability).
     type Bucket = { workDate: string; engagementId: string | null; hours: number; signalIds: string[]; narratives: string[] };
     const buckets = new Map<string, Bucket>();
-    for (const s of signalRows) {
+    const allWeekSignals = await db
+      .select()
+      .from(atelierTimesheetSignals)
+      .where(eq(atelierTimesheetSignals.weekId, args.weekId));
+    for (const s of allWeekSignals) {
       const key = `${s.workDate}__${s.engagementHint ?? "none"}`;
       const b = buckets.get(key) ?? {
-        workDate: s.workDate as string,
-        engagementId: (s.engagementHint as string | null) ?? null,
+        workDate: s.workDate,
+        engagementId: s.engagementHint ?? null,
         hours: 0,
         signalIds: [],
         narratives: [],
       };
       b.hours += Number(s.weightHours);
-      b.signalIds.push(s.id as string);
-      b.narratives.push(s.evidenceSummary as string);
+      b.signalIds.push(s.id);
+      b.narratives.push(s.evidenceSummary);
       buckets.set(key, b);
     }
 

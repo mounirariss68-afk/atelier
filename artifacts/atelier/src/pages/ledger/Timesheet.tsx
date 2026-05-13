@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useParams } from "wouter";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
 interface Entry {
@@ -48,6 +49,11 @@ interface WeekResp {
   signals: Signal[];
 }
 
+interface EngagementOption {
+  id: string;
+  name: string;
+}
+
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function addDays(iso: string, n: number): string {
@@ -66,17 +72,29 @@ function statusTone(s: string): "default" | "amber" | "green" | "gold" | "red" {
 }
 
 export default function Timesheet() {
+  // Past-week routes pass /:personId/:weekIso. When absent we load the
+  // active persona's current week via /ledger/timesheets/current.
+  const params = useParams<{ personId?: string; weekIso?: string }>();
+  const personId = params.personId;
+  const weekIso = params.weekIso;
+  const fetchUrl = personId && weekIso
+    ? `/api/atelier/ledger/timesheets/${personId}/${weekIso}`
+    : `/api/atelier/ledger/timesheets/current`;
+
   const [data, setData] = React.useState<WeekResp | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [drawerSignalIds, setDrawerSignalIds] = React.useState<string[] | null>(null);
   const [submitFlags, setSubmitFlags] = React.useState<string[] | null>(null);
+  const [busyEntryId, setBusyEntryId] = React.useState<string | null>(null);
+  const [addOpen, setAddOpen] = React.useState<string | null>(null); // workDate
+  const [engagements, setEngagements] = React.useState<EngagementOption[]>([]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/atelier/ledger/timesheets/current", { credentials: "include" });
+      const r = await fetch(fetchUrl, { credentials: "include" });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j.reason || j.error || `HTTP ${r.status}`);
@@ -87,11 +105,19 @@ export default function Timesheet() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchUrl]);
 
+  React.useEffect(() => { load(); }, [load]);
+
+  // Load engagements for the manual-entry dropdown (small list, OK to fetch once).
   React.useEffect(() => {
-    load();
-  }, [load]);
+    fetch("/api/atelier/engagements", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { engagements: [] }))
+      .then((j: { engagements?: Array<{ id: string; name: string }> }) =>
+        setEngagements((j.engagements ?? []).map((e) => ({ id: e.id, name: e.name }))),
+      )
+      .catch(() => setEngagements([]));
+  }, []);
 
   const runSteward = async () => {
     if (!data) return;
@@ -122,6 +148,59 @@ export default function Timesheet() {
       return;
     }
     setSubmitFlags(null);
+    await load();
+  };
+
+  const confirmEntry = async (entry: Entry) => {
+    if (!data) return;
+    setBusyEntryId(entry.id);
+    try {
+      const r = await fetch(
+        `/api/atelier/ledger/timesheets/${data.week.id}/entries/${entry.id}/confirm`,
+        { method: "POST", credentials: "include" },
+      );
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        setError(j.reason || j.error || `HTTP ${r.status}`);
+        return;
+      }
+      await load();
+    } finally {
+      setBusyEntryId(null);
+    }
+  };
+
+  const deleteEntry = async (entry: Entry) => {
+    setBusyEntryId(entry.id);
+    try {
+      const r = await fetch(`/api/atelier/ledger/timesheets/entries/${entry.id}`, {
+        method: "DELETE", credentials: "include",
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        setError(j.reason || j.error || `HTTP ${r.status}`);
+        return;
+      }
+      await load();
+    } finally {
+      setBusyEntryId(null);
+    }
+  };
+
+  const addManualEntry = async (workDate: string, hours: number, engagementId: string | null, narrative: string) => {
+    if (!data || !hours || hours <= 0) return;
+    const r = await fetch(`/api/atelier/ledger/timesheets/${data.week.id}/entries`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workDate, hours, engagementId, narrative, billable: !!engagementId }),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      setError(j.reason || j.error || `HTTP ${r.status}`);
+      return;
+    }
+    setAddOpen(null);
     await load();
   };
 
@@ -194,32 +273,87 @@ export default function Timesheet() {
             const dayEntries = entriesByDate.get(d) ?? [];
             const dayHours = dayEntries.reduce((s, e) => s + Number(e.hours || 0), 0);
             return (
-              <Card key={d} className="min-h-[180px] p-3">
+              <Card key={d} className="min-h-[200px] p-3">
                 <div className="flex items-baseline justify-between">
                   <div className="text-xs font-mono uppercase text-text-mute">{DAY_LABELS[i]}</div>
                   <div className="text-xs text-text-mute">{d.slice(5)}</div>
                 </div>
                 <div className="mt-1 text-lg font-semibold">{dayHours.toFixed(1)}h</div>
                 <div className="mt-2 space-y-2">
-                  {dayEntries.map((e) => (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => e.signalIds.length && setDrawerSignalIds(e.signalIds)}
-                      className="w-full rounded border border-border bg-surface/40 p-2 text-left text-xs hover:border-gold/60 min-h-[44px]"
-                    >
-                      <div className="flex items-center gap-1">
-                        <MonoChip tone={e.billable ? "green" : "default"}>{Number(e.hours).toFixed(1)}h</MonoChip>
-                        {e.source === "agent_drafted" && <MonoChip tone="gold">AI</MonoChip>}
+                  {dayEntries.map((e) => {
+                    const isAgentDraft = e.source === "agent_drafted" && e.status === "draft";
+                    return (
+                      <div
+                        key={e.id}
+                        className="rounded border border-border bg-surface/40 p-2 text-xs"
+                      >
+                        <div className="flex items-center gap-1">
+                          <MonoChip tone={e.billable ? "green" : "default"}>{Number(e.hours).toFixed(1)}h</MonoChip>
+                          {e.source === "agent_drafted" && (
+                            <MonoChip tone={e.status === "confirmed" ? "green" : "gold"}>
+                              {e.status === "confirmed" ? "AI ✓" : "AI"}
+                            </MonoChip>
+                          )}
+                        </div>
+                        <div className="mt-1 truncate text-text-mute">{e.engagementId ?? e.activityCode ?? "—"}</div>
+                        {e.narrative && <div className="mt-1 line-clamp-2 text-text">{e.narrative}</div>}
+                        {editable && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {isAgentDraft && (
+                              <button
+                                type="button"
+                                onClick={() => confirmEntry(e)}
+                                disabled={busyEntryId === e.id}
+                                className="rounded bg-gold/20 px-2 py-1 text-[11px] text-gold hover:bg-gold/30 min-h-[44px]"
+                                aria-label="Confirm this AI-drafted entry"
+                              >
+                                Confirm
+                              </button>
+                            )}
+                            {e.signalIds.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setDrawerSignalIds(e.signalIds)}
+                                className="rounded border border-border px-2 py-1 text-[11px] text-text-mute hover:border-gold/60 min-h-[44px]"
+                              >
+                                Why?
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => deleteEntry(e)}
+                              disabled={busyEntryId === e.id}
+                              className="ml-auto rounded border border-red-500/40 px-2 py-1 text-[11px] text-red-300 hover:bg-red-500/10 min-h-[44px]"
+                              aria-label="Delete entry"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <div className="mt-1 truncate text-text-mute">{e.engagementId ?? e.activityCode ?? "—"}</div>
-                      {e.narrative && <div className="mt-1 line-clamp-2 text-text">{e.narrative}</div>}
-                    </button>
-                  ))}
+                    );
+                  })}
                   {dayEntries.length === 0 && (
                     <div className="text-xs italic text-text-mute">No entries.</div>
                   )}
                 </div>
+                {editable && (
+                  addOpen === d ? (
+                    <ManualEntryForm
+                      engagements={engagements}
+                      onCancel={() => setAddOpen(null)}
+                      onSubmit={(hours, engId, narrative) => addManualEntry(d, hours, engId, narrative)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAddOpen(d)}
+                      className="mt-2 w-full rounded border border-dashed border-border py-1 text-xs text-text-mute hover:border-gold/60 min-h-[44px]"
+                    >
+                      + Add hours
+                    </button>
+                  )
+                )}
               </Card>
             );
           })}
@@ -253,6 +387,60 @@ export default function Timesheet() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ManualEntryForm({
+  engagements,
+  onCancel,
+  onSubmit,
+}: {
+  engagements: EngagementOption[];
+  onCancel: () => void;
+  onSubmit: (hours: number, engagementId: string | null, narrative: string) => void;
+}) {
+  const [hours, setHours] = React.useState("1.0");
+  const [engId, setEngId] = React.useState<string>("");
+  const [narrative, setNarrative] = React.useState("");
+  return (
+    <div className="mt-2 space-y-2 rounded border border-gold/40 bg-gold/5 p-2">
+      <input
+        type="number" step="0.25" min="0.25" max="14"
+        value={hours} onChange={(e) => setHours(e.target.value)}
+        placeholder="Hours" aria-label="Hours"
+        className="w-full rounded border border-border bg-surface/60 px-2 py-1 text-xs"
+      />
+      <select
+        value={engId} onChange={(e) => setEngId(e.target.value)}
+        aria-label="Engagement"
+        className="w-full rounded border border-border bg-surface/60 px-2 py-1 text-xs"
+      >
+        <option value="">Internal / non-billable</option>
+        {engagements.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+      </select>
+      <input
+        type="text" value={narrative} onChange={(e) => setNarrative(e.target.value)}
+        placeholder="What did you do? (e.g. 1.5h thinking through pricing)"
+        aria-label="Narrative"
+        className="w-full rounded border border-border bg-surface/60 px-2 py-1 text-xs"
+      />
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={() => onSubmit(Number(hours), engId || null, narrative)}
+          className="flex-1 rounded bg-gold/20 py-1 text-xs text-gold hover:bg-gold/30 min-h-[44px]"
+        >
+          Add
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded border border-border px-2 py-1 text-xs text-text-mute hover:border-gold/60 min-h-[44px]"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

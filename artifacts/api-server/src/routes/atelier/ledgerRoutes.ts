@@ -18,6 +18,7 @@
  *     Partner only) and surface in engagement-economics, not the timesheet.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
+import multer from "multer";
 import { eq, and, isNull, inArray, gte, desc } from "drizzle-orm";
 import {
   db,
@@ -422,11 +423,83 @@ router.post("/ledger/timesheets/:weekId/entries", async (req, res) => {
     createdByUserId: me.id,
   };
   if (id) {
-    await db.update(atelierTimesheetEntries).set({ ...values, updatedAt: new Date() }).where(eq(atelierTimesheetEntries.id, id));
+    // SECURITY: scope the update by BOTH entry id AND week id so a caller
+    // authorized on one week cannot overwrite an entry that belongs to a
+    // different week (or a different person) just by knowing its id.
+    const result = await db
+      .update(atelierTimesheetEntries)
+      .set({ ...values, updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierTimesheetEntries.id, id),
+          eq(atelierTimesheetEntries.weekId, week.id),
+          eq(atelierTimesheetEntries.personId, week.personId),
+          isNull(atelierTimesheetEntries.deletedAt),
+        ),
+      )
+      .returning({ id: atelierTimesheetEntries.id });
+    if (!result.length) {
+      res.status(404).json({ error: "entry-not-in-week" });
+      return;
+    }
   } else {
     await db.insert(atelierTimesheetEntries).values({ id: rid("tse"), ...values });
   }
   await recomputeWeekTotals(week.id);
+  res.json({ ok: true });
+});
+
+// =====================================================================
+// POST /ledger/timesheets/:weekId/entries/:entryId/confirm
+// One-tap row confirm: promotes an agent-drafted entry to a human-confirmed
+// row (source stays "agent_drafted" so the AI provenance is preserved, but
+// status flips to "confirmed" and the confirming user is recorded). The
+// route is week-scoped to prevent cross-week confirmation.
+// =====================================================================
+router.post("/ledger/timesheets/:weekId/entries/:entryId/confirm", async (req, res) => {
+  const [week] = await db
+    .select()
+    .from(atelierTimesheetWeeks)
+    .where(eq(atelierTimesheetWeeks.id, req.params.weekId));
+  if (!week) {
+    res.status(404).json({ error: "week-not-found" });
+    return;
+  }
+  const me = await assertCanMutateWeek(req, res, week);
+  if (!me) return;
+  if (week.status !== "draft" && week.status !== "rejected") {
+    res.status(409).json({ error: "week-locked" });
+    return;
+  }
+  // Flip status to "confirmed" and stamp the confirming user via
+  // createdByUserId (entries table has no separate confirmer column —
+  // the audit_event row below records who confirmed).
+  // Hardening: only agent_drafted rows can be "confirmed" — human rows are
+  // already authored by the user and have no draft state to promote.
+  const result = await db
+    .update(atelierTimesheetEntries)
+    .set({ status: "confirmed", createdByUserId: me.id, updatedAt: new Date() })
+    .where(
+      and(
+        eq(atelierTimesheetEntries.id, req.params.entryId),
+        eq(atelierTimesheetEntries.weekId, week.id),
+        eq(atelierTimesheetEntries.source, "agent_drafted"),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ),
+    )
+    .returning({ id: atelierTimesheetEntries.id });
+  if (!result.length) {
+    res.status(404).json({ error: "entry-not-confirmable" });
+    return;
+  }
+  await audit({
+    entityType: "timesheet_entry",
+    entityId: req.params.entryId,
+    actor: me,
+    action: "ledger.entry.confirm",
+    payload: { weekId: week.id },
+    summary: `${me.name} confirmed agent-drafted entry ${req.params.entryId}`,
+  });
   res.json({ ok: true });
 });
 
@@ -527,7 +600,9 @@ router.post("/ledger/timesheets/:weekId/submit", async (req, res) => {
 });
 
 // =====================================================================
-// GET /ledger/approvals  → queue for approver personas
+// GET /ledger/approvals  → queue for approver personas, grouped by engagement.
+// Returns weeks WITH their entries and signals inline so the approvals UI
+// can show per-row evidence without an N+1 round-trip.
 // =====================================================================
 router.get("/ledger/approvals", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -542,31 +617,99 @@ router.get("/ledger/approvals", async (req, res) => {
     .from(atelierTimesheetWeeks)
     .where(and(eq(atelierTimesheetWeeks.status, stage), isNull(atelierTimesheetWeeks.deletedAt)))
     .orderBy(desc(atelierTimesheetWeeks.submittedAt));
-  // Hydrate person names
+
+  const weekIds = rows.map((r) => r.id);
   const personIds = Array.from(new Set(rows.map((r) => r.personId)));
-  const emps = personIds.length
-    ? await db.select().from(atelierEmployees).where(inArray(atelierEmployees.id, personIds))
-    : [];
-  const cons = personIds.length
-    ? await db.select().from(atelierContractors).where(inArray(atelierContractors.id, personIds))
-    : [];
+  const [emps, cons, allEntries, allSignals, allEngs] = await Promise.all([
+    personIds.length
+      ? db.select().from(atelierEmployees).where(inArray(atelierEmployees.id, personIds))
+      : Promise.resolve([] as Array<typeof atelierEmployees.$inferSelect>),
+    personIds.length
+      ? db.select().from(atelierContractors).where(inArray(atelierContractors.id, personIds))
+      : Promise.resolve([] as Array<typeof atelierContractors.$inferSelect>),
+    weekIds.length
+      ? db
+          .select()
+          .from(atelierTimesheetEntries)
+          .where(and(inArray(atelierTimesheetEntries.weekId, weekIds), isNull(atelierTimesheetEntries.deletedAt)))
+      : Promise.resolve([] as Array<typeof atelierTimesheetEntries.$inferSelect>),
+    weekIds.length
+      ? db.select().from(atelierTimesheetSignals).where(inArray(atelierTimesheetSignals.weekId, weekIds))
+      : Promise.resolve([] as Array<typeof atelierTimesheetSignals.$inferSelect>),
+    db.select().from(atelierEngagements).where(isNull(atelierEngagements.deletedAt)),
+  ]);
   const nameById = new Map<string, string>([
     ...emps.map((e) => [e.id, e.fullName] as const),
     ...cons.map((c) => [c.id, c.fullName] as const),
   ]);
-  res.json(
-    rows.map((w) => ({
-      id: w.id,
-      personId: w.personId,
-      personName: nameById.get(w.personId) ?? w.personId,
-      weekIso: w.weekIso,
-      status: w.status,
-      totalHours: w.totalHours,
-      billableHours: w.billableHours,
-      suspiciousFlags: (w.suspiciousFlags as string[]) ?? [],
-      submittedAt: w.submittedAt?.toISOString() ?? null,
-    })),
-  );
+  const engNameById = new Map(allEngs.map((e) => [e.id, e.name] as const));
+  const entriesByWeek = new Map<string, typeof allEntries>();
+  for (const e of allEntries) {
+    const arr = entriesByWeek.get(e.weekId) ?? [];
+    arr.push(e);
+    entriesByWeek.set(e.weekId, arr);
+  }
+  const signalsByWeek = new Map<string, typeof allSignals>();
+  for (const s of allSignals) {
+    const arr = signalsByWeek.get(s.weekId) ?? [];
+    arr.push(s);
+    signalsByWeek.set(s.weekId, arr);
+  }
+
+  // Group: engagementId → [{week, entries-on-that-engagement, signals-on-that-engagement}]
+  const groups = new Map<string, {
+    engagementId: string | null;
+    engagementName: string;
+    weeks: Array<{
+      id: string;
+      personId: string;
+      personName: string;
+      weekIso: string;
+      status: string;
+      totalHours: number;
+      billableHours: number;
+      suspiciousFlags: string[];
+      submittedAt: string | null;
+      engagementEntries: ReturnType<typeof entryWire>[];
+      engagementSignals: ReturnType<typeof signalWire>[];
+    }>;
+  }>();
+  for (const w of rows) {
+    const wEntries = entriesByWeek.get(w.id) ?? [];
+    const wSignals = signalsByWeek.get(w.id) ?? [];
+    // A single week can span multiple engagements — emit one group entry per
+    // engagement found, plus an "internal" bucket if any non-billable rows.
+    const engsHit = new Set<string | null>(wEntries.map((e) => e.engagementId));
+    if (!engsHit.size) engsHit.add(null);
+    for (const engId of engsHit) {
+      const key = engId ?? "__internal__";
+      const g = groups.get(key) ?? {
+        engagementId: engId,
+        engagementName: engId ? engNameById.get(engId) ?? engId : "Internal / non-billable",
+        weeks: [],
+      };
+      const engEntries = wEntries.filter((e) => e.engagementId === engId).map(entryWire);
+      const sigIdsOnEng = new Set(engEntries.flatMap((e) => e.signalIds));
+      g.weeks.push({
+        id: w.id,
+        personId: w.personId,
+        personName: nameById.get(w.personId) ?? w.personId,
+        weekIso: w.weekIso,
+        status: w.status,
+        totalHours: w.totalHours,
+        billableHours: w.billableHours,
+        suspiciousFlags: (w.suspiciousFlags as string[]) ?? [],
+        submittedAt: w.submittedAt?.toISOString() ?? null,
+        engagementEntries: engEntries,
+        engagementSignals: wSignals.filter((s) => sigIdsOnEng.has(s.id) || s.engagementHint === engId).map(signalWire),
+      });
+      groups.set(key, g);
+    }
+  }
+  res.json({
+    stage,
+    groups: Array.from(groups.values()).sort((a, b) => a.engagementName.localeCompare(b.engagementName)),
+  });
 });
 
 // =====================================================================
@@ -667,9 +810,15 @@ router.post("/ledger/approvals/:weekId/reject", async (req, res) => {
 });
 
 // =====================================================================
-// GET /ledger/roster/people/:id/timesheet-summary
+// GET /ledger/roster/people/:id/timesheet-summary  (legacy alias)
+// AND /roster/people/:id/timesheet-summary  (canonical path per spec)
 // Rolling 4-week + YTD billable %, missing-week flags.
 // =====================================================================
+router.get("/roster/people/:id/timesheet-summary", (req, res, next) => {
+  // Delegate to the /ledger/-prefixed handler so both URLs share one impl.
+  req.url = `/ledger/roster/people/${req.params.id}/timesheet-summary`;
+  next("route");
+});
 router.get("/ledger/roster/people/:id/timesheet-summary", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -728,9 +877,18 @@ router.get("/ledger/roster/people/:id/timesheet-summary", async (req, res) => {
 
 // =====================================================================
 // POST /ledger/partner-firm-hours/:engagementId
-// Body: text/csv with header: resource_name,partner_firm_id,week_iso,hours,cost_amount,cost_currency
+// Accepts the CSV in three shapes (in priority order):
+//   1. multipart/form-data with field "file" (preferred — matches the spec
+//      and the upload UI's <input type="file">).
+//   2. application/json with body { csv: "..." } (programmatic ingest).
+//   3. text/csv raw body (curl convenience).
+// CSV header: resource_name,partner_firm_id,week_iso,hours,cost_amount,cost_currency
 // =====================================================================
-router.post("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
+const partnerFirmUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB ceiling for an HR CSV
+});
+router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single("file"), async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   if (!canManagePartnerFirm(me)) return void res.status(403).json({ error: "forbidden" });
@@ -740,13 +898,13 @@ router.post("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
     .where(and(eq(atelierEngagements.id, req.params.engagementId), isNull(atelierEngagements.deletedAt)));
   if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
 
-  // Accept either text/csv body or JSON {csv:"..."}
   const csvText: string =
-    typeof req.body === "string"
+    req.file?.buffer?.toString("utf8") ??
+    (typeof req.body === "string"
       ? req.body
       : typeof req.body?.csv === "string"
         ? req.body.csv
-        : "";
+        : "");
   if (!csvText.trim()) return void res.status(400).json({ error: "empty-csv" });
   const lines = csvText
     .split(/\r?\n/)
