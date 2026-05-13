@@ -140,12 +140,17 @@ export async function runInvoiceComposer(args: RunArgs): Promise<InvoiceComposer
         rate: rateBySeniority.get(emp.seniority) ?? fallbackRate,
       };
     }
+    // Contractors have no `seniority` column on this schema (they are
+    // T&M / fixed-fee instead of being slotted into the rate-card
+    // ladder). Derive their bill rate from the contracted `dayRateAmount`
+    // (USD/day → USD/hour over an 8-hour day). This is the "applicable
+    // rate" for that contractor per their master agreement and avoids
+    // silently falling back to a generic rate-card row.
     const [con] = await db.select().from(atelierContractors).where(eq(atelierContractors.id, personId));
-    if (con?.seniority) {
-      return {
-        seniority: con.seniority,
-        rate: rateBySeniority.get(con.seniority) ?? fallbackRate,
-      };
+    if (con) {
+      const dayRate = con.dayRateAmount ?? 0;
+      const hourly = dayRate > 0 ? +(dayRate / 8).toFixed(2) : fallbackRate;
+      return { seniority: "contractor", rate: hourly };
     }
     return { seniority: "unknown", rate: fallbackRate };
   }

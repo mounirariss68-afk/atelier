@@ -1367,7 +1367,7 @@ router.post("/wallet/approvals/run", async (req, res) => {
     entityId: "manual",
     actor: me,
     action: "wallet.payment_proposer.run",
-    payload: summary,
+    payload: summary as unknown as Record<string, unknown>,
     summary: `Proposer composed ${summary.contractorProposals.created}+${summary.partnerFirmProposals.created} proposal(s).`,
   });
   res.json({ ok: true, summary });
