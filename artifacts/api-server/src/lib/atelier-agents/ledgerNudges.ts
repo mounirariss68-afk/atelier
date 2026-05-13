@@ -183,6 +183,14 @@ export function startLedgerNudgeJob(): void {
     void runLedgerStewardTick().catch((err) => {
       console.warn("[ledger.steward] tick failed:", err);
     });
+    // Task #258: utilization snapshots (recompute last 6 ISO weeks; cheap +
+    // idempotent) and Burn Sentinel (hourly gate inside the function).
+    void runUtilizationSnapshotTick().catch((err) => {
+      console.warn("[ledger.utilization] snapshot tick failed:", err);
+    });
+    void runBurnSentinelTick().catch((err) => {
+      console.warn("[ledger.burn] sentinel tick failed:", err);
+    });
   }, TICK_MS);
   // Don't keep the process alive for this background ticker.
   if (typeof timer.unref === "function") timer.unref();
@@ -193,4 +201,283 @@ export function stopLedgerNudgeJob(): void {
     clearInterval(timer);
     timer = null;
   }
+}
+
+// ---------------------------------------------------------------------
+// Task #258 — Utilization snapshot tick + Burn Sentinel hourly tick.
+// Both run on the same 15-minute scheduler:
+//   • Snapshot tick: every 12h gate (so we don't churn the table on every
+//     ticker fire) — also runnable on demand from a Partner-only route.
+//     Re-runs are idempotent: deterministic snap id `usnap_<person>_<wk>`.
+//   • Burn Sentinel: hourly gate. For every active engagement, computes
+//     `actualHours / plannedHours` and writes a Pane A item to the
+//     Engagement Lead when a 60/80/100% threshold is crossed since the
+//     last sentinel run (we use existing pane-A rows for that engagement
+//     as the previous-burn record, so the cross is only fired once).
+// ---------------------------------------------------------------------
+
+import {
+  atelierUtilizationSnapshots,
+  atelierEngagements,
+  atelierDealPricings,
+  atelierRateCards,
+  atelierRateCardRows,
+  atelierPaneAItems,
+  atelierNotifications,
+} from "@workspace/db";
+
+const SNAPSHOT_ENTRY_STATUSES = ["lead_approved", "approved", "partner_approved"];
+
+function isoWeekIdFromDateLocal(d: Date): { weekIso: string; weekStartDate: string } {
+  const day = (d.getUTCDay() + 6) % 7; // Mon=0
+  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
+  const target = new Date(monday);
+  target.setUTCDate(target.getUTCDate() + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return {
+    weekIso: `${target.getUTCFullYear()}-W${String(week).padStart(2, "0")}`,
+    weekStartDate: monday.toISOString().slice(0, 10),
+  };
+}
+
+export async function runUtilizationSnapshotTick(opts: { force?: boolean; weeksBack?: number } = {}): Promise<{ snapshotsWritten: number }> {
+  const weeksBack = opts.weeksBack ?? 6;
+
+  // Build the list of (personId, weekIso) targets from existing weeks
+  // rows so we never invent a snapshot for a person that doesn't track
+  // hours yet. We snapshot for the last `weeksBack` ISO weeks.
+  const targets: Array<{ personId: string; personType: string; weekIso: string; weekStartDate: string }> = [];
+  for (let i = 0; i < weeksBack; i++) {
+    const ref = new Date();
+    ref.setUTCDate(ref.getUTCDate() - i * 7);
+    const { weekIso, weekStartDate } = isoWeekIdFromDateLocal(ref);
+    const weeks = await db
+      .select({ personId: atelierTimesheetWeeks.personId, personType: atelierTimesheetWeeks.personType })
+      .from(atelierTimesheetWeeks)
+      .where(and(eq(atelierTimesheetWeeks.weekIso, weekIso), isNull(atelierTimesheetWeeks.deletedAt)));
+    for (const w of weeks) targets.push({ personId: w.personId, personType: w.personType, weekIso, weekStartDate });
+  }
+  if (!targets.length) return { snapshotsWritten: 0 };
+
+  // Pre-fetch employee target % so we can hydrate `targetPct`.
+  const emps = await db
+    .select({ id: atelierEmployees.id, utilizationTargetPct: atelierEmployees.utilizationTargetPct, role: atelierEmployees.role, seniority: atelierEmployees.seniority })
+    .from(atelierEmployees)
+    .where(isNull(atelierEmployees.deletedAt));
+  const empById = new Map(emps.map((e) => [e.id, e] as const));
+
+  function defaultTargetPct(role: string | null | undefined, seniority: string | null | undefined): number {
+    if (role === "partner" || seniority === "partner") return 50;
+    if (role === "ai_engineer") return 75;
+    if (role === "engagement_lead" || seniority === "principal") return 65;
+    if (seniority === "manager" || seniority === "senior_consultant") return 70;
+    return 75;
+  }
+
+  let written = 0;
+  for (const t of targets) {
+    const entries = await db
+      .select({
+        engagementId: atelierTimesheetEntries.engagementId,
+        hours: atelierTimesheetEntries.hours,
+        billable: atelierTimesheetEntries.billable,
+        activityCode: atelierTimesheetEntries.activityCode,
+      })
+      .from(atelierTimesheetEntries)
+      .innerJoin(atelierTimesheetWeeks, eq(atelierTimesheetEntries.weekId, atelierTimesheetWeeks.id))
+      .where(and(
+        eq(atelierTimesheetWeeks.personId, t.personId),
+        eq(atelierTimesheetWeeks.weekIso, t.weekIso),
+        inArray(atelierTimesheetEntries.status, SNAPSHOT_ENTRY_STATUSES),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ));
+    if (!entries.length) continue;
+
+    const totalHours = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+    const billableHours = entries.filter((e) => e.billable).reduce((s, e) => s + Number(e.hours || 0), 0);
+    const leaveHours = entries.filter((e) => e.activityCode === "leave").reduce((s, e) => s + Number(e.hours || 0), 0);
+    const internalHours = totalHours - billableHours - leaveHours;
+    const availableHours = 40;
+    const utilizationPct = availableHours > 0 ? billableHours / availableHours : 0;
+    const emp = empById.get(t.personId);
+    const targetPct = emp?.utilizationTargetPct
+      ? emp.utilizationTargetPct / 100
+      : defaultTargetPct(emp?.role ?? null, emp?.seniority ?? null) / 100;
+
+    // engagement mix: aggregate hours per engagement
+    const mixMap = new Map<string, { hours: number; billable: boolean }>();
+    for (const e of entries) {
+      const key = e.engagementId ?? "__internal__";
+      const prev = mixMap.get(key) ?? { hours: 0, billable: false };
+      mixMap.set(key, { hours: prev.hours + Number(e.hours || 0), billable: prev.billable || !!e.billable });
+    }
+    const engIds = Array.from(mixMap.keys()).filter((k) => k !== "__internal__");
+    const engRows = engIds.length
+      ? await db.select({ id: atelierEngagements.id, name: atelierEngagements.name }).from(atelierEngagements).where(inArray(atelierEngagements.id, engIds))
+      : [];
+    const engNameById = new Map(engRows.map((e) => [e.id, e.name] as const));
+    const engagementMix = Array.from(mixMap.entries()).map(([engId, v]) => ({
+      engagementId: engId === "__internal__" ? null : engId,
+      name: engId === "__internal__" ? "Internal / non-billable" : (engNameById.get(engId) ?? engId),
+      hours: v.hours,
+      billable: v.billable,
+    }));
+
+    const id = `usnap_${t.personId}_${t.weekIso}`;
+    await db
+      .insert(atelierUtilizationSnapshots)
+      .values({
+        id,
+        personId: t.personId,
+        personType: t.personType,
+        weekIso: t.weekIso,
+        weekStartDate: t.weekStartDate,
+        billableHours,
+        internalHours,
+        leaveHours,
+        totalHours,
+        availableHours,
+        utilizationPct,
+        targetPct,
+        engagementMix,
+        computedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: atelierUtilizationSnapshots.id,
+        set: {
+          billableHours,
+          internalHours,
+          leaveHours,
+          totalHours,
+          availableHours,
+          utilizationPct,
+          targetPct,
+          engagementMix,
+          computedAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    written++;
+  }
+  return { snapshotsWritten: written };
+}
+
+const BURN_THRESHOLDS = [0.6, 0.8, 1.0] as const;
+
+interface BurnRow {
+  engagementId: string;
+  engagementName: string;
+  engagementLeadId: string;
+  partnerOwnerId: string;
+  plannedHours: number;
+  actualHours: number;
+  burnPct: number;
+  thresholds: number[]; // crossed
+}
+
+async function computeEngagementBurns(): Promise<BurnRow[]> {
+  const engagements = await db
+    .select()
+    .from(atelierEngagements)
+    .where(isNull(atelierEngagements.deletedAt));
+  const out: BurnRow[] = [];
+  for (const eng of engagements) {
+    if (!eng.opportunityId) continue;
+    const [pricing] = await db
+      .select()
+      .from(atelierDealPricings)
+      .where(and(eq(atelierDealPricings.opportunityId, eng.opportunityId), isNull(atelierDealPricings.deletedAt)));
+    if (!pricing) continue;
+    // Planned hours = sum over team mix of (ftePct * durationWeeks * 40)
+    const teamMix = (pricing.teamMix as Array<{ ftePct: number }>) ?? [];
+    const plannedHours = teamMix.reduce((s, m) => s + Number(m.ftePct || 0) * Number(pricing.durationWeeks || 0) * 40, 0);
+    if (plannedHours <= 0) continue;
+    // Actual hours = sum of approved + lead_approved + submitted billable hours on this engagement.
+    const actualRows = await db
+      .select({ hours: atelierTimesheetEntries.hours })
+      .from(atelierTimesheetEntries)
+      .where(and(
+        eq(atelierTimesheetEntries.engagementId, eng.id),
+        inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ));
+    const actualHours = actualRows.reduce((s, r) => s + Number(r.hours || 0), 0);
+    const burnPct = actualHours / plannedHours;
+    const thresholds = BURN_THRESHOLDS.filter((th) => burnPct >= th);
+    out.push({
+      engagementId: eng.id,
+      engagementName: eng.name,
+      engagementLeadId: eng.engagementLeadId,
+      partnerOwnerId: eng.partnerOwnerId,
+      plannedHours,
+      actualHours,
+      burnPct,
+      thresholds,
+    });
+  }
+  return out;
+}
+
+export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promise<{ alertsWritten: number; engagementsScanned: number }> {
+  if (!opts.force) {
+    const { minute } = nowInGst();
+    // Hourly gate: only fire on the first 15-min slice of each hour.
+    if (minute >= 15) return { alertsWritten: 0, engagementsScanned: 0 };
+  }
+  const burns = await computeEngagementBurns();
+  let alertsWritten = 0;
+  for (const b of burns) {
+    for (const th of b.thresholds) {
+      const id = `panea_burn_${b.engagementId}_${Math.round(th * 100)}`;
+      const severityLabel = th >= 1.0 ? "OVER PLAN" : `${Math.round(th * 100)}% burn`;
+      const priority = th >= 1.0 ? "high" : th >= 0.8 ? "high" : "medium";
+      const inserted = await db
+        .insert(atelierPaneAItems)
+        .values({
+          id,
+          userId: b.engagementLeadId,
+          title: `Burn Sentinel · ${b.engagementName} — ${severityLabel}`,
+          summary: `Engagement at ${(b.burnPct * 100).toFixed(0)}% of planned hours (${b.actualHours.toFixed(0)} / ${b.plannedHours.toFixed(0)} hrs). Threshold crossed: ${Math.round(th * 100)}%.`,
+          priority,
+          hrefKind: "engagement_economics",
+          hrefTargetId: b.engagementId,
+          dueLabel: "Now",
+          sortKey: th >= 1.0 ? 100 : th >= 0.8 ? 80 : 60,
+        })
+        .onConflictDoNothing({ target: atelierPaneAItems.id })
+        .returning({ id: atelierPaneAItems.id });
+      if (inserted.length) {
+        alertsWritten++;
+        await db.insert(atelierAuditEvents).values({
+          id: `aud_burn_${b.engagementId}_${Math.round(th * 100)}`,
+          entityType: "engagement",
+          entityId: b.engagementId,
+          actorType: "agent",
+          actorId: "ag_burn_sentinel",
+          actorLabel: "Burn Sentinel",
+          action: "ledger.burn.threshold_crossed",
+          payload: { thresholdPct: Math.round(th * 100), burnPct: b.burnPct, plannedHours: b.plannedHours, actualHours: b.actualHours },
+          payloadSummary: `Burn Sentinel: ${b.engagementName} crossed ${Math.round(th * 100)}% of planned hours.`,
+        }).onConflictDoNothing({ target: atelierAuditEvents.id });
+        await db.insert(atelierNotifications).values({
+          id: `notif_burn_${b.engagementId}_${Math.round(th * 100)}`,
+          userId: b.engagementLeadId,
+          kind: "burn_alert",
+          payload: { engagementId: b.engagementId, thresholdPct: Math.round(th * 100), burnPct: b.burnPct },
+          subject: `Burn alert: ${b.engagementName} (${Math.round(th * 100)}%)`,
+          body: `Engagement at ${(b.burnPct * 100).toFixed(0)}% of planned hours.`,
+          refType: "engagement",
+          refId: b.engagementId,
+          status: "queued",
+        }).onConflictDoNothing({ target: atelierNotifications.id });
+      }
+    }
+  }
+  return { alertsWritten, engagementsScanned: burns.length };
+}
+
+export async function getEngagementBurnSummary(engagementId: string): Promise<BurnRow | null> {
+  const all = await computeEngagementBurns();
+  return all.find((b) => b.engagementId === engagementId) ?? null;
 }

@@ -69,8 +69,9 @@ import {
   atelierSalonDecisions,
   atelierSalonRequests,
   atelierDeliverablePublishes,
+  atelierUtilizationSnapshots,
 } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, isNull, inArray } from "drizzle-orm";
 
 const NOW = new Date();
 const HOURS_AGO = (h: number) => new Date(NOW.getTime() - h * 3600 * 1000);
@@ -4059,8 +4060,140 @@ async function main() {
     ])
     .onConflictDoNothing();
 
+  // ============================================================
+  // Task #258 — v3 Ledger: utilization targets, Utilization Analyst +
+  // Burn Sentinel agents, and computed utilization snapshots.
+  // Idempotent (UPDATE / onConflictDoNothing / onConflictDoUpdate).
+  // ============================================================
+  console.log("[seed-atelier] v3 ledger (Task #258): utilization targets…");
+  // role/seniority → target % (whole numbers stored as percent points)
+  const TARGETS: Array<{ predicate: (e: { role: string; seniority?: string | null }) => boolean; pct: number }> = [
+    { predicate: (e) => e.role === "partner" || e.seniority === "partner", pct: 50 },
+    { predicate: (e) => e.role === "ai_engineer", pct: 75 },
+    { predicate: (e) => e.role === "engagement_lead" || e.seniority === "principal", pct: 65 },
+    { predicate: (e) => e.seniority === "manager" || e.seniority === "senior_consultant", pct: 70 },
+  ];
+  for (const emp of employeesToInsert) {
+    const t = TARGETS.find((t) => t.predicate(emp))?.pct ?? 75;
+    await db
+      .update(atelierEmployees)
+      .set({ utilizationTargetPct: t, updatedAt: new Date() })
+      .where(eq(atelierEmployees.id, emp.id));
+  }
+
+  console.log("[seed-atelier] v3 ledger (Task #258): Utilization Analyst + Burn Sentinel agents…");
+  await db
+    .insert(atelierAgents)
+    .values([
+      {
+        id: "ag_utilization_analyst",
+        name: "Utilization Analyst",
+        group: "Ledger",
+        stage: "Govern",
+        purpose:
+          "Translates the firm's deterministic utilization, realization, and burn numbers into a partner-grade narrative. Refuses generation when the numeric block is missing or stale.",
+        model: "claude-haiku-4-5",
+        starred: false,
+        status: "mvp",
+        tools: ["snapshots.read", "engagement.read"],
+        guardrails: [
+          "Refuses when numeric_block is missing or all-zero (no rows yet)",
+          "Never invents numbers — every claim is anchored to a snapshot value",
+          "Recommends concrete actions (re-look pricing, rebench), not 'communicate'",
+        ],
+        humanCheckpoints: ["Partner reviews narrative before sharing externally"],
+        runsLast30d: 0,
+      },
+      {
+        id: "ag_burn_sentinel",
+        name: "Burn Sentinel",
+        group: "Ledger",
+        stage: "Govern",
+        purpose:
+          "Watches every active engagement; emits a Pane A item to the Engagement Lead the moment burn-rate crosses 60 / 80 / 100 % of planned hours.",
+        model: "deterministic",
+        starred: false,
+        status: "mvp",
+        tools: ["engagement.read", "panea.write", "notifications.write", "audit.write"],
+        guardrails: [
+          "Idempotent: one alert per (engagement, threshold-band) — never re-fires",
+          "Hourly gate to avoid alert spam",
+          "100% crosses are always priority=high",
+        ],
+        humanCheckpoints: ["Engagement Lead acknowledges the Pane A item"],
+        runsLast30d: 0,
+      },
+    ])
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 ledger (Task #258): computing utilization snapshots…");
+  // Pull the actual entries we just seeded and roll up by (person, week).
+  // We materialise snapshots so the new pages have data on the very first
+  // page-load (no need to wait 15 minutes for the ticker to fire).
+  const SNAP_STATUSES = ["lead_approved", "approved", "partner_approved"];
+  const allWeeks = await db
+    .select()
+    .from(atelierTimesheetWeeks)
+    .where(isNull(atelierTimesheetWeeks.deletedAt));
+  const allEntries = await db
+    .select()
+    .from(atelierTimesheetEntries)
+    .where(and(inArray(atelierTimesheetEntries.status, SNAP_STATUSES), isNull(atelierTimesheetEntries.deletedAt)));
+  const allEngs = await db.select({ id: atelierEngagements.id, name: atelierEngagements.name }).from(atelierEngagements);
+  const engNameById = new Map(allEngs.map((e) => [e.id, e.name] as const));
+  const empById = new Map(employeesToInsert.map((e) => [e.id, e] as const));
+  function targetFor(emp: typeof employeesToInsert[number] | undefined): number {
+    if (!emp) return 0.75;
+    return (TARGETS.find((t) => t.predicate(emp))?.pct ?? 75) / 100;
+  }
+
+  const snapshotsToInsert: Array<typeof atelierUtilizationSnapshots.$inferInsert> = [];
+  for (const wk of allWeeks) {
+    const wkEntries = allEntries.filter((e) => e.weekId === wk.id);
+    if (!wkEntries.length) continue;
+    const totalHours = wkEntries.reduce((s, e) => s + Number(e.hours || 0), 0);
+    const billableHours = wkEntries.filter((e) => e.billable).reduce((s, e) => s + Number(e.hours || 0), 0);
+    const leaveHours = wkEntries.filter((e) => e.activityCode === "leave").reduce((s, e) => s + Number(e.hours || 0), 0);
+    const internalHours = totalHours - billableHours - leaveHours;
+    const availableHours = 40;
+    const utilizationPct = availableHours > 0 ? billableHours / availableHours : 0;
+    const emp = empById.get(wk.personId);
+    const targetPct = targetFor(emp);
+    const mixMap = new Map<string, { hours: number; billable: boolean }>();
+    for (const e of wkEntries) {
+      const k = e.engagementId ?? "__internal__";
+      const prev = mixMap.get(k) ?? { hours: 0, billable: false };
+      mixMap.set(k, { hours: prev.hours + Number(e.hours || 0), billable: prev.billable || !!e.billable });
+    }
+    const engagementMix = Array.from(mixMap.entries()).map(([engId, v]) => ({
+      engagementId: engId === "__internal__" ? null : engId,
+      name: engId === "__internal__" ? "Internal / non-billable" : (engNameById.get(engId) ?? engId),
+      hours: v.hours,
+      billable: v.billable,
+    }));
+    snapshotsToInsert.push({
+      id: `usnap_${wk.personId}_${wk.weekIso}`,
+      personId: wk.personId,
+      personType: wk.personType,
+      weekIso: wk.weekIso,
+      weekStartDate: wk.weekStartDate,
+      billableHours,
+      internalHours,
+      leaveHours,
+      totalHours,
+      availableHours,
+      utilizationPct,
+      targetPct,
+      engagementMix,
+    });
+  }
+  if (snapshotsToInsert.length) {
+    await db.insert(atelierUtilizationSnapshots).values(snapshotsToInsert).onConflictDoNothing();
+  }
+  console.log(`[seed-atelier] v3 ledger (Task #258): ${snapshotsToInsert.length} utilization snapshots written.`);
+
   console.log(
-    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published) · ${employeesToInsert.length} employees · ${CONTRACTORS.length} contractors · ${PARTNER_FIRMS.length} partner firms · ${PARTNER_RESOURCES.length} partner-firm resources.`,
+    `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published) · ${employeesToInsert.length} employees · ${CONTRACTORS.length} contractors · ${PARTNER_FIRMS.length} partner firms · ${PARTNER_RESOURCES.length} partner-firm resources · ${snapshotsToInsert.length} utilization snapshots.`,
   );
 }
 

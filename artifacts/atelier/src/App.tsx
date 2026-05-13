@@ -37,6 +37,8 @@ import RosterSkillGraph from "@/pages/roster/RosterSkillGraph";
 import Timesheet from "@/pages/ledger/Timesheet";
 import LedgerApprovals from "@/pages/ledger/LedgerApprovals";
 import EngagementEconomics from "@/pages/ledger/EngagementEconomics";
+import Utilization from "@/pages/ledger/Utilization";
+import FirmEconomics from "@/pages/ledger/FirmEconomics";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
@@ -83,6 +85,9 @@ function Router() {
         <Route path="/ledger/timesheets/:personId/:weekIso" component={Timesheet} />
         <Route path="/ledger/approvals" component={LedgerApprovals} />
         <Route path="/ledger/engagement-economics/:engagementId" component={EngagementEconomics} />
+        <Route path="/ledger/utilization" component={Utilization} />
+        <Route path="/ledger/utilization/:personId" component={Utilization} />
+        <Route path="/ledger/firm-economics" component={FirmEconomics} />
         <Route path="/accounts/:accountId" component={Account} />
         <Route path="/agents" component={Agents} />
         <Route path="/agents/runs/:runId" component={AgentRun} />

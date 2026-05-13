@@ -33,8 +33,23 @@ import {
   atelierAuditEvents,
   atelierPartnerFirmResources,
 } from "@workspace/db";
-import { runTimeSteward } from "../../lib/atelier-agents/runner.js";
-import { runLedgerNudgeTick, runLedgerStewardTick } from "../../lib/atelier-agents/ledgerNudges.js";
+import { runTimeSteward, runUtilizationAnalyst } from "../../lib/atelier-agents/runner.js";
+import {
+  runLedgerNudgeTick,
+  runLedgerStewardTick,
+  runUtilizationSnapshotTick,
+  runBurnSentinelTick,
+  getEngagementBurnSummary,
+} from "../../lib/atelier-agents/ledgerNudges.js";
+import {
+  atelierUtilizationSnapshots,
+  atelierAccounts,
+  atelierDealPricings,
+  atelierRateCards,
+  atelierRateCardRows,
+  atelierOpportunities,
+} from "@workspace/db";
+import { gte, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -1246,6 +1261,621 @@ router.post("/ledger/steward/run", async (req, res) => {
   }
   const out = await runLedgerStewardTick({ force: true });
   res.json(out);
+});
+
+// =====================================================================
+// Task #258 — Utilization, Realization, Burn Sentinel
+// =====================================================================
+
+// ISO week list for the last N weeks (newest first).
+function lastNWeeks(n: number): { weekIso: string; weekStartDate: string }[] {
+  const out: { weekIso: string; weekStartDate: string }[] = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - i * 7);
+    const day = (d.getUTCDay() + 6) % 7;
+    const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
+    const target = new Date(monday);
+    target.setUTCDate(target.getUTCDate() + 3);
+    const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+    const week = 1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+    out.push({
+      weekIso: `${target.getUTCFullYear()}-W${String(week).padStart(2, "0")}`,
+      weekStartDate: monday.toISOString().slice(0, 10),
+    });
+  }
+  return out;
+}
+
+function defaultTargetPctFor(role: string | null | undefined, seniority: string | null | undefined): number {
+  if (role === "partner" || seniority === "partner") return 0.5;
+  if (role === "ai_engineer") return 0.75;
+  if (role === "engagement_lead" || seniority === "principal") return 0.65;
+  if (seniority === "manager" || seniority === "senior_consultant") return 0.7;
+  return 0.75;
+}
+
+// ---------------------------------------------------------------------
+// GET /ledger/utilization/person/:id
+// Rolling 4 weeks + YTD + engagement mix + variance vs target.
+// ACL: self OR partner/operations/engagement_lead.
+// ---------------------------------------------------------------------
+router.get("/ledger/utilization/person/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const personId = req.params.id;
+
+  // Accept either an employee id or a user id (the rest of the system uses
+  // both, so callers shouldn't have to know which one they have).
+  const [emp] = await db
+    .select()
+    .from(atelierEmployees)
+    .where(and(
+      isNull(atelierEmployees.deletedAt),
+      personId.startsWith("emp_") ? eq(atelierEmployees.id, personId) : eq(atelierEmployees.userId, personId),
+    ));
+
+  // ACL: self OR leadership
+  const isLeadership = me.role === "partner" || me.role === "operations" || me.role === "engagement_lead";
+  if (!isLeadership) {
+    if (!emp || emp.userId !== me.id) return void res.status(403).json({ error: "forbidden" });
+  }
+  const resolvedPersonId = emp?.id ?? personId;
+  const personLabel = emp?.fullName ?? personId;
+  const targetPct = emp?.utilizationTargetPct
+    ? emp.utilizationTargetPct / 100
+    : defaultTargetPctFor(emp?.role, emp?.seniority);
+
+  const last4 = lastNWeeks(4);
+  const last4Iso = last4.map((w) => w.weekIso);
+  const snapshots = await db
+    .select()
+    .from(atelierUtilizationSnapshots)
+    .where(eq(atelierUtilizationSnapshots.personId, resolvedPersonId));
+
+  const last4Snaps = snapshots
+    .filter((s) => last4Iso.includes(s.weekIso))
+    .sort((a, b) => a.weekIso.localeCompare(b.weekIso));
+  const ytdSnaps = snapshots.filter((s) => s.weekIso.startsWith(String(new Date().getUTCFullYear())));
+
+  const sum = (arr: { billableHours: number; totalHours: number; availableHours: number }[]) => ({
+    billable: arr.reduce((s, r) => s + Number(r.billableHours), 0),
+    total: arr.reduce((s, r) => s + Number(r.totalHours), 0),
+    available: arr.reduce((s, r) => s + Number(r.availableHours), 0),
+  });
+  const r4 = sum(last4Snaps);
+  const ytd = sum(ytdSnaps);
+  const rolling4UtilPct = r4.available > 0 ? r4.billable / r4.available : 0;
+  const ytdUtilPct = ytd.available > 0 ? ytd.billable / ytd.available : 0;
+
+  // engagement mix across rolling 4
+  const mixMap = new Map<string, { name: string; hours: number; billable: boolean }>();
+  for (const s of last4Snaps) {
+    for (const m of (s.engagementMix as Array<{ engagementId: string | null; name: string; hours: number; billable: boolean }>) ?? []) {
+      const k = m.engagementId ?? "__internal__";
+      const prev = mixMap.get(k) ?? { name: m.name, hours: 0, billable: m.billable };
+      mixMap.set(k, { name: m.name, hours: prev.hours + Number(m.hours), billable: prev.billable || m.billable });
+    }
+  }
+  const mix = Array.from(mixMap.entries()).map(([engagementId, v]) => ({
+    engagementId: engagementId === "__internal__" ? null : engagementId,
+    name: v.name,
+    hours: v.hours,
+    billable: v.billable,
+  })).sort((a, b) => b.hours - a.hours);
+
+  res.json({
+    personId: resolvedPersonId,
+    personLabel,
+    role: emp?.role ?? "unknown",
+    seniority: emp?.seniority ?? "unknown",
+    targetPct,
+    rolling4UtilPct,
+    ytdUtilPct,
+    variancePct: rolling4UtilPct - targetPct,
+    weeks: last4Snaps.map((s) => ({
+      weekIso: s.weekIso,
+      weekStartDate: s.weekStartDate,
+      billableHours: Number(s.billableHours),
+      totalHours: Number(s.totalHours),
+      utilizationPct: Number(s.utilizationPct),
+      targetPct: Number(s.targetPct),
+    })),
+    engagementMix: mix,
+    snapshotsAvailable: snapshots.length > 0,
+    computedAt: snapshots[0]?.computedAt ?? null,
+  });
+});
+
+// ---------------------------------------------------------------------
+// GET /ledger/utilization/engagement/:slug
+// Planned vs actual hours, planned vs actual cost, realized margin,
+// burn-rate, weeks-of-runway.  :slug accepts either id or slug.
+// ACL: leadership OR engagement lead/partner owner of this engagement.
+// ---------------------------------------------------------------------
+router.get("/ledger/utilization/engagement/:slug", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const key = req.params.slug;
+
+  const [eng] = await db
+    .select()
+    .from(atelierEngagements)
+    .where(and(
+      isNull(atelierEngagements.deletedAt),
+      // accept id or slug
+      key.includes("eng_") ? eq(atelierEngagements.id, key) : eq(atelierEngagements.slug, key),
+    ));
+  if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
+
+  const isLeadership = me.role === "partner" || me.role === "operations";
+  const isLead = me.id === eng.engagementLeadId || me.id === eng.partnerOwnerId;
+  if (!isLeadership && !isLead) return void res.status(403).json({ error: "forbidden" });
+
+  // Pricing baseline
+  const [pricing] = eng.opportunityId
+    ? await db
+        .select()
+        .from(atelierDealPricings)
+        .where(and(eq(atelierDealPricings.opportunityId, eng.opportunityId), isNull(atelierDealPricings.deletedAt)))
+    : [undefined as never];
+
+  const teamMix = (pricing?.teamMix as Array<{ seniority: string; role?: string; ftePct: number }>) ?? [];
+  const durationWeeks = pricing ? Number(pricing.durationWeeks) : 0;
+
+  // Planned hours per seniority bucket: ftePct * duration_weeks * 40
+  const plannedBySeniority = new Map<string, { plannedHours: number; role?: string }>();
+  for (const t of teamMix) {
+    const planned = Number(t.ftePct || 0) * durationWeeks * 40;
+    const prev = plannedBySeniority.get(t.seniority) ?? { plannedHours: 0, role: t.role };
+    plannedBySeniority.set(t.seniority, { plannedHours: prev.plannedHours + planned, role: prev.role });
+  }
+  const plannedTotal = Array.from(plannedBySeniority.values()).reduce((s, r) => s + r.plannedHours, 0);
+  const plannedCostUsd = pricing ? Number(pricing.computedCostUsd) : 0;
+  const plannedPriceUsd = pricing ? Number(pricing.computedPriceUsd) : 0;
+  const plannedMarginPct = pricing ? Number(pricing.computedMarginPct) : 0;
+
+  // Actual: pull approved+lead_approved+submitted entries on this engagement.
+  const actualEntries = await db
+    .select({
+      hours: atelierTimesheetEntries.hours,
+      personId: atelierTimesheetEntries.personId,
+      billable: atelierTimesheetEntries.billable,
+      status: atelierTimesheetEntries.status,
+    })
+    .from(atelierTimesheetEntries)
+    .where(and(
+      eq(atelierTimesheetEntries.engagementId, eng.id),
+      inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
+      isNull(atelierTimesheetEntries.deletedAt),
+    ));
+
+  const personIds = Array.from(new Set(actualEntries.map((e) => e.personId)));
+  const empRows = personIds.length
+    ? await db.select().from(atelierEmployees).where(inArray(atelierEmployees.id, personIds))
+    : [];
+  const empById = new Map(empRows.map((e) => [e.id, e] as const));
+
+  // Find the active rate card to cost the actual hours (use the latest one).
+  const [activeCard] = await db
+    .select()
+    .from(atelierRateCards)
+    .where(isNull(atelierRateCards.deletedAt))
+    .orderBy(desc(atelierRateCards.createdAt))
+    .limit(1);
+  const cardRows = activeCard
+    ? await db.select().from(atelierRateCardRows).where(and(eq(atelierRateCardRows.rateCardId, activeCard.id), isNull(atelierRateCardRows.deletedAt)))
+    : [];
+  const rateBySeniority = new Map(cardRows.map((r) => [r.seniority, { cost: Number(r.dayRateInternalCost), price: Number(r.dayRateClientPrice) }] as const));
+
+  // Bucket actuals by seniority (mapped through employee.seniority → rate card seniority).
+  const senioritySeenLabels: Record<string, string> = {
+    partner: "Partner", principal: "Principal", manager: "SubjectMatterLead",
+    senior_consultant: "AIEngineer", consultant: "AIEngineer", analyst: "Analyst",
+  };
+  const actualBySeniority = new Map<string, { hours: number; costUsd: number; priceUsd: number }>();
+  for (const e of actualEntries) {
+    const emp = empById.get(e.personId);
+    const seniorityKey = senioritySeenLabels[(emp?.seniority ?? "consultant").toLowerCase()] ?? "AIEngineer";
+    const rate = rateBySeniority.get(seniorityKey) ?? { cost: 600, price: 1500 };
+    const hours = Number(e.hours || 0);
+    const days = hours / 8;
+    const prev = actualBySeniority.get(seniorityKey) ?? { hours: 0, costUsd: 0, priceUsd: 0 };
+    actualBySeniority.set(seniorityKey, {
+      hours: prev.hours + hours,
+      costUsd: prev.costUsd + days * rate.cost,
+      priceUsd: prev.priceUsd + (e.billable ? days * rate.price : 0),
+    });
+  }
+  const actualTotalHours = Array.from(actualBySeniority.values()).reduce((s, r) => s + r.hours, 0);
+  const actualCostUsd = Array.from(actualBySeniority.values()).reduce((s, r) => s + r.costUsd, 0);
+  const actualBilledUsd = Array.from(actualBySeniority.values()).reduce((s, r) => s + r.priceUsd, 0);
+  const realizedMarginPct = actualBilledUsd > 0 ? (actualBilledUsd - actualCostUsd) / actualBilledUsd : 0;
+
+  const burnPct = plannedTotal > 0 ? actualTotalHours / plannedTotal : 0;
+  const weeksOfRunwayPlannedHours = plannedTotal - actualTotalHours;
+  const recentEntries = actualEntries.length;
+  // crude: average billable hours/week over last 4 weeks of entries.
+  const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
+  const recentBillable = await db
+    .select({ hours: atelierTimesheetEntries.hours, weekIso: atelierTimesheetWeeks.weekIso })
+    .from(atelierTimesheetEntries)
+    .innerJoin(atelierTimesheetWeeks, eq(atelierTimesheetEntries.weekId, atelierTimesheetWeeks.id))
+    .where(and(
+      eq(atelierTimesheetEntries.engagementId, eng.id),
+      eq(atelierTimesheetEntries.billable, true),
+      inArray(atelierTimesheetWeeks.weekIso, last4Iso),
+      isNull(atelierTimesheetEntries.deletedAt),
+    ));
+  const recentRunRate = recentBillable.length
+    ? recentBillable.reduce((s, r) => s + Number(r.hours), 0) / Math.max(1, new Set(recentBillable.map((r) => r.weekIso)).size)
+    : 0;
+  const weeksOfRunway = recentRunRate > 0 ? weeksOfRunwayPlannedHours / recentRunRate : null;
+
+  const planVsActual = Array.from(new Set([...plannedBySeniority.keys(), ...actualBySeniority.keys()])).map((seniority) => {
+    const planned = plannedBySeniority.get(seniority) ?? { plannedHours: 0 };
+    const actual = actualBySeniority.get(seniority) ?? { hours: 0, costUsd: 0, priceUsd: 0 };
+    return {
+      seniority,
+      plannedHours: planned.plannedHours,
+      actualHours: actual.hours,
+      variancePct: planned.plannedHours > 0 ? (actual.hours - planned.plannedHours) / planned.plannedHours : 0,
+      actualCostUsd: actual.costUsd,
+      actualPriceUsd: actual.priceUsd,
+    };
+  });
+
+  res.json({
+    engagementId: eng.id,
+    engagementSlug: eng.slug,
+    engagementName: eng.name,
+    opportunityId: eng.opportunityId,
+    plmStage: eng.plmStage,
+    planned: {
+      hours: plannedTotal,
+      costUsd: plannedCostUsd,
+      priceUsd: plannedPriceUsd,
+      marginPct: plannedMarginPct,
+      durationWeeks,
+      pricingId: pricing?.id ?? null,
+    },
+    actual: {
+      hours: actualTotalHours,
+      costUsd: actualCostUsd,
+      billedUsd: actualBilledUsd,
+      marginPct: realizedMarginPct,
+    },
+    planVsActual,
+    burnPct,
+    weeksOfRunway,
+    rateCardId: activeCard?.id ?? null,
+  });
+});
+
+// ---------------------------------------------------------------------
+// GET /ledger/utilization/firm  (Partner-only)
+// Partner-by-partner utilization, sector-by-sector margin realization,
+// firm realization rate, and a leakage report.
+// ---------------------------------------------------------------------
+router.get("/ledger/utilization/firm", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") return void res.status(403).json({ error: "partner-only" });
+
+  // Last 4 weeks for utilization
+  const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
+  const snaps = await db
+    .select()
+    .from(atelierUtilizationSnapshots)
+    .where(inArray(atelierUtilizationSnapshots.weekIso, last4Iso));
+  const emps = await db.select().from(atelierEmployees).where(isNull(atelierEmployees.deletedAt));
+  const empById = new Map(emps.map((e) => [e.id, e] as const));
+
+  // Group by partner-owner via engagements assigned to each person.
+  // Simplification: utilization is per person; we attribute persons to the
+  // partner who owns the largest share of their billable hours over the
+  // window. Falls back to "(unattributed)" when the person had no billable
+  // engagement work in the window.
+  const engs = await db.select().from(atelierEngagements).where(isNull(atelierEngagements.deletedAt));
+  const engById = new Map(engs.map((e) => [e.id, e] as const));
+
+  type PartnerAgg = { partnerId: string; partnerName: string; people: { personId: string; name: string; utilPct: number; targetPct: number }[]; weightedUtil: number; weightedTarget: number; weight: number };
+  const partnerAgg = new Map<string, PartnerAgg>();
+  // partner-owner id on engagements is a *user* id (e.g. "p_mounir_ariss"),
+  // not an employee id, so key the aggregator by user id and look up the
+  // display name via employees.userId.
+  const partners = emps.filter((e) => e.role === "partner");
+  for (const p of partners) {
+    const key = p.userId ?? p.id;
+    partnerAgg.set(key, { partnerId: key, partnerName: p.fullName, people: [], weightedUtil: 0, weightedTarget: 0, weight: 0 });
+  }
+  partnerAgg.set("__unattributed__", { partnerId: "__unattributed__", partnerName: "(unattributed)", people: [], weightedUtil: 0, weightedTarget: 0, weight: 0 });
+
+  // group snaps by person
+  const snapsByPerson = new Map<string, typeof snaps>();
+  for (const s of snaps) {
+    const arr = snapsByPerson.get(s.personId) ?? [];
+    arr.push(s);
+    snapsByPerson.set(s.personId, arr);
+  }
+  for (const [personId, personSnaps] of snapsByPerson) {
+    const totalBill = personSnaps.reduce((s, r) => s + Number(r.billableHours), 0);
+    const totalAvail = personSnaps.reduce((s, r) => s + Number(r.availableHours), 0);
+    const utilPct = totalAvail > 0 ? totalBill / totalAvail : 0;
+    const targetPct = personSnaps[0] ? Number(personSnaps[0].targetPct) : 0;
+
+    // attribute via dominant engagement
+    const engHours = new Map<string, number>();
+    for (const s of personSnaps) {
+      for (const m of (s.engagementMix as Array<{ engagementId: string | null; hours: number; billable: boolean }>) ?? []) {
+        if (!m.engagementId || !m.billable) continue;
+        engHours.set(m.engagementId, (engHours.get(m.engagementId) ?? 0) + Number(m.hours));
+      }
+    }
+    let dominantPartnerId = "__unattributed__";
+    let dominantHours = 0;
+    for (const [engId, h] of engHours) {
+      if (h > dominantHours) {
+        const eng = engById.get(engId);
+        if (eng) {
+          dominantPartnerId = eng.partnerOwnerId;
+          dominantHours = h;
+        }
+      }
+    }
+    const agg = partnerAgg.get(dominantPartnerId) ?? partnerAgg.get("__unattributed__")!;
+    const emp = empById.get(personId);
+    agg.people.push({ personId, name: emp?.fullName ?? personId, utilPct, targetPct });
+    agg.weightedUtil += utilPct * totalAvail;
+    agg.weightedTarget += targetPct * totalAvail;
+    agg.weight += totalAvail;
+  }
+
+  const partnerSummary = Array.from(partnerAgg.values())
+    .filter((p) => p.people.length > 0)
+    .map((p) => ({
+      partnerId: p.partnerId,
+      partnerName: p.partnerName,
+      utilPct: p.weight > 0 ? p.weightedUtil / p.weight : 0,
+      targetPct: p.weight > 0 ? p.weightedTarget / p.weight : 0,
+      peopleCount: p.people.length,
+      people: p.people.sort((a, b) => b.utilPct - a.utilPct),
+    }));
+
+  // Sector margin realization: per account, aggregate engagement-economics
+  const accounts = await db.select().from(atelierAccounts).where(isNull(atelierAccounts.deletedAt));
+  const accountById = new Map(accounts.map((a) => [a.id, a] as const));
+
+  type SectorAgg = { sector: string; plannedMargin: number; realizedMargin: number; engagementCount: number; weightUsd: number };
+  const sectorAgg = new Map<string, SectorAgg>();
+
+  // Cost actual entries
+  const allActuals = await db
+    .select({
+      engagementId: atelierTimesheetEntries.engagementId,
+      hours: atelierTimesheetEntries.hours,
+      personId: atelierTimesheetEntries.personId,
+      billable: atelierTimesheetEntries.billable,
+    })
+    .from(atelierTimesheetEntries)
+    .where(and(
+      inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
+      isNull(atelierTimesheetEntries.deletedAt),
+    ));
+
+  const [activeCard] = await db
+    .select()
+    .from(atelierRateCards)
+    .where(isNull(atelierRateCards.deletedAt))
+    .orderBy(desc(atelierRateCards.createdAt))
+    .limit(1);
+  const cardRows = activeCard
+    ? await db.select().from(atelierRateCardRows).where(eq(atelierRateCardRows.rateCardId, activeCard.id))
+    : [];
+  const rateBySeniority = new Map(cardRows.map((r) => [r.seniority, { cost: Number(r.dayRateInternalCost), price: Number(r.dayRateClientPrice) }] as const));
+  const senLabel: Record<string, string> = {
+    partner: "Partner", principal: "Principal", manager: "SubjectMatterLead",
+    senior_consultant: "AIEngineer", consultant: "AIEngineer", analyst: "Analyst",
+  };
+
+  // Per-engagement actuals
+  const perEng = new Map<string, { hours: number; cost: number; price: number; billableHours: number }>();
+  for (const e of allActuals) {
+    if (!e.engagementId) continue;
+    const emp = empById.get(e.personId);
+    const sk = senLabel[(emp?.seniority ?? "consultant").toLowerCase()] ?? "AIEngineer";
+    const rate = rateBySeniority.get(sk) ?? { cost: 600, price: 1500 };
+    const days = Number(e.hours || 0) / 8;
+    const prev = perEng.get(e.engagementId) ?? { hours: 0, cost: 0, price: 0, billableHours: 0 };
+    perEng.set(e.engagementId, {
+      hours: prev.hours + Number(e.hours || 0),
+      cost: prev.cost + days * rate.cost,
+      price: prev.price + (e.billable ? days * rate.price : 0),
+      billableHours: prev.billableHours + (e.billable ? Number(e.hours || 0) : 0),
+    });
+  }
+
+  // Engagement leakage list: billable hours that are 'lead_approved' but not
+  // yet 'partner_approved'/'approved' (proxy for "not yet invoiced" since
+  // the Wallet/invoicing module lands in Task #259).
+  const leakRows = await db
+    .select({
+      engagementId: atelierTimesheetEntries.engagementId,
+      hours: atelierTimesheetEntries.hours,
+      personId: atelierTimesheetEntries.personId,
+    })
+    .from(atelierTimesheetEntries)
+    .where(and(
+      eq(atelierTimesheetEntries.status, "lead_approved"),
+      eq(atelierTimesheetEntries.billable, true),
+      isNull(atelierTimesheetEntries.deletedAt),
+    ));
+  const leakByEng = new Map<string, number>();
+  for (const r of leakRows) {
+    if (!r.engagementId) continue;
+    leakByEng.set(r.engagementId, (leakByEng.get(r.engagementId) ?? 0) + Number(r.hours || 0));
+  }
+
+  // Realization rate (firm-wide) = approved billable hours / (approved + lead_approved billable hours)
+  let invoicedAtFullRate = 0;
+  let availableAtFullRate = 0;
+  for (const e of allActuals) {
+    if (!e.billable) continue;
+    availableAtFullRate += Number(e.hours || 0);
+    // 'approved' or 'partner_approved' is our proxy for invoice-ready.
+    // (Note: actual entries fetch above doesn't carry status; we redo it below for clarity.)
+  }
+  const apr = await db
+    .select({ status: atelierTimesheetEntries.status, hours: atelierTimesheetEntries.hours })
+    .from(atelierTimesheetEntries)
+    .where(and(
+      eq(atelierTimesheetEntries.billable, true),
+      inArray(atelierTimesheetEntries.status, ["lead_approved", "approved", "partner_approved"]),
+      isNull(atelierTimesheetEntries.deletedAt),
+    ));
+  const fullRateAvail = apr.reduce((s, r) => s + Number(r.hours), 0);
+  const fullRateInv = apr.filter((r) => r.status === "approved" || r.status === "partner_approved").reduce((s, r) => s + Number(r.hours), 0);
+  const realizationRatePct = fullRateAvail > 0 ? fullRateInv / fullRateAvail : 0;
+
+  // Sector margin
+  for (const eng of engs) {
+    const acct = accountById.get(eng.accountId);
+    if (!acct) continue;
+    const actuals = perEng.get(eng.id);
+    if (!actuals) continue;
+    const realizedMargin = actuals.price > 0 ? (actuals.price - actuals.cost) / actuals.price : 0;
+    let pricing: typeof atelierDealPricings.$inferSelect | undefined;
+    if (eng.opportunityId) {
+      const [p] = await db
+        .select()
+        .from(atelierDealPricings)
+        .where(and(eq(atelierDealPricings.opportunityId, eng.opportunityId), isNull(atelierDealPricings.deletedAt)));
+      pricing = p;
+    }
+    const plannedMargin = pricing ? Number(pricing.computedMarginPct) : 0;
+    const sec = sectorAgg.get(acct.sector) ?? { sector: acct.sector, plannedMargin: 0, realizedMargin: 0, engagementCount: 0, weightUsd: 0 };
+    const w = actuals.price;
+    sec.plannedMargin += plannedMargin * w;
+    sec.realizedMargin += realizedMargin * w;
+    sec.weightUsd += w;
+    sec.engagementCount += 1;
+    sectorAgg.set(acct.sector, sec);
+  }
+  const sectorSummary = Array.from(sectorAgg.values()).map((s) => ({
+    sector: s.sector,
+    plannedMarginPct: s.weightUsd > 0 ? s.plannedMargin / s.weightUsd : 0,
+    realizedMarginPct: s.weightUsd > 0 ? s.realizedMargin / s.weightUsd : 0,
+    engagementCount: s.engagementCount,
+    revenueUsd: s.weightUsd,
+  }));
+
+  // Per-engagement leakage + realized-margin row, with re-look CTA pointer
+  const engagementRollup = await Promise.all(engs.map(async (eng) => {
+    const acct = accountById.get(eng.accountId);
+    const actuals = perEng.get(eng.id) ?? { hours: 0, cost: 0, price: 0, billableHours: 0 };
+    const realizedMargin = actuals.price > 0 ? (actuals.price - actuals.cost) / actuals.price : 0;
+    let pricing: typeof atelierDealPricings.$inferSelect | undefined;
+    if (eng.opportunityId) {
+      const [p] = await db
+        .select()
+        .from(atelierDealPricings)
+        .where(and(eq(atelierDealPricings.opportunityId, eng.opportunityId), isNull(atelierDealPricings.deletedAt)));
+      pricing = p;
+    }
+    const plannedMargin = pricing ? Number(pricing.computedMarginPct) : 0;
+    const targetMargin = pricing ? Number(pricing.targetMarginPct) : 0.55;
+    const belowTarget = realizedMargin > 0 && realizedMargin < targetMargin;
+    return {
+      engagementId: eng.id,
+      engagementName: eng.name,
+      accountName: acct?.name ?? "?",
+      sector: acct?.sector ?? "?",
+      partnerOwnerId: eng.partnerOwnerId,
+      opportunityId: eng.opportunityId,
+      plannedMarginPct: plannedMargin,
+      realizedMarginPct: realizedMargin,
+      targetMarginPct: targetMargin,
+      belowTarget,
+      reLookHref: belowTarget && eng.opportunityId ? `/pricing/${eng.opportunityId}` : null,
+      leakageHours: leakByEng.get(eng.id) ?? 0,
+    };
+  }));
+
+  res.json({
+    period: { weeks: 4, weekIsos: last4Iso },
+    realizationRatePct,
+    fullRateInvoicedHours: fullRateInv,
+    fullRateAvailableHours: fullRateAvail,
+    partnerSummary,
+    sectorSummary,
+    engagementRollup,
+    snapshotsAvailable: snaps.length > 0,
+    computedAt: snaps[0]?.computedAt ?? null,
+  });
+});
+
+// ---------------------------------------------------------------------
+// POST /ledger/utilization/narrative  → run Utilization Analyst.
+// Body: { view, targetId, period, numericBlock }
+// ---------------------------------------------------------------------
+router.post("/ledger/utilization/narrative", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const body = (req.body ?? {}) as {
+    view?: "person" | "engagement" | "firm";
+    targetId?: string;
+    targetLabel?: string;
+    period?: string;
+    numericBlock?: Record<string, unknown> | null;
+  };
+  if (!body.view || !body.targetId) {
+    return void res.status(400).json({ error: "view-and-targetId-required" });
+  }
+  const out = await runUtilizationAnalyst({
+    view: body.view,
+    targetId: body.targetId,
+    targetLabel: body.targetLabel ?? body.targetId,
+    period: body.period ?? "rolling-4w",
+    numericBlock: body.numericBlock ?? null,
+    triggeredByUserId: me.id,
+  });
+  res.json(out);
+});
+
+// ---------------------------------------------------------------------
+// POST /ledger/utilization/snapshot/run (Partner/Operations) — manual recompute.
+// POST /ledger/burn-sentinel/run        (Partner/Operations) — manual sweep.
+// ---------------------------------------------------------------------
+router.post("/ledger/utilization/snapshot/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner" && me.role !== "operations") return void res.status(403).json({ error: "forbidden" });
+  const out = await runUtilizationSnapshotTick({ force: true, weeksBack: 8 });
+  res.json(out);
+});
+
+router.post("/ledger/burn-sentinel/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner" && me.role !== "operations") return void res.status(403).json({ error: "forbidden" });
+  const out = await runBurnSentinelTick({ force: true });
+  res.json(out);
+});
+
+router.get("/ledger/burn-sentinel/engagement/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [eng] = await db
+    .select()
+    .from(atelierEngagements)
+    .where(and(eq(atelierEngagements.id, req.params.id), isNull(atelierEngagements.deletedAt)));
+  if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
+  const isLeadership = me.role === "partner" || me.role === "operations";
+  const isLead = me.id === eng.engagementLeadId || me.id === eng.partnerOwnerId;
+  if (!isLeadership && !isLead) return void res.status(403).json({ error: "forbidden" });
+  const summary = await getEngagementBurnSummary(req.params.id);
+  if (!summary) return void res.status(404).json({ error: "no-burn-data" });
+  res.json(summary);
 });
 
 export default router;

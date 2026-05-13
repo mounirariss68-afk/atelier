@@ -2239,3 +2239,37 @@ export const atelierPartnerFirmHours = pgTable(
     index("idx_atelier_pfh_week").on(t.weekIso),
   ],
 );
+
+// ============================================================
+// Task #258 — v3 Ledger: Utilization snapshots (computed weekly)
+// ============================================================
+export const atelierUtilizationSnapshots = pgTable(
+  "atelier_utilization_snapshots",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personId: text("person_id").notNull(),
+    personType: text("person_type").notNull().default("employee"), // employee | contractor
+    weekIso: text("week_iso").notNull(),
+    weekStartDate: text("week_start_date").notNull(),
+    billableHours: doublePrecision("billable_hours").notNull().default(0),
+    internalHours: doublePrecision("internal_hours").notNull().default(0),
+    leaveHours: doublePrecision("leave_hours").notNull().default(0),
+    totalHours: doublePrecision("total_hours").notNull().default(0),
+    availableHours: doublePrecision("available_hours").notNull().default(40),
+    utilizationPct: doublePrecision("utilization_pct").notNull().default(0),
+    targetPct: doublePrecision("target_pct").notNull().default(0),
+    // engagement_mix: array of { engagementId, name, hours, billable }
+    engagementMix: jsonb("engagement_mix").notNull().default([]).$type<
+      Array<{ engagementId: string | null; name: string; hours: number; billable: boolean }>
+    >(),
+    computedAt: timestamp("computed_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_utilization_snap").on(t.personId, t.weekIso),
+    index("idx_atelier_utilization_snap_week").on(t.weekIso),
+    index("idx_atelier_utilization_snap_org").on(t.orgId),
+  ],
+);

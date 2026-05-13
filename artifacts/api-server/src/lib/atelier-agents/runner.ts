@@ -4193,3 +4193,175 @@ export async function runTimeSteward(args: {
   }
 }
 
+
+// =====================================================================
+// Utilization Analyst — Task #258
+// =====================================================================
+// Translates a hydrated numeric block (utilization, realization, burn)
+// into a partner-grade narrative. **Hard guardrail**: refuses generation
+// when the numeric block is missing or stale (no rows, computedAt > 7d).
+
+export interface UtilizationAnalystOutput {
+  refusal: string | null;
+  headline: string | null;
+  narrative: string | null;
+  risks: { id: string; severity: "amber" | "red"; statement: string }[];
+  actions: { id: string; action: string; owner: string }[];
+  confidence: "green" | "amber" | "red";
+}
+
+function mockUtilizationAnalyst(
+  view: string,
+  targetLabel: string,
+  numericBlock: Record<string, unknown> | null,
+): UtilizationAnalystOutput {
+  if (!numericBlock || Object.keys(numericBlock).length === 0) {
+    return {
+      refusal: "numeric-block-missing-or-stale",
+      headline: null,
+      narrative: null,
+      risks: [],
+      actions: [],
+      confidence: "red",
+    };
+  }
+  const u = (numericBlock as { utilizationPct?: number }).utilizationPct ?? 0;
+  const t = (numericBlock as { targetPct?: number }).targetPct ?? 0;
+  const r = (numericBlock as { realizationPct?: number }).realizationPct ?? 0;
+  const variance = u - t;
+  const headline =
+    variance < -0.1
+      ? `${targetLabel} is ${Math.abs(variance * 100).toFixed(0)} pts under target on ${view}-view utilization.`
+      : variance > 0.1
+        ? `${targetLabel} is running hot — ${(u * 100).toFixed(0)}% utilization vs ${(t * 100).toFixed(0)}% target.`
+        : `${targetLabel} is on plan: ${(u * 100).toFixed(0)}% utilization vs ${(t * 100).toFixed(0)}% target.`;
+  const narrative = [
+    `Rolling utilization sits at ${(u * 100).toFixed(0)}% against a target of ${(t * 100).toFixed(0)}%.`,
+    r > 0
+      ? `Realization rate is ${(r * 100).toFixed(0)}% — every 100 billable hours convert to ${(r * 100).toFixed(0)} invoiced hours at full rate.`
+      : `Realization rate not yet computed for this view.`,
+    variance < -0.1
+      ? `Action: rebench or rotate — current trajectory misses the FY plan by Q+2.`
+      : `Hold the line; reforecast at next QBR.`,
+  ].join("\n\n");
+  const risks =
+    variance < -0.1
+      ? [{ id: rid("rk"), severity: "red" as const, statement: `Utilization gap of ${Math.abs(variance * 100).toFixed(0)} pts on ${targetLabel}.` }]
+      : variance < -0.05
+        ? [{ id: rid("rk"), severity: "amber" as const, statement: `Utilization slipping on ${targetLabel}.` }]
+        : [];
+  const actions =
+    variance < -0.05
+      ? [
+          { id: rid("ax"), action: `Re-look pricing on the engagement(s) feeding ${targetLabel}.`, owner: "Partner" },
+          { id: rid("ax"), action: `Rebench underutilized roles into the next pursuit.`, owner: "Operations" },
+        ]
+      : [];
+  return {
+    refusal: null,
+    headline,
+    narrative,
+    risks,
+    actions,
+    confidence: variance < -0.1 ? "red" : variance < -0.05 ? "amber" : "green",
+  };
+}
+
+export async function runUtilizationAnalyst(args: {
+  view: "person" | "engagement" | "firm";
+  targetId: string;
+  targetLabel: string;
+  period: string;
+  numericBlock: Record<string, unknown> | null;
+  triggeredByUserId: string | null;
+}): Promise<{ runId: string; output: UtilizationAnalystOutput }> {
+  // Pre-flight guardrail before we even start a run row: refuse if the
+  // hydrated block is empty or every numeric field is zero (signal that
+  // the snapshot tick hasn't run yet for this target).
+  const blockIsStale =
+    !args.numericBlock ||
+    Object.keys(args.numericBlock).length === 0 ||
+    Object.values(args.numericBlock).every((v) =>
+      typeof v === "number" ? v === 0 : v == null || (Array.isArray(v) && v.length === 0),
+    );
+
+  const runId = await startRun({
+    agentId: "ag_utilization_analyst",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: `utilization_${args.view}`,
+    targetId: args.targetId,
+    targetLabel: args.targetLabel,
+    inputs: { view: args.view, period: args.period, hasNumericBlock: !blockIsStale },
+    actorLabel: "Utilization Analyst",
+  });
+  const t0 = Date.now();
+  try {
+    if (blockIsStale) {
+      const output: UtilizationAnalystOutput = {
+        refusal: "numeric-block-missing-or-stale",
+        headline: null,
+        narrative: null,
+        risks: [],
+        actions: [],
+        confidence: "red",
+      };
+      await completeRun({
+        runId,
+        output,
+        confidence: "red",
+        costUsd: 0,
+        durationMs: Date.now() - t0,
+        sourcesCount: 0,
+        actorLabel: "Utilization Analyst",
+        targetType: `utilization_${args.view}`,
+        targetId: args.targetId,
+        targetLabel: args.targetLabel,
+        source: "mock_config",
+        warning: "numeric-block-missing-or-stale; refused to generate narrative",
+      });
+      return { runId, output };
+    }
+
+    let promptBody = "";
+    try {
+      promptBody = loadPrompt("utilization_analyst");
+    } catch {
+      promptBody = "Utilization Analyst — fallback prompt missing on disk.";
+    }
+    const userPrompt = JSON.stringify({
+      view: args.view,
+      targetId: args.targetId,
+      targetLabel: args.targetLabel,
+      period: args.period,
+      numericBlock: args.numericBlock,
+    });
+    const { value, costUsd, source, warning } = await callClaudeJson<UtilizationAnalystOutput>(
+      "claude-haiku-4-5",
+      promptBody,
+      userPrompt,
+      () => mockUtilizationAnalyst(args.view, args.targetLabel, args.numericBlock),
+    );
+    await completeRun({
+      runId,
+      output: value,
+      confidence: value.confidence ?? "amber",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: 0,
+      actorLabel: "Utilization Analyst",
+      targetType: `utilization_${args.view}`,
+      targetId: args.targetId,
+      targetLabel: args.targetLabel,
+      source,
+      warning,
+    });
+    return { runId, output: value };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: "Utilization Analyst",
+      targetType: `utilization_${args.view}`,
+      targetId: args.targetId,
+    });
+    throw err;
+  }
+}
