@@ -14,7 +14,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 import {
   db,
   atelierEngagements,
@@ -76,7 +76,29 @@ async function loadEng(id: string) {
  * soft-deleted engagements return 404. This is the single chokepoint
  * for confidentiality — both reads and writes route through it.
  */
-async function ensureEngAccess(
+/**
+ * Returns the set of engagement ids the persona may read. Partners get
+ * the firm-wide list; everyone else gets only the engagements they hold
+ * an explicit grant for. Used to filter list endpoints so cross-engagement
+ * data never leaks via the collection route.
+ */
+export async function accessibleEngagementIds(
+  me: typeof atelierUsers.$inferSelect,
+): Promise<{ all: true } | { all: false; ids: Set<string> }> {
+  if (me.role === "partner") return { all: true };
+  const grants = await db
+    .select({ engagementId: atelierEngagementAccess.engagementId })
+    .from(atelierEngagementAccess)
+    .where(
+      and(
+        eq(atelierEngagementAccess.userId, me.id),
+        isNull(atelierEngagementAccess.deletedAt),
+      ),
+    );
+  return { all: false, ids: new Set(grants.map((g) => g.engagementId)) };
+}
+
+export async function ensureEngAccess(
   res: Response,
   me: typeof atelierUsers.$inferSelect,
   engId: string | null | undefined,
@@ -117,7 +139,7 @@ async function loadTree(engId: string): Promise<HypothesisTree | null> {
   return (row.root as HypothesisTree) ?? null;
 }
 
-function audit(args: {
+export function audit(args: {
   entityType: string;
   entityId: string;
   actor: typeof atelierUsers.$inferSelect;

@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, type SQL } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -38,7 +38,31 @@ import {
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler } from "./auditPdf";
 import agentRoutes from "./agentRoutes";
-import engagementRoutes from "./engagementRoutes";
+import engagementRoutes, {
+  accessibleEngagementIds,
+  ensureEngAccess,
+  audit as engagementAudit,
+} from "./engagementRoutes";
+
+async function recordEngagementRead(
+  me: typeof atelierUsers.$inferSelect,
+  eng: typeof atelierEngagements.$inferSelect,
+) {
+  // Cross-engagement read = persona is not the lead/partner-owner of the
+  // engagement they're reading. Emits an audit row whenever a partner uses
+  // firm-wide visibility on an engagement they don't directly own, or when
+  // any other persona reads via an explicit grant rather than ownership.
+  const isOwner = eng.engagementLeadId === me.id || eng.partnerOwnerId === me.id;
+  if (isOwner) return;
+  await engagementAudit({
+    entityType: "engagement",
+    entityId: eng.id,
+    actor: me,
+    action: "engagement.cross_read",
+    payload: { engagementId: eng.id, viewerRole: me.role },
+    summary: `${me.name} viewed engagement ${eng.id} (cross-engagement read)`,
+  });
+}
 
 registerAtelierRlsDefaults();
 
@@ -400,30 +424,42 @@ async function buildEngagementWire(
   };
 }
 
-router.get("/engagements", async (_req, res) => {
+router.get("/engagements", async (req, res) => {
+  const me = req.atelierPersona;
+  if (!me) {
+    res.status(401).json({ error: "no-active-persona" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!access.all && access.ids.size === 0) {
+    res.json(AtelierListEngagementsResponse.parse([]));
+    return;
+  }
   const rows = await db
     .select()
     .from(atelierEngagements)
-    .where(isNull(atelierEngagements.deletedAt));
+    .where(
+      access.all
+        ? isNull(atelierEngagements.deletedAt)
+        : and(
+            isNull(atelierEngagements.deletedAt),
+            inArray(atelierEngagements.id, [...access.ids]),
+          ),
+    );
   const wire = await Promise.all(rows.map(buildEngagementWire));
   res.json(AtelierListEngagementsResponse.parse(wire));
 });
 
 router.get("/engagements/:engId", async (req, res) => {
-  const [row] = await db
-    .select()
-    .from(atelierEngagements)
-    .where(
-      and(
-        eq(atelierEngagements.id, req.params.engId),
-        isNull(atelierEngagements.deletedAt),
-      ),
-    );
-  if (!row) {
-    res.status(404).json({ error: "engagement-not-found" });
+  const me = req.atelierPersona;
+  if (!me) {
+    res.status(401).json({ error: "no-active-persona" });
     return;
   }
-  res.json(AtelierGetEngagementResponse.parse(await buildEngagementWire(row)));
+  const eng = await ensureEngAccess(res, me, req.params.engId);
+  if (!eng) return;
+  await recordEngagementRead(me, eng);
+  res.json(AtelierGetEngagementResponse.parse(await buildEngagementWire(eng)));
 });
 
 // =============================================================
