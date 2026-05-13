@@ -398,6 +398,9 @@ router.post("/roster/people/:id/skills", async (req, res) => {
     // Provenance rule: source=self may only be written by the subject
     // user themselves. Verifier roles must use partner_attested or
     // evidence_atelier when speaking on someone else's behalf.
+    // Contractors have no userId link in the schema, so they cannot
+    // self-attest under the current data model — verifier roles must
+    // record their skills via partner_attested or evidence_atelier.
     const linkedUserId =
       person.workerType === "employee" ? await userIdForEmployee(person.id) : null;
     if (linkedUserId !== me.id) {
@@ -459,6 +462,10 @@ router.post("/roster/people/:id/skills", async (req, res) => {
         evidenceArtifactIds: body.evidenceArtifactIds ?? [],
         evidenceSummary: body.evidenceSummary ?? null,
         status: "active",
+        // Refresh verifier metadata on re-attestation so provenance does
+        // not go stale. Self-attestations stay unverified.
+        verifiedByUserId: source !== "self" ? me.id : null,
+        verifiedAt: source !== "self" ? now : null,
         updatedAt: now,
       },
     });
