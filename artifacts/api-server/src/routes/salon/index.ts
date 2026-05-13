@@ -258,7 +258,7 @@ router.get("/engagements", async (req, res, next) => {
   try {
     const me = ensureSalonPersona(req, res);
     if (!me) return;
-    const access = await db
+    const accessAll = await db
       .select()
       .from(atelierSalonUserEngagementAccess)
       .where(
@@ -267,6 +267,9 @@ router.get("/engagements", async (req, res, next) => {
           isNull(atelierSalonUserEngagementAccess.deletedAt),
         ),
       );
+    // Exclude revoked grants — revoked clients must not see engagement
+    // metadata in their portfolio listing.
+    const access = accessAll.filter((a) => !a.revokedAt);
     if (access.length === 0) {
       res.json({ engagements: [] });
       return;

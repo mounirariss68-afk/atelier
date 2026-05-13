@@ -276,7 +276,8 @@ function DeliverableDetail({ slug, deliverableId, ctx }: { slug: string; deliver
 
   async function attemptDownload() {
     setFeedback(null);
-    if (data!.access.downloadsAllowed) {
+    // Effective permission = access grant AND publish-level allow.
+    if (data!.access.downloadsAllowed && data!.publish?.downloadsAllowed) {
       setFeedback("Download started (mock).");
       return;
     }
