@@ -859,7 +859,17 @@ paths:
     get:
       operationId: atelierListAccounts
       tags: [atelier]
-      summary: Firm accounts
+      summary: Firm accounts (CRM list, with v2 filters)
+      parameters:
+        - in: query
+          name: tier
+          schema: { type: string, enum: [A, B, C, D] }
+        - in: query
+          name: sector
+          schema: { type: string }
+        - in: query
+          name: ownerId
+          schema: { type: string }
       responses:
         "200":
           description: All accounts
@@ -868,7 +878,175 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Account"
+                  $ref: "#/components/schemas/AtelierAccountSummary"
+  /atelier/accounts/{accountId}:
+    get:
+      operationId: atelierGetAccountWorkspace
+      tags: [atelier]
+      summary: Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Workspace payload
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/accounts/{accountId}/cartographer/refresh:
+    post:
+      operationId: atelierRefreshAccountCartographer
+      tags: [atelier]
+      summary: Trigger Account Cartographer for this account
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCartographerRefreshInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+  /atelier/accounts/{accountId}/contacts:
+    get:
+      operationId: atelierListAccountContacts
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Contacts + relationships graph
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierContactGraph" }
+  /atelier/accounts/{accountId}/whitespace:
+    get:
+      operationId: atelierGetAccountWhitespace
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Offerings × buyer-personas grid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierWhitespaceCanvas" }
+  /atelier/accounts/{accountId}/qbr:
+    get:
+      operationId: atelierGetAccountQbr
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: QBR canvas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierQbrCanvas" }
+  /atelier/accounts/{accountId}/profile-updates/{updateId}/decision:
+    post:
+      operationId: atelierDecideProfileUpdate
+      tags: [atelier]
+      summary: Approve or reject a Pursuit Scout-proposed profile delta
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: updateId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierProfileUpdateDecisionInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/contacts/{contactId}/disposition:
+    post:
+      operationId: atelierUpdateContactDisposition
+      tags: [atelier]
+      summary: Update a contact's disposition (audited)
+      parameters:
+        - in: path
+          name: contactId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierContactDispositionInput" }
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierContact" }
+
+  /atelier/credentials:
+    get:
+      operationId: atelierListCredentials
+      tags: [atelier]
+      summary: First-class credentials (case-study workspace)
+      responses:
+        "200":
+          description: Credentials
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierCredential" }
+    post:
+      operationId: atelierCreateCredential
+      tags: [atelier]
+      summary: Create a credential (Partner-only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCredentialInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierCredential" }
+        "403":
+          description: Not a partner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
 
   /atelier/agents:
     get:
@@ -1448,6 +1626,331 @@ components:
         reason: { type: ["string", "null"] }
         readiness: { type: ["string", "null"] }
       required: [error]
+
+    # ----- v2 CRM Accounts (Task #238) -----
+    AtelierAccountTier:
+      type: string
+      enum: [A, B, C, D]
+    AtelierAccountStatus:
+      type: string
+      enum: [active, dormant, archived]
+    AtelierContactDisposition:
+      type: string
+      enum: [champion, supporter, neutral, skeptic, blocker, unknown]
+    AtelierContactSeniority:
+      type: string
+      enum: [c_suite, vp, director, manager, ic, unknown]
+    AtelierBuyerPersona:
+      type: string
+      enum: [CEO, COO, CIO, CDO, CXO, business_head, procurement, technical_evaluator, other]
+
+    AtelierSourceSignal:
+      type: object
+      required: [kind, title, url]
+      properties:
+        kind: { type: string, enum: [news, linkedin, press, filing, manual] }
+        title: { type: string }
+        url: { type: string }
+        summary: { type: ["string", "null"] }
+        publishedAt: { type: ["string", "null"] }
+        confidence: { type: ["string", "null"], enum: [green, amber, red, null] }
+
+    AtelierProfileUpdateProposal:
+      type: object
+      required: [id, proposedBy, proposedAt, field, fromValue, toValue, rationale, status]
+      properties:
+        id: { type: string }
+        proposedBy: { type: string }
+        proposedAt: { type: string }
+        field: { type: string }
+        fromValue: {}
+        toValue: {}
+        rationale: { type: string }
+        oppId: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, approved, rejected] }
+
+    AtelierProfileUpdateDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        note: { type: ["string", "null"] }
+
+    AtelierAccountSummary:
+      type: object
+      required: [id, name, country, sector, tier, status, relationshipStrength]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        country: { type: string }
+        sector: { type: string }
+        tier: { $ref: "#/components/schemas/AtelierAccountTier" }
+        status: { $ref: "#/components/schemas/AtelierAccountStatus" }
+        size: { type: ["string", "null"] }
+        hqCity: { type: ["string", "null"] }
+        primaryCurrency: { type: string }
+        primaryLanguage: { type: string }
+        partnerOwnerId: { type: ["string", "null"] }
+        partnerOwnerName: { type: ["string", "null"] }
+        relationshipStrength: { type: number }
+        openOpportunityCount: { type: integer }
+        activeEngagementCount: { type: integer }
+        lastTouchAt: { type: ["string", "null"] }
+        enrichedAt: { type: ["string", "null"] }
+        pendingUpdateCount: { type: integer }
+
+    AtelierContact:
+      type: object
+      required: [id, accountId, fullName, disposition, influenceScore]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        fullName: { type: string }
+        title: { type: ["string", "null"] }
+        seniority: { type: ["string", "null"], enum: [c_suite, vp, director, manager, ic, unknown, null] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        buyerPersona: { type: ["string", "null"] }
+        influenceScore: { type: integer, minimum: 1, maximum: 5 }
+        disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
+        lastContactAt: { type: ["string", "null"] }
+        contactOwnerId: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+
+    AtelierContactRelationship:
+      type: object
+      required: [id, accountId, fromContactId, toContactId, type]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        fromContactId: { type: string }
+        toContactId: { type: string }
+        type: { type: string, enum: [reports_to, partners_with, blocks] }
+        notes: { type: ["string", "null"] }
+
+    AtelierContactGraph:
+      type: object
+      required: [contacts, relationships]
+      properties:
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContact" }
+        relationships:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContactRelationship" }
+
+    AtelierContactDispositionInput:
+      type: object
+      required: [disposition]
+      properties:
+        disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
+        note: { type: ["string", "null"] }
+
+    AtelierAccountOpportunityRef:
+      type: object
+      required: [id, name, plmStage, dealValueUsd]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        plmStage: { $ref: "#/components/schemas/PlmStage" }
+        dealValueUsd: { type: number }
+        winProbabilityPct: { type: ["number", "null"] }
+        leadName: { type: ["string", "null"] }
+        nextMilestone: { type: ["string", "null"] }
+
+    AtelierAccountEngagementRef:
+      type: object
+      required: [id, title, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string }
+        leadName: { type: ["string", "null"] }
+        startedAt: { type: ["string", "null"] }
+
+    AtelierWhitespaceCell:
+      type: object
+      required: [offering, persona, state]
+      properties:
+        offering: { type: string }
+        persona: { type: string }
+        state: { type: string, enum: [empty, identified, qualified, won] }
+        note: { type: ["string", "null"] }
+        oppId: { type: ["string", "null"] }
+        rationale: { type: ["string", "null"] }
+
+    AtelierWhitespaceCanvas:
+      type: object
+      required: [accountId, offerings, personas, cells]
+      properties:
+        accountId: { type: string }
+        offerings:
+          type: array
+          items: { type: string }
+        personas:
+          type: array
+          items: { type: string }
+        cells:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierWhitespaceCell" }
+        priorityMoves:
+          type: array
+          items: { type: string }
+        generatedAt: { type: ["string", "null"] }
+
+    AtelierQbrSection:
+      type: object
+      required: [heading, body]
+      properties:
+        heading: { type: string }
+        body: { type: string }
+
+    AtelierQbrCanvas:
+      type: object
+      required: [accountId, periodLabel, sections]
+      properties:
+        accountId: { type: string }
+        periodLabel: { type: string }
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierQbrSection" }
+        riskFlags:
+          type: array
+          items: { type: string }
+        nextMoves:
+          type: array
+          items: { type: string }
+        generatedAt: { type: ["string", "null"] }
+
+    AtelierAuditEventLite:
+      type: object
+      required: [id, action, actorLabel, createdAt]
+      properties:
+        id: { type: string }
+        action: { type: string }
+        actorType: { type: string }
+        actorLabel: { type: string }
+        payloadSummary: { type: ["string", "null"] }
+        createdAt: { type: string }
+
+    AtelierAccountWorkspace:
+      type: object
+      required:
+        [account, contacts, relationships, opportunities, engagements, audit]
+      properties:
+        account:
+          allOf:
+            - $ref: "#/components/schemas/AtelierAccountSummary"
+            - type: object
+              properties:
+                notes: { type: ["string", "null"] }
+                strategicPriorities:
+                  type: array
+                  items: { type: string }
+                aicoHypothesis: { type: ["string", "null"] }
+                sourceSignals:
+                  type: array
+                  items: { $ref: "#/components/schemas/AtelierSourceSignal" }
+                pendingProfileUpdates:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/AtelierProfileUpdateProposal"
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContact" }
+        relationships:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContactRelationship" }
+        opportunities:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountOpportunityRef" }
+        engagements:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountEngagementRef" }
+        audit:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAuditEventLite" }
+        whitespacePreview:
+          $ref: "#/components/schemas/AtelierWhitespaceCanvas"
+        qbrPreview:
+          $ref: "#/components/schemas/AtelierQbrCanvas"
+
+    AtelierCartographerRefreshInput:
+      type: object
+      properties:
+        focusOpportunityId: { type: ["string", "null"] }
+
+    AtelierCredential:
+      type: object
+      required:
+        [id, title, clientName, sector, engagementType, anonymizationStatus, redactedAbstract, outcomeMetrics, evidenceLinks, tags]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        accountId: { type: ["string", "null"] }
+        clientName: { type: string }
+        sector: { type: string }
+        engagementType:
+          { type: string, enum: [diagnostic, pov, agentic_build, transformation, workshop] }
+        anonymizationStatus:
+          { type: string, enum: [redacted, attributed, pending] }
+        redactedAbstract: { type: string }
+        attributedAbstract: { type: ["string", "null"] }
+        outcomeMetrics:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: string }
+        evidenceLinks:
+          type: array
+          items:
+            type: object
+            required: [label, url]
+            properties:
+              label: { type: string }
+              url: { type: string }
+        relatedAssetId: { type: ["string", "null"] }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string }
+
+    AtelierCredentialInput:
+      type: object
+      required: [title, clientName, sector, engagementType, redactedAbstract]
+      properties:
+        title: { type: string }
+        accountId: { type: ["string", "null"] }
+        clientName: { type: string }
+        sector: { type: string }
+        engagementType: { type: string }
+        anonymizationStatus: { type: ["string", "null"] }
+        redactedAbstract: { type: string }
+        attributedAbstract: { type: ["string", "null"] }
+        outcomeMetrics:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label: { type: string }
+              value: { type: string }
+        evidenceLinks:
+          type: array
+          items:
+            type: object
+            required: [label, url]
+            properties:
+              label: { type: string }
+              url: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+    # ----- end v2 CRM Accounts -----
 
     AtelierPersonaRole:
       type: string

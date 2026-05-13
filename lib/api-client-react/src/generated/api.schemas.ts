@@ -89,6 +89,437 @@ export interface AtelierError {
   readiness?: string | null;
 }
 
+export type AtelierAccountTier =
+  (typeof AtelierAccountTier)[keyof typeof AtelierAccountTier];
+
+export const AtelierAccountTier = {
+  A: "A",
+  B: "B",
+  C: "C",
+  D: "D",
+} as const;
+
+export type AtelierAccountStatus =
+  (typeof AtelierAccountStatus)[keyof typeof AtelierAccountStatus];
+
+export const AtelierAccountStatus = {
+  active: "active",
+  dormant: "dormant",
+  archived: "archived",
+} as const;
+
+export type AtelierContactDisposition =
+  (typeof AtelierContactDisposition)[keyof typeof AtelierContactDisposition];
+
+export const AtelierContactDisposition = {
+  champion: "champion",
+  supporter: "supporter",
+  neutral: "neutral",
+  skeptic: "skeptic",
+  blocker: "blocker",
+  unknown: "unknown",
+} as const;
+
+export type AtelierContactSeniority =
+  (typeof AtelierContactSeniority)[keyof typeof AtelierContactSeniority];
+
+export const AtelierContactSeniority = {
+  c_suite: "c_suite",
+  vp: "vp",
+  director: "director",
+  manager: "manager",
+  ic: "ic",
+  unknown: "unknown",
+} as const;
+
+export type AtelierBuyerPersona =
+  (typeof AtelierBuyerPersona)[keyof typeof AtelierBuyerPersona];
+
+export const AtelierBuyerPersona = {
+  CEO: "CEO",
+  COO: "COO",
+  CIO: "CIO",
+  CDO: "CDO",
+  CXO: "CXO",
+  business_head: "business_head",
+  procurement: "procurement",
+  technical_evaluator: "technical_evaluator",
+  other: "other",
+} as const;
+
+export type AtelierSourceSignalKind =
+  (typeof AtelierSourceSignalKind)[keyof typeof AtelierSourceSignalKind];
+
+export const AtelierSourceSignalKind = {
+  news: "news",
+  linkedin: "linkedin",
+  press: "press",
+  filing: "filing",
+  manual: "manual",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AtelierSourceSignalConfidence =
+  | (typeof AtelierSourceSignalConfidence)[keyof typeof AtelierSourceSignalConfidence]
+  | null;
+
+export const AtelierSourceSignalConfidence = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface AtelierSourceSignal {
+  kind: AtelierSourceSignalKind;
+  title: string;
+  url: string;
+  /** @nullable */
+  summary?: string | null;
+  /** @nullable */
+  publishedAt?: string | null;
+  /** @nullable */
+  confidence?: AtelierSourceSignalConfidence;
+}
+
+export type AtelierProfileUpdateProposalStatus =
+  (typeof AtelierProfileUpdateProposalStatus)[keyof typeof AtelierProfileUpdateProposalStatus];
+
+export const AtelierProfileUpdateProposalStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export interface AtelierProfileUpdateProposal {
+  id: string;
+  proposedBy: string;
+  proposedAt: string;
+  field: string;
+  fromValue: unknown;
+  toValue: unknown;
+  rationale: string;
+  /** @nullable */
+  oppId?: string | null;
+  status: AtelierProfileUpdateProposalStatus;
+}
+
+export type AtelierProfileUpdateDecisionInputDecision =
+  (typeof AtelierProfileUpdateDecisionInputDecision)[keyof typeof AtelierProfileUpdateDecisionInputDecision];
+
+export const AtelierProfileUpdateDecisionInputDecision = {
+  approve: "approve",
+  reject: "reject",
+} as const;
+
+export interface AtelierProfileUpdateDecisionInput {
+  decision: AtelierProfileUpdateDecisionInputDecision;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface AtelierAccountSummary {
+  id: string;
+  name: string;
+  country: string;
+  sector: string;
+  tier: AtelierAccountTier;
+  status: AtelierAccountStatus;
+  /** @nullable */
+  size?: string | null;
+  /** @nullable */
+  hqCity?: string | null;
+  primaryCurrency?: string;
+  primaryLanguage?: string;
+  /** @nullable */
+  partnerOwnerId?: string | null;
+  /** @nullable */
+  partnerOwnerName?: string | null;
+  relationshipStrength: number;
+  openOpportunityCount?: number;
+  activeEngagementCount?: number;
+  /** @nullable */
+  lastTouchAt?: string | null;
+  /** @nullable */
+  enrichedAt?: string | null;
+  pendingUpdateCount?: number;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierContactSeniorityProperty =
+  | (typeof AtelierContactSeniorityProperty)[keyof typeof AtelierContactSeniorityProperty]
+  | null;
+
+export const AtelierContactSeniorityProperty = {
+  c_suite: "c_suite",
+  vp: "vp",
+  director: "director",
+  manager: "manager",
+  ic: "ic",
+  unknown: "unknown",
+} as const;
+
+export interface AtelierContact {
+  id: string;
+  accountId: string;
+  fullName: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  seniority?: AtelierContactSeniorityProperty;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  /** @nullable */
+  buyerPersona?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  influenceScore: number;
+  disposition: AtelierContactDisposition;
+  /** @nullable */
+  lastContactAt?: string | null;
+  /** @nullable */
+  contactOwnerId?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type AtelierContactRelationshipType =
+  (typeof AtelierContactRelationshipType)[keyof typeof AtelierContactRelationshipType];
+
+export const AtelierContactRelationshipType = {
+  reports_to: "reports_to",
+  partners_with: "partners_with",
+  blocks: "blocks",
+} as const;
+
+export interface AtelierContactRelationship {
+  id: string;
+  accountId: string;
+  fromContactId: string;
+  toContactId: string;
+  type: AtelierContactRelationshipType;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface AtelierContactGraph {
+  contacts: AtelierContact[];
+  relationships: AtelierContactRelationship[];
+}
+
+export interface AtelierContactDispositionInput {
+  disposition: AtelierContactDisposition;
+  /** @nullable */
+  note?: string | null;
+}
+
+export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
+
+export const PlmStage = {
+  identify: "identify",
+  shape: "shape",
+  pursue: "pursue",
+  mobilize: "mobilize",
+  deliver: "deliver",
+  compound: "compound",
+  won: "won",
+  lost: "lost",
+  no_go: "no_go",
+  closed: "closed",
+} as const;
+
+export interface AtelierAccountOpportunityRef {
+  id: string;
+  name: string;
+  plmStage: PlmStage;
+  dealValueUsd: number;
+  /** @nullable */
+  winProbabilityPct?: number | null;
+  /** @nullable */
+  leadName?: string | null;
+  /** @nullable */
+  nextMilestone?: string | null;
+}
+
+export interface AtelierAccountEngagementRef {
+  id: string;
+  title: string;
+  status: string;
+  /** @nullable */
+  leadName?: string | null;
+  /** @nullable */
+  startedAt?: string | null;
+}
+
+export type AtelierWhitespaceCellState =
+  (typeof AtelierWhitespaceCellState)[keyof typeof AtelierWhitespaceCellState];
+
+export const AtelierWhitespaceCellState = {
+  empty: "empty",
+  identified: "identified",
+  qualified: "qualified",
+  won: "won",
+} as const;
+
+export interface AtelierWhitespaceCell {
+  offering: string;
+  persona: string;
+  state: AtelierWhitespaceCellState;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  oppId?: string | null;
+  /** @nullable */
+  rationale?: string | null;
+}
+
+export interface AtelierWhitespaceCanvas {
+  accountId: string;
+  offerings: string[];
+  personas: string[];
+  cells: AtelierWhitespaceCell[];
+  priorityMoves?: string[];
+  /** @nullable */
+  generatedAt?: string | null;
+}
+
+export interface AtelierQbrSection {
+  heading: string;
+  body: string;
+}
+
+export interface AtelierQbrCanvas {
+  accountId: string;
+  periodLabel: string;
+  sections: AtelierQbrSection[];
+  riskFlags?: string[];
+  nextMoves?: string[];
+  /** @nullable */
+  generatedAt?: string | null;
+}
+
+export interface AtelierAuditEventLite {
+  id: string;
+  action: string;
+  actorType?: string;
+  actorLabel: string;
+  /** @nullable */
+  payloadSummary?: string | null;
+  createdAt: string;
+}
+
+export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
+  /** @nullable */
+  notes?: string | null;
+  strategicPriorities?: string[];
+  /** @nullable */
+  aicoHypothesis?: string | null;
+  sourceSignals?: AtelierSourceSignal[];
+  pendingProfileUpdates?: AtelierProfileUpdateProposal[];
+};
+
+export interface AtelierAccountWorkspace {
+  account: AtelierAccountWorkspaceAccount;
+  contacts: AtelierContact[];
+  relationships: AtelierContactRelationship[];
+  opportunities: AtelierAccountOpportunityRef[];
+  engagements: AtelierAccountEngagementRef[];
+  audit: AtelierAuditEventLite[];
+  whitespacePreview?: AtelierWhitespaceCanvas;
+  qbrPreview?: AtelierQbrCanvas;
+}
+
+export interface AtelierCartographerRefreshInput {
+  /** @nullable */
+  focusOpportunityId?: string | null;
+}
+
+export type AtelierCredentialEngagementType =
+  (typeof AtelierCredentialEngagementType)[keyof typeof AtelierCredentialEngagementType];
+
+export const AtelierCredentialEngagementType = {
+  diagnostic: "diagnostic",
+  pov: "pov",
+  agentic_build: "agentic_build",
+  transformation: "transformation",
+  workshop: "workshop",
+} as const;
+
+export type AtelierCredentialAnonymizationStatus =
+  (typeof AtelierCredentialAnonymizationStatus)[keyof typeof AtelierCredentialAnonymizationStatus];
+
+export const AtelierCredentialAnonymizationStatus = {
+  redacted: "redacted",
+  attributed: "attributed",
+  pending: "pending",
+} as const;
+
+export type AtelierCredentialOutcomeMetricsItem = {
+  label: string;
+  value: string;
+};
+
+export type AtelierCredentialEvidenceLinksItem = {
+  label: string;
+  url: string;
+};
+
+export interface AtelierCredential {
+  id: string;
+  title: string;
+  /** @nullable */
+  accountId?: string | null;
+  clientName: string;
+  sector: string;
+  engagementType: AtelierCredentialEngagementType;
+  anonymizationStatus: AtelierCredentialAnonymizationStatus;
+  redactedAbstract: string;
+  /** @nullable */
+  attributedAbstract?: string | null;
+  outcomeMetrics: AtelierCredentialOutcomeMetricsItem[];
+  evidenceLinks: AtelierCredentialEvidenceLinksItem[];
+  /** @nullable */
+  relatedAssetId?: string | null;
+  tags: string[];
+  createdAt?: string;
+}
+
+export type AtelierCredentialInputOutcomeMetricsItem = {
+  label: string;
+  value: string;
+};
+
+export type AtelierCredentialInputEvidenceLinksItem = {
+  label: string;
+  url: string;
+};
+
+export interface AtelierCredentialInput {
+  title: string;
+  /** @nullable */
+  accountId?: string | null;
+  clientName: string;
+  sector: string;
+  engagementType: string;
+  /** @nullable */
+  anonymizationStatus?: string | null;
+  redactedAbstract: string;
+  /** @nullable */
+  attributedAbstract?: string | null;
+  outcomeMetrics?: AtelierCredentialInputOutcomeMetricsItem[];
+  evidenceLinks?: AtelierCredentialInputEvidenceLinksItem[];
+  tags?: string[];
+}
+
 export type AtelierPersonaRole =
   (typeof AtelierPersonaRole)[keyof typeof AtelierPersonaRole];
 
@@ -115,21 +546,6 @@ export interface AtelierPersona {
 export interface AtelierPersonaSwitchInput {
   personaId: string;
 }
-
-export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
-
-export const PlmStage = {
-  identify: "identify",
-  shape: "shape",
-  pursue: "pursue",
-  mobilize: "mobilize",
-  deliver: "deliver",
-  compound: "compound",
-  won: "won",
-  lost: "lost",
-  no_go: "no_go",
-  closed: "closed",
-} as const;
 
 export interface Account {
   id: string;
@@ -1532,6 +1948,22 @@ export interface AtelierAgentRunSummary {
 export type AtelierGetActivityParams = {
   limit?: number;
 };
+
+export type AtelierListAccountsParams = {
+  tier?: AtelierListAccountsTier;
+  sector?: string;
+  ownerId?: string;
+};
+
+export type AtelierListAccountsTier =
+  (typeof AtelierListAccountsTier)[keyof typeof AtelierListAccountsTier];
+
+export const AtelierListAccountsTier = {
+  A: "A",
+  B: "B",
+  C: "C",
+  D: "D",
+} as const;
 
 export type AtelierListAuditParams = {
   entityType?: AtelierListAuditEntityType;

@@ -40,6 +40,7 @@ import { auditPdfHandler } from "./auditPdf";
 import agentRoutes from "./agentRoutes";
 import proposalRoutes from "./proposalRoutes";
 import knowledgeRoutes from "./knowledgeRoutes";
+import accountRoutes from "./accountRoutes";
 import engagementRoutes, {
   accessibleEngagementIds,
   ensureEngAccess,
@@ -77,6 +78,7 @@ router.get("/audit/export.pdf", auditPdfHandler);
 
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);
+router.use(accountRoutes);
 // Mount engagement / charter / deliverable / artifact write routes (Task #222).
 router.use(engagementRoutes);
 // Mount process / prototype / proposal write routes (Task #223).
@@ -471,23 +473,7 @@ router.get("/engagements/:engId", async (req, res) => {
 // =============================================================
 // Accounts / Agents / Assets
 // =============================================================
-router.get("/accounts", async (_req, res) => {
-  const rows = await db
-    .select()
-    .from(atelierAccounts)
-    .where(isNull(atelierAccounts.deletedAt));
-  res.json(
-    AtelierListAccountsResponse.parse(
-      rows.map((a) => ({
-        id: a.id,
-        name: a.name,
-        country: a.country,
-        sector: a.sector,
-        notes: a.notes,
-      })),
-    ),
-  );
-});
+// /accounts handled by accountRoutes (Task #238 — v2 CRM).
 
 router.get("/agents", async (_req, res) => {
   const rows = await db

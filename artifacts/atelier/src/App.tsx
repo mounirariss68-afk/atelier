@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import SignIn from "@/pages/SignIn";
 import Home from "@/pages/Home";
 import Pipeline from "@/pages/Pipeline";
+import Crm from "@/pages/Crm";
 import Opportunity from "@/pages/Opportunity";
 import Engagements from "@/pages/Engagements";
 import Engagement from "@/pages/Engagement";
@@ -29,6 +30,7 @@ function Router() {
       <Switch>
         <Route path="/sign-in" component={SignIn} />
         <Route path="/" component={Home} />
+        <Route path="/crm" component={Crm} />
         <Route path="/pipeline" component={Pipeline} />
         <Route path="/pipeline/:oppId" component={Opportunity} />
         <Route path="/engagements" component={Engagements} />

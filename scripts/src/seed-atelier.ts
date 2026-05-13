@@ -37,6 +37,9 @@ import {
   atelierHypothesisTrees,
   atelierProcesses,
   atelierPaneAItems,
+  atelierContacts,
+  atelierContactRelationships,
+  atelierCredentials,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
@@ -174,6 +177,439 @@ const ACCOUNTS = [
       "BOQ workshop completed; learnings being harvested into the Atelier as a delivery learning.",
   },
 ] as const;
+
+// ============================================================
+// 2.5) ACCOUNT EXT (Task #238) — tier, owner, hypothesis, signals
+// ============================================================
+type AccountExt = {
+  size?: string;
+  hqCity?: string;
+  primaryCurrency?: string;
+  primaryLanguage?: string;
+  tier?: "A" | "B" | "C" | "D";
+  status?: string;
+  partnerOwnerId?: string;
+  relationshipStrength?: number;
+  enrichedAt?: Date;
+  sourceSignals?: Array<{
+    kind: string;
+    title: string;
+    summary?: string;
+    url: string;
+    capturedAt: string;
+    confidence: "green" | "amber" | "red";
+  }>;
+  strategicPriorities?: string[];
+  aicoHypothesis?: string;
+  pendingProfileUpdates?: Array<{
+    id: string;
+    field: string;
+    proposedValue: unknown;
+    rationale: string;
+    sourceAgentRunId?: string;
+    status: "pending" | "approved" | "rejected";
+    proposedAt: string;
+  }>;
+};
+
+const ACCOUNT_EXT: Record<string, AccountExt> = {
+  acc_tasama: {
+    size: "enterprise",
+    hqCity: "Riyadh",
+    primaryCurrency: "SAR",
+    primaryLanguage: "ar",
+    tier: "A",
+    status: "active",
+    partnerOwnerId: "p_mounir_ariss",
+    relationshipStrength: 88,
+    enrichedAt: HOURS_AGO(36),
+    strategicPriorities: [
+      "Scale Agentic BPO marketplace to 12 verticals by FY27",
+      "Lift utilization on Maven AI agent fleet from 38% to 65%",
+      "Lock in Saudi public-sector logos as anchor tenants",
+    ],
+    aicoHypothesis:
+      "Tasama is the marquee proof-point that an Agentic BPO can outperform conventional BPO economics by 3–4x. AICo's role is to graduate the marketplace from pilot into a defensible operating system.",
+    sourceSignals: [
+      {
+        kind: "press",
+        title: "Tasama announces FY26 expansion of shared-services platform",
+        summary: "Highlights three new sectors and Maven AI integration.",
+        url: "https://www.example.com/tasama-fy26",
+        publishedAt: HOURS_AGO(72).toISOString(),
+        confidence: "green",
+      },
+      {
+        kind: "news",
+        title: "New COO appointment at Tasama",
+        summary: "Ex-Aramco operations leader joins; mandate is digitalisation.",
+        url: "https://www.example.com/tasama-coo",
+        publishedAt: HOURS_AGO(120).toISOString(),
+        confidence: "amber",
+      },
+    ],
+    pendingProfileUpdates: [
+      {
+        id: "ppu_tasama_priority",
+        proposedBy: "ag_account_cartographer",
+        proposedAt: HOURS_AGO(2).toISOString(),
+        field: "strategicPriorities",
+        fromValue: [
+          "Scale Agentic BPO marketplace to 12 verticals by FY27",
+          "Lift utilization on Maven AI agent fleet from 38% to 65%",
+          "Lock in Saudi public-sector logos as anchor tenants",
+        ],
+        toValue: [
+          "Scale Agentic BPO marketplace to 12 verticals by FY27",
+          "Lift utilization on Maven AI agent fleet from 38% to 65%",
+          "Lock in Saudi public-sector logos as anchor tenants",
+          "Establish Tasama Academy for agent operators",
+        ],
+        rationale:
+          "Cartographer ★ found three press mentions of an Academy concept across Q1 2026.",
+        status: "pending",
+      },
+    ],
+  },
+  acc_dubai_municipality: {
+    hqCity: "Dubai",
+    primaryCurrency: "AED",
+    primaryLanguage: "ar",
+    tier: "A",
+    partnerOwnerId: "p_mounir_ariss",
+    relationshipStrength: 82,
+    enrichedAt: HOURS_AGO(60),
+    strategicPriorities: [
+      "Service-design transformation across 60+ touchpoints",
+      "Citizen NPS lift of +20 by year-end",
+      "Single-window digital concierge across departments",
+    ],
+    aicoHypothesis:
+      "DM is the lighthouse smart-city service-design account in the GCC. Win two more departments to convert into multi-year retainer.",
+  },
+  acc_dge: {
+    hqCity: "Abu Dhabi",
+    primaryCurrency: "AED",
+    primaryLanguage: "en",
+    tier: "A",
+    partnerOwnerId: "p_mounir_ariss",
+    relationshipStrength: 79,
+    enrichedAt: HOURS_AGO(48),
+    strategicPriorities: [
+      "Effortless agent program scale to 8 ministries",
+      "Federation across UAE government data spines",
+    ],
+    aicoHypothesis:
+      "DGE is our most replicable agentic-government story. Codify the playbook so other emirates buy on rails.",
+  },
+  acc_tahakom: {
+    hqCity: "Riyadh",
+    primaryCurrency: "SAR",
+    primaryLanguage: "ar",
+    tier: "B",
+    partnerOwnerId: "p_mounir_ariss",
+    relationshipStrength: 64,
+  },
+  acc_nhc: {
+    hqCity: "Riyadh",
+    primaryCurrency: "SAR",
+    primaryLanguage: "ar",
+    tier: "B",
+    partnerOwnerId: "p_mounir_ariss",
+    relationshipStrength: 58,
+  },
+  acc_stc: {
+    hqCity: "Riyadh",
+    primaryCurrency: "SAR",
+    primaryLanguage: "ar",
+    tier: "B",
+    partnerOwnerId: "p_mounir_ariss",
+    relationshipStrength: 52,
+  },
+  acc_aldrees: {
+    hqCity: "Riyadh",
+    primaryCurrency: "SAR",
+    primaryLanguage: "ar",
+    tier: "C",
+    partnerOwnerId: "p_mounir_ariss",
+    relationshipStrength: 46,
+  },
+};
+
+// ============================================================
+// 2.6) CONTACTS (Task #238) — Tier-A account org charts
+// ============================================================
+type ContactSeed = {
+  id: string;
+  accountId: string;
+  fullName: string;
+  email?: string | null;
+  title?: string | null;
+  seniority?: string | null;
+  buyerPersona?: string | null;
+  influenceScore: number;
+  disposition:
+    | "champion"
+    | "supporter"
+    | "neutral"
+    | "skeptic"
+    | "blocker"
+    | "unknown";
+  notes?: string | null;
+  source?: string | null;
+  ownerUserId?: string | null;
+};
+
+const CONTACTS: ContactSeed[] = [
+  // Tasama
+  {
+    id: "ct_tasama_ceo",
+    accountId: "acc_tasama",
+    fullName: "Faisal Al-Otaibi",
+    title: "CEO",
+    seniority: "C-suite",
+    buyerPersona: "Economic Buyer",
+    influenceScore: 5,
+    disposition: "champion",
+    notes: "Personally sponsors the Agentic BPO platform.",
+    source: "manual",
+    ownerUserId: "p_mounir_ariss",
+  },
+  {
+    id: "ct_tasama_coo",
+    accountId: "acc_tasama",
+    fullName: "Hala Mansour",
+    title: "COO",
+    seniority: "C-suite",
+    buyerPersona: "Operations Sponsor",
+    influenceScore: 4,
+    disposition: "supporter",
+    notes: "New hire — owns operational scale-up. First QBR in 6 weeks.",
+    source: "cartographer",
+    ownerUserId: "p_mounir_ariss",
+  },
+  {
+    id: "ct_tasama_cto",
+    accountId: "acc_tasama",
+    fullName: "Bader Al-Harbi",
+    title: "CTO",
+    seniority: "C-suite",
+    buyerPersona: "Technical Buyer",
+    influenceScore: 4,
+    disposition: "supporter",
+    source: "manual",
+    ownerUserId: "p_layla_haddad",
+  },
+  {
+    id: "ct_tasama_cfo",
+    accountId: "acc_tasama",
+    fullName: "Reema Al-Saud",
+    title: "CFO",
+    seniority: "C-suite",
+    buyerPersona: "Economic Approver",
+    influenceScore: 4,
+    disposition: "skeptic",
+    notes: "Pushes hard on unit economics. Needs proof of margin uplift.",
+    source: "manual",
+  },
+  {
+    id: "ct_tasama_head_ai",
+    accountId: "acc_tasama",
+    fullName: "Tariq Younis",
+    title: "Head of AI Programs",
+    seniority: "VP",
+    buyerPersona: "Champion",
+    influenceScore: 5,
+    disposition: "champion",
+    notes: "Day-to-day partner. Joined Maven AI co-design sessions.",
+    source: "manual",
+    ownerUserId: "p_layla_haddad",
+  },
+  // Dubai Municipality
+  {
+    id: "ct_dm_dg",
+    accountId: "acc_dubai_municipality",
+    fullName: "Khalifa Al-Marri",
+    title: "Director General",
+    seniority: "C-suite",
+    buyerPersona: "Economic Buyer",
+    influenceScore: 5,
+    disposition: "supporter",
+    source: "manual",
+    ownerUserId: "p_mounir_ariss",
+  },
+  {
+    id: "ct_dm_chiefdigital",
+    accountId: "acc_dubai_municipality",
+    fullName: "Noura Al-Falasi",
+    title: "Chief Digital Officer",
+    seniority: "VP",
+    buyerPersona: "Champion",
+    influenceScore: 5,
+    disposition: "champion",
+    notes: "Driving the citizen-NPS program. Weekly working sessions.",
+    source: "manual",
+    ownerUserId: "p_gokhan_guney",
+  },
+  {
+    id: "ct_dm_servicedesign",
+    accountId: "acc_dubai_municipality",
+    fullName: "Yasmin Hashemi",
+    title: "Head of Service Design",
+    seniority: "Director",
+    buyerPersona: "Practitioner",
+    influenceScore: 3,
+    disposition: "supporter",
+    source: "manual",
+  },
+  {
+    id: "ct_dm_procurement",
+    accountId: "acc_dubai_municipality",
+    fullName: "Salem Al-Nuaimi",
+    title: "Head of Procurement",
+    seniority: "Director",
+    buyerPersona: "Approver",
+    influenceScore: 3,
+    disposition: "neutral",
+    source: "manual",
+  },
+  // DGE
+  {
+    id: "ct_dge_chair",
+    accountId: "acc_dge",
+    fullName: "Mohammed Al-Hashimi",
+    title: "Chairman",
+    seniority: "C-suite",
+    buyerPersona: "Economic Buyer",
+    influenceScore: 5,
+    disposition: "supporter",
+    source: "manual",
+    ownerUserId: "p_mounir_ariss",
+  },
+  {
+    id: "ct_dge_dg",
+    accountId: "acc_dge",
+    fullName: "Aisha Al-Romaithi",
+    title: "Director General",
+    seniority: "C-suite",
+    buyerPersona: "Economic Buyer",
+    influenceScore: 5,
+    disposition: "champion",
+    notes: "Personally championed the Effortless rollout.",
+    source: "manual",
+    ownerUserId: "p_mounir_ariss",
+  },
+  {
+    id: "ct_dge_headai",
+    accountId: "acc_dge",
+    fullName: "Omar Khoury",
+    title: "Head of AI",
+    seniority: "VP",
+    buyerPersona: "Technical Buyer",
+    influenceScore: 4,
+    disposition: "champion",
+    source: "manual",
+    ownerUserId: "p_layla_haddad",
+  },
+];
+
+const CONTACT_RELATIONSHIPS: Array<{
+  id: string;
+  accountId: string;
+  fromContactId: string;
+  toContactId: string;
+  type: "reports_to" | "partners_with" | "blocks" | "mentors";
+  notes?: string | null;
+}> = [
+  // Tasama
+  { id: "cr_tasama_coo_ceo", accountId: "acc_tasama", fromContactId: "ct_tasama_coo", toContactId: "ct_tasama_ceo", type: "reports_to" },
+  { id: "cr_tasama_cto_ceo", accountId: "acc_tasama", fromContactId: "ct_tasama_cto", toContactId: "ct_tasama_ceo", type: "reports_to" },
+  { id: "cr_tasama_cfo_ceo", accountId: "acc_tasama", fromContactId: "ct_tasama_cfo", toContactId: "ct_tasama_ceo", type: "reports_to" },
+  { id: "cr_tasama_headai_cto", accountId: "acc_tasama", fromContactId: "ct_tasama_head_ai", toContactId: "ct_tasama_cto", type: "reports_to" },
+  { id: "cr_tasama_cfo_blocks", accountId: "acc_tasama", fromContactId: "ct_tasama_cfo", toContactId: "ct_tasama_head_ai", type: "blocks", notes: "Margin scrutiny on AI program." },
+  // DM
+  { id: "cr_dm_cdo_dg", accountId: "acc_dubai_municipality", fromContactId: "ct_dm_chiefdigital", toContactId: "ct_dm_dg", type: "reports_to" },
+  { id: "cr_dm_sd_cdo", accountId: "acc_dubai_municipality", fromContactId: "ct_dm_servicedesign", toContactId: "ct_dm_chiefdigital", type: "reports_to" },
+  { id: "cr_dm_proc_dg", accountId: "acc_dubai_municipality", fromContactId: "ct_dm_procurement", toContactId: "ct_dm_dg", type: "reports_to" },
+  // DGE
+  { id: "cr_dge_dg_chair", accountId: "acc_dge", fromContactId: "ct_dge_dg", toContactId: "ct_dge_chair", type: "reports_to" },
+  { id: "cr_dge_ai_dg", accountId: "acc_dge", fromContactId: "ct_dge_headai", toContactId: "ct_dge_dg", type: "reports_to" },
+];
+
+// ============================================================
+// 2.7) CREDENTIALS (Task #238) — case-study seeds
+// ============================================================
+const CREDENTIALS = [
+  {
+    id: "cred_tasama_marketplace",
+    title: "Agentic BPO Marketplace launched in MENA",
+    accountId: "acc_tasama",
+    clientName: "Tasama",
+    sector: "Shared Services / BPO",
+    engagementType: "agentic_build",
+    redactedAbstract:
+      "Spun up the first Agentic BPO marketplace in MENA — 14 production agents, 38% utilization in 90 days, 3.2x cost-to-serve improvement.",
+    attributedAbstract:
+      "Tasama × AICo: first Agentic BPO marketplace in MENA, 14 agents in production within 90 days.",
+    anonymizationStatus: "attributed",
+    outcomeMetrics: [
+      { label: "Cost-to-serve", value: "−68%" },
+      { label: "Time-to-launch", value: "11 weeks" },
+      { label: "Production agents", value: "14" },
+    ],
+    evidenceLinks: [
+      { label: "Tasama press release", url: "https://www.example.com/tasama-marketplace" },
+    ],
+    tags: ["agentic-bpo", "ksa", "marketplace"],
+    createdByUserId: "p_mounir_ariss",
+  },
+  {
+    id: "cred_dge_effortless",
+    title: "DGE Effortless — Agentic Government POC",
+    accountId: "acc_dge",
+    clientName: "Department of Government Enablement",
+    sector: "Government Enablement",
+    engagementType: "pov",
+    redactedAbstract:
+      "Designed and shipped the first agentic citizen-services prototype for a UAE government enablement body in 8 weeks, mapping 22 service journeys to a single concierge agent.",
+    attributedAbstract:
+      "DGE × AICo: agentic concierge POC across 22 citizen journeys in 8 weeks.",
+    anonymizationStatus: "attributed",
+    outcomeMetrics: [
+      { label: "Journeys covered", value: "22" },
+      { label: "Time-to-prototype", value: "8 weeks" },
+      { label: "Citizen NPS lift", value: "+19" },
+    ],
+    evidenceLinks: [
+      { label: "DGE Effortless brief", url: "https://www.example.com/dge-effortless" },
+    ],
+    tags: ["government", "uae", "pov"],
+    createdByUserId: "p_mounir_ariss",
+  },
+  {
+    id: "cred_dm_concierge",
+    title: "Citizen Concierge service design — 60+ touchpoints",
+    accountId: "acc_dubai_municipality",
+    clientName: "Dubai Municipality",
+    sector: "Government / Smart City",
+    engagementType: "transformation",
+    redactedAbstract:
+      "60-touchpoint service-design transformation feeding a unified citizen concierge for a major GCC municipality — first phase delivered in 14 weeks.",
+    attributedAbstract:
+      "Dubai Municipality × AICo: 60-touchpoint service-design transformation, phase one in 14 weeks.",
+    anonymizationStatus: "attributed",
+    outcomeMetrics: [
+      { label: "Touchpoints redesigned", value: "60+" },
+      { label: "Departments aligned", value: "9" },
+      { label: "Phase-1 duration", value: "14 weeks" },
+    ],
+    evidenceLinks: [
+      { label: "DM concierge case", url: "https://www.example.com/dm-concierge" },
+    ],
+    tags: ["smart-city", "uae", "service-design"],
+    createdByUserId: "p_mounir_ariss",
+  },
+];
 
 // ============================================================
 // 3) AGENTS — full 22-agent registry (spec §8)
@@ -555,6 +991,64 @@ const AGENTS: AgentSeed[] = [
     guardrails: [],
     humanCheckpoints: ["Lead approves"],
     runsLast30d: 0,
+  },
+  // ---- Task #238: CRM Accounts & Cartographer ----
+  {
+    id: "ag_account_cartographer",
+    name: "Account Cartographer",
+    group: "CRM",
+    stage: "Identify",
+    purpose:
+      "Re-map an account's reality — leadership changes, strategic priorities, signals — and propose governed updates to the account profile.",
+    model: "claude-sonnet-4-6",
+    starred: true,
+    status: "mvp",
+    tools: ["web_search", "knowledge.search", "file.read"],
+    guardrails: [
+      "Every proposed update must include a citation",
+      "Writes only to pendingProfileUpdates queue (never live fields)",
+      "Partner approval required before any field is overwritten",
+    ],
+    humanCheckpoints: [
+      "Partner reviews each proposed delta and Approves / Rejects",
+    ],
+    runsLast30d: 9,
+  },
+  {
+    id: "ag_whitespace_mapper",
+    name: "Whitespace Mapper",
+    group: "CRM",
+    stage: "Shape",
+    purpose:
+      "Cross-tabulate AICo offerings × buyer personas inside an account to surface the next 3 priority moves.",
+    model: "claude-sonnet-4-6",
+    starred: false,
+    status: "mvp",
+    tools: ["knowledge.search"],
+    guardrails: [
+      "Only personas already mapped on the account can be scored",
+      "Priority moves capped at 3 per refresh",
+    ],
+    humanCheckpoints: ["Lead reviews canvas before sharing"],
+    runsLast30d: 4,
+  },
+  {
+    id: "ag_qbr_composer",
+    name: "QBR Composer",
+    group: "CRM",
+    stage: "Steward",
+    purpose:
+      "Compose a quarterly business-review canvas — wins, risks, next moves — bound to the account's engagements + signals.",
+    model: "claude-sonnet-4-6",
+    starred: false,
+    status: "mvp",
+    tools: ["knowledge.search"],
+    guardrails: [
+      "Sections must cite engagements or signals — no ungrounded claims",
+      "Risk flags rendered amber, not buried",
+    ],
+    humanCheckpoints: ["Partner approves before client send"],
+    runsLast30d: 3,
   },
 ];
 
@@ -1486,6 +1980,9 @@ async function truncateAll() {
     "atelier_assets",
     "atelier_prompts",
     "atelier_agents",
+    "atelier_credentials",
+    "atelier_contact_relationships",
+    "atelier_contacts",
     "atelier_accounts",
     "atelier_users",
   ];
@@ -1538,14 +2035,43 @@ async function main() {
 
   console.log("[seed-atelier] accounts…");
   await db.insert(atelierAccounts).values(
-    ACCOUNTS.map((a) => ({
-      id: a.id,
-      name: a.name,
-      country: a.country,
-      sector: a.sector,
-      notes: a.notes,
-    })),
+    ACCOUNTS.map((a) => {
+      const ext = ACCOUNT_EXT[a.id] ?? {};
+      return {
+        id: a.id,
+        name: a.name,
+        country: a.country,
+        sector: a.sector,
+        notes: a.notes,
+        size: ext.size ?? "enterprise",
+        hqCity: ext.hqCity ?? null,
+        primaryCurrency: ext.primaryCurrency ?? "USD",
+        primaryLanguage: ext.primaryLanguage ?? "en",
+        tier: ext.tier ?? "C",
+        status: ext.status ?? "active",
+        partnerOwnerId: ext.partnerOwnerId ?? "p_mounir_ariss",
+        relationshipStrength: ext.relationshipStrength ?? 50,
+        enrichedAt: ext.enrichedAt ?? null,
+        sourceSignals: ext.sourceSignals ?? [],
+        strategicPriorities: ext.strategicPriorities ?? [],
+        aicoHypothesis: ext.aicoHypothesis ?? null,
+        pendingProfileUpdates: ext.pendingProfileUpdates ?? [],
+      };
+    }),
   );
+
+  console.log("[seed-atelier] contacts…");
+  if (CONTACTS.length > 0) {
+    await db.insert(atelierContacts).values(CONTACTS);
+  }
+  if (CONTACT_RELATIONSHIPS.length > 0) {
+    await db.insert(atelierContactRelationships).values(CONTACT_RELATIONSHIPS);
+  }
+
+  console.log("[seed-atelier] credentials…");
+  if (CREDENTIALS.length > 0) {
+    await db.insert(atelierCredentials).values(CREDENTIALS);
+  }
 
   console.log("[seed-atelier] agents…");
   await db.insert(atelierAgents).values(

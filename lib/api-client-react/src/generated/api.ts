@@ -17,9 +17,10 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
-  Account,
   AgentActivityItem,
   AgentCatalogEntry,
+  AtelierAccountSummary,
+  AtelierAccountWorkspace,
   AtelierAdminSettings,
   AtelierAdminSettingsUpdate,
   AtelierAgentDecisionInput,
@@ -33,14 +34,20 @@ import type {
   AtelierArtifactInput,
   AtelierAsset,
   AtelierBriefEnvelope,
+  AtelierCartographerRefreshInput,
   AtelierCharterApproveInput,
   AtelierCharterRedraftInput,
   AtelierCharterVersion,
   AtelierComposeProposalInput,
   AtelierConciergeSearchInput,
   AtelierConciergeSearchResult,
+  AtelierContact,
+  AtelierContactDispositionInput,
+  AtelierContactGraph,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
+  AtelierCredential,
+  AtelierCredentialInput,
   AtelierCritiqueInput,
   AtelierCritiqueResult,
   AtelierDeliverable,
@@ -55,6 +62,7 @@ import type {
   AtelierGetActivityParams,
   AtelierHome,
   AtelierHypothesisTree,
+  AtelierListAccountsParams,
   AtelierListAuditParams,
   AtelierMeeting,
   AtelierOverrideProposalPricingInput,
@@ -63,6 +71,7 @@ import type {
   AtelierPov,
   AtelierPovVersion,
   AtelierProcess,
+  AtelierProfileUpdateDecisionInput,
   AtelierPromoteAgentDesign200,
   AtelierPromoteFactInput,
   AtelierPromptEntry,
@@ -71,6 +80,7 @@ import type {
   AtelierProposalSection,
   AtelierProposalSendResponse,
   AtelierPrototype,
+  AtelierQbrCanvas,
   AtelierQualifier,
   AtelierQualifierInput,
   AtelierRaidItem,
@@ -83,6 +93,7 @@ import type {
   AtelierStageChangeInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierWhitespaceCanvas,
   AuditEvent,
   ChatError,
   ChatRequest,
@@ -3757,43 +3768,68 @@ export const useAtelierTranslateArtifact = <
 };
 
 /**
- * @summary Firm accounts
+ * @summary Firm accounts (CRM list, with v2 filters)
  */
-export const getAtelierListAccountsUrl = () => {
-  return `/api/atelier/accounts`;
+export const getAtelierListAccountsUrl = (
+  params?: AtelierListAccountsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/accounts?${stringifiedParams}`
+    : `/api/atelier/accounts`;
 };
 
 export const atelierListAccounts = async (
+  params?: AtelierListAccountsParams,
   options?: RequestInit,
-): Promise<Account[]> => {
-  return customFetch<Account[]>(getAtelierListAccountsUrl(), {
-    ...options,
-    method: "GET",
-  });
+): Promise<AtelierAccountSummary[]> => {
+  return customFetch<AtelierAccountSummary[]>(
+    getAtelierListAccountsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
 };
 
-export const getAtelierListAccountsQueryKey = () => {
-  return [`/api/atelier/accounts`] as const;
+export const getAtelierListAccountsQueryKey = (
+  params?: AtelierListAccountsParams,
+) => {
+  return [`/api/atelier/accounts`, ...(params ? [params] : [])] as const;
 };
 
 export const getAtelierListAccountsQueryOptions = <
   TData = Awaited<ReturnType<typeof atelierListAccounts>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof atelierListAccounts>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: AtelierListAccountsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListAccounts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getAtelierListAccountsQueryKey();
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListAccountsQueryKey(params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof atelierListAccounts>>
-  > = ({ signal }) => atelierListAccounts({ signal, ...requestOptions });
+  > = ({ signal }) =>
+    atelierListAccounts(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof atelierListAccounts>>,
@@ -3808,21 +3844,24 @@ export type AtelierListAccountsQueryResult = NonNullable<
 export type AtelierListAccountsQueryError = ErrorType<unknown>;
 
 /**
- * @summary Firm accounts
+ * @summary Firm accounts (CRM list, with v2 filters)
  */
 
 export function useAtelierListAccounts<
   TData = Awaited<ReturnType<typeof atelierListAccounts>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof atelierListAccounts>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getAtelierListAccountsQueryOptions(options);
+>(
+  params?: AtelierListAccountsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListAccounts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListAccountsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -3830,6 +3869,828 @@ export function useAtelierListAccounts<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)
+ */
+export const getAtelierGetAccountWorkspaceUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}`;
+};
+
+export const atelierGetAccountWorkspace = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierGetAccountWorkspaceUrl(accountId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetAccountWorkspaceQueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}`] as const;
+};
+
+export const getAtelierGetAccountWorkspaceQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAccountWorkspace>>,
+  TError = ErrorType<AtelierError>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountWorkspace>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAccountWorkspaceQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAccountWorkspace>>
+  > = ({ signal }) =>
+    atelierGetAccountWorkspace(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAccountWorkspace>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAccountWorkspaceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAccountWorkspace>>
+>;
+export type AtelierGetAccountWorkspaceQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)
+ */
+
+export function useAtelierGetAccountWorkspace<
+  TData = Awaited<ReturnType<typeof atelierGetAccountWorkspace>>,
+  TError = ErrorType<AtelierError>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountWorkspace>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAccountWorkspaceQueryOptions(
+    accountId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Trigger Account Cartographer for this account
+ */
+export const getAtelierRefreshAccountCartographerUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/cartographer/refresh`;
+};
+
+export const atelierRefreshAccountCartographer = async (
+  accountId: string,
+  atelierCartographerRefreshInput?: AtelierCartographerRefreshInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierRefreshAccountCartographerUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCartographerRefreshInput),
+    },
+  );
+};
+
+export const getAtelierRefreshAccountCartographerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRefreshAccountCartographer>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCartographerRefreshInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRefreshAccountCartographer>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCartographerRefreshInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRefreshAccountCartographer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRefreshAccountCartographer>>,
+    { accountId: string; data: BodyType<AtelierCartographerRefreshInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierRefreshAccountCartographer(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRefreshAccountCartographerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRefreshAccountCartographer>>
+>;
+export type AtelierRefreshAccountCartographerMutationBody =
+  BodyType<AtelierCartographerRefreshInput>;
+export type AtelierRefreshAccountCartographerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Trigger Account Cartographer for this account
+ */
+export const useAtelierRefreshAccountCartographer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRefreshAccountCartographer>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCartographerRefreshInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRefreshAccountCartographer>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCartographerRefreshInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierRefreshAccountCartographerMutationOptions(options),
+  );
+};
+
+export const getAtelierListAccountContactsUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/contacts`;
+};
+
+export const atelierListAccountContacts = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierContactGraph> => {
+  return customFetch<AtelierContactGraph>(
+    getAtelierListAccountContactsUrl(accountId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListAccountContactsQueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}/contacts`] as const;
+};
+
+export const getAtelierListAccountContactsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListAccountContacts>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListAccountContacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListAccountContactsQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListAccountContacts>>
+  > = ({ signal }) =>
+    atelierListAccountContacts(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListAccountContacts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListAccountContactsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListAccountContacts>>
+>;
+export type AtelierListAccountContactsQueryError = ErrorType<unknown>;
+
+export function useAtelierListAccountContacts<
+  TData = Awaited<ReturnType<typeof atelierListAccountContacts>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListAccountContacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListAccountContactsQueryOptions(
+    accountId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierGetAccountWhitespaceUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/whitespace`;
+};
+
+export const atelierGetAccountWhitespace = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierWhitespaceCanvas> => {
+  return customFetch<AtelierWhitespaceCanvas>(
+    getAtelierGetAccountWhitespaceUrl(accountId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetAccountWhitespaceQueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}/whitespace`] as const;
+};
+
+export const getAtelierGetAccountWhitespaceQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAccountWhitespace>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountWhitespace>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAccountWhitespaceQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAccountWhitespace>>
+  > = ({ signal }) =>
+    atelierGetAccountWhitespace(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAccountWhitespace>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAccountWhitespaceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAccountWhitespace>>
+>;
+export type AtelierGetAccountWhitespaceQueryError = ErrorType<unknown>;
+
+export function useAtelierGetAccountWhitespace<
+  TData = Awaited<ReturnType<typeof atelierGetAccountWhitespace>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountWhitespace>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAccountWhitespaceQueryOptions(
+    accountId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierGetAccountQbrUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/qbr`;
+};
+
+export const atelierGetAccountQbr = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierQbrCanvas> => {
+  return customFetch<AtelierQbrCanvas>(getAtelierGetAccountQbrUrl(accountId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetAccountQbrQueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}/qbr`] as const;
+};
+
+export const getAtelierGetAccountQbrQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAccountQbr>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountQbr>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAccountQbrQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAccountQbr>>
+  > = ({ signal }) =>
+    atelierGetAccountQbr(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAccountQbr>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAccountQbrQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAccountQbr>>
+>;
+export type AtelierGetAccountQbrQueryError = ErrorType<unknown>;
+
+export function useAtelierGetAccountQbr<
+  TData = Awaited<ReturnType<typeof atelierGetAccountQbr>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountQbr>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAccountQbrQueryOptions(accountId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Approve or reject a Pursuit Scout-proposed profile delta
+ */
+export const getAtelierDecideProfileUpdateUrl = (
+  accountId: string,
+  updateId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/profile-updates/${updateId}/decision`;
+};
+
+export const atelierDecideProfileUpdate = async (
+  accountId: string,
+  updateId: string,
+  atelierProfileUpdateDecisionInput: AtelierProfileUpdateDecisionInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierDecideProfileUpdateUrl(accountId, updateId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierProfileUpdateDecisionInput),
+    },
+  );
+};
+
+export const getAtelierDecideProfileUpdateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDecideProfileUpdate>>,
+    TError,
+    {
+      accountId: string;
+      updateId: string;
+      data: BodyType<AtelierProfileUpdateDecisionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDecideProfileUpdate>>,
+  TError,
+  {
+    accountId: string;
+    updateId: string;
+    data: BodyType<AtelierProfileUpdateDecisionInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierDecideProfileUpdate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDecideProfileUpdate>>,
+    {
+      accountId: string;
+      updateId: string;
+      data: BodyType<AtelierProfileUpdateDecisionInput>;
+    }
+  > = (props) => {
+    const { accountId, updateId, data } = props ?? {};
+
+    return atelierDecideProfileUpdate(
+      accountId,
+      updateId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDecideProfileUpdateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDecideProfileUpdate>>
+>;
+export type AtelierDecideProfileUpdateMutationBody =
+  BodyType<AtelierProfileUpdateDecisionInput>;
+export type AtelierDecideProfileUpdateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve or reject a Pursuit Scout-proposed profile delta
+ */
+export const useAtelierDecideProfileUpdate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDecideProfileUpdate>>,
+    TError,
+    {
+      accountId: string;
+      updateId: string;
+      data: BodyType<AtelierProfileUpdateDecisionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDecideProfileUpdate>>,
+  TError,
+  {
+    accountId: string;
+    updateId: string;
+    data: BodyType<AtelierProfileUpdateDecisionInput>;
+  },
+  TContext
+> => {
+  return useMutation(getAtelierDecideProfileUpdateMutationOptions(options));
+};
+
+/**
+ * @summary Update a contact's disposition (audited)
+ */
+export const getAtelierUpdateContactDispositionUrl = (contactId: string) => {
+  return `/api/atelier/contacts/${contactId}/disposition`;
+};
+
+export const atelierUpdateContactDisposition = async (
+  contactId: string,
+  atelierContactDispositionInput: AtelierContactDispositionInput,
+  options?: RequestInit,
+): Promise<AtelierContact> => {
+  return customFetch<AtelierContact>(
+    getAtelierUpdateContactDispositionUrl(contactId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierContactDispositionInput),
+    },
+  );
+};
+
+export const getAtelierUpdateContactDispositionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContactDisposition>>,
+    TError,
+    { contactId: string; data: BodyType<AtelierContactDispositionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateContactDisposition>>,
+  TError,
+  { contactId: string; data: BodyType<AtelierContactDispositionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateContactDisposition"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateContactDisposition>>,
+    { contactId: string; data: BodyType<AtelierContactDispositionInput> }
+  > = (props) => {
+    const { contactId, data } = props ?? {};
+
+    return atelierUpdateContactDisposition(contactId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateContactDispositionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateContactDisposition>>
+>;
+export type AtelierUpdateContactDispositionMutationBody =
+  BodyType<AtelierContactDispositionInput>;
+export type AtelierUpdateContactDispositionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a contact's disposition (audited)
+ */
+export const useAtelierUpdateContactDisposition = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContactDisposition>>,
+    TError,
+    { contactId: string; data: BodyType<AtelierContactDispositionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateContactDisposition>>,
+  TError,
+  { contactId: string; data: BodyType<AtelierContactDispositionInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpdateContactDispositionMutationOptions(options),
+  );
+};
+
+/**
+ * @summary First-class credentials (case-study workspace)
+ */
+export const getAtelierListCredentialsUrl = () => {
+  return `/api/atelier/credentials`;
+};
+
+export const atelierListCredentials = async (
+  options?: RequestInit,
+): Promise<AtelierCredential[]> => {
+  return customFetch<AtelierCredential[]>(getAtelierListCredentialsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListCredentialsQueryKey = () => {
+  return [`/api/atelier/credentials`] as const;
+};
+
+export const getAtelierListCredentialsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListCredentials>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListCredentials>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListCredentialsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListCredentials>>
+  > = ({ signal }) => atelierListCredentials({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListCredentials>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListCredentialsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListCredentials>>
+>;
+export type AtelierListCredentialsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary First-class credentials (case-study workspace)
+ */
+
+export function useAtelierListCredentials<
+  TData = Awaited<ReturnType<typeof atelierListCredentials>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListCredentials>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListCredentialsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a credential (Partner-only)
+ */
+export const getAtelierCreateCredentialUrl = () => {
+  return `/api/atelier/credentials`;
+};
+
+export const atelierCreateCredential = async (
+  atelierCredentialInput: AtelierCredentialInput,
+  options?: RequestInit,
+): Promise<AtelierCredential> => {
+  return customFetch<AtelierCredential>(getAtelierCreateCredentialUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierCredentialInput),
+  });
+};
+
+export const getAtelierCreateCredentialMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateCredential>>,
+    TError,
+    { data: BodyType<AtelierCredentialInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateCredential>>,
+  TError,
+  { data: BodyType<AtelierCredentialInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateCredential"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateCredential>>,
+    { data: BodyType<AtelierCredentialInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateCredential(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateCredentialMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateCredential>>
+>;
+export type AtelierCreateCredentialMutationBody =
+  BodyType<AtelierCredentialInput>;
+export type AtelierCreateCredentialMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Create a credential (Partner-only)
+ */
+export const useAtelierCreateCredential = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateCredential>>,
+    TError,
+    { data: BodyType<AtelierCredentialInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateCredential>>,
+  TError,
+  { data: BodyType<AtelierCredentialInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateCredentialMutationOptions(options));
+};
 
 /**
  * @summary The full agent catalog (22 named agents)

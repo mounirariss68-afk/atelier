@@ -2025,3 +2025,345 @@ export async function runProposalComposer(args: {
     throw err;
   }
 }
+
+// =============================================================
+// v2 — Account Cartographer (★), Whitespace Mapper, QBR Composer
+// (Task #238). Mock-first. Output JSON shapes mirror OpenAPI.
+// =============================================================
+
+export interface CartographerOutput {
+  account: {
+    refreshedSummary: string;
+    strategicPriorities: string[];
+    aicoHypothesis: string;
+  };
+  sourceSignals: Array<{
+    kind: "news" | "linkedin" | "press" | "filing" | "manual";
+    title: string;
+    url: string;
+    summary?: string;
+    publishedAt?: string;
+    confidence?: "green" | "amber" | "red";
+  }>;
+  proposedProfileUpdates: Array<{
+    field: string;
+    fromValue: unknown;
+    toValue: unknown;
+    rationale: string;
+  }>;
+  contactsToAdd?: Array<{
+    fullName: string;
+    title?: string;
+    seniority?: "c_suite" | "vp" | "director" | "manager" | "ic";
+    buyerPersona?: string;
+    rationale?: string;
+  }>;
+}
+
+function mockCartographer(args: {
+  accountName: string;
+  sector: string;
+  country: string;
+}): CartographerOutput {
+  return {
+    account: {
+      refreshedSummary: `${args.accountName} is consolidating its ${args.sector} platform investments and accelerating AI-led modernisation in the ${args.country} market.`,
+      strategicPriorities: [
+        "Scale agentic AI use cases across shared services",
+        "Tighten governance and procurement velocity",
+        "Drive measurable adoption of digital channels",
+      ],
+      aicoHypothesis: `AICo can land a 90-day diagnostic by anchoring on the named exec sponsor and offering a fixed-fee scoping artefact, then expand into an agentic-build engagement on the top operational pain.`,
+    },
+    sourceSignals: [
+      {
+        kind: "press",
+        title: `${args.accountName} announces enterprise AI program`,
+        url: "https://example.com/press/ai-program",
+        summary: "Board-approved push into productivity AI across operations.",
+        publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 21).toISOString(),
+        confidence: "green",
+      },
+      {
+        kind: "news",
+        title: `${args.sector} sector outlook — ${args.country}`,
+        url: "https://example.com/news/sector-outlook",
+        summary: "Consolidation accelerating; two or three platform vendors emerging.",
+        publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 9).toISOString(),
+        confidence: "amber",
+      },
+      {
+        kind: "linkedin",
+        title: "New CIO appointed",
+        url: "https://example.com/linkedin/new-cio",
+        summary: "CIO transition signals fresh budget cycle and new pursuit window.",
+        publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
+        confidence: "amber",
+      },
+    ],
+    proposedProfileUpdates: [
+      {
+        field: "strategicPriorities",
+        fromValue: [],
+        toValue: [
+          "Scale agentic AI use cases across shared services",
+          "Tighten governance and procurement velocity",
+          "Drive measurable adoption of digital channels",
+        ],
+        rationale: "Triangulated from press release and investor day deck.",
+      },
+      {
+        field: "aicoHypothesis",
+        fromValue: null,
+        toValue: `AICo can anchor on a 90-day diagnostic with a named exec sponsor.`,
+        rationale: "Hypothesis aligned with stated CEO ambition and recent CIO appointment.",
+      },
+    ],
+    contactsToAdd: [],
+  };
+}
+
+export async function runAccountCartographer(args: {
+  accountId: string;
+  accountName: string;
+  accountSector: string;
+  accountCountry: string;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+  focusOpportunityId?: string | null;
+}): Promise<{ runId: string; output: CartographerOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "account_cartographer",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "account",
+    targetId: args.accountId,
+    targetLabel: args.accountName,
+    inputs: { focusOpportunityId: args.focusOpportunityId ?? null },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = (() => {
+      try {
+        return loadPrompt("account_cartographer" as AtelierAgentId);
+      } catch {
+        return "You are Account Cartographer for an AI consulting firm. Refresh strategic-priorities and citable signals; never invent figures.";
+      }
+    })();
+    await progressRun(runId, 30, "Pulling source signals");
+    const { value, costUsd, source, warning } = await callClaudeJson<CartographerOutput>(
+      "claude-sonnet-4-6",
+      system,
+      JSON.stringify({
+        accountName: args.accountName,
+        accountSector: args.accountSector,
+        accountCountry: args.accountCountry,
+      }),
+      () => mockCartographer({ accountName: args.accountName, sector: args.accountSector, country: args.accountCountry }),
+    );
+    await progressRun(runId, 80, "Drafting hypothesis", { name: "cart.synth", durationMs: Date.now() - t0 });
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: "amber",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.sourceSignals?.length ?? 0,
+      actorLabel: args.actorLabel,
+      targetType: "account",
+      targetId: args.accountId,
+      targetLabel: args.accountName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "account", targetId: args.accountId });
+    throw err;
+  }
+}
+
+// ----- Whitespace Mapper -----
+
+export interface WhitespaceOutput {
+  offerings: string[];
+  personas: string[];
+  cells: Array<{
+    offering: string;
+    persona: string;
+    state: "empty" | "identified" | "qualified" | "won";
+    note?: string;
+    rationale?: string;
+  }>;
+  priorityMoves: string[];
+}
+
+function mockWhitespace(accountName: string): WhitespaceOutput {
+  const offerings = [
+    "Diagnostic Sprint",
+    "POV / Worked Example",
+    "Agentic Build",
+    "Operating Model Re-design",
+    "Compound Workshop",
+  ];
+  const personas = ["CEO", "COO", "CIO", "CDO", "Business Head", "Procurement"];
+  const cells = offerings.flatMap((o) =>
+    personas.map((p) => {
+      // Deterministic-ish state pattern.
+      const k = (o.length + p.length) % 5;
+      const state =
+        k === 0 ? "won" : k === 1 || k === 2 ? "qualified" : k === 3 ? "identified" : "empty";
+      return {
+        offering: o,
+        persona: p,
+        state: state as "empty" | "identified" | "qualified" | "won",
+        note: state === "empty" ? undefined : `${o} fits ${p}'s pain on adoption velocity at ${accountName}.`,
+        rationale: state === "empty" ? undefined : "Triangulated from prior engagements and stated priorities.",
+      };
+    }),
+  );
+  return {
+    offerings,
+    personas,
+    cells,
+    priorityMoves: [
+      `Open a Diagnostic Sprint conversation with the CIO at ${accountName} this quarter.`,
+      `Position an Agentic Build worked-example for the COO around shared-services intake.`,
+      `Pre-brief Procurement on framework agreement to compress cycle time.`,
+    ],
+  };
+}
+
+export async function runWhitespaceMapper(args: {
+  accountId: string;
+  accountName: string;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: WhitespaceOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "whitespace_mapper",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "account",
+    targetId: args.accountId,
+    targetLabel: args.accountName,
+    inputs: {},
+    actorLabel: args.actorLabel,
+  });
+  try {
+    await progressRun(runId, 40, "Mapping offerings × personas");
+    const { value, costUsd, source, warning } = await callClaudeJson<WhitespaceOutput>(
+      "claude-haiku-4-5",
+      "You are Whitespace Mapper. Produce an offerings × personas matrix with grounded rationales.",
+      JSON.stringify({ accountName: args.accountName }),
+      () => mockWhitespace(args.accountName),
+    );
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: "amber",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.cells?.length ?? 0,
+      actorLabel: args.actorLabel,
+      targetType: "account",
+      targetId: args.accountId,
+      targetLabel: args.accountName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "account", targetId: args.accountId });
+    throw err;
+  }
+}
+
+// ----- QBR Composer -----
+
+export interface QbrOutput {
+  periodLabel: string;
+  sections: Array<{ heading: string; body: string }>;
+  riskFlags: string[];
+  nextMoves: string[];
+}
+
+function mockQbr(accountName: string): QbrOutput {
+  const now = new Date();
+  const q = Math.floor(now.getUTCMonth() / 3) + 1;
+  return {
+    periodLabel: `Q${q} ${now.getUTCFullYear()} — ${accountName}`,
+    sections: [
+      {
+        heading: "What changed this quarter",
+        body: `${accountName} accelerated its AI program with a board-level mandate; CIO transition triggered a fresh procurement cycle. AICo posture has shifted from inbound-curiosity to active-pursuit on two named opportunities.`,
+      },
+      {
+        heading: "Where we created value",
+        body: `Diagnostic Sprint surfaced 9 agentifiable workflows; the worked-example for shared-services intake scored highest on adoption-readiness. Engagement lead recommends doubling down on this thread.`,
+      },
+      {
+        heading: "Where we lost ground",
+        body: `Two competitive pitches landed in parallel; commercial gating on procurement velocity slowed our scoping conversation by 3 weeks. Mitigation: pre-brief Procurement before next pursuit.`,
+      },
+      {
+        heading: "Compound — what to ship into Knowledge Atelier",
+        body: `The shared-services intake worked-example, the procurement playbook delta, and the CIO transition handoff template all warrant promotion to firm-wide assets.`,
+      },
+    ],
+    riskFlags: [
+      "Procurement velocity remains the single biggest pursuit risk.",
+      "Sponsor concentration: hypothesis depends on one CIO relationship — broaden coverage to COO and CDO.",
+    ],
+    nextMoves: [
+      "Schedule pre-procurement workshop within 30 days.",
+      "Open Whitespace conversation with COO around adoption playbook.",
+      "Convert worked-example to a publishable Credential after partner review.",
+    ],
+  };
+}
+
+export async function runQbrComposer(args: {
+  accountId: string;
+  accountName: string;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: QbrOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "qbr_composer",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "account",
+    targetId: args.accountId,
+    targetLabel: args.accountName,
+    inputs: {},
+    actorLabel: args.actorLabel,
+  });
+  try {
+    await progressRun(runId, 50, "Composing QBR canvas");
+    const { value, costUsd, source, warning } = await callClaudeJson<QbrOutput>(
+      "claude-sonnet-4-6",
+      "You are QBR Composer. Produce a quarterly business-review canvas: what changed, where we created value, where we lost ground, what to compound. Honest, evidence-bound.",
+      JSON.stringify({ accountName: args.accountName }),
+      () => mockQbr(args.accountName),
+    );
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: "amber",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.sections?.length ?? 0,
+      actorLabel: args.actorLabel,
+      targetType: "account",
+      targetId: args.accountId,
+      targetLabel: args.accountName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "account", targetId: args.accountId });
+    throw err;
+  }
+}

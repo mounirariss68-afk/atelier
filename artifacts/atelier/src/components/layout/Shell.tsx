@@ -40,6 +40,7 @@ export function TopNav() {
 
   const navItems = [
     { href: "/", label: "Home" },
+    { href: "/crm", label: "CRM" },
     { href: "/pipeline", label: "Pipeline" },
     { href: "/engagements", label: "Engagements" },
     { href: "/atelier", label: "Atelier" },

@@ -64,12 +64,161 @@ export const atelierAccounts = pgTable(
     country: text("country").notNull(),
     sector: text("sector").notNull(),
     notes: text("notes"),
+    // v2 CRM extensions (Task #238 — PRD §2.1).
+    parentAccountId: text("parent_account_id"),
+    size: text("size"), // 'enterprise' | 'large' | 'mid' | 'small' (free text for now)
+    hqCity: text("hq_city"),
+    primaryCurrency: text("primary_currency").notNull().default("USD"),
+    primaryLanguage: text("primary_language").notNull().default("en"),
+    tier: text("tier").notNull().default("C"), // 'A' | 'B' | 'C' | 'D'
+    status: text("status").notNull().default("active"), // 'active' | 'dormant' | 'archived'
+    partnerOwnerId: text("partner_owner_id"),
+    relationshipStrength: doublePrecision("relationship_strength")
+      .notNull()
+      .default(0), // 0–100
+    enrichedAt: timestamp("enriched_at"),
+    sourceSignals: jsonb("source_signals")
+      .$type<
+        Array<{
+          kind: "news" | "linkedin" | "press" | "filing" | "manual";
+          title: string;
+          url: string;
+          summary?: string;
+          publishedAt?: string;
+          confidence?: "green" | "amber" | "red";
+        }>
+      >()
+      .notNull()
+      .default([]),
+    strategicPriorities: jsonb("strategic_priorities")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    aicoHypothesis: text("aico_hypothesis"),
+    pendingProfileUpdates: jsonb("pending_profile_updates")
+      .$type<
+        Array<{
+          id: string;
+          proposedBy: string; // agent id, e.g. ag_pursuit_scout
+          proposedAt: string;
+          field: string; // dotted path: 'sector', 'hqCity', 'strategicPriorities'
+          fromValue: unknown;
+          toValue: unknown;
+          rationale: string;
+          oppId?: string;
+          status: "pending" | "approved" | "rejected";
+        }>
+      >()
+      .notNull()
+      .default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
     deletedAt: timestamp("deleted_at"),
   },
-  (t) => [index("idx_atelier_accounts_org").on(t.orgId)],
+  (t) => [
+    index("idx_atelier_accounts_org").on(t.orgId),
+    index("idx_atelier_accounts_tier").on(t.tier),
+    index("idx_atelier_accounts_partner").on(t.partnerOwnerId),
+  ],
+);
+
+// ============================================================
+// CONTACTS (v2 — PRD §2.2)
+// ============================================================
+export const atelierContacts = pgTable(
+  "atelier_contacts",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    fullName: text("full_name").notNull(),
+    title: text("title"),
+    seniority: text("seniority"), // 'c_suite' | 'vp' | 'director' | 'manager' | 'ic'
+    email: text("email"),
+    phone: text("phone"),
+    linkedinUrl: text("linkedin_url"),
+    buyerPersona: text("buyer_persona"), // CEO|COO|CIO|CDO|CXO|business_head|procurement|technical_evaluator
+    influenceScore: integer("influence_score").notNull().default(3), // 1–5
+    disposition: text("disposition").notNull().default("unknown"),
+    // 'champion' | 'supporter' | 'neutral' | 'skeptic' | 'blocker' | 'unknown'
+    lastContactAt: timestamp("last_contact_at"),
+    contactOwnerId: text("contact_owner_id"), // FK to atelier_users
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_contacts_org").on(t.orgId),
+    index("idx_atelier_contacts_account").on(t.accountId),
+    index("idx_atelier_contacts_disposition").on(t.disposition),
+  ],
+);
+
+// Graph edges between contacts (org chart structure: reports_to, partners_with,
+// blocks). One row = one directed edge.
+export const atelierContactRelationships = pgTable(
+  "atelier_contact_relationships",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    fromContactId: text("from_contact_id").notNull(),
+    toContactId: text("to_contact_id").notNull(),
+    type: text("type").notNull(), // 'reports_to' | 'partners_with' | 'blocks'
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_contact_rels_org").on(t.orgId),
+    index("idx_atelier_contact_rels_account").on(t.accountId),
+    index("idx_atelier_contact_rels_from").on(t.fromContactId),
+  ],
+);
+
+// ============================================================
+// CREDENTIALS (v2 — PRD §1.1, first-class case-study workspace)
+// Extends the v1 Atelier asset with structured credential metadata.
+// ============================================================
+export const atelierCredentials = pgTable(
+  "atelier_credentials",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    title: text("title").notNull(),
+    accountId: text("account_id"), // optional FK
+    clientName: text("client_name").notNull(), // anonymized label allowed
+    sector: text("sector").notNull(),
+    engagementType: text("engagement_type").notNull(),
+    // 'diagnostic' | 'pov' | 'agentic_build' | 'transformation' | 'workshop'
+    outcomeMetrics: jsonb("outcome_metrics")
+      .$type<Array<{ label: string; value: string }>>()
+      .notNull()
+      .default([]),
+    anonymizationStatus: text("anonymization_status")
+      .notNull()
+      .default("redacted"), // 'redacted' | 'attributed' | 'pending'
+    redactedAbstract: text("redacted_abstract").notNull(),
+    attributedAbstract: text("attributed_abstract"),
+    evidenceLinks: jsonb("evidence_links")
+      .$type<Array<{ label: string; url: string }>>()
+      .notNull()
+      .default([]),
+    relatedAssetId: text("related_asset_id"), // optional FK → atelier_assets
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_credentials_org").on(t.orgId),
+    index("idx_atelier_credentials_account").on(t.accountId),
+    index("idx_atelier_credentials_sector").on(t.sector),
+  ],
 );
 
 // ============================================================
