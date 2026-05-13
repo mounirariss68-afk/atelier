@@ -105,6 +105,7 @@ router.use((req, res, next) => {
   // partner-firm CSV endpoint and may read their own engagement's economics.
   if (me.role === "contractor" && p.startsWith("/ledger/timesheets")) return next();
   if (me.role === "partner_firm_resource" && p.startsWith("/ledger/partner-firm-hours")) return next();
+  if (me.role === "partner_firm_resource" && p.startsWith("/ledger/engagement-economics")) return next();
   // Allow per-person dossier endpoints only for the caller's OWN identity
   // (no IDOR enumeration of other people's PII / HR metadata). The :id
   // segment must equal the active persona id; bare `/roster/people` and

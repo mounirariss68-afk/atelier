@@ -12,10 +12,12 @@ import {
   db,
   atelierAuditEvents,
   atelierTimesheetWeeks,
+  atelierTimesheetEntries,
   atelierEmployees,
   atelierContractors,
 } from "@workspace/db";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { runTimeSteward } from "./runner.js";
 
 type NudgeKind = "submit_due" | "approve_due";
 
@@ -88,6 +90,85 @@ export async function runLedgerNudgeTick(opts: { force?: NudgeKind } = {}): Prom
   return { inserted: inserted.length, kind };
 }
 
+// ---------------------------------------------------------------------
+// Daily Time Steward tick — runs at Mon 06:00 GST and drafts the current
+// ISO week for every active employee + contractor that doesn't already
+// have agent_drafted entries. This is the "draft already populated when I
+// open Monday morning" guarantee from the PRD; the on-demand auto-draft
+// in /ledger/timesheets/current remains as a fallback for any persona
+// that the scheduler hasn't reached yet.
+//
+// Idempotent: runTimeSteward writes deterministic ids and the existence
+// check below short-circuits when entries are already present.
+// ---------------------------------------------------------------------
+function isoWeekIdFromDate(d: Date): { weekIso: string; weekStartDate: string } {
+  const day = (d.getUTCDay() + 6) % 7; // Mon=0
+  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day));
+  const target = new Date(monday);
+  target.setUTCDate(target.getUTCDate() + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  const weekIso = `${target.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+  return { weekIso, weekStartDate: monday.toISOString().slice(0, 10) };
+}
+
+export async function runLedgerStewardTick(opts: { force?: boolean } = {}): Promise<{ drafted: number }> {
+  if (!opts.force) {
+    const { dayOfWeek, hour } = nowInGst();
+    if (dayOfWeek !== 1 || hour !== 6) return { drafted: 0 };
+  }
+  const { weekIso, weekStartDate } = isoWeekIdFromDate(new Date());
+  const [emps, cons] = await Promise.all([
+    db.select({ id: atelierEmployees.id }).from(atelierEmployees).where(isNull(atelierEmployees.deletedAt)),
+    db.select({ id: atelierContractors.id }).from(atelierContractors).where(isNull(atelierContractors.deletedAt)),
+  ]);
+  const personIds = [...emps.map((e) => e.id), ...cons.map((c) => c.id)];
+  let drafted = 0;
+  for (const personId of personIds) {
+    const weekId = `tsw_${personId}_${weekIso}`;
+    // Ensure shell row.
+    const [existing] = await db
+      .select()
+      .from(atelierTimesheetWeeks)
+      .where(and(eq(atelierTimesheetWeeks.id, weekId), isNull(atelierTimesheetWeeks.deletedAt)));
+    if (!existing) {
+      await db
+        .insert(atelierTimesheetWeeks)
+        .values({
+          id: weekId,
+          personId,
+          personType: emps.find((e) => e.id === personId) ? "employee" : "contractor",
+          weekIso,
+          weekStartDate,
+          status: "draft",
+        })
+        .onConflictDoNothing();
+    } else if (existing.status !== "draft" && existing.status !== "rejected") {
+      continue; // already submitted/approved — never overwrite.
+    }
+    // Skip if agent_drafted entries already present.
+    const [hasDraft] = await db
+      .select({ id: atelierTimesheetEntries.id })
+      .from(atelierTimesheetEntries)
+      .where(
+        and(
+          eq(atelierTimesheetEntries.weekId, weekId),
+          eq(atelierTimesheetEntries.source, "agent_drafted"),
+          isNull(atelierTimesheetEntries.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (hasDraft) continue;
+    try {
+      await runTimeSteward({ weekId, personId, weekStartDate, triggeredByUserId: "ag_time_steward" });
+      drafted++;
+    } catch (err) {
+      console.warn("[ledger.steward] tick draft failed for", personId, err);
+    }
+  }
+  return { drafted };
+}
+
 export function startLedgerNudgeJob(): void {
   if (timer) return;
   // Skip in test runs to avoid background DB chatter.
@@ -95,6 +176,9 @@ export function startLedgerNudgeJob(): void {
   timer = setInterval(() => {
     void runLedgerNudgeTick().catch((err) => {
       console.warn("[ledger.nudge] tick failed:", err);
+    });
+    void runLedgerStewardTick().catch((err) => {
+      console.warn("[ledger.steward] tick failed:", err);
     });
   }, TICK_MS);
   // Don't keep the process alive for this background ticker.

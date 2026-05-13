@@ -34,7 +34,7 @@ import {
   atelierPartnerFirmResources,
 } from "@workspace/db";
 import { runTimeSteward } from "../../lib/atelier-agents/runner.js";
-import { runLedgerNudgeTick } from "../../lib/atelier-agents/ledgerNudges.js";
+import { runLedgerNudgeTick, runLedgerStewardTick } from "../../lib/atelier-agents/ledgerNudges.js";
 
 const router: IRouter = Router();
 
@@ -184,8 +184,22 @@ async function resolvePerson(personIdOrUserId: string): Promise<PersonRow | null
   return null;
 }
 
+// Resolve the person row for the active persona. Employees carry a
+// userId column so the direct-id + userId fallback in resolvePerson covers
+// them. atelier_contractors has no user_id column, so contractor personas
+// won't resolve via id alone — fall back to email match against the
+// atelier_users persona to keep contractor self-timesheet routes working.
 async function resolvePersonForCaller(me: typeof atelierUsers.$inferSelect): Promise<PersonRow | null> {
-  return resolvePerson(me.id);
+  const direct = await resolvePerson(me.id);
+  if (direct) return direct;
+  if (!me.email) return null;
+  const [conByEmail] = await db
+    .select()
+    .from(atelierContractors)
+    .where(and(eq(atelierContractors.email, me.email), isNull(atelierContractors.deletedAt)));
+  if (conByEmail)
+    return { id: conByEmail.id, type: "contractor", fullName: conByEmail.fullName, email: conByEmail.email, userId: null };
+  return null;
 }
 
 /**
@@ -1049,6 +1063,69 @@ router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single
 });
 
 // =====================================================================
+// GET /ledger/engagement-economics/:engagementId
+// Surfaces partner-firm hours + cost roll-ups for the engagement-economics
+// panel. Same role + object-level ACL as /ledger/partner-firm-hours: a
+// partner_firm_resource sees only their own firm's rows on engagements
+// they are seconded to; leadership (partner/operations/engagement_lead)
+// sees the full picture.
+// =====================================================================
+router.get("/ledger/engagement-economics/:engagementId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!canViewPartnerFirmHours(me)) return void res.status(403).json({ error: "forbidden" });
+  const engagementId = req.params.engagementId;
+  const [eng] = await db
+    .select()
+    .from(atelierEngagements)
+    .where(and(eq(atelierEngagements.id, engagementId), isNull(atelierEngagements.deletedAt)));
+  if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
+  const scope = await resolvePartnerFirmScope(me);
+  if (scope && !scope.secondedEngagementIds.includes(engagementId)) {
+    return void res.status(403).json({ error: "engagement-not-in-scope" });
+  }
+  const baseFilter = scope
+    ? and(
+        eq(atelierPartnerFirmHours.engagementId, engagementId),
+        eq(atelierPartnerFirmHours.partnerFirmId, scope.partnerFirmId),
+        isNull(atelierPartnerFirmHours.deletedAt),
+      )
+    : and(eq(atelierPartnerFirmHours.engagementId, engagementId), isNull(atelierPartnerFirmHours.deletedAt));
+  const rows = await db
+    .select()
+    .from(atelierPartnerFirmHours)
+    .where(baseFilter)
+    .orderBy(desc(atelierPartnerFirmHours.weekIso));
+  const byFirm = new Map<string, { partnerFirmId: string; hours: number; costAmount: number; costCurrency: string }>();
+  for (const r of rows) {
+    const cur = byFirm.get(r.partnerFirmId) ?? {
+      partnerFirmId: r.partnerFirmId,
+      hours: 0,
+      costAmount: 0,
+      costCurrency: r.costCurrency,
+    };
+    cur.hours += Number(r.hours || 0);
+    cur.costAmount += Number(r.costAmount || 0);
+    byFirm.set(r.partnerFirmId, cur);
+  }
+  res.json({
+    engagementId,
+    engagementName: eng.name,
+    partnerFirmRollup: Array.from(byFirm.values()),
+    rows: rows.map((r) => ({
+      id: r.id,
+      partnerFirmId: r.partnerFirmId,
+      resourceName: r.resourceName,
+      weekIso: r.weekIso,
+      hours: r.hours,
+      costAmount: r.costAmount,
+      costCurrency: r.costCurrency,
+      uploadedAt: r.uploadedAt.toISOString(),
+    })),
+  });
+});
+
+// =====================================================================
 // GET /ledger/partner-firm-hours/:engagementId  → engagement-economics panel
 // =====================================================================
 router.get("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
@@ -1098,6 +1175,19 @@ router.post("/ledger/nudges/run", async (req, res) => {
   }
   const force = req.body?.force as "submit_due" | "approve_due" | undefined;
   const out = await runLedgerNudgeTick({ force });
+  res.json(out);
+});
+
+// Manual trigger for the daily Time Steward draft pass — partner/operations
+// only. Lets QA and runbooks force the same backfill that runs Mon 06:00 GST
+// from startLedgerNudgeJob's 15-minute ticker.
+router.post("/ledger/steward/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner" && me.role !== "operations") {
+    return void res.status(403).json({ error: "forbidden" });
+  }
+  const out = await runLedgerStewardTick({ force: true });
   res.json(out);
 });
 
