@@ -770,21 +770,21 @@ router.put("/credentials/:credentialId", async (req, res) => {
     return;
   }
   const updated = await db.transaction(async (tx) => {
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (parsed.data.title !== undefined) patch.title = parsed.data.title;
+    if (parsed.data.clientName !== undefined) patch.clientName = parsed.data.clientName;
+    if (parsed.data.sector !== undefined) patch.sector = parsed.data.sector;
+    if (parsed.data.engagementType !== undefined) patch.engagementType = parsed.data.engagementType;
+    if (parsed.data.anonymizationStatus) patch.anonymizationStatus = parsed.data.anonymizationStatus;
+    if (parsed.data.redactedAbstract !== undefined) patch.redactedAbstract = parsed.data.redactedAbstract;
+    if (parsed.data.attributedAbstract !== undefined) patch.attributedAbstract = parsed.data.attributedAbstract;
+    if (parsed.data.outcomeMetrics !== undefined) patch.outcomeMetrics = parsed.data.outcomeMetrics;
+    if (parsed.data.evidenceLinks !== undefined) patch.evidenceLinks = parsed.data.evidenceLinks;
+    if (parsed.data.tags !== undefined) patch.tags = parsed.data.tags;
     await tx
       .update(atelierCredentials)
-      .set({
-        ...(parsed.data.title !== undefined && { title: parsed.data.title }),
-        ...(parsed.data.clientName !== undefined && { clientName: parsed.data.clientName }),
-        ...(parsed.data.sector !== undefined && { sector: parsed.data.sector }),
-        ...(parsed.data.engagementType !== undefined && { engagementType: parsed.data.engagementType }),
-        ...(parsed.data.anonymizationStatus !== undefined && { anonymizationStatus: parsed.data.anonymizationStatus }),
-        ...(parsed.data.redactedAbstract !== undefined && { redactedAbstract: parsed.data.redactedAbstract }),
-        ...(parsed.data.attributedAbstract !== undefined && { attributedAbstract: parsed.data.attributedAbstract }),
-        ...(parsed.data.outcomeMetrics !== undefined && { outcomeMetrics: parsed.data.outcomeMetrics }),
-        ...(parsed.data.evidenceLinks !== undefined && { evidenceLinks: parsed.data.evidenceLinks }),
-        ...(parsed.data.tags !== undefined && { tags: parsed.data.tags }),
-        updatedAt: new Date(),
-      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .set(patch as any)
       .where(eq(atelierCredentials.id, existing.id));
     const [row] = await tx.select().from(atelierCredentials).where(eq(atelierCredentials.id, existing.id));
     await tx.insert(atelierAuditEvents).values({

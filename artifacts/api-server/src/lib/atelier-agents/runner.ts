@@ -16,8 +16,8 @@
  * amber→red).
  */
 
-import { db, atelierAgentRuns, atelierAuditEvents } from "@workspace/db";
-import { eq, and, gte } from "drizzle-orm";
+import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities } from "@workspace/db";
+import { eq, and, gte, isNull } from "drizzle-orm";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
 
 // ------- shared types -------
@@ -438,6 +438,80 @@ function mockScoutOutput(
   };
 }
 
+/**
+ * Pursuit Scout v2 governed-write — Task #238 §2.5.
+ *
+ * Translates Scout 5C/strategic-priority deltas into pending profile-update
+ * proposals on the account's `pending_profile_updates` queue. Partners
+ * approve/reject these via the Cartographer Profile tab. We never overwrite
+ * live account fields here.
+ */
+async function proposeProfileUpdatesFromScout(args: {
+  opportunityId: string;
+  proposedBy: string;
+  output: PursuitScoutOutput;
+}): Promise<void> {
+  const [opp] = await db
+    .select()
+    .from(atelierOpportunities)
+    .where(eq(atelierOpportunities.id, args.opportunityId));
+  if (!opp?.accountId) return;
+  const [account] = await db
+    .select()
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.id, opp.accountId), isNull(atelierAccounts.deletedAt)));
+  if (!account) return;
+
+  const proposals: Array<{
+    id: string;
+    proposedBy: string;
+    proposedAt: string;
+    field: string;
+    fromValue: unknown;
+    toValue: unknown;
+    rationale: string;
+    oppId?: string;
+    status: "pending" | "approved" | "rejected";
+  }> = [];
+
+  const now = new Date().toISOString();
+  const facts = (args.output as { facts?: Array<{ statement?: string; sourceUrl?: string; sourceTitle?: string }> }).facts ?? [];
+  const priorityFacts = facts.filter((f) => /priorit|strateg|initiative/i.test(f.statement ?? ""));
+  const existingPriorities = (account.strategicPriorities as string[] | null) ?? [];
+  for (const f of priorityFacts.slice(0, 3)) {
+    if (!f.statement) continue;
+    proposals.push({
+      id: `pp_${rid("x").slice(2)}`,
+      proposedBy: args.proposedBy,
+      proposedAt: now,
+      field: "strategicPriorities",
+      fromValue: existingPriorities,
+      toValue: [...existingPriorities, f.statement.slice(0, 200)],
+      rationale: `Pursuit Scout fact: ${f.sourceTitle ?? f.sourceUrl ?? "evidence pending"}`,
+      oppId: args.opportunityId,
+      status: "pending",
+    });
+  }
+
+  if (proposals.length === 0) return;
+  const queue = ((account.pendingProfileUpdates as typeof proposals | null) ?? []).concat(proposals);
+  await db
+    .update(atelierAccounts)
+    .set({ pendingProfileUpdates: queue, updatedAt: new Date() })
+    .where(eq(atelierAccounts.id, account.id));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "account",
+    entityId: account.id,
+    actorType: "agent",
+    actorId: args.proposedBy,
+    actorLabel: "Pursuit Scout",
+    action: "account.profile.proposeUpdate",
+    payload: { count: proposals.length, oppId: args.opportunityId },
+    payloadSummary: `Pursuit Scout proposed ${proposals.length} profile update(s) for "${account.name}".`,
+  });
+}
+
 export async function runPursuitScout(args: {
   opportunityId: string;
   accountName: string;
@@ -475,6 +549,20 @@ export async function runPursuitScout(args: {
     );
     await progressRun(runId, 70, "Synthesising 5C draft", { name: "scout.synth", durationMs: Date.now() - t0, tokensIn, tokensOut });
     const guarded: PursuitScoutOutput = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
+    // Pursuit Scout v2 governed-write — Task #238 §2.5.
+    // Any account-profile delta the scout surfaces is enqueued onto the
+    // Cartographer approval queue (atelier_accounts.pending_profile_updates)
+    // rather than written directly. Partners decide via the Profile tab.
+    try {
+      await proposeProfileUpdatesFromScout({
+        opportunityId: args.opportunityId,
+        proposedBy: "ag_pursuit_scout",
+        output: guarded,
+      });
+    } catch (e) {
+      // governed-write must never break a successful scout run
+      console.warn("proposeProfileUpdatesFromScout failed", e);
+    }
     await completeRun({
       runId,
       output: guarded as unknown,

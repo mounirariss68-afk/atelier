@@ -66,11 +66,13 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
 ];
 
+// PRD §6.2: champion + supporter = gold; neutral = mute (default);
+// skeptic + blocker = danger (red).
 const DISPOSITION_TONE: Record<AtelierContactDisposition, "default" | "gold" | "green" | "amber" | "red"> = {
-  champion: "green",
+  champion: "gold",
   supporter: "gold",
   neutral: "default",
-  skeptic: "amber",
+  skeptic: "red",
   blocker: "red",
   unknown: "default",
 };
@@ -425,6 +427,34 @@ function DecisionMakersTab({
             <MonoChip tone="gold">Influence {selected.influenceScore}/5</MonoChip>
             {selected.email && <MonoChip>{selected.email}</MonoChip>}
           </div>
+          <div className="grid grid-cols-2 gap-3 mt-3 text-xs font-mono text-text-mute">
+            <div>
+              <Eyebrow>Last contact</Eyebrow>
+              <div className="mt-1 text-text">
+                {selected.lastContactAt
+                  ? new Date(selected.lastContactAt).toLocaleDateString()
+                  : "—"}
+              </div>
+            </div>
+            <div>
+              <Eyebrow>LinkedIn</Eyebrow>
+              <div className="mt-1">
+                {selected.linkedinUrl ? (
+                  <a
+                    href={selected.linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-gold hover:underline break-all"
+                    data-testid={`link-linkedin-${selected.id}`}
+                  >
+                    {selected.linkedinUrl.replace(/^https?:\/\/(www\.)?/, "")}
+                  </a>
+                ) : (
+                  <span className="text-text-mute">—</span>
+                )}
+              </div>
+            </div>
+          </div>
           {selected.notes && (
             <p className="text-sm text-text-mute leading-snug border-t border-border-soft pt-3 mt-3">
               {selected.notes}
@@ -534,11 +564,14 @@ function DecisionMakersGraph({
       positions.set(c.id, { x: step * (i + 1), y: 40 + depthIdx * ROW_H });
     });
   });
+  // Mirror DISPOSITION_TONE per PRD §6.2: gold for champion/supporter,
+  // mute for neutral/unknown, danger for skeptic/blocker.
   const dispositionFill: Record<string, string> = {
-    champion: "#1F6F3E",
-    supporter: "#2F855A",
+    champion: "#9C6A1F",
+    supporter: "#7A5316",
     neutral: "#1E2A47",
-    skeptic: "#7B341E",
+    unknown: "#1E2A47",
+    skeptic: "#7B1F1F",
     blocker: "#7B1F1F",
   };
   return (

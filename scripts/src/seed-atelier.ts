@@ -984,7 +984,14 @@ const AGENTS: AgentSeed[] = [
     model: "claude-sonnet-4-6",
     starred: true,
     status: "mvp",
-    tools: ["web_search", "knowledge.search", "file.read"],
+    tools: [
+      "web_search",
+      "web_fetch",
+      "linkedin.lookup",
+      "news.feed",
+      "knowledge.search",
+      "file.read",
+    ],
     guardrails: [
       "Every proposed update must include a citation",
       "Writes only to pendingProfileUpdates queue (never live fields)",
