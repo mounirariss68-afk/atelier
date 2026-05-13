@@ -128,6 +128,13 @@ export interface ReferenceComboboxProps {
   locale?: ReferenceLocale;
   className?: string;
   testIdPrefix?: string;
+  /**
+   * When true (default), the combobox refuses any value that does not match a
+   * canonical reference row — no synthetic "Add X" rows, no free-text fallback.
+   * Set to false only if a caller deliberately needs to accept ad-hoc text
+   * (currently no such caller exists; the lookup is closed by design).
+   */
+  disableFreeText?: boolean;
 }
 
 const SIZE_CLS: Record<"sm" | "md" | "lg", string> = {
@@ -150,6 +157,7 @@ export function ReferenceCombobox({
   locale = "en",
   className,
   testIdPrefix,
+  disableFreeText = true,
 }: ReferenceComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const { data, loading, error } = useReferenceBootstrap();
@@ -239,24 +247,28 @@ export function ReferenceCombobox({
     return { items, label: selectedRow ? localizedIndustryName(selectedRow, locale) : "" };
   }, [data, kind, allowDeprecated, parentIndustry, value, valueMode, locale]);
 
-  // cmdk filter — uses our scoring helpers and disables free text by
-  // returning 0 for any item that doesn't match (no synthetic "Add X" rows).
+  // cmdk filter — scoring helpers gate visibility. When disableFreeText
+  // is true (default) we never render synthetic "Add X" rows; an empty
+  // result set just shows CommandEmpty.
   const filter = React.useCallback(
     (itemKey: string, search: string): number => {
       if (!data) return 0;
       const q = search ?? "";
       if (kind === "country") {
         const row = data.countries.find((c) => c.isoAlpha2 === itemKey);
-        return row ? scoreCountryMatch(row, q) : 0;
+        const score = row ? scoreCountryMatch(row, q) : 0;
+        return disableFreeText ? score : Math.max(score, q ? 0.001 : 0);
       }
       if (kind === "industry") {
         const row = data.industries.find((i) => i.code === itemKey);
-        return row ? scoreIndustryMatch(row, q) : 0;
+        const score = row ? scoreIndustryMatch(row, q) : 0;
+        return disableFreeText ? score : Math.max(score, q ? 0.001 : 0);
       }
       const row = data.subIndustries.find((s) => s.code === itemKey);
-      return row ? scoreSubIndustryMatch(row, q) : 0;
+      const score = row ? scoreSubIndustryMatch(row, q) : 0;
+      return disableFreeText ? score : Math.max(score, q ? 0.001 : 0);
     },
-    [data, kind],
+    [data, kind, disableFreeText],
   );
 
   const Icon = kind === "country" ? Globe : Building2;

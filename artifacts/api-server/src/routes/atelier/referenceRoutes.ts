@@ -13,6 +13,12 @@
  *
  * Countries are a closed ISO 3166-1 list — no POST; extend COUNTRY_EXTRAS
  * in the seed and re-run it instead.
+ *
+ * No DELETE endpoints by design: every reference row that has ever been
+ * referenced by an account / opportunity must remain resolvable. The
+ * canonical retire flow is `PATCH … { status: "deprecated" }`, which keeps
+ * the row in place but hides it from active pickers (combobox excludes
+ * deprecated unless `?includeDeprecated=true`).
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
