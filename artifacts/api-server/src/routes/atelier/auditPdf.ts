@@ -151,6 +151,24 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
     res.status(400).json({ error: "missing-person-id" });
     return;
   }
+  // Task #261 SEC — partner-signed audit pack must be locked to
+  // partner / operations personas, OR a strict self-export where the
+  // requesting persona's id matches the requested personId. Without
+  // this guard any employee/lead could exfiltrate another person's
+  // full audit trail (IDOR).
+  const persona = (req as Request & {
+    atelierPersona?: { id: string; role: string };
+  }).atelierPersona;
+  if (!persona) {
+    res.status(401).json({ error: "unauthenticated" });
+    return;
+  }
+  const isPrivileged = persona.role === "partner" || persona.role === "operations";
+  const isSelf = persona.id === personId;
+  if (!isPrivileged && !isSelf) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
 
   const { person, onboardingIds, offboardingIds, rows } = await withRls(req, async (tx) => {
     const [emp] = await tx.select().from(atelierEmployees).where(eq(atelierEmployees.id, personId)).limit(1);

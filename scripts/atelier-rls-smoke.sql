@@ -29,6 +29,12 @@
 -- superuser (BYPASSRLS); for smoke purposes we run inside an explicit
 -- LOCAL role override using SET LOCAL row_security = on, plus a
 -- best-effort role swap when an `atelier_app` role exists.
+-- All assertions run inside ONE explicit transaction so SET LOCAL
+-- session GUCs (`app.org_id`, `app.user_id`, `app.engagement_ids`,
+-- `row_security`) persist across the DO blocks below. Closing the
+-- transaction at the bottom releases everything cleanly.
+BEGIN;
+
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'atelier_app') THEN
@@ -138,3 +144,5 @@ END $$;
 
 -- -------------------------------------------------------------------
 SELECT 'atelier-rls-smoke: PASS' AS result;
+
+COMMIT;
