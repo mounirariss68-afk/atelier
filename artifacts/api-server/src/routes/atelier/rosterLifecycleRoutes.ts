@@ -24,7 +24,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, isNull, lte, gte, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, gte, ne, or, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -136,6 +136,35 @@ async function findPerson(
     );
   if (pr) return { ...pr, workerType: "partner_firm_resource" };
   return null;
+}
+
+/**
+ * Resolve the linked atelier_users.id for a roster person, mirroring
+ * `resolveLinkedUserId` in rosterRoutes.ts (Access Sentinel). Employees are
+ * linked canonically via atelier_employees.user_id; contractors and
+ * partner-firm resources fall back to email lookup against atelier_users.
+ *
+ * Critical for offboarding: engagement_access grants are keyed by user_id,
+ * so any check that reads them MUST resolve through this same path —
+ * otherwise an employee with a null/changed email would falsely report
+ * "no pending grants" and let finalize sign off without revocation.
+ */
+async function resolveLinkedUserIdForPerson(
+  person: { id: string; workerType: WorkerType; email: string | null },
+): Promise<string | null> {
+  if (person.workerType === "employee") {
+    const [emp] = await db
+      .select({ userId: atelierEmployees.userId })
+      .from(atelierEmployees)
+      .where(eq(atelierEmployees.id, person.id));
+    return emp?.userId ?? null;
+  }
+  if (!person.email) return null;
+  const [u] = await db
+    .select({ id: atelierUsers.id })
+    .from(atelierUsers)
+    .where(eq(atelierUsers.email, person.email));
+  return u?.id ?? null;
 }
 
 // -----------------------------------------------------------------
@@ -750,10 +779,20 @@ router.get("/roster/onboarding", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
+    // Per PRD §6, the onboarding pane shows in-flight sequences by default.
+    // Pass ?status=all to include completed/cancelled rows.
+    const includeAll = String(req.query.status ?? "in_flight") === "all";
     const onbs = await db
       .select()
       .from(atelierOnboardings)
-      .where(isNull(atelierOnboardings.deletedAt))
+      .where(
+        includeAll
+          ? isNull(atelierOnboardings.deletedAt)
+          : and(
+              isNull(atelierOnboardings.deletedAt),
+              eq(atelierOnboardings.status, "in_flight"),
+            ),
+      )
       .orderBy(desc(atelierOnboardings.startedAt));
     const stepsByOnb = new Map<string, (typeof atelierOnboardingSteps.$inferSelect)[]>();
     if (onbs.length > 0) {
@@ -929,10 +968,20 @@ router.get("/roster/offboarding", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
+    // Per PRD §6, the offboarding pane shows active sequences by default.
+    // Pass ?status=all to include completed (audit-pack-signed) rows.
+    const includeAll = String(req.query.status ?? "active") === "all";
     const offs = await db
       .select()
       .from(atelierOffboardings)
-      .where(isNull(atelierOffboardings.deletedAt))
+      .where(
+        includeAll
+          ? isNull(atelierOffboardings.deletedAt)
+          : and(
+              isNull(atelierOffboardings.deletedAt),
+              ne(atelierOffboardings.status, "complete"),
+            ),
+      )
       .orderBy(desc(atelierOffboardings.initiatedAt));
     const stepsByOff = new Map<string, (typeof atelierOffboardingSteps.$inferSelect)[]>();
     if (offs.length > 0) {
@@ -1064,29 +1113,24 @@ router.post("/roster/offboarding/:id/steps/:stepId/advance", async (req, res, ne
         .where(eq(atelierOffboardings.id, req.params.id));
       if (off) {
         const person = await findPerson(off.personId);
-        if (person?.email) {
-          const [u] = await db
-            .select({ id: atelierUsers.id })
-            .from(atelierUsers)
-            .where(eq(atelierUsers.email, person.email));
-          if (u) {
-            const remaining = await db
-              .select({ id: atelierEngagementAccess.id })
-              .from(atelierEngagementAccess)
-              .where(
-                and(
-                  eq(atelierEngagementAccess.userId, u.id),
-                  eq(atelierEngagementAccess.status, "active"),
-                  isNull(atelierEngagementAccess.deletedAt),
-                ),
-              );
-            if (remaining.length > 0) {
-              res.status(422).json({
-                error: "reassignments-still-pending",
-                pendingGrants: remaining.length,
-              });
-              return;
-            }
+        const userId = person ? await resolveLinkedUserIdForPerson(person) : null;
+        if (userId) {
+          const remaining = await db
+            .select({ id: atelierEngagementAccess.id })
+            .from(atelierEngagementAccess)
+            .where(
+              and(
+                eq(atelierEngagementAccess.userId, userId),
+                eq(atelierEngagementAccess.status, "active"),
+                isNull(atelierEngagementAccess.deletedAt),
+              ),
+            );
+          if (remaining.length > 0) {
+            res.status(422).json({
+              error: "reassignments-still-pending",
+              pendingGrants: remaining.length,
+            });
+            return;
           }
         }
       }
@@ -1154,12 +1198,9 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
     // were actually rolled.
     {
       const personForCheck = await findPerson(off.personId);
-      if (personForCheck?.email) {
-        const [u] = await db
-          .select({ id: atelierUsers.id })
-          .from(atelierUsers)
-          .where(eq(atelierUsers.email, personForCheck.email));
-        if (u) {
+      const userIdForCheck = personForCheck ? await resolveLinkedUserIdForPerson(personForCheck) : null;
+      if (userIdForCheck) {
+        {
           const activeGrants = await db
             .select({
               id: atelierEngagementAccess.id,
@@ -1168,7 +1209,7 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
             .from(atelierEngagementAccess)
             .where(
               and(
-                eq(atelierEngagementAccess.userId, u.id),
+                eq(atelierEngagementAccess.userId, userIdForCheck),
                 eq(atelierEngagementAccess.status, "active"),
               ),
             );
@@ -1224,18 +1265,15 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
     // worker can pick them up. Each side-effect emits its own audit row so
     // the offboarding pack reflects exactly which systems were torn down.
     const person = await findPerson(off.personId);
-    if (person?.email) {
-      const [u] = await db
-        .select({ id: atelierUsers.id })
-        .from(atelierUsers)
-        .where(eq(atelierUsers.email, person.email));
-      if (u) {
+    const linkedUserId = person ? await resolveLinkedUserIdForPerson(person) : null;
+    if (person && linkedUserId) {
+      {
         const revoked = await db
           .update(atelierEngagementAccess)
           .set({ status: "revoked", endDate: new Date() })
           .where(
             and(
-              eq(atelierEngagementAccess.userId, u.id),
+              eq(atelierEngagementAccess.userId, linkedUserId),
               eq(atelierEngagementAccess.status, "active"),
             ),
           )
@@ -1245,7 +1283,7 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
           entityId: off.id,
           actor: me,
           action: "offboarding.revoke.atelier_access",
-          payload: { userId: u.id, revokedGrantIds: revoked.map((r) => r.id) },
+          payload: { userId: linkedUserId, revokedGrantIds: revoked.map((r) => r.id) },
           summary: `Atelier engagement access revoked for ${person.fullName} (${revoked.length} grants).`,
         });
       }
