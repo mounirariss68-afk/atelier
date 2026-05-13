@@ -3955,6 +3955,30 @@ export const AtelierRunPricingStrategistParams = zod.object({
   oppId: zod.coerce.string(),
 });
 
+export const atelierRunPricingStrategistBodyTargetMarginPctMin = 0;
+export const atelierRunPricingStrategistBodyTargetMarginPctMax = 1;
+
+export const AtelierRunPricingStrategistBody = zod
+  .object({
+    primary_intent: zod
+      .string()
+      .optional()
+      .describe(
+        'e.g. \"land_and_expand\", \"defend_margin\", \"displace_incumbent\"',
+      ),
+    target_margin_pct: zod
+      .number()
+      .min(atelierRunPricingStrategistBodyTargetMarginPctMin)
+      .max(atelierRunPricingStrategistBodyTargetMarginPctMax)
+      .optional(),
+    alternative_lenses: zod
+      .array(zod.enum(["fixed_fee", "outcome_based", "retainer"]))
+      .optional(),
+  })
+  .describe(
+    "Optional spec-contract input forwarded to the Pricing Strategist.\nopportunity_id from the path takes precedence; the body fields are\nnarrative + alt-selection hints. target_margin_pct (when provided)\noverrides the firm-default policy target for the duration of this run.\n",
+  );
+
 export const AtelierRunPricingStrategistResponse = zod.object({
   runId: zod.string(),
   primary: zod.object({
@@ -3997,6 +4021,41 @@ export const AtelierRunPricingStrategistResponse = zod.object({
   partnerOverrideRequired: zod.boolean(),
   twoPartnerRequired: zod.boolean(),
   confidence: zod.enum(["green", "amber", "red"]),
+  primary_pricing: zod
+    .object({
+      pricingModel: zod.string(),
+      durationWeeks: zod.number(),
+      teamMix: zod.array(
+        zod.object({
+          seniority: zod.string(),
+          role: zod.string().optional(),
+          ftePct: zod.number(),
+        }),
+      ),
+      cost: zod.number(),
+      price: zod.number(),
+      marginPct: zod.number(),
+      marginLockStatus: zod.enum(["green", "amber", "red"]),
+      narrative: zod.string(),
+    })
+    .optional()
+    .describe("Spec-canonical alias of `primary` (snake_case)."),
+  talking_points_for_partner: zod
+    .array(zod.string())
+    .optional()
+    .describe("Spec-canonical alias of `talkingPoints` (snake_case)."),
+  margin_lock_chip: zod
+    .enum(["green", "amber", "red"])
+    .optional()
+    .describe("Spec-canonical alias of `marginLockChip`."),
+  partner_override_required: zod
+    .boolean()
+    .optional()
+    .describe("Spec-canonical alias of `partnerOverrideRequired`."),
+  two_partner_required: zod
+    .boolean()
+    .optional()
+    .describe("Spec-canonical alias of `twoPartnerRequired`."),
 });
 
 export const AtelierOverridePricingParams = zod.object({

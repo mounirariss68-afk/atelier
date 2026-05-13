@@ -8,7 +8,7 @@
 import type { AtelierMarginLockStatus } from "./atelierMarginLockStatus";
 import type { AtelierTeamMixEntry } from "./atelierTeamMixEntry";
 
-export type AtelierPricingStrategistResultPrimary = {
+export interface AtelierPricingStrategistPrimary {
   pricingModel: string;
   durationWeeks: number;
   teamMix: AtelierTeamMixEntry[];
@@ -17,4 +17,4 @@ export type AtelierPricingStrategistResultPrimary = {
   marginPct: number;
   marginLockStatus: AtelierMarginLockStatus;
   narrative: string;
-};
+}

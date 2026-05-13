@@ -1809,6 +1809,11 @@ paths:
           name: oppId
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPricingStrategistInput" }
       responses:
         "200":
           description: Strategist brief with primary + 2-3 alternatives
@@ -3614,25 +3619,48 @@ components:
         marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
         story: { type: string }
 
+    AtelierPricingStrategistInput:
+      type: object
+      description: |
+        Optional spec-contract input forwarded to the Pricing Strategist.
+        opportunity_id from the path takes precedence; the body fields are
+        narrative + alt-selection hints. target_margin_pct (when provided)
+        overrides the firm-default policy target for the duration of this run.
+      properties:
+        primary_intent:
+          type: string
+          description: e.g. "land_and_expand", "defend_margin", "displace_incumbent"
+        target_margin_pct:
+          type: number
+          minimum: 0
+          maximum: 1
+        alternative_lenses:
+          type: array
+          items:
+            type: string
+            enum: [fixed_fee, outcome_based, retainer]
+
+    AtelierPricingStrategistPrimary:
+      type: object
+      required: [pricingModel, durationWeeks, teamMix, cost, price, marginPct, marginLockStatus, narrative]
+      properties:
+        pricingModel: { type: string }
+        durationWeeks: { type: number }
+        teamMix:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierTeamMixEntry" }
+        cost: { type: number }
+        price: { type: number }
+        marginPct: { type: number }
+        marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+        narrative: { type: string }
+
     AtelierPricingStrategistResult:
       type: object
       required: [runId, primary, alternatives, talkingPoints, risks, marginLockChip, partnerOverrideRequired, twoPartnerRequired, confidence]
       properties:
         runId: { type: string }
-        primary:
-          type: object
-          required: [pricingModel, durationWeeks, teamMix, cost, price, marginPct, marginLockStatus, narrative]
-          properties:
-            pricingModel: { type: string }
-            durationWeeks: { type: number }
-            teamMix:
-              type: array
-              items: { $ref: "#/components/schemas/AtelierTeamMixEntry" }
-            cost: { type: number }
-            price: { type: number }
-            marginPct: { type: number }
-            marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
-            narrative: { type: string }
+        primary: { $ref: "#/components/schemas/AtelierPricingStrategistPrimary" }
         alternatives:
           type: array
           items: { $ref: "#/components/schemas/AtelierPricingStrategistAlternative" }
@@ -3646,6 +3674,22 @@ components:
         partnerOverrideRequired: { type: boolean }
         twoPartnerRequired: { type: boolean }
         confidence: { $ref: "#/components/schemas/Confidence" }
+        primary_pricing:
+          description: Spec-canonical alias of `primary` (snake_case).
+          $ref: "#/components/schemas/AtelierPricingStrategistPrimary"
+        talking_points_for_partner:
+          description: Spec-canonical alias of `talkingPoints` (snake_case).
+          type: array
+          items: { type: string }
+        margin_lock_chip:
+          description: Spec-canonical alias of `marginLockChip`.
+          $ref: "#/components/schemas/AtelierMarginLockStatus"
+        partner_override_required:
+          description: Spec-canonical alias of `partnerOverrideRequired`.
+          type: boolean
+        two_partner_required:
+          description: Spec-canonical alias of `twoPartnerRequired`.
+          type: boolean
 
     AtelierAgentRunSummary:
       type: object

@@ -7,12 +7,12 @@
  */
 import type { AtelierMarginLockStatus } from "./atelierMarginLockStatus";
 import type { AtelierPricingStrategistAlternative } from "./atelierPricingStrategistAlternative";
-import type { AtelierPricingStrategistResultPrimary } from "./atelierPricingStrategistResultPrimary";
+import type { AtelierPricingStrategistPrimary } from "./atelierPricingStrategistPrimary";
 import type { Confidence } from "./confidence";
 
 export interface AtelierPricingStrategistResult {
   runId: string;
-  primary: AtelierPricingStrategistResultPrimary;
+  primary: AtelierPricingStrategistPrimary;
   alternatives: AtelierPricingStrategistAlternative[];
   talkingPoints: string[];
   risks: string[];
@@ -20,4 +20,14 @@ export interface AtelierPricingStrategistResult {
   partnerOverrideRequired: boolean;
   twoPartnerRequired: boolean;
   confidence: Confidence;
+  /** Spec-canonical alias of `primary` (snake_case). */
+  primary_pricing?: AtelierPricingStrategistPrimary;
+  /** Spec-canonical alias of `talkingPoints` (snake_case). */
+  talking_points_for_partner?: string[];
+  /** Spec-canonical alias of `marginLockChip`. */
+  margin_lock_chip?: AtelierMarginLockStatus;
+  /** Spec-canonical alias of `partnerOverrideRequired`. */
+  partner_override_required?: boolean;
+  /** Spec-canonical alias of `twoPartnerRequired`. */
+  two_partner_required?: boolean;
 }

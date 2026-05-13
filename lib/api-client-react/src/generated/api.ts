@@ -79,6 +79,7 @@ import type {
   AtelierPersonaSwitchInput,
   AtelierPov,
   AtelierPovVersion,
+  AtelierPricingStrategistInput,
   AtelierPricingStrategistResult,
   AtelierProcess,
   AtelierProfileUpdateDecisionInput,
@@ -8274,6 +8275,7 @@ export const getAtelierRunPricingStrategistUrl = (oppId: string) => {
 
 export const atelierRunPricingStrategist = async (
   oppId: string,
+  atelierPricingStrategistInput?: AtelierPricingStrategistInput,
   options?: RequestInit,
 ): Promise<AtelierPricingStrategistResult> => {
   return customFetch<AtelierPricingStrategistResult>(
@@ -8281,6 +8283,8 @@ export const atelierRunPricingStrategist = async (
     {
       ...options,
       method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPricingStrategistInput),
     },
   );
 };
@@ -8292,14 +8296,14 @@ export const getAtelierRunPricingStrategistMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof atelierRunPricingStrategist>>,
     TError,
-    { oppId: string },
+    { oppId: string; data: BodyType<AtelierPricingStrategistInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof atelierRunPricingStrategist>>,
   TError,
-  { oppId: string },
+  { oppId: string; data: BodyType<AtelierPricingStrategistInput> },
   TContext
 > => {
   const mutationKey = ["atelierRunPricingStrategist"];
@@ -8313,11 +8317,11 @@ export const getAtelierRunPricingStrategistMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof atelierRunPricingStrategist>>,
-    { oppId: string }
+    { oppId: string; data: BodyType<AtelierPricingStrategistInput> }
   > = (props) => {
-    const { oppId } = props ?? {};
+    const { oppId, data } = props ?? {};
 
-    return atelierRunPricingStrategist(oppId, requestOptions);
+    return atelierRunPricingStrategist(oppId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -8326,7 +8330,8 @@ export const getAtelierRunPricingStrategistMutationOptions = <
 export type AtelierRunPricingStrategistMutationResult = NonNullable<
   Awaited<ReturnType<typeof atelierRunPricingStrategist>>
 >;
-
+export type AtelierRunPricingStrategistMutationBody =
+  BodyType<AtelierPricingStrategistInput>;
 export type AtelierRunPricingStrategistMutationError = ErrorType<unknown>;
 
 export const useAtelierRunPricingStrategist = <
@@ -8336,14 +8341,14 @@ export const useAtelierRunPricingStrategist = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof atelierRunPricingStrategist>>,
     TError,
-    { oppId: string },
+    { oppId: string; data: BodyType<AtelierPricingStrategistInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof atelierRunPricingStrategist>>,
   TError,
-  { oppId: string },
+  { oppId: string; data: BodyType<AtelierPricingStrategistInput> },
   TContext
 > => {
   return useMutation(getAtelierRunPricingStrategistMutationOptions(options));

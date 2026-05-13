@@ -2754,39 +2754,45 @@ export async function runPricingStrategist(args: {
       policy: args.policy,
     });
 
-    await progressRun(runId, 55, "Building 3 alternative pricing structures");
+    await progressRun(runId, 55, "Building alternative pricing structures");
 
     // Deterministic alternatives — math always server-side.
-    const altSpecs: Array<{ model: string; weeks: number; mix: PricingTeamMixEntry[]; story: string }> = [];
+    // The full catalog of supported alternative lenses; the strategist
+    // input contract `alternative_lenses?` filters this list, and the
+    // empty/undefined case keeps backwards behaviour (all three).
+    const fullAltSpecs: Array<{ model: string; weeks: number; mix: PricingTeamMixEntry[]; story: string }> = [
+      {
+        // Lens: scope discipline / fixed_fee
+        model: "fixed_fee",
+        weeks: Math.max(2, Math.round(args.pricing.durationWeeks * 0.85)),
+        mix: teamMix,
+        story:
+          "Fixed-fee at a tighter scope. Buyer gets predictability; we keep margin by ring-fencing scope creep. Recommended when procurement leads the buying committee.",
+      },
+      {
+        // Lens: pricing model / outcome_based
+        model: "outcome_based",
+        weeks: args.pricing.durationWeeks,
+        mix: rebalanceSenior(teamMix),
+        story:
+          "Outcome-based pricing tied to a measurable client KPI. Senior-heavy blend signals confidence in the result and justifies a price premium. Use when the client has internal sponsorship and a clear KPI.",
+      },
+      {
+        // Lens: cash flow / retainer
+        model: "retainer",
+        weeks: Math.max(args.pricing.durationWeeks, 12),
+        mix: rebalanceJunior(teamMix),
+        story:
+          "Quarterly retainer with a senior-led core and leveraged delivery. Smooths cash flow, preserves margin via blended rate, and opens the account for follow-on work.",
+      },
+    ];
 
-    // Alt 1: Fixed fee, slightly compressed duration (lever: scope discipline)
-    altSpecs.push({
-      model: "fixed_fee",
-      weeks: Math.max(2, Math.round(args.pricing.durationWeeks * 0.85)),
-      mix: teamMix,
-      story:
-        "Fixed-fee at a tighter scope. Buyer gets predictability; we keep margin by ring-fencing scope creep. Recommended when procurement leads the buying committee.",
-    });
+    const requestedLenses = (args.alternativeLenses ?? []).map((s) => s.toLowerCase().trim()).filter(Boolean);
+    const altSpecs = requestedLenses.length
+      ? fullAltSpecs.filter((s) => requestedLenses.includes(s.model.toLowerCase()))
+      : fullAltSpecs;
 
-    // Alt 2: Outcome-based with senior-heavy blend (lever: pricing model)
-    altSpecs.push({
-      model: "outcome_based",
-      weeks: args.pricing.durationWeeks,
-      mix: rebalanceSenior(teamMix),
-      story:
-        "Outcome-based pricing tied to a measurable client KPI. Senior-heavy blend signals confidence in the result and justifies a price premium. Use when the client has internal sponsorship and a clear KPI.",
-    });
-
-    // Alt 3: Retainer (lever: cash flow + relationship)
-    altSpecs.push({
-      model: "retainer",
-      weeks: Math.max(args.pricing.durationWeeks, 12),
-      mix: rebalanceJunior(teamMix),
-      story:
-        "Quarterly retainer with a senior-led core and leveraged delivery. Smooths cash flow, preserves margin via blended rate, and opens the account for follow-on work.",
-    });
-
-    const alternatives = altSpecs.map((spec) => {
+    const alternatives = (altSpecs.length ? altSpecs : fullAltSpecs).map((spec) => {
       const c = computePricingFn({
         teamMix: spec.mix,
         durationWeeks: spec.weeks,
@@ -2824,10 +2830,18 @@ export async function runPricingStrategist(args: {
       alternatives,
     });
     const fallbackRisks = buildRisks(primaryCompute.marginLockStatus, args.policy);
+    const intentSuffix = args.primaryIntent
+      ? ` Intent: ${args.primaryIntent}.`
+      : "";
+    const lensSuffix = args.alternativeLenses && args.alternativeLenses.length
+      ? ` Alternatives constrained to: ${args.alternativeLenses.join(", ")}.`
+      : "";
     const fallbackNarrative =
-      primaryCompute.marginLockStatus === "green"
+      (primaryCompute.marginLockStatus === "green"
         ? `Primary structure clears the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target with room. Lead with this; alternatives are negotiation levers, not fallbacks.`
-        : `Primary structure lands at ${(primaryCompute.computedMarginPct * 100).toFixed(1)}% — below the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target. Alternatives below recover margin via scope, model, or blend.`;
+        : `Primary structure lands at ${(primaryCompute.computedMarginPct * 100).toFixed(1)}% — below the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target. Alternatives below recover margin via scope, model, or blend.`)
+      + intentSuffix
+      + lensSuffix;
 
     interface NarrativeJson {
       narrative: string;
@@ -2844,6 +2858,13 @@ export async function runPricingStrategist(args: {
     const userPrompt = JSON.stringify({
       opportunity: { id: args.opportunity.id, name: args.opportunity.name, accountId: args.opportunity.accountId },
       policy: args.policy,
+      // Spec-contract hints supplied by the caller. The narrative MUST
+      // reflect `primaryIntent` (e.g. "land_and_expand", "defend_margin")
+      // and stay within the requested `alternativeLenses` catalog.
+      strategistInput: {
+        primaryIntent: args.primaryIntent ?? null,
+        alternativeLenses: args.alternativeLenses ?? null,
+      },
       primary: {
         pricingModel: args.pricing.pricingModel,
         durationWeeks: args.pricing.durationWeeks,

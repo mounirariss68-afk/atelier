@@ -2170,7 +2170,34 @@ export interface AtelierPricingStrategistAlternative {
   story: string;
 }
 
-export type AtelierPricingStrategistResultPrimary = {
+export type AtelierPricingStrategistInputAlternativeLensesItem =
+  (typeof AtelierPricingStrategistInputAlternativeLensesItem)[keyof typeof AtelierPricingStrategistInputAlternativeLensesItem];
+
+export const AtelierPricingStrategistInputAlternativeLensesItem = {
+  fixed_fee: "fixed_fee",
+  outcome_based: "outcome_based",
+  retainer: "retainer",
+} as const;
+
+/**
+ * Optional spec-contract input forwarded to the Pricing Strategist.
+opportunity_id from the path takes precedence; the body fields are
+narrative + alt-selection hints. target_margin_pct (when provided)
+overrides the firm-default policy target for the duration of this run.
+
+ */
+export interface AtelierPricingStrategistInput {
+  /** e.g. "land_and_expand", "defend_margin", "displace_incumbent" */
+  primary_intent?: string;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  target_margin_pct?: number;
+  alternative_lenses?: AtelierPricingStrategistInputAlternativeLensesItem[];
+}
+
+export interface AtelierPricingStrategistPrimary {
   pricingModel: string;
   durationWeeks: number;
   teamMix: AtelierTeamMixEntry[];
@@ -2179,11 +2206,11 @@ export type AtelierPricingStrategistResultPrimary = {
   marginPct: number;
   marginLockStatus: AtelierMarginLockStatus;
   narrative: string;
-};
+}
 
 export interface AtelierPricingStrategistResult {
   runId: string;
-  primary: AtelierPricingStrategistResultPrimary;
+  primary: AtelierPricingStrategistPrimary;
   alternatives: AtelierPricingStrategistAlternative[];
   talkingPoints: string[];
   risks: string[];
@@ -2191,6 +2218,16 @@ export interface AtelierPricingStrategistResult {
   partnerOverrideRequired: boolean;
   twoPartnerRequired: boolean;
   confidence: Confidence;
+  /** Spec-canonical alias of `primary` (snake_case). */
+  primary_pricing?: AtelierPricingStrategistPrimary;
+  /** Spec-canonical alias of `talkingPoints` (snake_case). */
+  talking_points_for_partner?: string[];
+  /** Spec-canonical alias of `marginLockChip`. */
+  margin_lock_chip?: AtelierMarginLockStatus;
+  /** Spec-canonical alias of `partnerOverrideRequired`. */
+  partner_override_required?: boolean;
+  /** Spec-canonical alias of `twoPartnerRequired`. */
+  two_partner_required?: boolean;
 }
 
 export type AtelierAgentRunSummaryStatus =

@@ -70,6 +70,42 @@
         "partnerOverrideRequired": true,
         "twoPartnerRequired": true
       }
+    },
+    {
+      "id": "s_strategist_input_filters_alternatives",
+      "description": "Asserts that strategist input alternative_lenses=['retainer'] yields exactly one alternative (retainer) instead of all three, proving primaryIntent/alternativeLenses actually drive the run.",
+      "strategistInput": {
+        "primary_intent": "land_and_expand",
+        "alternative_lenses": ["retainer"]
+      },
+      "policy": { "targetMarginPct": 0.55, "amberThresholdPct": 0.50, "redThresholdPct": 0.45, "twoPartnerThresholdPct": 0.45 },
+      "teamMix": [
+        { "seniority": "Principal", "ftePct": 0.5 },
+        { "seniority": "AIEngineer", "ftePct": 1.0 },
+        { "seniority": "Analyst", "ftePct": 1.0 }
+      ],
+      "durationWeeks": 8,
+      "expect": {
+        "alternativesCount": 1,
+        "alternativePricingModels": ["retainer"],
+        "narrativeContains": ["land_and_expand", "retainer"]
+      }
+    },
+    {
+      "id": "s_strategist_input_default_keeps_all_three",
+      "description": "Backwards-compat: empty strategist input still returns all 3 alternatives.",
+      "strategistInput": {},
+      "policy": { "targetMarginPct": 0.55, "amberThresholdPct": 0.50, "redThresholdPct": 0.45, "twoPartnerThresholdPct": 0.45 },
+      "teamMix": [
+        { "seniority": "Principal", "ftePct": 0.5 },
+        { "seniority": "AIEngineer", "ftePct": 1.0 },
+        { "seniority": "Analyst", "ftePct": 1.0 }
+      ],
+      "durationWeeks": 8,
+      "expect": {
+        "alternativesCount": 3,
+        "alternativePricingModels": ["fixed_fee", "outcome_based", "retainer"]
+      }
     }
   ]
 }
