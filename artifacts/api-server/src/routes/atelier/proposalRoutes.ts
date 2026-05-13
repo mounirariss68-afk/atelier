@@ -437,10 +437,13 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
   const opp = await ensureOppAccess(res, me, req.params.oppId);
   if (!opp) return;
   const body = req.body as {
+    title?: string;
     sectionsRequired?: string[];
     teamProposed?: { role: string; alloc: number }[];
     pricingIntent?: { targetMarginPct: number; durationWeeks: number };
     rfpRequirements?: { id: string; requirement: string; severity: string }[];
+    deadlineAt?: string;
+    rfpFileName?: string;
   };
   const sectionsRequired = body.sectionsRequired ?? [
     "context",
@@ -496,13 +499,15 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
       id: proposalId,
       opportunityId: opp.id,
       runId,
-      title: output.title,
+      title: body.title ?? output.title,
       sectionsRequired,
       teamProposed: body.teamProposed ?? teamFromCharter ?? [],
       pricingIntent: {
         ...(body.pricingIntent ?? {}),
         seededFromCharter: proposedWorkstreams.length > 0,
         proposedWorkstreams,
+        deadlineAt: body.deadlineAt ?? null,
+        rfpFileName: body.rfpFileName ?? null,
       },
       pricingModel: output.pricingModel as unknown as Record<string, unknown>,
       winThemes: output.winThemes,
@@ -853,6 +858,79 @@ router.post("/proposals/:proposalId/override-pricing", async (req, res) => {
 });
 
 // ----------------------------------------------------------------------
+// PromptSheet checkpoint #1 — Section assignments confirmed (lead/partner).
+// Locks the per-section ownerAgent + sectionsRequired list before send.
+// ----------------------------------------------------------------------
+router.post("/proposals/:proposalId/confirm-section-assignments", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "engagement_lead" && me.role !== "partner") {
+    res.status(403).json({ error: "only-lead-or-partner-may-confirm-assignments" });
+    return;
+  }
+  const [proposal] = await db.select().from(atelierProposals).where(eq(atelierProposals.id, req.params.proposalId));
+  if (!proposal) { res.status(404).json({ error: "proposal-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  const newIntent = {
+    ...((proposal.pricingIntent ?? {}) as Record<string, unknown>),
+    sectionAssignmentsConfirmedAt: new Date().toISOString(),
+    sectionAssignmentsConfirmedByUserId: me.id,
+    sectionAssignmentsConfirmedByName: me.name,
+  };
+  const [updated] = await db
+    .update(atelierProposals)
+    .set({ pricingIntent: newIntent, updatedAt: new Date() })
+    .where(eq(atelierProposals.id, proposal.id))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: proposal.opportunityId,
+    actor: me,
+    action: "proposal.confirm_section_assignments",
+    payload: { proposalId: proposal.id },
+    summary: `${me.name} confirmed proposal section assignments for "${proposal.title}"`,
+  });
+  res.json(updated);
+});
+
+// ----------------------------------------------------------------------
+// PromptSheet checkpoint #2 — Final partner read (partner only).
+// Distinct from approve-pricing: this is the partner's last-mile read
+// of the assembled proposal before the send.
+// ----------------------------------------------------------------------
+router.post("/proposals/:proposalId/partner-final-read", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "only-partner-may-record-final-read" });
+    return;
+  }
+  const [proposal] = await db.select().from(atelierProposals).where(eq(atelierProposals.id, req.params.proposalId));
+  if (!proposal) { res.status(404).json({ error: "proposal-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  const newIntent = {
+    ...((proposal.pricingIntent ?? {}) as Record<string, unknown>),
+    partnerFinalReadAt: new Date().toISOString(),
+    partnerFinalReadByUserId: me.id,
+    partnerFinalReadByName: me.name,
+  };
+  const [updated] = await db
+    .update(atelierProposals)
+    .set({ pricingIntent: newIntent, updatedAt: new Date() })
+    .where(eq(atelierProposals.id, proposal.id))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: proposal.opportunityId,
+    actor: me,
+    action: "proposal.partner_final_read",
+    payload: { proposalId: proposal.id },
+    summary: `${me.name} recorded final partner read for "${proposal.title}"`,
+  });
+  res.json(updated);
+});
+
+// ----------------------------------------------------------------------
 // Proposal SEND — partner-only final read gate. Enforces the workflow:
 // (1) all sections approved, (2) pricing approved OR overridden,
 // then assembles a deterministic DOCX/PDF artifact and flips
@@ -905,6 +983,27 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
   }
   if (pricingVerdict !== "partner_override_required" && !pricingApprovedAt) {
     res.status(409).json({ error: "pricing-not-yet-approved" });
+    return;
+  }
+  // PromptSheet checkpoints (Task #223 spec): the lead must lock the
+  // section assignments and the partner must record a final read before
+  // anything ships to the client. Both are recorded on pricingIntent.
+  const sheet = pricingIntent as {
+    sectionAssignmentsConfirmedAt?: string;
+    partnerFinalReadAt?: string;
+  };
+  if (!sheet.sectionAssignmentsConfirmedAt) {
+    res.status(409).json({
+      error: "section-assignments-not-confirmed",
+      hint: "Use POST /proposals/:id/confirm-section-assignments (lead/partner)",
+    });
+    return;
+  }
+  if (!sheet.partnerFinalReadAt) {
+    res.status(409).json({
+      error: "partner-final-read-required",
+      hint: "Use POST /proposals/:id/partner-final-read (partner only)",
+    });
     return;
   }
   // Render real DOCX + PDF artifacts via the proposal-docs pipeline and

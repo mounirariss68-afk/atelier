@@ -204,6 +204,8 @@ export {
   useAtelierApproveProposalSection,
   useAtelierEditProposalSection,
   useAtelierRejectProposalSection,
+  useAtelierConfirmSectionAssignments,
+  useAtelierPartnerFinalRead,
   getAtelierSendProposalUrl,
   getAtelierSendProposalMutationOptions,
   useAtelierSendProposal,

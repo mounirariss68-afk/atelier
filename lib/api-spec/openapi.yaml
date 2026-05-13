@@ -1183,6 +1183,34 @@ paths:
               schema: { $ref: "#/components/schemas/AtelierProposalSendResponse" }
         "409":
           description: Sections or pricing not ready
+  /atelier/proposals/{proposalId}/confirm-section-assignments:
+    post:
+      operationId: atelierConfirmSectionAssignments
+      tags: [atelier]
+      summary: Lock proposal section assignments (PromptSheet checkpoint, lead/partner)
+      parameters:
+        - in: path
+          name: proposalId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated proposal
+          content: { application/json: { schema: { $ref: "#/components/schemas/AtelierProposal" } } }
+  /atelier/proposals/{proposalId}/partner-final-read:
+    post:
+      operationId: atelierPartnerFinalRead
+      tags: [atelier]
+      summary: Record partner final read of proposal (PromptSheet checkpoint, partner only)
+      parameters:
+        - in: path
+          name: proposalId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated proposal
+          content: { application/json: { schema: { $ref: "#/components/schemas/AtelierProposal" } } }
   /atelier/proposal-sections/{sectionId}:
     patch:
       operationId: atelierEditProposalSection

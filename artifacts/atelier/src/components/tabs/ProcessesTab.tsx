@@ -13,6 +13,32 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Workflow, ShieldCheck, AlertTriangle } from "lucide-react";
+import mermaid from "mermaid";
+
+mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
+
+function MermaidDiagram({ chart, id }: { chart: string; id: string }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [fallback, setFallback] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!ref.current || !chart) return;
+    setFallback(false);
+    mermaid
+      .render(`mermaid-${id}`, chart)
+      .then(({ svg }) => { if (!cancelled && ref.current) ref.current.innerHTML = svg; })
+      .catch(() => { if (!cancelled) setFallback(true); });
+    return () => { cancelled = true; };
+  }, [chart, id]);
+  if (fallback) {
+    return (
+      <pre className="text-[11px] font-mono whitespace-pre-wrap bg-bg-deep border border-border-soft rounded p-3 overflow-x-auto" data-testid={`mermaid-fallback-${id}`}>
+        {chart}
+      </pre>
+    );
+  }
+  return <div ref={ref} className="bg-bg-deep border border-border-soft rounded p-3 overflow-x-auto" data-testid={`mermaid-${id}`} />;
+}
 
 const RISK_TONE: Record<string, "green" | "amber" | "red"> = { low: "green", med: "amber", high: "red" };
 const AGENTIFIABLE_TONE: Record<string, "green" | "amber" | "red"> = { yes: "green", partial: "amber", no: "red" };
@@ -53,6 +79,20 @@ export function ProcessesTab({ engId }: { engId: string }) {
       setSourceType("image");
     };
     reader.readAsDataURL(file);
+  }, []);
+
+  // Transcript (.txt/.vtt/.srt) and BPMN (.bpmn/.xml) file ingestion: read
+  // file as text and feed straight into the source textarea so the existing
+  // server-side parsers (Speaker:-stripping for transcripts, <task name=…>
+  // extraction for BPMN) can run unchanged.
+  const onPickTextFile = React.useCallback((file: File, kind: "transcript" | "bpmn") => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSource(typeof reader.result === "string" ? reader.result : "");
+      setImageName(file.name);
+      setSourceType(kind);
+    };
+    reader.readAsText(file);
   }, []);
 
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
@@ -111,19 +151,39 @@ export function ProcessesTab({ engId }: { engId: string }) {
             />
             {imageName && <span className="text-xs text-text-mute font-mono">{imageName}</span>}
           </div>
+        ) : (sourceType === "transcript" || sourceType === "bpmn") ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept={sourceType === "transcript" ? ".txt,.vtt,.srt,text/plain" : ".bpmn,.xml,application/xml,text/xml"}
+                data-testid={`input-process-${sourceType}-file`}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickTextFile(f, sourceType); }}
+                className="text-xs text-text-mute"
+              />
+              {imageName && <span className="text-xs text-text-mute font-mono">{imageName}</span>}
+              <span className="text-[11px] text-text-faint">or paste below</span>
+            </div>
+            <textarea
+              data-testid="input-process-source"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              rows={6}
+              placeholder={
+                sourceType === "transcript"
+                  ? "Paste meeting transcript (Speaker: text). Lines without colons are kept verbatim."
+                  : "Paste BPMN XML. <userTask name=…>/<task name=…> nodes will be extracted in order."
+              }
+              className="w-full rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text font-mono"
+            />
+          </div>
         ) : (
           <textarea
             data-testid="input-process-source"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             rows={6}
-            placeholder={
-              sourceType === "transcript"
-                ? "Paste meeting transcript (Speaker: text). Lines without colons are kept verbatim."
-                : sourceType === "bpmn"
-                  ? "Paste BPMN XML. <userTask name=…>/<task name=…> nodes will be extracted in order."
-                  : "Paste the process description (≥10 chars). Use periods or new lines between steps."
-            }
+            placeholder="Paste the process description (≥10 chars). Use periods or new lines between steps."
             className="w-full rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text font-mono"
           />
         )}
@@ -165,11 +225,7 @@ export function ProcessesTab({ engId }: { engId: string }) {
               <div className="font-medium text-text">{p.name}</div>
               <span className="text-xs font-mono text-text-mute">{(p.steps ?? []).length} steps</span>
             </div>
-            {p.diagram && (
-              <pre className="text-[11px] font-mono whitespace-pre-wrap bg-bg-deep border border-border-soft rounded p-3 overflow-x-auto">
-                {p.diagram}
-              </pre>
-            )}
+            {p.diagram && <MermaidDiagram chart={p.diagram} id={p.id} />}
             <div className="space-y-1">
               {(p.steps ?? []).map((s) => (
                 <div key={s.id} className="flex items-center gap-2 text-xs">

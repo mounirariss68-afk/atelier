@@ -1822,7 +1822,48 @@ function mockProposal(args: {
     case_studies: {
       name: "Case Studies",
       owner: "case_study_picker",
-      content: () => `Three relevant credentials selected from Atelier portfolio.`,
+      content: (oppId: string) => {
+        // Mock Case Study Picker — ranks the firm portfolio against the
+        // opportunity name and returns the top-3 credentials as one-pagers
+        // so the section is real text the lead can review (not placeholder).
+        const portfolio = [
+          { id: "cs_acme_refunds", client: "ACME Retail", sector: "Retail",
+            outcome: "Refund triage cycle 5d → 18h with senior-overseen agents.",
+            metric: "Cost / case −41%, CSAT +9pts" },
+          { id: "cs_nile_kyc", client: "Nile Bank", sector: "Financial services",
+            outcome: "KYC packet checks: 92% straight-through with reviewer signoff.",
+            metric: "Throughput ×3.2, SLA breaches −68%" },
+          { id: "cs_maw_rfp", client: "Mawared Group", sector: "Public sector advisory",
+            outcome: "RFP response time 11d → 3d with Composer + compliance matrix.",
+            metric: "Win-rate +14pts on shortlisted bids" },
+          { id: "cs_zaha_engops", client: "Zaha Insurance", sector: "Insurance",
+            outcome: "Claims engineering ops with bilingual EN/AR drafter agents.",
+            metric: "Backlog −55%, audit findings 0" },
+          { id: "cs_thuraya_ai", client: "Thuraya Telco", sector: "Telecom",
+            outcome: "Tier-2 ticket routing with confidence-thresholded escalation.",
+            metric: "First-contact resolution +22%" },
+        ];
+        const focus = oppId.toLowerCase();
+        // Cheap relevance ranking: any portfolio entry whose sector token
+        // appears in the opportunity id floats to the top; remainder fills.
+        const ranked = [...portfolio].sort((a, b) => {
+          const aHit = focus.includes(a.sector.toLowerCase().split(" ")[0]) ? 1 : 0;
+          const bHit = focus.includes(b.sector.toLowerCase().split(" ")[0]) ? 1 : 0;
+          return bHit - aHit;
+        });
+        const top3 = ranked.slice(0, 3);
+        return [
+          "Three relevant credentials selected from the Atelier portfolio:",
+          "",
+          ...top3.flatMap((c, i) => [
+            `${i + 1}. ${c.client} — ${c.sector}`,
+            `   Outcome: ${c.outcome}`,
+            `   Impact: ${c.metric}`,
+            `   Reference id: ${c.id}`,
+            "",
+          ]),
+        ].join("\n");
+      },
     },
     terms: {
       name: "Terms & Risk",

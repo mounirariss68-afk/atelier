@@ -5196,6 +5196,182 @@ export const useAtelierSendProposal = <
 };
 
 /**
+ * @summary Lock proposal section assignments (PromptSheet checkpoint, lead/partner)
+ */
+export const getAtelierConfirmSectionAssignmentsUrl = (proposalId: string) => {
+  return `/api/atelier/proposals/${proposalId}/confirm-section-assignments`;
+};
+
+export const atelierConfirmSectionAssignments = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<AtelierProposal> => {
+  return customFetch<AtelierProposal>(
+    getAtelierConfirmSectionAssignmentsUrl(proposalId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierConfirmSectionAssignmentsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierConfirmSectionAssignments>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierConfirmSectionAssignments>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierConfirmSectionAssignments"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierConfirmSectionAssignments>>,
+    { proposalId: string }
+  > = (props) => {
+    const { proposalId } = props ?? {};
+
+    return atelierConfirmSectionAssignments(proposalId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierConfirmSectionAssignmentsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierConfirmSectionAssignments>>
+>;
+
+export type AtelierConfirmSectionAssignmentsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Lock proposal section assignments (PromptSheet checkpoint, lead/partner)
+ */
+export const useAtelierConfirmSectionAssignments = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierConfirmSectionAssignments>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierConfirmSectionAssignments>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  return useMutation(
+    getAtelierConfirmSectionAssignmentsMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Record partner final read of proposal (PromptSheet checkpoint, partner only)
+ */
+export const getAtelierPartnerFinalReadUrl = (proposalId: string) => {
+  return `/api/atelier/proposals/${proposalId}/partner-final-read`;
+};
+
+export const atelierPartnerFinalRead = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<AtelierProposal> => {
+  return customFetch<AtelierProposal>(
+    getAtelierPartnerFinalReadUrl(proposalId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierPartnerFinalReadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPartnerFinalRead>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierPartnerFinalRead>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierPartnerFinalRead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierPartnerFinalRead>>,
+    { proposalId: string }
+  > = (props) => {
+    const { proposalId } = props ?? {};
+
+    return atelierPartnerFinalRead(proposalId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierPartnerFinalReadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierPartnerFinalRead>>
+>;
+
+export type AtelierPartnerFinalReadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record partner final read of proposal (PromptSheet checkpoint, partner only)
+ */
+export const useAtelierPartnerFinalRead = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPartnerFinalRead>>,
+    TError,
+    { proposalId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierPartnerFinalRead>>,
+  TError,
+  { proposalId: string },
+  TContext
+> => {
+  return useMutation(getAtelierPartnerFinalReadMutationOptions(options));
+};
+
+/**
  * @summary Edit proposal section content (lead/partner). Resets to draft.
  */
 export const getAtelierEditProposalSectionUrl = (sectionId: string) => {

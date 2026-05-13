@@ -5,6 +5,8 @@ import {
   useAtelierApproveProposalSection,
   useAtelierEditProposalSection,
   useAtelierRejectProposalSection,
+  useAtelierConfirmSectionAssignments,
+  useAtelierPartnerFinalRead,
   useAtelierApproveProposalPricing,
   useAtelierOverrideProposalPricing,
   useAtelierSendProposal,
@@ -50,8 +52,25 @@ export function ProposalTab({ oppId }: { oppId: string }) {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
     },
   });
+  const confirmAssignments = useAtelierConfirmSectionAssignments({
+    mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }) },
+  });
+  const finalRead = useAtelierPartnerFinalRead({
+    mutation: { onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }) },
+  });
   const [openSectionId, setOpenSectionId] = React.useState<string | null>(null);
   const [drafts, setDrafts] = React.useState<Record<string, string>>({});
+  const [showSheet, setShowSheet] = React.useState(false);
+  const [sheetTitle, setSheetTitle] = React.useState("");
+  const [sheetDeadline, setSheetDeadline] = React.useState("");
+  const [sheetMargin, setSheetMargin] = React.useState("45");
+  const [sheetWeeks, setSheetWeeks] = React.useState("12");
+  const [sheetSections, setSheetSections] = React.useState<string[]>([
+    "context","approach","workplan","team","pricing","case_studies","terms","compliance",
+  ]);
+  const [sheetTeam, setSheetTeam] = React.useState("partner:15,lead:80,sme:60,ai_engineer:80");
+  const [sheetRfpName, setSheetRfpName] = React.useState<string | null>(null);
+  const ALL_SECTIONS = ["context","approach","workplan","team","pricing","case_studies","terms","compliance"] as const;
   const approvePricing = useAtelierApproveProposalPricing({
     mutation: {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
@@ -73,20 +92,92 @@ export function ProposalTab({ oppId }: { oppId: string }) {
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
   const detail = data as AtelierProposalDetail | undefined;
 
+  function parseTeam(s: string): { role: string; alloc: number }[] {
+    return s.split(",").map((p) => {
+      const [role, alloc] = p.split(":").map((x) => x.trim());
+      const n = Number(alloc);
+      return { role: role || "lead", alloc: Number.isFinite(n) ? n : 50 };
+    }).filter((r) => r.role);
+  }
+  function buildComposeBody() {
+    const body: Record<string, unknown> = {
+      sectionsRequired: sheetSections,
+      pricingIntent: { targetMarginPct: Number(sheetMargin) || 45, durationWeeks: Number(sheetWeeks) || 12 },
+      teamProposed: parseTeam(sheetTeam),
+    };
+    if (sheetTitle.trim()) body.title = sheetTitle.trim();
+    if (sheetDeadline) body.deadlineAt = new Date(sheetDeadline).toISOString();
+    if (sheetRfpName) body.rfpFileName = sheetRfpName;
+    return body;
+  }
+  function PromptSheet({ submitLabel, onSubmit }: { submitLabel: string; onSubmit: () => void }) {
+    return (
+      <Card className="p-4 space-y-3" data-testid="proposal-prompt-sheet">
+        <div className="text-xs font-mono uppercase tracking-wide text-text-mute">PromptSheet</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input data-testid="input-prompt-title" placeholder="Proposal title (optional)"
+            value={sheetTitle} onChange={(e) => setSheetTitle(e.target.value)}
+            className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text" />
+          <input data-testid="input-prompt-deadline" type="date"
+            value={sheetDeadline} onChange={(e) => setSheetDeadline(e.target.value)}
+            className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text" />
+          <input data-testid="input-prompt-margin" type="number" min={0} max={100}
+            placeholder="Target margin %" value={sheetMargin}
+            onChange={(e) => setSheetMargin(e.target.value)}
+            className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text" />
+          <input data-testid="input-prompt-weeks" type="number" min={1} max={104}
+            placeholder="Duration weeks" value={sheetWeeks}
+            onChange={(e) => setSheetWeeks(e.target.value)}
+            className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text" />
+        </div>
+        <div className="space-y-1">
+          <div className="text-[11px] font-mono uppercase text-text-mute">Sections</div>
+          <div className="flex flex-wrap gap-2">
+            {ALL_SECTIONS.map((sid) => {
+              const active = sheetSections.includes(sid);
+              return (
+                <button key={sid} type="button" data-testid={`chip-section-${sid}`}
+                  onClick={() => setSheetSections((s) => active ? s.filter((x) => x !== sid) : [...s, sid])}
+                  className={`px-2 py-1 rounded text-[11px] font-mono border ${active ? "bg-gold/15 text-gold border-gold/40" : "bg-bg-deep text-text-mute border-border-soft"}`}>
+                  {sid}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-[11px] font-mono uppercase text-text-mute">Team allocation (role:percent, comma-separated)</div>
+          <input data-testid="input-prompt-team" value={sheetTeam}
+            onChange={(e) => setSheetTeam(e.target.value)}
+            className="w-full rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text font-mono" />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-[11px] text-text-mute">RFP file (optional, name only):</label>
+          <input type="file" data-testid="input-prompt-rfp"
+            onChange={(e) => setSheetRfpName(e.target.files?.[0]?.name ?? null)}
+            className="text-xs text-text-mute" />
+          {sheetRfpName && <span className="text-[11px] font-mono text-text">{sheetRfpName}</span>}
+        </div>
+        <div className="flex justify-end">
+          <PillButton variant="primary" data-testid="button-prompt-submit"
+            onClick={onSubmit} disabled={compose.isPending || sheetSections.length === 0}>
+            {compose.isPending ? "Composing…" : submitLabel}
+          </PillButton>
+        </div>
+      </Card>
+    );
+  }
+
   if (isError || !detail) {
     return (
-      <Card className="p-8 text-center border-dashed bg-bg-deep" data-testid="empty-proposal">
-        <FileText className="w-6 h-6 text-gold/60 mx-auto mb-2" />
-        <p className="text-text-mute text-sm mb-4">No proposal composed yet.</p>
-        <PillButton
-          variant="primary"
-          data-testid="button-compose-proposal"
-          onClick={() => compose.mutate({ oppId, data: {} })}
-          disabled={compose.isPending}
-        >
-          {compose.isPending ? "Composing…" : "Compose proposal"}
-        </PillButton>
-      </Card>
+      <div className="space-y-4">
+        <Card className="p-8 text-center border-dashed bg-bg-deep" data-testid="empty-proposal">
+          <FileText className="w-6 h-6 text-gold/60 mx-auto mb-2" />
+          <p className="text-text-mute text-sm mb-4">No proposal composed yet — fill the PromptSheet below.</p>
+        </Card>
+        <PromptSheet submitLabel="Compose proposal"
+          onSubmit={() => compose.mutate({ oppId, data: buildComposeBody() })} />
+      </div>
     );
   }
 
@@ -102,6 +193,16 @@ export function ProposalTab({ oppId }: { oppId: string }) {
   };
   const pricingApprovedAt = pricingIntentRaw.pricingApprovedAt;
   const pricingOverrideAt = pricingIntentRaw.pricingOverrideAt;
+  const sheetExtras = pricingIntentRaw as unknown as {
+    sectionAssignmentsConfirmedAt?: string;
+    sectionAssignmentsConfirmedByName?: string;
+    partnerFinalReadAt?: string;
+    partnerFinalReadByName?: string;
+    deadlineAt?: string;
+    rfpFileName?: string;
+  };
+  const assignmentsConfirmedAt = sheetExtras.sectionAssignmentsConfirmedAt;
+  const partnerFinalReadAt = sheetExtras.partnerFinalReadAt;
   const isPartner = me?.role === "partner";
   const pricingNeedsOverride = pricing?.verdict === "partner_override_required";
   const pricingCheckpointMet = pricingNeedsOverride ? !!pricingOverrideAt : !!pricingApprovedAt;
@@ -109,6 +210,10 @@ export function ProposalTab({ oppId }: { oppId: string }) {
 
   return (
     <div className="space-y-5" data-testid="tab-proposal-content">
+      {showSheet && (
+        <PromptSheet submitLabel="Recompose with these inputs"
+          onSubmit={() => compose.mutate({ oppId, data: buildComposeBody() })} />
+      )}
       <Card className="p-4 space-y-2">
         <div className="flex items-center justify-between">
           <div>
@@ -118,11 +223,42 @@ export function ProposalTab({ oppId }: { oppId: string }) {
           <div className="flex items-center gap-2">
             <PillButton
               variant="ghost"
+              data-testid="button-toggle-prompt-sheet"
+              onClick={() => setShowSheet((v) => !v)}
+            >
+              {showSheet ? "Hide PromptSheet" : "Edit PromptSheet"}
+            </PillButton>
+            <PillButton
+              variant="ghost"
               data-testid="button-recompose-proposal"
-              onClick={() => compose.mutate({ oppId, data: {} })}
+              onClick={() => compose.mutate({ oppId, data: buildComposeBody() })}
               disabled={compose.isPending}
             >
-              Recompose
+              {compose.isPending ? "Recomposing…" : "Recompose"}
+            </PillButton>
+            <PillButton
+              variant={assignmentsConfirmedAt ? "ghost" : "primary"}
+              data-testid="button-confirm-assignments"
+              onClick={() => confirmAssignments.mutate({ proposalId: proposal.id })}
+              disabled={confirmAssignments.isPending || !!assignmentsConfirmedAt}
+              title={assignmentsConfirmedAt
+                ? `Locked by ${sheetExtras.sectionAssignmentsConfirmedByName ?? "lead"}`
+                : "Lead/partner confirms section ownership before send"}
+            >
+              {assignmentsConfirmedAt ? "Assignments locked"
+                : confirmAssignments.isPending ? "Locking…" : "Confirm assignments"}
+            </PillButton>
+            <PillButton
+              variant={partnerFinalReadAt ? "ghost" : "primary"}
+              data-testid="button-partner-final-read"
+              onClick={() => finalRead.mutate({ proposalId: proposal.id })}
+              disabled={!isPartner || finalRead.isPending || !!partnerFinalReadAt}
+              title={!isPartner ? "Partner-only checkpoint"
+                : partnerFinalReadAt ? `Read recorded by ${sheetExtras.partnerFinalReadByName ?? "partner"}`
+                : "Partner records final read of assembled proposal"}
+            >
+              {partnerFinalReadAt ? "Final read recorded"
+                : finalRead.isPending ? "Recording…" : "Final partner read"}
             </PillButton>
             {pricingNeedsOverride ? (
               <PillButton

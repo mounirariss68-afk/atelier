@@ -2112,6 +2112,102 @@ export const AtelierSendProposalResponse = zod.object({
 });
 
 /**
+ * @summary Lock proposal section assignments (PromptSheet checkpoint, lead/partner)
+ */
+export const AtelierConfirmSectionAssignmentsParams = zod.object({
+  proposalId: zod.coerce.string(),
+});
+
+export const AtelierConfirmSectionAssignmentsResponse = zod.object({
+  id: zod.string(),
+  opportunityId: zod.string(),
+  runId: zod.string().nullish(),
+  title: zod.string(),
+  sectionsRequired: zod.array(zod.string()).optional(),
+  teamProposed: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  pricingIntent: zod.record(zod.string(), zod.unknown()).optional(),
+  pricingModel: zod
+    .object({
+      totalRevenueUsd: zod.number(),
+      totalCostUsd: zod.number(),
+      marginPct: zod.number(),
+      verdict: zod.enum(["green", "amber", "red", "partner_override_required"]),
+      wedgeChart: zod.array(
+        zod.object({
+          role: zod.string().optional(),
+          days: zod.number().optional(),
+          cost: zod.number().optional(),
+          revenue: zod.number().optional(),
+        }),
+      ),
+    })
+    .optional(),
+  winThemes: zod.array(zod.string()).optional(),
+  complianceMatrix: zod
+    .array(
+      zod.object({
+        rfpReqId: zod.string().optional(),
+        requirement: zod.string().optional(),
+        status: zod.enum(["green", "red"]).optional(),
+        evidence: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  status: zod.string(),
+  pdfUrl: zod.string().nullish(),
+  docxUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Record partner final read of proposal (PromptSheet checkpoint, partner only)
+ */
+export const AtelierPartnerFinalReadParams = zod.object({
+  proposalId: zod.coerce.string(),
+});
+
+export const AtelierPartnerFinalReadResponse = zod.object({
+  id: zod.string(),
+  opportunityId: zod.string(),
+  runId: zod.string().nullish(),
+  title: zod.string(),
+  sectionsRequired: zod.array(zod.string()).optional(),
+  teamProposed: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  pricingIntent: zod.record(zod.string(), zod.unknown()).optional(),
+  pricingModel: zod
+    .object({
+      totalRevenueUsd: zod.number(),
+      totalCostUsd: zod.number(),
+      marginPct: zod.number(),
+      verdict: zod.enum(["green", "amber", "red", "partner_override_required"]),
+      wedgeChart: zod.array(
+        zod.object({
+          role: zod.string().optional(),
+          days: zod.number().optional(),
+          cost: zod.number().optional(),
+          revenue: zod.number().optional(),
+        }),
+      ),
+    })
+    .optional(),
+  winThemes: zod.array(zod.string()).optional(),
+  complianceMatrix: zod
+    .array(
+      zod.object({
+        rfpReqId: zod.string().optional(),
+        requirement: zod.string().optional(),
+        status: zod.enum(["green", "red"]).optional(),
+        evidence: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  status: zod.string(),
+  pdfUrl: zod.string().nullish(),
+  docxUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary Edit proposal section content (lead/partner). Resets to draft.
  */
 export const AtelierEditProposalSectionParams = zod.object({
