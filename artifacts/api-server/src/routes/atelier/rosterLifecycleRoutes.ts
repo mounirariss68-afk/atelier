@@ -24,7 +24,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, isNull, lte, gte, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, gte, or, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -442,7 +442,20 @@ router.post("/roster/invitations", async (req, res, next) => {
       payload: { workerType: wt, email: body.email },
       summary: `${me.name} invited ${body.fullName} (${wt}).`,
     });
-    res.json({ ok: true, id, expiresAt: expiresAt.toISOString() });
+    // Onboarding sequence is started immediately on invitation creation so the
+    // pre-arrival compliance steps (background check, IT provisioning request,
+    // ID-document collection) can begin in parallel with the invitee accepting.
+    // The draft onboarding uses `draft:<invitation>` as the placeholder
+    // personId; the accept handler swaps in the real personId once the person
+    // record is materialised.
+    const draftOnboardingId = await startOnboardingSequence({
+      personId: `draft:${id}`,
+      workerType: wt,
+      invitationId: id,
+      targetStartDate: body.startDate ?? null,
+      ownerUserId: me.id,
+    });
+    res.json({ ok: true, id, expiresAt: expiresAt.toISOString(), onboardingId: draftOnboardingId });
   } catch (err) {
     next(err);
   }
@@ -1109,7 +1122,10 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
       .update(tbl)
       .set({ status: "former", endDate: isoDate(new Date()), updatedAt: new Date() })
       .where(eq(tbl.id, off.personId));
-    // Auto-revoke any remaining grants the linked atelier_user holds.
+    // Auto-revoke any remaining grants the linked atelier_user holds, and
+    // record cross-system revocation actions so a downstream provisioning
+    // worker can pick them up. Each side-effect emits its own audit row so
+    // the offboarding pack reflects exactly which systems were torn down.
     const person = await findPerson(off.personId);
     if (person?.email) {
       const [u] = await db
@@ -1117,7 +1133,7 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
         .from(atelierUsers)
         .where(eq(atelierUsers.email, person.email));
       if (u) {
-        await db
+        const revoked = await db
           .update(atelierEngagementAccess)
           .set({ status: "revoked", endDate: new Date() })
           .where(
@@ -1125,7 +1141,34 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
               eq(atelierEngagementAccess.userId, u.id),
               eq(atelierEngagementAccess.status, "active"),
             ),
-          );
+          )
+          .returning({ id: atelierEngagementAccess.id });
+        await audit({
+          entityType: "offboarding",
+          entityId: off.id,
+          actor: me,
+          action: "offboarding.revoke.atelier_access",
+          payload: { userId: u.id, revokedGrantIds: revoked.map((r) => r.id) },
+          summary: `Atelier engagement access revoked for ${person.fullName} (${revoked.length} grants).`,
+        });
+      }
+      // Cross-system revocation hooks (Salons, agents, email/SSO). These
+      // currently emit auditable intent rows that a provisioning worker
+      // consumes; the integrations themselves are stubbed but the audit
+      // trail captures every intended teardown for compliance review.
+      for (const sys of [
+        { action: "offboarding.revoke.salon_workspace", label: "Salon workspace access" },
+        { action: "offboarding.revoke.agent_runners", label: "Agent runner credentials" },
+        { action: "offboarding.revoke.sso_email", label: "SSO + corporate email" },
+      ]) {
+        await audit({
+          entityType: "offboarding",
+          entityId: off.id,
+          actor: me,
+          action: sys.action,
+          payload: { email: person.email, personId: person.id },
+          summary: `${sys.label} marked for revocation for ${person.fullName} (${person.email}).`,
+        });
       }
     }
     await audit({
@@ -1473,8 +1516,13 @@ router.post("/roster/steward/run", async (req, res, next) => {
       res.status(403).json({ error: "partner-or-operations-only" });
       return;
     }
-    const out = await runRosterSteward({ targetUserIds: ["p_mounir_ariss"] });
-    res.json(out);
+    const targets = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(or(eq(atelierUsers.role, "partner"), eq(atelierUsers.role, "operations")));
+    const targetUserIds = targets.length > 0 ? targets.map((t) => t.id) : [me.id];
+    const out = await runRosterSteward({ targetUserIds });
+    res.json({ ...out, targets: targetUserIds });
   } catch (err) {
     next(err);
   }
