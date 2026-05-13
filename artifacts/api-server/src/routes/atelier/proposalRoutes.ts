@@ -12,7 +12,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, or } from "drizzle-orm";
+import { eq, and, desc, isNull, or, inArray } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -24,6 +24,8 @@ import {
   atelierProposals,
   atelierProposalSections,
   atelierPrototypes,
+  atelierEngagements,
+  atelierEngagementAccess,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import {
@@ -80,6 +82,36 @@ async function ensureOppAccess(
     return null;
   }
   return opp;
+}
+
+/**
+ * Read-only mirror of ensureEngAccess that returns boolean and never
+ * writes to the response. Used when we want to filter rather than 403
+ * (e.g. when collecting the set of authorized engagements linked to an
+ * opportunity for charter cross-wiring).
+ */
+async function canAccessEngagement(
+  me: typeof atelierUsers.$inferSelect,
+  engId: string,
+): Promise<boolean> {
+  const [eng] = await db
+    .select({ id: atelierEngagements.id, orgId: atelierEngagements.orgId })
+    .from(atelierEngagements)
+    .where(and(eq(atelierEngagements.id, engId), isNull(atelierEngagements.deletedAt)));
+  if (!eng) return false;
+  if (eng.orgId !== me.orgId) return false;
+  if (me.role === "partner") return true;
+  const [grant] = await db
+    .select({ userId: atelierEngagementAccess.userId })
+    .from(atelierEngagementAccess)
+    .where(
+      and(
+        eq(atelierEngagementAccess.engagementId, eng.id),
+        eq(atelierEngagementAccess.userId, me.id),
+        isNull(atelierEngagementAccess.deletedAt),
+      ),
+    );
+  return !!grant;
 }
 
 const router: IRouter = Router();
@@ -466,23 +498,42 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
     "terms",
     "compliance",
   ];
-  // Pre-pull the most-recent Charter Architect run for this org.  When
-  // present, its `proposedWorkstreams` seed the team-allocation defaults
-  // (one row per workstream, lead role mapped through) so the proposal
-  // reflects the charter rather than a generic team. This is the
-  // Task #223 cross-agent wiring (charter → composer).
-  const [latestCharter] = await db
-    .select({ output: atelierAgentRuns.output })
-    .from(atelierAgentRuns)
-    .where(
-      and(
-        eq(atelierAgentRuns.agentId, "charter_architect"),
-        eq(atelierAgentRuns.orgId, me.orgId),
-        eq(atelierAgentRuns.status, "success"),
-      ),
-    )
-    .orderBy(desc(atelierAgentRuns.createdAt))
-    .limit(1);
+  // Pre-pull the most-recent Charter Architect run for THIS opportunity's
+  // engagement(s) only — never org-wide. We:
+  //   1. Resolve the engagement(s) linked to this opportunity.
+  //   2. Verify the caller has access to each via ensureEngAccess (same
+  //      ACL the engagement routes use; partners pass).
+  //   3. Restrict the charter run lookup to runs whose targetType is
+  //      "engagement" and targetId is in the authorized set.
+  // This prevents cross-engagement bleed of charter/workstream data.
+  const linkedEngs = await db
+    .select({ id: atelierEngagements.id })
+    .from(atelierEngagements)
+    .where(and(eq(atelierEngagements.opportunityId, opp.id), isNull(atelierEngagements.deletedAt)));
+  const authorizedEngIds: string[] = [];
+  for (const row of linkedEngs) {
+    // ensureEngAccess writes a 403 to res on denial; we silence that here
+    // by passing a stub response and only collecting positive results.
+    // Partners short-circuit; non-partners need an atelierEngagementAccess row.
+    const ok = await canAccessEngagement(me, row.id);
+    if (ok) authorizedEngIds.push(row.id);
+  }
+  const [latestCharter] = authorizedEngIds.length
+    ? await db
+        .select({ output: atelierAgentRuns.output })
+        .from(atelierAgentRuns)
+        .where(
+          and(
+            eq(atelierAgentRuns.agentId, "charter_architect"),
+            eq(atelierAgentRuns.orgId, me.orgId),
+            eq(atelierAgentRuns.targetType, "engagement"),
+            inArray(atelierAgentRuns.targetId, authorizedEngIds),
+            eq(atelierAgentRuns.status, "success"),
+          ),
+        )
+        .orderBy(desc(atelierAgentRuns.createdAt))
+        .limit(1)
+    : [];
   const proposedWorkstreams =
     (latestCharter?.output as CharterArchitectOutput | null)?.proposedWorkstreams ?? [];
   const teamFromCharter = proposedWorkstreams.length
