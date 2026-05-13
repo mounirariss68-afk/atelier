@@ -1,0 +1,11 @@
+{
+  "agent_id": "compliance_reviewer",
+  "prompt_version": 1,
+  "cases": [
+    { "id": "cr_01_all_green", "input": { "rfpRequirements": [{"id":"r1","requirement":"Bilingual","severity":"high"}], "proposalSections": [{"id":"approach","name":"Approach","content":"We provide bilingual EN/AR coverage."}] }, "asserts":[{"kind":"overall_green"}] },
+    { "id": "cr_02_unmet_red", "input": { "rfpRequirements": [{"id":"r1","requirement":"ISO27001","severity":"high"}], "proposalSections": [{"id":"context","name":"Context","content":"Banking client."}] }, "asserts":[{"kind":"overall_red"},{"kind":"unmet_includes","value":"r1"}] },
+    { "id": "cr_03_partial_no_yellow", "input": { "rfpRequirements": [{"id":"r1","requirement":"Bilingual","severity":"high"},{"id":"r2","requirement":"Audit trail","severity":"high"}], "proposalSections": [{"id":"approach","name":"Approach","content":"Bilingual covered."}] }, "asserts":[{"kind":"never_yellow"},{"kind":"overall_red"}] },
+    { "id": "cr_04_empty_rfp", "input": { "rfpRequirements": [], "proposalSections": [{"id":"context","name":"Context","content":"x"}] }, "asserts":[{"kind":"overall_green"}] },
+    { "id": "cr_05_evidence_recorded", "input": { "rfpRequirements": [{"id":"r1","requirement":"Bilingual","severity":"high"}], "proposalSections": [{"id":"approach","name":"Approach","content":"Bilingual EN/AR by default."}] }, "asserts":[{"kind":"every_row_has_evidence"}] }
+  ]
+}

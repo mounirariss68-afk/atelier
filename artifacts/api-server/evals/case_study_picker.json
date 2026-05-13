@@ -1,0 +1,11 @@
+{
+  "agent_id": "case_study_picker",
+  "prompt_version": 1,
+  "cases": [
+    { "id": "cs_01_match_sector", "input": { "context": {"sector":"BPO","region":"GCC","problemClass":"agentify_intake","scaleHint":"large"}, "candidates": [ {"id":"c1","title":"Tasama BPO Phase 1","sector":"BPO","region":"GCC","problemClass":"agentify_intake","outcome":"-40% MHT"}, {"id":"c2","title":"DGE","sector":"GovTech","region":"GCC","problemClass":"service_routing","outcome":"-30% TTR"}, {"id":"c3","title":"Aldrees","sector":"Retail","region":"GCC","problemClass":"quotes","outcome":"+15% conv"} ] }, "asserts":[{"kind":"top_pick_id_is","value":"c1"},{"kind":"picks_count","value":3}] },
+    { "id": "cs_02_few_candidates", "input": { "context": {"sector":"GovTech","region":"GCC","problemClass":"service_routing","scaleHint":"med"}, "candidates": [ {"id":"c2","title":"DGE","sector":"GovTech","region":"GCC","problemClass":"service_routing","outcome":"-30% TTR"} ] }, "asserts":[{"kind":"picks_count_max","value":1}] },
+    { "id": "cs_03_no_match", "input": { "context": {"sector":"Aerospace","region":"EU","problemClass":"design","scaleHint":"low"}, "candidates": [ {"id":"c1","title":"Tasama","sector":"BPO","region":"GCC","problemClass":"agentify_intake","outcome":"x"} ] }, "asserts":[{"kind":"never_invent_credential"}] },
+    { "id": "cs_04_rationale_required", "input": { "context": {"sector":"Retail","region":"GCC","problemClass":"quotes","scaleHint":"med"}, "candidates": [ {"id":"c3","title":"Aldrees","sector":"Retail","region":"GCC","problemClass":"quotes","outcome":"+15% conv"} ] }, "asserts":[{"kind":"every_pick_has_rationale"}] },
+    { "id": "cs_05_three_pick", "input": { "context": {"sector":"BPO","region":"GCC","problemClass":"agentify_intake","scaleHint":"large"}, "candidates": [ {"id":"c1","title":"Tasama","sector":"BPO","region":"GCC","problemClass":"agentify_intake","outcome":"a"}, {"id":"c2","title":"DGE","sector":"GovTech","region":"GCC","problemClass":"service_routing","outcome":"b"}, {"id":"c3","title":"Aldrees","sector":"Retail","region":"GCC","problemClass":"quotes","outcome":"c"}, {"id":"c4","title":"Other","sector":"Telco","region":"EU","problemClass":"churn","outcome":"d"} ] }, "asserts":[{"kind":"picks_count","value":3}] }
+  ]
+}

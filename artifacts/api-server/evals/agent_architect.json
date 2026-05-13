@@ -1,0 +1,37 @@
+{
+  "agent_id": "agent_architect",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "aa_01_tasama_intake",
+      "input": { "engagementId": "eng_tasama_bpo_phase1", "scopeHint": "Tasama shared-services intake — calls + email triage", "depth": "design", "source": "Customer calls intake; agent classifies; agent escalates to specialist; specialist confirms refund (>$500) and replies; QA samples 5%." },
+      "asserts": [
+        { "kind": "min_steps", "value": 4 },
+        { "kind": "min_candidate_agents", "value": 3 },
+        { "kind": "every_candidate_has_human_checkpoint" },
+        { "kind": "high_risk_flag_present_when_refund_step_present" },
+        { "kind": "diagram_is_mermaid" }
+      ]
+    },
+    {
+      "id": "aa_02_aldrees_boq",
+      "input": { "engagementId": "eng_aldrees_demo", "scopeHint": "Aldrees BOQ generation", "depth": "design", "source": "Engineer prepares takeoff; junior validates; senior signs commercial; PM sends to client." },
+      "asserts": [ { "kind": "min_candidate_agents", "value": 3 }, { "kind": "rationale_required_per_step" } ]
+    },
+    {
+      "id": "aa_03_dge_service_catalog",
+      "input": { "engagementId": "eng_dge_effortless_v1", "scopeHint": "Citizen service catalog routing", "depth": "design", "source": "Citizen submits; classifier routes; ministry agent fulfills; closure SMS." },
+      "asserts": [ { "kind": "min_steps", "value": 4 }, { "kind": "min_candidate_agents", "value": 3 } ]
+    },
+    {
+      "id": "aa_04_sketch_only",
+      "input": { "engagementId": "eng_tasama_bpo_phase1", "scopeHint": "Sketch quick — onboarding", "depth": "sketch", "source": "Recruiter screens; HR onboards; manager assigns laptop; IT provisions." },
+      "asserts": [ { "kind": "min_steps", "value": 4 } ]
+    },
+    {
+      "id": "aa_05_high_risk_only",
+      "input": { "engagementId": "eng_dge_effortless_v1", "scopeHint": "Outbound customer comms", "depth": "design", "source": "Marketing drafts; legal reviews; AGENT sends mass SMS to citizens; metrics collected." },
+      "asserts": [ { "kind": "high_risk_flag_present" }, { "kind": "every_candidate_has_human_checkpoint" } ]
+    }
+  ]
+}

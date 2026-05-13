@@ -1,0 +1,31 @@
+{
+  "agent_id": "prototype_forge",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "pf_01_dge_effortless",
+      "input": { "name": "DGE Effortless", "audience": "Citizens of Dubai", "problem": "Service requests are too slow.", "agenticThesis": "An agent triages + routes; specialist confirms.", "demos": ["Apply for a permit", "Track a request"], "constraints": ["bilingual"], "brandOverrides": null, "partnerDataApproved": false },
+      "asserts": [ { "kind": "prompt_includes_non_negotiables_block" }, { "kind": "build_plan_min_phases", "value": 3 }, { "kind": "demo_storyboard_min", "value": 2 } ]
+    },
+    {
+      "id": "pf_02_tasama_concept",
+      "input": { "name": "Tasama AgentOps", "audience": "Tasama BPO ops director", "problem": "Mean handle time too long.", "agenticThesis": "Per-service agent + telemetry + escalation.", "demos": ["Live agent floor", "Service dashboard"], "constraints": ["audit trail"], "brandOverrides": null, "partnerDataApproved": false },
+      "asserts": [ { "kind": "prompt_includes_non_negotiables_block" }, { "kind": "no_real_client_data_when_not_approved" } ]
+    },
+    {
+      "id": "pf_03_brand_override",
+      "input": { "name": "Aldrees Showroom Concierge", "audience": "Showroom managers", "problem": "Customers wait too long for quotes.", "agenticThesis": "Concierge agent quotes from BOQ.", "demos": ["Quote a vehicle"], "constraints": [], "brandOverrides": { "primary": "#0a3d62", "logo": "aldrees" }, "partnerDataApproved": true },
+      "asserts": [ { "kind": "brand_override_respected" } ]
+    },
+    {
+      "id": "pf_04_minimal",
+      "input": { "name": "Tiny Demo", "audience": "internal", "problem": "Just show feasibility.", "agenticThesis": "Single agent.", "demos": ["Hello world"], "constraints": [], "brandOverrides": null, "partnerDataApproved": false },
+      "asserts": [ { "kind": "build_plan_min_phases", "value": 1 } ]
+    },
+    {
+      "id": "pf_05_constrained",
+      "input": { "name": "Bilingual Helpdesk", "audience": "GCC banks", "problem": "Bilingual coverage with audit.", "agenticThesis": "Agent with HITL on every reply.", "demos": ["AR ticket", "EN ticket"], "constraints": ["bilingual", "every reply HITL"], "brandOverrides": null, "partnerDataApproved": false },
+      "asserts": [ { "kind": "prompt_includes_non_negotiables_block" }, { "kind": "demo_storyboard_min", "value": 2 } ]
+    }
+  ]
+}

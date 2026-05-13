@@ -12,14 +12,17 @@ import { BriefTab } from "@/components/tabs/BriefTab";
 import { ResearchTab } from "@/components/tabs/ResearchTab";
 import { PovTab } from "@/components/tabs/PovTab";
 import { MeetingsTab } from "@/components/tabs/MeetingsTab";
+import { ProposalTab } from "@/components/tabs/ProposalTab";
+import { PrototypeButton } from "@/components/tabs/PrototypeButton";
 import { QualifierSheet } from "@/components/QualifierSheet";
-import { ArrowLeft, Shield, FileText, FilePlus2, Mic, Telescope, Wrench, Folder } from "lucide-react";
+import { ArrowLeft, Shield, FileText, FilePlus2, Mic, Telescope, Folder } from "lucide-react";
 
 const TABS = [
   { id: "brief", label: "Brief" },
   { id: "research", label: "Research" },
   { id: "pov", label: "POV Studio" },
   { id: "meetings", label: "Meetings" },
+  { id: "proposal", label: "Proposal" },
   { id: "artifacts", label: "Artifacts" },
   { id: "audit", label: "Audit Trail" },
 ] as const;
@@ -77,7 +80,7 @@ export default function Opportunity() {
             <PillButton variant="primary" onClick={() => setActiveTab("pov")}>
               <span className="inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Draft POV</span>
             </PillButton>
-            <PillButton variant="ghost" onClick={() => setActiveTab("artifacts")}>
+            <PillButton variant="ghost" onClick={() => setActiveTab("proposal")}>
               <span className="inline-flex items-center gap-1"><FilePlus2 className="w-3 h-3" /> Build proposal</span>
             </PillButton>
             <PillButton variant="ghost" onClick={() => setActiveTab("meetings")}>
@@ -86,9 +89,7 @@ export default function Opportunity() {
             <PillButton variant="ghost" onClick={() => setActiveTab("research")}>
               <span className="inline-flex items-center gap-1"><Telescope className="w-3 h-3" /> Research account</span>
             </PillButton>
-            <PillButton variant="ghost" onClick={() => setActiveTab("artifacts")}>
-              <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" /> Prototype</span>
-            </PillButton>
+            <PrototypeButton oppId={opp.id} oppName={opp.name} />
           </div>
           <PillButton variant="ghost" onClick={() => setQualifierOpen(true)}>
             <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3" /> 5C Qualifier</span>
@@ -119,6 +120,7 @@ export default function Opportunity() {
           {activeTab === "research" && <ResearchTab oppId={opp.id} />}
           {activeTab === "pov" && <PovTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "meetings" && <MeetingsTab oppId={opp.id} personaName={personaName} />}
+          {activeTab === "proposal" && <ProposalTab oppId={opp.id} />}
           {activeTab === "artifacts" && (
             <div className="rounded-lg border border-dashed border-gold/30 bg-bg-deep p-12 text-center">
               <Folder className="w-8 h-8 text-gold/60 mx-auto mb-3" />

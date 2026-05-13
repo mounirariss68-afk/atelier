@@ -720,3 +720,91 @@ export const atelierPaneAItems = pgTable(
     index("idx_atelier_panea_org").on(t.orgId),
   ],
 );
+
+// ============================================================
+// PROPOSALS (Proposal Composer output, per opportunity) — Task #223
+// ============================================================
+export const atelierProposals = pgTable(
+  "atelier_proposals",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    opportunityId: text("opportunity_id").notNull(),
+    runId: text("run_id"),
+    title: text("title").notNull(),
+    sectionsRequired: jsonb("sections_required").notNull().$type<string[]>().default([]),
+    teamProposed: jsonb("team_proposed").notNull().default([]),
+    pricingIntent: jsonb("pricing_intent").notNull().default({}),
+    pricingModel: jsonb("pricing_model").notNull().default({}),
+    winThemes: jsonb("win_themes").notNull().$type<string[]>().default([]),
+    complianceMatrix: jsonb("compliance_matrix").notNull().default([]),
+    status: text("status").notNull().default("draft"),
+    docxUrl: text("docx_url"),
+    pdfUrl: text("pdf_url"),
+    deadline: timestamp("deadline"),
+    partnerApprovedAt: timestamp("partner_approved_at"),
+    partnerApprovedByUserId: text("partner_approved_by_user_id"),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_proposals_opp").on(t.opportunityId)],
+);
+
+export const atelierProposalSections = pgTable(
+  "atelier_proposal_sections",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    proposalId: text("proposal_id").notNull(),
+    sectionId: text("section_id").notNull(), // e.g. context, approach, workplan…
+    name: text("name").notNull(),
+    ownerAgent: text("owner_agent").notNull(),
+    status: text("status").notNull().default("draft"), // draft|green|amber|red|approved
+    content: text("content").notNull().default(""),
+    citations: jsonb("citations").notNull().default([]),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_propsec_proposal").on(t.proposalId),
+    uniqueIndex("uq_atelier_propsec").on(t.proposalId, t.sectionId),
+  ],
+);
+
+// ============================================================
+// PROTOTYPES (Prototype Forge output) — Task #223
+// ============================================================
+export const atelierPrototypes = pgTable(
+  "atelier_prototypes",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    opportunityId: text("opportunity_id"),
+    engagementId: text("engagement_id"),
+    runId: text("run_id"),
+    name: text("name").notNull(),
+    brief: jsonb("brief").notNull().default({}),
+    replitPromptMd: text("replit_prompt_md").notNull().default(""),
+    buildPlan: jsonb("build_plan").notNull().default([]),
+    demoStoryboard: jsonb("demo_storyboard").notNull().default([]),
+    status: text("status").notNull().default("draft"), // draft|lead_approved|partner_approved|sent
+    leadApprovedAt: timestamp("lead_approved_at"),
+    leadApprovedByUserId: text("lead_approved_by_user_id"),
+    partnerApprovedAt: timestamp("partner_approved_at"),
+    partnerApprovedByUserId: text("partner_approved_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_proto_opp").on(t.opportunityId),
+    index("idx_atelier_proto_eng").on(t.engagementId),
+  ],
+);

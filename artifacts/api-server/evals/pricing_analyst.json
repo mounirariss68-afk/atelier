@@ -1,0 +1,11 @@
+{
+  "agent_id": "pricing_analyst",
+  "prompt_version": 1,
+  "cases": [
+    { "id": "pa_01_healthy_margin", "input": { "team": [{"role":"lead","alloc":80,"days":60},{"role":"ai_engineer","alloc":100,"days":60}], "rates": {"partner":4000,"lead":3000,"sme":2500,"ai_engineer":2200,"business_developer":1800}, "durationWeeks":12, "targetMarginPct":40 }, "asserts":[{"kind":"verdict_green"}] },
+    { "id": "pa_02_thin_margin", "input": { "team": [{"role":"partner","alloc":15,"days":60},{"role":"lead","alloc":100,"days":60},{"role":"sme","alloc":100,"days":60},{"role":"ai_engineer","alloc":100,"days":60}], "rates": {"partner":4000,"lead":3000,"sme":2500,"ai_engineer":2200,"business_developer":1800}, "durationWeeks":12, "targetMarginPct":60 }, "asserts":[{"kind":"verdict_partner_override_required"}] },
+    { "id": "pa_03_amber_zone", "input": { "team": [{"role":"lead","alloc":50,"days":40}], "rates": {"partner":4000,"lead":3000,"sme":2500,"ai_engineer":2200,"business_developer":1800}, "durationWeeks":8, "targetMarginPct":40 }, "asserts":[{"kind":"verdict_amber_or_green"}] },
+    { "id": "pa_04_partner_heavy", "input": { "team": [{"role":"partner","alloc":50,"days":40}], "rates": {"partner":4000,"lead":3000,"sme":2500,"ai_engineer":2200,"business_developer":1800}, "durationWeeks":8, "targetMarginPct":40 }, "asserts":[{"kind":"never_double_count_partner_time"}] },
+    { "id": "pa_05_zero_team", "input": { "team": [], "rates": {"partner":4000,"lead":3000,"sme":2500,"ai_engineer":2200,"business_developer":1800}, "durationWeeks":4, "targetMarginPct":40 }, "asserts":[{"kind":"verdict_red"}] }
+  ]
+}

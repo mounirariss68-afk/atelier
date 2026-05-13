@@ -1,0 +1,31 @@
+{
+  "agent_id": "proposal_composer",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "pc_01_tasama",
+      "input": { "opportunityId": "opp_tasama_bpo", "sectionsRequired": ["context","approach","workplan","team","pricing","case_studies","terms","compliance"], "teamProposed": [ {"role":"partner","alloc":15},{"role":"lead","alloc":80},{"role":"sme","alloc":60},{"role":"ai_engineer","alloc":80} ], "pricingIntent": { "targetMarginPct": 45, "durationWeeks": 12 }, "rfpRequirements": [ {"id":"r1","requirement":"Bilingual","severity":"high"}, {"id":"r2","requirement":"Audit trail","severity":"high"} ] },
+      "asserts": [ { "kind": "section_count_min", "value": 8 }, { "kind": "compliance_matrix_present" }, { "kind": "win_themes_min", "value": 2 } ]
+    },
+    {
+      "id": "pc_02_dge",
+      "input": { "opportunityId": "opp_dge_effortless", "sectionsRequired": ["context","approach","workplan","team","pricing","case_studies","terms","compliance"], "teamProposed": [ {"role":"partner","alloc":10},{"role":"lead","alloc":80},{"role":"ai_engineer","alloc":100} ], "pricingIntent": { "targetMarginPct": 50, "durationWeeks": 8 }, "rfpRequirements": [ {"id":"r1","requirement":"PII isolation","severity":"high"} ] },
+      "asserts": [ { "kind": "compliance_matrix_present" }, { "kind": "every_promise_maps_to_workplan" } ]
+    },
+    {
+      "id": "pc_03_low_margin",
+      "input": { "opportunityId": "opp_aldrees_boq", "sectionsRequired": ["context","approach","workplan","team","pricing","case_studies","terms","compliance"], "teamProposed": [ {"role":"partner","alloc":5},{"role":"lead","alloc":100},{"role":"sme","alloc":100},{"role":"ai_engineer","alloc":100} ], "pricingIntent": { "targetMarginPct": 60, "durationWeeks": 10 }, "rfpRequirements": [] },
+      "asserts": [ { "kind": "pricing_verdict_partner_override_when_low_margin" } ]
+    },
+    {
+      "id": "pc_04_unmet_compliance",
+      "input": { "opportunityId": "opp_tasama_bpo", "sectionsRequired": ["context","approach","workplan","team","pricing","case_studies","terms","compliance"], "teamProposed": [ {"role":"lead","alloc":80} ], "pricingIntent": { "targetMarginPct": 30, "durationWeeks": 6 }, "rfpRequirements": [ {"id":"r1","requirement":"ISO27001 evidence","severity":"high"} ] },
+      "asserts": [ { "kind": "compliance_overall_red_when_unmet" } ]
+    },
+    {
+      "id": "pc_05_minimal",
+      "input": { "opportunityId": "opp_dge_effortless", "sectionsRequired": ["context","approach","workplan","pricing"], "teamProposed": [ {"role":"lead","alloc":80} ], "pricingIntent": { "targetMarginPct": 40, "durationWeeks": 4 }, "rfpRequirements": [] },
+      "asserts": [ { "kind": "section_count_min", "value": 4 } ]
+    }
+  ]
+}

@@ -37,7 +37,8 @@ DECLARE
     'atelier_assets','atelier_prompts','atelier_agents','atelier_agent_runs',
     'atelier_audit_events','atelier_raid_items','atelier_hypothesis_trees',
     'atelier_processes','atelier_agent_designs','atelier_notifications',
-    'atelier_pane_a_items'
+    'atelier_pane_a_items',
+    'atelier_proposals','atelier_proposal_sections','atelier_prototypes'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

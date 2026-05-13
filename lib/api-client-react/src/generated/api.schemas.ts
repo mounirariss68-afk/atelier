@@ -1087,6 +1087,275 @@ export interface AtelierArtifactInput {
   source?: string;
 }
 
+export type AtelierProcessStepCategory =
+  (typeof AtelierProcessStepCategory)[keyof typeof AtelierProcessStepCategory];
+
+export const AtelierProcessStepCategory = {
+  decision: "decision",
+  communication: "communication",
+  reconciliation: "reconciliation",
+  calculation: "calculation",
+  retrieval: "retrieval",
+  irreversible_action: "irreversible_action",
+} as const;
+
+export type AtelierProcessStepAgentifiable =
+  (typeof AtelierProcessStepAgentifiable)[keyof typeof AtelierProcessStepAgentifiable];
+
+export const AtelierProcessStepAgentifiable = {
+  yes: "yes",
+  partial: "partial",
+  no: "no",
+} as const;
+
+export interface AtelierProcessStep {
+  id: string;
+  name: string;
+  currentOwner: string;
+  category: AtelierProcessStepCategory;
+  agentifiable: AtelierProcessStepAgentifiable;
+  rationale: string;
+  /** @nullable */
+  candidateAgentId?: string | null;
+}
+
+export type AtelierCandidateAgentRiskClass =
+  (typeof AtelierCandidateAgentRiskClass)[keyof typeof AtelierCandidateAgentRiskClass];
+
+export const AtelierCandidateAgentRiskClass = {
+  low: "low",
+  med: "med",
+  high: "high",
+} as const;
+
+export interface AtelierCandidateAgent {
+  id: string;
+  name: string;
+  purpose: string;
+  inputs: string[];
+  outputs: string[];
+  tools: string[];
+  guardrails: string[];
+  humanCheckpoints: string[];
+  riskClass: AtelierCandidateAgentRiskClass;
+}
+
+export interface AtelierProcess {
+  id: string;
+  engagementId: string;
+  name: string;
+  /** @nullable */
+  diagram?: string | null;
+  steps?: AtelierProcessStep[];
+  createdAt: string;
+}
+
+export type AtelierAgentDesignStatus =
+  (typeof AtelierAgentDesignStatus)[keyof typeof AtelierAgentDesignStatus];
+
+export const AtelierAgentDesignStatus = {
+  draft: "draft",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export interface AtelierAgentDesign {
+  id: string;
+  engagementId: string;
+  /** @nullable */
+  processStepId?: string | null;
+  design: AtelierCandidateAgent;
+  status: AtelierAgentDesignStatus;
+  createdAt: string;
+}
+
+export type AtelierAnalyzeProcessInputDepth =
+  (typeof AtelierAnalyzeProcessInputDepth)[keyof typeof AtelierAnalyzeProcessInputDepth];
+
+export const AtelierAnalyzeProcessInputDepth = {
+  sketch: "sketch",
+  design: "design",
+} as const;
+
+export interface AtelierAnalyzeProcessInput {
+  name?: string;
+  /** @minLength 10 */
+  source: string;
+  scopeHint?: string;
+  depth?: AtelierAnalyzeProcessInputDepth;
+}
+
+export interface AtelierAnalyzeProcessResponse {
+  process: AtelierProcess;
+  designs: AtelierAgentDesign[];
+  runId: string;
+}
+
+export type AtelierPrototypeBuildPlanItem = {
+  phase?: string;
+  days?: number;
+  deliverables?: string[];
+};
+
+export type AtelierPrototypeDemoStoryboardItem = {
+  id?: string;
+  title?: string;
+  moment?: string;
+  interaction?: string;
+  artifact?: string;
+};
+
+export interface AtelierPrototype {
+  id: string;
+  /** @nullable */
+  opportunityId?: string | null;
+  /** @nullable */
+  engagementId?: string | null;
+  /** @nullable */
+  runId?: string | null;
+  name: string;
+  replitPromptMd?: string;
+  buildPlan?: AtelierPrototypeBuildPlanItem[];
+  demoStoryboard?: AtelierPrototypeDemoStoryboardItem[];
+  status: string;
+  createdAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierForgePrototypeInputBrandOverrides = {
+  primary?: string;
+  logo?: string;
+} | null;
+
+export interface AtelierForgePrototypeInput {
+  name?: string;
+  audience?: string;
+  problem?: string;
+  agenticThesis?: string;
+  demos?: string[];
+  constraints?: string[];
+  /** @nullable */
+  brandOverrides?: AtelierForgePrototypeInputBrandOverrides;
+  partnerDataApproved?: boolean;
+}
+
+export interface AtelierForgePrototypeResponse {
+  prototype: AtelierPrototype;
+  runId: string;
+}
+
+export type AtelierProposalSectionStatus =
+  (typeof AtelierProposalSectionStatus)[keyof typeof AtelierProposalSectionStatus];
+
+export const AtelierProposalSectionStatus = {
+  draft: "draft",
+  amber: "amber",
+  green: "green",
+  red: "red",
+  approved: "approved",
+} as const;
+
+export interface AtelierProposalSection {
+  id: string;
+  proposalId: string;
+  sectionId: string;
+  name: string;
+  ownerAgent: string;
+  status: AtelierProposalSectionStatus;
+  content: string;
+  citations?: string[];
+}
+
+export type AtelierPricingModelVerdict =
+  (typeof AtelierPricingModelVerdict)[keyof typeof AtelierPricingModelVerdict];
+
+export const AtelierPricingModelVerdict = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+  partner_override_required: "partner_override_required",
+} as const;
+
+export type AtelierPricingModelWedgeChartItem = {
+  role?: string;
+  days?: number;
+  cost?: number;
+  revenue?: number;
+};
+
+export interface AtelierPricingModel {
+  totalRevenueUsd: number;
+  totalCostUsd: number;
+  marginPct: number;
+  verdict: AtelierPricingModelVerdict;
+  wedgeChart: AtelierPricingModelWedgeChartItem[];
+}
+
+export type AtelierComplianceRowStatus =
+  (typeof AtelierComplianceRowStatus)[keyof typeof AtelierComplianceRowStatus];
+
+export const AtelierComplianceRowStatus = {
+  green: "green",
+  red: "red",
+} as const;
+
+export interface AtelierComplianceRow {
+  rfpReqId?: string;
+  requirement?: string;
+  status?: AtelierComplianceRowStatus;
+  evidence?: string;
+}
+
+export type AtelierProposalTeamProposedItem = { [key: string]: unknown };
+
+export type AtelierProposalPricingIntent = { [key: string]: unknown };
+
+export interface AtelierProposal {
+  id: string;
+  opportunityId: string;
+  /** @nullable */
+  runId?: string | null;
+  title: string;
+  sectionsRequired?: string[];
+  teamProposed?: AtelierProposalTeamProposedItem[];
+  pricingIntent?: AtelierProposalPricingIntent;
+  pricingModel?: AtelierPricingModel;
+  winThemes?: string[];
+  complianceMatrix?: AtelierComplianceRow[];
+  status: string;
+  createdAt: string;
+}
+
+export interface AtelierProposalDetail {
+  proposal: AtelierProposal;
+  sections: AtelierProposalSection[];
+}
+
+export type AtelierComposeProposalInputTeamProposedItem = {
+  role?: string;
+  alloc?: number;
+};
+
+export type AtelierComposeProposalInputPricingIntent = {
+  targetMarginPct?: number;
+  durationWeeks?: number;
+};
+
+export type AtelierComposeProposalInputRfpRequirementsItem = {
+  id?: string;
+  requirement?: string;
+  severity?: string;
+};
+
+export interface AtelierComposeProposalInput {
+  sectionsRequired?: string[];
+  teamProposed?: AtelierComposeProposalInputTeamProposedItem[];
+  pricingIntent?: AtelierComposeProposalInputPricingIntent;
+  rfpRequirements?: AtelierComposeProposalInputRfpRequirementsItem[];
+}
+
 export type AtelierGetActivityParams = {
   limit?: number;
 };

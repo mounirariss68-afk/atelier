@@ -30,7 +30,13 @@ export type AtelierAgentId =
   | "pov_author"
   | "meeting_scribe"
   | "charter_architect"
-  | "synthesis_critic";
+  | "synthesis_critic"
+  | "agent_architect"
+  | "prototype_forge"
+  | "proposal_composer"
+  | "pricing_analyst"
+  | "case_study_picker"
+  | "compliance_reviewer";
 
 export function loadPrompt(agentId: AtelierAgentId, version = 1): string {
   const path = resolve(PROMPT_DIR, agentId, `v${version}.md`);

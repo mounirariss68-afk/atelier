@@ -1223,3 +1223,629 @@ export function scaffoldDiagnosticMemo(args: {
     `<p>This memo is a draft. Each branch above maps to a hypothesis on the engagement tree; evidence collection is the next move.</p>`,
   ].join("\n");
 }
+
+// =============================================================
+// Agent Architect — Process Reader → Step Classifier →
+//                   Agentifiability Judge → Agent Designer
+// (Task #223)
+// =============================================================
+
+export type StepCategory =
+  | "decision"
+  | "communication"
+  | "reconciliation"
+  | "calculation"
+  | "retrieval"
+  | "irreversible_action";
+
+export interface ProcessStep {
+  id: string;
+  name: string;
+  currentOwner: string;
+  category: StepCategory;
+  agentifiable: "yes" | "partial" | "no";
+  rationale: string;
+  candidateAgentId?: string;
+}
+
+export interface CandidateAgentDesign {
+  id: string;
+  name: string;
+  purpose: string;
+  inputs: string[];
+  outputs: string[];
+  tools: string[];
+  guardrails: string[];
+  humanCheckpoints: string[];
+  riskClass: "low" | "med" | "high";
+}
+
+export interface AgentArchitectOutput {
+  processDiagramMermaid: string;
+  steps: ProcessStep[];
+  candidateAgents: CandidateAgentDesign[];
+}
+
+function mockAgentArchitect(args: {
+  scopeHint: string;
+  source: string;
+}): AgentArchitectOutput {
+  const lc = args.source.toLowerCase();
+  const tokens = args.source
+    .split(/[.;\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 4);
+  const verbs = tokens.length >= 3 ? tokens : [
+    "Inbound request received",
+    "Owner triages and classifies",
+    "Specialist resolves",
+    "QA samples a fraction of cases",
+  ];
+  const steps: ProcessStep[] = verbs.slice(0, 6).map((line, i) => {
+    const ownerGuess = /(specialist|senior|partner|legal)/i.test(line)
+      ? "Senior"
+      : /(qa|quality)/i.test(line)
+        ? "QA"
+        : /(agent|classifier|router)/i.test(line)
+          ? "Agent"
+          : i === 0 ? "Customer" : "Operator";
+    const cat: StepCategory = /classif|route|triage/i.test(line)
+      ? "decision"
+      : /reply|email|sms|comm/i.test(line)
+        ? "communication"
+        : /reconcil|match/i.test(line)
+          ? "reconciliation"
+          : /calculate|price|quote|boq/i.test(line)
+            ? "calculation"
+            : /send|sign|commit|refund|publish/i.test(line)
+              ? "irreversible_action"
+              : "retrieval";
+    const irreversible = cat === "irreversible_action";
+    const agentifiable: ProcessStep["agentifiable"] = irreversible
+      ? "partial"
+      : cat === "decision" || cat === "retrieval" || cat === "reconciliation"
+        ? "yes"
+        : cat === "communication"
+          ? "partial"
+          : "yes";
+    return {
+      id: `step_${i + 1}`,
+      name: line.slice(0, 120),
+      currentOwner: ownerGuess,
+      category: cat,
+      agentifiable,
+      rationale: irreversible
+        ? "Irreversible — agent may draft, human must commit."
+        : agentifiable === "yes"
+          ? "Bounded inputs/outputs and reversible — strong fit."
+          : "Bounded but customer-facing — keep human-in-the-loop.",
+    };
+  });
+  // Cluster: map agentifiable steps to ≥3 candidate agents.
+  const triage = steps.find((s) => s.category === "decision");
+  const calc = steps.find((s) => s.category === "calculation");
+  const comm = steps.find((s) => s.category === "communication");
+  const recon = steps.find((s) => s.category === "reconciliation");
+  const retr = steps.find((s) => s.category === "retrieval");
+  const irr = steps.find((s) => s.category === "irreversible_action");
+  const candidates: CandidateAgentDesign[] = [];
+  candidates.push({
+    id: "ag_triage",
+    name: "Triage Agent",
+    purpose: `Classify each inbound item in scope of "${args.scopeHint}" and route it.`,
+    inputs: ["raw_inbound_payload", "service_catalog"],
+    outputs: ["routed_class", "confidence", "explain_md"],
+    tools: ["catalog_lookup", "history_search"],
+    guardrails: ["confidence_threshold>=0.7_or_escalate", "no_PII_to_third_parties"],
+    humanCheckpoints: ["sme_reviews_amber_routes_daily"],
+    riskClass: "low",
+  });
+  if (calc || retr || recon) {
+    candidates.push({
+      id: "ag_solver",
+      name: calc ? "Calculation Agent" : recon ? "Reconciliation Agent" : "Retrieval Agent",
+      purpose: calc ? "Produce calculated outputs (e.g., quotes, BOQs) from inputs." : "Reconcile or fetch authoritative records.",
+      inputs: calc ? ["customer_request", "rate_card"] : ["search_query", "source_systems"],
+      outputs: calc ? ["draft_quote", "assumptions_md"] : ["matched_records", "explain_md"],
+      tools: calc ? ["pricing_engine", "rate_card_lookup"] : ["sql_read", "doc_search"],
+      guardrails: ["never_commit_without_human_signoff", "show_assumptions"],
+      humanCheckpoints: ["lead_approves_before_send"],
+      riskClass: "med",
+    });
+  }
+  if (comm || irr) {
+    candidates.push({
+      id: "ag_drafter",
+      name: comm ? "Customer-Comms Drafter" : "Action Drafter",
+      purpose: "Draft outbound communication or action — never sends.",
+      inputs: ["resolved_case_payload", "tone_guide"],
+      outputs: ["draft_reply_md", "tone_score"],
+      tools: ["template_library"],
+      guardrails: ["never_auto_send", "bilingual_when_required"],
+      humanCheckpoints: ["operator_approves_each_send"],
+      riskClass: irr ? "high" : "med",
+    });
+  }
+  while (candidates.length < 3) {
+    candidates.push({
+      id: `ag_extra_${candidates.length}`,
+      name: "QA Sampler Agent",
+      purpose: "Sample a fraction of completed cases and flag drift.",
+      inputs: ["completed_cases", "policy_rules"],
+      outputs: ["drift_report"],
+      tools: ["sql_read"],
+      guardrails: ["read_only"],
+      humanCheckpoints: ["qa_lead_reviews_weekly"],
+      riskClass: "low",
+    });
+  }
+  // Mermaid
+  const lines = ["flowchart TD"];
+  steps.forEach((s, i) => {
+    const shape = s.category === "decision" ? `{${s.name.replace(/[{}|"]/g, "")}}` : `[${s.name.replace(/[\[\]|"]/g, "")}]`;
+    lines.push(`  ${s.id}${shape}`);
+    if (i > 0) lines.push(`  ${steps[i - 1].id} --> ${s.id}`);
+  });
+  return {
+    processDiagramMermaid: lines.join("\n"),
+    steps,
+    candidateAgents: candidates,
+  };
+}
+
+export async function runAgentArchitect(args: {
+  engagementId: string;
+  engagementName: string;
+  scopeHint: string;
+  source: string;
+  depth: "sketch" | "design";
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: AgentArchitectOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "agent_architect",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "engagement",
+    targetId: args.engagementId,
+    targetLabel: args.engagementName,
+    inputs: { scopeHint: args.scopeHint, depth: args.depth, sourceChars: args.source.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("agent_architect");
+    await progressRun(runId, 15, "Process Reader — normalizing input into ordered steps");
+    await progressRun(runId, 35, "Step Classifier — assigning category per step");
+    await progressRun(runId, 60, "Agentifiability Judge — yes/partial/no with rationale");
+    await progressRun(runId, 80, "Agent Designer — clustering into candidate designs");
+    const { value, costUsd, source, warning } = await callClaudeJson<AgentArchitectOutput>(
+      "claude-sonnet-4-6",
+      system,
+      JSON.stringify({ scopeHint: args.scopeHint, depth: args.depth, source: args.source }),
+      () => mockAgentArchitect({ scopeHint: args.scopeHint, source: args.source }),
+    );
+    // Guardrail: every candidate must have a human checkpoint.
+    value.candidateAgents.forEach((c) => {
+      if (!c.humanCheckpoints || c.humanCheckpoints.length === 0) {
+        c.humanCheckpoints = ["lead_or_partner_signs_off"];
+      }
+    });
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: value.candidateAgents.some((c) => c.riskClass === "high") ? "amber" : "green",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.steps.length,
+      actorLabel: args.actorLabel,
+      targetType: "engagement",
+      targetId: args.engagementId,
+      targetLabel: args.engagementName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "engagement", targetId: args.engagementId });
+    throw err;
+  }
+}
+
+// =============================================================
+// Prototype Forge — Architecture Drafter → Demo Storyboarder →
+//                    Brand Translator → Prompt Composer
+// =============================================================
+
+export interface PrototypeForgeBrief {
+  name: string;
+  audience: string;
+  problem: string;
+  agenticThesis: string;
+  demos: string[];
+  constraints: string[];
+  brandOverrides?: { primary?: string; logo?: string } | null;
+  partnerDataApproved?: boolean;
+}
+
+export interface PrototypeForgeOutput {
+  replitPromptMd: string;
+  buildPlan: { phase: string; days: number; deliverables: string[] }[];
+  demoStoryboard: { id: string; title: string; moment: string; interaction: string; artifact: string }[];
+}
+
+function mockPrototypeForge(brief: PrototypeForgeBrief): PrototypeForgeOutput {
+  const safeDemos = brief.demos.length ? brief.demos : ["Hello world demo"];
+  const storyboard = safeDemos.map((d, i) => ({
+    id: `demo_${i + 1}`,
+    title: d,
+    moment: i === 0 ? "Opening" : i === safeDemos.length - 1 ? "Closing" : "Middle",
+    interaction: "User clicks a primary surface; agent responds with explainable output.",
+    artifact: "Visible card/panel with audit trail link.",
+  }));
+  const phases = [
+    { phase: "Phase 1 — surfaces + mock data", days: 2, deliverables: ["Routing", "Brand baseline", "Seed data"] },
+    { phase: "Phase 2 — agents (mock-LLM)", days: 3, deliverables: ["Agent runner skeleton", "Two demo agents", "Activity stream"] },
+    { phase: "Phase 3 — demo polish", days: 2, deliverables: ["Storyboard hook-up", "Audit trail", "Narrated walkthrough"] },
+  ];
+  const brandLine = brief.brandOverrides?.logo
+    ? `Brand: client-skinned (logo=\`${brief.brandOverrides.logo}\`, primary=\`${brief.brandOverrides.primary ?? "TBD"}\`).`
+    : "Brand: AICo defaults (Atelier dark, gold accent).";
+  const dataLine = brief.partnerDataApproved
+    ? "Real client data is permitted (Partner approved)."
+    : "Use synthetic/watermarked data only — Partner has NOT approved real client data.";
+  const promptMd = [
+    `# ${brief.name} — Replit build prompt`,
+    ``,
+    `**Audience:** ${brief.audience}`,
+    `**Problem:** ${brief.problem}`,
+    `**Agentic thesis:** ${brief.agenticThesis}`,
+    ``,
+    `## Surfaces`,
+    storyboard.map((s) => `- ${s.title}`).join("\n"),
+    ``,
+    `## Constraints`,
+    (brief.constraints.length ? brief.constraints : ["(none)"]).map((c) => `- ${c}`).join("\n"),
+    ``,
+    `## Brand`,
+    `- ${brandLine}`,
+    ``,
+    `## Data policy`,
+    `- ${dataLine}`,
+    ``,
+    `## AICo non-negotiables`,
+    `- Human authority is sovereign. Every irreversible action requires a human signoff.`,
+    `- Show the work. Every agent output ships with rationale + sources.`,
+    `- Audit trail. Every action is logged (who/what/when).`,
+    `- Bilingual-aware (EN/AR) where the audience requires.`,
+    `- Synthetic data is watermarked; never simulate a real customer outcome silently.`,
+  ].join("\n");
+  return { replitPromptMd: promptMd, buildPlan: phases, demoStoryboard: storyboard };
+}
+
+export async function runPrototypeForge(args: {
+  opportunityId: string | null;
+  engagementId: string | null;
+  targetLabel: string;
+  brief: PrototypeForgeBrief;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: PrototypeForgeOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "prototype_forge",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: args.opportunityId ? "opportunity" : "engagement",
+    targetId: (args.opportunityId ?? args.engagementId) as string,
+    targetLabel: args.targetLabel,
+    inputs: { name: args.brief.name, demos: args.brief.demos.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("prototype_forge");
+    await progressRun(runId, 20, "Architecture Drafter — sketching surfaces + agent topology");
+    await progressRun(runId, 45, "Demo Storyboarder — choosing demo moments");
+    await progressRun(runId, 70, "Brand Translator — applying brand defaults/overrides");
+    await progressRun(runId, 90, "Prompt Composer — assembling Replit-ready prompt");
+    const { value, costUsd, source, warning } = await callClaudeJson<PrototypeForgeOutput>(
+      "claude-sonnet-4-6",
+      system,
+      JSON.stringify(args.brief),
+      () => mockPrototypeForge(args.brief),
+    );
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: "green",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.demoStoryboard.length,
+      actorLabel: args.actorLabel,
+      targetType: args.opportunityId ? "opportunity" : "engagement",
+      targetId: (args.opportunityId ?? args.engagementId) as string,
+      targetLabel: args.targetLabel,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: args.opportunityId ? "opportunity" : "engagement",
+      targetId: (args.opportunityId ?? args.engagementId) as string,
+    });
+    throw err;
+  }
+}
+
+// =============================================================
+// Proposal Composer — orchestrates 8 sub-agents
+// (incl. Pricing Analyst, Case Study Picker, Compliance Reviewer)
+// =============================================================
+
+export interface ProposalSection {
+  id: string;
+  name: string;
+  ownerAgent: string;
+  status: "draft" | "amber" | "green" | "red" | "approved";
+  content: string;
+  citations: string[];
+}
+
+export interface PricingModel {
+  totalRevenueUsd: number;
+  totalCostUsd: number;
+  marginPct: number;
+  verdict: "green" | "amber" | "red" | "partner_override_required";
+  wedgeChart: { role: string; days: number; cost: number; revenue: number }[];
+}
+
+export interface ComplianceMatrixRow {
+  rfpReqId: string;
+  requirement: string;
+  status: "green" | "red";
+  evidence: string;
+}
+
+export interface ProposalComposerOutput {
+  title: string;
+  sections: ProposalSection[];
+  pricingModel: PricingModel;
+  winThemes: string[];
+  complianceMatrix: ComplianceMatrixRow[];
+  complianceOverall: "green" | "red";
+}
+
+const DAY_RATES: Record<string, number> = {
+  partner: 4000,
+  lead: 3000,
+  sme: 2500,
+  ai_engineer: 2200,
+  business_developer: 1800,
+};
+const SELL_MULTIPLIER: Record<string, number> = {
+  partner: 1.6,
+  lead: 1.7,
+  sme: 1.6,
+  ai_engineer: 1.7,
+  business_developer: 1.5,
+};
+
+function mockPricing(args: {
+  team: { role: string; alloc: number; days?: number }[];
+  durationWeeks: number;
+  targetMarginPct: number;
+}): PricingModel {
+  const seenPartner = new Set<string>();
+  const wedge = args.team
+    .filter((m) => {
+      if (m.role !== "partner") return true;
+      if (seenPartner.has("partner")) return false;
+      seenPartner.add("partner");
+      return true;
+    })
+    .map((m) => {
+      const days = m.days ?? Math.round((args.durationWeeks * 5 * (m.alloc ?? 50)) / 100);
+      const rate = DAY_RATES[m.role] ?? 2000;
+      const cost = days * rate;
+      const revenue = cost * (SELL_MULTIPLIER[m.role] ?? 1.5);
+      return { role: m.role, days, cost, revenue };
+    });
+  const totalCost = wedge.reduce((s, r) => s + r.cost, 0);
+  const totalRev = wedge.reduce((s, r) => s + r.revenue, 0);
+  const margin = totalRev > 0 ? ((totalRev - totalCost) / totalRev) * 100 : 0;
+  let verdict: PricingModel["verdict"];
+  if (totalRev === 0) verdict = "red";
+  else if (margin >= args.targetMarginPct) verdict = "green";
+  else if (margin >= args.targetMarginPct - 10) verdict = "amber";
+  else verdict = "partner_override_required";
+  return {
+    totalRevenueUsd: Math.round(totalRev),
+    totalCostUsd: Math.round(totalCost),
+    marginPct: Math.round(margin * 10) / 10,
+    verdict,
+    wedgeChart: wedge,
+  };
+}
+
+function mockCompliance(args: {
+  rfpRequirements: { id: string; requirement: string; severity: string }[];
+  proposalSections: { id: string; name: string; content: string }[];
+}): { matrix: ComplianceMatrixRow[]; overall: "green" | "red" } {
+  if (args.rfpRequirements.length === 0) {
+    return { matrix: [], overall: "green" };
+  }
+  const matrix = args.rfpRequirements.map((r) => {
+    const needles = r.requirement.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const hit = args.proposalSections.find((s) =>
+      needles.some((n) => s.content.toLowerCase().includes(n)),
+    );
+    if (hit) {
+      return { rfpReqId: r.id, requirement: r.requirement, status: "green" as const, evidence: `${hit.name}: matched on '${needles.find((n) => hit.content.toLowerCase().includes(n))}'` };
+    }
+    return { rfpReqId: r.id, requirement: r.requirement, status: "red" as const, evidence: "No evidence found in proposal." };
+  });
+  const overall: "green" | "red" = matrix.every((m) => m.status === "green") ? "green" : "red";
+  return { matrix, overall };
+}
+
+function mockProposal(args: {
+  opportunityId: string;
+  sectionsRequired: string[];
+  teamProposed: { role: string; alloc: number }[];
+  pricingIntent: { targetMarginPct: number; durationWeeks: number };
+  rfpRequirements: { id: string; requirement: string; severity: string }[];
+}): ProposalComposerOutput {
+  const sectionLib: Record<string, { name: string; owner: string; content: (oid: string) => string }> = {
+    context: {
+      name: "Context",
+      owner: "context_writer",
+      content: (oid) => `Client context for ${oid}: bilingual EN/AR coverage required. Audit trail expected. Senior-overseen agentic operations.`,
+    },
+    approach: {
+      name: "Approach",
+      owner: "approach_writer",
+      content: () => `Three MECE workstreams: (1) Agentify top-priority services with bilingual support, (2) Telemetry & adoption with audit trail, (3) Governance & ISO27001-aligned controls. Each promise maps to a workplan deliverable.`,
+    },
+    workplan: {
+      name: "Workplan",
+      owner: "workplan_writer",
+      content: () => `Phase 1 (wks 1–4): discovery + 1 agent live. Phase 2 (wks 5–8): scale + telemetry. Phase 3 (wks 9–12): adoption + handover. Deliverables: discovery memo, agent runtime, telemetry dashboard, handover pack.`,
+    },
+    team: {
+      name: "Team",
+      owner: "team_bios_writer",
+      content: () => `Partner (oversight), Engagement Lead (delivery), SME (domain), AI Engineer (build).`,
+    },
+    pricing: {
+      name: "Pricing",
+      owner: "pricing_analyst",
+      content: () => `Time-and-materials with capped margin floor. See pricing model.`,
+    },
+    case_studies: {
+      name: "Case Studies",
+      owner: "case_study_picker",
+      content: () => `Three relevant credentials selected from Atelier portfolio.`,
+    },
+    terms: {
+      name: "Terms & Risk",
+      owner: "terms_risk_writer",
+      content: () => `IP retained by AICo until acceptance. Standard MNDA. PII isolation honored.`,
+    },
+    compliance: {
+      name: "Compliance",
+      owner: "compliance_reviewer",
+      content: () => `See compliance matrix. ISO27001 evidence attached on request.`,
+    },
+  };
+  const sections: ProposalSection[] = args.sectionsRequired.map((sid) => {
+    const def = sectionLib[sid] ?? { name: sid, owner: "context_writer", content: () => `Section ${sid} draft.` };
+    return {
+      id: sid,
+      name: def.name,
+      ownerAgent: def.owner,
+      status: "draft" as const,
+      content: def.content(args.opportunityId),
+      citations: [],
+    };
+  });
+  const pricing = mockPricing({ team: args.teamProposed, durationWeeks: args.pricingIntent.durationWeeks, targetMarginPct: args.pricingIntent.targetMarginPct });
+  const compliance = mockCompliance({ rfpRequirements: args.rfpRequirements, proposalSections: sections.map((s) => ({ id: s.id, name: s.name, content: s.content })) });
+  // Mark statuses: pricing section = pricing verdict; compliance section = overall.
+  sections.forEach((s) => {
+    if (s.id === "pricing") {
+      s.status = pricing.verdict === "green" ? "green" : pricing.verdict === "amber" ? "amber" : "red";
+    } else if (s.id === "compliance") {
+      s.status = compliance.overall;
+    } else {
+      s.status = "green";
+    }
+  });
+  const winThemes = [
+    "Senior-overseen agentic operations (no shadow autopilot).",
+    "Bilingual EN/AR by default with audit trail.",
+    "Outcomes-tied pricing with measurable adoption gates.",
+  ];
+  return {
+    title: `Proposal — ${args.opportunityId}`,
+    sections,
+    pricingModel: pricing,
+    winThemes,
+    complianceMatrix: compliance.matrix,
+    complianceOverall: compliance.overall,
+  };
+}
+
+export async function runProposalComposer(args: {
+  opportunityId: string;
+  opportunityName: string;
+  sectionsRequired: string[];
+  teamProposed: { role: string; alloc: number }[];
+  pricingIntent: { targetMarginPct: number; durationWeeks: number };
+  rfpRequirements: { id: string; requirement: string; severity: string }[];
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: ProposalComposerOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "proposal_composer",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "opportunity",
+    targetId: args.opportunityId,
+    targetLabel: args.opportunityName,
+    inputs: { sections: args.sectionsRequired.length, team: args.teamProposed.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("proposal_composer");
+    await progressRun(runId, 10, "Context Writer — framing situation");
+    await progressRun(runId, 22, "Approach Writer — MECE workstreams");
+    await progressRun(runId, 35, "Workplan Writer — phasing deliverables");
+    await progressRun(runId, 48, "Team Bios Writer — proposed team");
+    await progressRun(runId, 60, "Case Study Picker — top-3 credentials");
+    await progressRun(runId, 72, "Pricing Analyst — building wedge");
+    await progressRun(runId, 84, "Terms & Risk Writer — contractual language");
+    await progressRun(runId, 95, "Compliance Reviewer — RFP matrix");
+    const { value, costUsd, source, warning } = await callClaudeJson<ProposalComposerOutput>(
+      "claude-sonnet-4-6",
+      system,
+      JSON.stringify({
+        opportunityId: args.opportunityId,
+        sectionsRequired: args.sectionsRequired,
+        teamProposed: args.teamProposed,
+        pricingIntent: args.pricingIntent,
+        rfpRequirements: args.rfpRequirements,
+      }),
+      () => mockProposal({
+        opportunityId: args.opportunityId,
+        sectionsRequired: args.sectionsRequired,
+        teamProposed: args.teamProposed,
+        pricingIntent: args.pricingIntent,
+        rfpRequirements: args.rfpRequirements,
+      }),
+    );
+    // Guardrail: if compliance unmet, overall must be red (never silently green).
+    if (value.complianceMatrix.some((r) => r.status === "red")) {
+      value.complianceOverall = "red";
+      const sec = value.sections.find((s) => s.id === "compliance");
+      if (sec) sec.status = "red";
+    }
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: value.complianceOverall === "red" || value.pricingModel.verdict === "partner_override_required" ? "amber" : "green",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.sections.length,
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunityId,
+      targetLabel: args.opportunityName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "opportunity", targetId: args.opportunityId });
+    throw err;
+  }
+}

@@ -929,6 +929,173 @@ paths:
                 items:
                   $ref: "#/components/schemas/AuditEvent"
 
+  # ============================================================
+  # Task #223 — Processes / Agent Designs / Prototypes / Proposals
+  # ============================================================
+  /atelier/engagements/{engId}/processes:
+    get:
+      operationId: atelierListProcesses
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Captured processes for the engagement
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierProcess" }
+    post:
+      operationId: atelierAnalyzeProcess
+      tags: [atelier]
+      summary: Run Agent Architect on a captured process
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierAnalyzeProcessInput" }
+      responses:
+        "201":
+          description: Process + candidate agent designs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAnalyzeProcessResponse" }
+  /atelier/engagements/{engId}/agent-designs:
+    get:
+      operationId: atelierListAgentDesigns
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Candidate agent designs for the engagement
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierAgentDesign" }
+  /atelier/engagements/{engId}/agent-designs/{designId}/approve:
+    post:
+      operationId: atelierApproveAgentDesign
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: designId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated design
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAgentDesign" }
+  /atelier/opportunities/{oppId}/prototypes:
+    get:
+      operationId: atelierListPrototypes
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Prototypes for the opportunity
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierPrototype" }
+  /atelier/opportunities/{oppId}/prototype:
+    post:
+      operationId: atelierForgePrototype
+      tags: [atelier]
+      summary: Run Prototype Forge to produce a Replit-ready prompt
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierForgePrototypeInput" }
+      responses:
+        "201":
+          description: Created prototype
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierForgePrototypeResponse" }
+  /atelier/opportunities/{oppId}/proposal:
+    get:
+      operationId: atelierGetProposal
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Latest proposal + sections
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposalDetail" }
+        "404":
+          description: No proposal yet
+    post:
+      operationId: atelierComposeProposal
+      tags: [atelier]
+      summary: Run Proposal Composer
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierComposeProposalInput" }
+      responses:
+        "201":
+          description: Created proposal + sections
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposalDetail" }
+  /atelier/proposal-sections/{sectionId}/approve:
+    post:
+      operationId: atelierApproveProposalSection
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: sectionId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated section
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposalSection" }
+
 components:
   schemas:
     HealthStatus:
@@ -1770,3 +1937,209 @@ components:
           default: []
         fileUrl: { type: ["string", "null"], default: null }
         source: { type: string, default: "upload" }
+
+    # ----------- Task #223 schemas -----------
+    AtelierProcessStep:
+      type: object
+      required: [id, name, currentOwner, category, agentifiable, rationale]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        currentOwner: { type: string }
+        category: { type: string, enum: [decision, communication, reconciliation, calculation, retrieval, irreversible_action] }
+        agentifiable: { type: string, enum: [yes, partial, no] }
+        rationale: { type: string }
+        candidateAgentId: { type: ["string", "null"] }
+    AtelierCandidateAgent:
+      type: object
+      required: [id, name, purpose, inputs, outputs, tools, guardrails, humanCheckpoints, riskClass]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        purpose: { type: string }
+        inputs: { type: array, items: { type: string } }
+        outputs: { type: array, items: { type: string } }
+        tools: { type: array, items: { type: string } }
+        guardrails: { type: array, items: { type: string } }
+        humanCheckpoints: { type: array, items: { type: string } }
+        riskClass: { type: string, enum: [low, med, high] }
+    AtelierProcess:
+      type: object
+      required: [id, engagementId, name, createdAt]
+      properties:
+        id: { type: string }
+        engagementId: { type: string }
+        name: { type: string }
+        diagram: { type: ["string", "null"] }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierProcessStep" }
+        createdAt: { type: string, format: date-time }
+    AtelierAgentDesign:
+      type: object
+      required: [id, engagementId, design, status, createdAt]
+      properties:
+        id: { type: string }
+        engagementId: { type: string }
+        processStepId: { type: ["string", "null"] }
+        design: { $ref: "#/components/schemas/AtelierCandidateAgent" }
+        status: { type: string, enum: [draft, approved, rejected] }
+        createdAt: { type: string, format: date-time }
+    AtelierAnalyzeProcessInput:
+      type: object
+      required: [source]
+      properties:
+        name: { type: string }
+        source: { type: string, minLength: 10 }
+        scopeHint: { type: string }
+        depth: { type: string, enum: [sketch, design], default: design }
+    AtelierAnalyzeProcessResponse:
+      type: object
+      required: [process, designs, runId]
+      properties:
+        process: { $ref: "#/components/schemas/AtelierProcess" }
+        designs:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAgentDesign" }
+        runId: { type: string }
+
+    AtelierPrototype:
+      type: object
+      required: [id, name, status, createdAt]
+      properties:
+        id: { type: string }
+        opportunityId: { type: ["string", "null"] }
+        engagementId: { type: ["string", "null"] }
+        runId: { type: ["string", "null"] }
+        name: { type: string }
+        replitPromptMd: { type: string }
+        buildPlan:
+          type: array
+          items:
+            type: object
+            properties:
+              phase: { type: string }
+              days: { type: integer }
+              deliverables: { type: array, items: { type: string } }
+        demoStoryboard:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              moment: { type: string }
+              interaction: { type: string }
+              artifact: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+    AtelierForgePrototypeInput:
+      type: object
+      properties:
+        name: { type: string }
+        audience: { type: string }
+        problem: { type: string }
+        agenticThesis: { type: string }
+        demos: { type: array, items: { type: string }, default: [] }
+        constraints: { type: array, items: { type: string }, default: [] }
+        brandOverrides:
+          type: ["object", "null"]
+          properties:
+            primary: { type: string }
+            logo: { type: string }
+        partnerDataApproved: { type: boolean, default: false }
+    AtelierForgePrototypeResponse:
+      type: object
+      required: [prototype, runId]
+      properties:
+        prototype: { $ref: "#/components/schemas/AtelierPrototype" }
+        runId: { type: string }
+
+    AtelierProposalSection:
+      type: object
+      required: [id, proposalId, sectionId, name, ownerAgent, status, content]
+      properties:
+        id: { type: string }
+        proposalId: { type: string }
+        sectionId: { type: string }
+        name: { type: string }
+        ownerAgent: { type: string }
+        status: { type: string, enum: [draft, amber, green, red, approved] }
+        content: { type: string }
+        citations:
+          type: array
+          items: { type: string }
+    AtelierPricingModel:
+      type: object
+      required: [totalRevenueUsd, totalCostUsd, marginPct, verdict, wedgeChart]
+      properties:
+        totalRevenueUsd: { type: number }
+        totalCostUsd: { type: number }
+        marginPct: { type: number }
+        verdict: { type: string, enum: [green, amber, red, partner_override_required] }
+        wedgeChart:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string }
+              days: { type: number }
+              cost: { type: number }
+              revenue: { type: number }
+    AtelierComplianceRow:
+      type: object
+      properties:
+        rfpReqId: { type: string }
+        requirement: { type: string }
+        status: { type: string, enum: [green, red] }
+        evidence: { type: string }
+    AtelierProposal:
+      type: object
+      required: [id, opportunityId, title, status, createdAt]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        runId: { type: ["string", "null"] }
+        title: { type: string }
+        sectionsRequired: { type: array, items: { type: string } }
+        teamProposed: { type: array, items: { type: object, additionalProperties: true } }
+        pricingIntent: { type: object, additionalProperties: true }
+        pricingModel: { $ref: "#/components/schemas/AtelierPricingModel" }
+        winThemes: { type: array, items: { type: string } }
+        complianceMatrix:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierComplianceRow" }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+    AtelierProposalDetail:
+      type: object
+      required: [proposal, sections]
+      properties:
+        proposal: { $ref: "#/components/schemas/AtelierProposal" }
+        sections:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierProposalSection" }
+    AtelierComposeProposalInput:
+      type: object
+      properties:
+        sectionsRequired: { type: array, items: { type: string }, default: [] }
+        teamProposed:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string }
+              alloc: { type: number }
+        pricingIntent:
+          type: object
+          properties:
+            targetMarginPct: { type: number }
+            durationWeeks: { type: number }
+        rfpRequirements:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              requirement: { type: string }
+              severity: { type: string }
