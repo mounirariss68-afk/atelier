@@ -4386,3 +4386,158 @@ export async function runUtilizationAnalyst(args: {
     throw err;
   }
 }
+
+// =====================================================================
+// Expense Auditor (Task #259) — OCR + classify + policy + VAT + billable
+// =====================================================================
+
+export interface ExpenseAuditorProposal {
+  category:
+    | "flight"
+    | "hotel"
+    | "meal"
+    | "gift"
+    | "software"
+    | "mileage"
+    | "per_diem"
+    | "taxi"
+    | "other";
+  vatTreatment: "ksa_15" | "uae_5" | "zero_rated_export" | "none";
+  vatAmount: number;
+  clientBillable: boolean;
+  markupPct: number;
+  summary: string;
+  ocrConfidence: "green" | "amber" | "red";
+  refused?: boolean;
+  reason?: string;
+}
+
+export interface ExpenseAuditorInput {
+  expenseId: string;
+  triggeredByUserId: string | null;
+  ocr: {
+    merchant?: string;
+    date?: string;
+    total?: number;
+    tax?: number;
+    currency?: string;
+    country?: string;
+    category?: string;
+    rawText?: string;
+    confidence?: "green" | "amber" | "red";
+  } | null;
+  contractDigest: {
+    expensesClause?: boolean;
+    expenseMarkupCapPct?: number;
+    permittedCategories?: string[];
+    summary?: string;
+  } | null;
+  draft: {
+    amount: number;
+    currency: string;
+    country?: string;
+    category?: string;
+    engagementId?: string | null;
+  };
+}
+
+function mockExpenseAuditor(input: ExpenseAuditorInput): ExpenseAuditorProposal {
+  const ocr = input.ocr;
+  if (!ocr || !ocr.confidence || ocr.confidence === "red") {
+    return {
+      category: "other",
+      vatTreatment: "none",
+      vatAmount: 0,
+      clientBillable: false,
+      markupPct: 0,
+      summary: "OCR confidence too low — manual review required.",
+      ocrConfidence: "red",
+      refused: true,
+      reason: "missing-or-zero-confidence-ocr",
+    };
+  }
+  const country = (ocr.country || input.draft.country || "").toUpperCase();
+  const treatment: ExpenseAuditorProposal["vatTreatment"] =
+    country === "KSA" || country === "SA"
+      ? "ksa_15"
+      : country === "UAE" || country === "AE"
+        ? "uae_5"
+        : country && country !== "US"
+          ? "zero_rated_export"
+          : "none";
+  const cat = (ocr.category ?? input.draft.category ?? "other") as ExpenseAuditorProposal["category"];
+  // Billability: contract clause must permit. Default false.
+  const cd = input.contractDigest;
+  const clauseOk = !!cd?.expensesClause;
+  const catPermitted = clauseOk && (!cd?.permittedCategories?.length || cd.permittedCategories.includes(cat));
+  const billable = !!input.draft.engagementId && clauseOk && catPermitted;
+  // Markup: clamp to engagement cap; default 0.
+  const cap = cd?.expenseMarkupCapPct ?? 0;
+  const proposed = billable ? Math.min(10, cap) : 0;
+  const summary = billable
+    ? `Auditor: classified ${cat}; billable to engagement at markup ${proposed}% (cap ${cap}%).`
+    : input.draft.engagementId
+      ? `Auditor: classified ${cat}; NOT billable — contract digest lacks an explicit ${cat} clause.`
+      : `Auditor: classified ${cat}; firm-overhead (no engagement attached).`;
+  return {
+    category: cat,
+    vatTreatment: treatment,
+    vatAmount: ocr.tax ?? 0,
+    clientBillable: billable,
+    markupPct: proposed,
+    summary,
+    ocrConfidence: ocr.confidence,
+  };
+}
+
+export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
+  runId: string;
+  proposal: ExpenseAuditorProposal;
+}> {
+  const runId = await startRun({
+    agentId: "ag_expense_auditor",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "expense",
+    targetId: input.expenseId,
+    targetLabel: `Expense ${input.expenseId}`,
+    inputs: { hasOcr: !!input.ocr, hasContract: !!input.contractDigest },
+    actorLabel: "Expense Auditor",
+  });
+  const t0 = Date.now();
+  try {
+    const promptBody = loadPrompt("expense_auditor");
+    const userPrompt = JSON.stringify({
+      ocr: input.ocr,
+      contractDigest: input.contractDigest,
+      draft: input.draft,
+    });
+    const { value, costUsd, source, warning } = await callClaudeJson<ExpenseAuditorProposal>(
+      "claude-haiku-4-5",
+      promptBody,
+      userPrompt,
+      () => mockExpenseAuditor(input),
+    );
+    await completeRun({
+      runId,
+      output: value,
+      confidence: value.ocrConfidence ?? "amber",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: 0,
+      actorLabel: "Expense Auditor",
+      targetType: "expense",
+      targetId: input.expenseId,
+      targetLabel: `Expense ${input.expenseId}`,
+      source,
+      warning,
+    });
+    return { runId, proposal: value };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: "Expense Auditor",
+      targetType: "expense",
+      targetId: input.expenseId,
+    });
+    throw err;
+  }
+}

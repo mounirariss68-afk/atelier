@@ -41,7 +41,8 @@ export type AtelierAgentId =
   | "win_loss_interviewer"
   | "theme_curator"
   | "utilization_analyst"
-  | "burn_sentinel";
+  | "burn_sentinel"
+  | "expense_auditor";
 
 export function loadPrompt(agentId: AtelierAgentId, version = 1): string {
   const path = resolve(PROMPT_DIR, agentId, `v${version}.md`);

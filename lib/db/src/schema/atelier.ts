@@ -2273,3 +2273,215 @@ export const atelierUtilizationSnapshots = pgTable(
     index("idx_atelier_utilization_snap_org").on(t.orgId),
   ],
 );
+
+// ============================================================
+// Task #259 — v3 Wallet: Expenses + Cards + Policies + FX + VAT
+// ============================================================
+
+/**
+ * Corporate-card metadata stub. We DO NOT integrate a live bank API here —
+ * each row records the provider (Pleo/Brex/Mesh), the cardholder, and a
+ * masked PAN suffix. The seed produces synthetic card-line drafts via
+ * atelierExpenses.captureSource = 'card_feed'.
+ */
+export const atelierCorporateCards = pgTable(
+  "atelier_corporate_cards",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    provider: text("provider").notNull(), // pleo | brex | mesh | manual
+    cardholderUserId: text("cardholder_user_id").notNull(),
+    last4: text("last4").notNull(),
+    label: text("label"),
+    currency: text("currency").notNull().default("USD"),
+    monthlyLimitAmount: doublePrecision("monthly_limit_amount").notNull().default(0),
+    status: text("status").notNull().default("active"), // active | frozen | closed
+    linkedAt: timestamp("linked_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_cards_holder").on(t.cardholderUserId),
+    index("idx_atelier_cards_org").on(t.orgId),
+  ],
+);
+
+/**
+ * Expense policy rules. One row per (category, applies_to_role|null,
+ * applies_to_country|null) tuple. The Auditor consults these on every
+ * draft to flag AMBER (over-cap with rationale) or RED (hard block).
+ * approvalThresholdUsd routes the expense through partner approval.
+ */
+export const atelierExpensePolicies = pgTable(
+  "atelier_expense_policies",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    category: text("category").notNull(), // flight | hotel | meal | gift | software | mileage | per_diem | taxi | other
+    appliesToRole: text("applies_to_role"), // null = all
+    appliesToCountry: text("applies_to_country"), // null = all
+    capAmountUsd: doublePrecision("cap_amount_usd"),
+    capUnit: text("cap_unit"), // per_trip | per_day | per_month | per_item
+    hardBlockAmountUsd: doublePrecision("hard_block_amount_usd"),
+    approvalThresholdUsd: doublePrecision("approval_threshold_usd"),
+    flightClassMax: text("flight_class_max"), // economy | premium_economy | business
+    rationale: text("rationale"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_policy_cat").on(t.category),
+  ],
+);
+
+/**
+ * FX rates — daily quotes. Deterministic-seeded; NOT live.
+ * `base` is always "USD"; one row per (date, quote).
+ */
+export const atelierFxRates = pgTable(
+  "atelier_fx_rates",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    date: text("date").notNull(), // YYYY-MM-DD
+    base: text("base").notNull().default("USD"),
+    quote: text("quote").notNull(), // SAR | AED | EUR | TRY | GBP ...
+    rate: doublePrecision("rate").notNull(), // units of quote per 1 base
+    source: text("source").notNull().default("seed"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_fx_date_pair").on(t.date, t.base, t.quote),
+    index("idx_atelier_fx_date").on(t.date),
+  ],
+);
+
+/**
+ * Expenses — the wallet's primary record.
+ *
+ * Captured via four paths:
+ *   - card_feed   : synthetic draft from atelierCorporateCards
+ *   - manual      : user-uploaded receipt (file blob ref + Auditor OCR)
+ *   - mileage     : km × rate, no receipt required below cap
+ *   - per_diem    : day-bucket allowance per country
+ *
+ * Multi-currency: amount/currency are the original values.
+ * usdAmount + fxRate + fxRateDate snapshot the conversion at submission.
+ *
+ * Policy outcome: policyStatus ∈ green | amber | red. AMBER allows
+ * override-with-rationale; RED is a hard block until edited.
+ *
+ * Receipt encryption: receiptEncryptedAtRest is an indicator field
+ * (we don't run real KMS in this build); ocrPayloadRedactedAt records
+ * when the 90-day OCR-payload retention job stripped the raw OCR JSON,
+ * leaving only the redacted summary.
+ */
+export const atelierExpenses = pgTable(
+  "atelier_expenses",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personId: text("person_id").notNull(), // atelier_users.id of submitter
+    personType: text("person_type").notNull().default("employee"), // employee | contractor
+    engagementId: text("engagement_id"), // null for non-billable / firm overhead
+    expenseDate: text("expense_date").notNull(), // YYYY-MM-DD
+    captureSource: text("capture_source").notNull(), // card_feed | manual | mileage | per_diem
+    cardId: text("card_id"), // FK-ish to atelierCorporateCards when card_feed
+    merchant: text("merchant"),
+    description: text("description"),
+    category: text("category").notNull().default("other"),
+    amount: doublePrecision("amount").notNull().default(0),
+    currency: text("currency").notNull().default("USD"),
+    fxRate: doublePrecision("fx_rate").notNull().default(1), // amount * (1/fxRate) when base=USD; we store quote per USD, so usd = amount / rate
+    fxRateDate: text("fx_rate_date"),
+    usdAmount: doublePrecision("usd_amount").notNull().default(0),
+    vatAmount: doublePrecision("vat_amount").notNull().default(0),
+    vatCurrency: text("vat_currency"),
+    vatTreatment: text("vat_treatment").notNull().default("none"), // ksa_15 | uae_5 | zero_rated_export | none
+    vatCountry: text("vat_country"), // KSA | UAE | TR | ...
+    clientBillable: boolean("client_billable").notNull().default(false),
+    markupPct: doublePrecision("markup_pct").notNull().default(0),
+    status: text("status").notNull().default("draft"), // draft | submitted | approved | rejected
+    policyStatus: text("policy_status").notNull().default("green"), // green | amber | red
+    policyFindings: jsonb("policy_findings").notNull().default([]).$type<
+      Array<{
+        ruleId: string;
+        severity: "amber" | "red";
+        category: string;
+        message: string;
+      }>
+    >(),
+    overrideRationale: text("override_rationale"),
+    auditorRunId: text("auditor_run_id"), // atelier_agent_runs.id of the Auditor that scored this
+    auditorProposal: jsonb("auditor_proposal").default(null).$type<{
+      category?: string;
+      vatTreatment?: string;
+      vatAmount?: number;
+      clientBillable?: boolean;
+      markupPct?: number;
+      summary?: string;
+      ocrConfidence?: "green" | "amber" | "red";
+    } | null>(),
+    receiptFileRef: text("receipt_file_ref"), // synthetic blob ref
+    receiptFixtureKey: text("receipt_fixture_key"), // deterministic OCR fixture id
+    receiptEncryptedAtRest: boolean("receipt_encrypted_at_rest").notNull().default(true),
+    ocrPayload: jsonb("ocr_payload").default(null).$type<unknown>(),
+    ocrPayloadRedactedAt: timestamp("ocr_payload_redacted_at"),
+    summary: text("summary"), // human one-liner; survives OCR redaction
+    submittedAt: timestamp("submitted_at"),
+    approvedAt: timestamp("approved_at"),
+    approvedByUserId: text("approved_by_user_id"),
+    rejectedAt: timestamp("rejected_at"),
+    rejectedReason: text("rejected_reason"),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_expense_person_date").on(t.personId, t.expenseDate),
+    index("idx_atelier_expense_eng_status").on(t.engagementId, t.status),
+    index("idx_atelier_expense_status").on(t.status),
+    index("idx_atelier_expense_org").on(t.orgId),
+  ],
+);
+
+/**
+ * VAT register — bucketed by treatment + country. We materialise a row
+ * per approved expense at approval time so the auditor view + CSV export
+ * stay independent of the live expense rows (and survive OCR-payload
+ * redaction). Rows are append-only; corrections are issued as new rows
+ * with negative amounts and a `correctionOfId` back-reference.
+ */
+export const atelierVatRegister = pgTable(
+  "atelier_vat_register",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    expenseId: text("expense_id").notNull(),
+    correctionOfId: text("correction_of_id"),
+    expenseDate: text("expense_date").notNull(),
+    country: text("country").notNull(),
+    treatment: text("treatment").notNull(), // ksa_15 | uae_5 | zero_rated_export | none
+    rate: doublePrecision("rate").notNull().default(0),
+    netAmount: doublePrecision("net_amount").notNull().default(0),
+    vatAmount: doublePrecision("vat_amount").notNull().default(0),
+    grossAmount: doublePrecision("gross_amount").notNull().default(0),
+    currency: text("currency").notNull().default("USD"),
+    usdNet: doublePrecision("usd_net").notNull().default(0),
+    usdVat: doublePrecision("usd_vat").notNull().default(0),
+    usdGross: doublePrecision("usd_gross").notNull().default(0),
+    merchant: text("merchant"),
+    summary: text("summary"),
+    recordedAt: timestamp("recorded_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_vat_country_treatment").on(t.country, t.treatment),
+    index("idx_atelier_vat_date").on(t.expenseDate),
+    index("idx_atelier_vat_expense").on(t.expenseId),
+  ],
+);

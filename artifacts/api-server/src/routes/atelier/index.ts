@@ -60,6 +60,7 @@ import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
 import ledgerRoutes from "./ledgerRoutes";
+import walletRoutes from "./walletRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -104,6 +105,8 @@ router.use((req, res, next) => {
   // never appear in the ledger UI but DO upload their firm's hours via the
   // partner-firm CSV endpoint and may read their own engagement's economics.
   if (me.role === "contractor" && p.startsWith("/ledger/timesheets")) return next();
+  // Contractors may submit/view their OWN wallet expenses (scope=self).
+  if (me.role === "contractor" && p.startsWith("/wallet/expenses")) return next();
   if (me.role === "partner_firm_resource" && p.startsWith("/ledger/partner-firm-hours")) return next();
   if (me.role === "partner_firm_resource" && p.startsWith("/ledger/engagement-economics")) return next();
   // Allow per-person dossier endpoints only for the caller's OWN identity
@@ -156,6 +159,8 @@ router.use(rosterLifecycleRoutes);
 router.use(skillGraphRoutes);
 // Task #257 — v3 Ledger: Timesheets + Time Steward.
 router.use(ledgerRoutes);
+// Task #259 — v3 Wallet: Expenses + Auditor + Policy + FX + VAT.
+router.use(walletRoutes);
 
 function ensurePersona(
   req: Request,

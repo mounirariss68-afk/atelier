@@ -70,6 +70,11 @@ import {
   atelierSalonRequests,
   atelierDeliverablePublishes,
   atelierUtilizationSnapshots,
+  atelierCorporateCards,
+  atelierExpensePolicies,
+  atelierFxRates,
+  atelierExpenses,
+  atelierVatRegister,
 } from "@workspace/db";
 import { sql, eq, and, isNull, inArray } from "drizzle-orm";
 
@@ -4192,9 +4197,232 @@ async function main() {
   }
   console.log(`[seed-atelier] v3 ledger (Task #258): ${snapshotsToInsert.length} utilization snapshots written.`);
 
+  // ============================================================
+  // Task #259 — v3 Wallet seed (cards, FX, policies, expenses)
+  // ============================================================
+  await seedV3Wallet();
+
   console.log(
     `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published) · ${employeesToInsert.length} employees · ${CONTRACTORS.length} contractors · ${PARTNER_FIRMS.length} partner firms · ${PARTNER_RESOURCES.length} partner-firm resources · ${snapshotsToInsert.length} utilization snapshots.`,
   );
+}
+
+// ============================================================
+// Task #259 — v3 Wallet seed
+// ============================================================
+async function seedV3Wallet() {
+  // Wipe wallet tables for idempotency.
+  await db.delete(atelierVatRegister);
+  await db.delete(atelierExpenses);
+  await db.delete(atelierExpensePolicies);
+  await db.delete(atelierCorporateCards);
+  await db.delete(atelierFxRates);
+
+  // --- FX rates (deterministic, last 60 days) -----------------
+  const fxQuotes: Array<{ q: string; r: number }> = [
+    { q: "SAR", r: 3.75 },
+    { q: "AED", r: 3.6725 },
+    { q: "EUR", r: 0.92 },
+    { q: "GBP", r: 0.79 },
+    { q: "TRY", r: 32.5 },
+  ];
+  const fxRows: Array<typeof atelierFxRates.$inferInsert> = [];
+  for (let d = 0; d < 60; d++) {
+    const date = isoDate(DAYS_AGO(d));
+    for (const { q, r } of fxQuotes) {
+      const jitter = 1 + ((d % 7) - 3) * 0.0015;
+      fxRows.push({
+        id: `fx_${q}_${date}`,
+        base: "USD",
+        quote: q,
+        date,
+        rate: +(r * jitter).toFixed(6),
+        source: "deterministic",
+      });
+    }
+  }
+  await db.insert(atelierFxRates).values(fxRows).onConflictDoNothing();
+  console.log(`[seed-atelier] v3 wallet: ${fxRows.length} FX rates seeded.`);
+
+  // --- 4 Corporate cards ---------------------------------------
+  const cards = [
+    { id: "card_mounir_amex", cardholderUserId: "p_mounir_ariss", label: "Mounir Ariss · Amex Plat",   last4: "1004", provider: "manual",     currency: "USD", monthlyLimitAmount: 50000 },
+    { id: "card_layla_visa",  cardholderUserId: "p_layla_haddad", label: "Layla Haddad · ENBD Visa",    last4: "8821", provider: "manual",     currency: "AED", monthlyLimitAmount: 25000 },
+    { id: "card_omar_visa",   cardholderUserId: "p_omar_najjar",  label: "Omar Najjar · SNB Visa",       last4: "5510", provider: "manual",     currency: "SAR", monthlyLimitAmount: 25000 },
+    { id: "card_sara_mc",     cardholderUserId: "p_sara_qureshi", label: "Sara Qureshi · Mesh MC",       last4: "3370", provider: "mesh",       currency: "USD", monthlyLimitAmount: 15000 },
+  ];
+  await db.insert(atelierCorporateCards).values(
+    cards.map((c) => ({ ...c, status: "active", linkedAt: DAYS_AGO(180) })),
+  );
+  console.log(`[seed-atelier] v3 wallet: ${cards.length} corporate cards.`);
+
+  // --- 7 Default policies (mirror DEFAULT_POLICIES from policy.ts) ---
+  await db.insert(atelierExpensePolicies).values([
+    { id: "pol_meal",         category: "meal",     capAmountUsd: 75,   capUnit: "per_person_per_meal", hardBlockAmountUsd: 250, approvalThresholdUsd: 100, rationale: "Standard meal cap; > $100 needs leadership approval." },
+    { id: "pol_hotel",        category: "hotel",    capAmountUsd: 350,  capUnit: "per_night",           hardBlockAmountUsd: 800, approvalThresholdUsd: 400, rationale: "Hotel cap aligned with mid-tier business properties in Riyadh/Dubai." },
+    { id: "pol_taxi",         category: "taxi",     capAmountUsd: 150,  capUnit: "per_trip",            hardBlockAmountUsd: 400, rationale: "Single-trip cap; airport runs typically < $80." },
+    { id: "pol_flight_emp",   category: "flight",   appliesToRole: "employee",      capAmountUsd: 2500, capUnit: "per_segment", hardBlockAmountUsd: 8000, approvalThresholdUsd: 3000, flightClassMax: "business", rationale: "Employees: business max for long-haul; economy preferred regional." },
+    { id: "pol_flight_part",  category: "flight",   appliesToRole: "partner",       capAmountUsd: 6000, capUnit: "per_segment", hardBlockAmountUsd: 12000, flightClassMax: "first", rationale: "Partners may fly first on long-haul." },
+    { id: "pol_gift",         category: "gift",     capAmountUsd: 250,  capUnit: "per_gift",            hardBlockAmountUsd: 500, approvalThresholdUsd: 200, rationale: "Client gifts: stay under FCPA / KSA anti-corruption thresholds." },
+    { id: "pol_software",     category: "software", capAmountUsd: 500,  capUnit: "per_month",           hardBlockAmountUsd: 2000, approvalThresholdUsd: 300, rationale: "SaaS spend; > $300 routes through ops." },
+  ]);
+  console.log("[seed-atelier] v3 wallet: 7 default policies seeded.");
+
+  // --- 20 expenses across personas/states ----------------------
+  // Helpers to compute USD via the FX rate we just seeded.
+  function fxFor(currency: string, date: string): number {
+    if (currency === "USD") return 1;
+    const row = fxRows.find((r) => r.quote === currency && r.date === date);
+    return row ? row.rate as number : (fxQuotes.find((q) => q.q === currency)?.r ?? 1);
+  }
+  function usd(amount: number, currency: string, date: string): number {
+    if (currency === "USD") return amount;
+    return +(amount / fxFor(currency, date)).toFixed(2);
+  }
+
+  type ExpSeed = {
+    id: string; personId: string; personType: "employee" | "contractor"; engagementId: string | null;
+    daysAgo: number; captureSource: "card_feed" | "manual" | "mileage" | "per_diem"; cardId?: string;
+    merchant: string; description: string; category: string; amount: number; currency: string;
+    vatTreatment: string; vatAmount: number; vatCountry: string | null;
+    clientBillable: boolean; markupPct: number;
+    fixtureKey?: string;
+    status: "draft" | "submitted" | "approved" | "rejected";
+    policyStatus?: "green" | "amber" | "red";
+    overrideRationale?: string | null;
+    findings?: Array<{ severity: "amber" | "red"; ruleId: string; category: string; message: string }>;
+  };
+
+  const ENG = TASAMA_ENG_ID;
+  const ENG_DGE = "eng_dge_effortless_v1";
+
+  const seeds: ExpSeed[] = [
+    // Mounir — Riyadh client trip (approved, billable)
+    { id: "exp_001", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG, daysAgo: 14, captureSource: "card_feed", cardId: "card_mounir_amex", merchant: "Careem KSA", description: "Airport → DQ", category: "taxi", amount: 180, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 23.48, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_taxi_01", status: "approved", policyStatus: "green" },
+    { id: "exp_002", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG, daysAgo: 13, captureSource: "manual", merchant: "Four Seasons Riyadh", description: "2 nights (client visit)", category: "hotel", amount: 2300, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 300, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_hotel_01", status: "approved", policyStatus: "green" },
+    { id: "exp_003", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG, daysAgo: 12, captureSource: "manual", merchant: "Najd Village", description: "Dinner with Tasama CEO + COO", category: "meal", amount: 540, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 70.43, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_dinner_clientmeal", status: "approved", policyStatus: "green" },
+    { id: "exp_004", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG, daysAgo: 11, captureSource: "card_feed", cardId: "card_mounir_amex", merchant: "Saudia SV", description: "RUH → DXB business one-way", category: "flight", amount: 4200, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 547.83, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "flight_riyadh_dubai_business", status: "approved", policyStatus: "green" },
+
+    // Layla — Dubai trip (approved, billable)
+    { id: "exp_005", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 9, captureSource: "card_feed", cardId: "card_layla_visa", merchant: "Careem UAE", description: "DXB → DIFC", category: "taxi", amount: 95, currency: "AED", vatTreatment: "uae_5", vatAmount: 4.52, vatCountry: "UAE", clientBillable: true, markupPct: 10, fixtureKey: "dubai_taxi_01", status: "approved", policyStatus: "green" },
+    { id: "exp_006", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 8, captureSource: "manual", merchant: "Address Downtown", description: "1 night (DGE workshop)", category: "hotel", amount: 1450, currency: "AED", vatTreatment: "uae_5", vatAmount: 69.05, vatCountry: "UAE", clientBillable: true, markupPct: 10, fixtureKey: "dubai_hotel_01", status: "approved", policyStatus: "green" },
+    { id: "exp_007", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 7, captureSource: "manual", merchant: "Pierchic", description: "Working dinner — DGE leads", category: "meal", amount: 620, currency: "AED", vatTreatment: "uae_5", vatAmount: 29.52, vatCountry: "UAE", clientBillable: true, markupPct: 10, fixtureKey: "dubai_dinner_01", status: "approved", policyStatus: "green" },
+
+    // Omar — submitted, awaiting approval
+    { id: "exp_008", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 4, captureSource: "card_feed", cardId: "card_omar_visa", merchant: "Careem KSA", description: "Hotel → Tasama HQ", category: "taxi", amount: 95, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 12.39, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_taxi_01", status: "submitted", policyStatus: "green" },
+    { id: "exp_009", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 3, captureSource: "per_diem", merchant: "Per-diem 3 days (Riyadh)", description: "Field per-diem", category: "per_diem", amount: 225, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: true, markupPct: 0, status: "submitted", policyStatus: "green" },
+
+    // Sara — software (firm overhead)
+    { id: "exp_010", personId: "p_sara_qureshi", personType: "employee", engagementId: null, daysAgo: 6, captureSource: "manual", merchant: "OpenAI ChatGPT Team", description: "Team subscription · 5 seats", category: "software", amount: 150, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, fixtureKey: "software_chatgpt_team", status: "approved", policyStatus: "green" },
+    { id: "exp_011", personId: "p_sara_qureshi", personType: "employee", engagementId: null, daysAgo: 6, captureSource: "manual", merchant: "Figma", description: "Org plan · 12 seats", category: "software", amount: 540, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, fixtureKey: "software_figma_org", status: "submitted", policyStatus: "amber", overrideRationale: "Renewal of org plan; pre-approved at planning kickoff (Q1 ops review).", findings: [{ severity: "amber", ruleId: "pol_software", category: "software", message: "Software charge $540 exceeds approval threshold $300; needs ops review." }] },
+
+    // Layla — mileage internal
+    { id: "exp_012", personId: "p_layla_haddad", personType: "employee", engagementId: ENG, daysAgo: 5, captureSource: "mileage", merchant: "DXB → AUH (round trip)", description: "Client visit Abu Dhabi", category: "mileage", amount: 173.6, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: true, markupPct: 0, status: "approved", policyStatus: "green" },
+
+    // Mounir — RED block: first-class flight beyond hard cap (rejected then re-edited would normally happen; here keep as 'rejected' for audit trail).
+    { id: "exp_013", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG_DGE, daysAgo: 2, captureSource: "card_feed", cardId: "card_mounir_amex", merchant: "Emirates EK", description: "DXB → LHR first class", category: "flight", amount: 14800, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, fixtureKey: "flight_dubai_london_first", status: "rejected", policyStatus: "red", findings: [{ severity: "red", ruleId: "pol_flight_part", category: "flight", message: "Flight $14,800 exceeds hard cap $12,000 for partner segment." }] },
+
+    // Omar — small client gift (green)
+    { id: "exp_014", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 10, captureSource: "manual", merchant: "Patchi", description: "Gift box for Tasama PM (project close)", category: "gift", amount: 600, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 78.26, vatCountry: "KSA", clientBillable: false, markupPct: 0, fixtureKey: "gift_client_riyadh", status: "approved", policyStatus: "green" },
+
+    // Sara — Eurozone vendor (no VAT register)
+    { id: "exp_015", personId: "p_sara_qureshi", personType: "employee", engagementId: null, daysAgo: 20, captureSource: "manual", merchant: "Hetzner Online GmbH", description: "Compute · Q1 invoice", category: "software", amount: 320, currency: "EUR", vatTreatment: "none", vatAmount: 0, vatCountry: "EU", clientBillable: false, markupPct: 0, status: "approved", policyStatus: "green" },
+
+    // Mounir — small TRY meal (no VAT register)
+    { id: "exp_016", personId: "p_mounir_ariss", personType: "employee", engagementId: null, daysAgo: 25, captureSource: "manual", merchant: "Karaköy Lokantası", description: "Dinner Istanbul stopover", category: "meal", amount: 1850, currency: "TRY", vatTreatment: "none", vatAmount: 0, vatCountry: "TR", clientBillable: false, markupPct: 0, status: "approved", policyStatus: "green" },
+
+    // Layla — drafts
+    { id: "exp_017", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 1, captureSource: "manual", merchant: "Costa Coffee DXB", description: "Workshop coffees", category: "meal", amount: 145, currency: "AED", vatTreatment: "uae_5", vatAmount: 6.9, vatCountry: "UAE", clientBillable: true, markupPct: 10, status: "draft", policyStatus: "green" },
+
+    // Omar — draft mileage
+    { id: "exp_018", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 1, captureSource: "mileage", merchant: "Riyadh → Jeddah", description: "Driver visit", category: "mileage", amount: 595.2, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: true, markupPct: 0, status: "draft", policyStatus: "green" },
+
+    // Sara — submitted hotel approval-threshold (green but >approval)
+    { id: "exp_019", personId: "p_sara_qureshi", personType: "employee", engagementId: ENG, daysAgo: 4, captureSource: "card_feed", cardId: "card_sara_mc", merchant: "Hilton Riyadh Hotel & Residences", description: "1 night", category: "hotel", amount: 1500, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 195.65, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_hotel_01", status: "submitted", policyStatus: "green" },
+
+    // Mounir — approved meal in USD (firm overhead)
+    { id: "exp_020", personId: "p_mounir_ariss", personType: "employee", engagementId: null, daysAgo: 30, captureSource: "manual", merchant: "Cipriani DXB", description: "Recruiting dinner", category: "meal", amount: 480, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, status: "approved", policyStatus: "green" },
+  ];
+
+  const expenseRows: Array<typeof atelierExpenses.$inferInsert> = seeds.map((s) => {
+    const date = isoDate(DAYS_AGO(s.daysAgo));
+    const usdAmount = usd(s.amount, s.currency, date);
+    const submittedAt = s.status === "submitted" || s.status === "approved" || s.status === "rejected" ? DAYS_AGO(Math.max(s.daysAgo - 1, 0)) : null;
+    const approvedAt  = s.status === "approved" ? DAYS_AGO(Math.max(s.daysAgo - 2, 0)) : null;
+    const rejectedAt  = s.status === "rejected" ? DAYS_AGO(Math.max(s.daysAgo - 1, 0)) : null;
+    return {
+      id: s.id,
+      personId: s.personId,
+      personType: s.personType,
+      engagementId: s.engagementId,
+      expenseDate: date,
+      captureSource: s.captureSource,
+      cardId: s.cardId ?? null,
+      merchant: s.merchant,
+      description: s.description,
+      category: s.category,
+      amount: s.amount,
+      currency: s.currency,
+      fxRate: s.currency === "USD" ? 1 : fxFor(s.currency, date),
+      fxRateDate: date,
+      usdAmount,
+      vatAmount: s.vatAmount,
+      vatTreatment: s.vatTreatment,
+      vatCountry: s.vatCountry,
+      vatCurrency: s.currency,
+      clientBillable: s.clientBillable,
+      markupPct: s.markupPct,
+      status: s.status,
+      policyStatus: s.policyStatus ?? "green",
+      policyFindings: s.findings ?? [],
+      overrideRationale: s.overrideRationale ?? null,
+      receiptFixtureKey: s.fixtureKey ?? null,
+      receiptFileRef: s.fixtureKey ? `enc:wallet:${s.fixtureKey}.pdf` : null,
+      receiptEncryptedAtRest: !!s.fixtureKey,
+      summary: s.description,
+      submittedAt,
+      approvedAt,
+      approvedByUserId: approvedAt ? "p_mounir_ariss" : null,
+      rejectedAt,
+      rejectedReason: s.status === "rejected" ? "Exceeds hard cap (first-class long-haul beyond $12k)." : null,
+      createdByUserId: s.personId,
+      createdAt: DAYS_AGO(s.daysAgo),
+    };
+  });
+  await db.insert(atelierExpenses).values(expenseRows);
+
+  // --- VAT register for approved expenses ---------------------
+  const approved = seeds.filter((s) => s.status === "approved" && s.vatCountry && s.vatTreatment !== "none");
+  if (approved.length > 0) {
+    await db.insert(atelierVatRegister).values(
+      approved.map((s) => {
+        const date = isoDate(DAYS_AGO(s.daysAgo));
+        const usdAmount = usd(s.amount, s.currency, date);
+        const rate = s.vatTreatment === "ksa_15" ? 0.15 : s.vatTreatment === "uae_5" ? 0.05 : 0;
+        const net = +(s.amount - s.vatAmount).toFixed(2);
+        const usdNet = +(usdAmount * (net / Math.max(s.amount, 0.0001))).toFixed(2);
+        const usdVat = +(usdAmount - usdNet).toFixed(2);
+        return {
+          id: `vat_${s.id}`,
+          expenseId: s.id,
+          expenseDate: date,
+          country: s.vatCountry!,
+          treatment: s.vatTreatment,
+          rate,
+          netAmount: net,
+          vatAmount: s.vatAmount,
+          grossAmount: s.amount,
+          currency: s.currency,
+          usdNet,
+          usdVat,
+          usdGross: usdAmount,
+          merchant: s.merchant,
+          summary: s.description,
+        };
+      }),
+    );
+  }
+  console.log(`[seed-atelier] v3 wallet (Task #259): ${expenseRows.length} expenses, ${approved.length} VAT register rows.`);
 }
 
 main()

@@ -39,6 +39,12 @@ import LedgerApprovals from "@/pages/ledger/LedgerApprovals";
 import EngagementEconomics from "@/pages/ledger/EngagementEconomics";
 import Utilization from "@/pages/ledger/Utilization";
 import FirmEconomics from "@/pages/ledger/FirmEconomics";
+import WalletExpenses from "@/pages/wallet/WalletExpenses";
+import WalletNewExpense from "@/pages/wallet/WalletNewExpense";
+import WalletExpenseDetail from "@/pages/wallet/WalletExpenseDetail";
+import WalletPolicy from "@/pages/wallet/WalletPolicy";
+import WalletCards from "@/pages/wallet/WalletCards";
+import WalletVat from "@/pages/wallet/WalletVat";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
@@ -88,6 +94,13 @@ function Router() {
         <Route path="/ledger/utilization" component={Utilization} />
         <Route path="/ledger/utilization/:personId" component={Utilization} />
         <Route path="/ledger/firm-economics" component={FirmEconomics} />
+        <Route path="/wallet" component={WalletExpenses} />
+        <Route path="/wallet/expenses" component={WalletExpenses} />
+        <Route path="/wallet/expenses/new" component={WalletNewExpense} />
+        <Route path="/wallet/expenses/:id" component={WalletExpenseDetail} />
+        <Route path="/wallet/policy" component={WalletPolicy} />
+        <Route path="/wallet/cards" component={WalletCards} />
+        <Route path="/wallet/vat" component={WalletVat} />
         <Route path="/accounts/:accountId" component={Account} />
         <Route path="/agents" component={Agents} />
         <Route path="/agents/runs/:runId" component={AgentRun} />

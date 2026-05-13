@@ -1,0 +1,63 @@
+import * as React from "react";
+import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+
+interface CorporateCard {
+  id: string;
+  cardholderUserId: string;
+  cardholderName: string;
+  last4: string;
+  network: string;
+  issuingCurrency: string;
+  monthlyLimitUsd: number;
+  active: boolean;
+  linkedAt: string;
+}
+
+export default function WalletCards() {
+  const [cards, setCards] = React.useState<CorporateCard[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    void fetch("/api/atelier/wallet/cards", { credentials: "include" })
+      .then((r) => r.json())
+      .then((j) => { setCards(j.cards ?? []); setLoading(false); });
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-bg text-text">
+      <PageHero><div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div><h1 className="text-3xl font-display tracking-tight">Corporate cards</h1><p className="text-text-mute mt-2 max-w-2xl">Card-feed lines auto-flow into expense drafts; reconciled at submit.</p></PageHero>
+      <TabNav>
+        <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
+        <TabNavLink href="/wallet/expenses/new" active={false}>+ New expense</TabNavLink>
+        <TabNavLink href="/wallet/cards" active>Cards</TabNavLink>
+      </TabNav>
+      <div className="px-6 py-4 max-w-5xl mx-auto">
+        {loading && <div className="text-text-mute">Loading…</div>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {cards.map((c) => (
+            <Card key={c.id} className="p-5 bg-gradient-to-br from-bg-elevate to-bg-deep border-l-4 border-l-gold" data-testid={`card-${c.id}`}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-xs font-mono uppercase tracking-wider text-text-mute">{c.network}</div>
+                  <div className="text-xl font-mono mt-2 tracking-wider">•••• •••• •••• {c.last4}</div>
+                  <div className="text-sm text-text mt-3">{c.cardholderName}</div>
+                </div>
+                <div className="text-right space-y-1">
+                  <MonoChip tone={c.active ? "green" : "red"}>{c.active ? "active" : "frozen"}</MonoChip>
+                  <div className="text-[10px] font-mono text-text-mute">{c.issuingCurrency}</div>
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-border-soft text-xs font-mono flex justify-between">
+                <span className="text-text-mute">Monthly limit</span>
+                <span>${c.monthlyLimitUsd.toLocaleString()}</span>
+              </div>
+            </Card>
+          ))}
+          {!loading && cards.length === 0 && (
+            <Card className="p-6 text-center text-text-mute md:col-span-2">No cards linked.</Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
