@@ -7,8 +7,8 @@
  *   GET  /roster/skill-graph/search?q=...        — A + B (AND) | A or B (OR) grammar
  *   GET  /roster/people/:id/skills               — per-person grouped by source
  *   POST /roster/people/:id/skills               — add/upsert (self|partner_attested|evidence_atelier|certification)
- *   POST /roster/people/:id/skills/:skillId/verify
- *   POST /roster/people/:id/skills/:skillId/dismiss
+ *   POST /roster/people/:id/skills/row/:rowId/verify
+ *   POST /roster/people/:id/skills/row/:rowId/dismiss
  *   POST /roster/skill-graph/run                 — Skill Mapper, proposes agent_inferred rows
  *
  * Architectural rule: partner_firm_resource workers NEVER appear in

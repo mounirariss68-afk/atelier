@@ -61,18 +61,20 @@ export default function RosterSkillGraph(): React.ReactElement {
       .then((d) => setSkills(d.skills ?? []));
   }, []);
 
-  React.useEffect(() => {
-    if (!submitted) return;
-    fetch(
-      `/api/atelier/roster/skill-graph/search?q=${encodeURIComponent(submitted)}`,
+  const runSearch = React.useCallback(async (query: string): Promise<void> => {
+    if (!query) return;
+    const r = await fetch(
+      `/api/atelier/roster/skill-graph/search?q=${encodeURIComponent(query)}`,
       { credentials: "include" },
-    )
-      .then((r) => r.json())
-      .then((d) => {
-        setResults(d.results ?? []);
-        setMode(d.mode ?? "AND");
-      });
-  }, [submitted]);
+    );
+    const d = await r.json();
+    setResults(d.results ?? []);
+    setMode(d.mode ?? "AND");
+  }, []);
+
+  React.useEffect(() => {
+    void runSearch(submitted);
+  }, [submitted, runSearch]);
 
   const onSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
@@ -94,7 +96,7 @@ export default function RosterSkillGraph(): React.ReactElement {
         setRunMessage(
           `Skill Mapper: proposed ${d.proposalsInserted} new row(s); ${d.proposalsSkipped} skipped.`,
         );
-        if (submitted) setSubmitted(submitted + " "); // re-fetch
+        if (submitted) await runSearch(submitted);
       }
     } finally {
       setRunning(false);
