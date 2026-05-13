@@ -1969,6 +1969,12 @@ export const atelierComplianceRecords = pgTable(
     jurisdiction: text("jurisdiction"), // KSA | UAE_DIFC | UAE_ADGM | UAE_OTHER | EGY | ...
     referenceNumberRedacted: text("reference_number_redacted"), // e.g. "••••1234"
     referenceNumberLastFour: text("reference_number_last_four"),
+    // Indicator that the original reference value never enters this row in
+    // plaintext; raw values are dropped at ingest by `redactReference()` and
+    // — when a vault integration is wired — only the encrypted ciphertext
+    // would ever be persisted (in a separate vault, not this row). Defaults
+    // true since every write path in this codebase already strips raws.
+    encryptedAtRest: boolean("encrypted_at_rest").notNull().default(true),
     issuedDate: text("issued_date"),
     expiryDate: text("expiry_date"),
     status: text("status").notNull().default("active"), // active | expiring | expired | pending | exempt

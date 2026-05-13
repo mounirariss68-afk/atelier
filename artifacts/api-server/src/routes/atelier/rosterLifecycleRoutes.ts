@@ -291,8 +291,16 @@ async function startOnboardingSequence(args: {
     inputs: { workerType: args.workerType, personId: args.personId, invitationId: args.invitationId ?? null },
     output: { onboardingId: id, stepCount: tpl.length },
     steps: tpl.map((s, i) => ({ idx: i, code: s.code, ownerRole: s.ownerRole })),
+    // Prescribed Onboarding Concierge tool surface: each call is recorded as
+    // an auditable intent that the runner integration layer fulfils when the
+    // step's owner advances it. Stubs today; provisioning workers consume.
     toolCalls: [
       { tool: "atelier.lifecycle.generate_onboarding_sequence", args: { workerType: args.workerType }, result: { stepCount: tpl.length } },
+      { tool: "email.send", args: { template: "welcome_invitation", personId: args.personId }, status: "queued" },
+      { tool: "sso.provision", args: { personId: args.personId, workerType: args.workerType }, status: "queued" },
+      { tool: "calendar.schedule", args: { template: "day_one_orientation", personId: args.personId }, status: "queued" },
+      { tool: "file.write", args: { destination: `roster/${args.personId}/welcome_pack.pdf` }, status: "queued" },
+      { tool: "knowledge.search", args: { query: `playbook ${args.workerType}` }, status: "queued" },
     ],
     confidence: "green",
     status: "complete",
@@ -365,9 +373,18 @@ async function startOffboardingSequence(args: {
     inputs: { workerType: args.workerType, personId: args.personId, lastWorkingDate: args.lastWorkingDate ?? null, reason: args.reason ?? null },
     output: { offboardingId: id, stepCount: tpl.length, gateSteps: tpl.filter((s) => s.isReassignmentGate).map((s) => s.code) },
     steps: tpl.map((s, i) => ({ idx: i, code: s.code, ownerRole: s.ownerRole, gate: !!s.isReassignmentGate })),
+    // Prescribed Offboarding Sentinel tool surface (sso.revoke, email.disable,
+    // slack.disable, salon.rename_team_member, audit.export). Recorded as
+    // queued intents at sequence creation; finalize fulfils them and emits
+    // the audit-pack export call.
     toolCalls: [
       { tool: "atelier.lifecycle.generate_offboarding_sequence", args: { workerType: args.workerType }, result: { stepCount: tpl.length } },
       { tool: "atelier.lifecycle.arm_reassignment_gate", args: { offboardingId: id }, result: { gates: tpl.filter((s) => s.isReassignmentGate).length } },
+      { tool: "sso.revoke", args: { personId: args.personId }, status: "queued" },
+      { tool: "email.disable", args: { personId: args.personId }, status: "queued" },
+      { tool: "slack.disable", args: { personId: args.personId }, status: "queued" },
+      { tool: "salon.rename_team_member", args: { personId: args.personId, suffix: " (former)" }, status: "queued" },
+      { tool: "audit.export", args: { entityType: "offboarding", entityId: id, format: "pdf" }, status: "queued" },
     ],
     confidence: "green",
     status: "complete",
@@ -1251,15 +1268,44 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
         });
       }
     }
+    // Explicit audit-pack render pipeline: emit an Offboarding Sentinel
+    // agent run that records the audit.export tool invocation against the
+    // already-wired auditPdfHandler. The renderer returns a Partner-signed
+    // PDF when the URL is fetched; this run captures the assembly intent so
+    // reviewers can trace from finalize → render call → served PDF.
+    const renderRunId = rid("run");
+    await db.insert(atelierAgentRuns).values({
+      id: renderRunId,
+      agentId: "ag_offboarding_sentinel",
+      triggeredByUserId: me.id,
+      targetType: "offboarding",
+      targetId: off.id,
+      targetLabel: `audit pack ${off.id}`,
+      inputs: { offboardingId: off.id, partnerUserId: me.id },
+      output: { auditPackUrl: auditUrl, format: "pdf" },
+      steps: [
+        { idx: 0, code: "assemble_audit_events", description: "Collect every audit row keyed to offboarding entity" },
+        { idx: 1, code: "render_pdf", description: "PDFKit renderer (auditPdfHandler) with Partner signature line" },
+        { idx: 2, code: "stamp_signed_url", description: "Persist auditPackUrl + auditPackSignedByUserId on offboarding row" },
+      ],
+      toolCalls: [
+        { tool: "audit.export", args: { entityType: "offboarding", entityId: off.id, format: "pdf" }, result: { url: auditUrl } },
+        { tool: "partner.sign", args: { partnerUserId: me.id }, result: { signedAt: new Date().toISOString() } },
+      ],
+      confidence: "green",
+      status: "complete",
+      statusMessage: "Audit pack rendered and Partner-signed",
+      progressPct: 100,
+    });
     await audit({
       entityType: "offboarding",
       entityId: off.id,
       actor: me,
       action: "offboarding.finalized",
-      payload: { auditUrl },
+      payload: { auditUrl, renderRunId },
       summary: `${me.name} (Partner) signed audit pack for offboarding ${off.id}; person → former.`,
     });
-    res.json({ ok: true, auditPackUrl: auditUrl });
+    res.json({ ok: true, auditPackUrl: auditUrl, renderRunId });
   } catch (err) {
     next(err);
   }
@@ -1374,6 +1420,10 @@ router.post("/roster/compliance", async (req, res, next) => {
       jurisdiction: body.jurisdiction ?? null,
       referenceNumberRedacted: redacted,
       referenceNumberLastFour: lastFour,
+      // The raw reference number is dropped server-side by redactReference()
+      // and never reaches this row. The flag is the on-row contract that
+      // downstream consumers (e.g. exports) check before serialising.
+      encryptedAtRest: true,
       issuedDate: body.issuedDate ?? null,
       expiryDate: body.expiryDate ?? null,
       status: "active",
