@@ -33,7 +33,7 @@ interface Result {
   score: number;
   matchedTerms: MatchedTerm[];
   unmatchedTerms: string[];
-  evidence: Array<{ kind: string; id: string; label: string }>;
+  evidence: Array<{ kind: string; id: string; label: string; href: string }>;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -234,14 +234,20 @@ export default function RosterSkillGraph(): React.ReactElement {
                 ))}
               </div>
               {r.evidence.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1">
+                <div className="mt-3 flex flex-wrap gap-1 items-center">
                   <span className="text-xs text-text-mute font-mono uppercase">
                     Evidence:
                   </span>
                   {r.evidence.map((e) => (
-                    <MonoChip key={e.id} title={e.id}>
+                    <Link
+                      key={e.id}
+                      href={e.href}
+                      data-testid={`evidence-${e.id}`}
+                      className="font-mono text-[10px] uppercase px-2 py-1 border border-line rounded hover:border-gold hover:text-gold"
+                      title={e.id}
+                    >
                       {e.kind} · {e.label}
-                    </MonoChip>
+                    </Link>
                   ))}
                 </div>
               )}

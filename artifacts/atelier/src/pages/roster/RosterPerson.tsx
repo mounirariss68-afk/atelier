@@ -270,13 +270,13 @@ function SkillsTab({ personId }: { personId: string }) {
   React.useEffect(() => refresh(), [refresh]);
 
   const act = async (
-    skillId: string,
+    rowId: string,
     action: "verify" | "dismiss",
   ): Promise<void> => {
-    setBusy(`${skillId}:${action}`);
+    setBusy(`${rowId}:${action}`);
     try {
       const r = await fetch(
-        `/api/atelier/roster/people/${personId}/skills/${skillId}/${action}`,
+        `/api/atelier/roster/people/${personId}/skills/row/${rowId}/${action}`,
         { method: "POST", credentials: "include" },
       );
       const d = await r.json();
@@ -337,34 +337,34 @@ function SkillsTab({ personId }: { personId: string }) {
                       </MonoChip>
                     )}
                   </div>
-                  {canVerify && (
+                  {canVerify && r.source === "agent_inferred" && (
                     <div className="flex gap-2">
-                      {r.status !== "active" && (
+                      {r.status === "dismissed" && (
                         <button
-                          onClick={() => act(r.skill.id, "verify")}
-                          disabled={busy === `${r.skill.id}:verify`}
+                          onClick={() => act(r.id, "verify")}
+                          disabled={busy === `${r.id}:verify`}
                           className="text-xs px-2 py-1 border border-line rounded hover:border-gold hover:text-gold"
-                          data-testid={`verify-${r.skill.id}`}
+                          data-testid={`verify-${r.id}`}
                         >
                           Reinstate
                         </button>
                       )}
-                      {r.status === "active" && r.source === "agent_inferred" && (
+                      {r.status === "active" && (
                         <button
-                          onClick={() => act(r.skill.id, "verify")}
-                          disabled={busy === `${r.skill.id}:verify`}
+                          onClick={() => act(r.id, "verify")}
+                          disabled={busy === `${r.id}:verify`}
                           className="text-xs px-2 py-1 border border-line rounded hover:border-gold hover:text-gold"
-                          data-testid={`verify-${r.skill.id}`}
+                          data-testid={`verify-${r.id}`}
                         >
                           Verify
                         </button>
                       )}
                       {r.status === "active" && (
                         <button
-                          onClick={() => act(r.skill.id, "dismiss")}
-                          disabled={busy === `${r.skill.id}:dismiss`}
+                          onClick={() => act(r.id, "dismiss")}
+                          disabled={busy === `${r.id}:dismiss`}
                           className="text-xs px-2 py-1 border border-line rounded hover:border-warning hover:text-warning"
-                          data-testid={`dismiss-${r.skill.id}`}
+                          data-testid={`dismiss-${r.id}`}
                         >
                           Dismiss
                         </button>

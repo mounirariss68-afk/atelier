@@ -34,6 +34,9 @@ import {
   atelierAuditEvents,
   atelierSkills,
   atelierPersonSkills,
+  atelierAgentRuns,
+  atelierAgents,
+  atelierPersonDocuments,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -470,6 +473,11 @@ router.post("/roster/people/:id/skills", async (req, res) => {
   res.json({ skills });
 });
 
+// Verify / dismiss target a SPECIFIC row by id and are restricted to
+// `agent_inferred` rows — verify/dismiss is the per-row review flow for
+// Skill Mapper proposals. Human-asserted rows are managed via the POST
+// upsert endpoint above (or eventually a soft-delete) — they cannot be
+// silently flipped by a verifier.
 async function setRowStatus(
   req: Request,
   res: Response,
@@ -481,19 +489,43 @@ async function setRowStatus(
   if (!canVerify(me)) {
     res.status(403).json({
       error: "verifier-role-required",
-      message: "Only Engagement Lead, Operations, or Partner may verify or dismiss skill rows.",
+      message:
+        "Only Engagement Lead, Operations, or Partner may verify or dismiss inferred skill rows.",
     });
     return;
   }
   const personId = req.params.id as string;
-  const skillId = req.params.skillId as string;
+  const rowId = req.params.rowId as string;
   const person = await findPerson(personId);
   if (!person) {
     res.status(404).json({ error: "person-not-found" });
     return;
   }
+  const [row] = await db
+    .select()
+    .from(atelierPersonSkills)
+    .where(
+      and(
+        eq(atelierPersonSkills.id, rowId),
+        eq(atelierPersonSkills.personType, person.workerType),
+        eq(atelierPersonSkills.personId, person.id),
+        isNull(atelierPersonSkills.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "person-skill-row-not-found" });
+    return;
+  }
+  if (row.source !== "agent_inferred") {
+    res.status(409).json({
+      error: "verify-dismiss-applies-only-to-agent-inferred",
+      message:
+        "Verify and dismiss are the per-row review flow for Skill Mapper proposals. Human-asserted rows must be edited through the upsert endpoint.",
+    });
+    return;
+  }
   const now = new Date();
-  const updated = await db
+  await db
     .update(atelierPersonSkills)
     .set({
       status: newStatus,
@@ -501,35 +533,23 @@ async function setRowStatus(
       verifiedAt: action === "verify" ? now : null,
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(atelierPersonSkills.personType, person.workerType),
-        eq(atelierPersonSkills.personId, person.id),
-        eq(atelierPersonSkills.skillId, skillId),
-        isNull(atelierPersonSkills.deletedAt),
-      ),
-    )
-    .returning();
-  if (updated.length === 0) {
-    res.status(404).json({ error: "person-skill-not-found" });
-    return;
-  }
+    .where(eq(atelierPersonSkills.id, rowId));
   await audit({
     entityType: "person_skill",
-    entityId: `${person.workerType}:${person.id}:${skillId}`,
+    entityId: rowId,
     actor: me,
     action: `skill.${action}`,
-    payload: { rowsUpdated: updated.length },
-    summary: `${me.name} ${action === "verify" ? "verified" : "dismissed"} ${skillId} on ${person.fullName}`,
+    payload: { rowId, skillId: row.skillId },
+    summary: `${me.name} ${action === "verify" ? "verified" : "dismissed"} inferred row ${rowId} (skill ${row.skillId}) on ${person.fullName}`,
   });
   const skills = await loadPersonSkills(person.workerType, person.id);
   res.json({ skills });
 }
 
-router.post("/roster/people/:id/skills/:skillId/verify", (req, res) =>
+router.post("/roster/people/:id/skills/row/:rowId/verify", (req, res) =>
   setRowStatus(req, res, "active", "verify"),
 );
-router.post("/roster/people/:id/skills/:skillId/dismiss", (req, res) =>
+router.post("/roster/people/:id/skills/row/:rowId/dismiss", (req, res) =>
   setRowStatus(req, res, "dismissed", "dismiss"),
 );
 
@@ -554,7 +574,7 @@ interface SearchResultWire {
   score: number;
   matchedTerms: SearchTermMatch[];
   unmatchedTerms: string[];
-  evidence: Array<{ kind: string; id: string; label: string }>;
+  evidence: Array<{ kind: string; id: string; label: string; href: string }>;
 }
 
 function parseQuery(q: string): { terms: string[]; mode: "AND" | "OR" } {
@@ -728,7 +748,7 @@ router.get("/roster/skill-graph/search", async (req, res) => {
   );
   const evidenceLabels = new Map<
     string,
-    { kind: string; id: string; label: string }
+    { kind: string; id: string; label: string; href: string }
   >();
   if (allEvidenceIds.length) {
     const [aRows, dRows, eRows] = await Promise.all([
@@ -737,7 +757,11 @@ router.get("/roster/skill-graph/search", async (req, res) => {
         .from(atelierAssets)
         .where(inArray(atelierAssets.id, allEvidenceIds)),
       db
-        .select({ id: atelierDeliverables.id, name: atelierDeliverables.name })
+        .select({
+          id: atelierDeliverables.id,
+          name: atelierDeliverables.name,
+          engagementId: atelierDeliverables.engagementId,
+        })
         .from(atelierDeliverables)
         .where(inArray(atelierDeliverables.id, allEvidenceIds)),
       db
@@ -746,13 +770,28 @@ router.get("/roster/skill-graph/search", async (req, res) => {
         .where(inArray(atelierEngagements.id, allEvidenceIds)),
     ]);
     aRows.forEach((r) =>
-      evidenceLabels.set(r.id, { kind: "asset", id: r.id, label: r.title }),
+      evidenceLabels.set(r.id, {
+        kind: "asset",
+        id: r.id,
+        label: r.title,
+        href: `/atelier/${encodeURIComponent(r.id)}`,
+      }),
     );
     dRows.forEach((r) =>
-      evidenceLabels.set(r.id, { kind: "deliverable", id: r.id, label: r.name }),
+      evidenceLabels.set(r.id, {
+        kind: "deliverable",
+        id: r.id,
+        label: r.name,
+        href: `/engagements/${encodeURIComponent(r.engagementId)}/deliverables/${encodeURIComponent(r.id)}`,
+      }),
     );
     eRows.forEach((r) =>
-      evidenceLabels.set(r.id, { kind: "engagement", id: r.id, label: r.name }),
+      evidenceLabels.set(r.id, {
+        kind: "engagement",
+        id: r.id,
+        label: r.name,
+        href: `/engagements/${encodeURIComponent(r.id)}`,
+      }),
     );
   }
 
@@ -772,7 +811,10 @@ router.get("/roster/skill-graph/search", async (req, res) => {
         unmatchedTerms: c.unmatched,
         evidence: Array.from(c.evidenceIds)
           .map((id) => evidenceLabels.get(id))
-          .filter((x): x is { kind: string; id: string; label: string } => !!x),
+          .filter(
+            (x): x is { kind: string; id: string; label: string; href: string } =>
+              !!x,
+          ),
       } satisfies SearchResultWire;
     })
     .filter((r): r is SearchResultWire => !!r)
@@ -965,7 +1007,7 @@ async function runSkillMapper(
     }
   }
 
-  // -------- Signal 3: engagement leadership --------
+  // -------- Signal 3: engagement leadership + participation --------
   const engRows = await db
     .select({
       id: atelierEngagements.id,
@@ -984,6 +1026,28 @@ async function runSkillMapper(
         .where(inArray(atelierAccounts.id, accountIds))
     : [];
   const acctMap = new Map(acctRows.map((a) => [a.id, a]));
+  // Participation grants — anyone allocated to the engagement absorbs the
+  // industry/function signal at a lower weight than the owner/lead.
+  const accessRows = engRows.length
+    ? await db
+        .select()
+        .from(atelierEngagementAccess)
+        .where(
+          and(
+            inArray(
+              atelierEngagementAccess.engagementId,
+              engRows.map((e) => e.id),
+            ),
+            eq(atelierEngagementAccess.status, "active"),
+          ),
+        )
+    : [];
+  const accessByEng = new Map<string, typeof accessRows>();
+  for (const a of accessRows) {
+    const arr = accessByEng.get(a.engagementId) ?? [];
+    arr.push(a);
+    accessByEng.set(a.engagementId, arr);
+  }
   for (const e of engRows) {
     const acct = acctMap.get(e.accountId);
     if (!acct) continue;
@@ -992,6 +1056,7 @@ async function runSkillMapper(
       (s) => s.kind === "industry" || s.kind === "function",
     );
     if (matched.length === 0) continue;
+    // Owner/lead: weight 2.
     for (const userId of [e.partnerOwnerId, e.engagementLeadId]) {
       if (!userId) continue;
       const empId = userIdToEmpId.get(userId);
@@ -1006,6 +1071,92 @@ async function runSkillMapper(
           `Owned/led engagement ${e.name} (${acct.name})`,
         );
       }
+    }
+    // Participants on engagement_access (member/reviewer/contractor): weight 1.
+    for (const grant of accessByEng.get(e.id) ?? []) {
+      const empId = userIdToEmpId.get(grant.userId);
+      if (!empId) continue; // Only employees here; partner-firm ids not in map.
+      for (const sk of matched) {
+        record(
+          "employee",
+          empId,
+          sk.id,
+          1,
+          e.id,
+          `Allocated ${grant.allocationPct ?? 0}% on ${e.name} as ${grant.roleOnEngagement}`,
+        );
+      }
+    }
+  }
+
+  // -------- Signal 4: certifications uploaded as person_documents --------
+  const certRows = await db
+    .select()
+    .from(atelierPersonDocuments)
+    .where(
+      and(
+        eq(atelierPersonDocuments.kind, "cert"),
+        isNull(atelierPersonDocuments.deletedAt),
+      ),
+    );
+  for (const c of certRows) {
+    if (c.personType !== "employee" && c.personType !== "contractor") continue;
+    const matched = skillsInText(c.title);
+    for (const sk of matched) {
+      record(
+        c.personType,
+        c.personId,
+        sk.id,
+        3,
+        c.id,
+        `Certification on file: ${c.title}`,
+      );
+    }
+  }
+
+  // -------- Signal 5: atelier_agent_runs provenance --------
+  // If a person triggered a run on a tool-bearing agent, propose tech/tool
+  // skills mentioned in the agent's `tools` registry text.
+  const agentRunRows = await db
+    .select({
+      runId: atelierAgentRuns.id,
+      agentId: atelierAgentRuns.agentId,
+      triggeredByUserId: atelierAgentRuns.triggeredByUserId,
+    })
+    .from(atelierAgentRuns)
+    .where(isNull(atelierAgentRuns.deletedAt));
+  const agentIds = Array.from(new Set(agentRunRows.map((r) => r.agentId)));
+  const agentRows = agentIds.length
+    ? await db
+        .select({
+          id: atelierAgents.id,
+          name: atelierAgents.name,
+          tools: atelierAgents.tools,
+          purpose: atelierAgents.purpose,
+        })
+        .from(atelierAgents)
+        .where(inArray(atelierAgents.id, agentIds))
+    : [];
+  const agentMap = new Map(agentRows.map((a) => [a.id, a]));
+  for (const r of agentRunRows) {
+    if (!r.triggeredByUserId) continue;
+    const empId = userIdToEmpId.get(r.triggeredByUserId);
+    if (!empId) continue;
+    const agent = agentMap.get(r.agentId);
+    if (!agent) continue;
+    const haystack = `${agent.name} ${agent.purpose ?? ""} ${((agent.tools as string[] | null) ?? []).join(" ")}`;
+    const matched = skillsInText(haystack).filter(
+      (s) => s.kind === "tech" || s.kind === "tool",
+    );
+    for (const sk of matched) {
+      record(
+        "employee",
+        empId,
+        sk.id,
+        1,
+        r.runId,
+        `Triggered ${agent.name} agent run`,
+      );
     }
   }
 
