@@ -12,6 +12,11 @@ const ENTITY_TYPES = new Set([
   "agent_run",
   "session",
   "atelier_asset",
+  "onboarding",
+  "offboarding",
+  "invitation",
+  "compliance_record",
+  "conflict_disclosure",
 ]);
 
 export async function auditPdfHandler(req: Request, res: Response): Promise<void> {

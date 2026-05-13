@@ -1408,6 +1408,25 @@ router.post("/roster/access/conflict-override", async (req, res, next) => {
     }
     // Build the PersonWire shape Access Sentinel expects.
     const pw = { ...person } as unknown as Parameters<typeof runAccessSentinel>[0]["targetPerson"];
+    // Guarantee a paired "block → override" audit pair, even when the override
+    // endpoint is called directly (no prior failed grant attempt exists). We
+    // unconditionally write a synthesised block row first so reviewers always
+    // see what was overridden. The synthesised flag distinguishes this from
+    // the Sentinel-emitted block row (which fires on a real grant attempt).
+    await audit({
+      entityType: "engagement_access",
+      entityId: `${body.engagementId}:${person.id}`,
+      actor: me,
+      action: "access.grant.blocked.conflict",
+      payload: {
+        engagementId: body.engagementId,
+        personId: person.id,
+        synthesised: true,
+        reason:
+          "Override endpoint invoked directly; block row synthesised to keep block→override audit pair coherent.",
+      },
+      summary: `Access Sentinel block synthesised for ${person.fullName} → ${body.engagementId} prior to Partner override.`,
+    });
     await audit({
       entityType: "engagement_access",
       entityId: `${body.engagementId}:${person.id}`,
