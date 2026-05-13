@@ -2588,6 +2588,7 @@ export async function runPipelineForecaster(args: {
     targetId: "atelier-global",
     targetLabel: "Atelier Pipeline",
     actorLabel: args.actorLabel,
+    inputs: { summary: args.summary },
   });
   try {
     await progressRun(runId, 60, "Computing weighted pipeline + flagging stalled deals");
@@ -2667,8 +2668,7 @@ export async function runPipelineForecaster(args: {
       targetType: "pipeline",
       targetId: "atelier-global",
       targetLabel: "Atelier Pipeline",
-      source: "deterministic",
-      warning: null,
+      source: "mock_config",
     });
     return { runId, flagged };
   } catch (err) {

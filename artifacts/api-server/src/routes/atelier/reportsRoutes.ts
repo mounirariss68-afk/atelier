@@ -295,7 +295,7 @@ async function computeReport(
         .where(isNull(atelierOpportunities.deletedAt));
       const buckets = new Map<string, { offering: string; won: number; lost: number; winRatePct: number }>();
       for (const o of opps) {
-        const k = o.offeringAnchor;
+        const k = o.offeringAnchor ?? "unknown";
         const r = buckets.get(k) ?? { offering: k, won: 0, lost: 0, winRatePct: 0 };
         if (o.plmStage === "won") r.won++;
         if (o.plmStage === "lost") r.lost++;
@@ -536,7 +536,8 @@ router.post("/reports/:id/schedule", async (req, res) => {
   };
   const schedule = body.schedule ?? "weekly_monday";
   const cron = body.cron ?? "0 7 * * 1";
-  const channels = (body.channels && body.channels.length ? body.channels : ["in_app"]) as Array<"slack" | "email">;
+  const channels: Array<"slack" | "email" | "in_app"> =
+    body.channels && body.channels.length ? body.channels : ["in_app"];
   const recipients = body.recipientUserIds ?? [me.id];
   const nextParams = {
     ...((row.parameters as Record<string, unknown>) ?? {}),

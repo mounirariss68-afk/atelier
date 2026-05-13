@@ -185,7 +185,13 @@ router.post("/opportunities/:oppId/win-loss/run", async (req, res) => {
       hiddenCompetitor: output.hiddenCompetitor,
       themes: output.themes,
       whatWeWouldDoDifferently: output.whatWeWouldDoDifferently,
-      suggestedAtelierLessons: output.suggestedAtelierLessons,
+      suggestedAtelierLessons: output.suggestedAtelierLessons.map((l) => ({
+        title: l.title,
+        summary: (l as { summary?: string; abstract?: string }).summary
+          ?? (l as { summary?: string; abstract?: string }).abstract
+          ?? "",
+        kind: l.kind as string,
+      })),
       lastRunId: runId,
       synthesizedAt: new Date(),
       // Conductor of record at synthesis = the agent. Partner approval
@@ -276,19 +282,21 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
   // pointing back to this debrief. PRD §5.2: approval = publish to library.
   const lessons = (debrief.suggestedAtelierLessons as Array<{
     title?: string;
+    summary?: string;
     abstract?: string;
     kind?: string;
   }>) ?? [];
   const publishedAssetIds: string[] = [];
   for (const lesson of lessons) {
-    if (!lesson.title || !lesson.abstract) continue;
+    const text = lesson.summary ?? lesson.abstract;
+    if (!lesson.title || !text) continue;
     const aid = rid("ast");
     await db.insert(atelierAssets).values({
       id: aid,
       orgId: me.orgId,
       kind: (lesson.kind as string) ?? "learning",
       title: lesson.title,
-      abstract: lesson.abstract,
+      abstract: text,
       provenance: `winloss_debrief:${debrief.id}:opp:${req.params.oppId}`,
       createdByUserId: me.id,
     });

@@ -78,7 +78,8 @@ router.get("/forecast", async (req, res) => {
       const u = userMap.get(o.partnerOwnerId);
       bump(o.partnerOwnerId, u?.name ?? o.partnerOwnerId, o);
     } else if (by === "offering") {
-      bump(o.offeringAnchor, o.offeringAnchor, o);
+      const oa = o.offeringAnchor ?? "unknown";
+      bump(oa, oa, o);
     } else if (by === "sector") {
       const a = acctMap.get(o.accountId);
       const sec = a?.sector ?? "unknown";
@@ -133,7 +134,7 @@ router.get("/forecast", async (req, res) => {
   }
   for (const o of opps) {
     if (by === "partner") priorBump(o.partnerOwnerId, o);
-    else if (by === "offering") priorBump(o.offeringAnchor, o);
+    else if (by === "offering") priorBump(o.offeringAnchor ?? "unknown", o);
     else if (by === "sector") priorBump(acctMap.get(o.accountId)?.sector ?? "unknown", o);
     else if (by === "stage") priorBump(o.salesStage, o);
     else if (by === "quarter") {
