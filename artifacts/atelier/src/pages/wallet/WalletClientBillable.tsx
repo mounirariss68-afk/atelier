@@ -2,6 +2,13 @@ import * as React from "react";
 import { useParams, Link } from "wouter";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
+interface SentinelFinding { name: string; status: "pass" | "warn" | "fail"; detail: string }
+interface ExpenseSentinel {
+  status: "pass" | "warn" | "fail";
+  confidence: "green" | "amber" | "red";
+  publishAllowed: boolean;
+  findings: SentinelFinding[];
+}
 interface BillableExpense {
   id: string;
   personId: string;
@@ -15,11 +22,12 @@ interface BillableExpense {
   status: string;
   policyStatus: string;
   summary: string | null;
+  sentinel: ExpenseSentinel;
 }
 interface Resp {
   engagementId: string;
   expenses: BillableExpense[];
-  totals: { count: number; netUsd: number; markupUsd: number };
+  totals: { count: number; netUsd: number; markupUsd: number; sentinel: { pass: number; warn: number; fail: number } };
 }
 interface DraftLine {
   kind: "hours" | "expense";
@@ -116,24 +124,41 @@ export default function WalletClientBillable() {
 
         <Card className="p-4 space-y-3">
           <h3 className="text-sm font-semibold text-text-mute">
-            Approved client-billable expenses {data && `· ${data.totals.count} (${data.totals.netUsd.toFixed(2)} net + ${data.totals.markupUsd.toFixed(2)} markup)`}
+            Approved client-billable expenses (third-gate queue)
+            {data && (
+              <> · {data.totals.count} · ${data.totals.netUsd.toFixed(2)} net + ${data.totals.markupUsd.toFixed(2)} markup ·{" "}
+                {data.totals.sentinel.fail > 0 && <span className="text-red-400">{data.totals.sentinel.fail} RED</span>}
+                {data.totals.sentinel.fail > 0 && data.totals.sentinel.warn > 0 && " · "}
+                {data.totals.sentinel.warn > 0 && <span className="text-amber-400">{data.totals.sentinel.warn} AMBER</span>}
+              </>
+            )}
           </h3>
           {data && data.expenses.length === 0 && (
             <div className="text-text-mute text-sm">No approved client-billable expenses on this engagement yet.</div>
           )}
           <div className="space-y-2">
             {data?.expenses.map((e) => (
-              <div key={e.id} className="flex items-start justify-between gap-4 border-t border-border/50 pt-2">
-                <div>
+              <div key={e.id} className="flex items-start justify-between gap-4 border-t border-border/50 pt-2" data-testid={`row-billable-${e.id}`}>
+                <div className="flex-1">
                   <div className="font-semibold">{e.merchant ?? "(no merchant)"}</div>
                   <div className="text-xs font-mono text-text-mute">{e.expenseDate} · {e.category} · {e.currency} {e.amount.toFixed(2)}</div>
                   {e.summary && <div className="text-sm italic text-text-mute mt-0.5">{e.summary}</div>}
+                  {e.sentinel.findings.length > 0 && (
+                    <ul className="mt-1 text-xs font-mono space-y-0.5">
+                      {e.sentinel.findings.map((f, i) => (
+                        <li key={i} className={f.status === "fail" ? "text-red-400" : "text-amber-400"}>
+                          ⚑ {f.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 <div className="text-right shrink-0 space-y-1">
                   <div className="font-mono text-text">${e.usdAmount.toFixed(2)}</div>
-                  <div className="flex gap-1 justify-end">
+                  <div className="flex gap-1 justify-end flex-wrap">
                     <MonoChip tone={e.status === "approved" ? "green" : e.status === "submitted" ? "gold" : undefined}>{e.status}</MonoChip>
                     <MonoChip tone="gold">+{(e.markupPct * 100).toFixed(0)}%</MonoChip>
+                    <MonoChip tone={e.sentinel.confidence}>sentinel {e.sentinel.status}</MonoChip>
                   </div>
                 </div>
               </div>

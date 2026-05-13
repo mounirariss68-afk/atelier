@@ -39,9 +39,9 @@ import {
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
 import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-policy.js";
 import { RECEIPT_FIXTURES, resolveFixtureDate } from "../../lib/atelier-receipt-fixtures.js";
-import { runExpenseAuditor } from "../../lib/atelier-agents/runner.js";
+import { runExpenseAuditor, runPublishSentinel } from "../../lib/atelier-agents/runner.js";
 import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
-import { runInvoiceComposer } from "../../lib/atelier-invoice-composer.js";
+import { runInvoiceComposer, expensePublishSentinelChecks } from "../../lib/atelier-invoice-composer.js";
 
 const router: IRouter = Router();
 
@@ -1212,6 +1212,9 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
     return;
   }
   const eid = req.params.engagementId;
+  // Third-gate queue: only expenses already approved by the lead are
+  // candidates for client invoicing. Drafts / submitted / rejected rows
+  // are filtered out so the page shows the *invoiceable* set.
   const rows = await db
     .select()
     .from(atelierExpenses)
@@ -1219,30 +1222,56 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
       and(
         eq(atelierExpenses.engagementId, eid),
         eq(atelierExpenses.clientBillable, true),
+        eq(atelierExpenses.status, "approved"),
         isNull(atelierExpenses.deletedAt),
       ),
     )
     .orderBy(desc(atelierExpenses.expenseDate));
+  // Run sentinel on each row so the UI surfaces RED/AMBER blockers
+  // (markup outside band, blocked category, missing receipt, etc.)
+  // before the Lead clicks "Compose draft".
+  const enriched = await Promise.all(
+    rows.map(async (r) => {
+      const sentinel = await expensePublishSentinelChecks({ expenseId: r.id });
+      return {
+        id: r.id,
+        personId: r.personId,
+        expenseDate: r.expenseDate,
+        merchant: r.merchant,
+        category: r.category,
+        amount: r.amount,
+        currency: r.currency,
+        usdAmount: r.usdAmount,
+        markupPct: r.markupPct,
+        status: r.status,
+        policyStatus: r.policyStatus,
+        summary: r.summary,
+        sentinel: {
+          status: sentinel.status,
+          confidence: sentinel.confidence,
+          publishAllowed: sentinel.publishAllowed,
+          findings: sentinel.checks
+            .filter((c) => c.status !== "pass")
+            .map((c) => ({ name: c.name, status: c.status, detail: c.detail })),
+        },
+      };
+    }),
+  );
+  const sentinelStatusCounts = enriched.reduce(
+    (acc, e) => {
+      acc[e.sentinel.status] = (acc[e.sentinel.status] ?? 0) + 1;
+      return acc;
+    },
+    { pass: 0, warn: 0, fail: 0 } as Record<string, number>,
+  );
   res.json({
     engagementId: eid,
-    expenses: rows.map((r) => ({
-      id: r.id,
-      personId: r.personId,
-      expenseDate: r.expenseDate,
-      merchant: r.merchant,
-      category: r.category,
-      amount: r.amount,
-      currency: r.currency,
-      usdAmount: r.usdAmount,
-      markupPct: r.markupPct,
-      status: r.status,
-      policyStatus: r.policyStatus,
-      summary: r.summary,
-    })),
+    expenses: enriched,
     totals: {
       count: rows.length,
       netUsd: +rows.reduce((s, r) => s + r.usdAmount, 0).toFixed(2),
       markupUsd: +rows.reduce((s, r) => s + r.usdAmount * (r.markupPct ?? 0), 0).toFixed(2),
+      sentinel: sentinelStatusCounts,
     },
   });
 });
@@ -1545,9 +1574,11 @@ router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
 });
 
 // =============================================================
-// Task #260 — Salon Publish Sentinel (kind=expense) extension
+// Task #260 — Publish Sentinel (kind=expense) extension. Routes the
+// expense through the SAME runPublishSentinel agent the v2 deliverable
+// flow uses, but feeds it pre-computed expense checks so the result is
+// recorded as a normal sentinel run on the agent runs page.
 // =============================================================
-import { expensePublishSentinelChecks } from "../../lib/atelier-invoice-composer.js";
 router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1555,16 +1586,25 @@ router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  const out = await expensePublishSentinelChecks({ expenseId: req.params.id });
+  const expenseChecks = await expensePublishSentinelChecks({ expenseId: req.params.id });
+  const sentinel = await runPublishSentinel({
+    triggeredByUserId: me.id,
+    actorLabel: me.name,
+    deliverableId: req.params.id,
+    deliverableLabel: `expense ${req.params.id}`,
+    body: "",
+    kind: "expense",
+    precomputedChecks: expenseChecks.checks,
+  });
   await audit({
     entityType: "expense",
     entityId: req.params.id,
     actor: me,
     action: "wallet.publish_sentinel.run",
-    payload: out as never,
-    summary: `Publish Sentinel (kind=expense): ${out.status} — ${out.checks.length} check(s).`,
+    payload: { runId: sentinel.runId, status: sentinel.output.status },
+    summary: `Publish Sentinel (kind=expense): ${sentinel.output.status} — ${sentinel.output.checks.length} check(s).`,
   });
-  res.json({ ok: true, sentinel: out });
+  res.json({ ok: true, runId: sentinel.runId, sentinel: sentinel.output });
 });
 
 router.post("/wallet/invoice-drafts/:engagementId/run", async (req, res) => {

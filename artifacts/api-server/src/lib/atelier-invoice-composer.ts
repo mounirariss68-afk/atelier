@@ -80,14 +80,11 @@ async function resolveRateMap(engagementId: string): Promise<{
       .where(
         and(eq(atelierRateCardRows.rateCardId, rateCardId), isNull(atelierRateCardRows.deletedAt)),
       );
+    // Rate-card rows store a day-rate (8h) in client-price terms; convert to
+    // hourly so the composer can multiply directly by timesheet hours.
     for (const r of rows) {
-      const sen = (r as unknown as { seniority?: string }).seniority ?? "default";
-      const rate =
-        (r as unknown as { billRateUsd?: number }).billRateUsd ??
-        (r as unknown as { rateUsd?: number }).rateUsd ??
-        (r as unknown as { hourlyRate?: number }).hourlyRate ??
-        DEFAULT_BILL_RATE_USD;
-      rateBySeniority.set(sen, rate);
+      const hourly = r.dayRateClientPrice > 0 ? r.dayRateClientPrice / 8 : DEFAULT_BILL_RATE_USD;
+      rateBySeniority.set(r.seniority, +hourly.toFixed(2));
     }
   }
   return { rateCardId, rateBySeniority };

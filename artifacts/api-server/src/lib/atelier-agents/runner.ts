@@ -3422,23 +3422,34 @@ interface RunPublishSentinelArgs {
   deliverableId: string;
   deliverableLabel: string;
   body: string;
+  // Task #260 — sentinel can run against deliverables (default) or
+  // wallet expenses. When kind="expense", callers pre-compute the
+  // expense-specific checks (markup band, category, receipt, etc.) and
+  // pass them via `precomputedChecks`; the runner then bypasses the DLP
+  // scan and uses those checks as the authoritative result. This keeps
+  // the v2 deliverable flow untouched while extending the same agent
+  // surface to the new kind.
+  kind?: "deliverable" | "expense";
+  precomputedChecks?: PublishSentinelCheck[];
 }
 export async function runPublishSentinel(
   args: RunPublishSentinelArgs,
 ): Promise<{ runId: string; output: PublishSentinelOutput; costUsd: number }> {
   const t0 = Date.now();
+  const kind = args.kind ?? "deliverable";
+  const targetType = kind === "expense" ? "expense" : "deliverable";
   const runId = await startRun({
     agentId: "ag_publish_sentinel",
     triggeredByUserId: args.triggeredByUserId,
-    targetType: "deliverable",
+    targetType,
     targetId: args.deliverableId,
     targetLabel: args.deliverableLabel,
-    inputs: { bytes: args.body.length },
+    inputs: { bytes: args.body.length, kind },
     actorLabel: args.actorLabel,
   });
   try {
-    await progressRun(runId, 40, "Scanning for DLP patterns");
-    const checks = scanForDlp(args.body);
+    await progressRun(runId, 40, kind === "expense" ? "Running expense policy checks" : "Scanning for DLP patterns");
+    const checks = args.precomputedChecks ?? scanForDlp(args.body);
     const failed = checks.some((c) => c.status === "fail");
     const warned = checks.some((c) => c.status === "warn");
     const status: "pass" | "warn" | "fail" = failed ? "fail" : warned ? "warn" : "pass";
@@ -3460,7 +3471,7 @@ export async function runPublishSentinel(
       durationMs: Date.now() - t0,
       sourcesCount: checks.length,
       actorLabel: args.actorLabel,
-      targetType: "deliverable",
+      targetType,
       targetId: args.deliverableId,
       targetLabel: args.deliverableLabel,
       source: "mock_config",
@@ -3469,7 +3480,7 @@ export async function runPublishSentinel(
   } catch (err) {
     await failRun(runId, err, {
       actorLabel: args.actorLabel,
-      targetType: "deliverable",
+      targetType,
       targetId: args.deliverableId,
     });
     throw err;

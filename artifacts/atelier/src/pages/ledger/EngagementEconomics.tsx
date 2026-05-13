@@ -4,6 +4,18 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Toolti
 import { Link } from "wouter";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
+interface InvoiceDraftSummary {
+  id: string;
+  composedAt: string;
+  rateCardId: string | null;
+  totals: { hoursUsd: number; expensesNetUsd: number; markupUsd: number; totalUsd: number; lineCount: number };
+}
+interface ClientBillableSummary {
+  count: number;
+  netUsd: number;
+  markupUsd: number;
+  sentinel: { pass: number; warn: number; fail: number };
+}
 interface RollupRow { partnerFirmId: string; hours: number; costAmount: number; costCurrency: string; }
 interface HoursRow { id: string; partnerFirmId: string; resourceName: string; weekIso: string; hours: number; costAmount: number; costCurrency: string; uploadedAt: string; }
 interface EconResp { engagementId: string; engagementName: string; partnerFirmRollup: RollupRow[]; rows: HoursRow[]; }
@@ -57,15 +69,21 @@ export default function EngagementEconomics() {
   const [uploadMsg, setUploadMsg] = React.useState<string | null>(null);
   const [narrative, setNarrative] = React.useState<NarrativeResp | null>(null);
   const [narrLoading, setNarrLoading] = React.useState(false);
+  const [draft, setDraft] = React.useState<InvoiceDraftSummary | null>(null);
+  const [billable, setBillable] = React.useState<ClientBillableSummary | null>(null);
+  const [composerBusy, setComposerBusy] = React.useState(false);
+  const [composerMsg, setComposerMsg] = React.useState<string | null>(null);
   const fileInput = React.useRef<HTMLInputElement>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [r1, r2] = await Promise.all([
+      const [r1, r2, r3, r4] = await Promise.all([
         fetch(`/api/atelier/ledger/engagement-economics/${engagementId}`, { credentials: "include" }),
         fetch(`/api/atelier/ledger/utilization/engagement/${engagementId}`, { credentials: "include" }),
+        fetch(`/api/atelier/wallet/invoice-drafts/${engagementId}`, { credentials: "include" }),
+        fetch(`/api/atelier/wallet/client-billable/${engagementId}`, { credentials: "include" }),
       ]);
       if (!r1.ok) {
         const j = await r1.json().catch(() => ({}));
@@ -74,9 +92,33 @@ export default function EngagementEconomics() {
       setData(await r1.json());
       if (r2.ok) setUtil(await r2.json());
       else setUtil(null);
+      if (r3.ok) {
+        const j3 = await r3.json();
+        setDraft(j3.draft ?? null);
+      }
+      if (r4.ok) {
+        const j4 = await r4.json();
+        setBillable(j4.totals ?? null);
+      }
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   }, [engagementId]);
+
+  async function runComposer() {
+    setComposerBusy(true);
+    setComposerMsg(null);
+    try {
+      const r = await fetch(`/api/atelier/wallet/invoice-drafts/${engagementId}/run`, { method: "POST", credentials: "include" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      setComposerMsg(`Composed ${j.draft.totals.lineCount} line(s); $${j.draft.totals.totalUsd.toFixed(2)}.`);
+      await load();
+    } catch (e) {
+      setComposerMsg(`Compose failed: ${(e as Error).message}`);
+    } finally {
+      setComposerBusy(false);
+    }
+  }
 
   React.useEffect(() => { void load(); }, [load]);
 
@@ -264,6 +306,67 @@ export default function EngagementEconomics() {
           </Card>
         </>
       )}
+
+      <Card className="p-4 border-gold/30">
+        <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="text-sm font-semibold text-text-mute">Invoicing companion · client-billable + draft</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PillButton onClick={runComposer} disabled={composerBusy} data-testid="btn-econ-compose">
+              {composerBusy ? "Composing…" : "Run Invoice Composer"}
+            </PillButton>
+            {draft && (
+              <a
+                href={`/api/atelier/wallet/invoice-drafts/${engagementId}?format=csv`}
+                className="text-xs text-gold underline"
+                data-testid="link-econ-csv"
+              >
+                Download CSV
+              </a>
+            )}
+            <Link href={`/wallet/client-billable/${engagementId}`} className="text-xs text-gold underline">
+              Open client-billable queue →
+            </Link>
+          </div>
+        </div>
+        {composerMsg && <div className="mb-3 text-xs text-gold font-mono">{composerMsg}</div>}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div>
+            <div className="text-xs text-text-mute">Approved client-billable T&amp;E</div>
+            <div className="mt-1 text-2xl font-semibold">{billable ? fmtMoney(billable.netUsd) : "—"}</div>
+            <div className="mt-1 text-xs text-text-mute">
+              {billable ? `${billable.count} item(s) · markup ${fmtMoney(billable.markupUsd)}` : "no rows yet"}
+            </div>
+            {billable && (
+              <div className="mt-2 flex gap-1">
+                {billable.sentinel.fail > 0 && <MonoChip tone="red">{billable.sentinel.fail} sentinel-fail</MonoChip>}
+                {billable.sentinel.warn > 0 && <MonoChip tone="amber">{billable.sentinel.warn} sentinel-warn</MonoChip>}
+                {billable.sentinel.pass > 0 && <MonoChip tone="green">{billable.sentinel.pass} clean</MonoChip>}
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-xs text-text-mute">Latest invoice-line draft</div>
+            <div className="mt-1 text-2xl font-semibold">{draft ? fmtMoney(draft.totals.totalUsd) : "—"}</div>
+            <div className="mt-1 text-xs text-text-mute">
+              {draft ? `${draft.totals.lineCount} line(s) · composed ${new Date(draft.composedAt).toLocaleDateString()}` : "no draft composed yet"}
+            </div>
+            {draft && (
+              <div className="mt-2 flex gap-1 flex-wrap">
+                <MonoChip>hours {fmtMoney(draft.totals.hoursUsd)}</MonoChip>
+                <MonoChip>T&amp;E {fmtMoney(draft.totals.expensesNetUsd)}</MonoChip>
+                <MonoChip tone="gold">+markup {fmtMoney(draft.totals.markupUsd)}</MonoChip>
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-xs text-text-mute">Rate card</div>
+            <div className="mt-1 text-sm font-mono">{draft?.rateCardId ?? "—"}</div>
+            <div className="mt-2 text-xs text-text-mute">
+              The Composer pulls hourly rates from the engagement's deal-pricing rate card (day-rate ÷ 8) and folds in approved client-billable expenses with their per-row markup.
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {data && (
         <>

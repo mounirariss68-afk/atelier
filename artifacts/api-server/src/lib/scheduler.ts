@@ -159,6 +159,11 @@ export function stopScheduler(): void {
     walletRetentionTask = null;
     logger.info("Wallet retention scheduler stopped");
   }
+  if (walletPaymentProposerTask) {
+    walletPaymentProposerTask.stop();
+    walletPaymentProposerTask = null;
+    logger.info("Wallet payment proposer scheduler stopped");
+  }
 }
 
 export function getSchedulerStatus(): {
