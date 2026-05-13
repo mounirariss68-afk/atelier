@@ -36,6 +36,7 @@ import {
   atelierEngagements,
   atelierEngagementAccess,
   atelierAuditEvents,
+  atelierAgentRuns,
   atelierConflictDisclosures,
   atelierInvitations,
   atelierOnboardings,
@@ -276,6 +277,28 @@ async function startOnboardingSequence(args: {
     payload: { workerType: args.workerType, personId: args.personId, steps: tpl.length },
     payloadSummary: `Onboarding Concierge generated ${tpl.length}-step sequence for ${args.workerType} ${args.personId}.`,
   });
+  // Emit an Onboarding Concierge agent run so the lifecycle is visible in
+  // the standard agent_runs feed (Pane B), with toolCalls capturing each
+  // template step and the prescribed owner. Status `complete` because the
+  // sequence-generation tool call is what this run represents.
+  await db.insert(atelierAgentRuns).values({
+    id: rid("run"),
+    agentId: "ag_onboarding_concierge",
+    triggeredByUserId: args.ownerUserId,
+    targetType: "onboarding",
+    targetId: id,
+    targetLabel: `${args.workerType} ${args.personId}`,
+    inputs: { workerType: args.workerType, personId: args.personId, invitationId: args.invitationId ?? null },
+    output: { onboardingId: id, stepCount: tpl.length },
+    steps: tpl.map((s, i) => ({ idx: i, code: s.code, ownerRole: s.ownerRole })),
+    toolCalls: [
+      { tool: "atelier.lifecycle.generate_onboarding_sequence", args: { workerType: args.workerType }, result: { stepCount: tpl.length } },
+    ],
+    confidence: "green",
+    status: "complete",
+    statusMessage: `${tpl.length}-step sequence generated`,
+    progressPct: 100,
+  });
   return id;
 }
 
@@ -299,6 +322,11 @@ async function startOffboardingSequence(args: {
     reason: args.reason ?? null,
   });
   const tpl = OFFBOARDING_TEMPLATES[args.workerType];
+  // Deadlines are a forward schedule anchored to `now` (the moment offboarding
+  // was initiated). Steps with `daysFromStart` flow forward toward last
+  // working date; the audit-pack-signed step (max daysFromStart) lands on
+  // last working day. This matches the seed's forward calculation.
+  const startMs = now.getTime();
   await db.insert(atelierOffboardingSteps).values(
     tpl.map((s, i) => ({
       id: rid("offs"),
@@ -308,7 +336,7 @@ async function startOffboardingSequence(args: {
       title: s.title,
       description: s.description ?? null,
       ownerRole: s.ownerRole,
-      deadline: isoDate(new Date(last.getTime() + ((s.daysFromStart ?? 0) - tpl[tpl.length - 1]!.daysFromStart!) * 86400_000)),
+      deadline: isoDate(new Date(startMs + (s.daysFromStart ?? 0) * 86400_000)),
       status: "pending",
       isReassignmentGate: !!s.isReassignmentGate,
     })),
@@ -323,6 +351,28 @@ async function startOffboardingSequence(args: {
     action: "offboarding.created",
     payload: { workerType: args.workerType, personId: args.personId, steps: tpl.length },
     payloadSummary: `Offboarding Sentinel generated ${tpl.length}-step sequence for ${args.workerType} ${args.personId}.`,
+  });
+  // Emit an Offboarding Sentinel agent run so the lifecycle is visible in
+  // the standard agent_runs feed (Pane B), with toolCalls capturing the
+  // reassignment-gate steps the Sentinel will enforce.
+  await db.insert(atelierAgentRuns).values({
+    id: rid("run"),
+    agentId: "ag_offboarding_sentinel",
+    triggeredByUserId: args.initiatedByUserId,
+    targetType: "offboarding",
+    targetId: id,
+    targetLabel: `${args.workerType} ${args.personId}`,
+    inputs: { workerType: args.workerType, personId: args.personId, lastWorkingDate: args.lastWorkingDate ?? null, reason: args.reason ?? null },
+    output: { offboardingId: id, stepCount: tpl.length, gateSteps: tpl.filter((s) => s.isReassignmentGate).map((s) => s.code) },
+    steps: tpl.map((s, i) => ({ idx: i, code: s.code, ownerRole: s.ownerRole, gate: !!s.isReassignmentGate })),
+    toolCalls: [
+      { tool: "atelier.lifecycle.generate_offboarding_sequence", args: { workerType: args.workerType }, result: { stepCount: tpl.length } },
+      { tool: "atelier.lifecycle.arm_reassignment_gate", args: { offboardingId: id }, result: { gates: tpl.filter((s) => s.isReassignmentGate).length } },
+    ],
+    confidence: "green",
+    status: "complete",
+    statusMessage: `${tpl.length}-step sequence generated; ${tpl.filter((s) => s.isReassignmentGate).length} reassignment gate(s) armed`,
+    progressPct: 100,
   });
   return id;
 }
@@ -624,20 +674,50 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
         updatedAt: new Date(),
       })
       .where(eq(atelierInvitations.id, inv.id));
-    const onboardingId = await startOnboardingSequence({
-      personId,
-      workerType: inv.workerType as WorkerType,
-      invitationId: inv.id,
-      targetStartDate: draft.startDate ?? null,
-      ownerUserId: me.id,
-    });
+    // Rebind the draft onboarding (created at invitation time with placeholder
+    // personId = "draft:<inv.id>") to the real materialised person, rather
+    // than spawning a duplicate sequence. This preserves any progress made
+    // on pre-arrival compliance steps.
+    const [draftOnb] = await db
+      .select({ id: atelierOnboardings.id })
+      .from(atelierOnboardings)
+      .where(
+        and(
+          eq(atelierOnboardings.invitationId, inv.id),
+          isNull(atelierOnboardings.deletedAt),
+        ),
+      );
+    let onboardingId: string;
+    if (draftOnb) {
+      onboardingId = draftOnb.id;
+      await db
+        .update(atelierOnboardings)
+        .set({ personId, updatedAt: new Date() })
+        .where(eq(atelierOnboardings.id, draftOnb.id));
+      await audit({
+        entityType: "onboarding",
+        entityId: onboardingId,
+        actor: me,
+        action: "onboarding.rebound",
+        payload: { invitationId: inv.id, personId },
+        summary: `Draft onboarding ${onboardingId} rebound from draft:${inv.id} → ${personId}.`,
+      });
+    } else {
+      onboardingId = await startOnboardingSequence({
+        personId,
+        workerType: inv.workerType as WorkerType,
+        invitationId: inv.id,
+        targetStartDate: draft.startDate ?? null,
+        ownerUserId: me.id,
+      });
+    }
     await audit({
       entityType: "invitation",
       entityId: inv.id,
       actor: me,
       action: "invitation.accepted",
       payload: { personId, onboardingId },
-      summary: `${me.name} materialised ${draft.fullName} (${inv.workerType}); onboarding sequence ${onboardingId} started.`,
+      summary: `${me.name} materialised ${draft.fullName} (${inv.workerType}); onboarding sequence ${onboardingId} now bound to person.`,
     });
     res.json({ ok: true, personId, onboardingId });
   } catch (err) {
