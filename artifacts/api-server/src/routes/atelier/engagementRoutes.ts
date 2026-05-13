@@ -682,7 +682,7 @@ router.get("/deliverables/:delId", async (req, res) => {
         entityType: "engagement",
         entityId: eng.id,
         actor: me,
-        action: "engagement.cross_read",
+        action: "cross_engagement_read",
         payload: { engagementId: eng.id, viewerRole: me.role, via: "deliverable", deliverableId: row.id },
         summary: `${me.name} viewed deliverable ${row.id} (cross-engagement read)`,
       });

@@ -71,7 +71,7 @@ async function recordEngagementRead(
     entityType: "engagement",
     entityId: eng.id,
     actor: me,
-    action: "engagement.cross_read",
+    action: "cross_engagement_read",
     payload: { engagementId: eng.id, viewerRole: me.role },
     summary: `${me.name} viewed engagement ${eng.id} (cross-engagement read)`,
   });

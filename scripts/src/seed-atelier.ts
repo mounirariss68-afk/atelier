@@ -1536,10 +1536,6 @@ const ENGAGEMENTS = [
     plannedEndDate: isoDate(DAYS_FROM_NOW(120)),
     raidStatus: "amber" as const,
     deliverablesDueThisWeek: 2,
-    // Task #243 — Tasama engagement is configured Arabic-first; the Engagement
-    // Curator emits its weekly digest with the AR variant flag and an Arabic
-    // message, exercising the bilingual code path end-to-end in the seed.
-    defaultLanguage: "ar" as const,
   },
   {
     id: "eng_dge_effortless_v1",
@@ -1578,6 +1574,30 @@ const ENGAGEMENTS = [
     plannedEndDate: isoDate(DAYS_AGO(15)),
     raidStatus: "green" as const,
     deliverablesDueThisWeek: 0,
+  },
+  // Task #243 — Synthetic Arabic-first engagement, distinct from Tasama
+  // (which remains EN). Exercises the bilingual code path end-to-end so
+  // the Engagement Curator emits an AR languageVariant + Arabic message
+  // for this engagement only.
+  {
+    id: "eng_nhc_ar_pilot",
+    slug: "nhc-ar-pilot",
+    name: "NHC — Arabic-first chat pilot · synthetic",
+    opportunityId: "opp_nhc_arabic_pilot",
+    accountId: "acc_nhc",
+    plmStage: "deliver",
+    partnerOwnerId: "p_mounir_ariss",
+    engagementLeadId: "p_layla_haddad",
+    charter: null,
+    workstreams: [
+      { name: "Arabic-first conversation design", lead: "Layla Haddad", status: "on-track" },
+    ],
+    valueCase: null,
+    startDate: isoDate(DAYS_AGO(20)),
+    plannedEndDate: isoDate(DAYS_FROM_NOW(60)),
+    raidStatus: "green" as const,
+    deliverablesDueThisWeek: 0,
+    defaultLanguage: "ar" as const,
   },
 ];
 

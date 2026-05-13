@@ -9,6 +9,7 @@ import {
   atelierAssets,
   atelierAgentRuns,
   atelierAgents,
+  atelierAdminSettings,
 } from "@workspace/db";
 import {
   AtelierListPromptsResponse,
@@ -269,26 +270,45 @@ const DEFAULT_ADMIN: AdminSettings = {
   ipAllowlistEnabled: false,
 };
 
-const ADMIN_BY_ORG = new Map<string, AdminSettings>();
+/**
+ * Task #243 — DB-backed admin settings. One row per orgId in
+ * `atelier_admin_settings`; the full settings shape lives in the JSONB
+ * `value` column so toggles survive server restarts. Reads merge over
+ * DEFAULT_ADMIN so newly-introduced fields fall back gracefully.
+ */
+async function getAdmin(orgId: string): Promise<AdminSettings> {
+  const [row] = await db
+    .select()
+    .from(atelierAdminSettings)
+    .where(eq(atelierAdminSettings.orgId, orgId));
+  const stored = (row?.value ?? {}) as Partial<AdminSettings>;
+  return {
+    ...DEFAULT_ADMIN,
+    piiPatterns: [...DEFAULT_ADMIN.piiPatterns],
+    ...stored,
+  };
+}
 
-function getAdmin(orgId: string): AdminSettings {
-  let s = ADMIN_BY_ORG.get(orgId);
-  if (!s) {
-    s = { ...DEFAULT_ADMIN, piiPatterns: [...DEFAULT_ADMIN.piiPatterns] };
-    ADMIN_BY_ORG.set(orgId, s);
-  }
-  return s;
+async function saveAdmin(orgId: string, next: AdminSettings): Promise<void> {
+  const value = next as unknown as Record<string, unknown>;
+  await db
+    .insert(atelierAdminSettings)
+    .values({ orgId, value, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: atelierAdminSettings.orgId,
+      set: { value, updatedAt: new Date() },
+    });
 }
 
 /**
- * Task #243 — non-codegen compliance accessors. Exposed as `/admin/compliance`
- * (raw JSON, not OpenAPI-zod) so the Admin Compliance Posture card can
- * persist the MFA toggle without triggering a Zod regen across the monorepo.
- * Read returns the full posture; PATCH accepts `{ mfaRequired?: boolean,
- * ipAllowlistEnabled?: boolean }`. All other indicators are read-only.
+ * Task #243 — non-codegen compliance accessors. `/admin/compliance` (raw
+ * JSON, not OpenAPI-zod) lets the Admin Compliance Posture card persist
+ * the MFA + IP-allowlist toggles without triggering a Zod regen across
+ * the monorepo. PATCH accepts `{ mfaRequired?: boolean,
+ * ipAllowlistEnabled?: boolean }`; all other indicators are read-only.
  */
-export function getCompliancePosture(orgId: string) {
-  const s = getAdmin(orgId);
+export async function getCompliancePosture(orgId: string) {
+  const s = await getAdmin(orgId);
   return {
     mfaRequired: s.mfaRequired,
     encryptionAtRest: s.encryptionAtRest,
@@ -300,13 +320,14 @@ export function getCompliancePosture(orgId: string) {
   };
 }
 
-export function patchCompliancePosture(
+export async function patchCompliancePosture(
   orgId: string,
   patch: { mfaRequired?: unknown; ipAllowlistEnabled?: unknown },
 ) {
-  const s = getAdmin(orgId);
+  const s = await getAdmin(orgId);
   if (typeof patch.mfaRequired === "boolean") s.mfaRequired = patch.mfaRequired;
   if (typeof patch.ipAllowlistEnabled === "boolean") s.ipAllowlistEnabled = patch.ipAllowlistEnabled;
+  await saveAdmin(orgId, s);
   return getCompliancePosture(orgId);
 }
 
@@ -383,7 +404,7 @@ router.get("/admin/settings", async (req, res) => {
     res.status(403).json({ error: "partner-only" });
     return;
   }
-  res.json(AtelierGetAdminSettingsResponse.parse(getAdmin(me.orgId)));
+  res.json(AtelierGetAdminSettingsResponse.parse(await getAdmin(me.orgId)));
 });
 
 router.post("/admin/settings", async (req, res) => {
@@ -398,12 +419,13 @@ router.post("/admin/settings", async (req, res) => {
     res.status(400).json({ error: "invalid-body" });
     return;
   }
-  const cur = getAdmin(me.orgId);
+  const cur = await getAdmin(me.orgId);
   if (parsed.data.disableOpus !== undefined) cur.disableOpus = parsed.data.disableOpus;
   if (parsed.data.disabledAgentIds) cur.disabledAgentIds = parsed.data.disabledAgentIds;
   if (parsed.data.piiPatterns) cur.piiPatterns = parsed.data.piiPatterns;
   if (parsed.data.perUserDailyTokenBudget !== undefined)
     cur.perUserDailyTokenBudget = parsed.data.perUserDailyTokenBudget;
+  await saveAdmin(me.orgId, cur);
   res.json(AtelierGetAdminSettingsResponse.parse(cur));
 });
 
@@ -418,7 +440,7 @@ router.get("/admin/compliance", async (req, res) => {
     res.status(403).json({ error: "partner-only" });
     return;
   }
-  res.json(getCompliancePosture(me.orgId));
+  res.json(await getCompliancePosture(me.orgId));
 });
 
 router.patch("/admin/compliance", async (req, res) => {
@@ -429,7 +451,7 @@ router.patch("/admin/compliance", async (req, res) => {
     return;
   }
   const body = (req.body ?? {}) as { mfaRequired?: unknown; ipAllowlistEnabled?: unknown };
-  res.json(patchCompliancePosture(me.orgId, body));
+  res.json(await patchCompliancePosture(me.orgId, body));
 });
 
 // Task #243 — Founder TODOs (read-only static list, raw JSON).

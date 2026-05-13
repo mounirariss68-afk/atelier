@@ -1522,3 +1522,16 @@ export const atelierSalonAuditEvents = pgTable(
     index("idx_atelier_salon_audit_ts").on(t.ts),
   ],
 );
+
+// ============================================================
+// ADMIN SETTINGS — Task #243 firm-wide config persistence.
+// One row per orgId. The settings shape (model controls, PII patterns,
+// compliance posture, etc.) lives in the JSONB `value` column so the
+// /admin/settings + /admin/compliance endpoints can extend without a
+// schema migration per field.
+// ============================================================
+export const atelierAdminSettings = pgTable("atelier_admin_settings", {
+  orgId: text("org_id").primaryKey(),
+  value: jsonb("value").notNull().default({}).$type<Record<string, unknown>>(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
