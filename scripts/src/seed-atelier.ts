@@ -38,6 +38,13 @@ import {
   atelierPartnerFirms,
   atelierPartnerFirmResources,
   atelierPersonDocuments,
+  atelierConflictDisclosures,
+  atelierInvitations,
+  atelierOnboardings,
+  atelierOnboardingSteps,
+  atelierOffboardings,
+  atelierOffboardingSteps,
+  atelierComplianceRecords,
   atelierRaidItems,
   atelierHypothesisTrees,
   atelierProcesses,
@@ -3356,6 +3363,257 @@ async function main() {
       grantedByUserId: "p_mounir_ariss",
       grantedAt: new Date(),
     })
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 lifecycle (Task #255): agents…");
+  await db
+    .insert(atelierAgents)
+    .values([
+      {
+        id: "ag_onboarding_concierge",
+        name: "Onboarding Concierge",
+        group: "Operations",
+        stage: "Govern",
+        purpose:
+          "Generates onboarding sequences from invitations. Holds the sequence open while any compliance gate (NDA, payroll, MSA) is blocked.",
+        model: "claude-sonnet-4-6",
+        starred: false,
+        status: "mvp",
+        tools: ["roster.invite", "roster.onboarding.advance", "audit.write"],
+        guardrails: [
+          "Only Partner / Operations can initiate invitations",
+          "Compliance-gate steps cannot be skipped — only blocked or done",
+          "Sequence cannot complete while any compliance step is blocked",
+        ],
+        humanCheckpoints: ["Operations marks each step done"],
+        runsLast30d: 0,
+      },
+      {
+        id: "ag_offboarding_sentinel",
+        name: "Offboarding Sentinel",
+        group: "Operations",
+        stage: "Govern",
+        purpose:
+          "Generates 11-step offboarding sequences. Blocks completion until reassignments are clear (no remaining engagement_access grants), then collects the Partner-signed audit pack.",
+        model: "claude-sonnet-4-6",
+        starred: false,
+        status: "mvp",
+        tools: ["roster.offboarding.advance", "roster.offboarding.finalize", "audit.write"],
+        guardrails: [
+          "Reassignment-gate step blocks until all active grants on the person are revoked",
+          "Audit-pack signing is Partner-only",
+          "On finalize, person status flips to `former` and remaining grants are revoked",
+        ],
+        humanCheckpoints: ["Partner signs the audit pack"],
+        runsLast30d: 0,
+      },
+      {
+        id: "ag_roster_steward",
+        name: "Roster Steward",
+        group: "Operations",
+        stage: "Govern",
+        purpose:
+          "Daily compliance scan. Emits Pane A items for visa, Iqama, GOSI, WPS, and master-agreement expirations at 30/60/90 day windows.",
+        model: "claude-sonnet-4-6",
+        starred: false,
+        status: "mvp",
+        tools: ["roster.compliance.scan", "pane.a.emit"],
+        guardrails: [
+          "Reference numbers are read in redacted form only — raw values never leave the database",
+          "Pane A item ids are deterministic per (record, bucket, user) — no duplicates",
+        ],
+        humanCheckpoints: [],
+        runsLast30d: 0,
+      },
+    ])
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 lifecycle: in-flight Principal onboarding…");
+  // New Principal joining in 14 days. Materialised + sequence in flight.
+  await db
+    .insert(atelierEmployees)
+    .values({
+      id: "emp_p_amal_haddad",
+      fullName: "Amal Haddad",
+      email: "amal.candidate@aico.example",
+      role: "engagement_lead",
+      seniority: "principal",
+      title: "Principal — Engagement Lead",
+      country: "AE",
+      employmentType: "FTE",
+      homeOffice: "Dubai",
+      payrollCountry: "AE",
+      employeeIdExternal: "AICO-0011",
+      noticePeriodDays: 60,
+      startDate: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
+      status: "onboarding",
+    })
+    .onConflictDoNothing();
+  const onbId = "onb_amal_haddad_seed";
+  await db
+    .insert(atelierOnboardings)
+    .values({
+      id: onbId,
+      personType: "employee",
+      personId: "emp_p_amal_haddad",
+      targetStartDate: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
+      status: "in_flight",
+      ownerUserId: "p_mounir_ariss",
+    })
+    .onConflictDoNothing();
+  // Generate the 11 employee onboarding steps inline so we don't depend on
+  // route handlers being live during seed.
+  const onbSteps: {
+    code: string;
+    title: string;
+    ownerRole: string;
+    days: number;
+    isComplianceGate: boolean;
+    status: "pending" | "in_progress" | "done";
+  }[] = [
+    { code: "nda.signed", title: "NDA signed", ownerRole: "operations", days: 0, isComplianceGate: true, status: "done" },
+    { code: "contract.signed", title: "Employment contract signed", ownerRole: "partner", days: 0, isComplianceGate: true, status: "done" },
+    { code: "payroll.registered", title: "Payroll registered (GOSI / WPS)", ownerRole: "operations", days: 1, isComplianceGate: true, status: "in_progress" },
+    { code: "sso.provisioned", title: "SSO + email provisioned", ownerRole: "operations", days: 2, isComplianceGate: false, status: "pending" },
+    { code: "slack.invited", title: "Invited to Slack workspaces", ownerRole: "operations", days: 2, isComplianceGate: false, status: "pending" },
+    { code: "calendar.welcome", title: "Welcome calendar block", ownerRole: "operations", days: 3, isComplianceGate: false, status: "pending" },
+    { code: "equipment.shipped", title: "Equipment shipped", ownerRole: "operations", days: 3, isComplianceGate: false, status: "pending" },
+    { code: "benefits.enrolled", title: "Benefits enrollment", ownerRole: "operations", days: 5, isComplianceGate: false, status: "pending" },
+    { code: "security.training", title: "Security & data-handling training", ownerRole: "operations", days: 7, isComplianceGate: false, status: "pending" },
+    { code: "manager.intro", title: "Manager intro session", ownerRole: "engagement_lead", days: 7, isComplianceGate: false, status: "pending" },
+    { code: "atelier.tour", title: "The Atelier walkthrough", ownerRole: "engagement_lead", days: 7, isComplianceGate: false, status: "pending" },
+  ];
+  await db
+    .insert(atelierOnboardingSteps)
+    .values(
+      onbSteps.map((s, i) => ({
+        id: `onbs_amal_${s.code.replace(/\./g, "_")}`,
+        onboardingId: onbId,
+        sortKey: i,
+        code: s.code,
+        title: s.title,
+        ownerRole: s.ownerRole,
+        deadline: new Date(Date.now() + s.days * 86400_000).toISOString().slice(0, 10),
+        status: s.status,
+        isComplianceGate: s.isComplianceGate,
+      })),
+    )
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 lifecycle: in-flight contractor offboarding (Hadeel)…");
+  const offId = "off_hadeel_seed";
+  await db
+    .insert(atelierOffboardings)
+    .values({
+      id: offId,
+      personType: "contractor",
+      personId: "ct_hadeel_aljarrah",
+      initiatedByUserId: "p_mounir_ariss",
+      lastWorkingDate: new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10),
+      reason: "Engagement scope wrap — contract end of period",
+      status: "in_flight",
+    })
+    .onConflictDoNothing();
+  const offSteps: {
+    code: string;
+    title: string;
+    ownerRole: string;
+    days: number;
+    isReassignmentGate: boolean;
+    status: "pending" | "in_progress" | "done";
+  }[] = [
+    { code: "intent.recorded", title: "Intent to roll off recorded", ownerRole: "operations", days: 0, isReassignmentGate: false, status: "done" },
+    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "engagement_lead", days: 1, isReassignmentGate: true, status: "in_progress" },
+    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "engagement_lead", days: 3, isReassignmentGate: false, status: "pending" },
+    { code: "client.notify", title: "Clients notified", ownerRole: "partner", days: 4, isReassignmentGate: false, status: "pending" },
+    { code: "sso.revoked", title: "SSO revoked", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "email.disabled", title: "Email disabled", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "slack.disabled", title: "Slack disabled", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "ip.assignment.signed", title: "IP assignment + return of property", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "final.payment", title: "Final invoice paid", ownerRole: "operations", days: 14, isReassignmentGate: false, status: "pending" },
+    { code: "audit.pack.signed", title: "Partner-signed audit pack issued", ownerRole: "partner", days: 14, isReassignmentGate: false, status: "pending" },
+  ];
+  await db
+    .insert(atelierOffboardingSteps)
+    .values(
+      offSteps.map((s, i) => ({
+        id: `offs_hadeel_${s.code.replace(/\./g, "_")}`,
+        offboardingId: offId,
+        sortKey: i,
+        code: s.code,
+        title: s.title,
+        ownerRole: s.ownerRole,
+        deadline: new Date(Date.now() + s.days * 86400_000).toISOString().slice(0, 10),
+        status: s.status,
+        isReassignmentGate: s.isReassignmentGate,
+      })),
+    )
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 lifecycle: planted Conflict-of-Interest (Rami → Tasama)…");
+  await db
+    .insert(atelierConflictDisclosures)
+    .values({
+      id: "conf_rami_tasama_seed",
+      personType: "contractor",
+      personId: "ct_rami_haddad",
+      disclosureText:
+        "Sibling is a Director of Operations at Tasama. Self-recused from any Tasama-touching engagement-access until cleared by the Partner.",
+      declaredParty: "Tasama",
+      nature: "family",
+      scopeImpact: "no engagement_access on any Tasama-account engagement",
+      status: "active",
+      createdByUserId: "p_mounir_ariss",
+    })
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 lifecycle: compliance records…");
+  // Iqama expiring in 25 days (will land in the 30d Steward bucket).
+  await db
+    .insert(atelierComplianceRecords)
+    .values([
+      {
+        id: "cmp_layla_iqama_seed",
+        personType: "employee",
+        personId: "emp_p_layla_haddad",
+        kind: "iqama",
+        jurisdiction: "KSA",
+        // Redacted-only — raw number never persisted.
+        referenceNumberRedacted: "••••4471",
+        referenceNumberLastFour: "4471",
+        issuedDate: "2024-06-01",
+        expiryDate: new Date(Date.now() + 25 * 86400_000).toISOString().slice(0, 10),
+        status: "active",
+        metadata: { sponsorEntity: "AICo KSA" },
+        createdByUserId: "p_mounir_ariss",
+      },
+      {
+        id: "cmp_aico_difc_seed",
+        personType: null,
+        personId: null,
+        kind: "difc",
+        jurisdiction: "UAE_DIFC",
+        referenceNumberRedacted: "••••2018",
+        referenceNumberLastFour: "2018",
+        issuedDate: "2023-01-15",
+        expiryDate: new Date(Date.now() + 70 * 86400_000).toISOString().slice(0, 10),
+        status: "active",
+        metadata: { sponsorEntity: "AICo Holdings DIFC" },
+        createdByUserId: "p_mounir_ariss",
+      },
+      {
+        id: "cmp_bgts_saudization_seed",
+        personType: null,
+        personId: null,
+        partnerFirmId: "pf_bgts",
+        kind: "saudization",
+        jurisdiction: "KSA",
+        status: "active",
+        metadata: { saudizationQuotaRequired: 30, saudizationQuotaActual: 34 },
+        createdByUserId: "p_mounir_ariss",
+      },
+    ])
     .onConflictDoNothing();
 
   console.log("[seed-atelier] v3 roster: a placeholder document on Mounir…");

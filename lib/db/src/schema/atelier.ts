@@ -1792,3 +1792,208 @@ export const atelierPersonDocuments = pgTable(
     index("idx_atelier_person_docs_person").on(t.personType, t.personId),
   ],
 );
+
+// ============================================================
+// Task #255 — Onboarding / Offboarding sequences + Compliance + Invitations
+// ============================================================
+
+// Invitations — pre-onboarding hand-off. A pending row holds the personDraft
+// (full_name + email + worker_type + role) until accepted, at which point
+// the Onboarding Concierge materialises the actual person row + sequence.
+export const atelierInvitations = pgTable(
+  "atelier_invitations",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    workerType: text("worker_type").notNull(), // employee | contractor | partner_firm_resource
+    personDraft: jsonb("person_draft")
+      .$type<{
+        fullName: string;
+        email: string;
+        role?: string | null;
+        seniority?: string | null;
+        title?: string | null;
+        country?: string | null;
+        partnerFirmId?: string | null;
+        startDate?: string | null;
+      }>()
+      .notNull(),
+    sentByUserId: text("sent_by_user_id").notNull(),
+    sentAt: timestamp("sent_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at"),
+    acceptedAt: timestamp("accepted_at"),
+    acceptedPersonId: text("accepted_person_id"), // FK to materialised person row
+    revokedAt: timestamp("revoked_at"),
+    revokedByUserId: text("revoked_by_user_id"),
+    status: text("status").notNull().default("sent"), // sent | accepted | expired | revoked
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_invitations_org").on(t.orgId),
+    index("idx_atelier_invitations_status").on(t.status),
+  ],
+);
+
+export const atelierOnboardings = pgTable(
+  "atelier_onboardings",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor | partner_firm_resource
+    personId: text("person_id").notNull(),
+    invitationId: text("invitation_id"),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    targetStartDate: text("target_start_date"),
+    completedAt: timestamp("completed_at"),
+    blockedAt: timestamp("blocked_at"),
+    blockedReason: text("blocked_reason"),
+    status: text("status").notNull().default("in_flight"), // in_flight | complete | blocked | cancelled
+    ownerUserId: text("owner_user_id"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_onboardings_org").on(t.orgId),
+    index("idx_atelier_onboardings_person").on(t.personType, t.personId),
+    index("idx_atelier_onboardings_status").on(t.status),
+  ],
+);
+
+export const atelierOnboardingSteps = pgTable(
+  "atelier_onboarding_steps",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    onboardingId: text("onboarding_id").notNull(),
+    sortKey: integer("sort_key").notNull().default(0),
+    code: text("code").notNull(), // e.g. nda.signed | sso.provisioned | calendar.welcome
+    title: text("title").notNull(),
+    description: text("description"),
+    ownerRole: text("owner_role"), // operations | partner | engagement_lead | hr | itself
+    deadline: text("deadline"),
+    status: text("status").notNull().default("pending"), // pending | in_progress | done | blocked | skipped
+    completedAt: timestamp("completed_at"),
+    completedByUserId: text("completed_by_user_id"),
+    blockedReason: text("blocked_reason"),
+    isComplianceGate: boolean("is_compliance_gate").notNull().default(false),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_onb_steps_org").on(t.orgId),
+    index("idx_atelier_onb_steps_onb").on(t.onboardingId),
+    index("idx_atelier_onb_steps_status").on(t.status),
+  ],
+);
+
+export const atelierOffboardings = pgTable(
+  "atelier_offboardings",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(),
+    personId: text("person_id").notNull(),
+    initiatedAt: timestamp("initiated_at").notNull().defaultNow(),
+    initiatedByUserId: text("initiated_by_user_id"),
+    lastWorkingDate: text("last_working_date"),
+    completedAt: timestamp("completed_at"),
+    blockedAt: timestamp("blocked_at"),
+    blockedReason: text("blocked_reason"),
+    status: text("status").notNull().default("in_flight"), // in_flight | complete | blocked | cancelled
+    auditPackUrl: text("audit_pack_url"), // signed by the Partner upon final
+    auditPackSignedByUserId: text("audit_pack_signed_by_user_id"),
+    auditPackSignedAt: timestamp("audit_pack_signed_at"),
+    reason: text("reason"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_offb_org").on(t.orgId),
+    index("idx_atelier_offb_person").on(t.personType, t.personId),
+    index("idx_atelier_offb_status").on(t.status),
+  ],
+);
+
+export const atelierOffboardingSteps = pgTable(
+  "atelier_offboarding_steps",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    offboardingId: text("offboarding_id").notNull(),
+    sortKey: integer("sort_key").notNull().default(0),
+    code: text("code").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    ownerRole: text("owner_role"),
+    deadline: text("deadline"),
+    status: text("status").notNull().default("pending"),
+    completedAt: timestamp("completed_at"),
+    completedByUserId: text("completed_by_user_id"),
+    blockedReason: text("blocked_reason"),
+    isReassignmentGate: boolean("is_reassignment_gate").notNull().default(false),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_offb_steps_org").on(t.orgId),
+    index("idx_atelier_offb_steps_offb").on(t.offboardingId),
+    index("idx_atelier_offb_steps_status").on(t.status),
+  ],
+);
+
+// Compliance records — DIFC/ADGM/KSA registrations, Iqama/visa expirations,
+// WPS readiness, GOSI, master agreements. Reference numbers (visa/Iqama)
+// are stored in `referenceNumberRedacted` (only the last-four digits, padded
+// with •) plus `referenceNumberLastFour`. Raw numbers are NEVER persisted —
+// see PII redaction wrapper in roster-lifecycle-routes.ts.
+export const atelierComplianceRecords = pgTable(
+  "atelier_compliance_records",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type"), // null = entity-level (e.g., master agreement)
+    personId: text("person_id"),
+    partnerFirmId: text("partner_firm_id"),
+    kind: text("kind").notNull(), // visa | iqama | gosi | wps | difc | adgm | ksa_cr | saudization | master_agreement | cert
+    jurisdiction: text("jurisdiction"), // KSA | UAE_DIFC | UAE_ADGM | UAE_OTHER | EGY | ...
+    referenceNumberRedacted: text("reference_number_redacted"), // e.g. "••••1234"
+    referenceNumberLastFour: text("reference_number_last_four"),
+    issuedDate: text("issued_date"),
+    expiryDate: text("expiry_date"),
+    status: text("status").notNull().default("active"), // active | expiring | expired | pending | exempt
+    metadata: jsonb("metadata")
+      .$type<{
+        saudizationQuotaRequired?: number;
+        saudizationQuotaActual?: number;
+        wpsBankFile?: string | null;
+        gosiAmountSar?: number;
+        clientName?: string;
+        sponsorEntity?: string;
+        agentReadable?: Record<string, string | number | boolean>;
+      }>()
+      .notNull()
+      .default({}),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_compliance_org").on(t.orgId),
+    index("idx_atelier_compliance_person").on(t.personType, t.personId),
+    index("idx_atelier_compliance_kind").on(t.kind),
+    index("idx_atelier_compliance_expiry").on(t.expiryDate),
+  ],
+);

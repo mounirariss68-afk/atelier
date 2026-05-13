@@ -57,6 +57,7 @@ import winLossRoutes from "./winLossRoutes";
 import forecastRoutes from "./forecastRoutes";
 import reportsRoutes from "./reportsRoutes";
 import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
+import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -140,6 +141,9 @@ router.use(reportsRoutes);
 // authenticated persona — comp/bank fields are stripped server-side
 // for non-Partner/Operations callers.
 router.use(rosterRoutes);
+// Task #255 — onboarding / offboarding sequences, compliance roll-ups,
+// conflict-of-interest mutations + Partner override.
+router.use(rosterLifecycleRoutes);
 
 function ensurePersona(
   req: Request,

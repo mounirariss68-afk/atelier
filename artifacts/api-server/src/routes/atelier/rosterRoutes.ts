@@ -363,11 +363,20 @@ interface SentinelInput {
   scope: string[];
   endDate?: string | null;
   action: "grant" | "revoke";
+  // Task #255 — Partner override path sets this to bypass the conflict gate.
+  // Override always emits an audit row in the calling route.
+  skipConflictGate?: boolean;
 }
 
 interface SentinelResult {
   ok: boolean;
-  blocked?: { reason: string; offendingScope?: string[] };
+  blocked?: {
+    reason: string;
+    offendingScope?: string[];
+    conflictIds?: string[];
+    accountId?: string;
+    accountName?: string;
+  };
   grantId?: string;
 }
 
@@ -441,6 +450,70 @@ async function runAccessSentinel(input: SentinelInput): Promise<SentinelResult> 
       ok: false,
       blocked: { reason: "engagement-closed-grants-frozen" },
     };
+  }
+
+  // Policy 5 (Task #255) — Conflict-of-Interest gate. If the target person
+  // has an active conflict whose declared_party matches the engagement's
+  // account, block. Partner override path is the explicit
+  // POST /roster/access/conflict-override endpoint, which writes the
+  // override row AND retries the grant. We always emit a `block` audit
+  // event here so the trail shows the original guardrail fired.
+  if (input.action === "grant" && !input.skipConflictGate) {
+    const [acct] = await db
+      .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+      .from(atelierAccounts)
+      .where(eq(atelierAccounts.id, eng.accountId));
+    if (acct) {
+      const activeConflicts = await db
+        .select()
+        .from(atelierConflictDisclosures)
+        .where(
+          and(
+            eq(atelierConflictDisclosures.personType, input.targetPerson.workerType),
+            eq(atelierConflictDisclosures.personId, input.targetPerson.id),
+            eq(atelierConflictDisclosures.status, "active"),
+            isNull(atelierConflictDisclosures.deletedAt),
+          ),
+        );
+      const matched = activeConflicts.filter((c) => {
+        const dp = (c.declaredParty ?? "").toLowerCase();
+        if (!dp) return false;
+        return (
+          dp === acct.id.toLowerCase() ||
+          dp === acct.name.toLowerCase() ||
+          dp.includes(acct.name.toLowerCase()) ||
+          acct.name.toLowerCase().includes(dp)
+        );
+      });
+      if (matched.length > 0) {
+        await db.insert(atelierAuditEvents).values({
+          id: rid("aud"),
+          entityType: "engagement_access",
+          entityId: `${input.engagementId}:${input.targetPerson.id}`,
+          actorType: "agent",
+          actorId: "ag_access_sentinel",
+          actorLabel: "Access Sentinel",
+          action: "access.grant.blocked.conflict",
+          payload: {
+            engagementId: input.engagementId,
+            targetPersonId: input.targetPerson.id,
+            accountId: acct.id,
+            conflictIds: matched.map((m) => m.id),
+            actor: input.actor.id,
+          },
+          payloadSummary: `Access Sentinel blocked grant of ${input.targetPerson.fullName} → ${eng.name}: active conflict on ${acct.name}.`,
+        });
+        return {
+          ok: false,
+          blocked: {
+            reason: "conflict-of-interest-active",
+            conflictIds: matched.map((m) => m.id),
+            accountId: acct.id,
+            accountName: acct.name,
+          },
+        };
+      }
+    }
   }
 
   // Resolve target → atelier_users.id (engagement_access keys on user_id).

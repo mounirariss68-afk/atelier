@@ -35,6 +35,7 @@ const TABS = [
   { id: "skills", label: "Skills" },
   { id: "timesheet", label: "Timesheet-summary" },
   { id: "documents", label: "Documents" },
+  { id: "conflicts", label: "Conflicts" },
   { id: "audit", label: "Audit" },
 ];
 
@@ -108,6 +109,7 @@ export default function RosterPerson() {
         {activeTab === "skills" && <PlaceholderTab title="Skills & competencies" />}
         {activeTab === "timesheet" && <PlaceholderTab title="Timesheet summary" />}
         {activeTab === "documents" && <DocumentsTab personId={personId} />}
+        {activeTab === "conflicts" && <ConflictsTab personId={personId} />}
         {activeTab === "audit" && <AuditTab personId={personId} />}
       </div>
     </div>
@@ -479,6 +481,197 @@ function AuditTab({ personId }: { personId: string }) {
           <div className="text-xs text-text-faint mt-1">
             {e.actorType}: {e.actorLabel}
           </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+interface ConflictRow {
+  id: string;
+  declaredParty: string | null;
+  disclosureText: string;
+  nature: string | null;
+  scopeImpact: string | null;
+  status: string;
+  declaredAt: string | null;
+  lastReviewedAt: string | null;
+  notes: string | null;
+}
+
+function ConflictsTab({ personId }: { personId: string }) {
+  const [rows, setRows] = React.useState<ConflictRow[] | null>(null);
+  const [draft, setDraft] = React.useState({
+    declaredParty: "",
+    disclosureText: "",
+    nature: "",
+    scopeImpact: "",
+  });
+  const [busy, setBusy] = React.useState(false);
+
+  const reload = React.useCallback(() => {
+    fetch(`/api/atelier/roster/people/${personId}/conflicts`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((d) => setRows(d.conflicts ?? []))
+      .catch(() => setRows([]));
+  }, [personId]);
+
+  React.useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await fetch(`/api/atelier/roster/people/${personId}/conflicts`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      setDraft({ declaredParty: "", disclosureText: "", nature: "", scopeImpact: "" });
+      reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const update = async (conflictId: string, status: string) => {
+    await fetch(`/api/atelier/roster/people/${personId}/conflicts/${conflictId}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    reload();
+  };
+
+  return (
+    <div className="space-y-4" data-testid="conflicts-tab">
+      <Card className="p-4 space-y-3">
+        <h3 className="font-mono text-xs uppercase text-text-mute">
+          Declare a conflict
+        </h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className="font-mono text-[11px] uppercase text-text-mute">
+              Declared party (account name or id)
+            </span>
+            <input
+              className="w-full bg-bg-elev border border-line rounded px-2 py-1 text-sm"
+              value={draft.declaredParty}
+              onChange={(e) =>
+                setDraft({ ...draft, declaredParty: e.target.value })
+              }
+              data-testid="conflict-party"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="font-mono text-[11px] uppercase text-text-mute">
+              Nature
+            </span>
+            <input
+              className="w-full bg-bg-elev border border-line rounded px-2 py-1 text-sm"
+              value={draft.nature}
+              onChange={(e) => setDraft({ ...draft, nature: e.target.value })}
+              placeholder="prior employer · family · investor · …"
+            />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <span className="font-mono text-[11px] uppercase text-text-mute">
+              Disclosure text
+            </span>
+            <textarea
+              className="w-full bg-bg-elev border border-line rounded px-2 py-1 text-sm min-h-[80px]"
+              value={draft.disclosureText}
+              onChange={(e) =>
+                setDraft({ ...draft, disclosureText: e.target.value })
+              }
+              data-testid="conflict-text"
+            />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <span className="font-mono text-[11px] uppercase text-text-mute">
+              Scope impact
+            </span>
+            <input
+              className="w-full bg-bg-elev border border-line rounded px-2 py-1 text-sm"
+              value={draft.scopeImpact}
+              onChange={(e) =>
+                setDraft({ ...draft, scopeImpact: e.target.value })
+              }
+              placeholder="e.g. cannot view pricing on this account"
+            />
+          </label>
+        </div>
+        <button
+          onClick={submit}
+          disabled={busy || !draft.declaredParty || !draft.disclosureText}
+          className="px-3 py-1 rounded text-xs font-mono bg-gold text-bg disabled:opacity-50"
+          data-testid="conflict-submit"
+        >
+          {busy ? "Recording…" : "Declare"}
+        </button>
+      </Card>
+
+      {rows === null && <div className="text-text-mute py-8">Loading…</div>}
+      {rows?.length === 0 && (
+        <div className="text-text-mute italic py-4">
+          No conflicts declared for this person.
+        </div>
+      )}
+      {rows?.map((c) => (
+        <Card
+          key={c.id}
+          className="p-4 flex items-start justify-between gap-4"
+          data-testid={`conflict-row-${c.id}`}
+        >
+          <div className="space-y-1 flex-1">
+            <div className="font-medium">
+              {c.declaredParty ?? "—"}
+              <span className="ml-2">
+                <MonoChip
+                  tone={
+                    c.status === "active"
+                      ? "red"
+                      : c.status === "escalated"
+                        ? "amber"
+                        : "green"
+                  }
+                >
+                  {c.status}
+                </MonoChip>
+              </span>
+            </div>
+            {c.nature && (
+              <div className="text-text-mute text-xs">Nature: {c.nature}</div>
+            )}
+            <div className="text-sm">{c.disclosureText}</div>
+            {c.scopeImpact && (
+              <div className="text-text-mute text-xs italic">
+                Impact: {c.scopeImpact}
+              </div>
+            )}
+          </div>
+          {c.status === "active" && (
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => update(c.id, "cleared")}
+                className="px-2 py-1 rounded text-[11px] font-mono border border-line hover:bg-bg-elev"
+                data-testid={`conflict-clear-${c.id}`}
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => update(c.id, "escalated")}
+                className="px-2 py-1 rounded text-[11px] font-mono border border-line hover:bg-bg-elev"
+              >
+                Escalate
+              </button>
+            </div>
+          )}
         </Card>
       ))}
     </div>

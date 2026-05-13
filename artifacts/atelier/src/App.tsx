@@ -29,6 +29,10 @@ import Reports from "@/pages/Reports";
 import RosterPeople from "@/pages/roster/RosterPeople";
 import RosterPerson from "@/pages/roster/RosterPerson";
 import RosterAccessMatrix from "@/pages/roster/RosterAccessMatrix";
+import RosterInvitations from "@/pages/roster/RosterInvitations";
+import RosterOnboarding from "@/pages/roster/RosterOnboarding";
+import RosterOffboarding from "@/pages/roster/RosterOffboarding";
+import RosterCompliance from "@/pages/roster/RosterCompliance";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
@@ -61,6 +65,10 @@ function Router() {
         <Route path="/atelier" component={AtelierIndex} />
         <Route path="/atelier/:section" component={AtelierIndex} />
         <Route path="/roster/access-matrix" component={RosterAccessMatrix} />
+        <Route path="/roster/invitations" component={RosterInvitations} />
+        <Route path="/roster/onboarding" component={RosterOnboarding} />
+        <Route path="/roster/offboarding" component={RosterOffboarding} />
+        <Route path="/roster/compliance" component={RosterCompliance} />
         <Route path="/roster/people" component={RosterPeople} />
         <Route path="/roster/people/:id" component={RosterPerson} />
         <Route path="/roster/people/:id/:tab" component={RosterPerson} />
