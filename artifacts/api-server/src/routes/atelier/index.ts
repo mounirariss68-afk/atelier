@@ -58,6 +58,7 @@ import forecastRoutes from "./forecastRoutes";
 import reportsRoutes from "./reportsRoutes";
 import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
+import skillGraphRoutes from "./skillGraphRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -144,6 +145,8 @@ router.use(rosterRoutes);
 // Task #255 — onboarding / offboarding sequences, compliance roll-ups,
 // conflict-of-interest mutations + Partner override.
 router.use(rosterLifecycleRoutes);
+// Task #256 — Skill graph + Skill Mapper.
+router.use(skillGraphRoutes);
 
 function ensurePersona(
   req: Request,

@@ -106,7 +106,15 @@ export default function RosterPerson() {
         )}
         {activeTab === "access" && <AccessTab personId={personId} />}
         {activeTab === "engagements" && <EngagementsTab personId={personId} />}
-        {activeTab === "skills" && <PlaceholderTab title="Skills & competencies" />}
+        {activeTab === "skills" && (
+          person?.workerType === "partner_firm_resource" ? (
+            <Card className="p-6 text-text-mute">
+              Partner-firm resources are not part of the firm's skill graph by design.
+            </Card>
+          ) : (
+            <SkillsTab personId={personId} />
+          )
+        )}
         {activeTab === "timesheet" && <PlaceholderTab title="Timesheet summary" />}
         {activeTab === "documents" && <DocumentsTab personId={personId} />}
         {activeTab === "conflicts" && <ConflictsTab personId={personId} />}
@@ -216,6 +224,175 @@ function Field({
       >
         {value || "—"}
       </span>
+    </div>
+  );
+}
+
+interface SkillRow {
+  id: string;
+  skill: { id: string; name: string; kind: string; slug: string };
+  proficiency: number;
+  source: string;
+  evidenceArtifactIds: string[];
+  evidenceSummary: string | null;
+  confidence: number | null;
+  status: string;
+  verifiedByName: string | null;
+  verifiedAt: string | null;
+  proposedByAgentId: string | null;
+  proposedAt: string | null;
+}
+
+const SKILL_SOURCE_LABEL: Record<string, string> = {
+  certification: "Certification",
+  partner_attested: "Partner attested",
+  evidence_atelier: "Atelier evidence",
+  self: "Self",
+  agent_inferred: "Agent inferred",
+};
+
+function SkillsTab({ personId }: { personId: string }) {
+  const [rows, setRows] = React.useState<SkillRow[] | null>(null);
+  const [canVerify, setCanVerify] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
+
+  const refresh = React.useCallback(() => {
+    fetch(`/api/atelier/roster/people/${personId}/skills`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setRows(d.skills ?? []);
+        setCanVerify(!!d.viewerCanVerify);
+      });
+  }, [personId]);
+
+  React.useEffect(() => refresh(), [refresh]);
+
+  const act = async (
+    skillId: string,
+    action: "verify" | "dismiss",
+  ): Promise<void> => {
+    setBusy(`${skillId}:${action}`);
+    try {
+      const r = await fetch(
+        `/api/atelier/roster/people/${personId}/skills/${skillId}/${action}`,
+        { method: "POST", credentials: "include" },
+      );
+      const d = await r.json();
+      if (r.ok && d.skills) {
+        setRows(d.skills);
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!rows) return <div className="text-text-mute">Loading…</div>;
+
+  // Group by source for clean visual hierarchy: verified evidence first.
+  const order = [
+    "certification",
+    "partner_attested",
+    "evidence_atelier",
+    "self",
+    "agent_inferred",
+  ];
+  const grouped = new Map<string, SkillRow[]>();
+  for (const r of rows) {
+    const arr = grouped.get(r.source) ?? [];
+    arr.push(r);
+    grouped.set(r.source, arr);
+  }
+
+  return (
+    <div className="space-y-4" data-testid="skills-tab">
+      <div className="text-xs text-text-mute font-mono uppercase">
+        Skills · {rows.length} · grouped by source
+      </div>
+      {order
+        .filter((s) => grouped.has(s))
+        .map((src) => (
+          <div key={src} className="space-y-2">
+            <div className="text-xs font-mono uppercase text-text-mute">
+              {SKILL_SOURCE_LABEL[src] ?? src}
+            </div>
+            {(grouped.get(src) ?? []).map((r) => (
+              <Card
+                key={r.id}
+                className={`p-3 ${r.status === "dismissed" ? "opacity-50" : ""}`}
+                data-testid={`skill-row-${r.skill.id}`}
+              >
+                <div className="flex flex-wrap justify-between gap-3 items-center">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-sm">{r.skill.name}</span>
+                    <MonoChip>{r.skill.kind}</MonoChip>
+                    <MonoChip>p{r.proficiency}/5</MonoChip>
+                    {r.confidence != null && (
+                      <MonoChip>conf {(r.confidence * 100).toFixed(0)}%</MonoChip>
+                    )}
+                    {r.status !== "active" && (
+                      <MonoChip className="text-warning border-warning/40">
+                        {r.status}
+                      </MonoChip>
+                    )}
+                  </div>
+                  {canVerify && (
+                    <div className="flex gap-2">
+                      {r.status !== "active" && (
+                        <button
+                          onClick={() => act(r.skill.id, "verify")}
+                          disabled={busy === `${r.skill.id}:verify`}
+                          className="text-xs px-2 py-1 border border-line rounded hover:border-gold hover:text-gold"
+                          data-testid={`verify-${r.skill.id}`}
+                        >
+                          Reinstate
+                        </button>
+                      )}
+                      {r.status === "active" && r.source === "agent_inferred" && (
+                        <button
+                          onClick={() => act(r.skill.id, "verify")}
+                          disabled={busy === `${r.skill.id}:verify`}
+                          className="text-xs px-2 py-1 border border-line rounded hover:border-gold hover:text-gold"
+                          data-testid={`verify-${r.skill.id}`}
+                        >
+                          Verify
+                        </button>
+                      )}
+                      {r.status === "active" && (
+                        <button
+                          onClick={() => act(r.skill.id, "dismiss")}
+                          disabled={busy === `${r.skill.id}:dismiss`}
+                          className="text-xs px-2 py-1 border border-line rounded hover:border-warning hover:text-warning"
+                          data-testid={`dismiss-${r.skill.id}`}
+                        >
+                          Dismiss
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {(r.evidenceSummary || r.verifiedByName) && (
+                  <div className="text-xs text-text-mute mt-1">
+                    {r.evidenceSummary && <span>{r.evidenceSummary}</span>}
+                    {r.verifiedByName && (
+                      <span>
+                        {r.evidenceSummary ? " · " : ""}
+                        verified by {r.verifiedByName}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        ))}
+      {rows.length === 0 && (
+        <Card className="p-6 text-text-mute">
+          No skills recorded yet. Self-attest from this dossier, or run the Skill
+          Mapper from <Link href="/roster/skill-graph" className="text-gold">/roster/skill-graph</Link>.
+        </Card>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 const ITEMS: { href: string; label: string }[] = [
   { href: "/roster/people", label: "People" },
   { href: "/roster/access-matrix", label: "Access matrix" },
+  { href: "/roster/skill-graph", label: "Skill graph" },
   { href: "/roster/invitations", label: "Invitations" },
   { href: "/roster/onboarding", label: "Onboarding" },
   { href: "/roster/offboarding", label: "Offboarding" },

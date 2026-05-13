@@ -31,6 +31,8 @@ import {
   atelierAssets,
   atelierPrompts,
   atelierAgents,
+  atelierSkills,
+  atelierPersonSkills,
   atelierAgentRuns,
   atelierAuditEvents,
   atelierEmployees,
@@ -3628,6 +3630,143 @@ async function main() {
       uploadedByUserId: "p_mounir_ariss",
     },
   ]).onConflictDoNothing();
+
+  // ============================================================
+  // v3 Skill graph (Task #256) — taxonomy + per-person skills.
+  // Hard rule: NEVER seed rows for partner_firm_resource workers.
+  // ============================================================
+  console.log("[seed-atelier] v3 skill graph (Task #256): agent registry…");
+  await db
+    .insert(atelierAgents)
+    .values({
+      id: "ag_skill_mapper",
+      name: "Skill Mapper",
+      group: "Roster",
+      stage: "Govern",
+      purpose:
+        "On-demand: scans engagements, deliverable versions, and Atelier asset authorship/promotion to propose agent_inferred skill rows on employees. Never auto-verifies; never proposes for partner-firm resources.",
+      model: "claude-sonnet-4-6",
+      starred: false,
+      status: "mvp",
+      tools: [
+        "skill_graph.scan",
+        "skill_graph.propose",
+        "audit.write",
+      ],
+      guardrails: [
+        "Hard exclusion: partner_firm_resource workers never receive proposals",
+        "Skips rows that are blocked by stronger human sources or prior dismissals",
+        "Confidence is capped at 0.85 — verification stays a human decision",
+      ],
+      humanCheckpoints: [
+        "Engagement Lead / Operations / Partner verifies or dismisses each proposed row",
+      ],
+      runsLast30d: 0,
+    })
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 skill graph: taxonomy…");
+  const SKILLS: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    kind: string;
+    description: string;
+  }> = [
+    { id: "sk_databricks", slug: "databricks", name: "Databricks", kind: "tech", description: "Lakehouse platform, Delta, Unity Catalog" },
+    { id: "sk_snowflake", slug: "snowflake", name: "Snowflake", kind: "tech", description: "Cloud data warehouse" },
+    { id: "sk_dbt", slug: "dbt", name: "dbt", kind: "tool", description: "Data build tool" },
+    { id: "sk_python", slug: "python", name: "Python", kind: "tech", description: "Programming language for data and ML" },
+    { id: "sk_typescript", slug: "typescript", name: "TypeScript", kind: "tech", description: "Typed JavaScript" },
+    { id: "sk_pricing_strategy", slug: "pricing_strategy", name: "Pricing strategy", kind: "function", description: "B2B and consumer pricing" },
+    { id: "sk_forecasting", slug: "forecasting", name: "Forecasting", kind: "function", description: "Demand and revenue forecasting" },
+    { id: "sk_change_management", slug: "change_management", name: "Change management", kind: "function", description: "Operating-model and adoption" },
+    { id: "sk_ksa_public_sector", slug: "ksa_public_sector", name: "KSA public sector", kind: "industry", description: "Saudi Arabia government and PIF entities" },
+    { id: "sk_uae_banking", slug: "uae_banking", name: "UAE banking", kind: "industry", description: "Retail and corporate banking in the UAE" },
+    { id: "sk_telco", slug: "telco", name: "Telco", kind: "industry", description: "Mobile and broadband operators" },
+    { id: "sk_arabic", slug: "arabic", name: "Arabic", kind: "language", description: "Modern Standard Arabic" },
+    { id: "sk_french", slug: "french", name: "French", kind: "language", description: "" },
+    { id: "sk_powerbi", slug: "powerbi", name: "Power BI", kind: "tool", description: "Microsoft BI" },
+  ];
+  await db
+    .insert(atelierSkills)
+    .values(
+      SKILLS.map((s) => ({
+        id: s.id,
+        slug: s.slug,
+        name: s.name,
+        kind: s.kind,
+        description: s.description,
+        createdByUserId: "p_mounir_ariss",
+      })),
+    )
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 skill graph: person_skills…");
+  // Mix of sources spanning all kinds. Five FTE employees only — no
+  // contractors, no partner-firm resources. The Skill Mapper run will
+  // additionally produce agent_inferred rows from the seeded
+  // engagements/deliverables/assets.
+  const PSK: Array<{
+    person: string;
+    skill: string;
+    proficiency: number;
+    source: "self" | "partner_attested" | "evidence_atelier" | "certification";
+    summary?: string;
+    confidence?: number | null;
+  }> = [
+    // Mounir — Founder/Partner
+    { person: "emp_p_mounir_ariss", skill: "sk_pricing_strategy", proficiency: 5, source: "partner_attested", summary: "Founder; long career in pricing" },
+    { person: "emp_p_mounir_ariss", skill: "sk_ksa_public_sector", proficiency: 4, source: "evidence_atelier", summary: "Owner on PIF / Aramco engagements" },
+    { person: "emp_p_mounir_ariss", skill: "sk_arabic", proficiency: 5, source: "self" },
+    { person: "emp_p_mounir_ariss", skill: "sk_french", proficiency: 5, source: "self" },
+    { person: "emp_p_mounir_ariss", skill: "sk_change_management", proficiency: 4, source: "partner_attested" },
+    // Layla — Operations Lead
+    { person: "emp_p_layla_haddad", skill: "sk_change_management", proficiency: 5, source: "certification", summary: "Prosci certified" },
+    { person: "emp_p_layla_haddad", skill: "sk_uae_banking", proficiency: 4, source: "evidence_atelier" },
+    { person: "emp_p_layla_haddad", skill: "sk_powerbi", proficiency: 3, source: "self" },
+    { person: "emp_p_layla_haddad", skill: "sk_arabic", proficiency: 5, source: "self" },
+    // Omar — Engagement Lead (Pricing)
+    { person: "emp_p_omar_najjar", skill: "sk_pricing_strategy", proficiency: 5, source: "evidence_atelier", summary: "Lead on Arçelik pricing engagement" },
+    { person: "emp_p_omar_najjar", skill: "sk_databricks", proficiency: 4, source: "certification", summary: "Databricks Certified Data Engineer Pro" },
+    { person: "emp_p_omar_najjar", skill: "sk_python", proficiency: 4, source: "self" },
+    { person: "emp_p_omar_najjar", skill: "sk_telco", proficiency: 3, source: "evidence_atelier" },
+    { person: "emp_p_omar_najjar", skill: "sk_arabic", proficiency: 4, source: "self" },
+    // Sara — Senior Consultant (Forecast/Analytics)
+    { person: "emp_p_sara_qureshi", skill: "sk_forecasting", proficiency: 5, source: "evidence_atelier", summary: "Authored forecast deliverables" },
+    { person: "emp_p_sara_qureshi", skill: "sk_python", proficiency: 5, source: "self" },
+    { person: "emp_p_sara_qureshi", skill: "sk_dbt", proficiency: 4, source: "certification", summary: "dbt Analytics Engineering certified" },
+    { person: "emp_p_sara_qureshi", skill: "sk_snowflake", proficiency: 4, source: "self" },
+    { person: "emp_p_sara_qureshi", skill: "sk_powerbi", proficiency: 3, source: "evidence_atelier" },
+    // Youssef — Business Developer
+    { person: "emp_p_youssef_idrissi", skill: "sk_uae_banking", proficiency: 4, source: "partner_attested" },
+    { person: "emp_p_youssef_idrissi", skill: "sk_telco", proficiency: 3, source: "self" },
+    { person: "emp_p_youssef_idrissi", skill: "sk_typescript", proficiency: 3, source: "self" },
+    { person: "emp_p_youssef_idrissi", skill: "sk_arabic", proficiency: 4, source: "self" },
+    { person: "emp_p_youssef_idrissi", skill: "sk_french", proficiency: 4, source: "self" },
+  ];
+  const now = new Date();
+  await db
+    .insert(atelierPersonSkills)
+    .values(
+      PSK.map((p) => ({
+        id: `psk_seed_${p.person}_${p.skill}_${p.source}`,
+        personType: "employee",
+        personId: p.person,
+        skillId: p.skill,
+        proficiency: p.proficiency,
+        source: p.source,
+        evidenceArtifactIds: [],
+        evidenceSummary: p.summary ?? null,
+        confidence: null,
+        status: "active",
+        verifiedByUserId:
+          p.source === "self" ? null : "p_mounir_ariss",
+        verifiedAt: p.source === "self" ? null : now,
+        createdByUserId: "p_mounir_ariss",
+      })),
+    )
+    .onConflictDoNothing();
 
   console.log(
     `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published) · ${employeesToInsert.length} employees · ${CONTRACTORS.length} contractors · ${PARTNER_FIRMS.length} partner firms · ${PARTNER_RESOURCES.length} partner-firm resources.`,

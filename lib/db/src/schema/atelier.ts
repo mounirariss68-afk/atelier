@@ -2003,3 +2003,83 @@ export const atelierComplianceRecords = pgTable(
     index("idx_atelier_compliance_expiry").on(t.expiryDate),
   ],
 );
+
+// ============================================================
+// SKILL GRAPH (Task #256 — v3 §10)
+// Small namespaced taxonomy + per-person proficiency with source.
+// `atelier_person_skills` is INTENTIONALLY restricted to employees and
+// contractors at the route layer — partner-firm resources are never
+// listed (architectural rule). Schema does not enforce this; the
+// `personType` is treated as data and validated server-side.
+// ============================================================
+export const atelierSkills = pgTable(
+  "atelier_skills",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").notNull(), // tech | industry | function | language | tool
+    parentId: text("parent_id"),
+    description: text("description"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_skills_org").on(t.orgId),
+    index("idx_atelier_skills_kind").on(t.kind),
+    uniqueIndex("uniq_atelier_skills_slug").on(t.orgId, t.slug),
+  ],
+);
+
+export const atelierPersonSkills = pgTable(
+  "atelier_person_skills",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor
+    personId: text("person_id").notNull(),
+    skillId: text("skill_id").notNull(),
+    // 1..5 (Junior practitioner → Recognized expert)
+    proficiency: integer("proficiency").notNull().default(3),
+    // self | partner_attested | evidence_atelier | certification | agent_inferred
+    source: text("source").notNull(),
+    // Pointers to atelier_assets / atelier_deliverable_versions / atelier_engagements
+    // that justify this row. Stored as opaque ids; the search endpoint hydrates
+    // labels at read time.
+    evidenceArtifactIds: jsonb("evidence_artifact_ids")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    evidenceSummary: text("evidence_summary"),
+    // Confidence is only meaningful for `agent_inferred` rows (0..1). For
+    // human-asserted rows we leave it null and let proficiency carry the signal.
+    confidence: doublePrecision("confidence"),
+    // active | dismissed | superseded — soft-delete via deletedAt is reserved
+    // for hard removal; dismissed keeps the negative signal so the mapper
+    // does not propose the same skill again.
+    status: text("status").notNull().default("active"),
+    verifiedByUserId: text("verified_by_user_id"),
+    verifiedAt: timestamp("verified_at"),
+    proposedByAgentId: text("proposed_by_agent_id"),
+    proposedAt: timestamp("proposed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_person_skills_person").on(t.personType, t.personId),
+    index("idx_atelier_person_skills_skill").on(t.skillId),
+    index("idx_atelier_person_skills_source").on(t.source),
+    index("idx_atelier_person_skills_status").on(t.status),
+    uniqueIndex("uniq_atelier_person_skills").on(
+      t.personType,
+      t.personId,
+      t.skillId,
+      t.source,
+    ),
+  ],
+);

@@ -33,6 +33,7 @@ import RosterInvitations from "@/pages/roster/RosterInvitations";
 import RosterOnboarding from "@/pages/roster/RosterOnboarding";
 import RosterOffboarding from "@/pages/roster/RosterOffboarding";
 import RosterCompliance from "@/pages/roster/RosterCompliance";
+import RosterSkillGraph from "@/pages/roster/RosterSkillGraph";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
@@ -65,6 +66,7 @@ function Router() {
         <Route path="/atelier" component={AtelierIndex} />
         <Route path="/atelier/:section" component={AtelierIndex} />
         <Route path="/roster/access-matrix" component={RosterAccessMatrix} />
+        <Route path="/roster/skill-graph" component={RosterSkillGraph} />
         <Route path="/roster/invitations" component={RosterInvitations} />
         <Route path="/roster/onboarding" component={RosterOnboarding} />
         <Route path="/roster/offboarding" component={RosterOffboarding} />
