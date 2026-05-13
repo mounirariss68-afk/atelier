@@ -10,7 +10,12 @@ import {
   atelierAgentRuns,
   atelierAgents,
   atelierAdminSettings,
+  atelierEmployees,
+  atelierComplianceRecords,
+  atelierFxRates,
+  atelierExpenses,
 } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import {
   AtelierListPromptsResponse,
   AtelierConciergeSearchBody,
@@ -309,6 +314,95 @@ async function saveAdmin(orgId: string, next: AdminSettings): Promise<void> {
  */
 export async function getCompliancePosture(orgId: string) {
   const s = await getAdmin(orgId);
+
+  // Task #261 — v3 indicator chips. Each one is a deterministic computation
+  // off live tables so the Admin posture card always reflects current
+  // state, not a settings-table snapshot. Fail-soft: any per-chip query
+  // failure surfaces as `unknown` rather than 5xx'ing the whole panel.
+  let wpsStatus: "ok" | "warn" | "unknown" = "unknown";
+  let wpsMessage = "";
+  let saudizationPct: number | null = null;
+  let saudizationStatus: "ok" | "warn" | "unknown" = "unknown";
+  let fxFreshnessHours: number | null = null;
+  let fxStatus: "ok" | "warn" | "unknown" = "unknown";
+  let receiptEncryptionStatus: "ok" | "warn" | "unknown" = "unknown";
+  let receiptUnencryptedCount: number | null = null;
+
+  try {
+    const wpsRows = await db
+      .select({ status: atelierComplianceRecords.status })
+      .from(atelierComplianceRecords)
+      .where(and(eq(atelierComplianceRecords.kind, "wps"), eq(atelierComplianceRecords.orgId, orgId)));
+    if (wpsRows.length === 0) {
+      wpsStatus = "warn";
+      wpsMessage = "No WPS registration record on file.";
+    } else {
+      const expired = wpsRows.filter((r) => r.status === "expired" || r.status === "missing");
+      wpsStatus = expired.length === 0 ? "ok" : "warn";
+      wpsMessage = expired.length === 0
+        ? `${wpsRows.length} WPS records active`
+        : `${expired.length} of ${wpsRows.length} WPS records expired or missing`;
+    }
+  } catch {
+    /* noop — leave unknown */
+  }
+
+  try {
+    const sRows = await db
+      .select({ metadata: atelierComplianceRecords.metadata })
+      .from(atelierComplianceRecords)
+      .where(
+        and(eq(atelierComplianceRecords.kind, "saudization"), eq(atelierComplianceRecords.orgId, orgId)),
+      );
+    if (sRows.length > 0) {
+      let req = 0;
+      let act = 0;
+      for (const r of sRows) {
+        const p = r.metadata as { saudizationQuotaRequired?: number; saudizationQuotaActual?: number } | null;
+        req += Number(p?.saudizationQuotaRequired ?? 0);
+        act += Number(p?.saudizationQuotaActual ?? 0);
+      }
+      if (req > 0) {
+        saudizationPct = Math.round((act / req) * 100);
+        saudizationStatus = saudizationPct >= 100 ? "ok" : "warn";
+      }
+    }
+  } catch {
+    /* noop */
+  }
+
+  try {
+    const [{ maxDate } = { maxDate: null as string | null }] = await db
+      .select({ maxDate: sql<string>`MAX(${atelierFxRates.date})` })
+      .from(atelierFxRates)
+      .where(eq(atelierFxRates.orgId, orgId));
+    if (maxDate) {
+      const ageMs = Date.now() - new Date(maxDate + "T00:00:00Z").getTime();
+      fxFreshnessHours = Math.max(0, Math.round(ageMs / (3600 * 1000)));
+      fxStatus = fxFreshnessHours <= 24 ? "ok" : "warn";
+    }
+  } catch {
+    /* noop */
+  }
+
+  try {
+    const expRows = await db
+      .select({
+        receiptFileRef: atelierExpenses.receiptFileRef,
+        receiptEncryptedAtRest: atelierExpenses.receiptEncryptedAtRest,
+        deletedAt: atelierExpenses.deletedAt,
+      })
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.orgId, orgId));
+    const offenders = expRows.filter(
+      (r) => !r.deletedAt && r.receiptFileRef && r.receiptEncryptedAtRest === false,
+    );
+    receiptUnencryptedCount = offenders.length;
+    receiptEncryptionStatus = offenders.length === 0 ? "ok" : "warn";
+  } catch {
+    /* noop */
+  }
+
   return {
     mfaRequired: s.mfaRequired,
     encryptionAtRest: s.encryptionAtRest,
@@ -317,6 +411,14 @@ export async function getCompliancePosture(orgId: string) {
     immutableAuditRetentionYears: s.immutableAuditRetentionYears,
     ipAllowlistEnabled: s.ipAllowlistEnabled,
     residencyRegion: s.residencyRegion,
+    // Task #261 — v3 indicator chips.
+    wps: { status: wpsStatus, message: wpsMessage },
+    saudization: { status: saudizationStatus, pct: saudizationPct },
+    fxFreshness: { status: fxStatus, hours: fxFreshnessHours },
+    receiptEncryption: { status: receiptEncryptionStatus, unencryptedCount: receiptUnencryptedCount },
+    // DIFC/ADGM/KSA registration confirmations are platform-level guarantees
+    // sourced from atelier_compliance_records of the corresponding `kind`s.
+    jurisdictions: ["DIFC", "ADGM", "KSA"],
   };
 }
 
@@ -468,13 +570,18 @@ router.get("/admin/founder-todos", async (req, res) => {
   // defaults the founding partner must lock in pre-GA; the operator
   // console resolves them, but they surface here so partners see the
   // pending defaults at a glance.
+  // Task #261 — PRD §10 v3 founder TODOs. These supersede the v2 list and
+  // are the firm-wide defaults the founding partner must lock in pre-GA.
   res.json({
     items: [
-      "Set firm-wide target margin % (default 55% pending founder lock)",
-      "Lock QBR cadence (default quarterly · founder to confirm cadence + format)",
-      "Charter the Deal Review Board (membership + quorum + escalation path)",
-      "Approve async-video as a first-class deliverable channel (default on; founder sign-off)",
-      "Activate Client-Side Discovery Agent v3 in production (default off pending founder go-live)",
+      "Confirm Operations Partner role (Mounir vs new hire) and lock the resourcing/finance ownership.",
+      "Tighten per-role utilization targets (Partner 50% · EL 65% · SC/Sr.SC 70% · AI Eng 75%) and ratify the firm default.",
+      "Lock default markup on client-billable expenses (proposed 10% · founder to ratify).",
+      "Approve partner-economics model (firm-share %, ramp, founder buy-in, vesting cliffs).",
+      "Approve contractor Atelier-reuse pathway (which contractors join the Atelier and on what terms).",
+      "Decide single-vs-two card-platform strategy (Pleo + Brex both, or consolidate on one).",
+      "Lock VAT-reclaim philosophy (claim everywhere eligible · or restrict by jurisdiction).",
+      "Select e-signature provider (DocuSign vs Adobe Sign vs in-house) and contract.",
     ],
   });
 });

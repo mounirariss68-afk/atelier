@@ -37,7 +37,7 @@ import {
   rejectClientRealm,
 } from "./personaCookie";
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
-import { auditPdfHandler } from "./auditPdf";
+import { auditPdfHandler, personAuditPdfHandler } from "./auditPdf";
 import agentRoutes from "./agentRoutes";
 import {
   STALLED_THRESHOLD_DAYS,
@@ -131,6 +131,8 @@ router.use((req, res, next) => {
 
 // Audit PDF export — registered before /audit JSON to win the route match.
 router.get("/audit/export.pdf", auditPdfHandler);
+// Task #261 — Per-Person audit pack PDF (Roster).
+router.get("/roster/people/:id/audit", personAuditPdfHandler);
 
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

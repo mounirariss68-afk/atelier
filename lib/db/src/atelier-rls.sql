@@ -38,14 +38,23 @@ DECLARE
     'atelier_audit_events','atelier_raid_items','atelier_hypothesis_trees',
     'atelier_processes','atelier_agent_designs','atelier_notifications',
     'atelier_pane_a_items',
-    'atelier_proposals','atelier_proposal_sections','atelier_prototypes'
+    'atelier_proposals','atelier_proposal_sections','atelier_prototypes',
+    -- Task #261 — v3 Ledger / Wallet tables. org_id is enforced here;
+    -- engagement_id ACL is added below via eng_tables for the rows that
+    -- carry an engagement_id FK (nullable: non-billable internal time and
+    -- firm-overhead expenses are visible to all org users).
+    'atelier_timesheet_entries','atelier_expenses'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their
   -- parent's engagement ACL at the application layer).
   eng_tables text[] := ARRAY[
     'atelier_deliverables','atelier_raid_items',
-    'atelier_hypothesis_trees','atelier_processes','atelier_agent_designs'
+    'atelier_hypothesis_trees','atelier_processes','atelier_agent_designs',
+    -- Task #261 — Ledger + Wallet engagement gate. NULL engagement_id rows
+    -- (internal time, firm overhead) bypass the gate so a contractor or
+    -- partner-firm resource only sees rows tied to engagements they're on.
+    'atelier_timesheet_entries','atelier_expenses'
   ];
   t text;
 BEGIN

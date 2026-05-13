@@ -50,6 +50,7 @@ import {
   atelierOpportunities,
 } from "@workspace/db";
 import { gte, sql } from "drizzle-orm";
+import { assertAuditAction } from "./auditContract.js";
 
 const router: IRouter = Router();
 
@@ -137,6 +138,7 @@ async function audit(args: {
   payload: Record<string, unknown>;
   summary: string;
 }): Promise<void> {
+  assertAuditAction(args.action);
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: args.entityType,

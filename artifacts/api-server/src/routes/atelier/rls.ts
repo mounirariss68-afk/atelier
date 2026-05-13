@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { db, pool } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { db, pool, atelierEngagementAccess } from "@workspace/db";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 /**
  * Per-request Row-Level-Security context for The Atelier.
@@ -89,10 +89,51 @@ export async function withRls<T>(
 /**
  * Express middleware shim. Stores the resolved RLS context on the
  * request so handlers/observers can introspect it without re-querying.
+ *
+ * Task #261 — For contractor / partner_firm_resource personas, populate
+ * `req.atelierEngagementIds` from `atelier_engagement_access` so the
+ * RLS engagement gate (added on `atelier_timesheet_entries` +
+ * `atelier_expenses`) actually narrows their visibility. Other roles
+ * (partner / engagement_lead / sme / ai_engineer / business_developer /
+ * operations) continue to see the full org and rely on per-route ACLs.
+ *
+ * Failure-to-resolve degrades to "no engagements" so a misconfigured
+ * persona never silently leaks cross-engagement data.
  */
 export function attachRls(req: Request, _res: Response, next: NextFunction): void {
-  (req as Request & { atelierRls?: AtelierRlsContext }).atelierRls = ctxFromReq(req);
-  next();
+  const persona = req.atelierPersona;
+  const restricted = persona && (persona.role === "contractor" || persona.role === "partner_firm_resource");
+  if (!restricted) {
+    (req as Request & { atelierRls?: AtelierRlsContext }).atelierRls = ctxFromReq(req);
+    return next();
+  }
+  // Async path: query engagement_access then attach.
+  void (async () => {
+    try {
+      const grants = await db
+        .select({ engagementId: atelierEngagementAccess.engagementId })
+        .from(atelierEngagementAccess)
+        .where(
+          and(
+            eq(atelierEngagementAccess.userId, persona!.id),
+            eq(atelierEngagementAccess.status, "active"),
+            isNull(atelierEngagementAccess.deletedAt),
+          ),
+        );
+      const ids = grants.map((g) => g.engagementId).filter(Boolean) as string[];
+      // SECURITY: empty `app.engagement_ids` means ALLOW-ALL in
+      // `atelier_engagement_allowed()`. Restricted personas with no grants
+      // must therefore receive a deny sentinel (a real engagement_id can
+      // never collide with this token), not an empty list.
+      req.atelierEngagementIds = ids.length > 0 ? ids : ["__atelier_deny_all__"];
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[atelier-rls] failed to resolve engagement grants for", persona!.id, err);
+      req.atelierEngagementIds = ["__atelier_deny_all__"];
+    }
+    (req as Request & { atelierRls?: AtelierRlsContext }).atelierRls = ctxFromReq(req);
+    next();
+  })();
 }
 
 declare global {

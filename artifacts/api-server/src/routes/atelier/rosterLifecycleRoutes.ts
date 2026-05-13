@@ -47,6 +47,7 @@ import {
   atelierPaneAItems,
 } from "@workspace/db";
 import { runAccessSentinel } from "./rosterRoutes.js";
+import { assertAuditAction } from "./auditContract.js";
 
 const router: IRouter = Router();
 
@@ -98,6 +99,7 @@ async function audit(args: {
   payload?: Record<string, unknown>;
   summary: string;
 }): Promise<void> {
+  assertAuditAction(args.action);
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: args.entityType,
@@ -389,6 +391,30 @@ async function startOffboardingSequence(args: {
     payload: { workerType: args.workerType, personId: args.personId, steps: tpl.length },
     payloadSummary: `Offboarding Sentinel generated ${tpl.length}-step sequence for ${args.workerType} ${args.personId}.`,
   });
+  // Task #261 — Offboarding Sentinel Pane A producer. Surface a high-
+  // priority "reassignment pending" item on the initiator's Home so the
+  // gate step never sits silent. Idempotent on (offboardingId, userId).
+  {
+    const gateCount = tpl.filter((s) => s.isReassignmentGate).length;
+    if (gateCount > 0 && args.initiatedByUserId) {
+      const personLabel = args.personId;
+      await db
+        .insert(atelierPaneAItems)
+        .values({
+          id: `panea_offboarding_${id}_${args.initiatedByUserId}`,
+          userId: args.initiatedByUserId,
+          title: `Reassignment pending: ${personLabel}`,
+          summary: `Offboarding Sentinel · ${gateCount} reassignment gate${gateCount === 1 ? "" : "s"} must clear before audit-pack sign-off.`,
+          priority: "high",
+          hrefKind: "atelier",
+          hrefTargetId: "roster",
+          dueLabel: args.lastWorkingDate ?? isoDate(now),
+          sortKey: 0,
+          createdByUserId: args.initiatedByUserId,
+        })
+        .onConflictDoNothing({ target: atelierPaneAItems.id });
+    }
+  }
   // Emit an Offboarding Sentinel agent run so the lifecycle is visible in
   // the standard agent_runs feed (Pane B), with toolCalls capturing the
   // reassignment-gate steps the Sentinel will enforce.

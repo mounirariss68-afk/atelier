@@ -46,6 +46,10 @@ export default function Admin() {
     immutableAuditRetentionYears: number;
     ipAllowlistEnabled: boolean;
     residencyRegion: string;
+    wps?: { status: "ok" | "warn" | "unknown"; message: string };
+    saudization?: { status: "ok" | "warn" | "unknown"; pct: number | null };
+    fxFreshness?: { status: "ok" | "warn" | "unknown"; hours: number | null };
+    receiptEncryption?: { status: "ok" | "warn" | "unknown"; unencryptedCount: number | null };
   };
   const [posture, setPosture] = React.useState<Posture | null>(null);
   const [todos, setTodos] = React.useState<string[]>([]);
@@ -291,6 +295,72 @@ export default function Admin() {
                       </div>
                     </div>
                   </div>
+                </div>
+                {/* Task #261 — v3 indicator chips: WPS, Saudization, FX freshness,
+                    receipt encryption. Each chip's color is driven by the
+                    server-side computed status. */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-border-soft">
+                  {(
+                    [
+                      {
+                        key: "wps",
+                        label: "WPS",
+                        status: posture.wps?.status ?? "unknown",
+                        detail: posture.wps?.message ?? "—",
+                      },
+                      {
+                        key: "saudization",
+                        label: "Saudization",
+                        status: posture.saudization?.status ?? "unknown",
+                        detail:
+                          posture.saudization?.pct == null
+                            ? "no quota on file"
+                            : `${posture.saudization.pct}% of required`,
+                      },
+                      {
+                        key: "fx",
+                        label: "FX Freshness",
+                        status: posture.fxFreshness?.status ?? "unknown",
+                        detail:
+                          posture.fxFreshness?.hours == null
+                            ? "no rates"
+                            : `last refresh ${posture.fxFreshness.hours}h ago`,
+                      },
+                      {
+                        key: "receipts",
+                        label: "Receipt Encryption",
+                        status: posture.receiptEncryption?.status ?? "unknown",
+                        detail:
+                          posture.receiptEncryption?.unencryptedCount == null
+                            ? "no expenses"
+                            : posture.receiptEncryption.unencryptedCount === 0
+                              ? "all encrypted at rest"
+                              : `${posture.receiptEncryption.unencryptedCount} unencrypted receipt(s)`,
+                      },
+                    ] as const
+                  ).map((chip) => {
+                    const tone =
+                      chip.status === "ok"
+                        ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-300"
+                        : chip.status === "warn"
+                          ? "border-amber-500/40 bg-amber-500/5 text-amber-300"
+                          : "border-border-soft bg-surface-soft/30 text-text-mute";
+                    return (
+                      <div
+                        key={chip.key}
+                        data-testid={`chip-posture-${chip.key}`}
+                        className={`rounded-md border px-2.5 py-2 ${tone}`}
+                      >
+                        <div className="font-mono text-[10px] uppercase tracking-widest opacity-80">
+                          {chip.label}
+                        </div>
+                        <div className="text-xs font-semibold mt-0.5 capitalize">
+                          {chip.status}
+                        </div>
+                        <div className="text-[11px] opacity-80 mt-0.5">{chip.detail}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               </Card>
             )}

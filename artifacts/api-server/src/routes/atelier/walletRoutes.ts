@@ -37,9 +37,11 @@ import {
   atelierPartnerFirmHours,
   atelierTimesheetEntries,
   atelierInvoiceLineDrafts,
+  atelierPaneAItems,
 } from "@workspace/db";
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
 import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-policy.js";
+import { assertAuditAction } from "./auditContract.js";
 import { RECEIPT_FIXTURES, resolveFixtureDate } from "../../lib/atelier-receipt-fixtures.js";
 import { runExpenseAuditor, runPublishSentinel } from "../../lib/atelier-agents/runner.js";
 import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
@@ -74,6 +76,7 @@ async function audit(args: {
   payload: Record<string, unknown>;
   summary: string;
 }) {
+  assertAuditAction(args.action);
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
     entityType: args.entityType,
@@ -681,6 +684,47 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
       payload: { reason: "policy-red-block", findings: expense.policyFindings },
       summary: `Submit blocked (RED) on ${expense.merchant ?? expense.id}.`,
     });
+    // Task #261 — Expense Auditor Pane A producer. When a submit is blocked
+    // by a hard RED policy, emit a Pane A item to the engagement lead (or
+    // the submitter when there's no engagement attached) so the violation
+    // doesn't sit invisible in the user's wallet. Idempotent on
+    // (expense, target_user) so repeated submit attempts don't spam.
+    {
+      const targets: string[] = [];
+      if (expense.engagementId) {
+        const [eng] = await db
+          .select({ leadId: atelierEngagements.engagementLeadId })
+          .from(atelierEngagements)
+          .where(eq(atelierEngagements.id, expense.engagementId));
+        if (eng?.leadId) targets.push(eng.leadId);
+      }
+      // Always notify the submitter so the issue is visible in their own
+      // Home pane even if there's no engagement lead to copy.
+      if (!targets.includes(me.id)) targets.push(me.id);
+      const merchantLabel = expense.merchant ?? expense.id;
+      const findingsSummary = (expense.policyFindings ?? [])
+        .map((f) => f.message)
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(" · ");
+      for (const uid of targets) {
+        await db
+          .insert(atelierPaneAItems)
+          .values({
+            id: `panea_expense_red_${expense.id}_${uid}`,
+            userId: uid,
+            title: `Expense RED: ${merchantLabel}`,
+            summary: `Expense Auditor blocked submit on ${merchantLabel}${findingsSummary ? ` — ${findingsSummary}` : ""}.`,
+            priority: "high",
+            hrefKind: "atelier",
+            hrefTargetId: "wallet",
+            dueLabel: new Date().toISOString().slice(0, 10),
+            sortKey: 0,
+            createdByUserId: me.id,
+          })
+          .onConflictDoNothing({ target: atelierPaneAItems.id });
+      }
+    }
     res.status(409).json({
       error: "policy-red-block",
       message: "Expense violates a hard policy block; edit and retry.",
