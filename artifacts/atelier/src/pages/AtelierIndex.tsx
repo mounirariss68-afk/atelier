@@ -113,6 +113,16 @@ function AssetsView() {
     query: { queryKey: getAtelierListAssetsQueryKey() },
   });
   const [filter, setFilter] = React.useState("");
+  const focusId = React.useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("focus");
+  }, []);
+  const focusRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (focusId && focusRef.current) {
+      focusRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [focusId, assets]);
   const [conciergeQ, setConciergeQ] = React.useState("");
   const concierge = useAtelierConciergeSearch();
 
@@ -192,7 +202,13 @@ function AssetsView() {
         {filtered.map((asset) => (
           <Card
             key={asset.id}
-            className="p-5 flex flex-col justify-between hover:border-gold/50 transition-colors"
+            ref={asset.id === focusId ? focusRef : undefined}
+            data-testid={`asset-card-${asset.id}`}
+            className={`p-5 flex flex-col justify-between transition-colors ${
+              asset.id === focusId
+                ? "border-gold ring-2 ring-gold/40"
+                : "hover:border-gold/50"
+            }`}
           >
             <div className="space-y-3">
               <div className="flex justify-between items-start gap-4">

@@ -774,7 +774,7 @@ router.get("/roster/skill-graph/search", async (req, res) => {
         kind: "asset",
         id: r.id,
         label: r.title,
-        href: `/atelier/${encodeURIComponent(r.id)}`,
+        href: `/atelier/assets?focus=${encodeURIComponent(r.id)}`,
       }),
     );
     dRows.forEach((r) =>
