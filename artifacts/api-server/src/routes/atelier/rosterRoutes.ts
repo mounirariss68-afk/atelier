@@ -69,6 +69,10 @@ interface PersonWire {
   avatarUrl?: string | null;
   notes?: string | null;
   partnerEconomicsId?: string | null;
+  // PRD §2.1 policy-locked fields (Partner / Operations only).
+  baseCompensation?: number | null;
+  dayRateInternalCost?: number | null;
+  costToAicoPerDay?: number | null;
 }
 
 const COMP_ROLES = new Set(["partner", "operations"]);
@@ -205,6 +209,8 @@ function employeeToWire(
     base.payrollCountry = r.payrollCountry;
     base.employeeIdExternal = r.employeeIdExternal;
     base.partnerEconomicsId = r.partnerEconomicsId;
+    // PRD §2.1 policy-locked field — Partner / Operations only.
+    base.baseCompensation = r.baseCompensation ?? null;
   }
   return base;
 }
@@ -231,6 +237,8 @@ function contractorToWire(
   if (includeComp) {
     base.dayRateAmount = r.dayRateAmount;
     base.dayRateCurrency = r.dayRateCurrency;
+    // PRD §2.1 policy-locked field — Partner / Operations only.
+    base.dayRateInternalCost = r.dayRateInternalCost ?? null;
   }
   return base;
 }
@@ -259,6 +267,8 @@ function partnerResourceToWire(
   if (includeComp) {
     base.dayRateAmount = r.dayRateAmount;
     base.dayRateCurrency = r.dayRateCurrency;
+    // PRD §2.1 policy-locked field — Partner / Operations only.
+    base.costToAicoPerDay = r.costToAicoPerDay ?? null;
   }
   return base;
 }

@@ -33,7 +33,7 @@ const TABS = [
   { id: "access", label: "Access" },
   { id: "engagements", label: "Engagements" },
   { id: "skills", label: "Skills" },
-  { id: "timesheet", label: "Timesheet" },
+  { id: "timesheet", label: "Timesheet-summary" },
   { id: "documents", label: "Documents" },
   { id: "audit", label: "Audit" },
 ];
@@ -422,11 +422,39 @@ function AuditTab({ personId }: { personId: string }) {
       .then((r) => r.json())
       .then((d) => setEvents(d.events ?? []));
   }, [personId]);
-  if (!events) return <div className="text-text-mute">Loading…</div>;
+  // PRD §1 IA — Audit tab owns the per-person Audit Pack export CTA.
+  // The export pipeline lands in a follow-up; the placeholder hook is wired
+  // here so QA + downstream tasks have a stable target.
+  const ExportCta = (
+    <div className="flex justify-end mb-3">
+      <button
+        type="button"
+        disabled
+        title="Audit Pack PDF export ships in a follow-up task"
+        data-testid="export-audit-pack-pdf"
+        className="px-3 py-1.5 text-xs font-mono uppercase border border-border rounded text-text-mute hover:text-gold hover:border-gold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Export Audit Pack PDF
+      </button>
+    </div>
+  );
+  if (!events)
+    return (
+      <>
+        {ExportCta}
+        <div className="text-text-mute">Loading…</div>
+      </>
+    );
   if (events.length === 0)
-    return <Card className="p-6 text-text-mute">No audit events.</Card>;
+    return (
+      <>
+        {ExportCta}
+        <Card className="p-6 text-text-mute">No audit events.</Card>
+      </>
+    );
   return (
     <div className="space-y-2">
+      {ExportCta}
       {events.map((e) => (
         <Card key={e.id} className="p-3">
           <div className="flex justify-between gap-3 text-xs text-text-mute">

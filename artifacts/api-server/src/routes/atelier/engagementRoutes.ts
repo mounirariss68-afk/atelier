@@ -44,6 +44,7 @@ import {
   runCharterArchitect,
   runSynthesisCritic,
   scaffoldDiagnosticMemo,
+  emitAccessSentinelEvent,
   type HypothesisTree,
 } from "../../lib/atelier-agents/runner.js";
 import { curatorAbstract } from "./knowledgeRoutes.js";
@@ -1125,6 +1126,60 @@ router.post("/artifacts/:artifactId/translate", async (req, res) => {
     summary: `${me.name} translated artifact "${a.title}" (stub, ${lang}→${lang === "ar" ? "en" : "ar"})`,
   });
   res.json(artifactWire(row));
+});
+
+// =============================================================
+// Task #254 — Engagement stage transition (close hook).
+// PATCHing plmStage='closed' fires the Access Sentinel which auto-revokes
+// every non-employee grant on this engagement and writes audit rows.
+// =============================================================
+router.patch("/engagements/:engId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (
+    me.role !== "partner" &&
+    me.role !== "engagement_lead" &&
+    me.role !== "operations"
+  ) {
+    res.status(403).json({ error: "actor-not-authorized-to-update-engagement" });
+    return;
+  }
+  const eng = await loadEng(req.params.engId);
+  if (!eng) {
+    res.status(404).json({ error: "engagement-not-found" });
+    return;
+  }
+  const body = (req.body ?? {}) as { plmStage?: string };
+  const nextStage = body.plmStage;
+  if (!nextStage) {
+    res.status(400).json({ error: "no-fields-to-update" });
+    return;
+  }
+  const wasClosed = eng.plmStage === "closed";
+  await db
+    .update(atelierEngagements)
+    .set({ plmStage: nextStage, updatedAt: new Date() })
+    .where(eq(atelierEngagements.id, eng.id));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "engagement",
+    entityId: eng.id,
+    actorType: "user",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "engagement.stage.update",
+    payload: { from: eng.plmStage, to: nextStage },
+    payloadSummary: `Engagement stage ${eng.plmStage} → ${nextStage}`,
+  });
+  // Sentinel side-effect: on transition INTO closed, auto-revoke non-employees.
+  if (nextStage === "closed" && !wasClosed) {
+    await emitAccessSentinelEvent({
+      kind: "engagement_closed",
+      engagementId: eng.id,
+      closedByUserId: me.id,
+    });
+  }
+  res.json({ ok: true, engagementId: eng.id, plmStage: nextStage });
 });
 
 export default router;

@@ -3320,6 +3320,38 @@ async function main() {
   ];
   await db.insert(atelierPartnerFirmResources).values(PARTNER_RESOURCES).onConflictDoNothing();
 
+  // Task #254 — Provision a partner-firm USER persona + scoped engagement-access
+  // grant. Required so the cross-realm test ("partner-firm staff in seed only
+  // see assigned engagement routes") has a concrete subject.
+  console.log("[seed-atelier] v3 roster: partner-firm persona + scoped grant…");
+  await db
+    .insert(atelierUsers)
+    .values({
+      id: "u_yara_bgts",
+      orgId: "aico",
+      name: "Yara Al-Suwaidi",
+      initials: "YA",
+      email: "yara.suwaidi@bgts.example",
+      role: "partner_firm_resource",
+      roleLabel: "Senior Consultant — BGTS",
+      title: "Senior Consultant — BGTS",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(atelierEngagementAccess)
+    .values({
+      id: "ea_yara_tasama",
+      engagementId: "eng_tasama_bpo_phase1",
+      userId: "u_yara_bgts",
+      role: "partner_resource",
+      allocationPct: 60,
+      scope: ["can_view_engagement", "can_view_artifacts"],
+      status: "active",
+      grantedByUserId: "p_mounir_ariss",
+      grantedAt: new Date(),
+    })
+    .onConflictDoNothing();
+
   console.log("[seed-atelier] v3 roster: a placeholder document on Mounir…");
   await db.insert(atelierPersonDocuments).values([
     {

@@ -38,12 +38,15 @@ export function TopNav() {
     });
   };
 
+  // Task #254 — Roster nav visible to Partner / Operations / Engagement Lead only.
+  const ROSTER_ROLES = new Set(["partner", "operations", "engagement_lead"]);
+  const canSeeRoster = !!me?.role && ROSTER_ROLES.has(me.role);
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/crm", label: "CRM" },
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
-    { href: "/roster/people", label: "Roster" },
+    ...(canSeeRoster ? [{ href: "/roster/people", label: "Roster" }] : []),
     { href: "/forecast", label: "Forecast" },
     { href: "/win-loss", label: "Win Themes" },
     { href: "/atelier", label: "Atelier" },
