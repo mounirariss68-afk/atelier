@@ -186,7 +186,13 @@ router.get("/accounts", async (req, res) => {
   if (tier) filtered = filtered.filter((r) => (r.tier ?? "C") === tier);
   if (sector) filtered = filtered.filter((r) => r.sector === sector);
   if (ownerId) filtered = filtered.filter((r) => r.partnerOwnerId === ownerId);
-  const out = await Promise.all(filtered.map((a) => summariseAccount(a, access)));
+  // Account-level RLS: a non-partner only sees accounts where they hold an
+  // engagement grant or are the partner_owner. Mirrors canSeeAccount().
+  const visible = await Promise.all(
+    filtered.map(async (r) => ((await canSeeAccount(access, me, r.id)) ? r : null)),
+  );
+  const allowed = visible.filter((r): r is NonNullable<typeof r> => r !== null);
+  const out = await Promise.all(allowed.map((a) => summariseAccount(a, access)));
   res.json(out);
 });
 
@@ -741,6 +747,110 @@ router.post("/credentials", async (req, res) => {
     tags: c.tags ?? [],
     createdAt: new Date(c.createdAt).toISOString(),
   });
+});
+
+router.put("/credentials/:credentialId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const parsed = AtelierCredentialInput.partial().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(atelierCredentials)
+    .where(and(eq(atelierCredentials.id, req.params.credentialId), isNull(atelierCredentials.deletedAt)));
+  if (!existing) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const updated = await db.transaction(async (tx) => {
+    await tx
+      .update(atelierCredentials)
+      .set({
+        ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+        ...(parsed.data.clientName !== undefined && { clientName: parsed.data.clientName }),
+        ...(parsed.data.sector !== undefined && { sector: parsed.data.sector }),
+        ...(parsed.data.engagementType !== undefined && { engagementType: parsed.data.engagementType }),
+        ...(parsed.data.anonymizationStatus !== undefined && { anonymizationStatus: parsed.data.anonymizationStatus }),
+        ...(parsed.data.redactedAbstract !== undefined && { redactedAbstract: parsed.data.redactedAbstract }),
+        ...(parsed.data.attributedAbstract !== undefined && { attributedAbstract: parsed.data.attributedAbstract }),
+        ...(parsed.data.outcomeMetrics !== undefined && { outcomeMetrics: parsed.data.outcomeMetrics }),
+        ...(parsed.data.evidenceLinks !== undefined && { evidenceLinks: parsed.data.evidenceLinks }),
+        ...(parsed.data.tags !== undefined && { tags: parsed.data.tags }),
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierCredentials.id, existing.id));
+    const [row] = await tx.select().from(atelierCredentials).where(eq(atelierCredentials.id, existing.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "credential",
+      entityId: existing.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "credential.update",
+      payload: { fields: Object.keys(parsed.data) },
+      payloadSummary: `${me.name} updated Credential "${row.title}".`,
+    });
+    return row;
+  });
+  res.json({
+    id: updated.id,
+    title: updated.title,
+    accountId: updated.accountId ?? null,
+    clientName: updated.clientName,
+    sector: updated.sector,
+    engagementType: updated.engagementType,
+    anonymizationStatus: updated.anonymizationStatus,
+    redactedAbstract: updated.redactedAbstract,
+    attributedAbstract: updated.attributedAbstract ?? null,
+    outcomeMetrics: updated.outcomeMetrics ?? [],
+    evidenceLinks: updated.evidenceLinks ?? [],
+    relatedAssetId: updated.relatedAssetId ?? null,
+    tags: updated.tags ?? [],
+    createdAt: new Date(updated.createdAt).toISOString(),
+  });
+});
+
+router.delete("/credentials/:credentialId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(atelierCredentials)
+    .where(and(eq(atelierCredentials.id, req.params.credentialId), isNull(atelierCredentials.deletedAt)));
+  if (!existing) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierCredentials)
+      .set({ deletedAt: new Date() })
+      .where(eq(atelierCredentials.id, existing.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "credential",
+      entityId: existing.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "credential.delete",
+      payload: { title: existing.title },
+      payloadSummary: `${me.name} retired Credential "${existing.title}".`,
+    });
+  });
+  res.status(204).send();
 });
 
 export default router;

@@ -191,7 +191,13 @@ export default function Account() {
             }}
           />
         )}
-        {tab === "decision_makers" && <DecisionMakersTab contacts={ws.contacts} accountId={accountId} />}
+        {tab === "decision_makers" && (
+          <DecisionMakersTab
+            contacts={ws.contacts}
+            relationships={ws.relationships}
+            accountId={accountId}
+          />
+        )}
         {tab === "opportunities" && <OpportunitiesTab opps={ws.opportunities} />}
         {tab === "engagements" && <EngagementsTab engs={ws.engagements} />}
         {tab === "relationships" && (
@@ -366,9 +372,18 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function DecisionMakersTab({ contacts, accountId }: { contacts: AtelierContact[]; accountId: string }) {
+function DecisionMakersTab({
+  contacts,
+  relationships,
+  accountId,
+}: {
+  contacts: AtelierContact[];
+  relationships: AtelierContactRelationship[];
+  accountId: string;
+}) {
   const updateDisp = useAtelierUpdateContactDisposition();
   const qc = useQueryClient();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   if (contacts.length === 0) {
     return (
       <Card className="p-8 text-center text-text-mute font-mono text-sm">
@@ -376,10 +391,55 @@ function DecisionMakersTab({ contacts, accountId }: { contacts: AtelierContact[]
       </Card>
     );
   }
+  const selected = selectedId ? contacts.find((c) => c.id === selectedId) ?? null : null;
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {contacts.map((c) => (
-        <Card key={c.id} className="p-5 space-y-3" data-testid={`card-contact-${c.id}`}>
+    <div className="space-y-6">
+      <DecisionMakersGraph
+        contacts={contacts}
+        relationships={relationships}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
+      {selected && (
+        <Card className="p-5 border-gold/40" data-testid={`panel-contact-${selected.id}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <Eyebrow>Contact</Eyebrow>
+              <div className="text-lg font-semibold text-text mt-1">{selected.fullName}</div>
+              <div className="text-xs font-mono text-text-mute">
+                {selected.title ?? "—"}
+                {selected.seniority && ` · ${selected.seniority}`}
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedId(null)}
+              className="text-xs font-mono text-text-mute hover:text-text"
+              data-testid="button-close-contact-panel"
+            >
+              close ✕
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <MonoChip tone={DISPOSITION_TONE[selected.disposition]}>{selected.disposition}</MonoChip>
+            {selected.buyerPersona && <MonoChip>{selected.buyerPersona}</MonoChip>}
+            <MonoChip tone="gold">Influence {selected.influenceScore}/5</MonoChip>
+            {selected.email && <MonoChip>{selected.email}</MonoChip>}
+          </div>
+          {selected.notes && (
+            <p className="text-sm text-text-mute leading-snug border-t border-border-soft pt-3 mt-3">
+              {selected.notes}
+            </p>
+          )}
+        </Card>
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {contacts.map((c) => (
+        <Card
+          key={c.id}
+          onClick={() => setSelectedId(c.id)}
+          className={`p-5 space-y-3 cursor-pointer transition-colors ${selectedId === c.id ? "border-gold/60" : "hover:border-border"}`}
+          data-testid={`card-contact-${c.id}`}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-base font-semibold text-text">{c.fullName}</div>
@@ -400,7 +460,10 @@ function DecisionMakersTab({ contacts, accountId }: { contacts: AtelierContact[]
               {c.notes}
             </p>
           )}
-          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border-soft">
+          <div
+            className="flex flex-wrap gap-1.5 pt-2 border-t border-border-soft"
+            onClick={(e) => e.stopPropagation()}
+          >
             {(["champion", "supporter", "neutral", "skeptic", "blocker"] as AtelierContactDisposition[]).map((d) => (
               <button
                 key={d}
@@ -428,7 +491,128 @@ function DecisionMakersTab({ contacts, accountId }: { contacts: AtelierContact[]
           </div>
         </Card>
       ))}
+      </div>
     </div>
+  );
+}
+
+function DecisionMakersGraph({
+  contacts,
+  relationships,
+  selectedId,
+  onSelect,
+}: {
+  contacts: AtelierContact[];
+  relationships: AtelierContactRelationship[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  // Layered layout: roots (no incoming reports_to) on top, descendants below.
+  const reportsTo = relationships.filter((r) => r.type === "reports_to");
+  const childToParent = new Map(reportsTo.map((r) => [r.fromContactId, r.toContactId]));
+  const depth = (id: string, seen = new Set<string>()): number => {
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const p = childToParent.get(id);
+    return p ? 1 + depth(p, seen) : 0;
+  };
+  const layers: AtelierContact[][] = [];
+  contacts.forEach((c) => {
+    const d = depth(c.id);
+    if (!layers[d]) layers[d] = [];
+    layers[d].push(c);
+  });
+  const W = 880;
+  const ROW_H = 110;
+  const H = Math.max(220, layers.length * ROW_H + 40);
+  const NODE_W = 150;
+  const NODE_H = 56;
+  const positions = new Map<string, { x: number; y: number }>();
+  layers.forEach((layer, depthIdx) => {
+    const step = W / (layer.length + 1);
+    layer.forEach((c, i) => {
+      positions.set(c.id, { x: step * (i + 1), y: 40 + depthIdx * ROW_H });
+    });
+  });
+  const dispositionFill: Record<string, string> = {
+    champion: "#1F6F3E",
+    supporter: "#2F855A",
+    neutral: "#1E2A47",
+    skeptic: "#7B341E",
+    blocker: "#7B1F1F",
+  };
+  return (
+    <Card className="p-4 overflow-x-auto">
+      <Eyebrow>Influence Map</Eyebrow>
+      <svg
+        width={W}
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
+        className="mt-3 w-full h-auto"
+        data-testid="decision-makers-graph"
+      >
+        {relationships.map((r) => {
+          const a = positions.get(r.fromContactId);
+          const b = positions.get(r.toContactId);
+          if (!a || !b) return null;
+          const stroke =
+            r.type === "blocks" ? "#a83232" : r.type === "partners_with" ? "#E89E2C" : "#3a4a6e";
+          const dash = r.type === "partners_with" ? "4 3" : undefined;
+          return (
+            <line
+              key={r.id}
+              x1={a.x}
+              y1={a.y + NODE_H / 2}
+              x2={b.x}
+              y2={b.y - NODE_H / 2}
+              stroke={stroke}
+              strokeWidth={1.5}
+              strokeDasharray={dash}
+              opacity={0.7}
+            />
+          );
+        })}
+        {contacts.map((c) => {
+          const p = positions.get(c.id);
+          if (!p) return null;
+          const isSel = selectedId === c.id;
+          return (
+            <g
+              key={c.id}
+              transform={`translate(${p.x - NODE_W / 2}, ${p.y - NODE_H / 2})`}
+              onClick={() => onSelect(c.id)}
+              style={{ cursor: "pointer" }}
+              data-testid={`graph-node-${c.id}`}
+            >
+              <rect
+                width={NODE_W}
+                height={NODE_H}
+                rx={6}
+                fill={dispositionFill[c.disposition] ?? "#1E2A47"}
+                stroke={isSel ? "#E89E2C" : "#2c3a5c"}
+                strokeWidth={isSel ? 2 : 1}
+              />
+              <text x={NODE_W / 2} y={22} textAnchor="middle" fontSize={11} fontWeight={600} fill="#F5EBD6">
+                {c.fullName.length > 22 ? c.fullName.slice(0, 20) + "…" : c.fullName}
+              </text>
+              <text x={NODE_W / 2} y={38} textAnchor="middle" fontSize={9} fill="#C9C2B0" fontFamily="monospace">
+                {(c.title ?? "—").slice(0, 24)}
+              </text>
+              <text x={NODE_W / 2} y={50} textAnchor="middle" fontSize={9} fill="#E89E2C" fontFamily="monospace">
+                infl {c.influenceScore}/5
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-3 mt-2 text-[10px] font-mono text-text-mute">
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#1F6F3E] mr-1" />champion</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#7B1F1F] mr-1" />blocker</span>
+        <span><span className="inline-block w-3 h-px bg-[#3a4a6e] mr-1 align-middle" />reports_to</span>
+        <span><span className="inline-block w-3 h-px bg-[#a83232] mr-1 align-middle" />blocks</span>
+        <span><span className="inline-block w-3 h-px border-t border-dashed border-[#E89E2C] mr-1 align-middle" />partners_with</span>
+      </div>
+    </Card>
   );
 }
 

@@ -244,11 +244,58 @@ function CredentialsView() {
                 ))}
               </div>
             )}
+            {isPartner && (
+              <div className="mt-4 pt-3 border-t border-border-soft flex justify-end gap-2">
+                <button
+                  onClick={() => editCredential(c.id)}
+                  className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-border text-text-mute hover:border-gold hover:text-gold"
+                  data-testid={`button-edit-credential-${c.id}`}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => deleteCredential(c.id, c.title)}
+                  className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-border text-text-mute hover:border-red-500 hover:text-red-400"
+                  data-testid={`button-delete-credential-${c.id}`}
+                >
+                  Retire
+                </button>
+              </div>
+            )}
           </Card>
         ))}
       </div>
     </div>
   );
+}
+
+async function editCredential(id: string) {
+  const newTitle = window.prompt("New title (leave blank to cancel):");
+  if (!newTitle) return;
+  const r = await fetch(`/api/atelier/credentials/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ title: newTitle }),
+  });
+  if (!r.ok) {
+    window.alert(`Update failed (${r.status})`);
+    return;
+  }
+  window.location.reload();
+}
+
+async function deleteCredential(id: string, title: string) {
+  if (!window.confirm(`Retire credential "${title}"? This is a soft-delete and is auditable.`)) return;
+  const r = await fetch(`/api/atelier/credentials/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!r.ok) {
+    window.alert(`Delete failed (${r.status})`);
+    return;
+  }
+  window.location.reload();
 }
 
 function PeopleView() {
