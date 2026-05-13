@@ -1749,6 +1749,18 @@ router.get("/ledger/utilization/firm", async (req, res) => {
   const fullRateInv = apr.filter((r) => r.status === "approved" || r.status === "partner_approved").reduce((s, r) => s + Number(r.hours), 0);
   const realizationRatePct = fullRateAvail > 0 ? fullRateInv / fullRateAvail : 0;
 
+  // Batch-prefetch pricings for *all* engagements in this view so neither
+  // the sector-aggregation loop below nor the engagement rollup further
+  // down has to N+1 a per-engagement pricing query. Keyed by opportunityId.
+  const oppIds = engs.map((e) => e.opportunityId).filter((x): x is string => !!x);
+  const pricingRows = oppIds.length
+    ? await db
+        .select()
+        .from(atelierDealPricings)
+        .where(and(inArray(atelierDealPricings.opportunityId, oppIds), isNull(atelierDealPricings.deletedAt)))
+    : [];
+  const pricingByOpp = new Map(pricingRows.map((p) => [p.opportunityId, p] as const));
+
   // Sector margin
   for (const eng of engs) {
     const acct = accountById.get(eng.accountId);
@@ -1756,14 +1768,7 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     const actuals = perEng.get(eng.id);
     if (!actuals) continue;
     const realizedMargin = actuals.price > 0 ? (actuals.price - actuals.cost) / actuals.price : 0;
-    let pricing: typeof atelierDealPricings.$inferSelect | undefined;
-    if (eng.opportunityId) {
-      const [p] = await db
-        .select()
-        .from(atelierDealPricings)
-        .where(and(eq(atelierDealPricings.opportunityId, eng.opportunityId), isNull(atelierDealPricings.deletedAt)));
-      pricing = p;
-    }
+    const pricing = eng.opportunityId ? pricingByOpp.get(eng.opportunityId) : undefined;
     const plannedMargin = pricing ? Number(pricing.computedMarginPct) : 0;
     const sec = sectorAgg.get(acct.sector) ?? { sector: acct.sector, plannedMargin: 0, realizedMargin: 0, engagementCount: 0, weightUsd: 0 };
     const w = actuals.price;
@@ -1781,19 +1786,8 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     revenueUsd: s.weightUsd,
   }));
 
-  // Batch-prefetch pricings for *all* engagements in this view so the
-  // rollup doesn't N+1 a per-engagement pricing query. Keyed by
-  // opportunityId since that's the FK pricings carry.
-  const oppIds = engs.map((e) => e.opportunityId).filter((x): x is string => !!x);
-  const pricingRows = oppIds.length
-    ? await db
-        .select()
-        .from(atelierDealPricings)
-        .where(and(inArray(atelierDealPricings.opportunityId, oppIds), isNull(atelierDealPricings.deletedAt)))
-    : [];
-  const pricingByOpp = new Map(pricingRows.map((p) => [p.opportunityId, p] as const));
-
-  // Per-engagement leakage + realized-margin row, with re-look CTA pointer
+  // Per-engagement leakage + realized-margin row, with re-look CTA
+  // pointer. `pricingByOpp` was prefetched above the sector loop.
   const engagementRollup = engs.map((eng) => {
     const acct = accountById.get(eng.accountId);
     const actuals = perEng.get(eng.id) ?? { hours: 0, cost: 0, price: 0, billableHours: 0 };
