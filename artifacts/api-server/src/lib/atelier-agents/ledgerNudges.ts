@@ -17,7 +17,7 @@ import {
   atelierContractors,
 } from "@workspace/db";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { runTimeSteward } from "./runner.js";
+import { runTimeSteward, startRun, completeRun } from "./runner.js";
 
 type NudgeKind = "submit_due" | "approve_due";
 
@@ -441,6 +441,28 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
     // Hourly gate: only fire on the first 15-min slice of each hour.
     if (minute >= 15) return { alertsWritten: 0, engagementsScanned: 0 };
   }
+  // Wrap the deterministic sweep in the standard agent-run lifecycle so
+  // Burn Sentinel shows up alongside other agents in the runs list with
+  // start/complete telemetry, duration, and alertsWritten as output.
+  // Failures inside the sweep are recorded as a `blocked` run rather
+  // than crashing the scheduler.
+  const startedAt = Date.now();
+  let runId: string | null = null;
+  try {
+    runId = await startRun({
+      agentId: "ag_burn_sentinel",
+      triggeredByUserId: null,
+      targetType: "ledger.burn_sentinel",
+      targetId: "firm",
+      targetLabel: "Firm-wide burn sweep",
+      actorLabel: "Burn Sentinel",
+      inputs: { force: !!opts.force },
+    });
+  } catch (err) {
+    // Budget rejection or DB unavailable — fall back to a telemetry-less
+    // run rather than dropping the deterministic alerts.
+    console.warn("[burn-sentinel] startRun failed, continuing without telemetry:", err);
+  }
   const burns = await computeEngagementBurns();
   let alertsWritten = 0;
 
@@ -515,6 +537,25 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
           status: "queued",
         }).onConflictDoNothing({ target: atelierNotifications.id });
       }
+    }
+  }
+  if (runId) {
+    try {
+      await completeRun({
+        runId,
+        output: { alertsWritten, engagementsScanned: burns.length },
+        confidence: alertsWritten > 0 ? "amber" : "green",
+        costUsd: 0,
+        durationMs: Date.now() - startedAt,
+        sourcesCount: burns.length,
+        actorLabel: "Burn Sentinel",
+        targetType: "ledger.burn_sentinel",
+        targetId: "firm",
+        targetLabel: "Firm-wide burn sweep",
+        source: "mock_config",
+      });
+    } catch (err) {
+      console.warn("[burn-sentinel] completeRun failed:", err);
     }
   }
   return { alertsWritten, engagementsScanned: burns.length };
