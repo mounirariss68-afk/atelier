@@ -671,6 +671,14 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
   }
 
   if (expense.policyStatus === "red") {
+    await audit({
+      entityType: "expense",
+      entityId: expense.id,
+      actor: me,
+      action: "expense.submit.blocked",
+      payload: { reason: "policy-red-block", findings: expense.policyFindings },
+      summary: `Submit blocked (RED) on ${expense.merchant ?? expense.id}.`,
+    });
     res.status(409).json({
       error: "policy-red-block",
       message: "Expense violates a hard policy block; edit and retry.",
@@ -679,6 +687,14 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     return;
   }
   if (expense.policyStatus === "amber" && !body.overrideRationale) {
+    await audit({
+      entityType: "expense",
+      entityId: expense.id,
+      actor: me,
+      action: "expense.submit.blocked",
+      payload: { reason: "amber-requires-rationale", findings: expense.policyFindings },
+      summary: `Submit blocked (AMBER, no rationale) on ${expense.merchant ?? expense.id}.`,
+    });
     res.status(409).json({
       error: "amber-requires-rationale",
       message: "Policy AMBER warning — submit again with `overrideRationale`.",
@@ -814,6 +830,10 @@ router.post("/wallet/expenses/:id/reject", async (req, res) => {
     .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
   if (!existing) {
     res.status(404).json({ error: "expense-not-found" });
+    return;
+  }
+  if (existing.status !== "submitted") {
+    res.status(409).json({ error: "not-submitted" });
     return;
   }
   // engagement_lead may only reject expenses bound to engagements they lead.
