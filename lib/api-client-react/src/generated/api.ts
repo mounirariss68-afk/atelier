@@ -51,6 +51,7 @@ import type {
   AtelierHypothesisTree,
   AtelierListAuditParams,
   AtelierMeeting,
+  AtelierOverrideProposalPricingInput,
   AtelierPersona,
   AtelierPersonaSwitchInput,
   AtelierPov,
@@ -5012,6 +5013,97 @@ export const useAtelierApproveProposalPricing = <
   TContext
 > => {
   return useMutation(getAtelierApproveProposalPricingMutationOptions(options));
+};
+
+/**
+ * @summary Partner override for low-margin proposals (records rationale)
+ */
+export const getAtelierOverrideProposalPricingUrl = (proposalId: string) => {
+  return `/api/atelier/proposals/${proposalId}/override-pricing`;
+};
+
+export const atelierOverrideProposalPricing = async (
+  proposalId: string,
+  atelierOverrideProposalPricingInput: AtelierOverrideProposalPricingInput,
+  options?: RequestInit,
+): Promise<AtelierProposal> => {
+  return customFetch<AtelierProposal>(
+    getAtelierOverrideProposalPricingUrl(proposalId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierOverrideProposalPricingInput),
+    },
+  );
+};
+
+export const getAtelierOverrideProposalPricingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierOverrideProposalPricing>>,
+    TError,
+    { proposalId: string; data: BodyType<AtelierOverrideProposalPricingInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierOverrideProposalPricing>>,
+  TError,
+  { proposalId: string; data: BodyType<AtelierOverrideProposalPricingInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierOverrideProposalPricing"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierOverrideProposalPricing>>,
+    { proposalId: string; data: BodyType<AtelierOverrideProposalPricingInput> }
+  > = (props) => {
+    const { proposalId, data } = props ?? {};
+
+    return atelierOverrideProposalPricing(proposalId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierOverrideProposalPricingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierOverrideProposalPricing>>
+>;
+export type AtelierOverrideProposalPricingMutationBody =
+  BodyType<AtelierOverrideProposalPricingInput>;
+export type AtelierOverrideProposalPricingMutationError = ErrorType<void>;
+
+/**
+ * @summary Partner override for low-margin proposals (records rationale)
+ */
+export const useAtelierOverrideProposalPricing = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierOverrideProposalPricing>>,
+    TError,
+    { proposalId: string; data: BodyType<AtelierOverrideProposalPricingInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierOverrideProposalPricing>>,
+  TError,
+  { proposalId: string; data: BodyType<AtelierOverrideProposalPricingInput> },
+  TContext
+> => {
+  return useMutation(getAtelierOverrideProposalPricingMutationOptions(options));
 };
 
 /**

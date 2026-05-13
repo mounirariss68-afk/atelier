@@ -681,7 +681,10 @@ router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
   if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
   const verdict = (proposal.pricingModel as { verdict?: string } | null)?.verdict;
   if (verdict === "partner_override_required") {
-    res.status(409).json({ error: "pricing-requires-partner-override" });
+    res.status(409).json({
+      error: "pricing-requires-partner-override",
+      hint: "Use POST /proposals/:id/override-pricing with a rationale",
+    });
     return;
   }
   const newIntent = {
@@ -707,9 +710,62 @@ router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
 });
 
 // ----------------------------------------------------------------------
+// Pricing OVERRIDE checkpoint — partner-only escape hatch for proposals
+// whose verdict is "partner_override_required" (margin below target).
+// Records rationale + approver + timestamp on pricingIntent. Send gate
+// accepts either a normal pricing approval OR a recorded override.
+// ----------------------------------------------------------------------
+router.post("/proposals/:proposalId/override-pricing", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "only-partner-may-override-pricing" });
+    return;
+  }
+  const body = req.body as { rationale?: string };
+  const rationale = (body.rationale ?? "").trim();
+  if (rationale.length < 10) {
+    res.status(400).json({ error: "rationale-too-short" });
+    return;
+  }
+  const [proposal] = await db
+    .select()
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, req.params.proposalId));
+  if (!proposal) { res.status(404).json({ error: "proposal-not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  const verdict = (proposal.pricingModel as { verdict?: string } | null)?.verdict;
+  if (verdict !== "partner_override_required") {
+    res.status(409).json({ error: "override-not-required-for-this-verdict" });
+    return;
+  }
+  const newIntent = {
+    ...((proposal.pricingIntent ?? {}) as Record<string, unknown>),
+    pricingOverrideAt: new Date().toISOString(),
+    pricingOverrideByUserId: me.id,
+    pricingOverrideByName: me.name,
+    pricingOverrideRationale: rationale,
+  };
+  const [updated] = await db
+    .update(atelierProposals)
+    .set({ pricingIntent: newIntent, updatedAt: new Date() })
+    .where(eq(atelierProposals.id, proposal.id))
+    .returning();
+  await audit({
+    entityType: "opportunity",
+    entityId: proposal.opportunityId,
+    actor: me,
+    action: "proposal.override_pricing",
+    payload: { proposalId: proposal.id, rationale },
+    summary: `${me.name} overrode pricing for "${proposal.title}": ${rationale}`,
+  });
+  res.json(updated);
+});
+
+// ----------------------------------------------------------------------
 // Proposal SEND — partner-only final read gate. Enforces the workflow:
-// (1) all sections approved, (2) pricing not partner_override_required,
-// then assembles a deterministic DOCX/PDF placeholder artifact and flips
+// (1) all sections approved, (2) pricing approved OR overridden,
+// then assembles a deterministic DOCX/PDF artifact and flips
 // proposal.status to "sent".
 // ----------------------------------------------------------------------
 router.post("/proposals/:proposalId/send", async (req, res) => {
@@ -740,16 +796,24 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
     });
     return;
   }
+  // Send requires a recorded pricing checkpoint: either the normal
+  // approval (verdicts other than override-required) or an explicit
+  // partner override with rationale.
+  const pricingIntent = (proposal.pricingIntent ?? {}) as {
+    pricingApprovedAt?: string;
+    pricingOverrideAt?: string;
+  };
+  const pricingApprovedAt = pricingIntent.pricingApprovedAt;
+  const pricingOverrideAt = pricingIntent.pricingOverrideAt;
   const pricingVerdict = (proposal.pricingModel as { verdict?: string } | null)?.verdict;
-  if (pricingVerdict === "partner_override_required") {
-    res.status(409).json({ error: "pricing-requires-partner-override" });
+  if (pricingVerdict === "partner_override_required" && !pricingOverrideAt) {
+    res.status(409).json({
+      error: "pricing-requires-partner-override",
+      hint: "Use POST /proposals/:id/override-pricing with a rationale",
+    });
     return;
   }
-  // Send also requires the explicit pricing-approval checkpoint to have
-  // been recorded (separate from the section approvals above).
-  const pricingApprovedAt =
-    (proposal.pricingIntent as { pricingApprovedAt?: string } | null)?.pricingApprovedAt;
-  if (!pricingApprovedAt) {
+  if (pricingVerdict !== "partner_override_required" && !pricingApprovedAt) {
     res.status(409).json({ error: "pricing-not-yet-approved" });
     return;
   }

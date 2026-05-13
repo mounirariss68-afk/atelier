@@ -1140,6 +1140,31 @@ paths:
               schema: { $ref: "#/components/schemas/AtelierProposal" }
         "409":
           description: Pricing requires partner override (margin below target)
+  /atelier/proposals/{proposalId}/override-pricing:
+    post:
+      operationId: atelierOverrideProposalPricing
+      tags: [atelier]
+      summary: Partner override for low-margin proposals (records rationale)
+      parameters:
+        - in: path
+          name: proposalId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierOverrideProposalPricingInput" }
+      responses:
+        "200":
+          description: Proposal updated with override metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierProposal" }
+        "400":
+          description: Rationale missing or too short
+        "409":
+          description: Verdict does not require override
   /atelier/proposals/{proposalId}/send:
     post:
       operationId: atelierSendProposal
@@ -2215,6 +2240,11 @@ components:
         sections:
           type: array
           items: { $ref: "#/components/schemas/AtelierProposalSection" }
+    AtelierOverrideProposalPricingInput:
+      type: object
+      required: [rationale]
+      properties:
+        rationale: { type: string, minLength: 10 }
     AtelierProposalSendResponse:
       type: object
       required: [proposal, pdfUrl, docxUrl]

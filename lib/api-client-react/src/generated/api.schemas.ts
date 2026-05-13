@@ -1370,6 +1370,11 @@ export interface AtelierProposalDetail {
   sections: AtelierProposalSection[];
 }
 
+export interface AtelierOverrideProposalPricingInput {
+  /** @minLength 10 */
+  rationale: string;
+}
+
 export interface AtelierProposalSendResponse {
   proposal: AtelierProposal;
   pdfUrl: string;

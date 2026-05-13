@@ -88,6 +88,7 @@ export * from "./atelierMeetingAttendeesItem";
 export * from "./atelierMeetingDecisionsItem";
 export * from "./atelierMeetingKind";
 export * from "./atelierMeetingMode";
+export * from "./atelierOverrideProposalPricingInput";
 export * from "./atelierPersona";
 export * from "./atelierPersonaRole";
 export * from "./atelierPersonaSwitchInput";

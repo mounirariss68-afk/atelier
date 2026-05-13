@@ -215,6 +215,7 @@ export {
   getAtelierApproveProposalPricingUrl,
   getAtelierApproveProposalPricingMutationOptions,
   useAtelierApproveProposalPricing,
+  useAtelierOverrideProposalPricing,
 } from "./generated/api";
 export type {
   HealthCheckQueryResult,
