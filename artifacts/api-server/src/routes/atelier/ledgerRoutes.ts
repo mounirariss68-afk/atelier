@@ -1784,7 +1784,10 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     }
     const plannedMargin = pricing ? Number(pricing.computedMarginPct) : 0;
     const targetMargin = pricing ? Number(pricing.targetMarginPct) : 0.55;
-    const belowTarget = realizedMargin > 0 && realizedMargin < targetMargin;
+    // Trigger the re-look CTA whenever an engagement is below its target,
+    // including zero or negative realized margin (those are exactly the
+    // engagements that most need a pricing review).
+    const belowTarget = actuals.hours > 0 && realizedMargin < targetMargin;
     return {
       engagementId: eng.id,
       engagementName: eng.name,
@@ -1881,6 +1884,9 @@ async function hydrateUtilizationNumericBlock(
       bill: arr.reduce((s, r) => s + Number(r.billableHours), 0),
       avail: arr.reduce((s, r) => s + Number(r.availableHours), 0),
     });
+    // Hard refusal contract: if no snapshot rows exist for this person at
+    // all, the analyst MUST refuse rather than narrate synthetic zeros.
+    if (snaps.length === 0) return { numericBlock: null, computedAt: null };
     const r4 = sum(last4); const yt = sum(ytd);
     const targetPct = emp?.utilizationTargetPct ? emp.utilizationTargetPct / 100 : defaultTargetPctFor(emp?.role, emp?.seniority);
     const utilizationPct = r4.avail > 0 ? r4.bill / r4.avail : 0;
@@ -1932,6 +1938,9 @@ async function hydrateUtilizationNumericBlock(
         inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
         isNull(atelierTimesheetEntries.deletedAt),
       ));
+    // Hard refusal: no pricing baseline AND no actual hours = nothing for
+    // the analyst to anchor on. Refuse rather than narrate "0 vs 0".
+    if (!pricing && actuals.length === 0) return { numericBlock: null, computedAt: null };
     const actualHours = actuals.reduce((s, a) => s + Number(a.hours || 0), 0);
     const burnPct = plannedHours > 0 ? actualHours / plannedHours : 0;
     const plannedMarginPct = pricing ? Number(pricing.computedMarginPct) : 0;
@@ -1950,6 +1959,8 @@ async function hydrateUtilizationNumericBlock(
   if (me.role !== "partner") return { error: "partner-only", status: 403 };
   const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
   const snaps = await db.select().from(atelierUtilizationSnapshots).where(inArray(atelierUtilizationSnapshots.weekIso, last4Iso));
+  // Hard refusal: no snapshots in the window = nothing to anchor on.
+  if (snaps.length === 0) return { numericBlock: null, computedAt: null };
   const totalBill = snaps.reduce((s, r) => s + Number(r.billableHours), 0);
   const totalAvail = snaps.reduce((s, r) => s + Number(r.availableHours), 0);
   const firmComputed = snaps.reduce<Date | null>((acc, s) => {
