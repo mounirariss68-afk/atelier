@@ -341,7 +341,9 @@ function DeliverableDetail({ slug, deliverableId, ctx }: { slug: string; deliver
 
       <Card>
         <div className="text-xs uppercase tracking-widest text-text-mute mb-2">Document</div>
-        <div className="prose prose-sm max-w-none whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: data.deliverable.body || "<em>No content yet.</em>" }} />
+        <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+          {data.deliverable.body || <em>No content yet.</em>}
+        </div>
       </Card>
 
       <Card>
