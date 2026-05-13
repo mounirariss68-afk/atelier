@@ -18,6 +18,7 @@ import {
   atelierContractorPayments,
   atelierPartnerFirmInvoices,
   atelierTimesheetEntries,
+  atelierTimesheetWeeks,
   atelierPartnerFirmHours,
   atelierUsers,
   atelierContractors,
@@ -133,44 +134,84 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
     notificationsSent: 0,
   };
 
-  // ----- Contractor proposals from timesheet entries -----
-  // PRD: contractor payments compose from *lead-approved* entries (Mon
-  // weekly run) so partner has a queue ready before payroll. Employees
-  // are paid on the standard payroll cycle, NOT through this proposer —
-  // we filter them out in the bucket loop below.
-  const entries = await db
+  // ----- Contractor proposals from lead-approved timesheet weeks -----
+  // PRD: contractor payments compose from weeks that the engagement-lead
+  // has signed off on (week.status='lead_approved'). Approval state lives
+  // on the *week* row in this codebase, not the entry row, so we drive
+  // the query off atelierTimesheetWeeks. Employees are paid on the
+  // standard payroll cycle and are filtered out here (personType filter).
+  const leadApprovedWeeks = await db
     .select()
-    .from(atelierTimesheetEntries)
+    .from(atelierTimesheetWeeks)
     .where(
       and(
-        isNull(atelierTimesheetEntries.deletedAt),
-        eq(atelierTimesheetEntries.billable, true),
-        eq(atelierTimesheetEntries.status, "lead_approved"),
-        inArray(atelierTimesheetEntries.weekId, weeksIso),
+        isNull(atelierTimesheetWeeks.deletedAt),
+        eq(atelierTimesheetWeeks.status, "lead_approved"),
+        eq(atelierTimesheetWeeks.personType, "contractor"),
+        inArray(atelierTimesheetWeeks.weekIso, weeksIso),
       ),
     );
 
   type Bucket = {
+    contractorId: string;
     payeeUserId: string;
+    payeeName: string;
+    ratePerHour: number;
+    rateCurrency: string;
     engagementId: string;
     weekIso: string;
     hours: number;
     entryIds: string[];
   };
   const buckets = new Map<string, Bucket>();
-  for (const e of entries) {
-    if (!e.engagementId) continue;
-    const key = `${e.personId}|${e.engagementId}|${e.weekId}`;
-    const cur = buckets.get(key) ?? {
-      payeeUserId: e.personId,
-      engagementId: e.engagementId,
-      weekIso: e.weekId,
-      hours: 0,
-      entryIds: [],
-    };
-    cur.hours += e.hours ?? 0;
-    cur.entryIds.push(e.id);
-    buckets.set(key, cur);
+  for (const wk of leadApprovedWeeks) {
+    // Resolve contractor identity + day-rate from the contractors table.
+    const [con] = await db
+      .select()
+      .from(atelierContractors)
+      .where(and(eq(atelierContractors.id, wk.personId), isNull(atelierContractors.deletedAt)));
+    if (!con) {
+      summary.contractorProposals.skipped++;
+      continue;
+    }
+    const ratePerHour = con.dayRateAmount ? con.dayRateAmount / 8 : DEFAULT_HOURLY_FALLBACK_USD;
+    const rateCurrency = con.dayRateCurrency ?? "USD";
+    // Resolve linked user (if any) so payeeUserId is a real user id when
+    // the contractor has logged in; else fall back to contractor.id.
+    let payeeUserId = con.id;
+    if (con.email) {
+      const [u] = await db.select().from(atelierUsers).where(eq(atelierUsers.email, con.email));
+      if (u?.id) payeeUserId = u.id;
+    }
+    // Pull this week's billable entries grouped per engagement.
+    const entries = await db
+      .select()
+      .from(atelierTimesheetEntries)
+      .where(
+        and(
+          isNull(atelierTimesheetEntries.deletedAt),
+          eq(atelierTimesheetEntries.weekId, wk.id),
+          eq(atelierTimesheetEntries.billable, true),
+        ),
+      );
+    for (const e of entries) {
+      if (!e.engagementId) continue;
+      const key = `${payeeUserId}|${e.engagementId}|${wk.weekIso}`;
+      const cur = buckets.get(key) ?? {
+        contractorId: con.id,
+        payeeUserId,
+        payeeName: con.fullName,
+        ratePerHour,
+        rateCurrency,
+        engagementId: e.engagementId,
+        weekIso: wk.weekIso,
+        hours: 0,
+        entryIds: [],
+      };
+      cur.hours += e.hours ?? 0;
+      cur.entryIds.push(e.id);
+      buckets.set(key, cur);
+    }
   }
 
   for (const b of buckets.values()) {
@@ -178,13 +219,12 @@ export async function runPaymentProposer(args: RunArgs = {}): Promise<PaymentPro
       summary.contractorProposals.skipped++;
       continue;
     }
-    const meta = await payeeHourlyCostUsd(b.payeeUserId);
-    // Contractor-only queue: skip employees (they're on payroll, not
-    // a per-week disbursement proposal).
-    if (meta.personType !== "contractor") {
-      summary.contractorProposals.skipped++;
-      continue;
-    }
+    const meta = {
+      ratePerHour: b.ratePerHour,
+      rateCurrency: b.rateCurrency,
+      payeeName: b.payeeName,
+      personType: "contractor" as const,
+    };
     const costAmount = +(b.hours * meta.ratePerHour).toFixed(2);
     const fx = await convertToUsd(costAmount, meta.rateCurrency, new Date());
     const usdAmount = +fx.usdAmount.toFixed(2);
