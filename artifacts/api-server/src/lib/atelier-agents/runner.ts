@@ -4267,23 +4267,40 @@ function mockUtilizationAnalyst(
   };
 }
 
+// Snapshots older than this are treated as stale by the analyst. The Burn
+// Sentinel + snapshot ticks both run inside the 15-minute scheduler, so the
+// analyst expects fresh data; anything older than 24h is almost certainly a
+// dead environment, not a real read.
+const SNAPSHOT_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+
 export async function runUtilizationAnalyst(args: {
   view: "person" | "engagement" | "firm";
   targetId: string;
   targetLabel: string;
   period: string;
   numericBlock: Record<string, unknown> | null;
+  /** ISO-8601 timestamp of the snapshot/tick that produced numericBlock. */
+  computedAt?: string | null;
   triggeredByUserId: string | null;
 }): Promise<{ runId: string; output: UtilizationAnalystOutput }> {
-  // Pre-flight guardrail before we even start a run row: refuse if the
-  // hydrated block is empty or every numeric field is zero (signal that
-  // the snapshot tick hasn't run yet for this target).
-  const blockIsStale =
+  // Pre-flight guardrail before we even start a run row. Three independent
+  // refusal conditions, all collapsed into the same `numeric-block-missing-or-stale`
+  // contract so the prompt's refusal handler stays a single branch:
+  //   1) no block at all,
+  //   2) every numeric field is zero (snapshot tick hasn't run yet for this target),
+  //   3) `computedAt` (when provided) is older than SNAPSHOT_FRESHNESS_MS.
+  const emptyOrZero =
     !args.numericBlock ||
     Object.keys(args.numericBlock).length === 0 ||
     Object.values(args.numericBlock).every((v) =>
       typeof v === "number" ? v === 0 : v == null || (Array.isArray(v) && v.length === 0),
     );
+  let computedAtStale = false;
+  if (args.computedAt) {
+    const ts = Date.parse(args.computedAt);
+    if (!Number.isNaN(ts) && Date.now() - ts > SNAPSHOT_FRESHNESS_MS) computedAtStale = true;
+  }
+  const blockIsStale = emptyOrZero || computedAtStale;
 
   const runId = await startRun({
     agentId: "ag_utilization_analyst",
@@ -4291,7 +4308,7 @@ export async function runUtilizationAnalyst(args: {
     targetType: `utilization_${args.view}`,
     targetId: args.targetId,
     targetLabel: args.targetLabel,
-    inputs: { view: args.view, period: args.period, hasNumericBlock: !blockIsStale },
+    inputs: { view: args.view, period: args.period, hasNumericBlock: !blockIsStale, computedAt: args.computedAt ?? null, computedAtStale },
     actorLabel: "Utilization Analyst",
   });
   const t0 = Date.now();
@@ -4317,7 +4334,9 @@ export async function runUtilizationAnalyst(args: {
         targetId: args.targetId,
         targetLabel: args.targetLabel,
         source: "mock_config",
-        warning: "numeric-block-missing-or-stale; refused to generate narrative",
+        warning: computedAtStale
+          ? `numeric-block-stale (computedAt ${args.computedAt}); refused to generate narrative`
+          : "numeric-block-missing; refused to generate narrative",
       });
       return { runId, output };
     }

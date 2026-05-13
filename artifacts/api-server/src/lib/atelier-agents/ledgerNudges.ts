@@ -427,8 +427,32 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
   }
   const burns = await computeEngagementBurns();
   let alertsWritten = 0;
+
+  // Pull existing burn-threshold audit events so we can model
+  // `previousBurnPct` per engagement explicitly. A threshold is only
+  // "crossed" when the current burn ≥ threshold AND the highest
+  // previously-recorded threshold for this engagement was strictly less.
+  // This makes the contract auditable (the audit row IS the previous
+  // state) and lets us distinguish first-time crosses from re-crosses
+  // after replanning (which produce a fresh audit row when the plan
+  // shifts and the band is re-entered).
+  const prevAuditRows = await db
+    .select({ entityId: atelierAuditEvents.entityId, payload: atelierAuditEvents.payload })
+    .from(atelierAuditEvents)
+    .where(and(eq(atelierAuditEvents.actorId, "ag_burn_sentinel"), eq(atelierAuditEvents.action, "ledger.burn.threshold_crossed")));
+  const prevHighestThreshold = new Map<string, number>();
+  for (const row of prevAuditRows) {
+    const tp = (row.payload as { thresholdPct?: number } | null)?.thresholdPct;
+    if (typeof tp !== "number") continue;
+    const prev = prevHighestThreshold.get(row.entityId) ?? 0;
+    if (tp > prev) prevHighestThreshold.set(row.entityId, tp);
+  }
+
   for (const b of burns) {
-    for (const th of b.thresholds) {
+    const previousHighestPct = prevHighestThreshold.get(b.engagementId) ?? 0;
+    // Only fire on bands strictly above the previously-recorded high.
+    const newCrossings = b.thresholds.filter((th) => Math.round(th * 100) > previousHighestPct);
+    for (const th of newCrossings) {
       const id = `panea_burn_${b.engagementId}_${Math.round(th * 100)}`;
       const severityLabel = th >= 1.0 ? "OVER PLAN" : `${Math.round(th * 100)}% burn`;
       const priority = th >= 1.0 ? "high" : th >= 0.8 ? "high" : "medium";

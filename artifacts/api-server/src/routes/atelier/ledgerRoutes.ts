@@ -1827,9 +1827,31 @@ router.post("/ledger/utilization/narrative", async (req, res) => {
     targetLabel?: string;
     period?: string;
     numericBlock?: Record<string, unknown> | null;
+    computedAt?: string | null;
   };
   if (!body.view || !body.targetId) {
     return void res.status(400).json({ error: "view-and-targetId-required" });
+  }
+  // Resolve the freshness anchor server-side from the snapshot store so the
+  // client can't fake recency by omitting computedAt.
+  let computedAt: string | null = body.computedAt ?? null;
+  if (!computedAt) {
+    if (body.view === "person") {
+      const [snap] = await db
+        .select({ computedAt: atelierUtilizationSnapshots.computedAt })
+        .from(atelierUtilizationSnapshots)
+        .where(eq(atelierUtilizationSnapshots.personId, body.targetId))
+        .orderBy(desc(atelierUtilizationSnapshots.computedAt))
+        .limit(1);
+      computedAt = snap?.computedAt ? new Date(snap.computedAt).toISOString() : null;
+    } else {
+      const [snap] = await db
+        .select({ computedAt: atelierUtilizationSnapshots.computedAt })
+        .from(atelierUtilizationSnapshots)
+        .orderBy(desc(atelierUtilizationSnapshots.computedAt))
+        .limit(1);
+      computedAt = snap?.computedAt ? new Date(snap.computedAt).toISOString() : null;
+    }
   }
   const out = await runUtilizationAnalyst({
     view: body.view,
@@ -1837,6 +1859,7 @@ router.post("/ledger/utilization/narrative", async (req, res) => {
     targetLabel: body.targetLabel ?? body.targetId,
     period: body.period ?? "rolling-4w",
     numericBlock: body.numericBlock ?? null,
+    computedAt,
     triggeredByUserId: me.id,
   });
   res.json(out);
