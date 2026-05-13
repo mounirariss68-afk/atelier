@@ -536,6 +536,325 @@ paths:
               schema:
                 $ref: "#/components/schemas/AtelierError"
 
+  # ---- Charter (Charter Architect) -------------------------------
+  /atelier/engagements/{engId}/charter/versions:
+    get:
+      operationId: atelierListCharterVersions
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Charter versions, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierCharterVersion" }
+  /atelier/engagements/{engId}/charter/redraft:
+    post:
+      operationId: atelierRedraftCharter
+      tags: [atelier]
+      summary: Run Charter Architect to draft a new charter version
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCharterRedraftInput" }
+      responses:
+        "200":
+          description: New version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierCharterVersion" }
+  /atelier/engagements/{engId}/charter/versions/{versionId}/approve:
+    post:
+      operationId: atelierApproveCharterVersion
+      tags: [atelier]
+      summary: Approve a charter version (lead or partner)
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: versionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCharterApproveInput" }
+      responses:
+        "200":
+          description: Updated version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierCharterVersion" }
+
+  # ---- RAID -------------------------------------------------------
+  /atelier/engagements/{engId}/raid:
+    get:
+      operationId: atelierListRaid
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: RAID items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierRaidItem" }
+    post:
+      operationId: atelierCreateRaidItem
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierRaidItemInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierRaidItem" }
+  /atelier/engagements/{engId}/raid/{raidId}:
+    patch:
+      operationId: atelierUpdateRaidItem
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: raidId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierRaidItemPatch" }
+      responses:
+        "200":
+          description: Updated item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierRaidItem" }
+
+  # ---- Hypothesis tree -------------------------------------------
+  /atelier/engagements/{engId}/hypothesis-tree:
+    get:
+      operationId: atelierGetHypothesisTree
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Hypothesis tree (root)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierHypothesisTree" }
+
+  # ---- Deliverables (incl. Diagnostic Memo) -----------------------
+  /atelier/engagements/{engId}/deliverables:
+    get:
+      operationId: atelierListDeliverables
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deliverables
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierDeliverable" }
+    post:
+      operationId: atelierCreateDeliverable
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierDeliverableInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierDeliverable" }
+  /atelier/deliverables/{delId}:
+    get:
+      operationId: atelierGetDeliverable
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: delId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deliverable detail (with versions)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierDeliverableDetail" }
+  /atelier/deliverables/{delId}/draft:
+    post:
+      operationId: atelierDraftDeliverable
+      tags: [atelier]
+      summary: Append a new version (scaffolds from hypothesis tree if no body)
+      parameters:
+        - in: path
+          name: delId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierDeliverableDraftInput" }
+      responses:
+        "200":
+          description: New version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierDeliverableVersion" }
+  /atelier/deliverables/{delId}/critique:
+    post:
+      operationId: atelierCritiqueDeliverable
+      tags: [atelier]
+      summary: Run Synthesis Critic on the current version
+      parameters:
+        - in: path
+          name: delId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCritiqueInput" }
+      responses:
+        "200":
+          description: Critic output + updated readiness
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierCritiqueResult" }
+  /atelier/deliverables/{delId}/send:
+    post:
+      operationId: atelierSendDeliverable
+      tags: [atelier]
+      summary: Send to client (Partner Authority Lock — green or override)
+      parameters:
+        - in: path
+          name: delId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierSendDeliverableInput" }
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierDeliverable" }
+        "423":
+          description: Locked — readiness not green and no override rationale
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+
+  # ---- Artifacts (per engagement, bilingual) ---------------------
+  /atelier/engagements/{engId}/artifacts:
+    get:
+      operationId: atelierListArtifacts
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Artifacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierArtifact" }
+    post:
+      operationId: atelierCreateArtifact
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierArtifactInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierArtifact" }
+  /atelier/artifacts/{artifactId}/translate:
+    post:
+      operationId: atelierTranslateArtifact
+      tags: [atelier]
+      summary: Stub-translate an artifact (AR↔EN); preserves original
+      parameters:
+        - in: path
+          name: artifactId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Translated artifact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierArtifact" }
+
   /atelier/accounts:
     get:
       operationId: atelierListAccounts
@@ -668,6 +987,8 @@ components:
       type: object
       properties:
         error: { type: string }
+        reason: { type: ["string", "null"] }
+        readiness: { type: ["string", "null"] }
       required: [error]
 
     AtelierPersonaRole:
@@ -1159,3 +1480,293 @@ components:
       properties:
         decision: { type: string, enum: [approve, edit, reject] }
         rationale: { type: string, default: "" }
+
+    AtelierHypothesisBranch:
+      type: object
+      required: [hypothesis]
+      properties:
+        hypothesis: { type: string }
+        subHypotheses:
+          type: array
+          items: { type: string }
+        evidenceRequired:
+          type: array
+          items: { type: string }
+        status:
+          type: ["string", "null"]
+
+    AtelierHypothesisTree:
+      type: object
+      required: [engagementId, root]
+      properties:
+        engagementId: { type: string }
+        treeId: { type: ["string", "null"] }
+        root:
+          type: object
+          required: [rootIssue, branches]
+          properties:
+            rootIssue: { type: string }
+            branches:
+              type: array
+              items: { $ref: "#/components/schemas/AtelierHypothesisBranch" }
+
+    AtelierCharterBody:
+      type: object
+      required: [objectives, scope, outOfScope, successMetrics, governance, valueHypothesis]
+      properties:
+        objectives:
+          type: array
+          items: { type: string }
+        scope:
+          type: array
+          items: { type: string }
+        outOfScope:
+          type: array
+          items: { type: string }
+        successMetrics:
+          type: array
+          items:
+            type: object
+            required: [name, baseline, target]
+            properties:
+              name: { type: string }
+              baseline: { type: string }
+              target: { type: string }
+        governance: { type: string }
+        valueHypothesis: { type: string }
+
+    AtelierCharterVersion:
+      type: object
+      required: [id, engagementId, versionNumber, status, body, hypothesisTree, raidBaseline, proposedWorkstreams, meceFlags, createdAt]
+      properties:
+        id: { type: string }
+        engagementId: { type: string }
+        versionNumber: { type: integer }
+        status: { type: string, enum: [draft, lead_approved, live, superseded] }
+        runId: { type: ["string", "null"] }
+        body: { $ref: "#/components/schemas/AtelierCharterBody" }
+        hypothesisTree:
+          type: object
+          properties:
+            rootIssue: { type: string }
+            branches:
+              type: array
+              items: { $ref: "#/components/schemas/AtelierHypothesisBranch" }
+        raidBaseline:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { type: string, enum: [risk, assumption, issue, dependency] }
+              severity: { type: string, enum: [green, amber, red] }
+              ownerRole: { type: string }
+              description: { type: string }
+              dueClass: { type: string, enum: [wk1, wk2, wk4, monthly] }
+        proposedWorkstreams:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              leadRole: { type: string }
+              linkedHypothesis: { type: string }
+        meceFlags:
+          type: array
+          items: { type: string }
+        leadApprovedByName: { type: ["string", "null"] }
+        leadApprovedAt: { type: ["string", "null"], format: date-time }
+        partnerApprovedByName: { type: ["string", "null"] }
+        partnerApprovedAt: { type: ["string", "null"], format: date-time }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierCharterRedraftInput:
+      type: object
+      properties:
+        wonProposalSummary: { type: string, default: "" }
+        kickoffTranscriptExcerpt: { type: ["string", "null"], default: null }
+
+    AtelierCharterApproveInput:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [lead, partner] }
+        notes: { type: string, default: "" }
+
+    AtelierRaidItem:
+      type: object
+      required: [id, engagementId, kind, severity, status, description, createdAt]
+      properties:
+        id: { type: string }
+        engagementId: { type: string }
+        kind: { type: string, enum: [risk, assumption, issue, dependency] }
+        severity: { type: string, enum: [green, amber, red] }
+        status: { type: string, enum: [open, mitigated, closed] }
+        ownerUserId: { type: ["string", "null"] }
+        ownerName: { type: ["string", "null"] }
+        description: { type: string }
+        mitigation: { type: ["string", "null"] }
+        targetDate: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierRaidItemInput:
+      type: object
+      required: [kind, severity, description]
+      properties:
+        kind: { type: string, enum: [risk, assumption, issue, dependency] }
+        severity: { type: string, enum: [green, amber, red] }
+        description: { type: string, minLength: 4 }
+        ownerUserId: { type: ["string", "null"], default: null }
+        targetDate: { type: ["string", "null"], default: null }
+        mitigation: { type: ["string", "null"], default: null }
+
+    AtelierRaidItemPatch:
+      type: object
+      properties:
+        severity: { type: string, enum: [green, amber, red] }
+        status: { type: string, enum: [open, mitigated, closed] }
+        mitigation: { type: ["string", "null"] }
+        targetDate: { type: ["string", "null"] }
+
+    AtelierDeliverable:
+      type: object
+      required: [id, engagementId, type, name, status, criticReadiness, lockOverridden, createdAt]
+      properties:
+        id: { type: string }
+        engagementId: { type: string }
+        type: { type: string }
+        name: { type: string }
+        status: { type: string }
+        hypothesisId: { type: ["string", "null"] }
+        currentVersionId: { type: ["string", "null"] }
+        dueDate: { type: ["string", "null"] }
+        criticReadiness:
+          type: ["string", "null"]
+          enum: [green, amber, red, null]
+        criticReportSummary: { type: ["string", "null"] }
+        partnerApprovedAt: { type: ["string", "null"], format: date-time }
+        partnerApprovedByName: { type: ["string", "null"] }
+        partnerRationale: { type: ["string", "null"] }
+        lockOverridden: { type: boolean }
+        sentAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    AtelierDeliverableInput:
+      type: object
+      required: [type, name]
+      properties:
+        type: { type: string }
+        name: { type: string }
+        hypothesisId: { type: ["string", "null"], default: null }
+        dueDate: { type: ["string", "null"], default: null }
+
+    AtelierDeliverableVersion:
+      type: object
+      required: [id, deliverableId, versionNumber, body, createdAt]
+      properties:
+        id: { type: string }
+        deliverableId: { type: string }
+        versionNumber: { type: integer }
+        body: { type: string }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierDeliverableDetail:
+      type: object
+      required: [deliverable, versions]
+      properties:
+        deliverable: { $ref: "#/components/schemas/AtelierDeliverable" }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierDeliverableVersion" }
+        latestCriticIssues:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              severity: { type: string }
+              location: { type: string }
+              description: { type: string }
+              suggestion: { type: string }
+        pyramidScore: { type: ["number", "null"] }
+        evidenceCoveragePct: { type: ["integer", "null"] }
+        offHypothesisSections:
+          type: array
+          items: { type: string }
+        criticRunId: { type: ["string", "null"] }
+
+    AtelierDeliverableDraftInput:
+      type: object
+      properties:
+        body: { type: ["string", "null"], default: null }
+        notes: { type: string, default: "" }
+        scaffold: { type: boolean, default: false }
+        includeDefects: { type: boolean, default: false }
+
+    AtelierCritiqueInput:
+      type: object
+      properties:
+        audience: { type: string, default: "Client executive" }
+
+    AtelierCritiqueResult:
+      type: object
+      required: [readiness, issues, pyramidScore, evidenceCoveragePct, offHypothesisSections, runId]
+      properties:
+        readiness: { type: string, enum: [green, amber, red] }
+        pyramidScore: { type: number }
+        evidenceCoveragePct: { type: integer }
+        offHypothesisSections:
+          type: array
+          items: { type: string }
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              severity: { type: string }
+              location: { type: string }
+              description: { type: string }
+              suggestion: { type: string }
+        runId: { type: string }
+
+    AtelierSendDeliverableInput:
+      type: object
+      properties:
+        rationale: { type: string, default: "" }
+        override: { type: boolean, default: false }
+
+    AtelierArtifact:
+      type: object
+      required: [id, engagementId, title, language, source, createdAt]
+      properties:
+        id: { type: string }
+        engagementId: { type: string }
+        title: { type: string }
+        abstract: { type: ["string", "null"] }
+        body: { type: ["string", "null"] }
+        language: { type: string, enum: [en, ar, other] }
+        translatedTitle: { type: ["string", "null"] }
+        translatedBody: { type: ["string", "null"] }
+        translatedAt: { type: ["string", "null"], format: date-time }
+        source: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        fileUrl: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierArtifactInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        abstract: { type: ["string", "null"], default: null }
+        body: { type: ["string", "null"], default: null }
+        tags:
+          type: array
+          items: { type: string }
+          default: []
+        fileUrl: { type: ["string", "null"], default: null }
+        source: { type: string, default: "upload" }

@@ -1,0 +1,87 @@
+{
+  "agent_id": "charter_architect",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "ca_01_tasama_phase1",
+      "input": {
+        "engagementId": "eng_tasama_bpo_phase1",
+        "accountName": "Tasama",
+        "wonProposalSummary": "Cut Tasama mean handle time 40% on top-3 services within 90 days, with senior-overseen agentic operations. Adoption target ≥70% by day 90.",
+        "kickoffTranscriptExcerpt": "CEO: 'We need clear lead-by-lead telemetry'; COO: 'Don't break service-3 SLA'."
+      },
+      "asserts": [
+        { "kind": "min_objectives", "value": 3 },
+        { "kind": "every_objective_has_metric" },
+        { "kind": "tree_max_depth", "value": 3 },
+        { "kind": "raid_min", "value": 3 },
+        { "kind": "scope_outofscope_disjoint" }
+      ]
+    },
+    {
+      "id": "ca_02_dge_pilot",
+      "input": {
+        "engagementId": "eng_dge_effortless_v1",
+        "accountName": "DGE",
+        "wonProposalSummary": "Pilot Effortless Service for citizens; show measurable reduction in time-to-resolution within 60 days.",
+        "kickoffTranscriptExcerpt": "Director: 'Bilingual is non-negotiable; no PII to third parties.'"
+      },
+      "asserts": [
+        { "kind": "min_objectives", "value": 3 },
+        { "kind": "every_objective_has_metric" },
+        { "kind": "value_hypothesis_present" }
+      ]
+    },
+    {
+      "id": "ca_03_aldrees_workshop",
+      "input": {
+        "engagementId": "eng_aldrees_workshop",
+        "accountName": "Aldrees",
+        "wonProposalSummary": "Re-architect BOQ workflow to compress vendor cycle by 50%; learning harvest for Atelier.",
+        "kickoffTranscriptExcerpt": null
+      },
+      "asserts": [
+        { "kind": "tree_max_depth", "value": 3 },
+        { "kind": "raid_min", "value": 3 },
+        { "kind": "workstreams_min", "value": 2 }
+      ]
+    },
+    {
+      "id": "ca_04_mece_violation_caught",
+      "input": {
+        "engagementId": "eng_test_mece",
+        "accountName": "TestCo",
+        "wonProposalSummary": "Stand up an AI center of excellence AND build the first three production agents AND govern them — overlapping scopes by design.",
+        "kickoffTranscriptExcerpt": null
+      },
+      "asserts": [
+        { "kind": "mece_flags_nonempty" }
+      ]
+    },
+    {
+      "id": "ca_05_baseline_tbd_marked",
+      "input": {
+        "engagementId": "eng_test_no_baseline",
+        "accountName": "BaselineFreeCo",
+        "wonProposalSummary": "Improve customer satisfaction. (no baseline given)",
+        "kickoffTranscriptExcerpt": null
+      },
+      "asserts": [
+        { "kind": "contains_token", "value": "TBD-baseline" }
+      ]
+    },
+    {
+      "id": "ca_06_value_hypothesis_one_sentence",
+      "input": {
+        "engagementId": "eng_test_value",
+        "accountName": "ValueCo",
+        "wonProposalSummary": "Quarterly productivity gains from AI without disrupting governance.",
+        "kickoffTranscriptExcerpt": null
+      },
+      "asserts": [
+        { "kind": "value_hypothesis_present" },
+        { "kind": "value_hypothesis_max_words", "value": 40 }
+      ]
+    }
+  ]
+}

@@ -28,7 +28,9 @@ const PROMPT_DIR = findPromptDir();
 export type AtelierAgentId =
   | "pursuit_scout"
   | "pov_author"
-  | "meeting_scribe";
+  | "meeting_scribe"
+  | "charter_architect"
+  | "synthesis_critic";
 
 export function loadPrompt(agentId: AtelierAgentId, version = 1): string {
   const path = resolve(PROMPT_DIR, agentId, `v${version}.md`);

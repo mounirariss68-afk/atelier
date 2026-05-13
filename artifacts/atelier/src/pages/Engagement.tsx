@@ -4,6 +4,10 @@ import { SectionHead, PageHero, PlmPill, MonoChip, Card } from "@/components/ui/
 import { Link, useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuditTab } from "@/components/AuditTab";
+import { CharterTab } from "@/components/tabs/CharterTab";
+import { WorkplanTab } from "@/components/tabs/WorkplanTab";
+import { DeliverablesTab } from "@/components/tabs/DeliverablesTab";
+import { ArtifactsTab } from "@/components/tabs/ArtifactsTab";
 import { ArrowLeft, Code } from "lucide-react";
 
 const TABS = [
@@ -20,7 +24,7 @@ const TABS = [
 export default function Engagement() {
   const [, params] = useRoute("/engagements/:engId");
   const engId = params?.engId || "";
-  
+
   const { data: eng, isLoading, isError } = useAtelierGetEngagement(engId, {
     query: { enabled: !!engId, queryKey: getAtelierGetEngagementQueryKey(engId) },
   });
@@ -36,9 +40,9 @@ export default function Engagement() {
         <Link href="/engagements" className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Engagements
         </Link>
-        
+
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          <SectionHead 
+          <SectionHead
             eyebrow={eng.accountName}
             headline={eng.name}
             lede={<div className="flex items-center gap-4 mt-2">
@@ -59,35 +63,37 @@ export default function Engagement() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-8">
-      {/* Tabs */}
-      <div className="border-b border-border">
-        <div className="flex gap-6 overflow-x-auto scrollbar-thin">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${activeTab === tab.id ? 'border-gold text-gold' : 'border-transparent text-text-mute hover:text-text'}`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="border-b border-border">
+          <div className="flex gap-6 overflow-x-auto scrollbar-thin">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                data-testid={`tab-${tab.id}`}
+                className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${activeTab === tab.id ? 'border-gold text-gold' : 'border-transparent text-text-mute hover:text-text'}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Tab Content */}
-      <div className="py-4">
-        {activeTab === 'audit' ? (
-          <AuditTab entityType="engagement" entityId={eng.id} />
-        ) : (
-          <Card className="p-12 flex flex-col items-center justify-center text-center border-dashed bg-bg-deep">
-            <div className="w-12 h-12 bg-bg-elevate rounded-full flex items-center justify-center mb-4 text-gold">
-              <Code className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-semibold text-text mb-2">Workspace Module: {TABS.find(t=>t.id===activeTab)?.label}</h3>
-            <p className="text-text-mute max-w-md">This tab ships in a later workstream. Foundation registers it in the navigation shell.</p>
-          </Card>
-        )}
-      </div>
+        <div className="py-4">
+          {activeTab === 'charter' && <CharterTab engId={eng.id} />}
+          {activeTab === 'workplan' && <WorkplanTab engId={eng.id} />}
+          {activeTab === 'deliverables' && <DeliverablesTab engId={eng.id} />}
+          {activeTab === 'artifacts' && <ArtifactsTab engId={eng.id} />}
+          {activeTab === 'audit' && <AuditTab entityType="engagement" entityId={eng.id} />}
+          {(activeTab === 'agents' || activeTab === 'processes' || activeTab === 'meetings') && (
+            <Card className="p-12 flex flex-col items-center justify-center text-center border-dashed bg-bg-deep">
+              <div className="w-12 h-12 bg-bg-elevate rounded-full flex items-center justify-center mb-4 text-gold">
+                <Code className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-text mb-2">Workspace Module: {TABS.find(t => t.id === activeTab)?.label}</h3>
+              <p className="text-text-mute max-w-md">This tab ships in a later workstream. Foundation registers it in the navigation shell.</p>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

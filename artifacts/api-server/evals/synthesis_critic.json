@@ -1,0 +1,84 @@
+{
+  "agent_id": "synthesis_critic",
+  "prompt_version": 1,
+  "cases": [
+    {
+      "id": "sc_01_clean_memo",
+      "input": {
+        "deliverableId": "del_test_clean",
+        "body": "<h1>Diagnostic Memo</h1><h2>Bottom line</h2><p>Service-1 drives 42% of MHT variance.<sup>[#f1]</sup></p><h2>Evidence</h2><p>30-day handle-time logs by service.<sup>[#f2]</sup></p>",
+        "hypothesisTree": { "rootIssue": "Where does MHT variance live?", "branches": [{ "hypothesis": "Service-1 dominates variance", "subHypotheses": [], "evidenceRequired": ["handle-time logs"] }] },
+        "audience": "Tasama COO"
+      },
+      "asserts": [
+        { "kind": "readiness", "value": "green" },
+        { "kind": "evidence_coverage_min", "value": 80 },
+        { "kind": "off_hypothesis_empty" }
+      ]
+    },
+    {
+      "id": "sc_02_missing_citations",
+      "input": {
+        "deliverableId": "del_test_uncited",
+        "body": "<h1>Memo</h1><h2>Conclusion</h2><p>We assert that handle time will fall by half. We further assert that adoption will hit 90%.</p>",
+        "hypothesisTree": { "rootIssue": "Q?", "branches": [{ "hypothesis": "h1", "subHypotheses": [], "evidenceRequired": [] }] },
+        "audience": "COO"
+      },
+      "asserts": [
+        { "kind": "issue_type_present", "value": "missing_citation" },
+        { "kind": "readiness_at_most", "value": "amber" }
+      ]
+    },
+    {
+      "id": "sc_03_off_hypothesis_section",
+      "input": {
+        "deliverableId": "del_test_off_hyp",
+        "body": "<h1>Memo</h1><h2>Bottom line</h2><p>Service-1 dominates.<sup>[#f1]</sup></p><h2>Brand refresh proposal</h2><p>We also recommend a logo update.</p>",
+        "hypothesisTree": { "rootIssue": "MHT?", "branches": [{ "hypothesis": "Service-1 dominates", "subHypotheses": [], "evidenceRequired": [] }] },
+        "audience": "COO"
+      },
+      "asserts": [
+        { "kind": "off_hypothesis_contains", "value": "Brand refresh proposal" },
+        { "kind": "readiness_at_most", "value": "amber" }
+      ]
+    },
+    {
+      "id": "sc_04_buried_lede",
+      "input": {
+        "deliverableId": "del_test_burried",
+        "body": "<h1>Memo</h1><h2>Background</h2><p>Tasama was founded in 2018. Many things have happened since. After much analysis, we found that Service-1 dominates handle time variance.<sup>[#f1]</sup></p>",
+        "hypothesisTree": { "rootIssue": "MHT?", "branches": [{ "hypothesis": "Service-1 dominates", "subHypotheses": [], "evidenceRequired": [] }] },
+        "audience": "COO"
+      },
+      "asserts": [
+        { "kind": "issue_type_present", "value": "no_governing_thought" }
+      ]
+    },
+    {
+      "id": "sc_05_red_blocker",
+      "input": {
+        "deliverableId": "del_test_red",
+        "body": "<h1>Memo</h1><p>Everything will be fine. Trust us.</p>",
+        "hypothesisTree": { "rootIssue": "Q?", "branches": [{ "hypothesis": "h1", "subHypotheses": [], "evidenceRequired": [] }] },
+        "audience": "Board"
+      },
+      "asserts": [
+        { "kind": "readiness", "value": "red" },
+        { "kind": "issue_count_min", "value": 2 }
+      ]
+    },
+    {
+      "id": "sc_06_pyramid_high_score",
+      "input": {
+        "deliverableId": "del_test_pyramid",
+        "body": "<h1>Memo</h1><h2>Recommendation: cut MHT 40% in 90 days</h2><p>Three moves in priority order.<sup>[#f1]</sup></p><h3>1. Agentify Service-1</h3><p>Highest variance.<sup>[#f2]</sup></p><h3>2. Telemetry per lead</h3><p>Drives adoption.<sup>[#f3]</sup></p><h3>3. Weekly cadence</h3><p>Beats bulk launches.<sup>[#f4]</sup></p>",
+        "hypothesisTree": { "rootIssue": "Cut MHT?", "branches": [{ "hypothesis": "Agentify top variance", "subHypotheses": [], "evidenceRequired": [] }, { "hypothesis": "Telemetry drives adoption", "subHypotheses": [], "evidenceRequired": [] }, { "hypothesis": "Weekly cadence", "subHypotheses": [], "evidenceRequired": [] }] },
+        "audience": "COO"
+      },
+      "asserts": [
+        { "kind": "pyramid_min", "value": 0.7 },
+        { "kind": "evidence_coverage_min", "value": 80 }
+      ]
+    }
+  ]
+}

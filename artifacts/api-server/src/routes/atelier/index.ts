@@ -38,6 +38,7 @@ import {
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler } from "./auditPdf";
 import agentRoutes from "./agentRoutes";
+import engagementRoutes from "./engagementRoutes";
 
 registerAtelierRlsDefaults();
 
@@ -50,6 +51,8 @@ router.get("/audit/export.pdf", auditPdfHandler);
 
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);
+// Mount engagement / charter / deliverable / artifact write routes (Task #222).
+router.use(engagementRoutes);
 
 function ensurePersona(
   req: Request,

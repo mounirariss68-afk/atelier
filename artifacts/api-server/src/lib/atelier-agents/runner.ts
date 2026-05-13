@@ -787,3 +787,439 @@ export async function recordDecision(args: {
     payloadSummary: `${args.actorLabel} ${args.decision}d run on ${args.targetLabel}${args.rationale ? ` — "${args.rationale.slice(0, 120)}"` : ""}`,
   });
 }
+
+// =============================================================
+// Charter Architect (Sonnet 4.6, 4-sub-agent chain)
+// =============================================================
+
+export interface CharterBody {
+  objectives: string[];
+  scope: string[];
+  outOfScope: string[];
+  successMetrics: { name: string; baseline: string; target: string }[];
+  governance: string;
+  valueHypothesis: string;
+}
+export interface HypothesisTree {
+  rootIssue: string;
+  branches: {
+    hypothesis: string;
+    subHypotheses: string[];
+    evidenceRequired: string[];
+  }[];
+}
+export interface RaidBaselineItem {
+  kind: "risk" | "assumption" | "issue" | "dependency";
+  severity: "green" | "amber" | "red";
+  ownerRole: string;
+  description: string;
+  dueClass: "wk1" | "wk2" | "wk4" | "monthly";
+}
+export interface CharterArchitectOutput {
+  charter: CharterBody;
+  hypothesisTree: HypothesisTree;
+  raidBaseline: RaidBaselineItem[];
+  proposedWorkstreams: { name: string; leadRole: string; linkedHypothesis: string }[];
+  meceFlags: string[];
+}
+
+function mockCharter(args: {
+  accountName: string;
+  proposalSummary: string;
+  hasBaseline: boolean;
+}): CharterArchitectOutput {
+  const acct = args.accountName;
+  const baseline = args.hasBaseline ? "current state measured pre-engagement" : "TBD-baseline";
+  return {
+    charter: {
+      objectives: [
+        `Cut top-process cycle time by 40% within 90 days for ${acct}.`,
+        `Lift adoption of agentic ops to ≥70% of leads by day 90.`,
+        `Stand up an audit-grade governance loop for every external action.`,
+      ],
+      scope: [
+        "Top-3 highest-volume services within the agreed function.",
+        "End-user telemetry, lead-by-lead dashboards, and weekly cadence.",
+        "Baseline RAID and weekly steering with named owners.",
+      ],
+      outOfScope: [
+        "Cross-function rollouts beyond the agreed top-3 services.",
+        "Full Gantt resource leveling and utilisation analytics (v2).",
+        "Customer-facing branding or marketing changes.",
+      ],
+      successMetrics: [
+        { name: "Mean handle time on Service-1", baseline, target: "−40% vs baseline by day 90" },
+        { name: "Adoption rate per lead", baseline, target: "≥70% of leads active by day 90" },
+        { name: "Audit completeness", baseline: "0% (not measured)", target: "100% of agent actions audited" },
+      ],
+      governance: "Weekly steering with Partner + Lead + client COO; bi-weekly demo to executive sponsor; RAID review every Friday.",
+      valueHypothesis: `For ${acct}, the next 90 days are the cheapest window to lock in agentic-ops gains; waiting compounds the cost of inaction.`,
+    },
+    hypothesisTree: {
+      rootIssue: `Can a senior-overseen agentic operations layer cut ${acct}'s mean handle time by 40% within 90 days while compounding adoption past 70%?`,
+      branches: [
+        {
+          hypothesis: "Top-volume services dominate handle-time variance; agentifying them captures most of the value.",
+          subHypotheses: [
+            "Service-1 (intake) is responsible for >40% of MHT variance.",
+            "Service-2 (status checks) can be fully agent-handled with one human checkpoint.",
+          ],
+          evidenceRequired: [
+            "30-day handle-time logs by service.",
+            "Quality-of-resolution audit on agent-handled tickets.",
+          ],
+        },
+        {
+          hypothesis: "Adoption compounds when ops leads see lead-by-lead telemetry and own the rollout pace.",
+          subHypotheses: [
+            "Per-lead dashboards lift adoption ≥15 ppt within 30 days of release.",
+            "Weekly 'service-of-the-week' cadence outperforms bulk launches.",
+          ],
+          evidenceRequired: [
+            "Adoption curves of comparable BPO transformations.",
+            "Lead survey data, weeks 2/6/10.",
+          ],
+        },
+        {
+          hypothesis: "Audit-grade governance unlocks executive trust to expand scope.",
+          subHypotheses: [
+            "100% audit coverage of agent actions removes the largest objection.",
+            "Partner-Authority-Lock pattern reduces rework by ≥30%.",
+          ],
+          evidenceRequired: [
+            "Audit coverage report.",
+            "Rework-rate comparison vs prior phase.",
+          ],
+        },
+      ],
+    },
+    raidBaseline: [
+      { kind: "risk", severity: "amber", ownerRole: "Engagement Lead", description: "Adoption tail of service-3 may lag plan if lead onboarding slips.", dueClass: "wk2" },
+      { kind: "issue", severity: "amber", ownerRole: "Architect", description: "Data-residency confirmation outstanding for one upstream integration partner.", dueClass: "wk1" },
+      { kind: "assumption", severity: "green", ownerRole: "Partner", description: `${acct} executive sponsor will attend bi-weekly demos.`, dueClass: "wk1" },
+      { kind: "dependency", severity: "amber", ownerRole: "Engagement Lead", description: "Access to production handle-time logs requires DPA addendum.", dueClass: "wk1" },
+    ],
+    proposedWorkstreams: [
+      { name: "Agentify top-3 services", leadRole: "Architect", linkedHypothesis: "Top-volume services dominate variance" },
+      { name: "Telemetry + adoption", leadRole: "Engagement Lead", linkedHypothesis: "Adoption compounds with telemetry" },
+      { name: "Governance + audit", leadRole: "Partner", linkedHypothesis: "Audit unlocks executive trust" },
+    ],
+    meceFlags: args.proposalSummary.toLowerCase().includes("overlapping") ||
+      /\bAND\b.*\bAND\b/.test(args.proposalSummary)
+      ? ["Scope appears to bundle stand-up + build + governance — verify these are disjoint workstreams or collapse to one."]
+      : [],
+  };
+}
+
+export async function runCharterArchitect(args: {
+  engagementId: string;
+  engagementName: string;
+  accountName: string;
+  wonProposalSummary: string;
+  kickoffTranscriptExcerpt: string | null;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: CharterArchitectOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "charter_architect",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "engagement",
+    targetId: args.engagementId,
+    targetLabel: args.engagementName,
+    inputs: { accountName: args.accountName, hasTranscript: !!args.kickoffTranscriptExcerpt },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("charter_architect");
+    // Sub-agent chain progress beats — surfaced in the activity stream.
+    await progressRun(runId, 15, "Objective Distiller — extracting 3–5 outcome-shaped objectives");
+    await progressRun(runId, 35, "Scope Boundarist — drawing IN/OUT scope sets (MECE)");
+    await progressRun(runId, 60, "Hypothesis Tree Builder — building tree (max depth 3)");
+    await progressRun(runId, 80, "RAID Baseliner — triaging baseline RAID items");
+    const hasBaseline = !/no baseline/i.test(args.wonProposalSummary);
+    const { value, costUsd, tokensIn, tokensOut, source, warning } = await callClaudeJson<CharterArchitectOutput>(
+      "claude-sonnet-4-6",
+      system,
+      JSON.stringify({
+        engagementId: args.engagementId,
+        accountName: args.accountName,
+        wonProposalSummary: args.wonProposalSummary,
+        kickoffTranscriptExcerpt: args.kickoffTranscriptExcerpt,
+      }),
+      () => mockCharter({ accountName: args.accountName, proposalSummary: args.wonProposalSummary, hasBaseline }),
+    );
+    // Hard guardrail: cap depth to 3.
+    if (value.hypothesisTree?.branches) {
+      value.hypothesisTree.branches.forEach((b) => {
+        if (Array.isArray(b.subHypotheses) && b.subHypotheses.length > 6) {
+          b.subHypotheses = b.subHypotheses.slice(0, 6);
+        }
+      });
+    }
+    void tokensIn; void tokensOut;
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: value.meceFlags?.length ? "amber" : "green",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.raidBaseline?.length ?? 0,
+      actorLabel: args.actorLabel,
+      targetType: "engagement",
+      targetId: args.engagementId,
+      targetLabel: args.engagementName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "engagement", targetId: args.engagementId });
+    throw err;
+  }
+}
+
+// =============================================================
+// Synthesis Critic (Opus 4.6 — flag-only, never edits)
+// =============================================================
+
+export interface SynthesisCriticIssue {
+  type:
+    | "missing_citation"
+    | "off_hypothesis"
+    | "no_governing_thought"
+    | "mece_break"
+    | "weak_so_what"
+    | "tone"
+    | "factual_risk";
+  severity: "low" | "med" | "high";
+  location: string;
+  description: string;
+  suggestion: string;
+}
+export interface SynthesisCriticOutput {
+  issues: SynthesisCriticIssue[];
+  pyramid_score: number;
+  evidence_coverage_pct: number;
+  off_hypothesis_sections: string[];
+  readiness: "green" | "amber" | "red";
+}
+
+function mockCritique(args: {
+  body: string;
+  hypothesisTree: HypothesisTree | null;
+}): SynthesisCriticOutput {
+  // Heuristic critique used both as the mock and as the deterministic
+  // fallback when Claude is unavailable. Mirrors the prompt's logic.
+  const body = args.body || "";
+  // Section heuristic — each <h2> is a section.
+  const sectionRegex = /<h2[^>]*>(.*?)<\/h2>([\s\S]*?)(?=<h2|$)/gi;
+  const sections: { heading: string; text: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = sectionRegex.exec(body)) !== null) {
+    sections.push({
+      heading: m[1].replace(/<[^>]*>/g, "").trim(),
+      text: m[2].replace(/<[^>]*>/g, " ").trim(),
+    });
+  }
+  if (sections.length === 0) sections.push({ heading: "Body", text: body.replace(/<[^>]*>/g, " ").trim() });
+
+  // Citation coverage: count assertive sentences vs ones with [#fxx] markers.
+  const sentenceCount = (body.match(/[.!?](\s|<)/g) || []).length || 1;
+  const citationCount = (body.match(/\[#[a-z0-9_]+\]|<sup[^>]*>/gi) || []).length;
+  const evidence = Math.max(0, Math.min(100, Math.round((citationCount / sentenceCount) * 100)));
+
+  // Off-hypothesis sections: any section heading that doesn't match a tree node string.
+  const treeText = JSON.stringify(args.hypothesisTree || {}).toLowerCase();
+  const offHyp: string[] = [];
+  for (const s of sections) {
+    const k = s.heading.toLowerCase();
+    if (k === "body" || k.includes("bottom line") || k.includes("evidence") || k.includes("recommendation")) continue;
+    const tokens = k.split(/\W+/).filter((t) => t.length > 4);
+    const hit = tokens.some((t) => treeText.includes(t));
+    if (!hit) offHyp.push(s.heading);
+  }
+
+  const issues: SynthesisCriticIssue[] = [];
+  if (citationCount === 0 && sentenceCount > 1) {
+    issues.push({
+      type: "missing_citation",
+      severity: "high",
+      location: sections[0].heading,
+      description: "No citations detected in the body. Every factual claim must carry a source reference.",
+      suggestion: "Insert <sup data-fact='fXX'> markers next to each factual claim, or remove the claim.",
+    });
+  }
+  if (citationCount > 0 && evidence < 50) {
+    issues.push({
+      type: "missing_citation",
+      severity: "med",
+      location: sections[0].heading,
+      description: `Only ~${evidence}% of factual sentences carry a citation.`,
+      suggestion: "Audit each uncited assertion; either cite or soften.",
+    });
+  }
+  for (const s of offHyp) {
+    issues.push({
+      type: "off_hypothesis",
+      severity: "med",
+      location: s,
+      description: `Section "${s}" does not map to any branch of the hypothesis tree.`,
+      suggestion: "Either tie the section to an existing hypothesis or move it to an appendix.",
+    });
+  }
+  // Buried-lede heuristic: first section heading contains "background" or "history".
+  if (/background|history|introduction/i.test(sections[0].heading)) {
+    issues.push({
+      type: "no_governing_thought",
+      severity: "high",
+      location: sections[0].heading,
+      description: "Section opens with background instead of the governing thought (pyramid principle violation).",
+      suggestion: "Lead with the bottom-line recommendation; move background to a later section or appendix.",
+    });
+  }
+  // Trust-us / weak-so-what heuristic.
+  if (/trust us|fine|will be fine/i.test(body) && sentenceCount < 6) {
+    issues.push({
+      type: "weak_so_what",
+      severity: "high",
+      location: sections[0].heading,
+      description: "Vague reassurance language without a measurable claim.",
+      suggestion: "Replace with a measurable claim and a citation.",
+    });
+  }
+
+  // Pyramid score: fraction of sections that have a clear governing thought
+  // (proxy: heading contains a verb or a bottom-line marker).
+  const passed = sections.filter((s) =>
+    /recommend|cut|grow|reduce|adopt|bottom line|conclusion/i.test(s.heading) ||
+    /^\d+\.\s/.test(s.heading),
+  ).length;
+  const pyramid = sections.length === 0 ? 0 : Math.min(1, passed / sections.length + 0.2);
+
+  let readiness: "green" | "amber" | "red";
+  const highCount = issues.filter((i) => i.severity === "high").length;
+  if (pyramid >= 0.8 && evidence >= 80 && offHyp.length === 0 && highCount === 0) readiness = "green";
+  else if (pyramid < 0.5 || evidence < 50 || highCount >= 2) readiness = "red";
+  else readiness = "amber";
+
+  return {
+    issues,
+    pyramid_score: Number(pyramid.toFixed(2)),
+    evidence_coverage_pct: evidence,
+    off_hypothesis_sections: offHyp,
+    readiness,
+  };
+}
+
+export async function runSynthesisCritic(args: {
+  engagementId: string;
+  deliverableId: string;
+  deliverableName: string;
+  body: string;
+  hypothesisTree: HypothesisTree | null;
+  audience: string;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: SynthesisCriticOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "synthesis_critic",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "deliverable",
+    targetId: args.deliverableId,
+    targetLabel: args.deliverableName,
+    inputs: { engagementId: args.engagementId, audience: args.audience, bodyLen: args.body.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("synthesis_critic");
+    await progressRun(runId, 25, "Walking sections + checking pyramid structure");
+    await progressRun(runId, 60, "Auditing citations + hypothesis coverage");
+    const { value, costUsd, source, warning } = await callClaudeJson<SynthesisCriticOutput>(
+      "claude-opus-4-7",
+      system,
+      JSON.stringify({
+        deliverableId: args.deliverableId,
+        body: args.body,
+        hypothesisTree: args.hypothesisTree,
+        audience: args.audience,
+      }),
+      () => mockCritique({ body: args.body, hypothesisTree: args.hypothesisTree }),
+    );
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: value.readiness === "green" ? "green" : value.readiness === "amber" ? "amber" : "red",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.issues?.length ?? 0,
+      actorLabel: args.actorLabel,
+      targetType: "deliverable",
+      targetId: args.deliverableId,
+      targetLabel: args.deliverableName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "deliverable", targetId: args.deliverableId });
+    throw err;
+  }
+}
+
+// =============================================================
+// Diagnostic Memo scaffold — deterministic writer that turns the
+// engagement's hypothesis tree into a starter v1 body. Reused as the
+// "Re-draft from sources" action on the deliverable workspace; the
+// human edits in place after that.
+// =============================================================
+export function scaffoldDiagnosticMemo(args: {
+  engagementName: string;
+  audience: string;
+  tree: HypothesisTree | null;
+  // includeDefects: produce a deliberately-weak v1 so Synthesis Critic
+  // has something to flag in the seeded acceptance walkthrough.
+  includeDefects?: boolean;
+}): string {
+  const t = args.tree;
+  const branches = t?.branches ?? [];
+  const root = t?.rootIssue ?? `What should ${args.engagementName} do next?`;
+
+  if (args.includeDefects) {
+    // Deliberately weak v1: buried lede + uncited assertions + an
+    // off-hypothesis section. The Critic is expected to flag all three.
+    return [
+      `<h1>Diagnostic Memo — ${args.engagementName}</h1>`,
+      `<h2>Background</h2>`,
+      `<p>${args.engagementName} has been running for several quarters. Many things have happened. Adoption is broadly fine and we believe it will be fine going forward.</p>`,
+      `<h2>What we did</h2>`,
+      `<p>We reviewed available materials and held a kickoff. Trust us that the work was thorough.</p>`,
+      `<h2>Brand refresh proposal</h2>`,
+      `<p>While reviewing, we also recommend updating the engagement's logo treatment and tone of voice to better resonate with the executive sponsor.</p>`,
+      `<h2>Next steps</h2>`,
+      `<p>We will continue.</p>`,
+    ].join("\n");
+  }
+
+  const sections = branches.slice(0, 4).map((b, i) => {
+    const subs = (b.subHypotheses ?? []).slice(0, 3).map((s) => `<li>${s}</li>`).join("");
+    const ev = (b.evidenceRequired ?? []).slice(0, 3).map((e) => `<li>${e}</li>`).join("");
+    return [
+      `<h2>${i + 1}. ${b.hypothesis}</h2>`,
+      subs ? `<p><em>Sub-hypotheses:</em></p><ul>${subs}</ul>` : "",
+      ev ? `<p><em>Evidence required:</em></p><ul>${ev}</ul>` : "",
+      `<p><strong>So what:</strong> the next decision is to fund the evidence collection above and fix a 30-day check-in to test this branch.<sup data-fact="f${i + 1}">f${i + 1}</sup></p>`,
+    ].join("\n");
+  }).join("\n");
+
+  return [
+    `<h1>Diagnostic Memo — ${args.engagementName}</h1>`,
+    `<h2>Recommendation: pursue the three branches below in priority order</h2>`,
+    `<p><strong>Audience:</strong> ${args.audience}.</p>`,
+    `<p><strong>Bottom line:</strong> ${root}<sup data-fact="f0">f0</sup></p>`,
+    sections,
+    `<h2>Conclusion</h2>`,
+    `<p>This memo is a draft. Each branch above maps to a hypothesis on the engagement tree; evidence collection is the next move.</p>`,
+  ].join("\n");
+}

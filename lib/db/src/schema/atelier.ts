@@ -177,6 +177,19 @@ export const atelierDeliverables = pgTable(
     hypothesisId: text("hypothesis_id"),
     currentVersionId: text("current_version_id"),
     dueDate: text("due_date"),
+    // Synthesis Critic + Partner Authority Lock state. The critic populates
+    // readiness ('green'|'amber'|'red'); Partner Lock then blocks
+    // [Send to client] until readiness is GREEN or an explicit override
+    // rationale is recorded with the partner's name + ts.
+    criticReadiness: text("critic_readiness"), // null | green | amber | red
+    criticReportSummary: text("critic_report_summary"),
+    partnerApprovedAt: timestamp("partner_approved_at"),
+    partnerApprovedByUserId: text("partner_approved_by_user_id"),
+    partnerApprovedByName: text("partner_approved_by_name"),
+    partnerRationale: text("partner_rationale"),
+    lockOverridden: boolean("lock_overridden").notNull().default(false),
+    sentAt: timestamp("sent_at"),
+    sentByUserId: text("sent_by_user_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
@@ -263,8 +276,16 @@ export const atelierArtifacts = pgTable(
     fileUrl: text("file_url"),
     title: text("title").notNull(),
     abstract: text("abstract"),
+    body: text("body"),
     tags: jsonb("tags").notNull().default([]).$type<string[]>(),
     source: text("source").notNull().default("upload"),
+    // Bilingual flow: language detected on upload (en | ar | other),
+    // translation is stubbed in MVP but the *flow* must be present so the
+    // original is preserved alongside the translation in audit.
+    language: text("language").notNull().default("en"),
+    translatedTitle: text("translated_title"),
+    translatedBody: text("translated_body"),
+    translatedAt: timestamp("translated_at"),
     atelierPromoted: boolean("atelier_promoted").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -452,6 +473,47 @@ export const atelierHypothesisTrees = pgTable(
     createdByUserId: text("created_by_user_id"),
     deletedAt: timestamp("deleted_at"),
   },
+);
+
+// ============================================================
+// CHARTER VERSIONS (Charter Architect output, versioned w/ diff)
+// One row per re-draft. Engagement.charter (jsonb) mirrors the
+// LIVE row only after Partner sign-off; intermediate drafts live
+// here so the Lead and Partner can compare versions side-by-side.
+// ============================================================
+export const atelierCharterVersions = pgTable(
+  "atelier_charter_versions",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    versionNumber: integer("version_number").notNull(),
+    runId: text("run_id"),
+    body: jsonb("body").notNull().default({}).$type<{
+      objectives: string[];
+      scope: string[];
+      outOfScope: string[];
+      successMetrics: { name: string; baseline: string; target: string }[];
+      governance: string;
+      valueHypothesis: string;
+    }>(),
+    hypothesisTree: jsonb("hypothesis_tree").notNull().default({}),
+    raidBaseline: jsonb("raid_baseline").notNull().default([]),
+    proposedWorkstreams: jsonb("proposed_workstreams").notNull().default([]),
+    meceFlags: jsonb("mece_flags").notNull().default([]).$type<string[]>(),
+    status: text("status").notNull().default("draft"), // draft | lead_approved | live | superseded
+    leadApprovedAt: timestamp("lead_approved_at"),
+    leadApprovedByUserId: text("lead_approved_by_user_id"),
+    partnerApprovedAt: timestamp("partner_approved_at"),
+    partnerApprovedByUserId: text("partner_approved_by_user_id"),
+    partnerApprovedByName: text("partner_approved_by_name"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_charterv_eng").on(t.engagementId)],
 );
 
 export const atelierProcesses = pgTable(

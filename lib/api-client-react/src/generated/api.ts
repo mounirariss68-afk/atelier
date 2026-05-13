@@ -22,13 +22,26 @@ import type {
   AgentCatalogEntry,
   AtelierAgentDecisionInput,
   AtelierAgentRunDetail,
+  AtelierArtifact,
+  AtelierArtifactInput,
   AtelierAsset,
   AtelierBriefEnvelope,
+  AtelierCharterApproveInput,
+  AtelierCharterRedraftInput,
+  AtelierCharterVersion,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
+  AtelierCritiqueInput,
+  AtelierCritiqueResult,
+  AtelierDeliverable,
+  AtelierDeliverableDetail,
+  AtelierDeliverableDraftInput,
+  AtelierDeliverableInput,
+  AtelierDeliverableVersion,
   AtelierError,
   AtelierGetActivityParams,
   AtelierHome,
+  AtelierHypothesisTree,
   AtelierListAuditParams,
   AtelierMeeting,
   AtelierPersona,
@@ -38,8 +51,12 @@ import type {
   AtelierPromoteFactInput,
   AtelierQualifier,
   AtelierQualifierInput,
+  AtelierRaidItem,
+  AtelierRaidItemInput,
+  AtelierRaidItemPatch,
   AtelierResearchFact,
   AtelierScoutInput,
+  AtelierSendDeliverableInput,
   AtelierStageChangeInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
@@ -2315,6 +2332,1406 @@ export function useAtelierGetEngagement<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+export const getAtelierListCharterVersionsUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/charter/versions`;
+};
+
+export const atelierListCharterVersions = async (
+  engId: string,
+  options?: RequestInit,
+): Promise<AtelierCharterVersion[]> => {
+  return customFetch<AtelierCharterVersion[]>(
+    getAtelierListCharterVersionsUrl(engId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListCharterVersionsQueryKey = (engId: string) => {
+  return [`/api/atelier/engagements/${engId}/charter/versions`] as const;
+};
+
+export const getAtelierListCharterVersionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListCharterVersions>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCharterVersions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListCharterVersionsQueryKey(engId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListCharterVersions>>
+  > = ({ signal }) =>
+    atelierListCharterVersions(engId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!engId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListCharterVersions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListCharterVersionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListCharterVersions>>
+>;
+export type AtelierListCharterVersionsQueryError = ErrorType<unknown>;
+
+export function useAtelierListCharterVersions<
+  TData = Awaited<ReturnType<typeof atelierListCharterVersions>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCharterVersions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListCharterVersionsQueryOptions(
+    engId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Run Charter Architect to draft a new charter version
+ */
+export const getAtelierRedraftCharterUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/charter/redraft`;
+};
+
+export const atelierRedraftCharter = async (
+  engId: string,
+  atelierCharterRedraftInput: AtelierCharterRedraftInput,
+  options?: RequestInit,
+): Promise<AtelierCharterVersion> => {
+  return customFetch<AtelierCharterVersion>(
+    getAtelierRedraftCharterUrl(engId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCharterRedraftInput),
+    },
+  );
+};
+
+export const getAtelierRedraftCharterMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRedraftCharter>>,
+    TError,
+    { engId: string; data: BodyType<AtelierCharterRedraftInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRedraftCharter>>,
+  TError,
+  { engId: string; data: BodyType<AtelierCharterRedraftInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRedraftCharter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRedraftCharter>>,
+    { engId: string; data: BodyType<AtelierCharterRedraftInput> }
+  > = (props) => {
+    const { engId, data } = props ?? {};
+
+    return atelierRedraftCharter(engId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRedraftCharterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRedraftCharter>>
+>;
+export type AtelierRedraftCharterMutationBody =
+  BodyType<AtelierCharterRedraftInput>;
+export type AtelierRedraftCharterMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Run Charter Architect to draft a new charter version
+ */
+export const useAtelierRedraftCharter = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRedraftCharter>>,
+    TError,
+    { engId: string; data: BodyType<AtelierCharterRedraftInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRedraftCharter>>,
+  TError,
+  { engId: string; data: BodyType<AtelierCharterRedraftInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRedraftCharterMutationOptions(options));
+};
+
+/**
+ * @summary Approve a charter version (lead or partner)
+ */
+export const getAtelierApproveCharterVersionUrl = (
+  engId: string,
+  versionId: string,
+) => {
+  return `/api/atelier/engagements/${engId}/charter/versions/${versionId}/approve`;
+};
+
+export const atelierApproveCharterVersion = async (
+  engId: string,
+  versionId: string,
+  atelierCharterApproveInput: AtelierCharterApproveInput,
+  options?: RequestInit,
+): Promise<AtelierCharterVersion> => {
+  return customFetch<AtelierCharterVersion>(
+    getAtelierApproveCharterVersionUrl(engId, versionId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCharterApproveInput),
+    },
+  );
+};
+
+export const getAtelierApproveCharterVersionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveCharterVersion>>,
+    TError,
+    {
+      engId: string;
+      versionId: string;
+      data: BodyType<AtelierCharterApproveInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierApproveCharterVersion>>,
+  TError,
+  {
+    engId: string;
+    versionId: string;
+    data: BodyType<AtelierCharterApproveInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierApproveCharterVersion"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierApproveCharterVersion>>,
+    {
+      engId: string;
+      versionId: string;
+      data: BodyType<AtelierCharterApproveInput>;
+    }
+  > = (props) => {
+    const { engId, versionId, data } = props ?? {};
+
+    return atelierApproveCharterVersion(engId, versionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierApproveCharterVersionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierApproveCharterVersion>>
+>;
+export type AtelierApproveCharterVersionMutationBody =
+  BodyType<AtelierCharterApproveInput>;
+export type AtelierApproveCharterVersionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve a charter version (lead or partner)
+ */
+export const useAtelierApproveCharterVersion = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveCharterVersion>>,
+    TError,
+    {
+      engId: string;
+      versionId: string;
+      data: BodyType<AtelierCharterApproveInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierApproveCharterVersion>>,
+  TError,
+  {
+    engId: string;
+    versionId: string;
+    data: BodyType<AtelierCharterApproveInput>;
+  },
+  TContext
+> => {
+  return useMutation(getAtelierApproveCharterVersionMutationOptions(options));
+};
+
+export const getAtelierListRaidUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/raid`;
+};
+
+export const atelierListRaid = async (
+  engId: string,
+  options?: RequestInit,
+): Promise<AtelierRaidItem[]> => {
+  return customFetch<AtelierRaidItem[]>(getAtelierListRaidUrl(engId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListRaidQueryKey = (engId: string) => {
+  return [`/api/atelier/engagements/${engId}/raid`] as const;
+};
+
+export const getAtelierListRaidQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListRaid>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListRaid>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListRaidQueryKey(engId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof atelierListRaid>>> = ({
+    signal,
+  }) => atelierListRaid(engId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!engId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListRaid>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListRaidQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListRaid>>
+>;
+export type AtelierListRaidQueryError = ErrorType<unknown>;
+
+export function useAtelierListRaid<
+  TData = Awaited<ReturnType<typeof atelierListRaid>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListRaid>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListRaidQueryOptions(engId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierCreateRaidItemUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/raid`;
+};
+
+export const atelierCreateRaidItem = async (
+  engId: string,
+  atelierRaidItemInput: AtelierRaidItemInput,
+  options?: RequestInit,
+): Promise<AtelierRaidItem> => {
+  return customFetch<AtelierRaidItem>(getAtelierCreateRaidItemUrl(engId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierRaidItemInput),
+  });
+};
+
+export const getAtelierCreateRaidItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateRaidItem>>,
+    TError,
+    { engId: string; data: BodyType<AtelierRaidItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateRaidItem>>,
+  TError,
+  { engId: string; data: BodyType<AtelierRaidItemInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateRaidItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateRaidItem>>,
+    { engId: string; data: BodyType<AtelierRaidItemInput> }
+  > = (props) => {
+    const { engId, data } = props ?? {};
+
+    return atelierCreateRaidItem(engId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateRaidItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateRaidItem>>
+>;
+export type AtelierCreateRaidItemMutationBody = BodyType<AtelierRaidItemInput>;
+export type AtelierCreateRaidItemMutationError = ErrorType<unknown>;
+
+export const useAtelierCreateRaidItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateRaidItem>>,
+    TError,
+    { engId: string; data: BodyType<AtelierRaidItemInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateRaidItem>>,
+  TError,
+  { engId: string; data: BodyType<AtelierRaidItemInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateRaidItemMutationOptions(options));
+};
+
+export const getAtelierUpdateRaidItemUrl = (engId: string, raidId: string) => {
+  return `/api/atelier/engagements/${engId}/raid/${raidId}`;
+};
+
+export const atelierUpdateRaidItem = async (
+  engId: string,
+  raidId: string,
+  atelierRaidItemPatch: AtelierRaidItemPatch,
+  options?: RequestInit,
+): Promise<AtelierRaidItem> => {
+  return customFetch<AtelierRaidItem>(
+    getAtelierUpdateRaidItemUrl(engId, raidId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierRaidItemPatch),
+    },
+  );
+};
+
+export const getAtelierUpdateRaidItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateRaidItem>>,
+    TError,
+    { engId: string; raidId: string; data: BodyType<AtelierRaidItemPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateRaidItem>>,
+  TError,
+  { engId: string; raidId: string; data: BodyType<AtelierRaidItemPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateRaidItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateRaidItem>>,
+    { engId: string; raidId: string; data: BodyType<AtelierRaidItemPatch> }
+  > = (props) => {
+    const { engId, raidId, data } = props ?? {};
+
+    return atelierUpdateRaidItem(engId, raidId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateRaidItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateRaidItem>>
+>;
+export type AtelierUpdateRaidItemMutationBody = BodyType<AtelierRaidItemPatch>;
+export type AtelierUpdateRaidItemMutationError = ErrorType<unknown>;
+
+export const useAtelierUpdateRaidItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateRaidItem>>,
+    TError,
+    { engId: string; raidId: string; data: BodyType<AtelierRaidItemPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateRaidItem>>,
+  TError,
+  { engId: string; raidId: string; data: BodyType<AtelierRaidItemPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateRaidItemMutationOptions(options));
+};
+
+export const getAtelierGetHypothesisTreeUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/hypothesis-tree`;
+};
+
+export const atelierGetHypothesisTree = async (
+  engId: string,
+  options?: RequestInit,
+): Promise<AtelierHypothesisTree> => {
+  return customFetch<AtelierHypothesisTree>(
+    getAtelierGetHypothesisTreeUrl(engId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetHypothesisTreeQueryKey = (engId: string) => {
+  return [`/api/atelier/engagements/${engId}/hypothesis-tree`] as const;
+};
+
+export const getAtelierGetHypothesisTreeQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetHypothesisTree>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetHypothesisTree>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetHypothesisTreeQueryKey(engId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetHypothesisTree>>
+  > = ({ signal }) =>
+    atelierGetHypothesisTree(engId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!engId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetHypothesisTree>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetHypothesisTreeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetHypothesisTree>>
+>;
+export type AtelierGetHypothesisTreeQueryError = ErrorType<unknown>;
+
+export function useAtelierGetHypothesisTree<
+  TData = Awaited<ReturnType<typeof atelierGetHypothesisTree>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetHypothesisTree>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetHypothesisTreeQueryOptions(engId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierListDeliverablesUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/deliverables`;
+};
+
+export const atelierListDeliverables = async (
+  engId: string,
+  options?: RequestInit,
+): Promise<AtelierDeliverable[]> => {
+  return customFetch<AtelierDeliverable[]>(
+    getAtelierListDeliverablesUrl(engId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListDeliverablesQueryKey = (engId: string) => {
+  return [`/api/atelier/engagements/${engId}/deliverables`] as const;
+};
+
+export const getAtelierListDeliverablesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListDeliverables>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListDeliverables>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListDeliverablesQueryKey(engId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListDeliverables>>
+  > = ({ signal }) =>
+    atelierListDeliverables(engId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!engId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListDeliverables>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListDeliverablesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListDeliverables>>
+>;
+export type AtelierListDeliverablesQueryError = ErrorType<unknown>;
+
+export function useAtelierListDeliverables<
+  TData = Awaited<ReturnType<typeof atelierListDeliverables>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListDeliverables>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListDeliverablesQueryOptions(engId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierCreateDeliverableUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/deliverables`;
+};
+
+export const atelierCreateDeliverable = async (
+  engId: string,
+  atelierDeliverableInput: AtelierDeliverableInput,
+  options?: RequestInit,
+): Promise<AtelierDeliverable> => {
+  return customFetch<AtelierDeliverable>(
+    getAtelierCreateDeliverableUrl(engId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierDeliverableInput),
+    },
+  );
+};
+
+export const getAtelierCreateDeliverableMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateDeliverable>>,
+    TError,
+    { engId: string; data: BodyType<AtelierDeliverableInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateDeliverable>>,
+  TError,
+  { engId: string; data: BodyType<AtelierDeliverableInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateDeliverable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateDeliverable>>,
+    { engId: string; data: BodyType<AtelierDeliverableInput> }
+  > = (props) => {
+    const { engId, data } = props ?? {};
+
+    return atelierCreateDeliverable(engId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateDeliverableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateDeliverable>>
+>;
+export type AtelierCreateDeliverableMutationBody =
+  BodyType<AtelierDeliverableInput>;
+export type AtelierCreateDeliverableMutationError = ErrorType<unknown>;
+
+export const useAtelierCreateDeliverable = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateDeliverable>>,
+    TError,
+    { engId: string; data: BodyType<AtelierDeliverableInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateDeliverable>>,
+  TError,
+  { engId: string; data: BodyType<AtelierDeliverableInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateDeliverableMutationOptions(options));
+};
+
+export const getAtelierGetDeliverableUrl = (delId: string) => {
+  return `/api/atelier/deliverables/${delId}`;
+};
+
+export const atelierGetDeliverable = async (
+  delId: string,
+  options?: RequestInit,
+): Promise<AtelierDeliverableDetail> => {
+  return customFetch<AtelierDeliverableDetail>(
+    getAtelierGetDeliverableUrl(delId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetDeliverableQueryKey = (delId: string) => {
+  return [`/api/atelier/deliverables/${delId}`] as const;
+};
+
+export const getAtelierGetDeliverableQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetDeliverable>>,
+  TError = ErrorType<unknown>,
+>(
+  delId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetDeliverable>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetDeliverableQueryKey(delId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetDeliverable>>
+  > = ({ signal }) =>
+    atelierGetDeliverable(delId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!delId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetDeliverable>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetDeliverableQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetDeliverable>>
+>;
+export type AtelierGetDeliverableQueryError = ErrorType<unknown>;
+
+export function useAtelierGetDeliverable<
+  TData = Awaited<ReturnType<typeof atelierGetDeliverable>>,
+  TError = ErrorType<unknown>,
+>(
+  delId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetDeliverable>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetDeliverableQueryOptions(delId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Append a new version (scaffolds from hypothesis tree if no body)
+ */
+export const getAtelierDraftDeliverableUrl = (delId: string) => {
+  return `/api/atelier/deliverables/${delId}/draft`;
+};
+
+export const atelierDraftDeliverable = async (
+  delId: string,
+  atelierDeliverableDraftInput: AtelierDeliverableDraftInput,
+  options?: RequestInit,
+): Promise<AtelierDeliverableVersion> => {
+  return customFetch<AtelierDeliverableVersion>(
+    getAtelierDraftDeliverableUrl(delId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierDeliverableDraftInput),
+    },
+  );
+};
+
+export const getAtelierDraftDeliverableMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDraftDeliverable>>,
+    TError,
+    { delId: string; data: BodyType<AtelierDeliverableDraftInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDraftDeliverable>>,
+  TError,
+  { delId: string; data: BodyType<AtelierDeliverableDraftInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierDraftDeliverable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDraftDeliverable>>,
+    { delId: string; data: BodyType<AtelierDeliverableDraftInput> }
+  > = (props) => {
+    const { delId, data } = props ?? {};
+
+    return atelierDraftDeliverable(delId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDraftDeliverableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDraftDeliverable>>
+>;
+export type AtelierDraftDeliverableMutationBody =
+  BodyType<AtelierDeliverableDraftInput>;
+export type AtelierDraftDeliverableMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Append a new version (scaffolds from hypothesis tree if no body)
+ */
+export const useAtelierDraftDeliverable = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDraftDeliverable>>,
+    TError,
+    { delId: string; data: BodyType<AtelierDeliverableDraftInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDraftDeliverable>>,
+  TError,
+  { delId: string; data: BodyType<AtelierDeliverableDraftInput> },
+  TContext
+> => {
+  return useMutation(getAtelierDraftDeliverableMutationOptions(options));
+};
+
+/**
+ * @summary Run Synthesis Critic on the current version
+ */
+export const getAtelierCritiqueDeliverableUrl = (delId: string) => {
+  return `/api/atelier/deliverables/${delId}/critique`;
+};
+
+export const atelierCritiqueDeliverable = async (
+  delId: string,
+  atelierCritiqueInput: AtelierCritiqueInput,
+  options?: RequestInit,
+): Promise<AtelierCritiqueResult> => {
+  return customFetch<AtelierCritiqueResult>(
+    getAtelierCritiqueDeliverableUrl(delId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCritiqueInput),
+    },
+  );
+};
+
+export const getAtelierCritiqueDeliverableMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCritiqueDeliverable>>,
+    TError,
+    { delId: string; data: BodyType<AtelierCritiqueInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCritiqueDeliverable>>,
+  TError,
+  { delId: string; data: BodyType<AtelierCritiqueInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCritiqueDeliverable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCritiqueDeliverable>>,
+    { delId: string; data: BodyType<AtelierCritiqueInput> }
+  > = (props) => {
+    const { delId, data } = props ?? {};
+
+    return atelierCritiqueDeliverable(delId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCritiqueDeliverableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCritiqueDeliverable>>
+>;
+export type AtelierCritiqueDeliverableMutationBody =
+  BodyType<AtelierCritiqueInput>;
+export type AtelierCritiqueDeliverableMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Run Synthesis Critic on the current version
+ */
+export const useAtelierCritiqueDeliverable = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCritiqueDeliverable>>,
+    TError,
+    { delId: string; data: BodyType<AtelierCritiqueInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCritiqueDeliverable>>,
+  TError,
+  { delId: string; data: BodyType<AtelierCritiqueInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCritiqueDeliverableMutationOptions(options));
+};
+
+/**
+ * @summary Send to client (Partner Authority Lock — green or override)
+ */
+export const getAtelierSendDeliverableUrl = (delId: string) => {
+  return `/api/atelier/deliverables/${delId}/send`;
+};
+
+export const atelierSendDeliverable = async (
+  delId: string,
+  atelierSendDeliverableInput: AtelierSendDeliverableInput,
+  options?: RequestInit,
+): Promise<AtelierDeliverable> => {
+  return customFetch<AtelierDeliverable>(getAtelierSendDeliverableUrl(delId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierSendDeliverableInput),
+  });
+};
+
+export const getAtelierSendDeliverableMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSendDeliverable>>,
+    TError,
+    { delId: string; data: BodyType<AtelierSendDeliverableInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSendDeliverable>>,
+  TError,
+  { delId: string; data: BodyType<AtelierSendDeliverableInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierSendDeliverable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSendDeliverable>>,
+    { delId: string; data: BodyType<AtelierSendDeliverableInput> }
+  > = (props) => {
+    const { delId, data } = props ?? {};
+
+    return atelierSendDeliverable(delId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSendDeliverableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSendDeliverable>>
+>;
+export type AtelierSendDeliverableMutationBody =
+  BodyType<AtelierSendDeliverableInput>;
+export type AtelierSendDeliverableMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Send to client (Partner Authority Lock — green or override)
+ */
+export const useAtelierSendDeliverable = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSendDeliverable>>,
+    TError,
+    { delId: string; data: BodyType<AtelierSendDeliverableInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSendDeliverable>>,
+  TError,
+  { delId: string; data: BodyType<AtelierSendDeliverableInput> },
+  TContext
+> => {
+  return useMutation(getAtelierSendDeliverableMutationOptions(options));
+};
+
+export const getAtelierListArtifactsUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/artifacts`;
+};
+
+export const atelierListArtifacts = async (
+  engId: string,
+  options?: RequestInit,
+): Promise<AtelierArtifact[]> => {
+  return customFetch<AtelierArtifact[]>(getAtelierListArtifactsUrl(engId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListArtifactsQueryKey = (engId: string) => {
+  return [`/api/atelier/engagements/${engId}/artifacts`] as const;
+};
+
+export const getAtelierListArtifactsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListArtifacts>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListArtifacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListArtifactsQueryKey(engId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListArtifacts>>
+  > = ({ signal }) =>
+    atelierListArtifacts(engId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!engId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListArtifacts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListArtifactsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListArtifacts>>
+>;
+export type AtelierListArtifactsQueryError = ErrorType<unknown>;
+
+export function useAtelierListArtifacts<
+  TData = Awaited<ReturnType<typeof atelierListArtifacts>>,
+  TError = ErrorType<unknown>,
+>(
+  engId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListArtifacts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListArtifactsQueryOptions(engId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierCreateArtifactUrl = (engId: string) => {
+  return `/api/atelier/engagements/${engId}/artifacts`;
+};
+
+export const atelierCreateArtifact = async (
+  engId: string,
+  atelierArtifactInput: AtelierArtifactInput,
+  options?: RequestInit,
+): Promise<AtelierArtifact> => {
+  return customFetch<AtelierArtifact>(getAtelierCreateArtifactUrl(engId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierArtifactInput),
+  });
+};
+
+export const getAtelierCreateArtifactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateArtifact>>,
+    TError,
+    { engId: string; data: BodyType<AtelierArtifactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateArtifact>>,
+  TError,
+  { engId: string; data: BodyType<AtelierArtifactInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateArtifact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateArtifact>>,
+    { engId: string; data: BodyType<AtelierArtifactInput> }
+  > = (props) => {
+    const { engId, data } = props ?? {};
+
+    return atelierCreateArtifact(engId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateArtifactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateArtifact>>
+>;
+export type AtelierCreateArtifactMutationBody = BodyType<AtelierArtifactInput>;
+export type AtelierCreateArtifactMutationError = ErrorType<unknown>;
+
+export const useAtelierCreateArtifact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateArtifact>>,
+    TError,
+    { engId: string; data: BodyType<AtelierArtifactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateArtifact>>,
+  TError,
+  { engId: string; data: BodyType<AtelierArtifactInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateArtifactMutationOptions(options));
+};
+
+/**
+ * @summary Stub-translate an artifact (AR↔EN); preserves original
+ */
+export const getAtelierTranslateArtifactUrl = (artifactId: string) => {
+  return `/api/atelier/artifacts/${artifactId}/translate`;
+};
+
+export const atelierTranslateArtifact = async (
+  artifactId: string,
+  options?: RequestInit,
+): Promise<AtelierArtifact> => {
+  return customFetch<AtelierArtifact>(
+    getAtelierTranslateArtifactUrl(artifactId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierTranslateArtifactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierTranslateArtifact>>,
+    TError,
+    { artifactId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierTranslateArtifact>>,
+  TError,
+  { artifactId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierTranslateArtifact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierTranslateArtifact>>,
+    { artifactId: string }
+  > = (props) => {
+    const { artifactId } = props ?? {};
+
+    return atelierTranslateArtifact(artifactId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierTranslateArtifactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierTranslateArtifact>>
+>;
+
+export type AtelierTranslateArtifactMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Stub-translate an artifact (AR↔EN); preserves original
+ */
+export const useAtelierTranslateArtifact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierTranslateArtifact>>,
+    TError,
+    { artifactId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierTranslateArtifact>>,
+  TError,
+  { artifactId: string },
+  TContext
+> => {
+  return useMutation(getAtelierTranslateArtifactMutationOptions(options));
+};
 
 /**
  * @summary Firm accounts

@@ -83,6 +83,10 @@ export interface ChatError {
 
 export interface AtelierError {
   error: string;
+  /** @nullable */
+  reason?: string | null;
+  /** @nullable */
+  readiness?: string | null;
 }
 
 export type AtelierPersonaRole =
@@ -672,6 +676,415 @@ export const AtelierAgentDecisionInputDecision = {
 export interface AtelierAgentDecisionInput {
   decision: AtelierAgentDecisionInputDecision;
   rationale?: string;
+}
+
+export interface AtelierHypothesisBranch {
+  hypothesis: string;
+  subHypotheses?: string[];
+  evidenceRequired?: string[];
+  /** @nullable */
+  status?: string | null;
+}
+
+export type AtelierHypothesisTreeRoot = {
+  rootIssue: string;
+  branches: AtelierHypothesisBranch[];
+};
+
+export interface AtelierHypothesisTree {
+  engagementId: string;
+  /** @nullable */
+  treeId?: string | null;
+  root: AtelierHypothesisTreeRoot;
+}
+
+export type AtelierCharterBodySuccessMetricsItem = {
+  name: string;
+  baseline: string;
+  target: string;
+};
+
+export interface AtelierCharterBody {
+  objectives: string[];
+  scope: string[];
+  outOfScope: string[];
+  successMetrics: AtelierCharterBodySuccessMetricsItem[];
+  governance: string;
+  valueHypothesis: string;
+}
+
+export type AtelierCharterVersionStatus =
+  (typeof AtelierCharterVersionStatus)[keyof typeof AtelierCharterVersionStatus];
+
+export const AtelierCharterVersionStatus = {
+  draft: "draft",
+  lead_approved: "lead_approved",
+  live: "live",
+  superseded: "superseded",
+} as const;
+
+export type AtelierCharterVersionHypothesisTree = {
+  rootIssue?: string;
+  branches?: AtelierHypothesisBranch[];
+};
+
+export type AtelierCharterVersionRaidBaselineItemKind =
+  (typeof AtelierCharterVersionRaidBaselineItemKind)[keyof typeof AtelierCharterVersionRaidBaselineItemKind];
+
+export const AtelierCharterVersionRaidBaselineItemKind = {
+  risk: "risk",
+  assumption: "assumption",
+  issue: "issue",
+  dependency: "dependency",
+} as const;
+
+export type AtelierCharterVersionRaidBaselineItemSeverity =
+  (typeof AtelierCharterVersionRaidBaselineItemSeverity)[keyof typeof AtelierCharterVersionRaidBaselineItemSeverity];
+
+export const AtelierCharterVersionRaidBaselineItemSeverity = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierCharterVersionRaidBaselineItemDueClass =
+  (typeof AtelierCharterVersionRaidBaselineItemDueClass)[keyof typeof AtelierCharterVersionRaidBaselineItemDueClass];
+
+export const AtelierCharterVersionRaidBaselineItemDueClass = {
+  wk1: "wk1",
+  wk2: "wk2",
+  wk4: "wk4",
+  monthly: "monthly",
+} as const;
+
+export type AtelierCharterVersionRaidBaselineItem = {
+  kind?: AtelierCharterVersionRaidBaselineItemKind;
+  severity?: AtelierCharterVersionRaidBaselineItemSeverity;
+  ownerRole?: string;
+  description?: string;
+  dueClass?: AtelierCharterVersionRaidBaselineItemDueClass;
+};
+
+export type AtelierCharterVersionProposedWorkstreamsItem = {
+  name?: string;
+  leadRole?: string;
+  linkedHypothesis?: string;
+};
+
+export interface AtelierCharterVersion {
+  id: string;
+  engagementId: string;
+  versionNumber: number;
+  status: AtelierCharterVersionStatus;
+  /** @nullable */
+  runId?: string | null;
+  body: AtelierCharterBody;
+  hypothesisTree: AtelierCharterVersionHypothesisTree;
+  raidBaseline: AtelierCharterVersionRaidBaselineItem[];
+  proposedWorkstreams: AtelierCharterVersionProposedWorkstreamsItem[];
+  meceFlags: string[];
+  /** @nullable */
+  leadApprovedByName?: string | null;
+  /** @nullable */
+  leadApprovedAt?: string | null;
+  /** @nullable */
+  partnerApprovedByName?: string | null;
+  /** @nullable */
+  partnerApprovedAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface AtelierCharterRedraftInput {
+  wonProposalSummary?: string;
+  /** @nullable */
+  kickoffTranscriptExcerpt?: string | null;
+}
+
+export type AtelierCharterApproveInputRole =
+  (typeof AtelierCharterApproveInputRole)[keyof typeof AtelierCharterApproveInputRole];
+
+export const AtelierCharterApproveInputRole = {
+  lead: "lead",
+  partner: "partner",
+} as const;
+
+export interface AtelierCharterApproveInput {
+  role: AtelierCharterApproveInputRole;
+  notes?: string;
+}
+
+export type AtelierRaidItemKind =
+  (typeof AtelierRaidItemKind)[keyof typeof AtelierRaidItemKind];
+
+export const AtelierRaidItemKind = {
+  risk: "risk",
+  assumption: "assumption",
+  issue: "issue",
+  dependency: "dependency",
+} as const;
+
+export type AtelierRaidItemSeverity =
+  (typeof AtelierRaidItemSeverity)[keyof typeof AtelierRaidItemSeverity];
+
+export const AtelierRaidItemSeverity = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierRaidItemStatus =
+  (typeof AtelierRaidItemStatus)[keyof typeof AtelierRaidItemStatus];
+
+export const AtelierRaidItemStatus = {
+  open: "open",
+  mitigated: "mitigated",
+  closed: "closed",
+} as const;
+
+export interface AtelierRaidItem {
+  id: string;
+  engagementId: string;
+  kind: AtelierRaidItemKind;
+  severity: AtelierRaidItemSeverity;
+  status: AtelierRaidItemStatus;
+  /** @nullable */
+  ownerUserId?: string | null;
+  /** @nullable */
+  ownerName?: string | null;
+  description: string;
+  /** @nullable */
+  mitigation?: string | null;
+  /** @nullable */
+  targetDate?: string | null;
+  createdAt: string;
+}
+
+export type AtelierRaidItemInputKind =
+  (typeof AtelierRaidItemInputKind)[keyof typeof AtelierRaidItemInputKind];
+
+export const AtelierRaidItemInputKind = {
+  risk: "risk",
+  assumption: "assumption",
+  issue: "issue",
+  dependency: "dependency",
+} as const;
+
+export type AtelierRaidItemInputSeverity =
+  (typeof AtelierRaidItemInputSeverity)[keyof typeof AtelierRaidItemInputSeverity];
+
+export const AtelierRaidItemInputSeverity = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface AtelierRaidItemInput {
+  kind: AtelierRaidItemInputKind;
+  severity: AtelierRaidItemInputSeverity;
+  /** @minLength 4 */
+  description: string;
+  /** @nullable */
+  ownerUserId?: string | null;
+  /** @nullable */
+  targetDate?: string | null;
+  /** @nullable */
+  mitigation?: string | null;
+}
+
+export type AtelierRaidItemPatchSeverity =
+  (typeof AtelierRaidItemPatchSeverity)[keyof typeof AtelierRaidItemPatchSeverity];
+
+export const AtelierRaidItemPatchSeverity = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierRaidItemPatchStatus =
+  (typeof AtelierRaidItemPatchStatus)[keyof typeof AtelierRaidItemPatchStatus];
+
+export const AtelierRaidItemPatchStatus = {
+  open: "open",
+  mitigated: "mitigated",
+  closed: "closed",
+} as const;
+
+export interface AtelierRaidItemPatch {
+  severity?: AtelierRaidItemPatchSeverity;
+  status?: AtelierRaidItemPatchStatus;
+  /** @nullable */
+  mitigation?: string | null;
+  /** @nullable */
+  targetDate?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierDeliverableCriticReadiness =
+  | (typeof AtelierDeliverableCriticReadiness)[keyof typeof AtelierDeliverableCriticReadiness]
+  | null;
+
+export const AtelierDeliverableCriticReadiness = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface AtelierDeliverable {
+  id: string;
+  engagementId: string;
+  type: string;
+  name: string;
+  status: string;
+  /** @nullable */
+  hypothesisId?: string | null;
+  /** @nullable */
+  currentVersionId?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  criticReadiness: AtelierDeliverableCriticReadiness;
+  /** @nullable */
+  criticReportSummary?: string | null;
+  /** @nullable */
+  partnerApprovedAt?: string | null;
+  /** @nullable */
+  partnerApprovedByName?: string | null;
+  /** @nullable */
+  partnerRationale?: string | null;
+  lockOverridden: boolean;
+  /** @nullable */
+  sentAt?: string | null;
+  createdAt: string;
+}
+
+export interface AtelierDeliverableInput {
+  type: string;
+  name: string;
+  /** @nullable */
+  hypothesisId?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+}
+
+export interface AtelierDeliverableVersion {
+  id: string;
+  deliverableId: string;
+  versionNumber: number;
+  body: string;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export type AtelierDeliverableDetailLatestCriticIssuesItem = {
+  type?: string;
+  severity?: string;
+  location?: string;
+  description?: string;
+  suggestion?: string;
+};
+
+export interface AtelierDeliverableDetail {
+  deliverable: AtelierDeliverable;
+  versions: AtelierDeliverableVersion[];
+  latestCriticIssues?: AtelierDeliverableDetailLatestCriticIssuesItem[];
+  /** @nullable */
+  pyramidScore?: number | null;
+  /** @nullable */
+  evidenceCoveragePct?: number | null;
+  offHypothesisSections?: string[];
+  /** @nullable */
+  criticRunId?: string | null;
+}
+
+export interface AtelierDeliverableDraftInput {
+  /** @nullable */
+  body?: string | null;
+  notes?: string;
+  scaffold?: boolean;
+  includeDefects?: boolean;
+}
+
+export interface AtelierCritiqueInput {
+  audience?: string;
+}
+
+export type AtelierCritiqueResultReadiness =
+  (typeof AtelierCritiqueResultReadiness)[keyof typeof AtelierCritiqueResultReadiness];
+
+export const AtelierCritiqueResultReadiness = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierCritiqueResultIssuesItem = {
+  type?: string;
+  severity?: string;
+  location?: string;
+  description?: string;
+  suggestion?: string;
+};
+
+export interface AtelierCritiqueResult {
+  readiness: AtelierCritiqueResultReadiness;
+  pyramidScore: number;
+  evidenceCoveragePct: number;
+  offHypothesisSections: string[];
+  issues: AtelierCritiqueResultIssuesItem[];
+  runId: string;
+}
+
+export interface AtelierSendDeliverableInput {
+  rationale?: string;
+  override?: boolean;
+}
+
+export type AtelierArtifactLanguage =
+  (typeof AtelierArtifactLanguage)[keyof typeof AtelierArtifactLanguage];
+
+export const AtelierArtifactLanguage = {
+  en: "en",
+  ar: "ar",
+  other: "other",
+} as const;
+
+export interface AtelierArtifact {
+  id: string;
+  engagementId: string;
+  title: string;
+  /** @nullable */
+  abstract?: string | null;
+  /** @nullable */
+  body?: string | null;
+  language: AtelierArtifactLanguage;
+  /** @nullable */
+  translatedTitle?: string | null;
+  /** @nullable */
+  translatedBody?: string | null;
+  /** @nullable */
+  translatedAt?: string | null;
+  source: string;
+  tags?: string[];
+  /** @nullable */
+  fileUrl?: string | null;
+  createdAt: string;
+}
+
+export interface AtelierArtifactInput {
+  title: string;
+  /** @nullable */
+  abstract?: string | null;
+  /** @nullable */
+  body?: string | null;
+  tags?: string[];
+  /** @nullable */
+  fileUrl?: string | null;
+  source?: string;
 }
 
 export type AtelierGetActivityParams = {

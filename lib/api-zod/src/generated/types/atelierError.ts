@@ -8,4 +8,8 @@
 
 export interface AtelierError {
   error: string;
+  /** @nullable */
+  reason?: string | null;
+  /** @nullable */
+  readiness?: string | null;
 }

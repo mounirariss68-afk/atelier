@@ -873,6 +873,597 @@ export const AtelierGetEngagementResponse = zod.object({
   deliverablesDueThisWeek: zod.number(),
 });
 
+export const AtelierListCharterVersionsParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const AtelierListCharterVersionsResponseItem = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  versionNumber: zod.number(),
+  status: zod.enum(["draft", "lead_approved", "live", "superseded"]),
+  runId: zod.string().nullish(),
+  body: zod.object({
+    objectives: zod.array(zod.string()),
+    scope: zod.array(zod.string()),
+    outOfScope: zod.array(zod.string()),
+    successMetrics: zod.array(
+      zod.object({
+        name: zod.string(),
+        baseline: zod.string(),
+        target: zod.string(),
+      }),
+    ),
+    governance: zod.string(),
+    valueHypothesis: zod.string(),
+  }),
+  hypothesisTree: zod.object({
+    rootIssue: zod.string().optional(),
+    branches: zod
+      .array(
+        zod.object({
+          hypothesis: zod.string(),
+          subHypotheses: zod.array(zod.string()).optional(),
+          evidenceRequired: zod.array(zod.string()).optional(),
+          status: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+  }),
+  raidBaseline: zod.array(
+    zod.object({
+      kind: zod.enum(["risk", "assumption", "issue", "dependency"]).optional(),
+      severity: zod.enum(["green", "amber", "red"]).optional(),
+      ownerRole: zod.string().optional(),
+      description: zod.string().optional(),
+      dueClass: zod.enum(["wk1", "wk2", "wk4", "monthly"]).optional(),
+    }),
+  ),
+  proposedWorkstreams: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      leadRole: zod.string().optional(),
+      linkedHypothesis: zod.string().optional(),
+    }),
+  ),
+  meceFlags: zod.array(zod.string()),
+  leadApprovedByName: zod.string().nullish(),
+  leadApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByName: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListCharterVersionsResponse = zod.array(
+  AtelierListCharterVersionsResponseItem,
+);
+
+/**
+ * @summary Run Charter Architect to draft a new charter version
+ */
+export const AtelierRedraftCharterParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const atelierRedraftCharterBodyWonProposalSummaryDefault = ``;
+export const atelierRedraftCharterBodyKickoffTranscriptExcerptDefault = null;
+
+export const AtelierRedraftCharterBody = zod.object({
+  wonProposalSummary: zod
+    .string()
+    .default(atelierRedraftCharterBodyWonProposalSummaryDefault),
+  kickoffTranscriptExcerpt: zod
+    .string()
+    .nullish()
+    .default(atelierRedraftCharterBodyKickoffTranscriptExcerptDefault),
+});
+
+export const AtelierRedraftCharterResponse = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  versionNumber: zod.number(),
+  status: zod.enum(["draft", "lead_approved", "live", "superseded"]),
+  runId: zod.string().nullish(),
+  body: zod.object({
+    objectives: zod.array(zod.string()),
+    scope: zod.array(zod.string()),
+    outOfScope: zod.array(zod.string()),
+    successMetrics: zod.array(
+      zod.object({
+        name: zod.string(),
+        baseline: zod.string(),
+        target: zod.string(),
+      }),
+    ),
+    governance: zod.string(),
+    valueHypothesis: zod.string(),
+  }),
+  hypothesisTree: zod.object({
+    rootIssue: zod.string().optional(),
+    branches: zod
+      .array(
+        zod.object({
+          hypothesis: zod.string(),
+          subHypotheses: zod.array(zod.string()).optional(),
+          evidenceRequired: zod.array(zod.string()).optional(),
+          status: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+  }),
+  raidBaseline: zod.array(
+    zod.object({
+      kind: zod.enum(["risk", "assumption", "issue", "dependency"]).optional(),
+      severity: zod.enum(["green", "amber", "red"]).optional(),
+      ownerRole: zod.string().optional(),
+      description: zod.string().optional(),
+      dueClass: zod.enum(["wk1", "wk2", "wk4", "monthly"]).optional(),
+    }),
+  ),
+  proposedWorkstreams: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      leadRole: zod.string().optional(),
+      linkedHypothesis: zod.string().optional(),
+    }),
+  ),
+  meceFlags: zod.array(zod.string()),
+  leadApprovedByName: zod.string().nullish(),
+  leadApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByName: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Approve a charter version (lead or partner)
+ */
+export const AtelierApproveCharterVersionParams = zod.object({
+  engId: zod.coerce.string(),
+  versionId: zod.coerce.string(),
+});
+
+export const atelierApproveCharterVersionBodyNotesDefault = ``;
+
+export const AtelierApproveCharterVersionBody = zod.object({
+  role: zod.enum(["lead", "partner"]),
+  notes: zod.string().default(atelierApproveCharterVersionBodyNotesDefault),
+});
+
+export const AtelierApproveCharterVersionResponse = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  versionNumber: zod.number(),
+  status: zod.enum(["draft", "lead_approved", "live", "superseded"]),
+  runId: zod.string().nullish(),
+  body: zod.object({
+    objectives: zod.array(zod.string()),
+    scope: zod.array(zod.string()),
+    outOfScope: zod.array(zod.string()),
+    successMetrics: zod.array(
+      zod.object({
+        name: zod.string(),
+        baseline: zod.string(),
+        target: zod.string(),
+      }),
+    ),
+    governance: zod.string(),
+    valueHypothesis: zod.string(),
+  }),
+  hypothesisTree: zod.object({
+    rootIssue: zod.string().optional(),
+    branches: zod
+      .array(
+        zod.object({
+          hypothesis: zod.string(),
+          subHypotheses: zod.array(zod.string()).optional(),
+          evidenceRequired: zod.array(zod.string()).optional(),
+          status: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+  }),
+  raidBaseline: zod.array(
+    zod.object({
+      kind: zod.enum(["risk", "assumption", "issue", "dependency"]).optional(),
+      severity: zod.enum(["green", "amber", "red"]).optional(),
+      ownerRole: zod.string().optional(),
+      description: zod.string().optional(),
+      dueClass: zod.enum(["wk1", "wk2", "wk4", "monthly"]).optional(),
+    }),
+  ),
+  proposedWorkstreams: zod.array(
+    zod.object({
+      name: zod.string().optional(),
+      leadRole: zod.string().optional(),
+      linkedHypothesis: zod.string().optional(),
+    }),
+  ),
+  meceFlags: zod.array(zod.string()),
+  leadApprovedByName: zod.string().nullish(),
+  leadApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByName: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+export const AtelierListRaidParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const AtelierListRaidResponseItem = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+  severity: zod.enum(["green", "amber", "red"]),
+  status: zod.enum(["open", "mitigated", "closed"]),
+  ownerUserId: zod.string().nullish(),
+  ownerName: zod.string().nullish(),
+  description: zod.string(),
+  mitigation: zod.string().nullish(),
+  targetDate: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListRaidResponse = zod.array(AtelierListRaidResponseItem);
+
+export const AtelierCreateRaidItemParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const atelierCreateRaidItemBodyDescriptionMin = 4;
+
+export const atelierCreateRaidItemBodyOwnerUserIdDefault = null;
+export const atelierCreateRaidItemBodyTargetDateDefault = null;
+export const atelierCreateRaidItemBodyMitigationDefault = null;
+
+export const AtelierCreateRaidItemBody = zod.object({
+  kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+  severity: zod.enum(["green", "amber", "red"]),
+  description: zod.string().min(atelierCreateRaidItemBodyDescriptionMin),
+  ownerUserId: zod
+    .string()
+    .nullish()
+    .default(atelierCreateRaidItemBodyOwnerUserIdDefault),
+  targetDate: zod
+    .string()
+    .nullish()
+    .default(atelierCreateRaidItemBodyTargetDateDefault),
+  mitigation: zod
+    .string()
+    .nullish()
+    .default(atelierCreateRaidItemBodyMitigationDefault),
+});
+
+export const AtelierUpdateRaidItemParams = zod.object({
+  engId: zod.coerce.string(),
+  raidId: zod.coerce.string(),
+});
+
+export const AtelierUpdateRaidItemBody = zod.object({
+  severity: zod.enum(["green", "amber", "red"]).optional(),
+  status: zod.enum(["open", "mitigated", "closed"]).optional(),
+  mitigation: zod.string().nullish(),
+  targetDate: zod.string().nullish(),
+});
+
+export const AtelierUpdateRaidItemResponse = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+  severity: zod.enum(["green", "amber", "red"]),
+  status: zod.enum(["open", "mitigated", "closed"]),
+  ownerUserId: zod.string().nullish(),
+  ownerName: zod.string().nullish(),
+  description: zod.string(),
+  mitigation: zod.string().nullish(),
+  targetDate: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+export const AtelierGetHypothesisTreeParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const AtelierGetHypothesisTreeResponse = zod.object({
+  engagementId: zod.string(),
+  treeId: zod.string().nullish(),
+  root: zod.object({
+    rootIssue: zod.string(),
+    branches: zod.array(
+      zod.object({
+        hypothesis: zod.string(),
+        subHypotheses: zod.array(zod.string()).optional(),
+        evidenceRequired: zod.array(zod.string()).optional(),
+        status: zod.string().nullish(),
+      }),
+    ),
+  }),
+});
+
+export const AtelierListDeliverablesParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const AtelierListDeliverablesResponseItem = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  type: zod.string(),
+  name: zod.string(),
+  status: zod.string(),
+  hypothesisId: zod.string().nullish(),
+  currentVersionId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  criticReadiness: zod
+    .union([
+      zod.literal("green"),
+      zod.literal("amber"),
+      zod.literal("red"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  criticReportSummary: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByName: zod.string().nullish(),
+  partnerRationale: zod.string().nullish(),
+  lockOverridden: zod.boolean(),
+  sentAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListDeliverablesResponse = zod.array(
+  AtelierListDeliverablesResponseItem,
+);
+
+export const AtelierCreateDeliverableParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const atelierCreateDeliverableBodyHypothesisIdDefault = null;
+export const atelierCreateDeliverableBodyDueDateDefault = null;
+
+export const AtelierCreateDeliverableBody = zod.object({
+  type: zod.string(),
+  name: zod.string(),
+  hypothesisId: zod
+    .string()
+    .nullish()
+    .default(atelierCreateDeliverableBodyHypothesisIdDefault),
+  dueDate: zod
+    .string()
+    .nullish()
+    .default(atelierCreateDeliverableBodyDueDateDefault),
+});
+
+export const AtelierGetDeliverableParams = zod.object({
+  delId: zod.coerce.string(),
+});
+
+export const AtelierGetDeliverableResponse = zod.object({
+  deliverable: zod.object({
+    id: zod.string(),
+    engagementId: zod.string(),
+    type: zod.string(),
+    name: zod.string(),
+    status: zod.string(),
+    hypothesisId: zod.string().nullish(),
+    currentVersionId: zod.string().nullish(),
+    dueDate: zod.string().nullish(),
+    criticReadiness: zod
+      .union([
+        zod.literal("green"),
+        zod.literal("amber"),
+        zod.literal("red"),
+        zod.literal(null),
+      ])
+      .nullable(),
+    criticReportSummary: zod.string().nullish(),
+    partnerApprovedAt: zod.coerce.date().nullish(),
+    partnerApprovedByName: zod.string().nullish(),
+    partnerRationale: zod.string().nullish(),
+    lockOverridden: zod.boolean(),
+    sentAt: zod.coerce.date().nullish(),
+    createdAt: zod.coerce.date(),
+  }),
+  versions: zod.array(
+    zod.object({
+      id: zod.string(),
+      deliverableId: zod.string(),
+      versionNumber: zod.number(),
+      body: zod.string(),
+      notes: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  latestCriticIssues: zod
+    .array(
+      zod.object({
+        type: zod.string().optional(),
+        severity: zod.string().optional(),
+        location: zod.string().optional(),
+        description: zod.string().optional(),
+        suggestion: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  pyramidScore: zod.number().nullish(),
+  evidenceCoveragePct: zod.number().nullish(),
+  offHypothesisSections: zod.array(zod.string()).optional(),
+  criticRunId: zod.string().nullish(),
+});
+
+/**
+ * @summary Append a new version (scaffolds from hypothesis tree if no body)
+ */
+export const AtelierDraftDeliverableParams = zod.object({
+  delId: zod.coerce.string(),
+});
+
+export const atelierDraftDeliverableBodyBodyDefault = null;
+export const atelierDraftDeliverableBodyNotesDefault = ``;
+export const atelierDraftDeliverableBodyScaffoldDefault = false;
+export const atelierDraftDeliverableBodyIncludeDefectsDefault = false;
+
+export const AtelierDraftDeliverableBody = zod.object({
+  body: zod.string().nullish().default(atelierDraftDeliverableBodyBodyDefault),
+  notes: zod.string().default(atelierDraftDeliverableBodyNotesDefault),
+  scaffold: zod.boolean().default(atelierDraftDeliverableBodyScaffoldDefault),
+  includeDefects: zod
+    .boolean()
+    .default(atelierDraftDeliverableBodyIncludeDefectsDefault),
+});
+
+export const AtelierDraftDeliverableResponse = zod.object({
+  id: zod.string(),
+  deliverableId: zod.string(),
+  versionNumber: zod.number(),
+  body: zod.string(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Run Synthesis Critic on the current version
+ */
+export const AtelierCritiqueDeliverableParams = zod.object({
+  delId: zod.coerce.string(),
+});
+
+export const atelierCritiqueDeliverableBodyAudienceDefault = `Client executive`;
+
+export const AtelierCritiqueDeliverableBody = zod.object({
+  audience: zod.string().default(atelierCritiqueDeliverableBodyAudienceDefault),
+});
+
+export const AtelierCritiqueDeliverableResponse = zod.object({
+  readiness: zod.enum(["green", "amber", "red"]),
+  pyramidScore: zod.number(),
+  evidenceCoveragePct: zod.number(),
+  offHypothesisSections: zod.array(zod.string()),
+  issues: zod.array(
+    zod.object({
+      type: zod.string().optional(),
+      severity: zod.string().optional(),
+      location: zod.string().optional(),
+      description: zod.string().optional(),
+      suggestion: zod.string().optional(),
+    }),
+  ),
+  runId: zod.string(),
+});
+
+/**
+ * @summary Send to client (Partner Authority Lock — green or override)
+ */
+export const AtelierSendDeliverableParams = zod.object({
+  delId: zod.coerce.string(),
+});
+
+export const atelierSendDeliverableBodyRationaleDefault = ``;
+export const atelierSendDeliverableBodyOverrideDefault = false;
+
+export const AtelierSendDeliverableBody = zod.object({
+  rationale: zod.string().default(atelierSendDeliverableBodyRationaleDefault),
+  override: zod.boolean().default(atelierSendDeliverableBodyOverrideDefault),
+});
+
+export const AtelierSendDeliverableResponse = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  type: zod.string(),
+  name: zod.string(),
+  status: zod.string(),
+  hypothesisId: zod.string().nullish(),
+  currentVersionId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  criticReadiness: zod
+    .union([
+      zod.literal("green"),
+      zod.literal("amber"),
+      zod.literal("red"),
+      zod.literal(null),
+    ])
+    .nullable(),
+  criticReportSummary: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByName: zod.string().nullish(),
+  partnerRationale: zod.string().nullish(),
+  lockOverridden: zod.boolean(),
+  sentAt: zod.coerce.date().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+export const AtelierListArtifactsParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const AtelierListArtifactsResponseItem = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  title: zod.string(),
+  abstract: zod.string().nullish(),
+  body: zod.string().nullish(),
+  language: zod.enum(["en", "ar", "other"]),
+  translatedTitle: zod.string().nullish(),
+  translatedBody: zod.string().nullish(),
+  translatedAt: zod.coerce.date().nullish(),
+  source: zod.string(),
+  tags: zod.array(zod.string()).optional(),
+  fileUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierListArtifactsResponse = zod.array(
+  AtelierListArtifactsResponseItem,
+);
+
+export const AtelierCreateArtifactParams = zod.object({
+  engId: zod.coerce.string(),
+});
+
+export const atelierCreateArtifactBodyAbstractDefault = null;
+export const atelierCreateArtifactBodyBodyDefault = null;
+export const atelierCreateArtifactBodyTagsDefault = [];
+export const atelierCreateArtifactBodyFileUrlDefault = null;
+export const atelierCreateArtifactBodySourceDefault = `upload`;
+
+export const AtelierCreateArtifactBody = zod.object({
+  title: zod.string(),
+  abstract: zod
+    .string()
+    .nullish()
+    .default(atelierCreateArtifactBodyAbstractDefault),
+  body: zod.string().nullish().default(atelierCreateArtifactBodyBodyDefault),
+  tags: zod.array(zod.string()).default(atelierCreateArtifactBodyTagsDefault),
+  fileUrl: zod
+    .string()
+    .nullish()
+    .default(atelierCreateArtifactBodyFileUrlDefault),
+  source: zod.string().default(atelierCreateArtifactBodySourceDefault),
+});
+
+/**
+ * @summary Stub-translate an artifact (AR↔EN); preserves original
+ */
+export const AtelierTranslateArtifactParams = zod.object({
+  artifactId: zod.coerce.string(),
+});
+
+export const AtelierTranslateArtifactResponse = zod.object({
+  id: zod.string(),
+  engagementId: zod.string(),
+  title: zod.string(),
+  abstract: zod.string().nullish(),
+  body: zod.string().nullish(),
+  language: zod.enum(["en", "ar", "other"]),
+  translatedTitle: zod.string().nullish(),
+  translatedBody: zod.string().nullish(),
+  translatedAt: zod.coerce.date().nullish(),
+  source: zod.string(),
+  tags: zod.array(zod.string()).optional(),
+  fileUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
 /**
  * @summary Firm accounts
  */
