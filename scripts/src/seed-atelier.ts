@@ -1431,6 +1431,43 @@ const OPPORTUNITIES = [
     sourceLead: "Existing relationship",
     daysInStage: 22,
   },
+  // Task #243 — explicit lost_no_decision and withdrawn opportunities so the
+  // 10-stage v2 sales-stage lifecycle has at least one example per stage and
+  // the walkthrough hits the no-decision debrief path.
+  {
+    id: "opp_aldrees_workshop_followup",
+    slug: "aldrees-workshop-followup",
+    name: "Aldrees — supplier-portal copilot · no-decision",
+    accountId: "acc_aldrees",
+    plmStage: "lost",
+    salesStage: "lost_no_decision",
+    buyerPersona: "VP Procurement",
+    offeringAnchor: "Operations Copilots",
+    partnerOwnerId: "p_gokhan_guney",
+    engagementLeadId: "p_omar_najjar",
+    dealSizeHypothesis: 410_000,
+    probabilityPct: 0,
+    nextMilestone: "Buyer transcript pending; debrief queued",
+    sourceLead: "Workshop follow-up",
+    daysInStage: 41,
+  },
+  {
+    id: "opp_nhc_arabic_pilot",
+    slug: "nhc-arabic-pilot",
+    name: "NHC — Arabic-first chat pilot · withdrawn",
+    accountId: "acc_nhc",
+    plmStage: "lost",
+    salesStage: "withdrawn",
+    buyerPersona: "Chief Customer Officer",
+    offeringAnchor: "Citizen Service Agents",
+    partnerOwnerId: "p_mounir_ariss",
+    engagementLeadId: "p_layla_haddad",
+    dealSizeHypothesis: 540_000,
+    probabilityPct: 0,
+    nextMilestone: "Buyer requested deferral to FY27 — withdrawn by AICo",
+    sourceLead: "Outbound",
+    daysInStage: 12,
+  },
 ];
 
 // ============================================================
@@ -2395,6 +2432,9 @@ async function main() {
       buyerPersona: o.buyerPersona,
       offeringAnchor: o.offeringAnchor,
       plmStage: o.plmStage,
+      // Task #243 — explicit salesStage when supplied (no_decision/withdrawn);
+      // otherwise let the column default to 'lead'.
+      ...("salesStage" in o && o.salesStage ? { salesStage: o.salesStage } : {}),
       partnerOwnerId: o.partnerOwnerId,
       engagementLeadId: o.engagementLeadId,
       dealSizeHypothesis: o.dealSizeHypothesis,

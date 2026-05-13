@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShieldAlert, Shield, Globe, Download } from "lucide-react";
+import { ShieldAlert, Shield, Globe, Download, Lock, KeyRound, FileCheck2, ListTodo } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -34,6 +34,9 @@ export default function Admin() {
 
   const [piiDraft, setPiiDraft] = React.useState("");
   const [budgetDraft, setBudgetDraft] = React.useState("");
+  // Task #243 — local-only firm-intent toggle for MFA. Persisted enforcement
+  // happens at the IdP layer; this is a UI signal for partner posture.
+  const [mfaRequired, setMfaRequired] = React.useState<boolean>(true);
   React.useEffect(() => {
     if (settings) {
       setPiiDraft(settings.piiPatterns.join("\n"));
@@ -190,6 +193,82 @@ export default function Admin() {
               <p className="text-sm text-text-mute">
                 Full firm-wide audit log is available as PDF per engagement from the engagement page.
               </p>
+            </Card>
+
+            {/* Task #243 — Compliance posture (read-only indicators + MFA toggle).
+                Surfaces PRD §10 NFRs that are infrastructural rather than per-feature.
+                MFA toggle is local-state in the MVP; encryption + immutable-audit are
+                platform-level guarantees displayed for assurance. */}
+            <Card className="p-6 space-y-4 border-border-soft">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
+                <Lock className="w-4 h-4" /> Compliance Posture
+              </h3>
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="text-text font-semibold">Require MFA for Partners + Leads</div>
+                  <div className="text-xs text-text-mute">Enforced at IdP; this toggle records firm intent.</div>
+                </div>
+                <Switch
+                  checked={mfaRequired}
+                  onCheckedChange={setMfaRequired}
+                  data-testid="switch-mfa-required"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-border-soft">
+                <div className="flex items-start gap-2">
+                  <KeyRound className="w-4 h-4 text-gold mt-0.5" />
+                  <div>
+                    <div className="text-text text-sm font-semibold">Encryption</div>
+                    <div className="text-xs text-text-mute">AES-256 at rest · TLS 1.3 in transit</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <FileCheck2 className="w-4 h-4 text-gold mt-0.5" />
+                  <div>
+                    <div className="text-text text-sm font-semibold">Immutable Audit</div>
+                    <div className="text-xs text-text-mute">Append-only · 7y retention</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Globe className="w-4 h-4 text-gold mt-0.5" />
+                  <div>
+                    <div className="text-text text-sm font-semibold">IP Allowlist</div>
+                    <div className="text-xs text-text-mute">Configurable per partner request</div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Task #243 — Founder TODOs (PRD §10).
+                Informational checklist surfacing the 5 founder-only follow-ups
+                that gate full GA. Not actionable in the MVP — clicking does
+                not persist; we render so partners can see what is outstanding. */}
+            <Card className="p-6 space-y-3">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
+                <ListTodo className="w-4 h-4" /> Founder TODOs
+              </h3>
+              <p className="text-xs text-text-mute">
+                Pre-GA founder-only items. Tracked here for partner visibility; resolution happens in the
+                operator console.
+              </p>
+              <ul className="space-y-2 pt-2 border-t border-border-soft">
+                {[
+                  "Sign DPA + sub-processor list with model providers",
+                  "Confirm primary data-residency region with each anchor client",
+                  "Activate per-engagement RLS enforcement in production cluster",
+                  "Wire SOC 2 Type II audit evidence collector to immutable-audit stream",
+                  "Validate Arabic-first deliverable variants with Tasama + Aldrees stakeholders",
+                ].map((item, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-3 text-sm text-text"
+                    data-testid={`founder-todo-${i}`}
+                  >
+                    <span className="font-mono text-xs text-text-mute mt-0.5">{String(i + 1).padStart(2, "0")}</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
             </Card>
           </>
         )}

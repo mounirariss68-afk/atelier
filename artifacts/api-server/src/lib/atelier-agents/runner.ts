@@ -3338,6 +3338,7 @@ export async function runThemeCurator(args: {
 import {
   atelierDeliverablePublishes,
   atelierDeliverables,
+  atelierEngagements,
   atelierSalonNotifications,
   atelierSalonUserEngagementAccess,
   atelierSalonUsers,
@@ -3549,6 +3550,8 @@ export interface EngagementCuratorOutput {
   openRequests: number;
   message: string;
   confidence: "green" | "amber" | "red";
+  // Task #243 — bilingual variant flag derived from atelier_engagements.default_language.
+  languageVariant?: "en" | "ar";
 }
 interface RunEngagementCuratorArgs {
   triggeredByUserId: string | null;
@@ -3575,14 +3578,32 @@ export async function runEngagementCurator(
   });
   try {
     await progressRun(runId, 60, "Composing weekly digest");
+    // Task #243 — bilingual stub. Read the engagement's defaultLanguage
+    // (defaults to 'en'); when 'ar', emit an AR variant flag in the run
+    // output envelope so downstream rendering can route to the Arabic
+    // weekly digest template + RTL chrome.
+    let languageVariant: "en" | "ar" = "en";
+    try {
+      const [engRow] = await db
+        .select({ lang: atelierEngagements.defaultLanguage })
+        .from(atelierEngagements)
+        .where(eq(atelierEngagements.id, args.engagementId));
+      if (engRow?.lang === "ar") languageVariant = "ar";
+    } catch {
+      // Defensive — pre-migration environments lack the column; default to 'en'.
+    }
     const out: EngagementCuratorOutput = {
       weekOf: new Date().toISOString().slice(0, 10),
       highlights: args.highlights,
       upcoming: args.upcoming,
       decisionsLogged: args.decisionsLogged,
       openRequests: args.openRequests,
-      message: `Weekly digest queued for ${args.engagementLabel}.`,
+      message:
+        languageVariant === "ar"
+          ? `[AR] الموجز الأسبوعي جاهز للمراجعة — ${args.engagementLabel}`
+          : `Weekly digest queued for ${args.engagementLabel}.`,
       confidence: "green",
+      languageVariant,
     };
     await completeRun({
       runId,

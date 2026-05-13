@@ -360,6 +360,11 @@ export const atelierEngagements = pgTable(
     deliverablesDueThisWeek: integer("deliverables_due_this_week")
       .notNull()
       .default(0),
+    // Task #243 — engagement default language for bilingual deliverable
+    // generation. 'en' (default) routes Engagement Curator + deliverable
+    // scaffolds in English; 'ar' emits an Arabic-first variant flag that
+    // downstream rendering uses for RTL chrome and AR weekly digests.
+    defaultLanguage: text("default_language").notNull().default("en"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
