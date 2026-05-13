@@ -3398,7 +3398,12 @@ export function scanForDlp(text: string): PublishSentinelCheck[] {
     } else {
       checks.push({
         name: p.name,
-        status: p.name === "credit_card_pan" || p.name === "iban" ? "warn" : "fail",
+        status:
+          p.name === "credit_card_pan" ||
+          p.name === "iban" ||
+          p.name === "internal_only_marker"
+            ? "warn"
+            : "fail",
         detail: `${matches.length} match(es): ${p.detail}`,
         spans: matches.map((m) => ({
           pattern: p.name,
