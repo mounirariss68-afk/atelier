@@ -1437,6 +1437,98 @@ export interface AtelierComposeProposalInput {
   rfpRequirements?: AtelierComposeProposalInputRfpRequirementsItem[];
 }
 
+export interface AtelierPromptEntry {
+  agentId: string;
+  version: number;
+  status: string;
+  /** @nullable */
+  author?: string | null;
+  /** @nullable */
+  model?: string | null;
+  /** @nullable */
+  evalSetId?: string | null;
+  /** @nullable */
+  firesWhen?: string | null;
+  /** @nullable */
+  produces?: string | null;
+  /** @nullable */
+  owner?: string | null;
+  bodyPreview: string;
+  bytes: number;
+  updatedAt: string;
+}
+
+export interface AtelierConciergeSearchInput {
+  /** @minLength 1 */
+  query: string;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+}
+
+export interface AtelierConciergeHit {
+  score: number;
+  snippet: string;
+  asset: AtelierAsset;
+}
+
+export interface AtelierConciergeSearchResult {
+  query: string;
+  results: AtelierConciergeHit[];
+}
+
+export interface AtelierAdminSettings {
+  disableOpus: boolean;
+  disabledAgentIds: string[];
+  piiPatterns: string[];
+  residencyRegion: string;
+  perUserDailyTokenBudget: number;
+}
+
+export interface AtelierAdminSettingsUpdate {
+  disableOpus?: boolean;
+  disabledAgentIds?: string[];
+  piiPatterns?: string[];
+  /** @minimum 1000 */
+  perUserDailyTokenBudget?: number;
+}
+
+export type AtelierAgentRunSummaryStatus =
+  (typeof AtelierAgentRunSummaryStatus)[keyof typeof AtelierAgentRunSummaryStatus];
+
+export const AtelierAgentRunSummaryStatus = {
+  running: "running",
+  blocked: "blocked",
+  complete: "complete",
+  error: "error",
+} as const;
+
+export interface AtelierAgentRunSummary {
+  id: string;
+  agentId: string;
+  agentName: string;
+  status: AtelierAgentRunSummaryStatus;
+  confidence?: Confidence | null;
+  message: string;
+  /** @nullable */
+  targetType?: string | null;
+  /** @nullable */
+  targetId?: string | null;
+  /** @nullable */
+  targetLabel?: string | null;
+  startedAt: string;
+  /** @nullable */
+  progressPct?: number | null;
+  /** @nullable */
+  sourcesCount?: number | null;
+  /** @nullable */
+  costUsd?: number | null;
+  /** @nullable */
+  durationMs?: number | null;
+}
+
 export type AtelierGetActivityParams = {
   limit?: number;
 };

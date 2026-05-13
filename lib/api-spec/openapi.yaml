@@ -1307,6 +1307,86 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierProposalSection" }
 
+  # ============================================================
+  # Task #224 — Knowledge Atelier extras
+  # ============================================================
+  /atelier/prompts:
+    get:
+      operationId: atelierListPrompts
+      tags: [atelier]
+      summary: Filesystem-backed prompt library entries
+      responses:
+        "200":
+          description: Prompt entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierPromptEntry" }
+
+  /atelier/concierge/search:
+    post:
+      operationId: atelierConciergeSearch
+      tags: [atelier]
+      summary: Knowledge Concierge — keyword search over Atelier assets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierConciergeSearchInput" }
+      responses:
+        "200":
+          description: Ranked asset results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierConciergeSearchResult" }
+
+  /atelier/admin/settings:
+    get:
+      operationId: atelierGetAdminSettings
+      tags: [atelier]
+      summary: Partner-only firm admin settings
+      responses:
+        "200":
+          description: Admin settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAdminSettings" }
+    post:
+      operationId: atelierUpdateAdminSettings
+      tags: [atelier]
+      summary: Update Partner-only admin settings (in-memory)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierAdminSettingsUpdate" }
+      responses:
+        "200":
+          description: Updated admin settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAdminSettings" }
+
+  /atelier/agents/{agentId}/runs:
+    get:
+      operationId: atelierListAgentRuns
+      tags: [atelier]
+      summary: Recent agent runs for an agent
+      parameters:
+        - in: path
+          name: agentId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Recent runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierAgentRunSummary" }
+
 components:
   schemas:
     HealthStatus:
@@ -2403,3 +2483,92 @@ components:
               id: { type: string }
               requirement: { type: string }
               severity: { type: string }
+
+    AtelierPromptEntry:
+      type: object
+      required: [agentId, version, status, bodyPreview, bytes, updatedAt]
+      properties:
+        agentId: { type: string }
+        version: { type: integer }
+        status: { type: string }
+        author: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        evalSetId: { type: ["string", "null"] }
+        firesWhen: { type: ["string", "null"] }
+        produces: { type: ["string", "null"] }
+        owner: { type: ["string", "null"] }
+        bodyPreview: { type: string }
+        bytes: { type: integer }
+        updatedAt: { type: string, format: date-time }
+
+    AtelierConciergeSearchInput:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string, minLength: 1 }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 10 }
+
+    AtelierConciergeHit:
+      type: object
+      required: [score, snippet, asset]
+      properties:
+        score: { type: number }
+        snippet: { type: string }
+        asset: { $ref: "#/components/schemas/AtelierAsset" }
+
+    AtelierConciergeSearchResult:
+      type: object
+      required: [query, results]
+      properties:
+        query: { type: string }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierConciergeHit" }
+
+    AtelierAdminSettings:
+      type: object
+      required: [disableOpus, disabledAgentIds, piiPatterns, residencyRegion, perUserDailyTokenBudget]
+      properties:
+        disableOpus: { type: boolean }
+        disabledAgentIds:
+          type: array
+          items: { type: string }
+        piiPatterns:
+          type: array
+          items: { type: string }
+        residencyRegion: { type: string }
+        perUserDailyTokenBudget: { type: integer }
+
+    AtelierAdminSettingsUpdate:
+      type: object
+      properties:
+        disableOpus: { type: boolean }
+        disabledAgentIds:
+          type: array
+          items: { type: string }
+        piiPatterns:
+          type: array
+          items: { type: string }
+        perUserDailyTokenBudget: { type: integer, minimum: 1000 }
+
+    AtelierAgentRunSummary:
+      type: object
+      required: [id, agentId, agentName, status, message, startedAt]
+      properties:
+        id: { type: string }
+        agentId: { type: string }
+        agentName: { type: string }
+        status: { type: string, enum: [running, blocked, complete, error] }
+        confidence:
+          oneOf:
+            - { $ref: "#/components/schemas/Confidence" }
+            - { type: "null" }
+        message: { type: string }
+        targetType: { type: ["string", "null"] }
+        targetId: { type: ["string", "null"] }
+        targetLabel: { type: ["string", "null"] }
+        startedAt: { type: string, format: date-time }
+        progressPct: { type: ["integer", "null"] }
+        sourcesCount: { type: ["integer", "null"] }
+        costUsd: { type: ["number", "null"] }
+        durationMs: { type: ["integer", "null"] }

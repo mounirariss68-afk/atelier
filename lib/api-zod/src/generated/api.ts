@@ -2358,3 +2358,131 @@ export const AtelierApproveProposalSectionResponse = zod.object({
   content: zod.string(),
   citations: zod.array(zod.unknown()).optional(),
 });
+
+/**
+ * @summary Filesystem-backed prompt library entries
+ */
+export const AtelierListPromptsResponseItem = zod.object({
+  agentId: zod.string(),
+  version: zod.number(),
+  status: zod.string(),
+  author: zod.string().nullish(),
+  model: zod.string().nullish(),
+  evalSetId: zod.string().nullish(),
+  firesWhen: zod.string().nullish(),
+  produces: zod.string().nullish(),
+  owner: zod.string().nullish(),
+  bodyPreview: zod.string(),
+  bytes: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
+export const AtelierListPromptsResponse = zod.array(
+  AtelierListPromptsResponseItem,
+);
+
+/**
+ * @summary Knowledge Concierge — keyword search over Atelier assets
+ */
+
+export const atelierConciergeSearchBodyLimitDefault = 10;
+export const atelierConciergeSearchBodyLimitMax = 50;
+
+export const AtelierConciergeSearchBody = zod.object({
+  query: zod.string().min(1),
+  limit: zod
+    .number()
+    .min(1)
+    .max(atelierConciergeSearchBodyLimitMax)
+    .default(atelierConciergeSearchBodyLimitDefault),
+});
+
+export const AtelierConciergeSearchResponse = zod.object({
+  query: zod.string(),
+  results: zod.array(
+    zod.object({
+      score: zod.number(),
+      snippet: zod.string(),
+      asset: zod.object({
+        id: zod.string(),
+        kind: zod.enum([
+          "pov",
+          "prompt",
+          "framework",
+          "case_study",
+          "template",
+          "code",
+          "learning",
+        ]),
+        title: zod.string(),
+        abstract: zod.string(),
+        provenance: zod.string(),
+        tags: zod.array(zod.string()),
+        createdAt: zod.coerce.date(),
+        bodyOrFileUrl: zod.string().nullish(),
+      }),
+    }),
+  ),
+});
+
+/**
+ * @summary Partner-only firm admin settings
+ */
+export const AtelierGetAdminSettingsResponse = zod.object({
+  disableOpus: zod.boolean(),
+  disabledAgentIds: zod.array(zod.string()),
+  piiPatterns: zod.array(zod.string()),
+  residencyRegion: zod.string(),
+  perUserDailyTokenBudget: zod.number(),
+});
+
+/**
+ * @summary Update Partner-only admin settings (in-memory)
+ */
+export const atelierUpdateAdminSettingsBodyPerUserDailyTokenBudgetMin = 1000;
+
+export const AtelierUpdateAdminSettingsBody = zod.object({
+  disableOpus: zod.boolean().optional(),
+  disabledAgentIds: zod.array(zod.string()).optional(),
+  piiPatterns: zod.array(zod.string()).optional(),
+  perUserDailyTokenBudget: zod
+    .number()
+    .min(atelierUpdateAdminSettingsBodyPerUserDailyTokenBudgetMin)
+    .optional(),
+});
+
+export const AtelierUpdateAdminSettingsResponse = zod.object({
+  disableOpus: zod.boolean(),
+  disabledAgentIds: zod.array(zod.string()),
+  piiPatterns: zod.array(zod.string()),
+  residencyRegion: zod.string(),
+  perUserDailyTokenBudget: zod.number(),
+});
+
+/**
+ * @summary Recent agent runs for an agent
+ */
+export const AtelierListAgentRunsParams = zod.object({
+  agentId: zod.coerce.string(),
+});
+
+export const AtelierListAgentRunsResponseItem = zod.object({
+  id: zod.string(),
+  agentId: zod.string(),
+  agentName: zod.string(),
+  status: zod.enum(["running", "blocked", "complete", "error"]),
+  confidence: zod
+    .union([zod.enum(["green", "amber", "red"]), zod.null()])
+    .optional(),
+  message: zod.string(),
+  targetType: zod.string().nullish(),
+  targetId: zod.string().nullish(),
+  targetLabel: zod.string().nullish(),
+  startedAt: zod.coerce.date(),
+  progressPct: zod.number().nullish(),
+  sourcesCount: zod.number().nullish(),
+  costUsd: zod.number().nullish(),
+  durationMs: zod.number().nullish(),
+});
+export const AtelierListAgentRunsResponse = zod.array(
+  AtelierListAgentRunsResponseItem,
+);

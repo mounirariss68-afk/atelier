@@ -1,15 +1,50 @@
-import { useAtelierGetMe } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card } from "@/components/ui/primitives";
+import * as React from "react";
+import {
+  useAtelierGetMe,
+  useAtelierGetAdminSettings,
+  useAtelierUpdateAdminSettings,
+  useAtelierListAgents,
+  getAtelierGetAdminSettingsQueryKey,
+} from "@workspace/api-client-react";
+import { SectionHead, PageHero, Card, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ShieldAlert, Shield } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ShieldAlert, Shield, Globe, Download } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Admin() {
   const { data: me, isLoading } = useAtelierGetMe();
+  const { data: settings, isLoading: settingsLoading } = useAtelierGetAdminSettings({
+    query: { enabled: me?.role === "partner", queryKey: getAtelierGetAdminSettingsQueryKey() },
+  });
+  const { data: agents } = useAtelierListAgents();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const update = useAtelierUpdateAdminSettings({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getAtelierGetAdminSettingsQueryKey() });
+        toast({ title: "Settings saved", description: "Firm configuration updated." });
+      },
+    },
+  });
+
+  const [piiDraft, setPiiDraft] = React.useState("");
+  const [budgetDraft, setBudgetDraft] = React.useState("");
+  React.useEffect(() => {
+    if (settings) {
+      setPiiDraft(settings.piiPatterns.join("\n"));
+      setBudgetDraft(String(settings.perUserDailyTokenBudget));
+    }
+  }, [settings]);
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (!me) return null;
 
-  if (me.role !== 'partner') {
+  if (me.role !== "partner") {
     return (
       <div className="container-atelier py-20 flex flex-col items-center text-center animate-in fade-in">
         <div className="w-16 h-16 bg-danger/10 rounded-full flex items-center justify-center mb-6 text-danger">
@@ -17,30 +52,147 @@ export default function Admin() {
         </div>
         <h2 className="text-2xl font-semibold text-text mb-3">Partner Access Required</h2>
         <p className="text-text-mute max-w-md">
-          The administration console is restricted to firm Partners. 
-          Your current persona ({me.name}, {me.roleLabel}) does not have sufficient privileges.
+          The administration console is restricted to firm Partners. Your current persona ({me.name},{" "}
+          {me.roleLabel}) does not have sufficient privileges.
         </p>
       </div>
     );
   }
 
+  const toggleAgent = (agentId: string) => {
+    if (!settings) return;
+    const next = settings.disabledAgentIds.includes(agentId)
+      ? settings.disabledAgentIds.filter((x: string) => x !== agentId)
+      : [...settings.disabledAgentIds, agentId];
+    update.mutate({ data: { disabledAgentIds: next } });
+  };
+
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <SectionHead 
-          headline="Admin Console"
-          lede="Firm-wide configuration, access control, and billing."
-        />
+        <SectionHead headline="Admin Console" lede="Firm-wide configuration, access control, and audit." />
       </PageHero>
 
-      <div className="container-atelier py-10 max-w-2xl">
-        <Card className="p-12 flex flex-col items-center justify-center text-center border-dashed bg-bg-deep border-gold/30">
-          <div className="w-12 h-12 bg-gold/10 rounded-full flex items-center justify-center mb-4 text-gold">
-            <Shield className="w-6 h-6" />
-          </div>
-          <h3 className="text-lg font-semibold text-text mb-2">Partner View</h3>
-          <p className="text-text-mute">Admin modules (Tenant config, User roles, API keys) will be populated here.</p>
-        </Card>
+      <div className="container-atelier py-10 max-w-3xl space-y-6">
+        {settingsLoading || !settings ? (
+          <Skeleton className="h-96 bg-bg-elevate" />
+        ) : (
+          <>
+            <Card className="p-6 space-y-4 border-gold/30">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-gold flex items-center gap-2">
+                <Shield className="w-4 h-4" /> Model & Cost Controls
+              </h3>
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="text-text font-semibold">Disable Opus firm-wide</div>
+                  <div className="text-xs text-text-mute">Forces all agents to fall back to Sonnet.</div>
+                </div>
+                <Switch
+                  checked={settings.disableOpus}
+                  onCheckedChange={(v) => update.mutate({ data: { disableOpus: v } })}
+                  data-testid="switch-disable-opus"
+                />
+              </div>
+              <div className="space-y-2 pt-3 border-t border-border-soft">
+                <label className="text-text font-semibold block">Per-user daily token budget</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min={1000}
+                    value={budgetDraft}
+                    onChange={(e) => setBudgetDraft(e.target.value)}
+                    className="bg-bg-elevate border-border text-text max-w-[200px]"
+                    data-testid="input-budget"
+                  />
+                  <Button
+                    onClick={() =>
+                      update.mutate({
+                        data: { perUserDailyTokenBudget: parseInt(budgetDraft, 10) || 250000 },
+                      })
+                    }
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute">
+                Agent Access ({settings.disabledAgentIds.length} disabled)
+              </h3>
+              <div className="border border-border-soft rounded-md divide-y divide-border-soft max-h-72 overflow-y-auto">
+                {(agents ?? []).map((a) => {
+                  const disabled = settings.disabledAgentIds.includes(a.id);
+                  return (
+                    <div
+                      key={a.id}
+                      className="flex justify-between items-center px-4 py-2"
+                      data-testid={`row-agent-${a.id}`}
+                    >
+                      <div>
+                        <div className="text-text text-sm">{a.name}</div>
+                        <div className="text-xs text-text-mute font-mono">{a.id}</div>
+                      </div>
+                      <Switch
+                        checked={!disabled}
+                        onCheckedChange={() => toggleAgent(a.id)}
+                        data-testid={`switch-agent-${a.id}`}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute">
+                PII Redaction Patterns
+              </h3>
+              <p className="text-xs text-text-mute">
+                One regex per line. Matched text is redacted from agent prompts before model invocation.
+              </p>
+              <textarea
+                value={piiDraft}
+                onChange={(e) => setPiiDraft(e.target.value)}
+                rows={5}
+                className="w-full bg-bg-elevate border border-border rounded-md p-3 text-text font-mono text-xs"
+                data-testid="textarea-pii"
+              />
+              <Button
+                onClick={() =>
+                  update.mutate({
+                    data: { piiPatterns: piiDraft.split("\n").map((s) => s.trim()).filter(Boolean) },
+                  })
+                }
+              >
+                Save patterns
+              </Button>
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
+                <Globe className="w-4 h-4" /> Data Residency
+              </h3>
+              <div className="flex justify-between items-center">
+                <span className="text-text">{settings.residencyRegion}</span>
+                <MonoChip tone="green">enforced</MonoChip>
+              </div>
+              <p className="text-xs text-text-mute">
+                Region is fixed for this tenant. Contact your account exec to change.
+              </p>
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
+                <Download className="w-4 h-4" /> Audit Export
+              </h3>
+              <p className="text-sm text-text-mute">
+                Full firm-wide audit log is available as PDF per engagement from the engagement page.
+              </p>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );

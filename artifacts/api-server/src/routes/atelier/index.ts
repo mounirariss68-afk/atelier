@@ -39,6 +39,7 @@ import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler } from "./auditPdf";
 import agentRoutes from "./agentRoutes";
 import proposalRoutes from "./proposalRoutes";
+import knowledgeRoutes from "./knowledgeRoutes";
 import engagementRoutes, {
   accessibleEngagementIds,
   ensureEngAccess,
@@ -80,6 +81,8 @@ router.use(agentRoutes);
 router.use(engagementRoutes);
 // Mount process / prototype / proposal write routes (Task #223).
 router.use(proposalRoutes);
+// Mount Knowledge Atelier extras (Task #224): prompts, concierge, admin, runs.
+router.use(knowledgeRoutes);
 
 function ensurePersona(
   req: Request,

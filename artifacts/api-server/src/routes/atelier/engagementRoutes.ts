@@ -46,6 +46,7 @@ import {
   scaffoldDiagnosticMemo,
   type HypothesisTree,
 } from "../../lib/atelier-agents/runner.js";
+import { curatorAbstract } from "./knowledgeRoutes.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1018,6 +1019,19 @@ router.post("/engagements/:engId/artifacts", async (req, res) => {
   }
   const detectFrom = `${parsed.data.title}\n${parsed.data.abstract ?? ""}\n${parsed.data.body ?? ""}`;
   const language = detectLanguage(detectFrom);
+  // Atelier Curator (Task #224) — derive a 40-word abstract + tags when the
+  // uploader didn't supply them. Stub LLM behavior consistent with other
+  // mock-LLM agents in this codebase; an audit row records the curation.
+  const incomingTags = (parsed.data.tags ?? []) as string[];
+  let abstract = parsed.data.abstract ?? null;
+  let tags = incomingTags;
+  let curated = false;
+  if (!abstract || incomingTags.length === 0) {
+    const c = curatorAbstract(parsed.data.title, parsed.data.body);
+    if (!abstract) abstract = c.abstract;
+    if (incomingTags.length === 0) tags = c.tags;
+    curated = true;
+  }
   const id = rid("art");
   const [row] = await db
     .insert(atelierArtifacts)
@@ -1026,9 +1040,9 @@ router.post("/engagements/:engId/artifacts", async (req, res) => {
       parentType: "engagement",
       parentId: eng.id,
       title: parsed.data.title,
-      abstract: parsed.data.abstract ?? null,
+      abstract,
       body: parsed.data.body ?? null,
-      tags: (parsed.data.tags ?? []) as never,
+      tags: tags as never,
       source: parsed.data.source,
       language,
       fileUrl: parsed.data.fileUrl ?? null,
@@ -1040,9 +1054,19 @@ router.post("/engagements/:engId/artifacts", async (req, res) => {
     entityId: eng.id,
     actor: me,
     action: `artifact.upload.${language}`,
-    payload: { id, title: parsed.data.title, language },
-    summary: `${me.name} uploaded artifact "${parsed.data.title}" (${language})`,
+    payload: { id, title: parsed.data.title, language, curated },
+    summary: `${me.name} uploaded artifact "${parsed.data.title}" (${language})${curated ? " · Atelier Curator generated abstract" : ""}`,
   });
+  if (curated) {
+    await audit({
+      entityType: "artifact",
+      entityId: id,
+      actor: { ...me, id: "ag_atelier_curator", name: "Atelier Curator" } as typeof me,
+      action: "agent.atelier_curator.complete",
+      payload: { id, abstract, tags },
+      summary: `Atelier Curator generated 40-word abstract and ${tags.length} tags`,
+    });
+  }
   res.status(201).json(artifactWire(row));
 });
 

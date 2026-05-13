@@ -20,9 +20,12 @@ import type {
   Account,
   AgentActivityItem,
   AgentCatalogEntry,
+  AtelierAdminSettings,
+  AtelierAdminSettingsUpdate,
   AtelierAgentDecisionInput,
   AtelierAgentDesign,
   AtelierAgentRunDetail,
+  AtelierAgentRunSummary,
   AtelierAgentsUsageCounts200Item,
   AtelierAnalyzeProcessInput,
   AtelierAnalyzeProcessResponse,
@@ -34,6 +37,8 @@ import type {
   AtelierCharterRedraftInput,
   AtelierCharterVersion,
   AtelierComposeProposalInput,
+  AtelierConciergeSearchInput,
+  AtelierConciergeSearchResult,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
   AtelierCritiqueInput,
@@ -60,6 +65,7 @@ import type {
   AtelierProcess,
   AtelierPromoteAgentDesign200,
   AtelierPromoteFactInput,
+  AtelierPromptEntry,
   AtelierProposal,
   AtelierProposalDetail,
   AtelierProposalSection,
@@ -5807,3 +5813,423 @@ export const useAtelierApproveProposalSection = <
 > => {
   return useMutation(getAtelierApproveProposalSectionMutationOptions(options));
 };
+
+/**
+ * @summary Filesystem-backed prompt library entries
+ */
+export const getAtelierListPromptsUrl = () => {
+  return `/api/atelier/prompts`;
+};
+
+export const atelierListPrompts = async (
+  options?: RequestInit,
+): Promise<AtelierPromptEntry[]> => {
+  return customFetch<AtelierPromptEntry[]>(getAtelierListPromptsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListPromptsQueryKey = () => {
+  return [`/api/atelier/prompts`] as const;
+};
+
+export const getAtelierListPromptsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPrompts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPrompts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListPromptsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPrompts>>
+  > = ({ signal }) => atelierListPrompts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPrompts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPromptsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPrompts>>
+>;
+export type AtelierListPromptsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Filesystem-backed prompt library entries
+ */
+
+export function useAtelierListPrompts<
+  TData = Awaited<ReturnType<typeof atelierListPrompts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPrompts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPromptsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Knowledge Concierge — keyword search over Atelier assets
+ */
+export const getAtelierConciergeSearchUrl = () => {
+  return `/api/atelier/concierge/search`;
+};
+
+export const atelierConciergeSearch = async (
+  atelierConciergeSearchInput: AtelierConciergeSearchInput,
+  options?: RequestInit,
+): Promise<AtelierConciergeSearchResult> => {
+  return customFetch<AtelierConciergeSearchResult>(
+    getAtelierConciergeSearchUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierConciergeSearchInput),
+    },
+  );
+};
+
+export const getAtelierConciergeSearchMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierConciergeSearch>>,
+    TError,
+    { data: BodyType<AtelierConciergeSearchInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierConciergeSearch>>,
+  TError,
+  { data: BodyType<AtelierConciergeSearchInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierConciergeSearch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierConciergeSearch>>,
+    { data: BodyType<AtelierConciergeSearchInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierConciergeSearch(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierConciergeSearchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierConciergeSearch>>
+>;
+export type AtelierConciergeSearchMutationBody =
+  BodyType<AtelierConciergeSearchInput>;
+export type AtelierConciergeSearchMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Knowledge Concierge — keyword search over Atelier assets
+ */
+export const useAtelierConciergeSearch = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierConciergeSearch>>,
+    TError,
+    { data: BodyType<AtelierConciergeSearchInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierConciergeSearch>>,
+  TError,
+  { data: BodyType<AtelierConciergeSearchInput> },
+  TContext
+> => {
+  return useMutation(getAtelierConciergeSearchMutationOptions(options));
+};
+
+/**
+ * @summary Partner-only firm admin settings
+ */
+export const getAtelierGetAdminSettingsUrl = () => {
+  return `/api/atelier/admin/settings`;
+};
+
+export const atelierGetAdminSettings = async (
+  options?: RequestInit,
+): Promise<AtelierAdminSettings> => {
+  return customFetch<AtelierAdminSettings>(getAtelierGetAdminSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetAdminSettingsQueryKey = () => {
+  return [`/api/atelier/admin/settings`] as const;
+};
+
+export const getAtelierGetAdminSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAdminSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAdminSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAdminSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAdminSettings>>
+  > = ({ signal }) => atelierGetAdminSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAdminSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAdminSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAdminSettings>>
+>;
+export type AtelierGetAdminSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Partner-only firm admin settings
+ */
+
+export function useAtelierGetAdminSettings<
+  TData = Awaited<ReturnType<typeof atelierGetAdminSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAdminSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAdminSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update Partner-only admin settings (in-memory)
+ */
+export const getAtelierUpdateAdminSettingsUrl = () => {
+  return `/api/atelier/admin/settings`;
+};
+
+export const atelierUpdateAdminSettings = async (
+  atelierAdminSettingsUpdate: AtelierAdminSettingsUpdate,
+  options?: RequestInit,
+): Promise<AtelierAdminSettings> => {
+  return customFetch<AtelierAdminSettings>(getAtelierUpdateAdminSettingsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierAdminSettingsUpdate),
+  });
+};
+
+export const getAtelierUpdateAdminSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAdminSettings>>,
+    TError,
+    { data: BodyType<AtelierAdminSettingsUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAdminSettings>>,
+  TError,
+  { data: BodyType<AtelierAdminSettingsUpdate> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAdminSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAdminSettings>>,
+    { data: BodyType<AtelierAdminSettingsUpdate> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierUpdateAdminSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAdminSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAdminSettings>>
+>;
+export type AtelierUpdateAdminSettingsMutationBody =
+  BodyType<AtelierAdminSettingsUpdate>;
+export type AtelierUpdateAdminSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update Partner-only admin settings (in-memory)
+ */
+export const useAtelierUpdateAdminSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAdminSettings>>,
+    TError,
+    { data: BodyType<AtelierAdminSettingsUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAdminSettings>>,
+  TError,
+  { data: BodyType<AtelierAdminSettingsUpdate> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateAdminSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Recent agent runs for an agent
+ */
+export const getAtelierListAgentRunsUrl = (agentId: string) => {
+  return `/api/atelier/agents/${agentId}/runs`;
+};
+
+export const atelierListAgentRuns = async (
+  agentId: string,
+  options?: RequestInit,
+): Promise<AtelierAgentRunSummary[]> => {
+  return customFetch<AtelierAgentRunSummary[]>(
+    getAtelierListAgentRunsUrl(agentId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListAgentRunsQueryKey = (agentId: string) => {
+  return [`/api/atelier/agents/${agentId}/runs`] as const;
+};
+
+export const getAtelierListAgentRunsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListAgentRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  agentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListAgentRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListAgentRunsQueryKey(agentId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListAgentRuns>>
+  > = ({ signal }) =>
+    atelierListAgentRuns(agentId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!agentId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListAgentRuns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListAgentRunsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListAgentRuns>>
+>;
+export type AtelierListAgentRunsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Recent agent runs for an agent
+ */
+
+export function useAtelierListAgentRuns<
+  TData = Awaited<ReturnType<typeof atelierListAgentRuns>>,
+  TError = ErrorType<unknown>,
+>(
+  agentId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListAgentRuns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListAgentRunsQueryOptions(agentId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
