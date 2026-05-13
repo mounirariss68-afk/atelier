@@ -100,6 +100,26 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
     setDraftModel(data.pricing.pricingModel);
   }, [data?.pricing?.id]);
 
+  // Reactive what-if: recompute on draft changes (debounced 350 ms).
+  // Margin chip updates live as Partner edits team mix / duration / model.
+  React.useEffect(() => {
+    if (!data?.pricing?.rateCardId) return;
+    if (draftMix.length === 0) return;
+    const handle = window.setTimeout(() => {
+      whatif.mutate({
+        oppId,
+        data: {
+          teamMix: draftMix,
+          durationWeeks: draftWeeks,
+          pricingModel: draftModel,
+          rateCardId: data.pricing.rateCardId,
+        },
+      });
+    }, 350);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftMix, draftWeeks, draftModel, oppId, data?.pricing?.rateCardId]);
+
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
   if (isError || !data) {
     return (

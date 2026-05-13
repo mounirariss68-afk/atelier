@@ -538,6 +538,17 @@ router.post("/opportunities/:oppId/pricing/countersign", async (req, res) => {
     res.status(409).json({ error: "countersign-must-be-different-partner" });
     return;
   }
+  // Honour the configurable two-Partner threshold (PRD §2.4) — refuse a
+  // countersign on a margin that doesn't actually require one. Avoids
+  // accidentally generating audit noise on AMBER deals.
+  const policyForCountersign = await loadDefaultPolicy();
+  if (pricing.computedMarginPct >= policyForCountersign.twoPartnerThresholdPct) {
+    res.status(409).json({
+      error: "countersign-not-required",
+      hint: `Margin ${(pricing.computedMarginPct * 100).toFixed(1)}% is at or above two-Partner threshold (${(policyForCountersign.twoPartnerThresholdPct * 100).toFixed(0)}%).`,
+    });
+    return;
+  }
   const [updated] = await db
     .update(atelierDealPricings)
     .set({
@@ -560,6 +571,79 @@ router.post("/opportunities/:oppId/pricing/countersign", async (req, res) => {
     payloadSummary: `${me.name} countersigned ${pricing.marginLockStatus.toUpperCase()} margin override on ${req.params.oppId}`,
   });
   res.json(updated);
+});
+
+// Delete a single rate-card row (Partner-only, soft delete via real DELETE
+// since the table has no deletedAt — rows are inexpensive to recreate).
+router.delete("/rate-cards/:id/rows/:rowId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!requirePartner(me, res)) return;
+  const [row] = await db
+    .select()
+    .from(atelierRateCardRows)
+    .where(and(eq(atelierRateCardRows.id, req.params.rowId), eq(atelierRateCardRows.rateCardId, req.params.id)));
+  if (!row) {
+    res.status(404).json({ error: "row-not-found" });
+    return;
+  }
+  await db
+    .update(atelierRateCardRows)
+    .set({ deletedAt: new Date() })
+    .where(eq(atelierRateCardRows.id, row.id));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "rate_card",
+    entityId: req.params.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "rate_card.row_delete",
+    payload: { rowId: row.id, seniority: row.seniority },
+    payloadSummary: `${me.name} removed ${row.seniority} (${row.role}) from rate card ${req.params.id}`,
+  });
+  res.status(204).end();
+});
+
+// Archive (soft-delete) a rate card. Partner-only. Refuses if the card is
+// referenced by a non-deleted dealPricing row.
+router.delete("/rate-cards/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!requirePartner(me, res)) return;
+  const [card] = await db
+    .select()
+    .from(atelierRateCards)
+    .where(and(eq(atelierRateCards.id, req.params.id), isNull(atelierRateCards.deletedAt)));
+  if (!card) {
+    res.status(404).json({ error: "card-not-found" });
+    return;
+  }
+  const inUse = await db
+    .select({ id: atelierDealPricings.id })
+    .from(atelierDealPricings)
+    .where(and(eq(atelierDealPricings.rateCardId, card.id), isNull(atelierDealPricings.deletedAt)))
+    .limit(1);
+  if (inUse.length > 0) {
+    res.status(409).json({ error: "rate-card-in-use", hint: "Archive after migrating active deal pricings." });
+    return;
+  }
+  await db
+    .update(atelierRateCards)
+    .set({ status: "archived", deletedAt: new Date() })
+    .where(eq(atelierRateCards.id, card.id));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "rate_card",
+    entityId: card.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "rate_card.archive",
+    payload: { name: card.name },
+    payloadSummary: `${me.name} archived rate card ${card.name}`,
+  });
+  res.status(204).end();
 });
 
 export default router;

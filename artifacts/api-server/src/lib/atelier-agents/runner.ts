@@ -2790,17 +2790,61 @@ export async function runPricingStrategist(args: {
       };
     });
 
-    await progressRun(runId, 80, "Drafting Partner talking points");
+    await progressRun(runId, 80, "Drafting Partner narrative (Sonnet)");
 
-    const talkingPoints = buildTalkingPoints({
+    // Deterministic talking-points / risks stay as the mock baseline so the
+    // brief is meaningful when offline. The LLM augments narrative + adds
+    // qualitative talking points around the deterministic numbers.
+    const fallbackTalkingPoints = buildTalkingPoints({
       oppName: args.opportunity.name,
       primaryMargin: primaryCompute.computedMarginPct,
       targetMargin: args.policy.targetMarginPct,
       status: primaryCompute.marginLockStatus,
       alternatives,
     });
+    const fallbackRisks = buildRisks(primaryCompute.marginLockStatus, args.policy);
+    const fallbackNarrative =
+      primaryCompute.marginLockStatus === "green"
+        ? `Primary structure clears the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target with room. Lead with this; alternatives are negotiation levers, not fallbacks.`
+        : `Primary structure lands at ${(primaryCompute.computedMarginPct * 100).toFixed(1)}% — below the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target. Alternatives below recover margin via scope, model, or blend.`;
 
-    const risks = buildRisks(primaryCompute.marginLockStatus, args.policy);
+    interface NarrativeJson {
+      narrative: string;
+      talkingPoints: string[];
+      risks: string[];
+    }
+    let systemPrompt: string;
+    try {
+      systemPrompt = loadPrompt("pricing_strategist" as AtelierAgentId);
+    } catch {
+      systemPrompt =
+        "You are AICo's Pricing Strategist. Numbers are precomputed and authoritative — never invent or alter them. Author the Partner-facing narrative.";
+    }
+    const userPrompt = JSON.stringify({
+      opportunity: { id: args.opportunity.id, name: args.opportunity.name, accountId: args.opportunity.accountId },
+      policy: args.policy,
+      primary: {
+        pricingModel: args.pricing.pricingModel,
+        durationWeeks: args.pricing.durationWeeks,
+        teamMix,
+        cost: primaryCompute.computedCostUsd,
+        price: primaryCompute.computedPriceUsd,
+        marginPct: primaryCompute.computedMarginPct,
+        marginLockStatus: primaryCompute.marginLockStatus,
+      },
+      alternatives,
+      askFor: {
+        narrative: "1-2 paragraph Partner-facing recommendation",
+        talkingPoints: "3-5 short bullets a Partner can repeat verbatim",
+        risks: "2-4 short risk bullets",
+      },
+    });
+    const llm = await callClaudeJson<NarrativeJson>(
+      "claude-sonnet-4-5",
+      systemPrompt,
+      userPrompt,
+      () => ({ narrative: fallbackNarrative, talkingPoints: fallbackTalkingPoints, risks: fallbackRisks }),
+    );
 
     const result: PricingStrategistResult = {
       runId,
@@ -2812,33 +2856,51 @@ export async function runPricingStrategist(args: {
         price: primaryCompute.computedPriceUsd,
         marginPct: primaryCompute.computedMarginPct,
         marginLockStatus: primaryCompute.marginLockStatus,
-        narrative:
-          primaryCompute.marginLockStatus === "green"
-            ? `Primary structure clears the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target with room. Lead with this; alternatives are negotiation levers, not fallbacks.`
-            : `Primary structure lands at ${(primaryCompute.computedMarginPct * 100).toFixed(1)}% — below the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target. Alternatives below recover margin via scope, model, or blend.`,
+        narrative: llm.value.narrative ?? fallbackNarrative,
       },
       alternatives,
-      talkingPoints,
-      risks,
+      talkingPoints: Array.isArray(llm.value.talkingPoints) && llm.value.talkingPoints.length
+        ? llm.value.talkingPoints
+        : fallbackTalkingPoints,
+      risks: Array.isArray(llm.value.risks) && llm.value.risks.length ? llm.value.risks : fallbackRisks,
       marginLockChip: primaryCompute.marginLockStatus,
       partnerOverrideRequired: primaryCompute.marginLockStatus !== "green",
-      twoPartnerRequired: primaryCompute.twoPartnerRequired,
+      twoPartnerRequired: primaryCompute.computedMarginPct < args.policy.twoPartnerThresholdPct,
       confidence: primaryCompute.marginLockStatus === "red" ? "amber" : "green",
-      source: "mock_config",
+      source: llm.source,
     };
+
+    // Persist brief link onto the deal pricing row so downstream callers
+    // (Commercials tab, audit, send-gate) can trace which strategist run
+    // informed the saved pricing.
+    try {
+      await db
+        .update(atelierDealPricings)
+        .set({
+          pricingStrategistRunId: runId,
+          pricingStrategistBriefId: runId,
+          pricingStrategistOutput: result as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierDealPricings.id, args.pricing.id));
+    } catch (e) {
+      // Non-fatal — brief is still returned; we don't roll back the run.
+      // eslint-disable-next-line no-console
+      console.warn("[pricing-strategist] failed to persist brief link:", e);
+    }
 
     await completeRun({
       runId,
       output: result as unknown,
       confidence: result.confidence,
-      costUsd: 0,
+      costUsd: llm.costUsd,
       durationMs: Date.now() - t0,
       sourcesCount: alternatives.length,
       actorLabel: args.actorLabel,
       targetType: "opportunity",
       targetId: args.opportunity.id,
       targetLabel: args.opportunity.name,
-      source: "mock_config",
+      source: llm.source,
     });
 
     return result;
