@@ -2873,7 +2873,7 @@ async function main() {
       accentColor: "#0F4C5C",
       defaultLocale: "en",
       watermarkEnabled: true,
-      watermarkText: "AICo × Tasama — confidential",
+      rtlEnabled: false,
       downloadsAllowedDefault: false,
     },
   ]);
@@ -2890,7 +2890,7 @@ async function main() {
       initials: u.initials,
       title: u.title,
       accountId: "acc_tasama",
-      preferredLocale: "en",
+      locale: "en",
       status: "active" as const,
     })),
   );

@@ -699,6 +699,26 @@ router.post("/deliverables/:id/download-attempt", async (req, res, next) => {
       res.status(404).json({ error: "workspace-not-found" });
       return;
     }
+    // Authz: persona must hold an access grant for this engagement, AND the
+    // deliverable must be visible to clients (no internal-draft probing).
+    const [access] = await db
+      .select()
+      .from(atelierSalonUserEngagementAccess)
+      .where(
+        and(
+          eq(atelierSalonUserEngagementAccess.workspaceId, workspace.id),
+          eq(atelierSalonUserEngagementAccess.salonUserId, me.id),
+          isNull(atelierSalonUserEngagementAccess.deletedAt),
+        ),
+      );
+    if (!access) {
+      res.status(403).json({ error: "no-engagement-access" });
+      return;
+    }
+    if (!["review", "published", "final"].includes(d.clientVisibility ?? "")) {
+      res.status(404).json({ error: "deliverable-not-visible" });
+      return;
+    }
     await logAudit({
       engagementId: d.engagementId,
       workspaceId: workspace.id,
