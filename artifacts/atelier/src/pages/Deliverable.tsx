@@ -249,7 +249,7 @@ function CriticPanel({
   pyramidScore: number | null;
   evidenceCoveragePct: number | null;
   offHypothesisSections: string[];
-  issues: { id?: string; severity?: string; section?: string; rationale?: string; suggestion?: string }[];
+  issues: { id?: string; type?: string; severity?: string; location?: string; description?: string; suggestion?: string }[];
 }) {
   return (
     <Card className="p-5 space-y-4" data-testid="critic-panel">
@@ -300,9 +300,12 @@ function CriticPanel({
               <MonoChip tone={iss.severity === "high" ? "red" : iss.severity === "med" ? "amber" : "default"}>
                 {iss.severity ?? "—"}
               </MonoChip>
-              <span className="text-[10px] font-mono text-text-mute">{iss.section}</span>
+              <span className="text-[10px] font-mono text-text-mute">
+                {iss.location}
+                {iss.type ? ` · ${iss.type}` : ""}
+              </span>
             </div>
-            <div className="text-sm text-text">{iss.rationale}</div>
+            <div className="text-sm text-text">{iss.description}</div>
             {iss.suggestion && (
               <div className="text-xs text-text-mute italic">→ {iss.suggestion}</div>
             )}

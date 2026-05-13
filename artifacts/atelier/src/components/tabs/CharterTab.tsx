@@ -185,22 +185,23 @@ function CharterBody({ body }: { body: unknown }) {
     return <div className="text-text-mute text-sm font-mono">(empty)</div>;
   }
   const b = body as {
-    objective?: string;
-    inScope?: string[];
+    objectives?: string[];
+    scope?: string[];
     outOfScope?: string[];
-    successMetrics?: { metric: string; target?: string }[];
-    constraints?: string[];
+    successMetrics?: { name: string; baseline?: string; target?: string }[];
+    governance?: string;
+    valueHypothesis?: string;
   };
   return (
     <div className="space-y-4 text-sm">
-      {b.objective && (
-        <Section label="Objective">
-          <p className="text-text leading-relaxed">{b.objective}</p>
+      {(b.objectives?.length ?? 0) > 0 && (
+        <Section label="Objectives">
+          <ul className="list-disc ml-5 text-text space-y-0.5">{b.objectives!.map((s, i) => <li key={i}>{s}</li>)}</ul>
         </Section>
       )}
-      {(b.inScope?.length ?? 0) > 0 && (
+      {(b.scope?.length ?? 0) > 0 && (
         <Section label="In scope">
-          <ul className="list-disc ml-5 text-text">{b.inScope!.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          <ul className="list-disc ml-5 text-text">{b.scope!.map((s, i) => <li key={i}>{s}</li>)}</ul>
         </Section>
       )}
       {(b.outOfScope?.length ?? 0) > 0 && (
@@ -213,16 +214,22 @@ function CharterBody({ body }: { body: unknown }) {
           <ul className="space-y-1">
             {b.successMetrics!.map((m, i) => (
               <li key={i} className="font-mono text-xs">
-                <span className="text-text">{m.metric}</span>
+                <span className="text-text">{m.name}</span>
+                {m.baseline && <span className="text-text-mute ml-2">baseline: {m.baseline}</span>}
                 {m.target && <span className="text-gold ml-2">→ {m.target}</span>}
               </li>
             ))}
           </ul>
         </Section>
       )}
-      {(b.constraints?.length ?? 0) > 0 && (
-        <Section label="Constraints">
-          <ul className="list-disc ml-5 text-text-mute">{b.constraints!.map((s, i) => <li key={i}>{s}</li>)}</ul>
+      {b.governance && (
+        <Section label="Governance">
+          <p className="text-text leading-relaxed">{b.governance}</p>
+        </Section>
+      )}
+      {b.valueHypothesis && (
+        <Section label="Value hypothesis">
+          <p className="text-text leading-relaxed italic">{b.valueHypothesis}</p>
         </Section>
       )}
     </div>

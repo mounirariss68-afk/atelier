@@ -158,11 +158,10 @@ function charterVersionWire(v: typeof atelierCharterVersions.$inferSelect) {
 }
 
 router.get("/engagements/:engId/charter/versions", async (req, res) => {
-  const eng = await loadEng(req.params.engId);
-  if (!eng) {
-    res.status(404).json({ error: "engagement-not-found" });
-    return;
-  }
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const eng = await ensureEngAccess(res, me, req.params.engId);
+  if (!eng) return;
   const rows = await db
     .select()
     .from(atelierCharterVersions)
@@ -184,11 +183,18 @@ router.post("/engagements/:engId/charter/redraft", async (req, res) => {
     res.status(400).json({ error: "invalid-body" });
     return;
   }
+  // The UI calls /charter/redraft with no body to ask the Architect to
+  // re-derive from what's already on the engagement. Default to the
+  // engagement's own name + account so mock and live runners both have
+  // a non-empty seed and never crash on `undefined.toLowerCase()`.
+  const wonProposalSummary =
+    (parsed.data.wonProposalSummary && parsed.data.wonProposalSummary.trim()) ||
+    `${eng.name} — re-derive from engagement charter and seeded context`;
   const { runId, output } = await runCharterArchitect({
     engagementId: eng.id,
     engagementName: eng.name,
     accountName: eng.accountId,
-    wonProposalSummary: parsed.data.wonProposalSummary,
+    wonProposalSummary,
     kickoffTranscriptExcerpt: parsed.data.kickoffTranscriptExcerpt ?? null,
     triggeredByUserId: me.id,
     actorLabel: "Charter Architect",
@@ -327,7 +333,9 @@ router.post("/engagements/:engId/charter/versions/:versionId/approve", async (re
 // Hypothesis tree (read)
 // =============================================================
 router.get("/engagements/:engId/hypothesis-tree", async (req, res) => {
-  const eng = await loadEng(req.params.engId);
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const eng = await ensureEngAccess(res, me, req.params.engId);
   if (!eng) {
     res.status(404).json({ error: "engagement-not-found" });
     return;
@@ -353,17 +361,19 @@ function raidWire(r: typeof atelierRaidItems.$inferSelect, ownerName: string | n
     kind: r.kind as "risk" | "assumption" | "issue" | "dependency",
     severity: r.severity as "green" | "amber" | "red",
     status: r.status as "open" | "mitigated" | "closed",
-    ownerUserId: r.ownerUserId,
+    ownerUserId: r.ownerId,
     ownerName,
     description: r.description,
-    mitigation: r.mitigation,
-    targetDate: r.targetDate,
+    // `mitigation` is exposed on the wire for the UI but not yet persisted —
+    // a follow-up will add a column. For now we surface a stable null.
+    mitigation: null as string | null,
+    targetDate: r.dueDate,
     createdAt: r.createdAt.toISOString(),
   };
 }
 
 async function withOwner(rows: (typeof atelierRaidItems.$inferSelect)[]) {
-  const userIds = Array.from(new Set(rows.map((r) => r.ownerUserId).filter((x): x is string => !!x)));
+  const userIds = Array.from(new Set(rows.map((r) => r.ownerId).filter((x): x is string => !!x)));
   const users = userIds.length
     ? await db
         .select()
@@ -371,11 +381,13 @@ async function withOwner(rows: (typeof atelierRaidItems.$inferSelect)[]) {
         .where(and(isNull(atelierUsers.deletedAt)))
     : [];
   const byId = new Map(users.map((u) => [u.id, u.name]));
-  return rows.map((r) => raidWire(r, r.ownerUserId ? byId.get(r.ownerUserId) ?? null : null));
+  return rows.map((r) => raidWire(r, r.ownerId ? byId.get(r.ownerId) ?? null : null));
 }
 
 router.get("/engagements/:engId/raid", async (req, res) => {
-  const eng = await loadEng(req.params.engId);
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const eng = await ensureEngAccess(res, me, req.params.engId);
   if (!eng) {
     res.status(404).json({ error: "engagement-not-found" });
     return;
@@ -410,10 +422,9 @@ router.post("/engagements/:engId/raid", async (req, res) => {
       kind: parsed.data.kind,
       severity: parsed.data.severity,
       status: "open",
-      ownerUserId: parsed.data.ownerUserId ?? null,
+      ownerId: parsed.data.ownerUserId ?? null,
       description: parsed.data.description,
-      mitigation: parsed.data.mitigation ?? null,
-      targetDate: parsed.data.targetDate ?? null,
+      dueDate: parsed.data.targetDate ?? null,
       createdByUserId: me.id,
     })
     .returning();
@@ -447,8 +458,9 @@ router.patch("/engagements/:engId/raid/:raidId", async (req, res) => {
   const patch: Partial<typeof atelierRaidItems.$inferInsert> = { updatedAt: new Date() };
   if (parsed.data.severity) patch.severity = parsed.data.severity;
   if (parsed.data.status) patch.status = parsed.data.status;
-  if (parsed.data.mitigation !== undefined) patch.mitigation = parsed.data.mitigation;
-  if (parsed.data.targetDate !== undefined) patch.targetDate = parsed.data.targetDate;
+  // `mitigation` is part of the wire contract but not persisted yet — accept
+  // and ignore the value so the route stays forward-compatible.
+  if (parsed.data.targetDate !== undefined) patch.dueDate = parsed.data.targetDate;
   const [row] = await db
     .update(atelierRaidItems)
     .set(patch)
@@ -495,13 +507,17 @@ function versionWire(v: typeof atelierDeliverableVersions.$inferSelect) {
     deliverableId: v.deliverableId,
     versionNumber: v.versionNumber,
     body: v.body ?? "",
-    notes: v.notes,
+    // `notes` is exposed on the wire schema for future UX (re-draft notes) but
+    // not yet persisted; surface a stable null.
+    notes: null as string | null,
     createdAt: v.createdAt.toISOString(),
   };
 }
 
 router.get("/engagements/:engId/deliverables", async (req, res) => {
-  const eng = await loadEng(req.params.engId);
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const eng = await ensureEngAccess(res, me, req.params.engId);
   if (!eng) {
     res.status(404).json({ error: "engagement-not-found" });
     return;
@@ -640,7 +656,6 @@ router.post("/deliverables/:delId/draft", async (req, res) => {
       deliverableId: del.id,
       versionNumber: next,
       body,
-      notes: parsed.data.notes,
       createdByUserId: me.id,
     })
     .returning();
@@ -875,7 +890,9 @@ function artifactWire(a: typeof atelierArtifacts.$inferSelect) {
 }
 
 router.get("/engagements/:engId/artifacts", async (req, res) => {
-  const eng = await loadEng(req.params.engId);
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const eng = await ensureEngAccess(res, me, req.params.engId);
   if (!eng) {
     res.status(404).json({ error: "engagement-not-found" });
     return;
