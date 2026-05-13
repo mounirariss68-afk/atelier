@@ -238,7 +238,18 @@ router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, r
     inputs?: Array<Record<string, unknown>>;
     outputs?: Array<Record<string, unknown>>;
   };
+  // Mark the engagement-bound design as promoted so the engagement
+  // /agents view can clearly distinguish "engagement runtime (still
+  // engagement-bound)" from "promoted to global Atelier registry".
   const agentId = `agent_${rid("eng").slice(4)}`;
+  await db
+    .update(atelierAgentDesigns)
+    .set({
+      status: "promoted",
+      design: { ...(design.design as Record<string, unknown>), promotedAgentId: agentId },
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierAgentDesigns.id, design.id));
   await db.insert(atelierAgents).values({
     id: agentId,
     name: d.name ?? "Promoted Agent",

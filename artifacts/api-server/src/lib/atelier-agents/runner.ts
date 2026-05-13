@@ -1620,6 +1620,32 @@ function mockPrototypeForge(brief: PrototypeForgeBrief): PrototypeForgeOutput {
   return { replitPromptMd: promptMd, buildPlan: phases, demoStoryboard: storyboard };
 }
 
+function enforcePrototypeNonNegotiables(
+  output: PrototypeForgeOutput,
+  brief: PrototypeForgeBrief,
+): PrototypeForgeOutput {
+  const md = output.replitPromptMd ?? "";
+  const dataLine = brief.partnerDataApproved
+    ? "Real client data is permitted (Partner approved)."
+    : "Use synthetic/watermarked data only — Partner has NOT approved real client data.";
+  const canonical = [
+    ``,
+    `## Data policy (AICo-enforced)`,
+    `- ${dataLine}`,
+    ``,
+    `## AICo non-negotiables (auto-injected)`,
+    `- Human authority is sovereign. Every irreversible action requires a human signoff.`,
+    `- Show the work. Every agent output ships with rationale + sources.`,
+    `- Audit trail. Every action is logged (who/what/when).`,
+    `- Bilingual-aware (EN/AR) where the audience requires.`,
+    `- Synthetic data is watermarked; never simulate a real customer outcome silently.`,
+  ].join("\n");
+  const hasNonNeg = /##\s+AICo non-negotiables/i.test(md);
+  const hasDataPolicy = /##\s+Data policy/i.test(md);
+  if (hasNonNeg && hasDataPolicy) return output;
+  return { ...output, replitPromptMd: `${md.trimEnd()}\n${canonical}\n` };
+}
+
 export async function runPrototypeForge(args: {
   opportunityId: string | null;
   engagementId: string | null;
@@ -1644,12 +1670,16 @@ export async function runPrototypeForge(args: {
     await progressRun(runId, 45, "Demo Storyboarder — choosing demo moments");
     await progressRun(runId, 70, "Brand Translator — applying brand defaults/overrides");
     await progressRun(runId, 90, "Prompt Composer — assembling Replit-ready prompt");
-    const { value, costUsd, source, warning } = await callClaudeJson<PrototypeForgeOutput>(
+    const { value: rawValue, costUsd, source, warning } = await callClaudeJson<PrototypeForgeOutput>(
       "claude-sonnet-4-6",
       system,
       JSON.stringify(args.brief),
       () => mockPrototypeForge(args.brief),
     );
+    // Post-validate: AICo non-negotiables block must always be present in
+    // the Replit prompt regardless of model drift. If the model omits the
+    // section or the data-policy line, append the canonical block.
+    const value = enforcePrototypeNonNegotiables(rawValue, args.brief);
     await completeRun({
       runId,
       output: value as unknown,

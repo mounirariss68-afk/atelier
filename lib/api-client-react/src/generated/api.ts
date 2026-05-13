@@ -4588,6 +4588,180 @@ export const useAtelierForgePrototype = <
   return useMutation(getAtelierForgePrototypeMutationOptions(options));
 };
 
+/**
+ * @summary Engagement lead approves the prototype brief (gate 1 of 2)
+ */
+export const getAtelierApprovePrototypeBriefUrl = (prototypeId: string) => {
+  return `/api/atelier/prototypes/${prototypeId}/approve-brief`;
+};
+
+export const atelierApprovePrototypeBrief = async (
+  prototypeId: string,
+  options?: RequestInit,
+): Promise<AtelierPrototype> => {
+  return customFetch<AtelierPrototype>(
+    getAtelierApprovePrototypeBriefUrl(prototypeId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierApprovePrototypeBriefMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApprovePrototypeBrief>>,
+    TError,
+    { prototypeId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierApprovePrototypeBrief>>,
+  TError,
+  { prototypeId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierApprovePrototypeBrief"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierApprovePrototypeBrief>>,
+    { prototypeId: string }
+  > = (props) => {
+    const { prototypeId } = props ?? {};
+
+    return atelierApprovePrototypeBrief(prototypeId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierApprovePrototypeBriefMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierApprovePrototypeBrief>>
+>;
+
+export type AtelierApprovePrototypeBriefMutationError = ErrorType<void>;
+
+/**
+ * @summary Engagement lead approves the prototype brief (gate 1 of 2)
+ */
+export const useAtelierApprovePrototypeBrief = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApprovePrototypeBrief>>,
+    TError,
+    { prototypeId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierApprovePrototypeBrief>>,
+  TError,
+  { prototypeId: string },
+  TContext
+> => {
+  return useMutation(getAtelierApprovePrototypeBriefMutationOptions(options));
+};
+
+/**
+ * @summary Partner approves the generated prompt (gate 2 of 2 — unlocks copy/use)
+ */
+export const getAtelierApprovePrototypePromptUrl = (prototypeId: string) => {
+  return `/api/atelier/prototypes/${prototypeId}/approve-prompt`;
+};
+
+export const atelierApprovePrototypePrompt = async (
+  prototypeId: string,
+  options?: RequestInit,
+): Promise<AtelierPrototype> => {
+  return customFetch<AtelierPrototype>(
+    getAtelierApprovePrototypePromptUrl(prototypeId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierApprovePrototypePromptMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApprovePrototypePrompt>>,
+    TError,
+    { prototypeId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierApprovePrototypePrompt>>,
+  TError,
+  { prototypeId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierApprovePrototypePrompt"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierApprovePrototypePrompt>>,
+    { prototypeId: string }
+  > = (props) => {
+    const { prototypeId } = props ?? {};
+
+    return atelierApprovePrototypePrompt(prototypeId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierApprovePrototypePromptMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierApprovePrototypePrompt>>
+>;
+
+export type AtelierApprovePrototypePromptMutationError = ErrorType<void>;
+
+/**
+ * @summary Partner approves the generated prompt (gate 2 of 2 — unlocks copy/use)
+ */
+export const useAtelierApprovePrototypePrompt = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApprovePrototypePrompt>>,
+    TError,
+    { prototypeId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierApprovePrototypePrompt>>,
+  TError,
+  { prototypeId: string },
+  TContext
+> => {
+  return useMutation(getAtelierApprovePrototypePromptMutationOptions(options));
+};
+
 export const getAtelierGetProposalUrl = (oppId: string) => {
   return `/api/atelier/opportunities/${oppId}/proposal`;
 };

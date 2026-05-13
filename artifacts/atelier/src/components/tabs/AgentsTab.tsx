@@ -29,9 +29,9 @@ export function AgentsTab({ engId }: { engId: string }) {
   const { data: designs } = useAtelierListAgentDesigns(engId, {
     query: { enabled: !!engId, queryKey: getAtelierListAgentDesignsQueryKey(engId) },
   });
-  const approvedDesigns = ((designs ?? []) as AtelierAgentDesign[]).filter(
-    (d) => d.status === "approved",
-  );
+  const allDesigns = (designs ?? []) as AtelierAgentDesign[];
+  const approvedDesigns = allDesigns.filter((d) => d.status === "approved");
+  const promotedDesigns = allDesigns.filter((d) => d.status === "promoted");
   const promote = useAtelierPromoteAgentDesign({
     mutation: {
       onSuccess: () => {
@@ -76,16 +76,25 @@ export function AgentsTab({ engId }: { engId: string }) {
           Showing {deliverPhase.length} delivery-phase catalog agents available to engagement{" "}
           <span className="font-mono">{engId}</span>
           {approvedDesigns.length > 0 && (
-            <>, plus {approvedDesigns.length} engagement-scoped runtime design{approvedDesigns.length === 1 ? "" : "s"} promoted from Process Discovery</>
+            <>, plus {approvedDesigns.length} engagement-bound runtime agent{approvedDesigns.length === 1 ? "" : "s"} (not yet in the global Atelier registry)</>
+          )}
+          {promotedDesigns.length > 0 && (
+            <>, and {promotedDesigns.length} promoted to the global Atelier registry</>
           )}
           .
         </div>
       </Card>
 
       {approvedDesigns.length > 0 && (
-        <div className="space-y-3">
-          <div className="text-xs font-mono uppercase tracking-wide text-text-mute">
-            Engagement runtime — promoted from process discovery
+        <div className="space-y-3" data-testid="engagement-runtime-section">
+          <div className="text-xs font-mono uppercase tracking-wide text-text-mute flex items-center gap-2">
+            Engagement runtime — engagement-bound (not in global registry)
+            <MonoChip tone="amber">isolation: engagement-only</MonoChip>
+          </div>
+          <div className="text-[11px] text-text-mute -mt-1">
+            These agents run only inside engagement <span className="font-mono">{engId}</span>.
+            They never appear in the global /agents catalog or in other engagements until a Partner
+            promotes them.
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {approvedDesigns.map((d) => {

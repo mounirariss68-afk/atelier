@@ -1179,6 +1179,7 @@ export const AtelierAgentDesignStatus = {
   draft: "draft",
   approved: "approved",
   rejected: "rejected",
+  promoted: "promoted",
 } as const;
 
 export interface AtelierAgentDesign {
@@ -1238,6 +1239,18 @@ export type AtelierPrototypeDemoStoryboardItem = {
   artifact?: string;
 };
 
+export type AtelierPrototypeStatus =
+  (typeof AtelierPrototypeStatus)[keyof typeof AtelierPrototypeStatus];
+
+export const AtelierPrototypeStatus = {
+  draft: "draft",
+  lead_approved: "lead_approved",
+  live: "live",
+  superseded: "superseded",
+} as const;
+
+export type AtelierPrototypeBrief = { [key: string]: unknown };
+
 export interface AtelierPrototype {
   id: string;
   /** @nullable */
@@ -1250,7 +1263,16 @@ export interface AtelierPrototype {
   replitPromptMd?: string;
   buildPlan?: AtelierPrototypeBuildPlanItem[];
   demoStoryboard?: AtelierPrototypeDemoStoryboardItem[];
-  status: string;
+  status: AtelierPrototypeStatus;
+  /** @nullable */
+  leadApprovedAt?: string | null;
+  /** @nullable */
+  leadApprovedByUserId?: string | null;
+  /** @nullable */
+  partnerApprovedAt?: string | null;
+  /** @nullable */
+  partnerApprovedByUserId?: string | null;
+  brief?: AtelierPrototypeBrief;
   createdAt: string;
 }
 

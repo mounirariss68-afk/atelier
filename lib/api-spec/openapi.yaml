@@ -1043,6 +1043,42 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierForgePrototypeResponse" }
+  /atelier/prototypes/{prototypeId}/approve-brief:
+    post:
+      operationId: atelierApprovePrototypeBrief
+      tags: [atelier]
+      summary: Engagement lead approves the prototype brief (gate 1 of 2)
+      parameters:
+        - in: path
+          name: prototypeId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated prototype
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPrototype" }
+        "403": { description: Only lead/partner may approve }
+        "409": { description: Brief is not in draft }
+  /atelier/prototypes/{prototypeId}/approve-prompt:
+    post:
+      operationId: atelierApprovePrototypePrompt
+      tags: [atelier]
+      summary: Partner approves the generated prompt (gate 2 of 2 — unlocks copy/use)
+      parameters:
+        - in: path
+          name: prototypeId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated prototype (status=live)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPrototype" }
+        "403": { description: Partner-only }
+        "409": { description: Brief not lead-approved }
   /atelier/opportunities/{oppId}/proposal:
     get:
       operationId: atelierGetProposal
@@ -2173,7 +2209,7 @@ components:
         engagementId: { type: string }
         processStepId: { type: ["string", "null"] }
         design: { $ref: "#/components/schemas/AtelierCandidateAgent" }
-        status: { type: string, enum: [draft, approved, rejected] }
+        status: { type: string, enum: [draft, approved, rejected, promoted] }
         createdAt: { type: string, format: date-time }
     AtelierAnalyzeProcessInput:
       type: object
@@ -2222,7 +2258,16 @@ components:
               moment: { type: string }
               interaction: { type: string }
               artifact: { type: string }
-        status: { type: string }
+        status:
+          type: string
+          enum: [draft, lead_approved, live, superseded]
+        leadApprovedAt: { type: ["string", "null"], format: date-time }
+        leadApprovedByUserId: { type: ["string", "null"] }
+        partnerApprovedAt: { type: ["string", "null"], format: date-time }
+        partnerApprovedByUserId: { type: ["string", "null"] }
+        brief:
+          type: object
+          additionalProperties: true
         createdAt: { type: string, format: date-time }
     AtelierForgePrototypeInput:
       type: object

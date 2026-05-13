@@ -13,4 +13,5 @@ export const AtelierAgentDesignStatus = {
   draft: "draft",
   approved: "approved",
   rejected: "rejected",
+  promoted: "promoted",
 } as const;

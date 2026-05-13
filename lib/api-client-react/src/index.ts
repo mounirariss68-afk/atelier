@@ -192,6 +192,8 @@ export {
   getAtelierForgePrototypeUrl,
   getAtelierForgePrototypeMutationOptions,
   useAtelierForgePrototype,
+  useAtelierApprovePrototypeBrief,
+  useAtelierApprovePrototypePrompt,
   getAtelierGetProposalUrl,
   getAtelierGetProposalQueryKey,
   getAtelierGetProposalQueryOptions,

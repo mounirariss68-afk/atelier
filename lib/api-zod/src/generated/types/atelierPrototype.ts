@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierPrototypeBrief } from "./atelierPrototypeBrief";
 import type { AtelierPrototypeBuildPlanItem } from "./atelierPrototypeBuildPlanItem";
 import type { AtelierPrototypeDemoStoryboardItem } from "./atelierPrototypeDemoStoryboardItem";
+import type { AtelierPrototypeStatus } from "./atelierPrototypeStatus";
 
 export interface AtelierPrototype {
   id: string;
@@ -20,6 +22,15 @@ export interface AtelierPrototype {
   replitPromptMd?: string;
   buildPlan?: AtelierPrototypeBuildPlanItem[];
   demoStoryboard?: AtelierPrototypeDemoStoryboardItem[];
-  status: string;
+  status: AtelierPrototypeStatus;
+  /** @nullable */
+  leadApprovedAt?: Date | null;
+  /** @nullable */
+  leadApprovedByUserId?: string | null;
+  /** @nullable */
+  partnerApprovedAt?: Date | null;
+  /** @nullable */
+  partnerApprovedByUserId?: string | null;
+  brief?: AtelierPrototypeBrief;
   createdAt: Date;
 }

@@ -1690,7 +1690,7 @@ export const AtelierListAgentDesignsResponseItem = zod.object({
     humanCheckpoints: zod.array(zod.string()),
     riskClass: zod.enum(["low", "med", "high"]),
   }),
-  status: zod.enum(["draft", "approved", "rejected"]),
+  status: zod.enum(["draft", "approved", "rejected", "promoted"]),
   createdAt: zod.coerce.date(),
 });
 export const AtelierListAgentDesignsResponse = zod.array(
@@ -1747,7 +1747,7 @@ export const AtelierApproveAgentDesignResponse = zod.object({
     humanCheckpoints: zod.array(zod.string()),
     riskClass: zod.enum(["low", "med", "high"]),
   }),
-  status: zod.enum(["draft", "approved", "rejected"]),
+  status: zod.enum(["draft", "approved", "rejected", "promoted"]),
   createdAt: zod.coerce.date(),
 });
 
@@ -1782,7 +1782,12 @@ export const AtelierListPrototypesResponseItem = zod.object({
       }),
     )
     .optional(),
-  status: zod.string(),
+  status: zod.enum(["draft", "lead_approved", "live", "superseded"]),
+  leadApprovedAt: zod.coerce.date().nullish(),
+  leadApprovedByUserId: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByUserId: zod.string().nullish(),
+  brief: zod.record(zod.string(), zod.unknown()).optional(),
   createdAt: zod.coerce.date(),
 });
 export const AtelierListPrototypesResponse = zod.array(
@@ -1818,6 +1823,92 @@ export const AtelierForgePrototypeBody = zod.object({
   partnerDataApproved: zod
     .boolean()
     .default(atelierForgePrototypeBodyPartnerDataApprovedDefault),
+});
+
+/**
+ * @summary Engagement lead approves the prototype brief (gate 1 of 2)
+ */
+export const AtelierApprovePrototypeBriefParams = zod.object({
+  prototypeId: zod.coerce.string(),
+});
+
+export const AtelierApprovePrototypeBriefResponse = zod.object({
+  id: zod.string(),
+  opportunityId: zod.string().nullish(),
+  engagementId: zod.string().nullish(),
+  runId: zod.string().nullish(),
+  name: zod.string(),
+  replitPromptMd: zod.string().optional(),
+  buildPlan: zod
+    .array(
+      zod.object({
+        phase: zod.string().optional(),
+        days: zod.number().optional(),
+        deliverables: zod.array(zod.string()).optional(),
+      }),
+    )
+    .optional(),
+  demoStoryboard: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        title: zod.string().optional(),
+        moment: zod.string().optional(),
+        interaction: zod.string().optional(),
+        artifact: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  status: zod.enum(["draft", "lead_approved", "live", "superseded"]),
+  leadApprovedAt: zod.coerce.date().nullish(),
+  leadApprovedByUserId: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByUserId: zod.string().nullish(),
+  brief: zod.record(zod.string(), zod.unknown()).optional(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Partner approves the generated prompt (gate 2 of 2 — unlocks copy/use)
+ */
+export const AtelierApprovePrototypePromptParams = zod.object({
+  prototypeId: zod.coerce.string(),
+});
+
+export const AtelierApprovePrototypePromptResponse = zod.object({
+  id: zod.string(),
+  opportunityId: zod.string().nullish(),
+  engagementId: zod.string().nullish(),
+  runId: zod.string().nullish(),
+  name: zod.string(),
+  replitPromptMd: zod.string().optional(),
+  buildPlan: zod
+    .array(
+      zod.object({
+        phase: zod.string().optional(),
+        days: zod.number().optional(),
+        deliverables: zod.array(zod.string()).optional(),
+      }),
+    )
+    .optional(),
+  demoStoryboard: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        title: zod.string().optional(),
+        moment: zod.string().optional(),
+        interaction: zod.string().optional(),
+        artifact: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  status: zod.enum(["draft", "lead_approved", "live", "superseded"]),
+  leadApprovedAt: zod.coerce.date().nullish(),
+  leadApprovedByUserId: zod.string().nullish(),
+  partnerApprovedAt: zod.coerce.date().nullish(),
+  partnerApprovedByUserId: zod.string().nullish(),
+  brief: zod.record(zod.string(), zod.unknown()).optional(),
+  createdAt: zod.coerce.date(),
 });
 
 export const AtelierGetProposalParams = zod.object({
