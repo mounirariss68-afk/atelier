@@ -19,7 +19,19 @@
 import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems } from "@workspace/db";
 import { eq, and, gte, isNull } from "drizzle-orm";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
-import { STALLED_THRESHOLD_DAYS } from "./pipeline.js";
+import {
+  STALLED_THRESHOLD_DAYS,
+  SALES_STAGE_DEFAULT_PROB,
+  type SalesStage,
+} from "./pipeline.js";
+
+/**
+ * A probability is "miscalibrated" when it deviates from the default for its
+ * stage by more than this many percentage points (e.g., a `lead` flagged at
+ * 80% or a `submitted` deal still at 10%). Tunable; deliberately lenient so
+ * the forecaster doesn't cry wolf on every manual override.
+ */
+const MISCALIBRATION_THRESHOLD_PCT = 30;
 
 // ------- shared types -------
 
@@ -2573,30 +2585,61 @@ export async function runPipelineForecaster(args: {
       );
     const TERMINAL = new Set(["signed", "lost_no_decision", "withdrawn", "won", "lost", "no_go"]);
     let flagged = 0;
+    let miscalibrated = 0;
     for (const o of stalledRows) {
       if (TERMINAL.has(o.salesStage) || TERMINAL.has(o.plmStage)) continue;
-      if (o.daysInStage <= STALLED_THRESHOLD_DAYS) continue;
-      try {
-        await db.insert(atelierPaneAItems).values({
-          id: fid("pa"),
-          userId: args.actorId,
-          title: `Stalled: ${o.name}`,
-          summary: `${o.daysInStage}d in ${o.salesStage} — ${o.nextMilestone || "no next milestone set"}.`,
-          priority: o.daysInStage > 45 ? "high" : "medium",
-          hrefKind: "opportunity",
-          hrefTargetId: o.id,
-          dueLabel: "Stalled",
-          sortKey: 100 - Math.min(99, o.daysInStage),
-        });
-        flagged += 1;
-      } catch {
-        // ignore duplicate insert collisions; Pane A is best-effort
+
+      // (a) Stalled deals — surface aging in-stage.
+      if (o.daysInStage > STALLED_THRESHOLD_DAYS) {
+        try {
+          await db.insert(atelierPaneAItems).values({
+            id: fid("pa"),
+            userId: args.actorId,
+            title: `Stalled: ${o.name}`,
+            summary: `${o.daysInStage}d in ${o.salesStage} — ${o.nextMilestone || "no next milestone set"}.`,
+            priority: o.daysInStage > 45 ? "high" : "medium",
+            hrefKind: "opportunity",
+            hrefTargetId: o.id,
+            dueLabel: "Stalled",
+            sortKey: 100 - Math.min(99, o.daysInStage),
+          });
+          flagged += 1;
+        } catch {
+          // best-effort
+        }
+      }
+
+      // (b) Probability miscalibration — partner-set probability is far from the
+      // stage default. Suggest the calibrated value so the partner can confirm
+      // or override (audit captures both).
+      const expected = SALES_STAGE_DEFAULT_PROB[o.salesStage as SalesStage] ?? null;
+      if (expected !== null) {
+        const delta = Math.abs(o.probabilityPct - expected);
+        if (delta >= MISCALIBRATION_THRESHOLD_PCT) {
+          const direction = o.probabilityPct > expected ? "high" : "low";
+          try {
+            await db.insert(atelierPaneAItems).values({
+              id: fid("pa"),
+              userId: args.actorId,
+              title: `Probability looks ${direction}: ${o.name}`,
+              summary: `Set to ${o.probabilityPct}% in stage ${o.salesStage} — Forecaster suggests ~${expected}%. Review or override with rationale.`,
+              priority: "medium",
+              hrefKind: "opportunity",
+              hrefTargetId: o.id,
+              dueLabel: "Calibrate",
+              sortKey: 50 - Math.min(49, Math.round(delta / 2)),
+            });
+            miscalibrated += 1;
+          } catch {
+            // best-effort
+          }
+        }
       }
     }
 
     await completeRun({
       runId,
-      output: { ...args.summary, flagged } as unknown,
+      output: { ...args.summary, flagged, miscalibrated } as unknown,
       confidence: "green",
       costUsd: 0,
       durationMs: Date.now() - t0,

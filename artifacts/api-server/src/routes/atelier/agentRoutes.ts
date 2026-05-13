@@ -168,6 +168,9 @@ router.post("/opportunities", async (req, res) => {
       name: input.name,
       accountId: acct.id,
       plmStage: "identify",
+      // v1/v2 lockstep at create time so the new kanban + forecast see the
+      // opportunity in the right column from the moment it's persisted.
+      salesStage: deriveSalesStage("identify", 25),
       partnerOwnerId: me.id,
       engagementLeadId: me.id,
       dealSizeHypothesis: input.dealSizeUsd ?? 250000,
@@ -1291,11 +1294,12 @@ router.get("/pipeline/forecast", async (_req, res) => {
   res.json(AtelierGetPipelineForecastResponse.parse(summary));
 });
 
-router.post("/pipeline/forecast/run", async (req, res) => {
+async function runForecasterHandler(req: Request, res: Response) {
   const me = ensurePersona(req, res);
   if (!me) return;
   const summary = await computeForecast();
-  // Side effect: agent runner records audit + flags stalled deals into Pane A.
+  // Side effect: agent runner records audit, flags stalled deals + miscalibrated
+  // probabilities into Pane A.
   try {
     await runPipelineForecaster({ actorId: me.id, actorLabel: me.name, summary });
   } catch (e) {
@@ -1304,6 +1308,9 @@ router.post("/pipeline/forecast/run", async (req, res) => {
     console.error("[pipeline-forecaster] side-effect error", e);
   }
   res.json(AtelierGetPipelineForecastResponse.parse(summary));
-});
+}
+router.post("/pipeline/forecast/run", runForecasterHandler);
+// Canonical agent-namespaced alias.
+router.post("/agents/pipeline-forecaster/run", runForecasterHandler);
 
 export default router;

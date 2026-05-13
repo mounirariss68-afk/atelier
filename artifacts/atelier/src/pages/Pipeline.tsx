@@ -129,9 +129,26 @@ export default function Pipeline() {
   const [sortKey, setSortKey] = useState<SortKey>("dealSizeUsd");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [moveTarget, setMoveTarget] = useState<OppItem | null>(null);
+  const [stageFilter, setStageFilter] = useState<SalesStage | "all">("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
+
+  const owners = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of opps ?? []) set.add(o.partnerOwnerName);
+    return Array.from(set).sort();
+  }, [opps]);
+
+  const filteredOpps = useMemo(() => {
+    return (opps ?? []).filter((o) => {
+      const s = (o as { salesStage?: SalesStage }).salesStage ?? "lead";
+      if (stageFilter !== "all" && s !== stageFilter) return false;
+      if (ownerFilter !== "all" && o.partnerOwnerName !== ownerFilter) return false;
+      return true;
+    });
+  }, [opps, stageFilter, ownerFilter]);
 
   const sortedOpps = useMemo(() => {
-    const arr = [...(opps ?? [])];
+    const arr = [...filteredOpps];
     arr.sort((a, b) => {
       const av = (a as unknown as Record<string, string | number>)[sortKey];
       const bv = (b as unknown as Record<string, string | number>)[sortKey];
@@ -141,7 +158,7 @@ export default function Pipeline() {
         : String(bv).localeCompare(String(av));
     });
     return arr;
-  }, [opps, sortKey, sortDir]);
+  }, [filteredOpps, sortKey, sortDir]);
 
   function toggleSort(k: SortKey) {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -232,6 +249,41 @@ export default function Pipeline() {
             </div>
           </div>
 
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
+            <span>Filter</span>
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value as SalesStage | "all")}
+              className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
+            >
+              <option value="all">All stages</option>
+              {SALES_STAGES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              value={ownerFilter}
+              onChange={(e) => setOwnerFilter(e.target.value)}
+              className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
+            >
+              <option value="all">All owners</option>
+              {owners.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+            {(stageFilter !== "all" || ownerFilter !== "all") && (
+              <button
+                type="button"
+                onClick={() => { setStageFilter("all"); setOwnerFilter("all"); }}
+                className="text-text-mute hover:text-gold underline"
+              >
+                Clear
+              </button>
+            )}
+            <span className="ml-auto text-text-mute">{filteredOpps.length} of {opps?.length ?? 0}</span>
+          </div>
+
           {/* Forecast summary strip */}
           {forecast && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -262,7 +314,7 @@ export default function Pipeline() {
         {view === "kanban" ? (
           <div className="flex-1 flex gap-4 overflow-x-auto scrollbar-thin pb-6 snap-x">
             {SALES_STAGES.map((stage) => {
-              const stageOpps = (opps ?? []).filter(
+              const stageOpps = filteredOpps.filter(
                 (o) => ((o as { salesStage?: SalesStage }).salesStage ?? "lead") === stage,
               );
               const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: 0 };

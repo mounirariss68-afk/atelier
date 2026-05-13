@@ -387,12 +387,34 @@ async function buildOpportunityWire(
   };
 }
 
-router.get("/opportunities", async (_req, res) => {
+router.get("/opportunities", async (req, res) => {
+  // Optional query filters: ?stage=&owner=&sector=&account= (CSV allowed).
+  // Filtering happens after buildOpportunityWire because salesStage may be
+  // derived at read time for legacy rows that pre-date the v2 column.
+  const split = (v: unknown): string[] =>
+    typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const stages = split(req.query.stage);
+  const owners = split(req.query.owner);
+  const sectors = split(req.query.sector);
+  const accounts = split(req.query.account);
+
   const rows = await db
     .select()
     .from(atelierOpportunities)
     .where(isNull(atelierOpportunities.deletedAt));
-  const wire = await Promise.all(rows.map(buildOpportunityWire));
+  let wire = await Promise.all(rows.map(buildOpportunityWire));
+  if (stages.length) wire = wire.filter((o) => stages.includes(o.salesStage));
+  if (owners.length)
+    wire = wire.filter((o) => owners.includes(o.partnerOwnerName));
+  if (accounts.length)
+    wire = wire.filter(
+      (o) => accounts.includes(o.accountId) || accounts.includes(o.accountName),
+    );
+  if (sectors.length) {
+    const acctRows = await db.select().from(atelierAccounts);
+    const sectorByAcct = new Map(acctRows.map((a) => [a.id, a.sector]));
+    wire = wire.filter((o) => sectors.includes(sectorByAcct.get(o.accountId) ?? ""));
+  }
   res.json(AtelierListOpportunitiesResponse.parse(wire));
 });
 
