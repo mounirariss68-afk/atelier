@@ -22,6 +22,8 @@ import {
   atelierAgents,
   atelierAgentRuns,
   atelierProposals,
+  atelierDealPricings,
+  atelierMarginPolicies,
   atelierProposalSections,
   atelierPrototypes,
   atelierEngagements,
@@ -1067,6 +1069,58 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
       hint: "Use POST /proposals/:id/partner-final-read (partner only)",
     });
     return;
+  }
+  // Margin-lock gate (Task #240): block submit when the deal pricing is
+  // AMBER without a single-Partner override, or RED without a two-Partner
+  // countersign. Pricing rows are optional — if no row exists the gate is
+  // a no-op so v1 proposals (which never built a deal pricing row) still ship.
+  const [dealPricing] = await db
+    .select()
+    .from(atelierDealPricings)
+    .where(and(eq(atelierDealPricings.opportunityId, proposal.opportunityId), isNull(atelierDealPricings.deletedAt)));
+  if (dealPricing) {
+    // Re-classify against the *current* margin policy so a tightened policy
+    // immediately closes the gate on previously-saved deal pricing rows.
+    const [livePolicy] = await db
+      .select()
+      .from(atelierMarginPolicies)
+      .where(and(eq(atelierMarginPolicies.isDefault, true), isNull(atelierMarginPolicies.deletedAt)));
+    const margin = dealPricing.computedMarginPct;
+    let liveStatus: "green" | "amber" | "red" = dealPricing.marginLockStatus as "green" | "amber" | "red";
+    if (livePolicy) {
+      liveStatus = margin >= livePolicy.targetMarginPct
+        ? "green"
+        : margin >= livePolicy.redThresholdPct
+          ? "amber"
+          : "red";
+    }
+    if (liveStatus === "amber" && !dealPricing.partnerOverrideId) {
+      res.status(409).json({
+        error: "margin-lock-amber",
+        hint: "Use POST /opportunities/:id/pricing/override (Partner) with rationale",
+        marginPct: margin,
+      });
+      return;
+    }
+    if (liveStatus === "red") {
+      if (!dealPricing.partnerOverrideId) {
+        res.status(409).json({
+          error: "margin-lock-red",
+          hint: "Use POST /opportunities/:id/pricing/override (Partner) then countersign",
+          marginPct: margin,
+        });
+        return;
+      }
+      if (!dealPricing.countersignPartnerId) {
+        res.status(409).json({
+          error: "margin-lock-red-countersign-required",
+          hint: "Use POST /opportunities/:id/pricing/countersign (different Partner) with rationale",
+          marginPct: margin,
+          firstOverrideBy: dealPricing.partnerOverrideId,
+        });
+        return;
+      }
+    }
   }
   // Render real DOCX + PDF artifacts via the proposal-docs pipeline and
   // persist their public URLs on the proposal row.

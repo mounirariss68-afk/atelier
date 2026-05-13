@@ -1640,6 +1640,222 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/AtelierAgentRunSummary" }
 
+  /atelier/rate-cards:
+    get:
+      operationId: atelierListRateCards
+      tags: [atelier]
+      summary: Firm-wide rate cards
+      responses:
+        "200":
+          description: Cards (no rows)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AtelierRateCard" }
+    post:
+      operationId: atelierCreateRateCard
+      tags: [atelier]
+      summary: Create rate card (Partner-only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierRateCardCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierRateCard" }
+  /atelier/rate-cards/{id}:
+    get:
+      operationId: atelierGetRateCard
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Card with rows
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierRateCardDetail" }
+    patch:
+      operationId: atelierUpdateRateCard
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierRateCardCreate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierRateCard" }
+  /atelier/rate-cards/{id}/rows:
+    post:
+      operationId: atelierAddRateCardRow
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierRateCardRowInput" }
+      responses:
+        "201":
+          description: Row created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierRateCardRow" }
+  /atelier/margin-policy:
+    get:
+      operationId: atelierGetMarginPolicy
+      tags: [atelier]
+      responses:
+        "200":
+          description: Default firm margin policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierMarginPolicy" }
+    post:
+      operationId: atelierUpdateMarginPolicy
+      tags: [atelier]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierMarginPolicyInput" }
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierMarginPolicy" }
+  /atelier/opportunities/{oppId}/pricing:
+    get:
+      operationId: atelierGetDealPricing
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deal pricing + policy + rate-card rows
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierDealPricingEnvelope" }
+    put:
+      operationId: atelierUpdateDealPricing
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierDealPricingInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierDealPricingEnvelope" }
+  /atelier/opportunities/{oppId}/pricing/whatif:
+    post:
+      operationId: atelierWhatifDealPricing
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierDealPricingInput" }
+      responses:
+        "200":
+          description: Computed (no persistence)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierDealPricingComputed" }
+  /atelier/opportunities/{oppId}/pricing/strategist:
+    post:
+      operationId: atelierRunPricingStrategist
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Strategist brief with primary + 2-3 alternatives
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPricingStrategistResult" }
+  /atelier/opportunities/{oppId}/pricing/override:
+    post:
+      operationId: atelierOverridePricing
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierMarginOverrideInput" }
+      responses:
+        "200":
+          description: Override recorded
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /atelier/opportunities/{oppId}/pricing/countersign:
+    post:
+      operationId: atelierCountersignPricing
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierMarginOverrideInput" }
+      responses:
+        "200":
+          description: Countersign recorded
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
 components:
   schemas:
     HealthStatus:
@@ -3212,6 +3428,224 @@ components:
           type: array
           items: { type: string }
         perUserDailyTokenBudget: { type: integer, minimum: 1000 }
+
+    AtelierMarginLockStatus:
+      type: string
+      enum: [green, amber, red]
+
+    AtelierRateCard:
+      type: object
+      required: [id, name, status, geography, currency, effectiveFrom]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [draft, active, archived] }
+        geography: { type: string }
+        currency: { type: string }
+        effectiveFrom: { type: string, format: date-time }
+        effectiveTo: { type: ["string", "null"], format: date-time }
+        sourceUrl: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    AtelierRateCardRow:
+      type: object
+      required: [id, role, seniority, dayRateInternalCost, dayRateClientPrice, overheadPct, currency]
+      properties:
+        id: { type: string }
+        role: { type: string }
+        seniority: { type: string }
+        dayRateInternalCost: { type: number }
+        dayRateClientPrice: { type: number }
+        overheadPct: { type: number }
+        currency: { type: string }
+
+    AtelierRateCardDetail:
+      allOf:
+        - $ref: "#/components/schemas/AtelierRateCard"
+        - type: object
+          properties:
+            rows:
+              type: array
+              items: { $ref: "#/components/schemas/AtelierRateCardRow" }
+
+    AtelierRateCardCreate:
+      type: object
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [draft, active, archived] }
+        geography: { type: string }
+        currency: { type: string }
+        sourceUrl: { type: string }
+        notes: { type: string }
+
+    AtelierRateCardRowInput:
+      type: object
+      required: [role, seniority, dayRateInternalCost, dayRateClientPrice]
+      properties:
+        role: { type: string }
+        seniority: { type: string }
+        dayRateInternalCost: { type: number }
+        dayRateClientPrice: { type: number }
+        overheadPct: { type: number }
+        currency: { type: string }
+
+    AtelierMarginPolicy:
+      type: object
+      required: [id, targetMarginPct, amberThresholdPct, redThresholdPct, twoPartnerThresholdPct]
+      properties:
+        id: { type: string }
+        targetMarginPct: { type: number }
+        amberThresholdPct: { type: number }
+        redThresholdPct: { type: number }
+        twoPartnerThresholdPct: { type: number }
+
+    AtelierMarginPolicyInput:
+      type: object
+      properties:
+        targetMarginPct: { type: number }
+        amberThresholdPct: { type: number }
+        redThresholdPct: { type: number }
+        twoPartnerThresholdPct: { type: number }
+
+    AtelierTeamMixEntry:
+      type: object
+      required: [seniority, ftePct]
+      properties:
+        seniority: { type: string }
+        role: { type: string }
+        ftePct: { type: number }
+
+    AtelierDealPricing:
+      type: object
+      required: [id, opportunityId, rateCardId, pricingModel, durationWeeks, teamMix, computedCostUsd, computedPriceUsd, computedMarginPct, marginLockStatus]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        rateCardId: { type: string }
+        pricingModel: { type: string }
+        durationWeeks: { type: number }
+        teamMix:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierTeamMixEntry" }
+        computedCostUsd: { type: number }
+        computedPriceUsd: { type: number }
+        computedMarginPct: { type: number }
+        targetMarginPct: { type: number }
+        marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+        partnerOverrideId: { type: ["string", "null"] }
+        partnerOverrideAt: { type: ["string", "null"], format: date-time }
+        partnerOverrideRationale: { type: ["string", "null"] }
+        countersignPartnerId: { type: ["string", "null"] }
+        countersignAt: { type: ["string", "null"], format: date-time }
+        countersignRationale: { type: ["string", "null"] }
+        alternativeStructures:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    AtelierDealPricingEnvelope:
+      type: object
+      required: [pricing, policy, rateCardRows]
+      properties:
+        pricing: { $ref: "#/components/schemas/AtelierDealPricing" }
+        policy: { $ref: "#/components/schemas/AtelierMarginPolicy" }
+        rateCardRows:
+          type: array
+          items:
+            type: object
+            required: [seniority, dayRateInternalCost, dayRateClientPrice, overheadPct]
+            properties:
+              seniority: { type: string }
+              dayRateInternalCost: { type: number }
+              dayRateClientPrice: { type: number }
+              overheadPct: { type: number }
+        breakdown:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    AtelierDealPricingInput:
+      type: object
+      properties:
+        teamMix:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierTeamMixEntry" }
+        durationWeeks: { type: number }
+        pricingModel: { type: string }
+        rateCardId: { type: string }
+
+    AtelierDealPricingComputed:
+      type: object
+      required: [computedCostUsd, computedPriceUsd, computedMarginPct, marginLockStatus]
+      properties:
+        computedCostUsd: { type: number }
+        computedPriceUsd: { type: number }
+        computedMarginPct: { type: number }
+        marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+        twoPartnerRequired: { type: boolean }
+        perRoleBreakdown:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        policy: { $ref: "#/components/schemas/AtelierMarginPolicy" }
+
+    AtelierMarginOverrideInput:
+      type: object
+      required: [rationale]
+      properties:
+        rationale: { type: string, minLength: 1 }
+
+    AtelierPricingStrategistAlternative:
+      type: object
+      required: [pricingModel, durationWeeks, teamMix, cost, price, marginPct, marginLockStatus, story]
+      properties:
+        pricingModel: { type: string }
+        durationWeeks: { type: number }
+        teamMix:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierTeamMixEntry" }
+        cost: { type: number }
+        price: { type: number }
+        marginPct: { type: number }
+        marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+        story: { type: string }
+
+    AtelierPricingStrategistResult:
+      type: object
+      required: [runId, primary, alternatives, talkingPoints, risks, marginLockChip, partnerOverrideRequired, twoPartnerRequired, confidence]
+      properties:
+        runId: { type: string }
+        primary:
+          type: object
+          required: [pricingModel, durationWeeks, teamMix, cost, price, marginPct, marginLockStatus, narrative]
+          properties:
+            pricingModel: { type: string }
+            durationWeeks: { type: number }
+            teamMix:
+              type: array
+              items: { $ref: "#/components/schemas/AtelierTeamMixEntry" }
+            cost: { type: number }
+            price: { type: number }
+            marginPct: { type: number }
+            marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+            narrative: { type: string }
+        alternatives:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPricingStrategistAlternative" }
+        talkingPoints:
+          type: array
+          items: { type: string }
+        risks:
+          type: array
+          items: { type: string }
+        marginLockChip: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+        partnerOverrideRequired: { type: boolean }
+        twoPartnerRequired: { type: boolean }
+        confidence: { $ref: "#/components/schemas/Confidence" }
 
     AtelierAgentRunSummary:
       type: object

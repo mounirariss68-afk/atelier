@@ -1988,6 +1988,211 @@ export interface AtelierAdminSettingsUpdate {
   perUserDailyTokenBudget?: number;
 }
 
+export type AtelierMarginLockStatus =
+  (typeof AtelierMarginLockStatus)[keyof typeof AtelierMarginLockStatus];
+
+export const AtelierMarginLockStatus = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierRateCardStatus =
+  (typeof AtelierRateCardStatus)[keyof typeof AtelierRateCardStatus];
+
+export const AtelierRateCardStatus = {
+  draft: "draft",
+  active: "active",
+  archived: "archived",
+} as const;
+
+export interface AtelierRateCard {
+  id: string;
+  name: string;
+  status: AtelierRateCardStatus;
+  geography: string;
+  currency: string;
+  effectiveFrom: string;
+  /** @nullable */
+  effectiveTo?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export interface AtelierRateCardRow {
+  id: string;
+  role: string;
+  seniority: string;
+  dayRateInternalCost: number;
+  dayRateClientPrice: number;
+  overheadPct: number;
+  currency: string;
+}
+
+export type AtelierRateCardDetail = AtelierRateCard & {
+  rows?: AtelierRateCardRow[];
+};
+
+export type AtelierRateCardCreateStatus =
+  (typeof AtelierRateCardCreateStatus)[keyof typeof AtelierRateCardCreateStatus];
+
+export const AtelierRateCardCreateStatus = {
+  draft: "draft",
+  active: "active",
+  archived: "archived",
+} as const;
+
+export interface AtelierRateCardCreate {
+  name?: string;
+  status?: AtelierRateCardCreateStatus;
+  geography?: string;
+  currency?: string;
+  sourceUrl?: string;
+  notes?: string;
+}
+
+export interface AtelierRateCardRowInput {
+  role: string;
+  seniority: string;
+  dayRateInternalCost: number;
+  dayRateClientPrice: number;
+  overheadPct?: number;
+  currency?: string;
+}
+
+export interface AtelierMarginPolicy {
+  id: string;
+  targetMarginPct: number;
+  amberThresholdPct: number;
+  redThresholdPct: number;
+  twoPartnerThresholdPct: number;
+}
+
+export interface AtelierMarginPolicyInput {
+  targetMarginPct?: number;
+  amberThresholdPct?: number;
+  redThresholdPct?: number;
+  twoPartnerThresholdPct?: number;
+}
+
+export interface AtelierTeamMixEntry {
+  seniority: string;
+  role?: string;
+  ftePct: number;
+}
+
+export type AtelierDealPricingAlternativeStructuresItem = {
+  [key: string]: unknown;
+};
+
+export interface AtelierDealPricing {
+  id: string;
+  opportunityId: string;
+  rateCardId: string;
+  pricingModel: string;
+  durationWeeks: number;
+  teamMix: AtelierTeamMixEntry[];
+  computedCostUsd: number;
+  computedPriceUsd: number;
+  computedMarginPct: number;
+  targetMarginPct?: number;
+  marginLockStatus: AtelierMarginLockStatus;
+  /** @nullable */
+  partnerOverrideId?: string | null;
+  /** @nullable */
+  partnerOverrideAt?: string | null;
+  /** @nullable */
+  partnerOverrideRationale?: string | null;
+  /** @nullable */
+  countersignPartnerId?: string | null;
+  /** @nullable */
+  countersignAt?: string | null;
+  /** @nullable */
+  countersignRationale?: string | null;
+  alternativeStructures?: AtelierDealPricingAlternativeStructuresItem[];
+}
+
+export type AtelierDealPricingEnvelopeRateCardRowsItem = {
+  seniority: string;
+  dayRateInternalCost: number;
+  dayRateClientPrice: number;
+  overheadPct: number;
+};
+
+export type AtelierDealPricingEnvelopeBreakdownItem = {
+  [key: string]: unknown;
+};
+
+export interface AtelierDealPricingEnvelope {
+  pricing: AtelierDealPricing;
+  policy: AtelierMarginPolicy;
+  rateCardRows: AtelierDealPricingEnvelopeRateCardRowsItem[];
+  breakdown?: AtelierDealPricingEnvelopeBreakdownItem[];
+}
+
+export interface AtelierDealPricingInput {
+  teamMix?: AtelierTeamMixEntry[];
+  durationWeeks?: number;
+  pricingModel?: string;
+  rateCardId?: string;
+}
+
+export type AtelierDealPricingComputedPerRoleBreakdownItem = {
+  [key: string]: unknown;
+};
+
+export interface AtelierDealPricingComputed {
+  computedCostUsd: number;
+  computedPriceUsd: number;
+  computedMarginPct: number;
+  marginLockStatus: AtelierMarginLockStatus;
+  twoPartnerRequired?: boolean;
+  perRoleBreakdown?: AtelierDealPricingComputedPerRoleBreakdownItem[];
+  policy?: AtelierMarginPolicy;
+}
+
+export interface AtelierMarginOverrideInput {
+  /** @minLength 1 */
+  rationale: string;
+}
+
+export interface AtelierPricingStrategistAlternative {
+  pricingModel: string;
+  durationWeeks: number;
+  teamMix: AtelierTeamMixEntry[];
+  cost: number;
+  price: number;
+  marginPct: number;
+  marginLockStatus: AtelierMarginLockStatus;
+  story: string;
+}
+
+export type AtelierPricingStrategistResultPrimary = {
+  pricingModel: string;
+  durationWeeks: number;
+  teamMix: AtelierTeamMixEntry[];
+  cost: number;
+  price: number;
+  marginPct: number;
+  marginLockStatus: AtelierMarginLockStatus;
+  narrative: string;
+};
+
+export interface AtelierPricingStrategistResult {
+  runId: string;
+  primary: AtelierPricingStrategistResultPrimary;
+  alternatives: AtelierPricingStrategistAlternative[];
+  talkingPoints: string[];
+  risks: string[];
+  marginLockChip: AtelierMarginLockStatus;
+  partnerOverrideRequired: boolean;
+  twoPartnerRequired: boolean;
+  confidence: Confidence;
+}
+
 export type AtelierAgentRunSummaryStatus =
   (typeof AtelierAgentRunSummaryStatus)[keyof typeof AtelierAgentRunSummaryStatus];
 
@@ -2072,3 +2277,7 @@ export type AtelierAgentsUsageCounts200Item = {
 export type AtelierPromoteAgentDesign200 = {
   agentId: string;
 };
+
+export type AtelierOverridePricing200 = { [key: string]: unknown };
+
+export type AtelierCountersignPricing200 = { [key: string]: unknown };

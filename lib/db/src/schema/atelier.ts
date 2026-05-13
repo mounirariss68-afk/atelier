@@ -1009,3 +1009,104 @@ export const atelierPrototypes = pgTable(
     index("idx_atelier_proto_eng").on(t.engagementId),
   ],
 );
+
+// ============================================================
+// PRICING — Rate cards, deal pricings, margin policies (Task #240)
+// ============================================================
+export const atelierRateCards = pgTable(
+  "atelier_rate_cards",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    name: text("name").notNull(),
+    status: text("status").notNull().default("active"), // draft|active|archived
+    geography: text("geography").notNull(), // KSA | UAE | KSA+UAE
+    currency: text("currency").notNull(), // USD reporting; row-level may differ
+    effectiveFrom: timestamp("effective_from").notNull().defaultNow(),
+    effectiveTo: timestamp("effective_to"),
+    sourceUrl: text("source_url"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+);
+
+export const atelierRateCardRows = pgTable(
+  "atelier_rate_card_rows",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    rateCardId: text("rate_card_id").notNull(),
+    role: text("role").notNull(), // freeform label
+    seniority: text("seniority").notNull(), // Partner|Principal|SubjectMatterLead|AIEngineer|Designer|Analyst
+    dayRateInternalCost: doublePrecision("day_rate_internal_cost").notNull(),
+    dayRateClientPrice: doublePrecision("day_rate_client_price").notNull(),
+    overheadPct: doublePrecision("overhead_pct").notNull().default(0.25),
+    currency: text("currency").notNull().default("USD"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_rcrows_card").on(t.rateCardId)],
+);
+
+export const atelierMarginPolicies = pgTable(
+  "atelier_margin_policies",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    name: text("name").notNull().default("default"),
+    targetMarginPct: doublePrecision("target_margin_pct").notNull().default(0.55),
+    amberThresholdPct: doublePrecision("amber_threshold_pct").notNull().default(0.50),
+    redThresholdPct: doublePrecision("red_threshold_pct").notNull().default(0.45),
+    twoPartnerThresholdPct: doublePrecision("two_partner_threshold_pct").notNull().default(0.45),
+    isDefault: boolean("is_default").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+);
+
+export const atelierDealPricings = pgTable(
+  "atelier_deal_pricings",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    opportunityId: text("opportunity_id").notNull(),
+    rateCardId: text("rate_card_id").notNull(),
+    pricingModel: text("pricing_model").notNull().default("time_and_materials"), // time_and_materials | fixed_fee | outcome_based | retainer
+    durationWeeks: doublePrecision("duration_weeks").notNull().default(8),
+    teamMix: jsonb("team_mix").notNull().default([]).$type<Array<{
+      seniority: string;
+      role?: string;
+      ftePct: number; // 0..1 share of full-time across the duration
+    }>>(),
+    computedCostUsd: doublePrecision("computed_cost_usd").notNull().default(0),
+    computedPriceUsd: doublePrecision("computed_price_usd").notNull().default(0),
+    computedMarginPct: doublePrecision("computed_margin_pct").notNull().default(0),
+    targetMarginPct: doublePrecision("target_margin_pct").notNull().default(0.55),
+    marginLockStatus: text("margin_lock_status").notNull().default("green"), // green|amber|red
+    partnerOverrideId: text("partner_override_id"),
+    partnerOverrideAt: timestamp("partner_override_at"),
+    partnerOverrideRationale: text("partner_override_rationale"),
+    countersignPartnerId: text("countersign_partner_id"),
+    countersignAt: timestamp("countersign_at"),
+    countersignRationale: text("countersign_rationale"),
+    alternativeStructures: jsonb("alternative_structures").notNull().default([]),
+    pricingStrategistBriefId: text("pricing_strategist_brief_id"),
+    pricingStrategistRunId: text("pricing_strategist_run_id"),
+    pricingStrategistOutput: jsonb("pricing_strategist_output"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_dealpricing_opp").on(t.opportunityId),
+    index("idx_atelier_dealpricing_status").on(t.marginLockStatus),
+  ],
+);

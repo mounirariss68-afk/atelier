@@ -1313,4 +1313,21 @@ router.post("/pipeline/forecast/run", runForecasterHandler);
 // Canonical agent-namespaced alias.
 router.post("/agents/pipeline-forecaster/run", runForecasterHandler);
 
+// Pricing Strategist alias — issues a 307 so the original method/body are
+// preserved against /opportunities/:oppId/pricing/strategist. Avoids router
+// re-entry / middleware double-firing.
+router.post("/agents/pricing-strategist/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const oppId = req.body?.opportunityId;
+  if (!oppId || typeof oppId !== "string") {
+    res.status(400).json({ error: "opportunityId-required" });
+    return;
+  }
+  res.redirect(
+    307,
+    `/api/atelier/opportunities/${encodeURIComponent(oppId)}/pricing/strategist`,
+  );
+});
+
 export default router;

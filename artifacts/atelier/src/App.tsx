@@ -18,6 +18,7 @@ import Agents from "@/pages/Agents";
 import AgentProfile from "@/pages/AgentProfile";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
+import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
 import Deliverable from "@/pages/Deliverable";
 import AgentRun from "@/pages/AgentRun";
@@ -52,6 +53,7 @@ function Router() {
         <Route path="/agents/:agentId" component={AgentProfile} />
         <Route path="/settings" component={Settings} />
         <Route path="/admin" component={Admin} />
+        <Route path="/pricing" component={Pricing} />
         <Route component={NotFound} />
       </Switch>
     </Shell>

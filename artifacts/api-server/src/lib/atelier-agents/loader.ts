@@ -35,6 +35,7 @@ export type AtelierAgentId =
   | "prototype_forge"
   | "proposal_composer"
   | "pricing_analyst"
+  | "pricing_strategist"
   | "case_study_picker"
   | "compliance_reviewer";
 

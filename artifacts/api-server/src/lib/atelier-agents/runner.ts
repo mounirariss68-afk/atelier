@@ -24,6 +24,12 @@ import {
   SALES_STAGE_DEFAULT_PROB,
   type SalesStage,
 } from "./pipeline.js";
+import {
+  computePricing as computePricingFn,
+  type MarginPolicy as PricingMarginPolicy,
+  type RateCardRowLite as PricingRateCardRowLite,
+  type TeamMixEntry as PricingTeamMixEntry,
+} from "../atelier-pricing.js";
 
 /**
  * A probability is "miscalibrated" when it deviates from the default for its
@@ -2660,4 +2666,254 @@ export async function runPipelineForecaster(args: {
     });
     throw err;
   }
+}
+
+// =============================================================
+// Pricing Strategist (★) — Task #240.
+// Sonnet 4.6 narrative only. Deterministic SQL/server math for numbers.
+// =============================================================
+
+export interface PricingStrategistResult {
+  runId: string;
+  primary: {
+    pricingModel: string;
+    durationWeeks: number;
+    teamMix: PricingTeamMixEntry[];
+    cost: number;
+    price: number;
+    marginPct: number;
+    marginLockStatus: "green" | "amber" | "red";
+    narrative: string;
+  };
+  alternatives: Array<{
+    pricingModel: string;
+    durationWeeks: number;
+    teamMix: PricingTeamMixEntry[];
+    cost: number;
+    price: number;
+    marginPct: number;
+    marginLockStatus: "green" | "amber" | "red";
+    story: string;
+  }>;
+  talkingPoints: string[];
+  risks: string[];
+  marginLockChip: "green" | "amber" | "red";
+  partnerOverrideRequired: boolean;
+  twoPartnerRequired: boolean;
+  confidence: "green" | "amber" | "red";
+  source: "claude" | "mock_config" | "mock_fallback";
+}
+
+export async function runPricingStrategist(args: {
+  opportunity: typeof atelierOpportunities.$inferSelect;
+  pricing: { id: string; teamMix: unknown; durationWeeks: number; pricingModel: string; rateCardId: string };
+  policy: PricingMarginPolicy;
+  rateCardRows: PricingRateCardRowLite[];
+  actorId: string;
+  actorLabel: string;
+}): Promise<PricingStrategistResult> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_pricing_strategist",
+    triggeredByUserId: args.actorId,
+    targetType: "opportunity",
+    targetId: args.opportunity.id,
+    targetLabel: args.opportunity.name,
+    actorLabel: args.actorLabel,
+    inputs: {
+      pricingModel: args.pricing.pricingModel,
+      durationWeeks: args.pricing.durationWeeks,
+      teamMixSize: Array.isArray(args.pricing.teamMix) ? args.pricing.teamMix.length : 0,
+      targetMarginPct: args.policy.targetMarginPct,
+    },
+  });
+
+  try {
+    await progressRun(runId, 25, "Loading rate card + comparable closed deals");
+
+    const teamMix = (Array.isArray(args.pricing.teamMix) ? args.pricing.teamMix : []) as PricingTeamMixEntry[];
+    const primaryCompute = computePricingFn({
+      teamMix,
+      durationWeeks: args.pricing.durationWeeks,
+      rateCardRows: args.rateCardRows,
+      policy: args.policy,
+    });
+
+    await progressRun(runId, 55, "Building 3 alternative pricing structures");
+
+    // Deterministic alternatives — math always server-side.
+    const altSpecs: Array<{ model: string; weeks: number; mix: PricingTeamMixEntry[]; story: string }> = [];
+
+    // Alt 1: Fixed fee, slightly compressed duration (lever: scope discipline)
+    altSpecs.push({
+      model: "fixed_fee",
+      weeks: Math.max(2, Math.round(args.pricing.durationWeeks * 0.85)),
+      mix: teamMix,
+      story:
+        "Fixed-fee at a tighter scope. Buyer gets predictability; we keep margin by ring-fencing scope creep. Recommended when procurement leads the buying committee.",
+    });
+
+    // Alt 2: Outcome-based with senior-heavy blend (lever: pricing model)
+    altSpecs.push({
+      model: "outcome_based",
+      weeks: args.pricing.durationWeeks,
+      mix: rebalanceSenior(teamMix),
+      story:
+        "Outcome-based pricing tied to a measurable client KPI. Senior-heavy blend signals confidence in the result and justifies a price premium. Use when the client has internal sponsorship and a clear KPI.",
+    });
+
+    // Alt 3: Retainer (lever: cash flow + relationship)
+    altSpecs.push({
+      model: "retainer",
+      weeks: Math.max(args.pricing.durationWeeks, 12),
+      mix: rebalanceJunior(teamMix),
+      story:
+        "Quarterly retainer with a senior-led core and leveraged delivery. Smooths cash flow, preserves margin via blended rate, and opens the account for follow-on work.",
+    });
+
+    const alternatives = altSpecs.map((spec) => {
+      const c = computePricingFn({
+        teamMix: spec.mix,
+        durationWeeks: spec.weeks,
+        rateCardRows: args.rateCardRows,
+        policy: args.policy,
+      });
+      return {
+        pricingModel: spec.model,
+        durationWeeks: spec.weeks,
+        teamMix: spec.mix,
+        cost: c.computedCostUsd,
+        price: c.computedPriceUsd,
+        marginPct: c.computedMarginPct,
+        marginLockStatus: c.marginLockStatus,
+        story: spec.story,
+      };
+    });
+
+    await progressRun(runId, 80, "Drafting Partner talking points");
+
+    const talkingPoints = buildTalkingPoints({
+      oppName: args.opportunity.name,
+      primaryMargin: primaryCompute.computedMarginPct,
+      targetMargin: args.policy.targetMarginPct,
+      status: primaryCompute.marginLockStatus,
+      alternatives,
+    });
+
+    const risks = buildRisks(primaryCompute.marginLockStatus, args.policy);
+
+    const result: PricingStrategistResult = {
+      runId,
+      primary: {
+        pricingModel: args.pricing.pricingModel,
+        durationWeeks: args.pricing.durationWeeks,
+        teamMix,
+        cost: primaryCompute.computedCostUsd,
+        price: primaryCompute.computedPriceUsd,
+        marginPct: primaryCompute.computedMarginPct,
+        marginLockStatus: primaryCompute.marginLockStatus,
+        narrative:
+          primaryCompute.marginLockStatus === "green"
+            ? `Primary structure clears the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target with room. Lead with this; alternatives are negotiation levers, not fallbacks.`
+            : `Primary structure lands at ${(primaryCompute.computedMarginPct * 100).toFixed(1)}% — below the ${(args.policy.targetMarginPct * 100).toFixed(0)}% target. Alternatives below recover margin via scope, model, or blend.`,
+      },
+      alternatives,
+      talkingPoints,
+      risks,
+      marginLockChip: primaryCompute.marginLockStatus,
+      partnerOverrideRequired: primaryCompute.marginLockStatus !== "green",
+      twoPartnerRequired: primaryCompute.twoPartnerRequired,
+      confidence: primaryCompute.marginLockStatus === "red" ? "amber" : "green",
+      source: "mock_config",
+    };
+
+    await completeRun({
+      runId,
+      output: result as unknown,
+      confidence: result.confidence,
+      costUsd: 0,
+      durationMs: Date.now() - t0,
+      sourcesCount: alternatives.length,
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunity.id,
+      targetLabel: args.opportunity.name,
+      source: "mock_config",
+    });
+
+    return result;
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunity.id,
+    });
+    throw err;
+  }
+}
+
+function rebalanceSenior(mix: PricingTeamMixEntry[]): PricingTeamMixEntry[] {
+  if (mix.length === 0) return mix;
+  return mix.map((m) => {
+    if (m.seniority === "Partner" || m.seniority === "Principal") {
+      return { ...m, ftePct: Math.min(1, m.ftePct * 1.25) };
+    }
+    if (m.seniority === "Analyst" || m.seniority === "Designer") {
+      return { ...m, ftePct: m.ftePct * 0.7 };
+    }
+    return m;
+  });
+}
+
+function rebalanceJunior(mix: PricingTeamMixEntry[]): PricingTeamMixEntry[] {
+  if (mix.length === 0) return mix;
+  return mix.map((m) => {
+    if (m.seniority === "Analyst" || m.seniority === "AIEngineer") {
+      return { ...m, ftePct: Math.min(1, m.ftePct * 1.4) };
+    }
+    if (m.seniority === "Partner") {
+      return { ...m, ftePct: m.ftePct * 0.6 };
+    }
+    return m;
+  });
+}
+
+function buildTalkingPoints(args: {
+  oppName: string;
+  primaryMargin: number;
+  targetMargin: number;
+  status: "green" | "amber" | "red";
+  alternatives: Array<{ pricingModel: string; marginPct: number }>;
+}): string[] {
+  const points: string[] = [];
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+  if (args.status === "green") {
+    points.push(`${args.oppName}: primary structure prices at ${pct(args.primaryMargin)} margin — above target.`);
+  } else if (args.status === "amber") {
+    points.push(`${args.oppName}: primary structure at ${pct(args.primaryMargin)} — AMBER. Single-Partner sign-off required to send.`);
+  } else {
+    points.push(`${args.oppName}: primary structure at ${pct(args.primaryMargin)} — RED. Two-Partner countersign required.`);
+  }
+  const bestAlt = [...args.alternatives].sort((a, b) => b.marginPct - a.marginPct)[0];
+  if (bestAlt) {
+    points.push(`Best alternative: ${bestAlt.pricingModel.replace(/_/g, " ")} at ${pct(bestAlt.marginPct)}.`);
+  }
+  points.push(`Lead the room with the value story; price is the trailing edge of the conversation.`);
+  return points;
+}
+
+function buildRisks(status: "green" | "amber" | "red", policy: PricingMarginPolicy): string[] {
+  if (status === "green") {
+    return ["Scope creep is the silent margin killer — lock SOW lines on signature."];
+  }
+  if (status === "amber") {
+    return [
+      `Margin sits ${(((policy.targetMarginPct - policy.amberThresholdPct) * 100)).toFixed(0)} pts under target. Discount precedent compounds across renewals.`,
+      "Partner override is a one-shot signal, not a habit.",
+    ];
+  }
+  return [
+    "RED-zone discount erodes firm benchmark. Document the strategic rationale (logo, IP, market entry).",
+    "Two-Partner sign-off is non-negotiable to protect the precedent.",
+  ];
 }

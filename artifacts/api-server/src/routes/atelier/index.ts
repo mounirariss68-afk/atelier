@@ -46,6 +46,7 @@ import {
 import proposalRoutes from "./proposalRoutes";
 import knowledgeRoutes from "./knowledgeRoutes";
 import accountRoutes from "./accountRoutes";
+import pricingRoutes from "./pricingRoutes";
 import engagementRoutes, {
   accessibleEngagementIds,
   ensureEngAccess,
@@ -90,6 +91,9 @@ router.use(engagementRoutes);
 router.use(proposalRoutes);
 // Mount Knowledge Atelier extras (Task #224): prompts, concierge, admin, runs.
 router.use(knowledgeRoutes);
+// Mount pricing routes (Task #240): rate cards, margin policy, deal pricing,
+// pricing strategist, single/two-partner override.
+router.use(pricingRoutes);
 
 function ensurePersona(
   req: Request,

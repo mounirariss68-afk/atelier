@@ -27,6 +27,7 @@ import { ResearchTab } from "@/components/tabs/ResearchTab";
 import { PovTab } from "@/components/tabs/PovTab";
 import { MeetingsTab } from "@/components/tabs/MeetingsTab";
 import { ProposalTab } from "@/components/tabs/ProposalTab";
+import { CommercialsTab } from "@/components/tabs/CommercialsTab";
 import { PrototypeButton } from "@/components/tabs/PrototypeButton";
 import { QualifierSheet } from "@/components/QualifierSheet";
 import { StageTransitionDialog } from "@/components/StageTransitionDialog";
@@ -39,6 +40,7 @@ const TABS = [
   { id: "pov", label: "POV Studio" },
   { id: "meetings", label: "Meetings" },
   { id: "proposal", label: "Proposal" },
+  { id: "commercials", label: "Commercials" },
   { id: "artifacts", label: "Artifacts" },
   { id: "audit", label: "Audit Trail" },
 ] as const;
@@ -199,6 +201,7 @@ export default function Opportunity() {
           {activeTab === "pov" && <PovTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "meetings" && <MeetingsTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "proposal" && <ProposalTab oppId={opp.id} />}
+          {activeTab === "commercials" && <CommercialsTab oppId={opp.id} />}
           {activeTab === "artifacts" && (
             <div className="rounded-lg border border-dashed border-border bg-bg-elevate/40 p-12 text-center">
               <Folder className="w-8 h-8 text-gold/60 mx-auto mb-3" />

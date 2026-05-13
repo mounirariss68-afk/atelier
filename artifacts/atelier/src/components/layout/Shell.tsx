@@ -44,6 +44,7 @@ export function TopNav() {
     { href: "/engagements", label: "Engagements" },
     { href: "/atelier", label: "Atelier" },
     { href: "/agents", label: "Agents" },
+    { href: "/pricing", label: "Pricing" },
   ];
 
   return (
