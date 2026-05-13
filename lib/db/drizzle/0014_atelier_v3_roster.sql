@@ -177,7 +177,10 @@ CREATE INDEX IF NOT EXISTS "idx_atelier_person_docs_org" ON "atelier_person_docu
 CREATE INDEX IF NOT EXISTS "idx_atelier_person_docs_person" ON "atelier_person_documents" ("person_type", "person_id");
 
 -- ----- Backfill v1/v2 atelier_users -> atelier_employees -----
--- One row per active user, mapping role to a sensible seniority default.
+-- PRD §8.1: only INTERNAL AICo roles become employees. Non-employee
+-- personas (contractor / partner_firm_resource / client_user) live in
+-- atelier_contractors / atelier_partner_firm_resources / atelier_salon_users
+-- respectively and must NOT be backfilled into the employee table.
 INSERT INTO "atelier_employees" ("id", "org_id", "user_id", "full_name", "email", "role", "seniority", "title", "status")
 SELECT
   'emp_' || u.id AS id,
@@ -192,12 +195,14 @@ SELECT
     WHEN 'sme' THEN 'manager'
     WHEN 'ai_engineer' THEN 'senior_consultant'
     WHEN 'business_developer' THEN 'manager'
+    WHEN 'operations' THEN 'manager'
     ELSE 'consultant'
   END AS seniority,
   u.title,
   'active' AS status
 FROM "atelier_users" u
 WHERE u.deleted_at IS NULL
+  AND u.role IN ('partner', 'engagement_lead', 'sme', 'ai_engineer', 'business_developer', 'operations')
 ON CONFLICT ("org_id", "email") DO NOTHING;
 
 -- ----- Task #254 follow-up: PRD §2.1 column extensions (idempotent) -----
@@ -257,36 +262,10 @@ ALTER TABLE "atelier_person_documents"
   ADD COLUMN IF NOT EXISTS "file_ref" text,
   ADD COLUMN IF NOT EXISTS "signed_at" timestamp;
 
--- ----- Task #254 follow-up: tighten backfill to internal AICo roles only (PRD §8.1) -----
--- The original INSERT above is wider; re-running this scoped INSERT is safe
--- (ON CONFLICT DO NOTHING) and documents the intent for code review.
-INSERT INTO "atelier_employees" ("id", "org_id", "user_id", "full_name", "email", "role", "seniority", "title", "status")
-SELECT
-  'emp_' || u.id,
-  u.org_id,
-  u.id,
-  u.name,
-  u.email,
-  u.role,
-  CASE u.role
-    WHEN 'partner' THEN 'partner'
-    WHEN 'engagement_lead' THEN 'principal'
-    WHEN 'sme' THEN 'manager'
-    WHEN 'ai_engineer' THEN 'senior_consultant'
-    WHEN 'business_developer' THEN 'manager'
-    ELSE 'consultant'
-  END,
-  u.title,
-  'active'
-FROM "atelier_users" u
-WHERE u.deleted_at IS NULL
-  AND u.role IN ('partner', 'engagement_lead', 'sme', 'ai_engineer', 'business_developer', 'operations')
-ON CONFLICT ("org_id", "email") DO NOTHING;
-
--- Note (Task #254): the original wide INSERT block above used to backfill rows
--- for ALL atelier_users regardless of role; an earlier revision of this
--- migration also issued a DELETE to prune the over-broad rows. Per code
--- review, that DELETE is destructive at migration time and is removed.
--- Operators should rely on the scoped INSERT above; any pre-existing rows
--- with non-internal roles are left untouched and may be cleaned up by a
--- future, scoped DML script gated on `atelier_employees.id LIKE 'emp\_%'`.
+-- Note (Task #254): an earlier revision of this migration backfilled ALL
+-- atelier_users (no role filter) and then issued a DELETE to prune the
+-- over-broad rows. Both have been removed: the single backfill INSERT
+-- above is now strictly scoped to internal AICo roles per PRD §8.1.
+-- Any pre-existing rows from the previous wide backfill are left untouched
+-- and may be cleaned up by a future scoped DML script gated on
+-- `atelier_employees.id LIKE 'emp\_%' AND role NOT IN (...internal...)'`.

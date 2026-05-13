@@ -1144,7 +1144,17 @@ router.patch("/engagements/:engId", async (req, res) => {
     res.status(403).json({ error: "actor-not-authorized-to-update-engagement" });
     return;
   }
-  const eng = await loadEng(req.params.engId);
+  // Task #254 round-8 — close out IDOR on the close hook: a non-partner lead
+  // must hold an active access grant on THIS engagement before being allowed
+  // to mutate plmStage (which can fire the Sentinel auto-revoke side effect).
+  // Partners and Operations bypass the per-engagement check (firm-wide scope).
+  let eng;
+  if (me.role === "partner" || me.role === "operations") {
+    eng = await loadEng(req.params.engId);
+  } else {
+    eng = await ensureEngAccess(res, me, req.params.engId);
+    if (!eng) return; // ensureEngAccess already wrote a 403/404.
+  }
   if (!eng) {
     res.status(404).json({ error: "engagement-not-found" });
     return;
