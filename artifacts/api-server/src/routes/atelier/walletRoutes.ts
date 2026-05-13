@@ -208,9 +208,10 @@ async function buildContractDigest(engagementId: string | null): Promise<{
       /(pass[- ]through|reimburs|t&e|travel\s*\+\s*expense|expense.*billable|expenses?\s+(at\s+cost|reimbursed|passed|billable))/.test(
         haystack,
       );
-    // Charter present: explicit wording wins; explicit negation blocks;
-    // silence falls back to standard MSA.
-    hasClause = negated ? false : explicit ? true : true;
+    // Charter present: must contain explicit pass-through wording.
+    // Negation always blocks; silence means no clause was negotiated and
+    // expenses are firm-overhead by default.
+    hasClause = negated ? false : explicit;
     const capMatch = haystack.match(/markup\s*(?:of\s*)?(\d{1,2})\s*%/);
     if (capMatch) cap = Math.min(20, Number(capMatch[1]));
   }
@@ -603,6 +604,47 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
       error: "auditor-refused",
       message: `Auditor refused: ${proposal.reason ?? "unknown"}. Attach a clearer receipt and retry.`,
       reason: proposal.reason,
+    });
+    return;
+  }
+
+  // Re-validate contract billability + markup cap on the post-patch values
+  // so user edits cannot smuggle clientBillable=true or an inflated markup
+  // past the auditor.
+  if (expense.clientBillable) {
+    const digest = await buildContractDigest(expense.engagementId ?? null);
+    if (!digest || !digest.expensesClause) {
+      res.status(409).json({
+        error: "billable-not-permitted",
+        message: digest?.summary
+          ? `Cannot mark client-billable: ${digest.summary}`
+          : "Cannot mark client-billable: no engagement / no contract clause.",
+      });
+      return;
+    }
+    if (
+      Array.isArray(digest.permittedCategories) &&
+      digest.permittedCategories.length > 0 &&
+      !digest.permittedCategories.includes(expense.category)
+    ) {
+      res.status(409).json({
+        error: "category-not-permitted",
+        message: `Category "${expense.category}" is outside the contract pass-through scope (${digest.permittedCategories.join(", ")}).`,
+      });
+      return;
+    }
+    const cap = digest.expenseMarkupCapPct ?? 0;
+    if ((expense.markupPct ?? 0) > cap) {
+      res.status(409).json({
+        error: "markup-cap-exceeded",
+        message: `Markup ${expense.markupPct}% exceeds contract cap of ${cap}%.`,
+      });
+      return;
+    }
+  } else if ((expense.markupPct ?? 0) > 0) {
+    res.status(409).json({
+      error: "markup-without-billable",
+      message: "Markup may only be applied when the expense is client-billable.",
     });
     return;
   }

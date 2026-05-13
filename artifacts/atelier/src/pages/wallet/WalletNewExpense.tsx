@@ -71,6 +71,22 @@ export default function WalletNewExpense() {
   const [proposal, setProposal] = React.useState<AuditorProposal | null>(null);
   const [draft, setDraft] = React.useState<ExpenseDraft | null>(null);
 
+  // Editable proposal fields — initialised from auditor proposal, then sent
+  // back as a `patch` on submit so the user remains authoritative.
+  const [editCategory, setEditCategory] = React.useState<string>("");
+  const [editVatTreatment, setEditVatTreatment] = React.useState<string>("");
+  const [editVatAmount, setEditVatAmount] = React.useState<number>(0);
+  const [editClientBillable, setEditClientBillable] = React.useState<boolean>(false);
+  const [editMarkupPct, setEditMarkupPct] = React.useState<number>(0);
+  React.useEffect(() => {
+    if (!proposal) return;
+    setEditCategory(proposal.category);
+    setEditVatTreatment(proposal.vatTreatment);
+    setEditVatAmount(proposal.vatAmount);
+    setEditClientBillable(proposal.clientBillable);
+    setEditMarkupPct(proposal.markupPct);
+  }, [proposal]);
+
   // form fields
   const [engagementId, setEngagementId] = React.useState<string>("");
   const [merchant, setMerchant] = React.useState("");
@@ -161,11 +177,19 @@ export default function WalletNewExpense() {
     setBusy(true);
     setError(null);
     try {
+      const patch: Record<string, unknown> = {};
+      if (proposal) {
+        if (editCategory !== proposal.category) patch.category = editCategory;
+        if (editVatTreatment !== proposal.vatTreatment) patch.vatTreatment = editVatTreatment;
+        if (editVatAmount !== proposal.vatAmount) patch.vatAmount = editVatAmount;
+        if (editClientBillable !== proposal.clientBillable) patch.clientBillable = editClientBillable;
+        if (editMarkupPct !== proposal.markupPct) patch.markupPct = editMarkupPct;
+      }
       const r = await fetch(`/api/atelier/wallet/expenses/${draft.id}/submit`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ overrideRationale }),
+        body: JSON.stringify({ overrideRationale, patch: Object.keys(patch).length ? patch : undefined }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -338,14 +362,38 @@ export default function WalletNewExpense() {
 
         {draft && proposal && (
           <Card className="p-5 space-y-4 border-l-4 border-l-gold">
-            <h3 className="font-mono text-sm tracking-widest uppercase text-gold">Auditor proposal</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-mono text-sm tracking-widest uppercase text-gold">Auditor proposal — review &amp; edit before submit</h3>
+              <span className="text-[10px] font-mono text-text-mute">OCR <MonoChip tone={proposal.ocrConfidence}>{proposal.ocrConfidence}</MonoChip></span>
+            </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-text-mute">Category:</span> {proposal.category}</div>
-              <div><span className="text-text-mute">VAT treatment:</span> {proposal.vatTreatment}</div>
-              <div><span className="text-text-mute">VAT amount:</span> {proposal.vatAmount}</div>
-              <div><span className="text-text-mute">Client billable:</span> {proposal.clientBillable ? "yes" : "no"}</div>
-              <div><span className="text-text-mute">Markup:</span> {proposal.markupPct}%</div>
-              <div><span className="text-text-mute">OCR confidence:</span> <MonoChip tone={proposal.ocrConfidence}>{proposal.ocrConfidence}</MonoChip></div>
+              <div>
+                <label className={labelCls}>Category {editCategory !== proposal.category && <span className="text-gold">(edited)</span>}</label>
+                <select className={inputCls} value={editCategory} onChange={(e) => setEditCategory(e.target.value)} data-testid="edit-category">
+                  {["flight","hotel","meal","taxi","per_diem","mileage","software","gift","other"].map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>VAT treatment {editVatTreatment !== proposal.vatTreatment && <span className="text-gold">(edited)</span>}</label>
+                <select className={inputCls} value={editVatTreatment} onChange={(e) => setEditVatTreatment(e.target.value)} data-testid="edit-vat-treatment">
+                  {["recoverable","export","exempt","none"].map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>VAT amount {editVatAmount !== proposal.vatAmount && <span className="text-gold">(edited)</span>}</label>
+                <input type="number" className={inputCls} value={editVatAmount} onChange={(e) => setEditVatAmount(Number(e.target.value))} data-testid="edit-vat-amount" />
+              </div>
+              <div>
+                <label className={labelCls}>Client billable {editClientBillable !== proposal.clientBillable && <span className="text-gold">(edited)</span>}</label>
+                <select className={inputCls} value={editClientBillable ? "yes" : "no"} onChange={(e) => setEditClientBillable(e.target.value === "yes")} data-testid="edit-client-billable">
+                  <option value="no">no — firm overhead</option>
+                  <option value="yes">yes — pass through to client</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Markup % {editMarkupPct !== proposal.markupPct && <span className="text-gold">(edited)</span>}</label>
+                <input type="number" min={0} max={20} className={inputCls} value={editMarkupPct} onChange={(e) => setEditMarkupPct(Number(e.target.value))} data-testid="edit-markup-pct" />
+              </div>
             </div>
             {proposal.summary && <p className="text-sm italic text-text-mute">"{proposal.summary}"</p>}
             <div className="pt-2 border-t border-border-soft space-y-2">
