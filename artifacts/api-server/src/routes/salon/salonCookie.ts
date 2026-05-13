@@ -72,7 +72,15 @@ export async function attachSalonPersona(
     const fromCookie = req.cookies?.[SALON_PERSONA_COOKIE] as
       | string
       | undefined;
-    const id = fromCookie?.trim() || DEFAULT_SALON_PERSONA_ID;
+    const id = fromCookie?.trim();
+    // Task #242 architect round-4: NO default-admin fallback. Without an
+    // explicit salon_persona cookie the request is unauthenticated and the
+    // route handler must return 401 (or, for /me, persona:null so the
+    // frontend can redirect to /salon/sign-in).
+    if (!id) {
+      next();
+      return;
+    }
 
     const [persona] = await db
       .select()
@@ -83,19 +91,6 @@ export async function attachSalonPersona(
 
     if (!persona) {
       res.clearCookie(SALON_PERSONA_COOKIE, { path: "/" });
-      const [fallback] = await db
-        .select()
-        .from(atelierSalonUsers)
-        .where(
-          and(
-            eq(atelierSalonUsers.id, DEFAULT_SALON_PERSONA_ID),
-            isNull(atelierSalonUsers.deletedAt),
-          ),
-        );
-      if (fallback) {
-        req.salonPersonaId = fallback.id;
-        req.salonPersona = fallback;
-      }
       next();
       return;
     }

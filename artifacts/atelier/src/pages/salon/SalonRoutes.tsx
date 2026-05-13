@@ -73,7 +73,11 @@ function SalonSignIn() {
 }
 
 function SalonPortfolio() {
-  const { data: me } = useApi<{ persona: SalonMe }>("/me");
+  const { data: me } = useApi<{ persona: SalonMe | null }>("/me");
+  const [, navigate] = useLocation();
+  React.useEffect(() => {
+    if (me && !me.persona) navigate("/salon/sign-in");
+  }, [me, navigate]);
   const { data } = useApi<{ engagements: Array<{ slug: string; displayName: string; accentColor: string; eyebrowText: string | null; plmStage: string; role: string }> }>("/engagements");
   return (
     <div className="min-h-screen bg-bg p-6">

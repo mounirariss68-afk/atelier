@@ -164,8 +164,12 @@ async function mirrorInternalAudit(input: {
 
 router.get("/me", async (req, res, next) => {
   try {
-    const me = ensureSalonPersona(req, res);
-    if (!me) return;
+    // /me must NOT 401 — frontend uses persona:null to redirect to sign-in.
+    const me = req.salonPersona ?? null;
+    if (!me) {
+      res.json({ persona: null });
+      return;
+    }
     const access = await db
       .select()
       .from(atelierSalonUserEngagementAccess)
