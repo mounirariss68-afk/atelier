@@ -14,19 +14,19 @@ interface SeedRow {
   id: string;
   seniority: string;
   role: string;
-  costPerHourUsd: number;
-  billRatePerHourUsd: number;
-  utilisationPct: number;
-  overheadMultiplier: number;
+  dayRateInternalCost: number;
+  dayRateClientPrice: number;
+  overheadPct: number;
 }
 
+// Six canonical seniority bands per PRD §7.2.
 const SIX_BANDS: SeedRow[] = [
-  { id: "rcr_aico_partner",     seniority: "Partner",    role: "Partner",         costPerHourUsd: 250, billRatePerHourUsd: 850, utilisationPct: 0.55, overheadMultiplier: 1.35 },
-  { id: "rcr_aico_principal",   seniority: "Principal",  role: "Principal",       costPerHourUsd: 200, billRatePerHourUsd: 650, utilisationPct: 0.65, overheadMultiplier: 1.35 },
-  { id: "rcr_aico_manager",     seniority: "Manager",    role: "EngagementManager", costPerHourUsd: 150, billRatePerHourUsd: 475, utilisationPct: 0.75, overheadMultiplier: 1.35 },
-  { id: "rcr_aico_aieng",       seniority: "AIEngineer", role: "AIEngineer",      costPerHourUsd: 120, billRatePerHourUsd: 375, utilisationPct: 0.80, overheadMultiplier: 1.35 },
-  { id: "rcr_aico_designer",    seniority: "Designer",   role: "Designer",        costPerHourUsd: 95,  billRatePerHourUsd: 295, utilisationPct: 0.80, overheadMultiplier: 1.35 },
-  { id: "rcr_aico_analyst",     seniority: "Analyst",    role: "Analyst",         costPerHourUsd: 70,  billRatePerHourUsd: 225, utilisationPct: 0.85, overheadMultiplier: 1.35 },
+  { id: "rcr_aico_partner",     seniority: "Partner",            role: "Partner",            dayRateInternalCost: 2000, dayRateClientPrice: 6800, overheadPct: 0.35 },
+  { id: "rcr_aico_principal",   seniority: "Principal",          role: "Principal",          dayRateInternalCost: 1600, dayRateClientPrice: 5200, overheadPct: 0.35 },
+  { id: "rcr_aico_sml",         seniority: "SubjectMatterLead",  role: "SubjectMatterLead",  dayRateInternalCost: 1200, dayRateClientPrice: 3800, overheadPct: 0.35 },
+  { id: "rcr_aico_aieng",       seniority: "AIEngineer",         role: "AIEngineer",         dayRateInternalCost: 960,  dayRateClientPrice: 3000, overheadPct: 0.35 },
+  { id: "rcr_aico_designer",    seniority: "Designer",           role: "Designer",           dayRateInternalCost: 760,  dayRateClientPrice: 2360, overheadPct: 0.35 },
+  { id: "rcr_aico_analyst",     seniority: "Analyst",            role: "Analyst",            dayRateInternalCost: 560,  dayRateClientPrice: 1800, overheadPct: 0.35 },
 ];
 
 /**
@@ -66,10 +66,10 @@ export async function ensureAtelierPricingSeed(): Promise<void> {
           rateCardId: DEFAULT_CARD_ID,
           seniority: row.seniority,
           role: row.role,
-          costPerHourUsd: row.costPerHourUsd,
-          billRatePerHourUsd: row.billRatePerHourUsd,
-          utilisationPct: row.utilisationPct,
-          overheadMultiplier: row.overheadMultiplier,
+          dayRateInternalCost: row.dayRateInternalCost,
+          dayRateClientPrice: row.dayRateClientPrice,
+          overheadPct: row.overheadPct,
+          currency: "USD",
         });
       }
     }

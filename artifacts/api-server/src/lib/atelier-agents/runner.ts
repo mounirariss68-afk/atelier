@@ -16,7 +16,7 @@
  * amber→red).
  */
 
-import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems } from "@workspace/db";
+import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings } from "@workspace/db";
 import { eq, and, gte, isNull } from "drizzle-orm";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
 import {

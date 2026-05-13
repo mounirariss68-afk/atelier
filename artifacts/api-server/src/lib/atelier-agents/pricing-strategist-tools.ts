@@ -35,10 +35,9 @@ export interface RateCardSnapshot {
   rows: Array<{
     seniority: string;
     role: string;
-    costPerHourUsd: number;
-    billRatePerHourUsd: number;
-    utilisationPct: number;
-    overheadMultiplier: number;
+    dayRateInternalCost: number;
+    dayRateClientPrice: number;
+    overheadPct: number;
   }>;
 }
 
@@ -126,10 +125,9 @@ export async function rateCardRead(cardId: string): Promise<RateCardSnapshot | n
     rows: rows.map((r) => ({
       seniority: r.seniority,
       role: r.role,
-      costPerHourUsd: r.costPerHourUsd,
-      billRatePerHourUsd: r.billRatePerHourUsd,
-      utilisationPct: r.utilisationPct,
-      overheadMultiplier: r.overheadMultiplier,
+      dayRateInternalCost: r.dayRateInternalCost,
+      dayRateClientPrice: r.dayRateClientPrice,
+      overheadPct: r.overheadPct,
     })),
   };
 }
