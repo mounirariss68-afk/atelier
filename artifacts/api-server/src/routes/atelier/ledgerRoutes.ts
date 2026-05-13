@@ -53,6 +53,18 @@ import { gte, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+/**
+ * Canonical status set used for ledger "actuals" (burn, realized margin,
+ * realization rate). We intentionally include `submitted` (and the
+ * lead/partner-approved chain) so live engagements show progress *as
+ * timesheets flow* rather than only after final partner approval — that
+ * matches the partner-room mental model that "submitted hours are real
+ * even if not yet signed off". Drafts/rejected entries are excluded.
+ * Keep every burn/margin/realization query in this file pinned to this
+ * constant so the policy stays consistent.
+ */
+const LEDGER_ACTUAL_STATUSES = ["submitted", "lead_approved", "approved", "partner_approved"] as const;
+
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -1446,7 +1458,7 @@ router.get("/ledger/utilization/engagement/:slug", async (req, res) => {
     .from(atelierTimesheetEntries)
     .where(and(
       eq(atelierTimesheetEntries.engagementId, eng.id),
-      inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
+      inArray(atelierTimesheetEntries.status, LEDGER_ACTUAL_STATUSES as unknown as string[]),
       isNull(atelierTimesheetEntries.deletedAt),
     ));
 
@@ -1659,7 +1671,7 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     })
     .from(atelierTimesheetEntries)
     .where(and(
-      inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
+      inArray(atelierTimesheetEntries.status, LEDGER_ACTUAL_STATUSES as unknown as string[]),
       isNull(atelierTimesheetEntries.deletedAt),
     ));
 
@@ -1769,19 +1781,24 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     revenueUsd: s.weightUsd,
   }));
 
+  // Batch-prefetch pricings for *all* engagements in this view so the
+  // rollup doesn't N+1 a per-engagement pricing query. Keyed by
+  // opportunityId since that's the FK pricings carry.
+  const oppIds = engs.map((e) => e.opportunityId).filter((x): x is string => !!x);
+  const pricingRows = oppIds.length
+    ? await db
+        .select()
+        .from(atelierDealPricings)
+        .where(and(inArray(atelierDealPricings.opportunityId, oppIds), isNull(atelierDealPricings.deletedAt)))
+    : [];
+  const pricingByOpp = new Map(pricingRows.map((p) => [p.opportunityId, p] as const));
+
   // Per-engagement leakage + realized-margin row, with re-look CTA pointer
-  const engagementRollup = await Promise.all(engs.map(async (eng) => {
+  const engagementRollup = engs.map((eng) => {
     const acct = accountById.get(eng.accountId);
     const actuals = perEng.get(eng.id) ?? { hours: 0, cost: 0, price: 0, billableHours: 0 };
     const realizedMargin = actuals.price > 0 ? (actuals.price - actuals.cost) / actuals.price : 0;
-    let pricing: typeof atelierDealPricings.$inferSelect | undefined;
-    if (eng.opportunityId) {
-      const [p] = await db
-        .select()
-        .from(atelierDealPricings)
-        .where(and(eq(atelierDealPricings.opportunityId, eng.opportunityId), isNull(atelierDealPricings.deletedAt)));
-      pricing = p;
-    }
+    const pricing = eng.opportunityId ? pricingByOpp.get(eng.opportunityId) : undefined;
     const plannedMargin = pricing ? Number(pricing.computedMarginPct) : 0;
     const targetMargin = pricing ? Number(pricing.targetMarginPct) : 0.55;
     // Trigger the re-look CTA whenever an engagement is below its target,
@@ -1802,7 +1819,7 @@ router.get("/ledger/utilization/firm", async (req, res) => {
       reLookHref: belowTarget && eng.opportunityId ? `/pricing/${eng.opportunityId}` : null,
       leakageHours: leakByEng.get(eng.id) ?? 0,
     };
-  }));
+  });
 
   res.json({
     period: { weeks: 4, weekIsos: last4Iso },
@@ -1935,7 +1952,7 @@ async function hydrateUtilizationNumericBlock(
       .from(atelierTimesheetEntries)
       .where(and(
         eq(atelierTimesheetEntries.engagementId, eng.id),
-        inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
+        inArray(atelierTimesheetEntries.status, LEDGER_ACTUAL_STATUSES as unknown as string[]),
         isNull(atelierTimesheetEntries.deletedAt),
       ));
     // Hard refusal: no pricing baseline AND no actual hours = nothing for
