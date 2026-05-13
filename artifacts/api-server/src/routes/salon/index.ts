@@ -559,7 +559,7 @@ router.get("/deliverables/:id", async (req, res, next) => {
   }
 });
 
-router.post("/deliverables/:id/decision", async (req, res, next) => {
+async function handleDecision(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const me = ensureSalonPersona(req, res);
     if (!me) return;
@@ -706,18 +706,18 @@ router.post("/deliverables/:id/decision", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
+}
 
-// Per-action aliases (PRD contract surface). Each forwards to the unified
-// /decision handler by injecting the appropriate `kind` discriminator and
-// re-emitting the request through the same router so middleware + auth still
-// apply. Restores `/approve | /request-change | /comment` without duplicating
-// the validation/audit logic.
+router.post("/deliverables/:id/decision", handleDecision);
+
+// Per-action aliases (PRD contract surface). Each injects the appropriate
+// `kind` discriminator and invokes the shared handler directly — no router
+// self-dispatch, no URL mutation. Same validation, audit, and approval-chain
+// logic applies.
 function decisionAlias(kind: "approve" | "request_change" | "comment") {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     req.body = { ...(req.body ?? {}), kind };
-    req.url = `/deliverables/${req.params.id}/decision`;
-    (router as unknown as { handle: (r: Request, s: Response, n: NextFunction) => void }).handle(req, res, next);
+    return handleDecision(req, res, next);
   };
 }
 router.post("/deliverables/:id/approve", decisionAlias("approve"));
