@@ -34,6 +34,7 @@ import {
   atelierReports,
   atelierNotifications,
   atelierAuditEvents,
+  atelierDealPricings,
 } from "@workspace/db";
 
 function rid(p: string): string {
@@ -242,7 +243,29 @@ async function computeReport(
       return { rows, summary: `${rows.length} partners covering $${Math.round(rows.reduce((a, r) => a + r.weightedValueUsd, 0)).toLocaleString()} weighted.` };
     }
     case "margin_watch": {
-      return { rows: [], summary: "No deals currently below margin policy." };
+      // Real signal: pull deal pricings whose marginLockStatus is amber/red
+      // (i.e. below policy threshold) and have not yet been countersigned.
+      const pricings = await db
+        .select()
+        .from(atelierDealPricings)
+        .where(isNull(atelierDealPricings.deletedAt));
+      const flagged = pricings.filter(
+        (p) => p.marginLockStatus !== "green" && !p.countersignAt,
+      );
+      const opps = await db.select().from(atelierOpportunities);
+      const oppMap = new Map(opps.map((o) => [o.id, o]));
+      const rows = flagged.map((p) => ({
+        opportunity: oppMap.get(p.opportunityId)?.name ?? p.opportunityId,
+        marginPct: Math.round((p.computedMarginPct ?? 0) * 1000) / 10,
+        policyMin: Math.round((p.targetMarginPct ?? 0) * 1000) / 10,
+        gate: p.marginLockStatus,
+      }));
+      return {
+        rows,
+        summary: rows.length
+          ? `${rows.length} deal(s) below margin policy, awaiting countersign.`
+          : "All deals at or above margin policy.",
+      };
     }
     case "account_heatmap": {
       const opps = await db
@@ -325,18 +348,43 @@ async function computeReport(
       return { rows, summary: `Top ${rows.length} atelier assets.` };
     }
     case "senior_delivery_proof": {
+      // Senior-delivery proof = engagements where a named partner is on
+      // the team with a real recurring cadence. We read the engagement's
+      // partnerCadenceHoursPerWeek (or treat charterStatus=signed as proof
+      // when cadence missing) — this avoids hand-waved presence lines.
       const engs = await db
         .select()
         .from(atelierEngagements)
         .where(isNull(atelierEngagements.deletedAt));
       const users = await db.select().from(atelierUsers);
       const umap = new Map(users.map((u) => [u.id, u]));
-      const rows = engs.map((e) => ({
-        engagement: e.name,
-        partner: umap.get(e.partnerOwnerId)?.name ?? e.partnerOwnerId,
-        presenceLine: "Partner on the pitch + weekly cadence",
-      }));
-      return { rows, summary: `${rows.length} engagements with named partner cadence.` };
+      const rows = engs
+        .map((e) => {
+          const cadenceHrs = (e as unknown as { partnerCadenceHoursPerWeek?: number })
+            .partnerCadenceHoursPerWeek;
+          const charter = (e as unknown as { charterStatus?: string }).charterStatus ?? "draft";
+          const hours =
+            typeof cadenceHrs === "number" && cadenceHrs > 0
+              ? cadenceHrs
+              : charter === "signed"
+              ? 4
+              : 0;
+          return {
+            engagement: e.name,
+            partner: umap.get(e.partnerOwnerId)?.name ?? e.partnerOwnerId,
+            partnerCadenceHrsPerWeek: hours,
+            presenceLine:
+              hours > 0
+                ? `${hours} hrs/wk partner cadence (charter ${charter})`
+                : `No partner cadence — gap (charter ${charter})`,
+          };
+        })
+        .sort((a, b) => b.partnerCadenceHrsPerWeek - a.partnerCadenceHrsPerWeek);
+      const proven = rows.filter((r) => r.partnerCadenceHrsPerWeek > 0).length;
+      return {
+        rows,
+        summary: `${proven}/${rows.length} engagements with measurable partner cadence.`,
+      };
     }
   }
 }

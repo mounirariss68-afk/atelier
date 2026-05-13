@@ -47,6 +47,7 @@ function Router() {
         <Route path="/pipeline/:oppId" component={Opportunity} />
         <Route path="/opportunities/:oppId/win-loss" component={WinLoss} />
         <Route path="/opportunities/:oppId" component={Opportunity} />
+        <Route path="/win-loss/debriefs" component={WinLossLibrary} />
         <Route path="/win-loss" component={WinLossLibrary} />
         <Route path="/forecast" component={Forecast} />
         <Route path="/reports" component={Reports} />

@@ -174,6 +174,9 @@ router.post("/opportunities/:oppId/win-loss/run", async (req, res) => {
       suggestedAtelierLessons: output.suggestedAtelierLessons,
       lastRunId: runId,
       synthesizedAt: new Date(),
+      // Conductor of record at synthesis = the agent. Partner approval
+      // overwrites this to partner_off_team.
+      conductorRole: "agent",
       updatedAt: new Date(),
     })
     .where(eq(atelierWinLossDebriefs.id, debrief.id))
@@ -197,12 +200,38 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
     res.status(409).json({ error: "not-yet-synthesized" });
     return;
   }
+  // Win/Loss conductor guardrail (PRD §5.2): the deal team (partner_owner
+  // + engagement_lead) MUST NOT be the conductor of their own debrief.
+  // Approver (= conductor of record) must be either an off-deal partner
+  // or "agent" (auto-approve via system actor). Block deal-team self-approve.
+  const [opp] = await db
+    .select({
+      id: atelierOpportunities.id,
+      partnerOwnerId: atelierOpportunities.partnerOwnerId,
+      engagementLeadId: atelierOpportunities.engagementLeadId,
+    })
+    .from(atelierOpportunities)
+    .where(eq(atelierOpportunities.id, req.params.oppId));
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  if (opp.partnerOwnerId === me.id || opp.engagementLeadId === me.id) {
+    res.status(403).json({
+      error: "deal-team-cannot-conduct",
+      detail:
+        "Win/Loss conductor must be an off-deal partner (or the agent). Deal-team partners cannot publish their own debrief.",
+    });
+    return;
+  }
+  const conductorRole = "partner_off_team";
   const [updated] = await db
     .update(atelierWinLossDebriefs)
     .set({
       status: "approved",
       approvedByUserId: me.id,
       approvedAt: new Date(),
+      conductorRole,
       updatedAt: new Date(),
     })
     .where(eq(atelierWinLossDebriefs.id, debrief.id))
@@ -230,6 +259,118 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
     payloadSummary: `${me.name} approved Win/Loss debrief`,
   });
   res.json({ debrief: updated });
+});
+
+// Compliance loop (PRD §5.2): scan for debriefs past their 14-day SLA
+// that are still not approved, and (a) escalate the partner Pane A item to
+// red/critical, (b) write an audit row noting that close-without-debrief
+// now requires partner override + rationale to remove the gate.
+router.post("/win-loss/overdue/scan", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const now = new Date();
+  const overdue = await db
+    .select()
+    .from(atelierWinLossDebriefs)
+    .where(
+      and(
+        isNull(atelierWinLossDebriefs.deletedAt),
+        isNull(atelierWinLossDebriefs.approvedAt),
+      ),
+    );
+  let escalated = 0;
+  for (const d of overdue) {
+    if (!d.dueAt || d.dueAt > now) continue;
+    if (d.status === "approved") continue;
+    // Escalate Pane A item to RED (priority=critical, dueLabel "OVERDUE").
+    await db
+      .update(atelierPaneAItems)
+      .set({
+        priority: "critical",
+        dueLabel: "OVERDUE",
+        sortKey: 5,
+        summary: `Win/Loss debrief OVERDUE — partner override + rationale now required to clear gate.`,
+      })
+      .where(
+        and(
+          eq(atelierPaneAItems.hrefKind, "opportunity"),
+          eq(atelierPaneAItems.hrefTargetId, d.opportunityId),
+          isNull(atelierPaneAItems.resolvedAt),
+        ),
+      );
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "opportunity",
+      entityId: d.opportunityId,
+      actorType: "system",
+      actorId: "winloss-sla-monitor",
+      actorLabel: "Atelier",
+      action: "winloss.sla_breached",
+      payload: { debriefId: d.id, dueAt: d.dueAt.toISOString() },
+      payloadSummary: `Win/Loss debrief overdue — partner override + rationale required.`,
+    });
+    escalated++;
+  }
+  res.json({ scanned: overdue.length, escalated });
+});
+
+// Partner-override path (PRD §5.2): allow a partner to clear the
+// close-without-debrief gate with explicit rationale. Marks debrief as
+// `withdrawn` (closed without buyer view) and records who/why.
+router.post("/opportunities/:oppId/win-loss/override", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const body = req.body as { rationale?: string };
+  const rationale = (body.rationale ?? "").trim();
+  if (rationale.length < 20) {
+    res.status(400).json({
+      error: "rationale-required",
+      detail: "Partner override requires a written rationale (≥20 chars).",
+    });
+    return;
+  }
+  const debrief = await loadDebrief(req.params.oppId);
+  if (!debrief) {
+    res.status(404).json({ error: "debrief-not-found" });
+    return;
+  }
+  await db
+    .update(atelierWinLossDebriefs)
+    .set({
+      status: "approved",
+      conductorRole: "partner_off_team",
+      approvedByUserId: me.id,
+      approvedAt: new Date(),
+      sellerNotes: `[PARTNER OVERRIDE — no buyer interview]\n${rationale}\n\n${debrief.sellerNotes ?? ""}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierWinLossDebriefs.id, debrief.id));
+  await db
+    .update(atelierPaneAItems)
+    .set({ resolvedAt: new Date() })
+    .where(
+      and(
+        eq(atelierPaneAItems.hrefKind, "opportunity"),
+        eq(atelierPaneAItems.hrefTargetId, req.params.oppId),
+        isNull(atelierPaneAItems.resolvedAt),
+      ),
+    );
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: req.params.oppId,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "winloss.partner_override",
+    payload: { debriefId: debrief.id, rationale },
+    payloadSummary: `${me.name} cleared Win/Loss gate by partner override.`,
+  });
+  res.json({ ok: true });
 });
 
 router.get("/win-loss/debriefs", async (req, res) => {

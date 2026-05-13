@@ -29,6 +29,7 @@ import {
   atelierEngagements,
   atelierEngagementAccess,
   atelierWinThemes,
+  atelierAccounts,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import {
@@ -556,11 +557,28 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
       ),
     );
   const offering = opp.offeringAnchor ?? "";
+  const [acctRow] = await db
+    .select({ sector: atelierAccounts.sector })
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, opp.accountId));
+  const oppSector = acctRow?.sector ?? "";
+  // Score = 100 if offering tag matches, +50 if sector tag matches, +supportCount.
+  // Tagless ("org-wide") themes always eligible with score 0 + supportCount.
   const ranked = themeRows
     .map((t) => {
-      const tags = (t.offeringTags as string[]) ?? [];
-      const matches = tags.length === 0 ? 0 : tags.includes(offering) ? 2 : -1;
-      return { t, score: matches * 100 + (t.supportCount ?? 0) };
+      const offTags = (t.offeringTags as string[]) ?? [];
+      const secTags = (t.sectorTags as string[]) ?? [];
+      let score = t.supportCount ?? 0;
+      if (offTags.length === 0 && secTags.length === 0) {
+        // org-wide theme; eligible
+      } else {
+        const offMatch = offTags.length === 0 || (offering && offTags.includes(offering));
+        const secMatch = secTags.length === 0 || (oppSector && secTags.includes(oppSector));
+        if (!offMatch && !secMatch) return { t, score: -1 };
+        if (offering && offTags.includes(offering)) score += 100;
+        if (oppSector && secTags.includes(oppSector)) score += 50;
+      }
+      return { t, score };
     })
     .filter((x) => x.score >= 0)
     .sort((a, b) => b.score - a.score)

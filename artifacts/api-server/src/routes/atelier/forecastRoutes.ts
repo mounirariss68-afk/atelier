@@ -9,12 +9,13 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, isNull } from "drizzle-orm";
+import { isNull, gte } from "drizzle-orm";
 import {
   db,
   atelierUsers,
   atelierOpportunities,
   atelierAccounts,
+  atelierOpportunityStageTransitions,
 } from "@workspace/db";
 
 function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferSelect | null {
@@ -105,7 +106,79 @@ router.get("/forecast", async (req, res) => {
     }),
     { count: 0, weightedValueUsd: 0, rawValueUsd: 0 },
   );
-  res.json({ by, rows, totals });
+
+  // Week-over-week deltas: rebuild the same buckets at "as-of last Monday"
+  // by rewinding probabilityPct to the priorProbabilityPct of any stage
+  // transition that happened in the last 7 days. Opps with no transitions
+  // are assumed unchanged.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentTrans = await db
+    .select()
+    .from(atelierOpportunityStageTransitions)
+    .where(gte(atelierOpportunityStageTransitions.createdAt, sevenDaysAgo));
+  const lastWeekProb = new Map<string, number>(); // oppId -> earliest prior prob in window
+  for (const t of recentTrans) {
+    const cur = lastWeekProb.get(t.opportunityId);
+    if (cur === undefined && typeof t.priorProbabilityPct === "number") {
+      lastWeekProb.set(t.opportunityId, t.priorProbabilityPct);
+    }
+  }
+  const lastWeekBuckets = new Map<string, number>(); // key -> weighted
+  function priorBump(key: string, o: typeof opps[number]) {
+    const prevProb = lastWeekProb.has(o.id)
+      ? lastWeekProb.get(o.id)!
+      : o.probabilityPct;
+    const w = (o.dealSizeHypothesis * prevProb) / 100;
+    lastWeekBuckets.set(key, (lastWeekBuckets.get(key) ?? 0) + w);
+  }
+  for (const o of opps) {
+    if (by === "partner") priorBump(o.partnerOwnerId, o);
+    else if (by === "offering") priorBump(o.offeringAnchor, o);
+    else if (by === "sector") priorBump(acctMap.get(o.accountId)?.sector ?? "unknown", o);
+    else if (by === "stage") priorBump(o.salesStage, o);
+    else if (by === "quarter") {
+      const q = o.nextMilestoneDate
+        ? quarterKey(new Date(o.nextMilestoneDate))
+        : quarterKey(new Date());
+      priorBump(q, o);
+    }
+  }
+  const rowsWithDelta = rows.map((r) => {
+    const prev = lastWeekBuckets.get(r.key) ?? 0;
+    const deltaWeightedValueUsd = r.weightedValueUsd - prev;
+    return { ...r, deltaWeightedValueUsd, weightedValueUsdLastWeek: prev };
+  });
+
+  // Top-3 movers across the bucketing dimension.
+  const movers = [...rowsWithDelta]
+    .sort((a, b) => Math.abs(b.deltaWeightedValueUsd) - Math.abs(a.deltaWeightedValueUsd))
+    .slice(0, 3)
+    .map((r) => ({
+      key: r.key,
+      label: r.label,
+      deltaWeightedValueUsd: r.deltaWeightedValueUsd,
+      direction: r.deltaWeightedValueUsd >= 0 ? "up" : "down",
+    }));
+
+  // Conversion funnel: # of opps currently in each canonical stage.
+  const FUNNEL = ["shape", "qualifying", "proposal_in_flight", "submitted", "signed"];
+  const funnel = FUNNEL.map((s) => ({
+    stage: s,
+    count: opps.filter((o) => o.salesStage === s).length,
+  }));
+
+  const lastWeekTotalWeighted = [...lastWeekBuckets.values()].reduce((a, b) => a + b, 0);
+  res.json({
+    by,
+    rows: rowsWithDelta,
+    totals: {
+      ...totals,
+      weightedValueUsdLastWeek: lastWeekTotalWeighted,
+      deltaWeightedValueUsd: totals.weightedValueUsd - lastWeekTotalWeighted,
+    },
+    movers,
+    funnel,
+  });
 });
 
 export default router;

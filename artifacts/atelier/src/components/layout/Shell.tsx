@@ -44,7 +44,7 @@ export function TopNav() {
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
     { href: "/forecast", label: "Forecast" },
-    { href: "/win-loss", label: "Win/Loss" },
+    { href: "/win-loss", label: "Win Themes" },
     { href: "/atelier", label: "Atelier" },
     { href: "/agents", label: "Agents" },
     { href: "/reports", label: "Reports" },
