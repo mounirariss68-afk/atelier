@@ -51,9 +51,13 @@ DECLARE
   eng_tables text[] := ARRAY[
     'atelier_deliverables','atelier_raid_items',
     'atelier_hypothesis_trees','atelier_processes','atelier_agent_designs',
-    -- Task #261 — Ledger + Wallet engagement gate. NULL engagement_id rows
-    -- (internal time, firm overhead) bypass the gate so a contractor or
-    -- partner-firm resource only sees rows tied to engagements they're on.
+    -- Task #261 — Ledger + Wallet engagement gate. Behavior is
+    -- secure-by-default: when `app.engagement_ids` is set (restricted
+    -- persona) ANY row whose engagement_id is NOT in the allow-list is
+    -- denied — this includes NULL engagement_id rows (internal time,
+    -- firm overhead). Org-wide visibility for those NULL rows requires
+    -- an unrestricted persona (partner / operations) where the
+    -- middleware leaves `app.engagement_ids` empty.
     'atelier_timesheet_entries','atelier_expenses'
   ];
   t text;

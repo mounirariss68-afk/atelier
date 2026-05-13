@@ -50,6 +50,9 @@ export default function Admin() {
     saudization?: { status: "ok" | "warn" | "unknown"; pct: number | null };
     fxFreshness?: { status: "ok" | "warn" | "unknown"; hours: number | null };
     receiptEncryption?: { status: "ok" | "warn" | "unknown"; unencryptedCount: number | null };
+    jurisdictions?:
+      | string[]
+      | Array<{ key: string; label: string; status: "ok" | "warn" | "unknown"; detail: string }>;
   };
   const [posture, setPosture] = React.useState<Posture | null>(null);
   const [todos, setTodos] = React.useState<string[]>([]);
@@ -362,6 +365,41 @@ export default function Admin() {
                     );
                   })}
                 </div>
+                {/* Task #261 — DIFC / ADGM / KSA jurisdiction registration chips. */}
+                {Array.isArray(posture.jurisdictions) &&
+                  posture.jurisdictions.length > 0 &&
+                  typeof posture.jurisdictions[0] === "object" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 border-t border-border-soft">
+                      {(
+                        posture.jurisdictions as Array<{
+                          key: string;
+                          label: string;
+                          status: "ok" | "warn" | "unknown";
+                          detail: string;
+                        }>
+                      ).map((j) => {
+                        const tone =
+                          j.status === "ok"
+                            ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-300"
+                            : j.status === "warn"
+                              ? "border-amber-500/40 bg-amber-500/5 text-amber-300"
+                              : "border-border-soft bg-surface-soft/30 text-text-mute";
+                        return (
+                          <div
+                            key={j.key}
+                            data-testid={`chip-jurisdiction-${j.key}`}
+                            className={`rounded-md border px-2.5 py-2 ${tone}`}
+                          >
+                            <div className="font-mono text-[10px] uppercase tracking-widest opacity-80">
+                              {j.label}
+                            </div>
+                            <div className="text-xs font-semibold mt-0.5 capitalize">{j.status}</div>
+                            <div className="text-[11px] opacity-80 mt-0.5">{j.detail}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
               </Card>
             )}
 

@@ -416,10 +416,47 @@ export async function getCompliancePosture(orgId: string) {
     saudization: { status: saudizationStatus, pct: saudizationPct },
     fxFreshness: { status: fxStatus, hours: fxFreshnessHours },
     receiptEncryption: { status: receiptEncryptionStatus, unencryptedCount: receiptUnencryptedCount },
-    // DIFC/ADGM/KSA registration confirmations are platform-level guarantees
-    // sourced from atelier_compliance_records of the corresponding `kind`s.
-    jurisdictions: ["DIFC", "ADGM", "KSA"],
+    // DIFC/ADGM/KSA registration confirmations sourced from
+    // atelier_compliance_records by `kind` (difc, adgm, ksa_cr). Each
+    // entry's status is `ok` when at least one active row exists for the
+    // jurisdiction, `warn` when rows exist but all are expired/expiring,
+    // and `unknown` when none are on file.
+    jurisdictions: await computeJurisdictionChips(orgId),
   };
+}
+
+async function computeJurisdictionChips(
+  orgId: string,
+): Promise<Array<{ key: "difc" | "adgm" | "ksa"; label: string; status: "ok" | "warn" | "unknown"; detail: string }>> {
+  const KINDS: Array<{ key: "difc" | "adgm" | "ksa"; label: string; kind: string }> = [
+    { key: "difc", label: "DIFC", kind: "difc" },
+    { key: "adgm", label: "ADGM", kind: "adgm" },
+    { key: "ksa", label: "KSA CR", kind: "ksa_cr" },
+  ];
+  const out: Array<{ key: "difc" | "adgm" | "ksa"; label: string; status: "ok" | "warn" | "unknown"; detail: string }> = [];
+  for (const j of KINDS) {
+    try {
+      const rows = await db
+        .select({ status: atelierComplianceRecords.status })
+        .from(atelierComplianceRecords)
+        .where(and(eq(atelierComplianceRecords.kind, j.kind), eq(atelierComplianceRecords.orgId, orgId)));
+      if (rows.length === 0) {
+        out.push({ key: j.key, label: j.label, status: "unknown", detail: "no registration on file" });
+        continue;
+      }
+      const active = rows.filter((r) => r.status === "active").length;
+      const status: "ok" | "warn" = active > 0 ? "ok" : "warn";
+      out.push({
+        key: j.key,
+        label: j.label,
+        status,
+        detail: status === "ok" ? `${active} active registration(s)` : `${rows.length} record(s), none active`,
+      });
+    } catch {
+      out.push({ key: j.key, label: j.label, status: "unknown", detail: "lookup failed" });
+    }
+  }
+  return out;
 }
 
 export async function patchCompliancePosture(
