@@ -770,11 +770,15 @@ router.put("/credentials/:credentialId", async (req, res) => {
     return;
   }
   const updated = await db.transaction(async (tx) => {
-    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    const patch: Partial<typeof atelierCredentials.$inferInsert> = {
+      updatedAt: new Date(),
+    };
     if (parsed.data.title !== undefined) patch.title = parsed.data.title;
     if (parsed.data.clientName !== undefined) patch.clientName = parsed.data.clientName;
     if (parsed.data.sector !== undefined) patch.sector = parsed.data.sector;
     if (parsed.data.engagementType !== undefined) patch.engagementType = parsed.data.engagementType;
+    // anonymizationStatus is NOT NULL in the schema; only apply when the
+    // partial update supplies a non-null value.
     if (parsed.data.anonymizationStatus) patch.anonymizationStatus = parsed.data.anonymizationStatus;
     if (parsed.data.redactedAbstract !== undefined) patch.redactedAbstract = parsed.data.redactedAbstract;
     if (parsed.data.attributedAbstract !== undefined) patch.attributedAbstract = parsed.data.attributedAbstract;
@@ -783,8 +787,7 @@ router.put("/credentials/:credentialId", async (req, res) => {
     if (parsed.data.tags !== undefined) patch.tags = parsed.data.tags;
     await tx
       .update(atelierCredentials)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .set(patch as any)
+      .set(patch)
       .where(eq(atelierCredentials.id, existing.id));
     const [row] = await tx.select().from(atelierCredentials).where(eq(atelierCredentials.id, existing.id));
     await tx.insert(atelierAuditEvents).values({

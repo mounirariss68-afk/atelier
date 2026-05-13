@@ -639,8 +639,10 @@ function DecisionMakersGraph({
         })}
       </svg>
       <div className="flex flex-wrap gap-3 mt-2 text-[10px] font-mono text-text-mute">
-        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#1F6F3E] mr-1" />champion</span>
-        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#7B1F1F] mr-1" />blocker</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#9C6A1F] mr-1" />champion</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#7A5316] mr-1" />supporter</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#1E2A47] mr-1" />neutral</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#7B1F1F] mr-1" />skeptic / blocker</span>
         <span><span className="inline-block w-3 h-px bg-[#3a4a6e] mr-1 align-middle" />reports_to</span>
         <span><span className="inline-block w-3 h-px bg-[#a83232] mr-1 align-middle" />blocks</span>
         <span><span className="inline-block w-3 h-px border-t border-dashed border-[#E89E2C] mr-1 align-middle" />partners_with</span>
