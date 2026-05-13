@@ -1025,7 +1025,7 @@ const AGENTS: AgentSeed[] = [
       "Cross-tabulate AICo offerings × buyer personas inside an account to surface the next 3 priority moves.",
     model: "claude-sonnet-4-6",
     starred: false,
-    status: "mvp",
+    status: "stub",
     tools: ["knowledge.search"],
     guardrails: [
       "Only personas already mapped on the account can be scored",
@@ -1043,7 +1043,7 @@ const AGENTS: AgentSeed[] = [
       "Compose a quarterly business-review canvas — wins, risks, next moves — bound to the account's engagements + signals.",
     model: "claude-sonnet-4-6",
     starred: false,
-    status: "mvp",
+    status: "stub",
     tools: ["knowledge.search"],
     guardrails: [
       "Sections must cite engagements or signals — no ungrounded claims",

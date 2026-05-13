@@ -5,6 +5,7 @@ import { atelierAuditEvents } from "@workspace/db";
 import { withRls } from "./rls";
 
 const ENTITY_TYPES = new Set([
+  "account",
   "opportunity",
   "engagement",
   "deliverable",

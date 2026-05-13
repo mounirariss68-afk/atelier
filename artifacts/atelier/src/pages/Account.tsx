@@ -202,7 +202,7 @@ export default function Account() {
         )}
         {tab === "whitespace" && <WhitespaceTab accountId={accountId} />}
         {tab === "qbr" && <QbrTab accountId={accountId} />}
-        {tab === "audit" && <AuditTab events={ws.audit} />}
+        {tab === "audit" && <AuditTab accountId={ws.account.id} events={ws.audit} />}
       </div>
     </div>
   );
@@ -681,19 +681,36 @@ function QbrTab({ accountId }: { accountId: string }) {
 }
 
 function AuditTab({
+  accountId,
   events,
 }: {
+  accountId: string;
   events: AtelierAccountWorkspace["audit"];
 }) {
+  const pdfHref = `/api/atelier/audit/export.pdf?entityType=account&entityId=${encodeURIComponent(accountId)}`;
+  const exportButton = (
+    <a
+      href={pdfHref}
+      className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono border border-border-soft rounded hover:border-gold/40 hover:text-gold transition"
+      data-testid="account-audit-pdf"
+    >
+      <FileText className="w-3.5 h-3.5" /> Export PDF
+    </a>
+  );
   if (events.length === 0) {
     return (
-      <Card className="p-8 text-center text-text-mute font-mono text-sm">
-        No audit events recorded.
+      <Card className="p-8 text-center text-text-mute font-mono text-sm space-y-3">
+        <div>No audit events recorded.</div>
+        <div className="flex justify-center">{exportButton}</div>
       </Card>
     );
   }
   return (
     <Card className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <Eyebrow>Immutable Audit Trail</Eyebrow>
+        {exportButton}
+      </div>
       <ul className="space-y-3">
         {events.map((e) => (
           <li key={e.id} className="border-b border-border-soft pb-3 last:border-0 last:pb-0">

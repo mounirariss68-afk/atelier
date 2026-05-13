@@ -352,6 +352,11 @@ router.get("/accounts/:accountId", async (req, res) => {
 router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
   const a = await loadAccount(req.params.accountId);
   if (!a) {
     res.status(404).json({ error: "not-found" });
@@ -409,7 +414,6 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
     });
   });
 
-  const access = await accessibleEngagementIds(me);
   const ws = await buildWorkspace(a.id, access);
   res.json(ws);
 });
@@ -592,6 +596,11 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
     .where(and(eq(atelierContacts.id, req.params.contactId), isNull(atelierContacts.deletedAt)));
   if (!c) {
     res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, c.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
     return;
   }
   const before = c.disposition;

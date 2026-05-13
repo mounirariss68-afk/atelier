@@ -1,5 +1,7 @@
 import * as React from "react";
 import {
+  useAtelierGetMe,
+  useAtelierListCredentials,
   useAtelierListAssets,
   getAtelierListAssetsQueryKey,
   useAtelierListPrompts,
@@ -192,33 +194,56 @@ function PromptsView() {
 }
 
 function CredentialsView() {
-  const { data: assets, isLoading } = useAtelierListAssets();
+  const { data: me } = useAtelierGetMe();
+  const { data: credentials, isLoading } = useAtelierListCredentials();
+  const isPartner = me?.role === "partner";
   if (isLoading) return <Skeleton className="h-64 mt-8 bg-bg-elevate" />;
-  const CRED_KINDS = ["template", "framework", "learning"];
-  const credentials = (assets ?? []).filter((a) => CRED_KINDS.includes(a.kind));
+  const list = credentials ?? [];
   return (
     <div className="mt-8 space-y-4">
-      <p className="text-sm text-text-mute">
-        Reusable proof: case studies, points of view, and diagnostic templates the firm cites in
-        proposals.
-      </p>
-      {credentials.length === 0 && (
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-text-mute">
+          Reusable proof: anonymized case studies and outcome metrics the firm cites in proposals.
+          {!isPartner && " Read-only — partners curate."}
+        </p>
+        {isPartner && (
+          <span className="text-xs font-mono text-gold/70 shrink-0">Partner-curated</span>
+        )}
+      </div>
+      {list.length === 0 && (
         <Card className="p-8 text-center border-dashed bg-bg-deep">
-          <p className="text-text-mute">No credential assets yet. Promote a POV from a deliverable to seed this list.</p>
+          <p className="text-text-mute">
+            No credentials yet. {isPartner ? "Add one via POST /api/atelier/credentials." : "Ask a partner to publish one."}
+          </p>
         </Card>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {credentials.map((c) => (
+        {list.map((c) => (
           <Card key={c.id} className="p-5 border-border" data-testid={`credential-${c.id}`}>
             <div className="flex items-center gap-2 mb-2">
               <KeyRound className="w-4 h-4 text-gold" />
-              <MonoChip>{c.kind.replace("_", " ")}</MonoChip>
+              <MonoChip>{c.engagementType}</MonoChip>
+              <MonoChip>{c.sector}</MonoChip>
+              <MonoChip tone={c.anonymizationStatus === "attributed" ? "gold" : undefined}>
+                {c.anonymizationStatus}
+              </MonoChip>
             </div>
-            <h4 className="font-semibold text-text mb-2">{c.title}</h4>
-            <p className="text-sm text-text-mute line-clamp-3">{c.abstract}</p>
-            <div className="mt-3 pt-3 border-t border-border-soft text-xs font-mono text-gold/70">
-              {c.provenance}
-            </div>
+            <h4 className="font-semibold text-text mb-1">{c.title}</h4>
+            <p className="text-xs font-mono text-text-faint mb-2">{c.clientName}</p>
+            <p className="text-sm text-text-mute line-clamp-3">
+              {c.anonymizationStatus === "attributed" && c.attributedAbstract
+                ? c.attributedAbstract
+                : c.redactedAbstract}
+            </p>
+            {c.outcomeMetrics && c.outcomeMetrics.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {c.outcomeMetrics.slice(0, 3).map((m, i) => (
+                  <span key={i} className="text-xs font-mono px-2 py-0.5 rounded border border-border-soft text-gold/80">
+                    {m.label}: {m.value}
+                  </span>
+                ))}
+              </div>
+            )}
           </Card>
         ))}
       </div>

@@ -31,8 +31,16 @@ function Router() {
         <Route path="/sign-in" component={SignIn} />
         <Route path="/" component={Home} />
         <Route path="/crm" component={Crm} />
-        <Route path="/pipeline" component={Pipeline} />
+        <Route path="/pipeline">
+          {() => {
+            window.history.replaceState(null, "", "/opportunities");
+            window.location.replace("/opportunities");
+            return null;
+          }}
+        </Route>
+        <Route path="/opportunities" component={Pipeline} />
         <Route path="/pipeline/:oppId" component={Opportunity} />
+        <Route path="/opportunities/:oppId" component={Opportunity} />
         <Route path="/engagements" component={Engagements} />
         <Route path="/engagements/:engId" component={Engagement} />
         <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
