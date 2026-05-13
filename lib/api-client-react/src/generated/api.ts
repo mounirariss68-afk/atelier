@@ -7782,6 +7782,169 @@ export const useAtelierUpdateRateCard = <
   return useMutation(getAtelierUpdateRateCardMutationOptions(options));
 };
 
+/**
+ * Soft-archive (sets status=archived + deletedAt). Partner-only.
+ */
+export const getAtelierArchiveRateCardUrl = (id: string) => {
+  return `/api/atelier/rate-cards/${id}`;
+};
+
+export const atelierArchiveRateCard = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAtelierArchiveRateCardUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierArchiveRateCardMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveRateCard>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchiveRateCard>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchiveRateCard"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchiveRateCard>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchiveRateCard(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchiveRateCardMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchiveRateCard>>
+>;
+
+export type AtelierArchiveRateCardMutationError = ErrorType<void>;
+
+export const useAtelierArchiveRateCard = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveRateCard>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchiveRateCard>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierArchiveRateCardMutationOptions(options));
+};
+
+/**
+ * Soft-deletes a single row from a rate card. Partner-only.
+ */
+export const getAtelierDeleteRateCardRowUrl = (id: string, rowId: string) => {
+  return `/api/atelier/rate-cards/${id}/rows/${rowId}`;
+};
+
+export const atelierDeleteRateCardRow = async (
+  id: string,
+  rowId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAtelierDeleteRateCardRowUrl(id, rowId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteRateCardRowMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteRateCardRow>>,
+    TError,
+    { id: string; rowId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteRateCardRow>>,
+  TError,
+  { id: string; rowId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteRateCardRow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteRateCardRow>>,
+    { id: string; rowId: string }
+  > = (props) => {
+    const { id, rowId } = props ?? {};
+
+    return atelierDeleteRateCardRow(id, rowId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteRateCardRowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteRateCardRow>>
+>;
+
+export type AtelierDeleteRateCardRowMutationError = ErrorType<void>;
+
+export const useAtelierDeleteRateCardRow = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteRateCardRow>>,
+    TError,
+    { id: string; rowId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteRateCardRow>>,
+  TError,
+  { id: string; rowId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteRateCardRowMutationOptions(options));
+};
+
 export const getAtelierAddRateCardRowUrl = (id: string) => {
   return `/api/atelier/rate-cards/${id}/rows`;
 };

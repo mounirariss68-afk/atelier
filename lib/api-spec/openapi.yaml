@@ -1702,6 +1702,38 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierRateCard" }
+    delete:
+      operationId: atelierArchiveRateCard
+      tags: [atelier]
+      description: Soft-archive (sets status=archived + deletedAt). Partner-only.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Archived }
+        "403": { description: Partner-only }
+        "404": { description: Not found }
+        "409": { description: Card is referenced by an active deal pricing }
+  /atelier/rate-cards/{id}/rows/{rowId}:
+    delete:
+      operationId: atelierDeleteRateCardRow
+      tags: [atelier]
+      description: Soft-deletes a single row from a rate card. Partner-only.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: path
+          name: rowId
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Removed }
+        "403": { description: Partner-only }
+        "404": { description: Not found }
   /atelier/rate-cards/{id}/rows:
     post:
       operationId: atelierAddRateCardRow

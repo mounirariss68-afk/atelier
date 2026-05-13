@@ -3759,6 +3759,21 @@ export const AtelierUpdateRateCardResponse = zod.object({
   createdAt: zod.coerce.date().optional(),
 });
 
+/**
+ * Soft-archive (sets status=archived + deletedAt). Partner-only.
+ */
+export const AtelierArchiveRateCardParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * Soft-deletes a single row from a rate card. Partner-only.
+ */
+export const AtelierDeleteRateCardRowParams = zod.object({
+  id: zod.coerce.string(),
+  rowId: zod.coerce.string(),
+});
+
 export const AtelierAddRateCardRowParams = zod.object({
   id: zod.coerce.string(),
 });
