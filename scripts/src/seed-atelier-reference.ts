@@ -104,6 +104,8 @@ export async function seedAtelierReference(): Promise<{
       code: s.code,
       industryCode: s.industryCode,
       displayNameEn: s.displayNameEn,
+      shortDescription: s.shortDescription,
+      defaultOfferingAnchor: s.defaultOfferingAnchor,
       displayOrder: s.displayOrder,
       status: "active" as const,
       createdByUserId: "system",

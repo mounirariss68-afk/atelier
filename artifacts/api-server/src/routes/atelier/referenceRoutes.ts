@@ -1,28 +1,22 @@
 /**
  * Atelier — Reference data routes (Task #290).
  *
- * Endpoints:
- *   GET    /atelier/reference/bootstrap                 (single-shot read for FE hydration)
+ *   GET    /atelier/reference/bootstrap
  *   GET    /atelier/reference/countries
  *   GET    /atelier/reference/industries
- *   GET    /atelier/reference/sub-industries
- *   PATCH  /atelier/reference/countries/:isoAlpha2       (admin: partner | operations)
- *   POST   /atelier/reference/industries                 (admin)
- *   PATCH  /atelier/reference/industries/:code           (admin)
- *   POST   /atelier/reference/sub-industries             (admin)
- *   PATCH  /atelier/reference/sub-industries/:code       (admin)
+ *   GET    /atelier/reference/sub_industries
+ *   PATCH  /atelier/reference/countries/:isoAlpha2  (admin: partner | operations)
+ *   POST   /atelier/reference/industries            (admin)
+ *   PATCH  /atelier/reference/industries/:code      (admin)
+ *   POST   /atelier/reference/sub_industries        (admin)
+ *   PATCH  /atelier/reference/sub_industries/:code  (admin)
  *
- * Countries are a closed ISO 3166-1 list — there is no POST: new entries
- * are added by extending COUNTRY_EXTRAS in the seed and re-running it.
- *
- * NOTE on access control: the patch (Persona Replacement, Task #292) will
- * formalize the role set including `operations`. Until then we gate writes
- * on `partner` only, with a TODO marker to widen to `operations` once the
- * persona enum lands.
+ * Countries are a closed ISO 3166-1 list — no POST; extend COUNTRY_EXTRAS
+ * in the seed and re-run it instead.
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -33,11 +27,7 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 
-// =============================================================
-// Validation schemas (Task #290) — keep parity with the rigour
-// applied in accountRoutes/opportunityRoutes by parsing every
-// write body with Zod before touching the DB.
-// =============================================================
+// Zod validation schemas for write endpoints.
 const STATUS = z.enum(["active", "deprecated"]);
 const SHORT_TEXT = z.string().trim().min(1).max(120);
 const MED_TEXT = z.string().trim().min(1).max(500);
@@ -117,8 +107,6 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
   return req.atelierPersona;
 }
 
-// TODO (Task #292): widen to (role === 'partner' || role === 'operations')
-// once the 9-persona enum migration lands.
 function canAdminReferenceData(me: typeof atelierUsers.$inferSelect): boolean {
   return me.role === "partner" || me.role === "operations";
 }
@@ -154,9 +142,7 @@ async function audit(
   });
 }
 
-// =============================================================
-// READ — bootstrap (one fetch for the FE combobox)
-// =============================================================
+// READ — bootstrap (one fetch for the FE combobox).
 router.get("/reference/bootstrap", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -189,16 +175,14 @@ router.get("/reference/industries", async (req, res) => {
   res.json(includeDeprecated ? rows : rows.filter((r) => r.status === "active"));
 });
 
-router.get("/reference/sub-industries", async (req, res) => {
+router.get("/reference/sub_industries", async (req, res) => {
   if (!ensurePersona(req, res)) return;
   const includeDeprecated = req.query.includeDeprecated === "true";
   const rows = await db.select().from(atelierSubIndustries);
   res.json(includeDeprecated ? rows : rows.filter((r) => r.status === "active"));
 });
 
-// =============================================================
 // WRITE — countries
-// =============================================================
 router.patch("/reference/countries/:isoAlpha2", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
@@ -220,7 +204,6 @@ router.patch("/reference/countries/:isoAlpha2", async (req, res) => {
     res.status(404).json({ error: "country-not-found" });
     return;
   }
-  // Cannot mutate ISO codes (patch §6.1) — Zod schema does not include them.
   const patch: Partial<typeof atelierCountries.$inferInsert> = {
     ...parsed.data,
     updatedAt: new Date(),
@@ -244,9 +227,7 @@ router.patch("/reference/countries/:isoAlpha2", async (req, res) => {
   res.json(updated);
 });
 
-// =============================================================
 // WRITE — industries
-// =============================================================
 router.post("/reference/industries", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
@@ -333,10 +314,8 @@ router.patch("/reference/industries/:code", async (req, res) => {
   res.json(updated);
 });
 
-// =============================================================
 // WRITE — sub-industries
-// =============================================================
-router.post("/reference/sub-industries", async (req, res) => {
+router.post("/reference/sub_industries", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
   const parsed = CreateSubIndustryBody.safeParse(req.body ?? {});
@@ -389,7 +368,7 @@ router.post("/reference/sub-industries", async (req, res) => {
   res.json(created);
 });
 
-router.patch("/reference/sub-industries/:code", async (req, res) => {
+router.patch("/reference/sub_industries/:code", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
   const code = String(req.params.code ?? "").toUpperCase();
@@ -432,8 +411,5 @@ router.patch("/reference/sub-industries/:code", async (req, res) => {
 
   res.json(updated);
 });
-
-// Suppress an unused-warning for `and` (kept for future combined filters).
-void and;
 
 export default router;

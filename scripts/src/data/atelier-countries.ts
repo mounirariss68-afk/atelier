@@ -345,56 +345,68 @@ export const INDUSTRIES = [
   { code: "XSEC", displayNameEn: "Cross-Sector / Diversified", displayNameAr: "متعدد القطاعات", shortDescription: "Conglomerates, PE, family holdings, NGOs, other", displayOrder: 8 },
 ] as const;
 
+/**
+ * Sub-industry catalogue (43 entries, AICo taxonomy).
+ *
+ * Per patch §6.1, every sub-industry must canonicalize a `defaultOfferingAnchor`
+ * (the offering family the AICo CSP defaults to when a deal lands in this
+ * sub-industry) and a `shortDescription` (one-liner used in the combobox and
+ * the admin page). Anchors map to AICo's four practice families:
+ *   • agentic_ai           — AI agents, copilots, assistive workflows
+ *   • legacy_modernization — replatforming, modernization, migration
+ *   • data_foundations     — data platforms, lakes, warehousing, governance
+ *   • ai_product           — productized AI / model deployment
+ */
 export const SUB_INDUSTRIES = [
   // HPS (8)
-  { code: "HPS_FED", industryCode: "HPS", displayNameEn: "Federal Government", displayOrder: 1 },
-  { code: "HPS_LOCAL", industryCode: "HPS", displayNameEn: "Local Government / Municipalities", displayOrder: 2 },
-  { code: "HPS_SOVEREIGN", industryCode: "HPS", displayNameEn: "Sovereign Wealth / SWF", displayOrder: 3 },
-  { code: "HPS_HEALTHCARE", industryCode: "HPS", displayNameEn: "Healthcare Providers", displayOrder: 4 },
-  { code: "HPS_PHARMA", industryCode: "HPS", displayNameEn: "Pharma & Life Sciences", displayOrder: 5 },
-  { code: "HPS_EDUCATION", industryCode: "HPS", displayNameEn: "Education", displayOrder: 6 },
-  { code: "HPS_DEFENSE_CIVIL", industryCode: "HPS", displayNameEn: "Defense (civilian / non-classified)", displayOrder: 7 },
-  { code: "HPS_NGO", industryCode: "HPS", displayNameEn: "NGO / Multilateral", displayOrder: 8 },
+  { code: "HPS_FED", industryCode: "HPS", displayNameEn: "Federal Government", displayOrder: 1, shortDescription: "National ministries, central agencies, federal programs", defaultOfferingAnchor: "legacy_modernization" },
+  { code: "HPS_LOCAL", industryCode: "HPS", displayNameEn: "Local Government / Municipalities", displayOrder: 2, shortDescription: "Cities, emirates, smart-city authorities, public services", defaultOfferingAnchor: "agentic_ai" },
+  { code: "HPS_SOVEREIGN", industryCode: "HPS", displayNameEn: "Sovereign Wealth / SWF", displayOrder: 3, shortDescription: "PIF, ADIA, Mubadala-class investors and their portfolios", defaultOfferingAnchor: "data_foundations" },
+  { code: "HPS_HEALTHCARE", industryCode: "HPS", displayNameEn: "Healthcare Providers", displayOrder: 4, shortDescription: "Hospital groups, clinics, payor-providers, health authorities", defaultOfferingAnchor: "agentic_ai" },
+  { code: "HPS_PHARMA", industryCode: "HPS", displayNameEn: "Pharma & Life Sciences", displayOrder: 5, shortDescription: "Pharmaceutical, biotech, medical-devices, regulators", defaultOfferingAnchor: "ai_product" },
+  { code: "HPS_EDUCATION", industryCode: "HPS", displayNameEn: "Education", displayOrder: 6, shortDescription: "K-12, higher ed, ministries of education, EdTech", defaultOfferingAnchor: "agentic_ai" },
+  { code: "HPS_DEFENSE_CIVIL", industryCode: "HPS", displayNameEn: "Defense (civilian / non-classified)", displayOrder: 7, shortDescription: "Civilian defense back-office, simulation, training", defaultOfferingAnchor: "legacy_modernization" },
+  { code: "HPS_NGO", industryCode: "HPS", displayNameEn: "NGO / Multilateral", displayOrder: 8, shortDescription: "UN agencies, foundations, development banks, NGOs", defaultOfferingAnchor: "data_foundations" },
   // FS (6)
-  { code: "FS_BANKING", industryCode: "FS", displayNameEn: "Banking", displayOrder: 1 },
-  { code: "FS_INSURANCE", industryCode: "FS", displayNameEn: "Insurance", displayOrder: 2 },
-  { code: "FS_CAPMKT", industryCode: "FS", displayNameEn: "Capital Markets", displayOrder: 3 },
-  { code: "FS_WEALTH", industryCode: "FS", displayNameEn: "Wealth & Asset Management", displayOrder: 4 },
-  { code: "FS_FINTECH", industryCode: "FS", displayNameEn: "FinTech", displayOrder: 5 },
-  { code: "FS_ISLAMIC", industryCode: "FS", displayNameEn: "Islamic Finance", displayOrder: 6 },
+  { code: "FS_BANKING", industryCode: "FS", displayNameEn: "Banking", displayOrder: 1, shortDescription: "Retail, commercial, corporate banking; core systems", defaultOfferingAnchor: "agentic_ai" },
+  { code: "FS_INSURANCE", industryCode: "FS", displayNameEn: "Insurance", displayOrder: 2, shortDescription: "P&C, life, health, takaful; underwriting and claims", defaultOfferingAnchor: "agentic_ai" },
+  { code: "FS_CAPMKT", industryCode: "FS", displayNameEn: "Capital Markets", displayOrder: 3, shortDescription: "Exchanges, brokers, custodians, market infrastructure", defaultOfferingAnchor: "data_foundations" },
+  { code: "FS_WEALTH", industryCode: "FS", displayNameEn: "Wealth & Asset Management", displayOrder: 4, shortDescription: "Private banks, asset managers, family offices", defaultOfferingAnchor: "agentic_ai" },
+  { code: "FS_FINTECH", industryCode: "FS", displayNameEn: "FinTech", displayOrder: 5, shortDescription: "Digital-native lenders, payments, neobanks, embedded finance", defaultOfferingAnchor: "ai_product" },
+  { code: "FS_ISLAMIC", industryCode: "FS", displayNameEn: "Islamic Finance", displayOrder: 6, shortDescription: "Sharia-compliant banking, sukuk, takaful, Islamic windows", defaultOfferingAnchor: "data_foundations" },
   // TMT (5)
-  { code: "TMT_TELECOM", industryCode: "TMT", displayNameEn: "Telecom", displayOrder: 1 },
-  { code: "TMT_MEDIA", industryCode: "TMT", displayNameEn: "Media & Entertainment", displayOrder: 2 },
-  { code: "TMT_SOFTWARE", industryCode: "TMT", displayNameEn: "Software", displayOrder: 3 },
-  { code: "TMT_HIGHTECH", industryCode: "TMT", displayNameEn: "High Tech / Hardware", displayOrder: 4 },
-  { code: "TMT_DIGITAL_NATIVE", industryCode: "TMT", displayNameEn: "Digital Native", displayOrder: 5 },
+  { code: "TMT_TELECOM", industryCode: "TMT", displayNameEn: "Telecom", displayOrder: 1, shortDescription: "Mobile/fixed operators, towercos, ISPs, B2B carriers", defaultOfferingAnchor: "agentic_ai" },
+  { code: "TMT_MEDIA", industryCode: "TMT", displayNameEn: "Media & Entertainment", displayOrder: 2, shortDescription: "Broadcast, streaming, publishing, gaming, sports", defaultOfferingAnchor: "ai_product" },
+  { code: "TMT_SOFTWARE", industryCode: "TMT", displayNameEn: "Software", displayOrder: 3, shortDescription: "Enterprise/B2B SaaS vendors, ISVs, platform plays", defaultOfferingAnchor: "ai_product" },
+  { code: "TMT_HIGHTECH", industryCode: "TMT", displayNameEn: "High Tech / Hardware", displayOrder: 4, shortDescription: "Semiconductors, electronics, OEMs, IoT hardware", defaultOfferingAnchor: "data_foundations" },
+  { code: "TMT_DIGITAL_NATIVE", industryCode: "TMT", displayNameEn: "Digital Native", displayOrder: 5, shortDescription: "Marketplaces, ride-hailing, super-apps, internet companies", defaultOfferingAnchor: "ai_product" },
   // ER (6)
-  { code: "ER_OIL_GAS", industryCode: "ER", displayNameEn: "Oil & Gas", displayOrder: 1 },
-  { code: "ER_MINING", industryCode: "ER", displayNameEn: "Mining & Metals", displayOrder: 2 },
-  { code: "ER_UTILITIES", industryCode: "ER", displayNameEn: "Utilities (Power & Water)", displayOrder: 3 },
-  { code: "ER_CHEMICALS", industryCode: "ER", displayNameEn: "Chemicals", displayOrder: 4 },
-  { code: "ER_PETROCHEM", industryCode: "ER", displayNameEn: "Petrochemicals", displayOrder: 5 },
-  { code: "ER_RENEWABLES", industryCode: "ER", displayNameEn: "Renewables / Clean Energy", displayOrder: 6 },
+  { code: "ER_OIL_GAS", industryCode: "ER", displayNameEn: "Oil & Gas", displayOrder: 1, shortDescription: "Upstream, midstream, downstream, NOCs and IOCs", defaultOfferingAnchor: "data_foundations" },
+  { code: "ER_MINING", industryCode: "ER", displayNameEn: "Mining & Metals", displayOrder: 2, shortDescription: "Extractives, processing, smelting, metals trading", defaultOfferingAnchor: "data_foundations" },
+  { code: "ER_UTILITIES", industryCode: "ER", displayNameEn: "Utilities (Power & Water)", displayOrder: 3, shortDescription: "Generation, T&D, water utilities, grid operators", defaultOfferingAnchor: "legacy_modernization" },
+  { code: "ER_CHEMICALS", industryCode: "ER", displayNameEn: "Chemicals", displayOrder: 4, shortDescription: "Specialty/commodity chemicals, agrochemicals", defaultOfferingAnchor: "data_foundations" },
+  { code: "ER_PETROCHEM", industryCode: "ER", displayNameEn: "Petrochemicals", displayOrder: 5, shortDescription: "Refining, ethylene/PE/PP, fertilizers, derivatives", defaultOfferingAnchor: "data_foundations" },
+  { code: "ER_RENEWABLES", industryCode: "ER", displayNameEn: "Renewables / Clean Energy", displayOrder: 6, shortDescription: "Solar, wind, hydrogen, energy storage, EV infra", defaultOfferingAnchor: "data_foundations" },
   // IGR (5)
-  { code: "IGR_CONSTRUCTION", industryCode: "IGR", displayNameEn: "Construction & Engineering", displayOrder: 1 },
-  { code: "IGR_REAL_ESTATE", industryCode: "IGR", displayNameEn: "Real Estate Development", displayOrder: 2 },
-  { code: "IGR_MANUFACTURING", industryCode: "IGR", displayNameEn: "Industrial Manufacturing", displayOrder: 3 },
-  { code: "IGR_AEROSPACE_DEFENSE", industryCode: "IGR", displayNameEn: "Aerospace & Defense (commercial)", displayOrder: 4 },
-  { code: "IGR_ENG_SVCS", industryCode: "IGR", displayNameEn: "Engineering Services", displayOrder: 5 },
+  { code: "IGR_CONSTRUCTION", industryCode: "IGR", displayNameEn: "Construction & Engineering", displayOrder: 1, shortDescription: "Contractors, EPC firms, infrastructure programs", defaultOfferingAnchor: "legacy_modernization" },
+  { code: "IGR_REAL_ESTATE", industryCode: "IGR", displayNameEn: "Real Estate Development", displayOrder: 2, shortDescription: "Master developers, REITs, property managers, PropTech", defaultOfferingAnchor: "agentic_ai" },
+  { code: "IGR_MANUFACTURING", industryCode: "IGR", displayNameEn: "Industrial Manufacturing", displayOrder: 3, shortDescription: "Heavy/light manufacturing, factory operations, MES/SCADA", defaultOfferingAnchor: "data_foundations" },
+  { code: "IGR_AEROSPACE_DEFENSE", industryCode: "IGR", displayNameEn: "Aerospace & Defense (commercial)", displayOrder: 4, shortDescription: "Commercial aerospace OEMs, MRO, defense electronics", defaultOfferingAnchor: "ai_product" },
+  { code: "IGR_ENG_SVCS", industryCode: "IGR", displayNameEn: "Engineering Services", displayOrder: 5, shortDescription: "Engineering consultancies, design firms, program mgmt", defaultOfferingAnchor: "agentic_ai" },
   // TTH (5)
-  { code: "TTH_AVIATION", industryCode: "TTH", displayNameEn: "Aviation", displayOrder: 1 },
-  { code: "TTH_PORTS_SHIPPING", industryCode: "TTH", displayNameEn: "Ports & Shipping", displayOrder: 2 },
-  { code: "TTH_LOGISTICS", industryCode: "TTH", displayNameEn: "Logistics", displayOrder: 3 },
-  { code: "TTH_HOSPITALITY", industryCode: "TTH", displayNameEn: "Hospitality", displayOrder: 4 },
-  { code: "TTH_TOURISM_AUTHORITY", industryCode: "TTH", displayNameEn: "Tourism Authorities", displayOrder: 5 },
+  { code: "TTH_AVIATION", industryCode: "TTH", displayNameEn: "Aviation", displayOrder: 1, shortDescription: "Airlines, airports, ANSPs, ground handling", defaultOfferingAnchor: "agentic_ai" },
+  { code: "TTH_PORTS_SHIPPING", industryCode: "TTH", displayNameEn: "Ports & Shipping", displayOrder: 2, shortDescription: "Container terminals, shipping lines, port operators", defaultOfferingAnchor: "data_foundations" },
+  { code: "TTH_LOGISTICS", industryCode: "TTH", displayNameEn: "Logistics", displayOrder: 3, shortDescription: "3PLs, freight forwarders, last-mile, postal operators", defaultOfferingAnchor: "agentic_ai" },
+  { code: "TTH_HOSPITALITY", industryCode: "TTH", displayNameEn: "Hospitality", displayOrder: 4, shortDescription: "Hotels, resorts, F&B chains, hospitality groups", defaultOfferingAnchor: "agentic_ai" },
+  { code: "TTH_TOURISM_AUTHORITY", industryCode: "TTH", displayNameEn: "Tourism Authorities", displayOrder: 5, shortDescription: "Destination marketing organizations, tourism boards", defaultOfferingAnchor: "data_foundations" },
   // RC (5)
-  { code: "RC_RETAIL", industryCode: "RC", displayNameEn: "Retail", displayOrder: 1 },
-  { code: "RC_CPG", industryCode: "RC", displayNameEn: "Consumer Packaged Goods", displayOrder: 2 },
-  { code: "RC_LUXURY", industryCode: "RC", displayNameEn: "Luxury", displayOrder: 3 },
-  { code: "RC_BEAUTY", industryCode: "RC", displayNameEn: "Beauty & Personal Care", displayOrder: 4 },
-  { code: "RC_FB", industryCode: "RC", displayNameEn: "Food & Beverage", displayOrder: 5 },
+  { code: "RC_RETAIL", industryCode: "RC", displayNameEn: "Retail", displayOrder: 1, shortDescription: "Department stores, specialty retail, grocery, e-commerce", defaultOfferingAnchor: "agentic_ai" },
+  { code: "RC_CPG", industryCode: "RC", displayNameEn: "Consumer Packaged Goods", displayOrder: 2, shortDescription: "Food, beverage, household, personal-care manufacturers", defaultOfferingAnchor: "data_foundations" },
+  { code: "RC_LUXURY", industryCode: "RC", displayNameEn: "Luxury", displayOrder: 3, shortDescription: "Luxury fashion, watches, jewelry, leather goods", defaultOfferingAnchor: "ai_product" },
+  { code: "RC_BEAUTY", industryCode: "RC", displayNameEn: "Beauty & Personal Care", displayOrder: 4, shortDescription: "Cosmetics, skincare, fragrance, personal care brands", defaultOfferingAnchor: "ai_product" },
+  { code: "RC_FB", industryCode: "RC", displayNameEn: "Food & Beverage", displayOrder: 5, shortDescription: "Restaurants, QSR, beverage producers, catering", defaultOfferingAnchor: "agentic_ai" },
   // XSEC (3)
-  { code: "XSEC_CONGLOMERATE", industryCode: "XSEC", displayNameEn: "Conglomerate / Family Holding", displayOrder: 1 },
-  { code: "XSEC_PE", industryCode: "XSEC", displayNameEn: "Private Equity / Investment", displayOrder: 2 },
-  { code: "XSEC_OTHER", industryCode: "XSEC", displayNameEn: "Other / Unclassified", displayOrder: 3 },
+  { code: "XSEC_CONGLOMERATE", industryCode: "XSEC", displayNameEn: "Conglomerate / Family Holding", displayOrder: 1, shortDescription: "Diversified holdings, family offices, family-business groups", defaultOfferingAnchor: "data_foundations" },
+  { code: "XSEC_PE", industryCode: "XSEC", displayNameEn: "Private Equity / Investment", displayOrder: 2, shortDescription: "PE/VC funds and their portfolio companies", defaultOfferingAnchor: "data_foundations" },
+  { code: "XSEC_OTHER", industryCode: "XSEC", displayNameEn: "Other / Unclassified", displayOrder: 3, shortDescription: "Catch-all for clients that do not fit other taxonomies", defaultOfferingAnchor: "agentic_ai" },
 ] as const;
