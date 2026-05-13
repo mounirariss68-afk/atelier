@@ -2204,6 +2204,8 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AtelierComplianceRow" }
         status: { type: string }
+        pdfUrl: { type: ["string", "null"] }
+        docxUrl: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     AtelierProposalDetail:
       type: object
@@ -2215,10 +2217,11 @@ components:
           items: { $ref: "#/components/schemas/AtelierProposalSection" }
     AtelierProposalSendResponse:
       type: object
-      required: [proposal, artifactUrl]
+      required: [proposal, pdfUrl, docxUrl]
       properties:
         proposal: { $ref: "#/components/schemas/AtelierProposal" }
-        artifactUrl: { type: string }
+        pdfUrl: { type: string }
+        docxUrl: { type: string }
     AtelierComposeProposalInput:
       type: object
       properties:

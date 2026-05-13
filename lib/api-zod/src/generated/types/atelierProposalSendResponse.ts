@@ -9,5 +9,6 @@ import type { AtelierProposal } from "./atelierProposal";
 
 export interface AtelierProposalSendResponse {
   proposal: AtelierProposal;
-  artifactUrl: string;
+  pdfUrl: string;
+  docxUrl: string;
 }

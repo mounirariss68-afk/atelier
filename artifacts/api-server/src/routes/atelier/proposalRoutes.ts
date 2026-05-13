@@ -12,7 +12,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, or } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -30,6 +30,8 @@ import {
   runAgentArchitect,
   runPrototypeForge,
   runProposalComposer,
+  type MeetingScribeOutput,
+  type CharterArchitectOutput,
 } from "../../lib/atelier-agents/runner.js";
 import { generateProposalDocs, ATELIER_ARTIFACT_DIR } from "../../lib/atelier-agents/proposal-docs.js";
 import { createReadStream, existsSync } from "node:fs";
@@ -339,15 +341,36 @@ router.post("/opportunities/:oppId/prototype", async (req, res) => {
     brandOverrides?: { primary?: string; logo?: string } | null;
     partnerDataApproved?: boolean;
   };
+  // Pre-pull the most-recent successful Meeting Scribe run on this
+  // opportunity. If Scribe surfaced a `suggestedPrototypeBrief`, those
+  // fields seed the Forge brief unless the caller passes overrides.
+  // This is the cross-agent wiring required by Task #223.
+  const [latestScribe] = await db
+    .select({ output: atelierAgentRuns.output })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, "meeting_scribe"),
+        eq(atelierAgentRuns.targetType, "opportunity"),
+        eq(atelierAgentRuns.targetId, opp.id),
+        eq(atelierAgentRuns.status, "success"),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  const scribeBrief = (latestScribe?.output as MeetingScribeOutput | null)
+    ?.suggestedPrototypeBrief ?? null;
   const brief = {
     name: body.name ?? `Prototype — ${opp.name}`,
-    audience: body.audience ?? "Client decision-maker",
-    problem: body.problem ?? "Demonstrate agentic feasibility.",
-    agenticThesis: body.agenticThesis ?? "An agent assists; a human decides.",
-    demos: body.demos ?? ["Headline demo"],
+    audience: body.audience ?? scribeBrief?.audience ?? "Client decision-maker",
+    problem: body.problem ?? scribeBrief?.problem ?? "Demonstrate agentic feasibility.",
+    agenticThesis:
+      body.agenticThesis ?? scribeBrief?.agenticThesis ?? "An agent assists; a human decides.",
+    demos: body.demos ?? scribeBrief?.demos ?? ["Headline demo"],
     constraints: body.constraints ?? [],
     brandOverrides: body.brandOverrides ?? null,
     partnerDataApproved: body.partnerDataApproved ?? false,
+    seededFrom: scribeBrief ? "meeting_scribe" : null,
   };
   const { runId, output } = await runPrototypeForge({
     opportunityId: opp.id,
@@ -429,11 +452,33 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
     "terms",
     "compliance",
   ];
+  // Pre-pull the most-recent Charter Architect run for this org.  When
+  // present, its `proposedWorkstreams` seed the team-allocation defaults
+  // (one row per workstream, lead role mapped through) so the proposal
+  // reflects the charter rather than a generic team. This is the
+  // Task #223 cross-agent wiring (charter → composer).
+  const [latestCharter] = await db
+    .select({ output: atelierAgentRuns.output })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, "charter_architect"),
+        eq(atelierAgentRuns.orgId, me.orgId),
+        eq(atelierAgentRuns.status, "success"),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  const proposedWorkstreams =
+    (latestCharter?.output as CharterArchitectOutput | null)?.proposedWorkstreams ?? [];
+  const teamFromCharter = proposedWorkstreams.length
+    ? proposedWorkstreams.map((w) => ({ role: w.leadRole, alloc: 60 }))
+    : null;
   const { runId, output } = await runProposalComposer({
     opportunityId: opp.id,
     opportunityName: opp.name,
     sectionsRequired,
-    teamProposed: body.teamProposed ?? [
+    teamProposed: body.teamProposed ?? teamFromCharter ?? [
       { role: "partner", alloc: 15 },
       { role: "lead", alloc: 80 },
       { role: "sme", alloc: 60 },
@@ -453,8 +498,12 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
       runId,
       title: output.title,
       sectionsRequired,
-      teamProposed: body.teamProposed ?? [],
-      pricingIntent: body.pricingIntent ?? {},
+      teamProposed: body.teamProposed ?? teamFromCharter ?? [],
+      pricingIntent: {
+        ...(body.pricingIntent ?? {}),
+        seededFromCharter: proposedWorkstreams.length > 0,
+        proposedWorkstreams,
+      },
       pricingModel: output.pricingModel as unknown as Record<string, unknown>,
       winThemes: output.winThemes,
       complianceMatrix: output.complianceMatrix,
@@ -726,7 +775,7 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
   const docxUrl = `/api/atelier/artifacts/${docxFile}`;
   const [updated] = await db
     .update(atelierProposals)
-    .set({ status: "sent", updatedAt: new Date() })
+    .set({ status: "sent", pdfUrl, docxUrl, updatedAt: new Date() })
     .where(eq(atelierProposals.id, proposal.id))
     .returning();
   await audit({
@@ -744,12 +793,30 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
 // os.tmpdir()/atelier-artifacts and are name-prefixed with proposal-id, so
 // access control falls back on the unguessable id (the same posture used
 // for other generated artifacts in the workspace).
-router.get("/artifacts/:filename", (req, res) => {
+router.get("/artifacts/:filename", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
   const safe = req.params.filename.replace(/[^A-Za-z0-9._-]/g, "");
   if (!safe || safe !== req.params.filename) {
     res.status(400).json({ error: "bad-filename" });
     return;
   }
+  // Resolve the file back to a proposal row using the persisted
+  // pdf_url/docx_url columns, then enforce the same opportunity ACL
+  // used everywhere else. Deny if the file is not registered to a
+  // proposal — never serve unowned bytes.
+  const expectedUrl = `/api/atelier/artifacts/${safe}`;
+  const [owner] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(
+      and(
+        isNull(atelierProposals.deletedAt),
+        or(eq(atelierProposals.pdfUrl, expectedUrl), eq(atelierProposals.docxUrl, expectedUrl)),
+      ),
+    );
+  if (!owner) { res.status(404).json({ error: "not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, owner.opportunityId))) return;
   const full = join(ATELIER_ARTIFACT_DIR, safe);
   if (!existsSync(full)) { res.status(404).json({ error: "not-found" }); return; }
   const ct = safe.endsWith(".pdf") ? "application/pdf"

@@ -1866,6 +1866,8 @@ export const AtelierGetProposalResponse = zod.object({
       )
       .optional(),
     status: zod.string(),
+    pdfUrl: zod.string().nullish(),
+    docxUrl: zod.string().nullish(),
     createdAt: zod.coerce.date(),
   }),
   sections: zod.array(
@@ -1986,6 +1988,8 @@ export const AtelierApproveProposalPricingResponse = zod.object({
     )
     .optional(),
   status: zod.string(),
+  pdfUrl: zod.string().nullish(),
+  docxUrl: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -2038,9 +2042,12 @@ export const AtelierSendProposalResponse = zod.object({
       )
       .optional(),
     status: zod.string(),
+    pdfUrl: zod.string().nullish(),
+    docxUrl: zod.string().nullish(),
     createdAt: zod.coerce.date(),
   }),
-  artifactUrl: zod.string(),
+  pdfUrl: zod.string(),
+  docxUrl: zod.string(),
 });
 
 export const AtelierApproveProposalSectionParams = zod.object({

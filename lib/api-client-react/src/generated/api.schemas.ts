@@ -1358,6 +1358,10 @@ export interface AtelierProposal {
   winThemes?: string[];
   complianceMatrix?: AtelierComplianceRow[];
   status: string;
+  /** @nullable */
+  pdfUrl?: string | null;
+  /** @nullable */
+  docxUrl?: string | null;
   createdAt: string;
 }
 
@@ -1368,7 +1372,8 @@ export interface AtelierProposalDetail {
 
 export interface AtelierProposalSendResponse {
   proposal: AtelierProposal;
-  artifactUrl: string;
+  pdfUrl: string;
+  docxUrl: string;
 }
 
 export type AtelierComposeProposalInputTeamProposedItem = {

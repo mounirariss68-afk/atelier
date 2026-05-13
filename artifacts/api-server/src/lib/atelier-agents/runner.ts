@@ -102,6 +102,15 @@ export interface MeetingScribeOutput {
     capacity: string;
     contract: string;
   };
+  // Optional prototype seed surfaced by Scribe when the conversation
+  // contains a clear demo-able hypothesis. Picked up by Prototype Forge
+  // on the same opportunity so the lead can forge directly from a meeting.
+  suggestedPrototypeBrief?: {
+    audience: string;
+    problem: string;
+    agenticThesis: string;
+    demos: string[];
+  } | null;
 }
 
 // ------- run lifecycle helpers -------
@@ -686,6 +695,14 @@ function mockMeeting(
           capacity: "no prior brief",
           contract: "no prior brief",
         },
+    suggestedPrototypeBrief: tlen > 200
+      ? {
+          audience: "Client decision-maker discussed in the call",
+          problem: "Demonstrate the worked example referenced in this meeting.",
+          agenticThesis: "An agent prepares the recommendation; the human decides.",
+          demos: ["Headline demo tied to the open scoping question"],
+        }
+      : null,
   };
 }
 
