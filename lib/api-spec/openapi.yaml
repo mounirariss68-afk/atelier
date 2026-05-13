@@ -89,6 +89,20 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AtelierPersona"
+  /atelier/users:
+    get:
+      operationId: atelierListUsers
+      tags: [atelier]
+      summary: List active atelier_users (for owner pickers etc.)
+      responses:
+        "200":
+          description: Active atelier users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierPersona"
   /atelier/personas/switch:
     post:
       operationId: atelierSwitchPersona
@@ -2586,14 +2600,50 @@ components:
 
     AtelierCreateOpportunityInput:
       type: object
-      required: [name, accountName, accountCountry, accountSector]
+      required: [name, description]
       properties:
-        name: { type: string }
-        accountName: { type: string }
-        accountCountry: { type: string }
-        accountSector: { type: string }
-        contextBlurb: { type: string, default: "" }
-        dealSizeUsd: { type: number, default: 250000 }
+        name: { type: string, minLength: 1 }
+        description:
+          type: string
+          minLength: 1
+          description: |
+            Free-text description of what we're pursuing. This is what Pursuit
+            Scout reads first; persisted as the opportunity's offering anchor.
+        accountId:
+          type: ["string", "null"]
+          description: |
+            Existing atelier_accounts.id. Required when not creating a new
+            account. When omitted, accountName/accountCountry/accountSector
+            must be provided to create a new account.
+        accountName: { type: ["string", "null"] }
+        accountCountry: { type: ["string", "null"] }
+        accountSector: { type: ["string", "null"] }
+        accountTier:
+          oneOf:
+            - { $ref: "#/components/schemas/AtelierAccountTier" }
+            - { type: "null" }
+        partnerOwnerId:
+          type: ["string", "null"]
+          description: atelier_users.id of the partner owner. Defaults to creator if omitted.
+        engagementLeadId:
+          type: ["string", "null"]
+          description: atelier_users.id of the engagement lead. Defaults to creator if omitted.
+        sourceLead:
+          type: ["string", "null"]
+          description: |
+            Lead origin. One of inbound, referral, outbound, existing_client,
+            event, manual. Free-form fallback allowed.
+        dealSizeUsd: { type: ["number", "null"], default: 250000 }
+        probabilityPct: { type: ["number", "null"], minimum: 0, maximum: 100 }
+        nextMilestone: { type: ["string", "null"] }
+        nextMilestoneDate: { type: ["string", "null"] }
+        contextBlurb:
+          type: string
+          default: ""
+          description: Deprecated alias for description; retained for backwards compatibility.
+        scoutFocus:
+          type: ["string", "null"]
+          description: Optional steering text passed to Pursuit Scout alongside the description.
         runScout: { type: boolean, default: true }
 
     AtelierCreateOpportunityResponse:

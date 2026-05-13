@@ -192,6 +192,15 @@ router.get("/personas", async (_req, res) => {
   res.json(AtelierListPersonasResponse.parse(rows.map(personaToWire)));
 });
 
+// Active atelier users — used by owner pickers (e.g. New Opportunity dialog).
+router.get("/users", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(atelierUsers)
+    .where(isNull(atelierUsers.deletedAt));
+  res.json(rows.map(personaToWire));
+});
+
 router.post("/personas/switch", async (req, res) => {
   const parsed = AtelierSwitchPersonaBody.safeParse(req.body);
   if (!parsed.success) {

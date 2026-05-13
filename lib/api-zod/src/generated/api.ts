@@ -91,6 +91,30 @@ export const AtelierListPersonasResponse = zod.array(
 );
 
 /**
+ * @summary List active atelier_users (for owner pickers etc.)
+ */
+export const AtelierListUsersResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "partner",
+    "engagement_lead",
+    "sme",
+    "ai_engineer",
+    "business_developer",
+    "operations",
+    "contractor",
+    "partner_firm_resource",
+  ]),
+  roleLabel: zod.string(),
+  title: zod.string(),
+  initials: zod.string(),
+  avatarUrl: zod.string().nullish(),
+});
+export const AtelierListUsersResponse = zod.array(AtelierListUsersResponseItem);
+
+/**
  * @summary Switch the active persona (mock auth for MVP shell)
  */
 export const AtelierSwitchPersonaBody = zod.object({
@@ -298,21 +322,75 @@ export const AtelierListOpportunitiesResponse = zod.array(
 /**
  * @summary Create a new opportunity (Pursuit Scout auto-runs)
  */
-export const atelierCreateOpportunityBodyContextBlurbDefault = ``;
+
 export const atelierCreateOpportunityBodyDealSizeUsdDefault = 250000;
+export const atelierCreateOpportunityBodyProbabilityPctMin = 0;
+export const atelierCreateOpportunityBodyProbabilityPctMax = 100;
+
+export const atelierCreateOpportunityBodyContextBlurbDefault = ``;
 export const atelierCreateOpportunityBodyRunScoutDefault = true;
 
 export const AtelierCreateOpportunityBody = zod.object({
-  name: zod.string(),
-  accountName: zod.string(),
-  accountCountry: zod.string(),
-  accountSector: zod.string(),
-  contextBlurb: zod
+  name: zod.string().min(1),
+  description: zod
     .string()
-    .default(atelierCreateOpportunityBodyContextBlurbDefault),
+    .min(1)
+    .describe(
+      "Free-text description of what we're pursuing. This is what Pursuit\nScout reads first; persisted as the opportunity's offering anchor.\n",
+    ),
+  accountId: zod
+    .string()
+    .nullish()
+    .describe(
+      "Existing atelier_accounts.id. Required when not creating a new\naccount. When omitted, accountName\/accountCountry\/accountSector\nmust be provided to create a new account.\n",
+    ),
+  accountName: zod.string().nullish(),
+  accountCountry: zod.string().nullish(),
+  accountSector: zod.string().nullish(),
+  accountTier: zod
+    .union([zod.enum(["A", "B", "C", "D"]), zod.null()])
+    .optional(),
+  partnerOwnerId: zod
+    .string()
+    .nullish()
+    .describe(
+      "atelier_users.id of the partner owner. Defaults to creator if omitted.",
+    ),
+  engagementLeadId: zod
+    .string()
+    .nullish()
+    .describe(
+      "atelier_users.id of the engagement lead. Defaults to creator if omitted.",
+    ),
+  sourceLead: zod
+    .string()
+    .nullish()
+    .describe(
+      "Lead origin. One of inbound, referral, outbound, existing_client,\nevent, manual. Free-form fallback allowed.\n",
+    ),
   dealSizeUsd: zod
     .number()
+    .nullish()
     .default(atelierCreateOpportunityBodyDealSizeUsdDefault),
+  probabilityPct: zod
+    .number()
+    .min(atelierCreateOpportunityBodyProbabilityPctMin)
+    .max(atelierCreateOpportunityBodyProbabilityPctMax)
+    .nullish(),
+  nextMilestone: zod.string().nullish(),
+  nextMilestoneDate: zod.string().nullish(),
+  contextBlurb: zod
+    .string()
+    .default(atelierCreateOpportunityBodyContextBlurbDefault)
+    .describe(
+      "Deprecated alias for description; retained for backwards compatibility.",
+    ),
+  scoutFocus: zod
+    .string()
+    .nullish()
+    .describe(
+      "Optional steering text passed to Pursuit Scout alongside the description.",
+    ),
   runScout: zod.boolean().default(atelierCreateOpportunityBodyRunScoutDefault),
 });
 

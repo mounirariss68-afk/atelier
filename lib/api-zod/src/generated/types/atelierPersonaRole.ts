@@ -15,4 +15,7 @@ export const AtelierPersonaRole = {
   sme: "sme",
   ai_engineer: "ai_engineer",
   business_developer: "business_developer",
+  operations: "operations",
+  contractor: "contractor",
+  partner_firm_resource: "partner_firm_resource",
 } as const;

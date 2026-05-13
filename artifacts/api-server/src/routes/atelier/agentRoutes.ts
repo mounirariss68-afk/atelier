@@ -141,24 +141,92 @@ router.post("/opportunities", async (req, res) => {
   }
   const input = parsed.data;
 
-  // Find or create account.
-  let [acct] = await db
-    .select()
-    .from(atelierAccounts)
-    .where(eq(atelierAccounts.name, input.accountName));
-  if (!acct) {
-    const acctId = `acct_${slugify(input.accountName)}_${Math.random().toString(36).slice(2, 6)}`;
-    [acct] = await db
-      .insert(atelierAccounts)
-      .values({
-        id: acctId,
-        name: input.accountName,
-        country: input.accountCountry,
-        sector: input.accountSector,
-        createdByUserId: me.id,
-      })
-      .returning();
+  // `description` is the canonical free-text brief the partner writes for what
+  // we're pursuing. It is required by the request schema; the explicit guard
+  // below catches whitespace-only input that survives `min(1)`.
+  const description = input.description.trim();
+  if (!description) {
+    res.status(400).json({ error: "description-required" });
+    return;
   }
+
+  // Find or create account. Existing-account branch is keyed on accountId;
+  // create-new branch requires accountName + country + sector.
+  let acct: typeof atelierAccounts.$inferSelect | undefined;
+  if (input.accountId) {
+    [acct] = await db
+      .select()
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, input.accountId), isNull(atelierAccounts.deletedAt)));
+    if (!acct) {
+      res.status(404).json({ error: "account-not-found" });
+      return;
+    }
+  } else {
+    const newName = (input.accountName ?? "").trim();
+    const newCountry = (input.accountCountry ?? "").trim();
+    const newSector = (input.accountSector ?? "").trim();
+    if (!newName || !newCountry || !newSector) {
+      res.status(400).json({ error: "account-required" });
+      return;
+    }
+    // Reuse an existing account if the name already matches (case-sensitive
+    // exact, mirroring previous behaviour) — protects against accidental dupes.
+    [acct] = await db
+      .select()
+      .from(atelierAccounts)
+      .where(eq(atelierAccounts.name, newName));
+    if (!acct) {
+      const acctId = `acct_${slugify(newName)}_${Math.random().toString(36).slice(2, 6)}`;
+      [acct] = await db
+        .insert(atelierAccounts)
+        .values({
+          id: acctId,
+          name: newName,
+          country: newCountry,
+          sector: newSector,
+          tier: input.accountTier ?? undefined,
+          createdByUserId: me.id,
+        })
+        .returning();
+    }
+  }
+  if (!acct) {
+    res.status(500).json({ error: "account-resolution-failed" });
+    return;
+  }
+
+  // Resolve owners. Both default to the creator if unspecified, but if either
+  // is supplied it must reference an existing active atelier_users row.
+  async function resolveOwner(userId: string | null | undefined): Promise<string | null> {
+    if (!userId) return null;
+    const [u] = await db
+      .select()
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, userId), isNull(atelierUsers.deletedAt)));
+    return u ? u.id : null;
+  }
+  const partnerOwnerId = input.partnerOwnerId
+    ? await resolveOwner(input.partnerOwnerId)
+    : me.id;
+  if (!partnerOwnerId) {
+    res.status(400).json({ error: "invalid-partner-owner" });
+    return;
+  }
+  const engagementLeadId = input.engagementLeadId
+    ? await resolveOwner(input.engagementLeadId)
+    : me.id;
+  if (!engagementLeadId) {
+    res.status(400).json({ error: "invalid-engagement-lead" });
+    return;
+  }
+
+  const probabilityPct =
+    typeof input.probabilityPct === "number" ? input.probabilityPct : 25;
+  const nextMilestone =
+    (input.nextMilestone ?? "").trim() || "Run Pursuit Scout · qualify 5C";
+  const nextMilestoneDate = (input.nextMilestoneDate ?? "").trim() || null;
+  const sourceLead = (input.sourceLead ?? "").trim() || "manual";
 
   const oppId = `opp_${slugify(input.name)}_${Math.random().toString(36).slice(2, 6)}`;
   const [opp] = await db
@@ -168,16 +236,20 @@ router.post("/opportunities", async (req, res) => {
       slug: slugify(input.name),
       name: input.name,
       accountId: acct.id,
+      // Persist the partner-authored description as the offering anchor so
+      // the opportunity carries it forward without a schema change.
+      offeringAnchor: description,
       plmStage: "identify",
       // v1/v2 lockstep at create time so the new kanban + forecast see the
       // opportunity in the right column from the moment it's persisted.
-      salesStage: deriveSalesStage("identify", 25),
-      partnerOwnerId: me.id,
-      engagementLeadId: me.id,
+      salesStage: deriveSalesStage("identify", probabilityPct),
+      partnerOwnerId,
+      engagementLeadId,
       dealSizeHypothesis: input.dealSizeUsd ?? 250000,
-      probabilityPct: 25,
-      nextMilestone: "Run Pursuit Scout · qualify 5C",
-      sourceLead: input.contextBlurb || "manual",
+      probabilityPct,
+      nextMilestone,
+      nextMilestoneDate,
+      sourceLead,
       createdByUserId: me.id,
     })
     .returning();
@@ -190,9 +262,28 @@ router.post("/opportunities", async (req, res) => {
     actorId: me.id,
     actorLabel: me.name,
     action: "opportunity.create",
-    payload: { name: opp.name, account: acct.name },
+    payload: {
+      name: opp.name,
+      account: acct.name,
+      partnerOwnerId,
+      engagementLeadId,
+      sourceLead,
+      dealSizeUsd: opp.dealSizeHypothesis,
+      probabilityPct: opp.probabilityPct,
+    },
     payloadSummary: `${me.name} created opportunity "${opp.name}" on ${acct.name}.`,
   });
+
+  // Compose the brief Scout reads first: the partner's description, plus the
+  // optional steering "focus areas" textarea.
+  const scoutBrief = [
+    description,
+    input.scoutFocus?.trim()
+      ? `Focus areas: ${input.scoutFocus.trim()}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   let scoutRunId: string | null = null;
   if (input.runScout !== false) {
@@ -203,7 +294,7 @@ router.post("/opportunities", async (req, res) => {
         accountCountry: acct.country,
         accountSector: acct.sector,
         opportunityName: opp.name,
-        contextBlurb: input.contextBlurb ?? "",
+        contextBlurb: scoutBrief,
         triggeredByUserId: me.id,
         actorLabel: "Pursuit Scout",
       });

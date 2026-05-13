@@ -445,6 +445,81 @@ export function useAtelierListPersonas<
 }
 
 /**
+ * @summary List active atelier_users (for owner pickers etc.)
+ */
+export const getAtelierListUsersUrl = () => {
+  return `/api/atelier/users`;
+};
+
+export const atelierListUsers = async (
+  options?: RequestInit,
+): Promise<AtelierPersona[]> => {
+  return customFetch<AtelierPersona[]>(getAtelierListUsersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListUsersQueryKey = () => {
+  return [`/api/atelier/users`] as const;
+};
+
+export const getAtelierListUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListUsersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListUsers>>
+  > = ({ signal }) => atelierListUsers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListUsers>>
+>;
+export type AtelierListUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List active atelier_users (for owner pickers etc.)
+ */
+
+export function useAtelierListUsers<
+  TData = Awaited<ReturnType<typeof atelierListUsers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListUsers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListUsersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Switch the active persona (mock auth for MVP shell)
  */
 export const getAtelierSwitchPersonaUrl = () => {

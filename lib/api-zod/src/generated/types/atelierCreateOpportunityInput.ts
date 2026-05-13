@@ -5,13 +5,68 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountTier } from "./atelierAccountTier";
 
 export interface AtelierCreateOpportunityInput {
+  /** @minLength 1 */
   name: string;
-  accountName: string;
-  accountCountry: string;
-  accountSector: string;
+  /**
+   * Free-text description of what we're pursuing. This is what Pursuit
+Scout reads first; persisted as the opportunity's offering anchor.
+
+   * @minLength 1
+   */
+  description: string;
+  /**
+   * Existing atelier_accounts.id. Required when not creating a new
+account. When omitted, accountName/accountCountry/accountSector
+must be provided to create a new account.
+
+   * @nullable
+   */
+  accountId?: string | null;
+  /** @nullable */
+  accountName?: string | null;
+  /** @nullable */
+  accountCountry?: string | null;
+  /** @nullable */
+  accountSector?: string | null;
+  accountTier?: AtelierAccountTier | null;
+  /**
+   * atelier_users.id of the partner owner. Defaults to creator if omitted.
+   * @nullable
+   */
+  partnerOwnerId?: string | null;
+  /**
+   * atelier_users.id of the engagement lead. Defaults to creator if omitted.
+   * @nullable
+   */
+  engagementLeadId?: string | null;
+  /**
+   * Lead origin. One of inbound, referral, outbound, existing_client,
+event, manual. Free-form fallback allowed.
+
+   * @nullable
+   */
+  sourceLead?: string | null;
+  /** @nullable */
+  dealSizeUsd?: number | null;
+  /**
+   * @minimum 0
+   * @maximum 100
+   * @nullable
+   */
+  probabilityPct?: number | null;
+  /** @nullable */
+  nextMilestone?: string | null;
+  /** @nullable */
+  nextMilestoneDate?: string | null;
+  /** Deprecated alias for description; retained for backwards compatibility. */
   contextBlurb?: string;
-  dealSizeUsd?: number;
+  /**
+   * Optional steering text passed to Pursuit Scout alongside the description.
+   * @nullable
+   */
+  scoutFocus?: string | null;
   runScout?: boolean;
 }
