@@ -244,6 +244,22 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
     });
     return;
   }
+  // Also block if the buyer interview itself was authored by a deal-team
+  // member — even if an off-team partner is approving, a deal-team-authored
+  // interview compromises the conductor-of-record. (PRD §5.2 guardrail).
+  const interviewAuthorId = debrief.buyerInterviewConductedByUserId;
+  if (
+    interviewAuthorId &&
+    (interviewAuthorId === opp.partnerOwnerId ||
+      interviewAuthorId === opp.engagementLeadId)
+  ) {
+    res.status(403).json({
+      error: "deal-team-authored-interview",
+      detail:
+        "Buyer interview was authored by a deal-team member. Re-conduct the buyer interview off-team before approval.",
+    });
+    return;
+  }
   const conductorRole = "partner_off_team";
   const [updated] = await db
     .update(atelierWinLossDebriefs)
