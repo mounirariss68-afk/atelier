@@ -338,12 +338,12 @@ export default function Pipeline() {
     <div className="flex flex-col h-full min-h-[calc(100vh-3.5rem)]">
       <PageHero>
         <div className="flex flex-col gap-6">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="flex flex-col gap-4">
             <SectionHead
               headline="Opportunity Pipeline"
               lede="10-stage sales lifecycle. Click Move on a card to log a stage transition with rationale + evidence. Pipeline Forecaster re-rolls weighted value and flags stalled deals."
             />
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
               <CreateOpportunityDialog
                 trigger={
                   <PillButton variant="primary">
