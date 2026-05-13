@@ -101,6 +101,11 @@ router.use((req, res, next) => {
   // (no IDOR enumeration of other people's PII / HR metadata). The :id
   // segment must equal the active persona id; bare `/roster/people` and
   // `/roster/people/` (the partner-only list view) are NOT allowlisted.
+  // NOTE: this matches on `me.id` (atelier_users.id). Non-employee dossier
+  // rows in `atelier_contractors` / `atelier_partner_firm_resources` use
+  // their own primary keys (no `user_id` FK back to atelier_users), so
+  // self-dossier access for non-employees is a follow-up workstream that
+  // will need a persona→person mapping before this allowlist can resolve.
   const ownDossier = new RegExp(
     `^/roster/people/${me.id.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}(?:/|$)`,
   );

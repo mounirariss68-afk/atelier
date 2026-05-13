@@ -2528,14 +2528,16 @@ async function main() {
   // route logic and does NOT need rows here. We grant access to the
   // engagement's named lead, plus the SME (Omar) and AI engineer (Sara)
   // on their staffed Tasama engagement.
-  const accessRows: { id: string; engagementId: string; userId: string; role: string }[] = [];
+  // Task #254 — schema field is `roleOnEngagement` (mapped to legacy db
+  // column `role`); using the new name keeps seed in sync with PRD §2.1.
+  const accessRows: { id: string; engagementId: string; userId: string; roleOnEngagement: string }[] = [];
   for (const e of ENGAGEMENTS) {
     if (e.engagementLeadId && e.engagementLeadId !== "p_mounir_ariss") {
       accessRows.push({
         id: `access_${e.id}_${e.engagementLeadId}`,
         engagementId: e.id,
         userId: e.engagementLeadId,
-        role: "lead",
+        roleOnEngagement: "lead",
       });
     }
   }
@@ -2545,7 +2547,7 @@ async function main() {
       id: `access_${TASAMA_ENG_ID}_${uid}`,
       engagementId: TASAMA_ENG_ID,
       userId: uid,
-      role: "member",
+      roleOnEngagement: "member",
     });
   }
   if (accessRows.length) await db.insert(atelierEngagementAccess).values(accessRows);

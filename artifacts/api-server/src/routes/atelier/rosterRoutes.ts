@@ -793,8 +793,11 @@ router.get("/roster/access-matrix", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (me.role !== "partner") {
-      res.status(403).json({ error: "access-matrix-partner-only" });
+    // Task #254 round-9 — Partner|Operations align with the frontend copy
+    // ("Partner / Operations only"); both have firm-wide roster scope per
+    // PRD §8.1 and need the matrix view to audit grants.
+    if (me.role !== "partner" && me.role !== "operations") {
+      res.status(403).json({ error: "access-matrix-partner-or-operations-only" });
       return;
     }
     const grants = await db
