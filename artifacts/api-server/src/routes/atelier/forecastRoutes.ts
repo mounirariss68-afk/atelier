@@ -30,7 +30,10 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
 const router: IRouter = Router();
 // Task #254 — Forecast is firm-internal pipeline math; non-employee personas
 // (contractor / partner-firm resource) are explicitly out of scope.
-router.use(rejectNonEmployeePersona);
+// NOTE: applied per-route (not via router.use) because mounting a sub-router
+// with router.use(forecastRoutes) at the parent root would otherwise let this
+// middleware fire for ALL atelier paths, blocking even allowlisted routes
+// like /me. The centralized boundary in atelier/index.ts handles the rest.
 
 function quarterKey(d: Date): string {
   const y = d.getFullYear();
@@ -38,7 +41,7 @@ function quarterKey(d: Date): string {
   return `${y} Q${q}`;
 }
 
-router.get("/forecast", async (req, res) => {
+router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const by = String(req.query.by ?? "partner");

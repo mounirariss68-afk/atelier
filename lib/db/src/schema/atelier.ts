@@ -317,10 +317,11 @@ export const atelierEngagementAccess = pgTable(
     id: text("id").primaryKey(),
     engagementId: text("engagement_id").notNull(),
     userId: text("user_id").notNull(),
-    role: text("role").notNull().default("member"), // partner_owner | lead | member | reviewer | partner_resource | contractor
-    // v3 Roster extensions (Task #254). The legacy `role` column above is the
-    // engagement-side role (lead/member/reviewer/partner_resource/contractor)
-    // and is what the Access Sentinel writes when granting access.
+    // PRD §2.1 contract name: roleOnEngagement. Mapped to legacy db column
+    // `role` to avoid a destructive rename. Values:
+    // partner_owner | lead | member | reviewer | partner_resource | contractor
+    roleOnEngagement: text("role").notNull().default("member"),
+    // v3 Roster extensions (Task #254).
     allocationPct: integer("allocation_pct").notNull().default(0), // 0..100
     scope: jsonb("scope") // capability tokens (e.g., ["can_view_pricing","can_view_charter"])
       .$type<string[]>()

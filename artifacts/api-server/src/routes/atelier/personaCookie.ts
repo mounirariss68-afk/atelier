@@ -140,7 +140,10 @@ export function personaToWire(p: typeof atelierUsers.$inferSelect) {
       | "engagement_lead"
       | "sme"
       | "ai_engineer"
-      | "business_developer",
+      | "business_developer"
+      | "operations"
+      | "contractor"
+      | "partner_firm_resource",
     roleLabel: p.roleLabel,
     title: p.title,
     initials: p.initials,

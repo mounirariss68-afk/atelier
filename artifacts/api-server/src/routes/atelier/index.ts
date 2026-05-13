@@ -85,6 +85,33 @@ router.use(attachPersona);
 router.use(rejectClientRealm);
 router.use(attachRls);
 
+// Task #254 — Centralized non-employee boundary. Contractors and
+// partner-firm resources may ONLY hit engagement-scoped routes plus
+// identity (me / personas) and their own roster dossier surfaces.
+// Per-route `rejectNonEmployeePersona` calls remain as defense-in-depth.
+router.use((req, res, next) => {
+  const me = req.atelierPersona;
+  if (!me) return next();
+  if (me.role !== "contractor" && me.role !== "partner_firm_resource")
+    return next();
+  const p = req.path;
+  if (p === "/me" || p.startsWith("/personas")) return next();
+  if (p === "/engagements" || p.startsWith("/engagements/")) return next();
+  // Allow per-person dossier endpoints only for the caller's OWN identity
+  // (no IDOR enumeration of other people's PII / HR metadata). The :id
+  // segment must equal the active persona id; bare `/roster/people` and
+  // `/roster/people/` (the partner-only list view) are NOT allowlisted.
+  const ownDossier = new RegExp(
+    `^/roster/people/${me.id.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}(?:/|$)`,
+  );
+  if (ownDossier.test(p)) return next();
+  res.status(403).json({
+    error: "non-employee-persona-not-allowed-here",
+    message:
+      "Contractors and partner-firm resources may only access engagement-scoped routes.",
+  });
+});
+
 // Audit PDF export — registered before /audit JSON to win the route match.
 router.get("/audit/export.pdf", auditPdfHandler);
 

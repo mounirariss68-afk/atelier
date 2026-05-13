@@ -2282,7 +2282,7 @@ components:
 
     AtelierPersonaRole:
       type: string
-      enum: [partner, engagement_lead, sme, ai_engineer, business_developer]
+      enum: [partner, engagement_lead, sme, ai_engineer, business_developer, operations, contractor, partner_firm_resource]
 
     AtelierPersona:
       type: object

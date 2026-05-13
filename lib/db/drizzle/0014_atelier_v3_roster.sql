@@ -283,9 +283,10 @@ WHERE u.deleted_at IS NULL
   AND u.role IN ('partner', 'engagement_lead', 'sme', 'ai_engineer', 'business_developer', 'operations')
 ON CONFLICT ("org_id", "email") DO NOTHING;
 
--- Remove any previously backfilled rows whose source persona is NOT an internal AICo role
--- (e.g. client_user / contractor / partner_firm_resource) to honor PRD §8.1 scope.
-DELETE FROM "atelier_employees" e
-USING "atelier_users" u
-WHERE e.user_id = u.id
-  AND u.role NOT IN ('partner', 'engagement_lead', 'sme', 'ai_engineer', 'business_developer', 'operations');
+-- Note (Task #254): the original wide INSERT block above used to backfill rows
+-- for ALL atelier_users regardless of role; an earlier revision of this
+-- migration also issued a DELETE to prune the over-broad rows. Per code
+-- review, that DELETE is destructive at migration time and is removed.
+-- Operators should rely on the scoped INSERT above; any pre-existing rows
+-- with non-internal roles are left untouched and may be cleaned up by a
+-- future, scoped DML script gated on `atelier_employees.id LIKE 'emp\_%'`.

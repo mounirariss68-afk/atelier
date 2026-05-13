@@ -3343,7 +3343,7 @@ async function main() {
       id: "ea_yara_tasama",
       engagementId: "eng_tasama_bpo_phase1",
       userId: "u_yara_bgts",
-      role: "partner_resource",
+      roleOnEngagement: "partner_resource",
       allocationPct: 60,
       scope: ["can_view_engagement", "can_view_artifacts"],
       status: "active",
