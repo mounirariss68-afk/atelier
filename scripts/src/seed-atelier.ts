@@ -492,6 +492,88 @@ const CONTACTS: ContactSeed[] = [
     influenceScore: 4,
     disposition: "champion",
   },
+  // Tahakom (KSA traffic / smart-mobility authority)
+  {
+    id: "ct_tahakom_ceo",
+    accountId: "acc_tahakom",
+    fullName: "Abdulrahman Al-Qahtani",
+    title: "Chief Executive Officer",
+    seniority: "c_suite",
+    buyerPersona: "CEO",
+    influenceScore: 5,
+    disposition: "neutral",
+  },
+  {
+    id: "ct_tahakom_coo",
+    accountId: "acc_tahakom",
+    fullName: "Maha Al-Sudairi",
+    title: "Chief Operations Officer",
+    seniority: "c_suite",
+    buyerPersona: "COO",
+    influenceScore: 4,
+    disposition: "supporter",
+  },
+  {
+    id: "ct_tahakom_cdo",
+    accountId: "acc_tahakom",
+    fullName: "Ziyad Al-Ghamdi",
+    title: "Chief Data Officer",
+    seniority: "c_suite",
+    buyerPersona: "CDO",
+    influenceScore: 4,
+    disposition: "champion",
+  },
+  {
+    id: "ct_tahakom_proc",
+    accountId: "acc_tahakom",
+    fullName: "Faris Al-Mutairi",
+    title: "Head of Procurement",
+    seniority: "director",
+    buyerPersona: "procurement",
+    influenceScore: 3,
+    disposition: "skeptic",
+  },
+  // Aldrees (KSA logistics / fuel retail)
+  {
+    id: "ct_aldrees_ceo",
+    accountId: "acc_aldrees",
+    fullName: "Hamad Al-Drees",
+    title: "Chief Executive Officer",
+    seniority: "c_suite",
+    buyerPersona: "CEO",
+    influenceScore: 5,
+    disposition: "champion",
+  },
+  {
+    id: "ct_aldrees_cfo",
+    accountId: "acc_aldrees",
+    fullName: "Sultan Al-Subaie",
+    title: "Chief Financial Officer",
+    seniority: "c_suite",
+    buyerPersona: "CFO",
+    influenceScore: 4,
+    disposition: "skeptic",
+  },
+  {
+    id: "ct_aldrees_cio",
+    accountId: "acc_aldrees",
+    fullName: "Lina Al-Faisal",
+    title: "Chief Information Officer",
+    seniority: "c_suite",
+    buyerPersona: "CIO",
+    influenceScore: 4,
+    disposition: "supporter",
+  },
+  {
+    id: "ct_aldrees_ops",
+    accountId: "acc_aldrees",
+    fullName: "Yousef Al-Harthi",
+    title: "VP Logistics Operations",
+    seniority: "vp",
+    buyerPersona: "business_head",
+    influenceScore: 3,
+    disposition: "neutral",
+  },
 ];
 
 const CONTACT_RELATIONSHIPS: Array<{
@@ -515,6 +597,16 @@ const CONTACT_RELATIONSHIPS: Array<{
   // DGE
   { id: "cr_dge_dg_chair", accountId: "acc_dge", fromContactId: "ct_dge_dg", toContactId: "ct_dge_chair", type: "reports_to" },
   { id: "cr_dge_ai_dg", accountId: "acc_dge", fromContactId: "ct_dge_headai", toContactId: "ct_dge_dg", type: "reports_to" },
+  // Tahakom
+  { id: "cr_tahakom_coo_ceo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_coo", toContactId: "ct_tahakom_ceo", type: "reports_to" },
+  { id: "cr_tahakom_cdo_ceo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_cdo", toContactId: "ct_tahakom_ceo", type: "reports_to" },
+  { id: "cr_tahakom_proc_coo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_proc", toContactId: "ct_tahakom_coo", type: "reports_to" },
+  { id: "cr_tahakom_proc_blocks_cdo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_proc", toContactId: "ct_tahakom_cdo", type: "blocks", notes: "Procurement holds the AI program until SLA terms are signed." },
+  // Aldrees
+  { id: "cr_aldrees_cfo_ceo", accountId: "acc_aldrees", fromContactId: "ct_aldrees_cfo", toContactId: "ct_aldrees_ceo", type: "reports_to" },
+  { id: "cr_aldrees_cio_ceo", accountId: "acc_aldrees", fromContactId: "ct_aldrees_cio", toContactId: "ct_aldrees_ceo", type: "reports_to" },
+  { id: "cr_aldrees_ops_ceo", accountId: "acc_aldrees", fromContactId: "ct_aldrees_ops", toContactId: "ct_aldrees_ceo", type: "reports_to" },
+  { id: "cr_aldrees_cio_partners_ops", accountId: "acc_aldrees", fromContactId: "ct_aldrees_cio", toContactId: "ct_aldrees_ops", type: "partners_with", notes: "Co-sponsors of the BOQ digitisation initiative." },
 ];
 
 // ============================================================
@@ -588,6 +680,29 @@ const CREDENTIALS = [
       { label: "DM concierge case", url: "https://www.example.com/dm-concierge" },
     ],
     tags: ["smart-city", "uae", "service-design"],
+    createdByUserId: "p_mounir_ariss",
+  },
+  {
+    id: "cred_aldrees_boq",
+    title: "Aldrees BOQ digitisation — Logistics control tower",
+    accountId: "acc_aldrees",
+    clientName: "Aldrees Petroleum & Transport Services",
+    sector: "Logistics / Fuel Retail",
+    engagementType: "transformation",
+    redactedAbstract:
+      "Digitised end-to-end Bills-of-Quantities and route-cost workflows for a top-3 KSA fuel-retail operator, replacing 14 spreadsheets with a single agentic control tower.",
+    attributedAbstract:
+      "Aldrees × AICo: BOQ digitisation + logistics control tower across 320 service stations in 18 weeks.",
+    anonymizationStatus: "attributed",
+    outcomeMetrics: [
+      { label: "Spreadsheets retired", value: "14" },
+      { label: "Stations onboarded", value: "320" },
+      { label: "BOQ cycle time", value: "−72%" },
+    ],
+    evidenceLinks: [
+      { label: "Aldrees control-tower case", url: "https://www.example.com/aldrees-boq" },
+    ],
+    tags: ["logistics", "ksa", "control-tower", "boq"],
     createdByUserId: "p_mounir_ariss",
   },
 ];

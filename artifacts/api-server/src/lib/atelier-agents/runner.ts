@@ -475,9 +475,13 @@ async function proposeProfileUpdatesFromScout(args: {
   }> = [];
 
   const now = new Date().toISOString();
-  const facts = (args.output as { facts?: Array<{ statement?: string; sourceUrl?: string; sourceTitle?: string }> }).facts ?? [];
-  const priorityFacts = facts.filter((f) => /priorit|strateg|initiative/i.test(f.statement ?? ""));
+  const facts = (args.output as {
+    facts?: Array<{ statement?: string; sourceUrl?: string; sourceTitle?: string; topic?: string }>;
+  }).facts ?? [];
+
+  // 1) strategicPriorities deltas
   const existingPriorities = (account.strategicPriorities as string[] | null) ?? [];
+  const priorityFacts = facts.filter((f) => /priorit|strateg|initiative/i.test(f.statement ?? ""));
   for (const f of priorityFacts.slice(0, 3)) {
     if (!f.statement) continue;
     proposals.push({
@@ -488,6 +492,64 @@ async function proposeProfileUpdatesFromScout(args: {
       fromValue: existingPriorities,
       toValue: [...existingPriorities, f.statement.slice(0, 200)],
       rationale: `Pursuit Scout fact: ${f.sourceTitle ?? f.sourceUrl ?? "evidence pending"}`,
+      oppId: args.opportunityId,
+      status: "pending",
+    });
+  }
+
+  // 2) hqCity / sector enrichment
+  const hqMatch = facts.find((f) => /headquarter|HQ|based in|head office/i.test(f.statement ?? ""));
+  if (hqMatch?.statement && !account.hqCity) {
+    proposals.push({
+      id: `pp_${rid("x").slice(2)}`,
+      proposedBy: args.proposedBy,
+      proposedAt: now,
+      field: "hqCity",
+      fromValue: account.hqCity,
+      toValue: hqMatch.statement.slice(0, 100),
+      rationale: `Pursuit Scout HQ enrichment: ${hqMatch.sourceTitle ?? hqMatch.sourceUrl ?? "evidence pending"}`,
+      oppId: args.opportunityId,
+      status: "pending",
+    });
+  }
+  const sectorMatch = facts.find((f) => /sector|industry|vertical/i.test(f.statement ?? ""));
+  if (sectorMatch?.statement) {
+    proposals.push({
+      id: `pp_${rid("x").slice(2)}`,
+      proposedBy: args.proposedBy,
+      proposedAt: now,
+      field: "sector",
+      fromValue: account.sector,
+      toValue: sectorMatch.statement.slice(0, 100),
+      rationale: `Pursuit Scout sector signal: ${sectorMatch.sourceTitle ?? sectorMatch.sourceUrl ?? "evidence pending"}`,
+      oppId: args.opportunityId,
+      status: "pending",
+    });
+  }
+
+  // 3) sourceSignals enrichment — every fact with a URL becomes a candidate signal
+  const existingSignals = (account.sourceSignals as Array<{ url: string }> | null) ?? [];
+  const knownUrls = new Set(existingSignals.map((s) => s.url));
+  const newSignals = facts
+    .filter((f) => f.sourceUrl && !knownUrls.has(f.sourceUrl))
+    .slice(0, 5)
+    .map((f) => ({
+      kind: /linkedin/i.test(f.sourceUrl ?? "") ? "linkedin" : /press|news/i.test(f.sourceUrl ?? "") ? "news" : "press",
+      title: f.sourceTitle ?? f.statement?.slice(0, 80) ?? "Pursuit Scout finding",
+      url: f.sourceUrl as string,
+      summary: f.statement?.slice(0, 240),
+      publishedAt: now,
+      confidence: "amber" as const,
+    }));
+  if (newSignals.length > 0) {
+    proposals.push({
+      id: `pp_${rid("x").slice(2)}`,
+      proposedBy: args.proposedBy,
+      proposedAt: now,
+      field: "sourceSignals",
+      fromValue: existingSignals,
+      toValue: [...existingSignals, ...newSignals],
+      rationale: `Pursuit Scout surfaced ${newSignals.length} new signal(s) for review.`,
       oppId: args.opportunityId,
       status: "pending",
     });
