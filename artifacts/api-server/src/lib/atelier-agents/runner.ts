@@ -4283,24 +4283,22 @@ export async function runUtilizationAnalyst(args: {
   computedAt?: string | null;
   triggeredByUserId: string | null;
 }): Promise<{ runId: string; output: UtilizationAnalystOutput }> {
-  // Pre-flight guardrail before we even start a run row. Three independent
-  // refusal conditions, all collapsed into the same `numeric-block-missing-or-stale`
-  // contract so the prompt's refusal handler stays a single branch:
-  //   1) no block at all,
-  //   2) every numeric field is zero (snapshot tick hasn't run yet for this target),
-  //   3) `computedAt` (when provided) is older than SNAPSHOT_FRESHNESS_MS.
-  const emptyOrZero =
-    !args.numericBlock ||
-    Object.keys(args.numericBlock).length === 0 ||
-    Object.values(args.numericBlock).every((v) =>
-      typeof v === "number" ? v === 0 : v == null || (Array.isArray(v) && v.length === 0),
-    );
+  // Pre-flight guardrail. Two refusal conditions — both about *source*
+  // freshness, not value content:
+  //   1) numeric block is null or has no keys (hydrator returned nothing
+  //      because there's no source data to read),
+  //   2) `computedAt` is older than SNAPSHOT_FRESHNESS_MS.
+  // A block whose values are all zero is *not* refused: zero billable
+  // hours / zero margin can be a valid deterministic outcome and the
+  // analyst is expected to narrate it ("the team didn't bill any hours
+  // this period").
+  const emptyBlock = !args.numericBlock || Object.keys(args.numericBlock).length === 0;
   let computedAtStale = false;
   if (args.computedAt) {
     const ts = Date.parse(args.computedAt);
     if (!Number.isNaN(ts) && Date.now() - ts > SNAPSHOT_FRESHNESS_MS) computedAtStale = true;
   }
-  const blockIsStale = emptyOrZero || computedAtStale;
+  const blockIsStale = emptyBlock || computedAtStale;
 
   const runId = await startRun({
     agentId: "ag_utilization_analyst",

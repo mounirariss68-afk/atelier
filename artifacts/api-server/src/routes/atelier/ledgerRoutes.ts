@@ -1884,7 +1884,15 @@ async function hydrateUtilizationNumericBlock(
     const r4 = sum(last4); const yt = sum(ytd);
     const targetPct = emp?.utilizationTargetPct ? emp.utilizationTargetPct / 100 : defaultTargetPctFor(emp?.role, emp?.seniority);
     const utilizationPct = r4.avail > 0 ? r4.bill / r4.avail : 0;
-    const computedAt = snaps[0]?.computedAt ? new Date(snaps[0].computedAt).toISOString() : null;
+    // Freshness anchor must come from the *same scoped slice* the metric
+    // is built on (rolling-4w). An older YTD row would falsely mark fresh
+    // numbers as stale.
+    const scopedComputed = (last4.length > 0 ? last4 : snaps).reduce<Date | null>((acc, s) => {
+      const t = s.computedAt ? new Date(s.computedAt) : null;
+      if (t && (!acc || t > acc)) return t;
+      return acc;
+    }, null);
+    const computedAt = scopedComputed ? scopedComputed.toISOString() : null;
     return {
       numericBlock: {
         utilizationPct,
@@ -1944,6 +1952,11 @@ async function hydrateUtilizationNumericBlock(
   const snaps = await db.select().from(atelierUtilizationSnapshots).where(inArray(atelierUtilizationSnapshots.weekIso, last4Iso));
   const totalBill = snaps.reduce((s, r) => s + Number(r.billableHours), 0);
   const totalAvail = snaps.reduce((s, r) => s + Number(r.availableHours), 0);
+  const firmComputed = snaps.reduce<Date | null>((acc, s) => {
+    const t = s.computedAt ? new Date(s.computedAt) : null;
+    if (t && (!acc || t > acc)) return t;
+    return acc;
+  }, null);
   const apr = await db
     .select({ status: atelierTimesheetEntries.status, hours: atelierTimesheetEntries.hours })
     .from(atelierTimesheetEntries)
@@ -1961,7 +1974,7 @@ async function hydrateUtilizationNumericBlock(
       peopleCount: new Set(snaps.map((s) => s.personId)).size,
       weeks: last4Iso.length,
     },
-    computedAt: snaps[0]?.computedAt ? new Date(snaps[0].computedAt).toISOString() : null,
+    computedAt: firmComputed ? firmComputed.toISOString() : null,
   };
 }
 
