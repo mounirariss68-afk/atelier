@@ -137,8 +137,13 @@ export function TopNav() {
   );
 }
 
+const RailContext = React.createContext<{
+  collapsed: boolean;
+  setCollapsed: (v: boolean) => void;
+}>({ collapsed: false, setCollapsed: () => {} });
+
 export function RightRail() {
-  const [collapsed, setCollapsed] = React.useState(false);
+  const { collapsed, setCollapsed } = React.useContext(RailContext);
   const { data: activities } = useAtelierGetActivity(
     { limit: 15 },
     {
@@ -237,19 +242,28 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const isSignIn = location === "/sign-in";
 
+  const [collapsed, setCollapsed] = React.useState(false);
+
   if (isSignIn) {
     return <div className="min-h-screen flex flex-col">{children}</div>;
   }
 
   return (
-    <div className="min-h-screen flex flex-col relative">
-      <TopNav />
-      <div className="flex flex-1">
-        <main className="page-light flex-1 w-full pb-20 pr-12 lg:pr-80 transition-all duration-300">
-          {children}
-        </main>
-        <RightRail />
+    <RailContext.Provider value={{ collapsed, setCollapsed }}>
+      <div className="min-h-screen flex flex-col relative">
+        <TopNav />
+        <div className="flex flex-1">
+          <main
+            className={cn(
+              "page-light flex-1 w-full pb-20 transition-all duration-300",
+              collapsed ? "pr-12" : "pr-12 lg:pr-80",
+            )}
+          >
+            {children}
+          </main>
+          <RightRail />
+        </div>
       </div>
-    </div>
+    </RailContext.Provider>
   );
 }
