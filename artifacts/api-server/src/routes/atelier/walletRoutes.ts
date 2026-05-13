@@ -32,11 +32,16 @@ import {
   atelierVatRegister,
   atelierEngagements,
   atelierAuditEvents,
+  atelierContractorPayments,
+  atelierPartnerFirmInvoices,
+  atelierInvoiceLineDrafts,
 } from "@workspace/db";
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
 import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-policy.js";
 import { RECEIPT_FIXTURES, resolveFixtureDate } from "../../lib/atelier-receipt-fixtures.js";
 import { runExpenseAuditor } from "../../lib/atelier-agents/runner.js";
+import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
+import { runInvoiceComposer } from "../../lib/atelier-invoice-composer.js";
 
 const router: IRouter = Router();
 
@@ -1193,6 +1198,395 @@ router.post("/wallet/retention/run", async (req, res) => {
     summary: `Retention sweep: redacted ${result.redacted}/${result.scanned} OCR payloads older than 90d.`,
   });
   res.json({ ok: true, ...result });
+});
+
+// =============================================================
+// Task #260 — Client-billable expenses · /wallet/client-billable
+// =============================================================
+router.get("/wallet/client-billable/:engagementId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const isLead = me.role === "engagement_lead" || isPartnerOrOps(me);
+  if (!isLead) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const eid = req.params.engagementId;
+  const rows = await db
+    .select()
+    .from(atelierExpenses)
+    .where(
+      and(
+        eq(atelierExpenses.engagementId, eid),
+        eq(atelierExpenses.clientBillable, true),
+        isNull(atelierExpenses.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierExpenses.expenseDate));
+  res.json({
+    engagementId: eid,
+    expenses: rows.map((r) => ({
+      id: r.id,
+      personId: r.personId,
+      expenseDate: r.expenseDate,
+      merchant: r.merchant,
+      category: r.category,
+      amount: r.amount,
+      currency: r.currency,
+      usdAmount: r.usdAmount,
+      markupPct: r.markupPct,
+      status: r.status,
+      policyStatus: r.policyStatus,
+      summary: r.summary,
+    })),
+    totals: {
+      count: rows.length,
+      netUsd: +rows.reduce((s, r) => s + r.usdAmount, 0).toFixed(2),
+      markupUsd: +rows.reduce((s, r) => s + r.usdAmount * (r.markupPct ?? 0), 0).toFixed(2),
+    },
+  });
+});
+
+// =============================================================
+// Task #260 — Payment Proposals · /wallet/approvals (Partner-only)
+// =============================================================
+router.get("/wallet/approvals", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const status = (req.query.status as string) ?? "proposed";
+  const cps = await db
+    .select()
+    .from(atelierContractorPayments)
+    .where(
+      and(
+        isNull(atelierContractorPayments.deletedAt),
+        eq(atelierContractorPayments.status, status),
+      ),
+    )
+    .orderBy(desc(atelierContractorPayments.createdAt));
+  const pfis = await db
+    .select()
+    .from(atelierPartnerFirmInvoices)
+    .where(
+      and(
+        isNull(atelierPartnerFirmInvoices.deletedAt),
+        eq(atelierPartnerFirmInvoices.status, status),
+      ),
+    )
+    .orderBy(desc(atelierPartnerFirmInvoices.createdAt));
+  res.json({
+    contractorPayments: cps,
+    partnerFirmInvoices: pfis,
+    totals: {
+      contractorCount: cps.length,
+      partnerFirmCount: pfis.length,
+      contractorUsd: +cps.reduce((s, r) => s + r.usdAmount, 0).toFixed(2),
+      partnerFirmUsd: +pfis.reduce((s, r) => s + r.usdAmount, 0).toFixed(2),
+    },
+  });
+});
+
+router.post("/wallet/approvals/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner" && !isPartnerOrOps(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const weeksIso = Array.isArray(req.body?.weeksIso) ? req.body.weeksIso : undefined;
+  const summary = await runPaymentProposer({ triggeredBy: me.id, weeksIso });
+  await audit({
+    entityType: "wallet_payment_proposer",
+    entityId: "manual",
+    actor: me,
+    action: "wallet.payment_proposer.run",
+    payload: summary,
+    summary: `Proposer composed ${summary.contractorProposals.created}+${summary.partnerFirmProposals.created} proposal(s).`,
+  });
+  res.json({ ok: true, summary });
+});
+
+router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierContractorPayments)
+    .where(
+      and(
+        eq(atelierContractorPayments.id, req.params.id),
+        isNull(atelierContractorPayments.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (row.status !== "proposed") {
+    res.status(409).json({ error: "not-proposed", status: row.status });
+    return;
+  }
+  const rationale = (req.body?.rationale as string) || null;
+  await db
+    .update(atelierContractorPayments)
+    .set({
+      status: "partner_approved",
+      partnerApprovedByUserId: me.id,
+      partnerApprovedAt: new Date(),
+      partnerRationale: rationale,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierContractorPayments.id, row.id));
+  await audit({
+    entityType: "contractor_payment",
+    entityId: row.id,
+    actor: me,
+    action: "wallet.payment.approve",
+    payload: { usdAmount: row.usdAmount, rationale },
+    summary: `Approved $${row.usdAmount.toFixed(2)} for ${row.payeeName} (${row.weekIso}).`,
+  });
+  res.json({ ok: true });
+});
+
+router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const reason = (req.body?.reason as string) || "rejected";
+  const [row] = await db
+    .select()
+    .from(atelierContractorPayments)
+    .where(
+      and(
+        eq(atelierContractorPayments.id, req.params.id),
+        isNull(atelierContractorPayments.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  await db
+    .update(atelierContractorPayments)
+    .set({
+      status: "rejected",
+      rejectedAt: new Date(),
+      rejectedReason: reason,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierContractorPayments.id, row.id));
+  await audit({
+    entityType: "contractor_payment",
+    entityId: row.id,
+    actor: me,
+    action: "wallet.payment.reject",
+    payload: { reason },
+    summary: `Rejected ${row.payeeName} (${row.weekIso}): ${reason}`,
+  });
+  res.json({ ok: true });
+});
+
+router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierPartnerFirmInvoices)
+    .where(
+      and(
+        eq(atelierPartnerFirmInvoices.id, req.params.id),
+        isNull(atelierPartnerFirmInvoices.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (row.status !== "proposed") {
+    res.status(409).json({ error: "not-proposed", status: row.status });
+    return;
+  }
+  const rationale = (req.body?.rationale as string) || null;
+  await db
+    .update(atelierPartnerFirmInvoices)
+    .set({
+      status: "partner_approved",
+      partnerApprovedByUserId: me.id,
+      partnerApprovedAt: new Date(),
+      partnerRationale: rationale,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierPartnerFirmInvoices.id, row.id));
+  await audit({
+    entityType: "partner_firm_invoice",
+    entityId: row.id,
+    actor: me,
+    action: "wallet.payment.approve",
+    payload: { usdAmount: row.usdAmount, rationale },
+    summary: `Approved $${row.usdAmount.toFixed(2)} for ${row.partnerFirmName} (${row.weekIso}).`,
+  });
+  res.json({ ok: true });
+});
+
+router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (me.role !== "partner") {
+    res.status(403).json({ error: "partner-only" });
+    return;
+  }
+  const reason = (req.body?.reason as string) || "rejected";
+  const [row] = await db
+    .select()
+    .from(atelierPartnerFirmInvoices)
+    .where(
+      and(
+        eq(atelierPartnerFirmInvoices.id, req.params.id),
+        isNull(atelierPartnerFirmInvoices.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  await db
+    .update(atelierPartnerFirmInvoices)
+    .set({
+      status: "rejected",
+      rejectedAt: new Date(),
+      rejectedReason: reason,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierPartnerFirmInvoices.id, row.id));
+  await audit({
+    entityType: "partner_firm_invoice",
+    entityId: row.id,
+    actor: me,
+    action: "wallet.payment.reject",
+    payload: { reason },
+    summary: `Rejected ${row.partnerFirmName} (${row.weekIso}): ${reason}`,
+  });
+  res.json({ ok: true });
+});
+
+// =============================================================
+// Task #260 — Invoice-line drafts · /wallet/invoice-drafts/:eid
+// =============================================================
+router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!(me.role === "engagement_lead" || isPartnerOrOps(me))) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const eid = req.params.engagementId;
+  const [current] = await db
+    .select()
+    .from(atelierInvoiceLineDrafts)
+    .where(
+      and(
+        eq(atelierInvoiceLineDrafts.engagementId, eid),
+        isNull(atelierInvoiceLineDrafts.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierInvoiceLineDrafts.composedAt));
+  if (req.query.format === "csv") {
+    if (!current) {
+      res.status(404).type("text/plain").send("no draft");
+      return;
+    }
+    const headers = ["kind", "sourceId", "description", "qty", "unitPriceUsd", "amountUsd", "markupPct"];
+    const lines = current.lines as Array<{
+      kind: string;
+      sourceId: string;
+      description: string;
+      qty: number;
+      unitPriceUsd: number;
+      amountUsd: number;
+      markupPct?: number;
+    }>;
+    const csv = [
+      headers.join(","),
+      ...lines.map((l) =>
+        [
+          l.kind,
+          l.sourceId,
+          `"${(l.description || "").replace(/"/g, "''")}"`,
+          l.qty,
+          l.unitPriceUsd,
+          l.amountUsd,
+          l.markupPct ?? "",
+        ].join(","),
+      ),
+      `,,,TOTAL,,${(current.totals as { totalUsd: number }).totalUsd},`,
+    ].join("\n");
+    res
+      .type("text/csv")
+      .header("content-disposition", `attachment; filename="invoice-draft-${eid}.csv"`)
+      .send(csv);
+    return;
+  }
+  res.json({ engagementId: eid, draft: current ?? null });
+});
+
+// =============================================================
+// Task #260 — Salon Publish Sentinel (kind=expense) extension
+// =============================================================
+import { expensePublishSentinelChecks } from "../../lib/atelier-invoice-composer.js";
+router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!(me.role === "engagement_lead" || isPartnerOrOps(me))) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const out = await expensePublishSentinelChecks({ expenseId: req.params.id });
+  await audit({
+    entityType: "expense",
+    entityId: req.params.id,
+    actor: me,
+    action: "wallet.publish_sentinel.run",
+    payload: out as never,
+    summary: `Publish Sentinel (kind=expense): ${out.status} — ${out.checks.length} check(s).`,
+  });
+  res.json({ ok: true, sentinel: out });
+});
+
+router.post("/wallet/invoice-drafts/:engagementId/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!(me.role === "engagement_lead" || isPartnerOrOps(me))) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const out = await runInvoiceComposer({
+    engagementId: req.params.engagementId,
+    composedByUserId: me.id,
+  });
+  await audit({
+    entityType: "invoice_line_draft",
+    entityId: out.draftId,
+    actor: me,
+    action: "wallet.invoice_composer.run",
+    payload: out.totals,
+    summary: `Composed ${out.totals.lineCount} line(s); $${out.totals.totalUsd.toFixed(2)}.`,
+  });
+  res.json({ ok: true, draft: out });
 });
 
 export default router;

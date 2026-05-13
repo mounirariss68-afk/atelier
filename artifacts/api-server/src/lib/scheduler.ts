@@ -5,14 +5,18 @@ import { db, atelierUsers } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
 import { runRosterSteward } from "../routes/atelier/rosterLifecycleRoutes";
 import { runWalletRetentionSweep } from "../routes/atelier/walletRoutes";
+import { runPaymentProposer } from "./atelier-payment-proposer";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
 const WALLET_RETENTION_CRON = process.env.WALLET_RETENTION_CRON ?? "0 4 * * *";
+// Mon 03:00 UTC = Mon 06:00 GST — the start of the working week.
+const WALLET_PAYMENT_PROPOSER_CRON = process.env.WALLET_PAYMENT_PROPOSER_CRON ?? "0 3 * * 1";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
 let walletRetentionTask: ScheduledTask | null = null;
+let walletPaymentProposerTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -108,6 +112,33 @@ export function startScheduler(): void {
     logger.error(
       { cron: WALLET_RETENTION_CRON },
       "Invalid WALLET_RETENTION_CRON expression, wallet retention not scheduled",
+    );
+  }
+
+  // Weekly Payment Proposer — composes contractor + partner-firm payment
+  // proposal rows from approved billable hours so Partners arrive at a
+  // queued review every Monday morning (GST).
+  if (cron.validate(WALLET_PAYMENT_PROPOSER_CRON)) {
+    walletPaymentProposerTask = cron.schedule(
+      WALLET_PAYMENT_PROPOSER_CRON,
+      async () => {
+        try {
+          const out = await runPaymentProposer({ triggeredBy: "cron" });
+          logger.info(out, "Wallet payment proposer finished");
+        } catch (err) {
+          logger.error({ err }, "Wallet payment proposer encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info(
+      { cron: WALLET_PAYMENT_PROPOSER_CRON },
+      "Wallet payment proposer scheduler started",
+    );
+  } else {
+    logger.error(
+      { cron: WALLET_PAYMENT_PROPOSER_CRON },
+      "Invalid WALLET_PAYMENT_PROPOSER_CRON expression, payment proposer not scheduled",
     );
   }
 }

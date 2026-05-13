@@ -2485,3 +2485,148 @@ export const atelierVatRegister = pgTable(
     index("idx_atelier_vat_expense").on(t.expenseId),
   ],
 );
+
+// ============================================================
+// Task #260 — v3 Wallet (II): Client-billable + payments + invoice-line drafts
+// ============================================================
+
+/**
+ * Weekly contractor payment proposals composed by the Payment Proposer
+ * agent. One row per (payeeUserId, engagementId, weekIso) bucket of
+ * lead-approved timesheet entries. Status transitions:
+ *   proposed -> partner_approved | rejected
+ *   partner_approved -> paid (manual stub; v3 has no bank rails)
+ * Partner approval is REQUIRED when usdAmount > 250.
+ */
+export const atelierContractorPayments = pgTable(
+  "atelier_contractor_payments",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    payeeUserId: text("payee_user_id").notNull(),
+    payeePersonType: text("payee_person_type").notNull().default("contractor"), // employee | contractor
+    payeeName: text("payee_name").notNull(),
+    engagementId: text("engagement_id").notNull(),
+    weekIso: text("week_iso").notNull(),
+    hours: doublePrecision("hours").notNull().default(0),
+    ratePerHour: doublePrecision("rate_per_hour").notNull().default(0),
+    rateCurrency: text("rate_currency").notNull().default("USD"),
+    costAmount: doublePrecision("cost_amount").notNull().default(0),
+    costCurrency: text("cost_currency").notNull().default("USD"),
+    fxRate: doublePrecision("fx_rate").notNull().default(1),
+    usdAmount: doublePrecision("usd_amount").notNull().default(0),
+    status: text("status").notNull().default("proposed"), // proposed | partner_approved | paid | rejected
+    requiresPartnerApproval: boolean("requires_partner_approval").notNull().default(false),
+    proposalRunId: text("proposal_run_id"),
+    evidenceEntryIds: jsonb("evidence_entry_ids").$type<string[]>().notNull().default([]),
+    notes: text("notes"),
+    partnerApprovedByUserId: text("partner_approved_by_user_id"),
+    partnerApprovedAt: timestamp("partner_approved_at"),
+    partnerRationale: text("partner_rationale"),
+    rejectedAt: timestamp("rejected_at"),
+    rejectedReason: text("rejected_reason"),
+    paidAt: timestamp("paid_at"),
+    paidByUserId: text("paid_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_cp_eng_week").on(t.engagementId, t.weekIso),
+    index("idx_atelier_cp_payee_status").on(t.payeeUserId, t.status),
+    index("idx_atelier_cp_status").on(t.status),
+    uniqueIndex("uq_atelier_cp_payee_eng_week").on(t.payeeUserId, t.engagementId, t.weekIso),
+  ],
+);
+
+/**
+ * Weekly partner-firm invoice proposals. Composed from
+ * atelier_partner_firm_hours rows for a (partnerFirmId, engagementId,
+ * weekIso) bucket. Partner approval is ALWAYS required (per spec:
+ * any partner-firm proposal needs Partner sign-off).
+ */
+export const atelierPartnerFirmInvoices = pgTable(
+  "atelier_partner_firm_invoices",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    partnerFirmName: text("partner_firm_name").notNull(),
+    engagementId: text("engagement_id").notNull(),
+    weekIso: text("week_iso").notNull(),
+    hours: doublePrecision("hours").notNull().default(0),
+    costAmount: doublePrecision("cost_amount").notNull().default(0),
+    costCurrency: text("cost_currency").notNull().default("USD"),
+    fxRate: doublePrecision("fx_rate").notNull().default(1),
+    usdAmount: doublePrecision("usd_amount").notNull().default(0),
+    status: text("status").notNull().default("proposed"), // proposed | partner_approved | paid | rejected
+    proposalRunId: text("proposal_run_id"),
+    evidenceFirmHourIds: jsonb("evidence_firm_hour_ids").$type<string[]>().notNull().default([]),
+    notes: text("notes"),
+    partnerApprovedByUserId: text("partner_approved_by_user_id"),
+    partnerApprovedAt: timestamp("partner_approved_at"),
+    partnerRationale: text("partner_rationale"),
+    rejectedAt: timestamp("rejected_at"),
+    rejectedReason: text("rejected_reason"),
+    paidAt: timestamp("paid_at"),
+    paidByUserId: text("paid_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pfi_eng_week").on(t.engagementId, t.weekIso),
+    index("idx_atelier_pfi_firm_status").on(t.partnerFirmId, t.status),
+    index("idx_atelier_pfi_status").on(t.status),
+    uniqueIndex("uq_atelier_pfi_firm_eng_week").on(t.partnerFirmId, t.engagementId, t.weekIso),
+  ],
+);
+
+/**
+ * Invoice-line draft set composed on-demand by the Invoice Composer agent
+ * from (a) approved billable timesheet hours × applicable rate-card rate
+ * and (b) approved client-billable expenses × markup. One row per
+ * composer run; the latest non-deleted row per engagement is "current".
+ * Lines payload is flattened for accountant handoff (JSON / CSV).
+ */
+export type InvoiceLineDraftKind = "hours" | "expense";
+export interface InvoiceLineDraftLine {
+  kind: InvoiceLineDraftKind;
+  sourceId: string; // entry id or expense id
+  description: string;
+  qty: number; // hours OR 1 (per-expense)
+  unitPriceUsd: number;
+  amountUsd: number;
+  markupPct?: number; // expenses only
+  meta?: Record<string, unknown>;
+}
+export const atelierInvoiceLineDrafts = pgTable(
+  "atelier_invoice_line_drafts",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    composedAt: timestamp("composed_at").notNull().defaultNow(),
+    composedByUserId: text("composed_by_user_id"),
+    composerRunId: text("composer_run_id"),
+    rateCardId: text("rate_card_id"),
+    lines: jsonb("lines").notNull().default([]).$type<InvoiceLineDraftLine[]>(),
+    totals: jsonb("totals").notNull().default({}).$type<{
+      hoursUsd: number;
+      expensesNetUsd: number;
+      markupUsd: number;
+      totalUsd: number;
+      lineCount: number;
+    }>(),
+    status: text("status").notNull().default("draft"), // draft | exported
+    exportedAt: timestamp("exported_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_ild_eng").on(t.engagementId),
+    index("idx_atelier_ild_status").on(t.status),
+  ],
+);

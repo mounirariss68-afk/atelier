@@ -74,6 +74,9 @@ import {
   atelierExpensePolicies,
   atelierFxRates,
   atelierExpenses,
+  atelierContractorPayments,
+  atelierPartnerFirmInvoices,
+  atelierInvoiceLineDrafts,
   atelierVatRegister,
 } from "@workspace/db";
 import { sql, eq, and, isNull, inArray } from "drizzle-orm";
@@ -4423,6 +4426,140 @@ async function seedV3Wallet() {
     );
   }
   console.log(`[seed-atelier] v3 wallet (Task #259): ${expenseRows.length} expenses, ${approved.length} VAT register rows.`);
+
+  // ============================================================
+  // Task #260 — v3 Wallet (II): payment proposals + invoice drafts
+  // Walkthrough fixtures so the partner pane lights up on first load.
+  // ============================================================
+  console.log("[seed-atelier] v3 wallet (Task #260): payment proposals + invoice draft…");
+  await db.delete(atelierContractorPayments);
+  await db.delete(atelierPartnerFirmInvoices);
+  await db.delete(atelierInvoiceLineDrafts);
+
+  // 1) Contractor payment proposal awaiting Partner approval (>$250).
+  await db.insert(atelierContractorPayments).values([
+    {
+      id: "cp_seed_demo_thresh",
+      payeeUserId: "c_omar_haddad",
+      payeePersonType: "contractor",
+      payeeName: "Omar Haddad",
+      engagementId: TASAMA_ENG_ID,
+      weekIso: weekA.weekIso,
+      hours: 32,
+      ratePerHour: 75,
+      rateCurrency: "USD",
+      costAmount: 2400,
+      costCurrency: "USD",
+      fxRate: 1,
+      usdAmount: 2400,
+      status: "proposed",
+      requiresPartnerApproval: true,
+      proposalRunId: "ppr_seed_demo",
+      evidenceEntryIds: ["ts_seed_demo_a", "ts_seed_demo_b"],
+      notes: "Seed walkthrough — contractor week awaiting Partner sign-off ($250 threshold).",
+    },
+    {
+      id: "cp_seed_demo_small",
+      payeeUserId: "c_omar_haddad",
+      payeePersonType: "contractor",
+      payeeName: "Omar Haddad",
+      engagementId: TASAMA_ENG_ID,
+      weekIso: weekB.weekIso,
+      hours: 2,
+      ratePerHour: 75,
+      rateCurrency: "USD",
+      costAmount: 150,
+      costCurrency: "USD",
+      fxRate: 1,
+      usdAmount: 150,
+      status: "proposed",
+      requiresPartnerApproval: false,
+      proposalRunId: "ppr_seed_demo",
+      evidenceEntryIds: ["ts_seed_demo_c"],
+      notes: "Seed walkthrough — small contractor proposal under threshold.",
+    },
+  ]);
+
+  // 2) Partner-firm invoice proposal (always partner-approval).
+  await db.insert(atelierPartnerFirmInvoices).values([
+    {
+      id: "pfi_seed_demo",
+      partnerFirmId: "pf_bgts",
+      partnerFirmName: "Boutique Growth & Tech Studio",
+      engagementId: TASAMA_ENG_ID,
+      weekIso: weekA.weekIso,
+      hours: 38,
+      costAmount: 57000,
+      costCurrency: "SAR",
+      fxRate: 3.75,
+      usdAmount: 15200,
+      status: "proposed",
+      proposalRunId: "ppr_seed_demo",
+      evidenceFirmHourIds: [`pfh_seed_bgts_${weekA.weekIso}`],
+      notes: "Seed walkthrough — partner-firm invoice for Tasama week A.",
+    },
+  ]);
+
+  // 3) Invoice-line draft for the Tasama engagement (one composer run).
+  await db.insert(atelierInvoiceLineDrafts).values([
+    {
+      id: "ild_seed_demo",
+      engagementId: TASAMA_ENG_ID,
+      composedByUserId: "p_mounir_ariss",
+      composerRunId: "icr_seed_demo",
+      rateCardId: null,
+      lines: [
+        {
+          kind: "hours",
+          sourceId: "ts_seed_demo_a",
+          description: "Billable hours — Mounir Ariss (rolling 4 weeks)",
+          qty: 120,
+          unitPriceUsd: 250,
+          amountUsd: 30000,
+          meta: { personId: "p_mounir_ariss" },
+        },
+        {
+          kind: "hours",
+          sourceId: "ts_seed_demo_b",
+          description: "Billable hours — Senior consultant team",
+          qty: 92,
+          unitPriceUsd: 220,
+          amountUsd: 20240,
+          meta: { personId: "team_sc" },
+        },
+        {
+          kind: "expense",
+          sourceId: "exp_001",
+          description: "Careem KSA — taxi (2026-04-29)",
+          qty: 1,
+          unitPriceUsd: 52.8,
+          amountUsd: 52.8,
+          markupPct: 0.1,
+          meta: { merchant: "Careem KSA", category: "taxi" },
+        },
+        {
+          kind: "expense",
+          sourceId: "exp_002",
+          description: "Four Seasons Riyadh — hotel (2026-04-30)",
+          qty: 1,
+          unitPriceUsd: 674.96,
+          amountUsd: 674.96,
+          markupPct: 0.1,
+          meta: { merchant: "Four Seasons Riyadh", category: "hotel" },
+        },
+      ],
+      totals: {
+        hoursUsd: 50240,
+        expensesNetUsd: 661.6,
+        markupUsd: 66.16,
+        totalUsd: 50967.76,
+        lineCount: 4,
+      },
+      status: "draft",
+    },
+  ]);
+
+  console.log("[seed-atelier] v3 wallet (Task #260): 2 contractor + 1 partner-firm proposal + 1 invoice draft.");
 }
 
 main()

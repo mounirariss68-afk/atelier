@@ -45,6 +45,8 @@ import WalletExpenseDetail from "@/pages/wallet/WalletExpenseDetail";
 import WalletPolicy from "@/pages/wallet/WalletPolicy";
 import WalletCards from "@/pages/wallet/WalletCards";
 import WalletVat from "@/pages/wallet/WalletVat";
+import WalletApprovals from "@/pages/wallet/WalletApprovals";
+import WalletClientBillable from "@/pages/wallet/WalletClientBillable";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
@@ -101,6 +103,8 @@ function Router() {
         <Route path="/wallet/policy" component={WalletPolicy} />
         <Route path="/wallet/cards" component={WalletCards} />
         <Route path="/wallet/vat" component={WalletVat} />
+        <Route path="/wallet/approvals" component={WalletApprovals} />
+        <Route path="/wallet/client-billable/:engagementId" component={WalletClientBillable} />
         <Route path="/accounts/:accountId" component={Account} />
         <Route path="/agents" component={Agents} />
         <Route path="/agents/runs/:runId" component={AgentRun} />

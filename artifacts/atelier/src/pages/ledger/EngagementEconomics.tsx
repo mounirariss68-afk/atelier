@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useParams } from "wouter";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Link } from "wouter";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
 interface RollupRow { partnerFirmId: string; hours: number; costAmount: number; costCurrency: string; }

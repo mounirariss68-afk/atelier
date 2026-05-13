@@ -1,0 +1,380 @@
+/**
+ * Invoice Composer — Task #260.
+ *
+ * On-demand composer triggered from the engagement-economics view.
+ * Reads:
+ *   - Approved billable timesheet entries (atelier_timesheet_entries
+ *     where status='approved', billable=true, engagementId=:eid)
+ *     × applicable rate-card rate (from the engagement's deal pricing).
+ *   - Approved client-billable expenses (atelier_expenses where
+ *     status='approved', clientBillable=true, engagementId=:eid)
+ *     × markup percentage stored on the expense row.
+ *
+ * Writes one atelier_invoice_line_drafts row carrying the flattened
+ * line set + totals; returned as JSON; CSV export is rendered by the
+ * route handler.
+ */
+
+import {
+  db,
+  atelierInvoiceLineDrafts,
+  atelierTimesheetEntries,
+  atelierExpenses,
+  atelierEngagements,
+  atelierOpportunities,
+  atelierDealPricings,
+  atelierRateCards,
+  atelierRateCardRows,
+  atelierAuditEvents,
+  type InvoiceLineDraftLine,
+} from "@workspace/db";
+import { and, eq, isNull } from "drizzle-orm";
+import { convertToUsd } from "./atelier-fx.js";
+
+function rid(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const DEFAULT_BILL_RATE_USD = 250;
+
+/**
+ * Build a seniority -> billRateUsd lookup for an engagement.
+ * Resolution order: (1) deal_pricing.rate_card_id; (2) any active rate card.
+ * Falls back to DEFAULT_BILL_RATE_USD if neither is present.
+ */
+async function resolveRateMap(engagementId: string): Promise<{
+  rateCardId: string | null;
+  rateBySeniority: Map<string, number>;
+}> {
+  const [eng] = await db
+    .select()
+    .from(atelierEngagements)
+    .where(eq(atelierEngagements.id, engagementId));
+  let rateCardId: string | null = null;
+  if (eng?.opportunityId) {
+    const [pricing] = await db
+      .select()
+      .from(atelierDealPricings)
+      .where(
+        and(
+          eq(atelierDealPricings.opportunityId, eng.opportunityId),
+          isNull(atelierDealPricings.deletedAt),
+        ),
+      );
+    rateCardId = pricing?.rateCardId ?? null;
+  }
+  if (!rateCardId) {
+    const [card] = await db
+      .select()
+      .from(atelierRateCards)
+      .where(
+        and(eq(atelierRateCards.status, "active"), isNull(atelierRateCards.deletedAt)),
+      );
+    rateCardId = card?.id ?? null;
+  }
+  const rateBySeniority = new Map<string, number>();
+  if (rateCardId) {
+    const rows = await db
+      .select()
+      .from(atelierRateCardRows)
+      .where(
+        and(eq(atelierRateCardRows.rateCardId, rateCardId), isNull(atelierRateCardRows.deletedAt)),
+      );
+    for (const r of rows) {
+      const sen = (r as unknown as { seniority?: string }).seniority ?? "default";
+      const rate =
+        (r as unknown as { billRateUsd?: number }).billRateUsd ??
+        (r as unknown as { rateUsd?: number }).rateUsd ??
+        (r as unknown as { hourlyRate?: number }).hourlyRate ??
+        DEFAULT_BILL_RATE_USD;
+      rateBySeniority.set(sen, rate);
+    }
+  }
+  return { rateCardId, rateBySeniority };
+}
+
+export interface InvoiceComposerOutput {
+  draftId: string;
+  engagementId: string;
+  rateCardId: string | null;
+  lines: InvoiceLineDraftLine[];
+  totals: {
+    hoursUsd: number;
+    expensesNetUsd: number;
+    markupUsd: number;
+    totalUsd: number;
+    lineCount: number;
+  };
+  composedAt: string;
+}
+
+interface RunArgs {
+  engagementId: string;
+  composedByUserId: string | null;
+}
+
+export async function runInvoiceComposer(args: RunArgs): Promise<InvoiceComposerOutput> {
+  const { engagementId, composedByUserId } = args;
+  const composerRunId = rid("icr");
+
+  const { rateCardId, rateBySeniority } = await resolveRateMap(engagementId);
+  const fallbackRate =
+    rateBySeniority.size > 0
+      ? rateBySeniority.values().next().value ?? DEFAULT_BILL_RATE_USD
+      : DEFAULT_BILL_RATE_USD;
+
+  // ---- Hours lines (per timesheet entry, grouped by personId+activityCode) ----
+  const entries = await db
+    .select()
+    .from(atelierTimesheetEntries)
+    .where(
+      and(
+        eq(atelierTimesheetEntries.engagementId, engagementId),
+        eq(atelierTimesheetEntries.billable, true),
+        eq(atelierTimesheetEntries.status, "approved"),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ),
+    );
+
+  const lines: InvoiceLineDraftLine[] = [];
+  let hoursUsd = 0;
+  let expensesNetUsd = 0;
+  let markupUsd = 0;
+
+  // Roll up by personId + workDate-month for a more readable invoice
+  type HoursAgg = { personId: string; month: string; hours: number; entryIds: string[] };
+  const byBucket = new Map<string, HoursAgg>();
+  for (const e of entries) {
+    const month = (e.workDate ?? "").slice(0, 7) || "unknown";
+    const key = `${e.personId}|${month}`;
+    const cur = byBucket.get(key) ?? { personId: e.personId, month, hours: 0, entryIds: [] };
+    cur.hours += e.hours ?? 0;
+    cur.entryIds.push(e.id);
+    byBucket.set(key, cur);
+  }
+  for (const agg of byBucket.values()) {
+    if (agg.hours <= 0) continue;
+    const unit = fallbackRate;
+    const amount = +(agg.hours * unit).toFixed(2);
+    hoursUsd += amount;
+    lines.push({
+      kind: "hours",
+      sourceId: agg.entryIds[0],
+      description: `Billable hours — ${agg.personId} (${agg.month})`,
+      qty: +agg.hours.toFixed(2),
+      unitPriceUsd: unit,
+      amountUsd: amount,
+      meta: { personId: agg.personId, month: agg.month, entryIds: agg.entryIds },
+    });
+  }
+
+  // ---- Expense lines (one per approved client-billable expense) ----
+  const expenses = await db
+    .select()
+    .from(atelierExpenses)
+    .where(
+      and(
+        eq(atelierExpenses.engagementId, engagementId),
+        eq(atelierExpenses.clientBillable, true),
+        eq(atelierExpenses.status, "approved"),
+        isNull(atelierExpenses.deletedAt),
+      ),
+    );
+  for (const ex of expenses) {
+    const net = +ex.usdAmount.toFixed(2);
+    const markupPct = ex.markupPct ?? 0;
+    const lineMarkup = +(net * markupPct).toFixed(2);
+    const amount = +(net + lineMarkup).toFixed(2);
+    expensesNetUsd += net;
+    markupUsd += lineMarkup;
+    lines.push({
+      kind: "expense",
+      sourceId: ex.id,
+      description: `${ex.merchant ?? "Expense"} — ${ex.category} (${ex.expenseDate})`,
+      qty: 1,
+      unitPriceUsd: amount,
+      amountUsd: amount,
+      markupPct,
+      meta: {
+        merchant: ex.merchant,
+        category: ex.category,
+        currency: ex.currency,
+        netUsd: net,
+        markupUsd: lineMarkup,
+      },
+    });
+  }
+
+  const totals = {
+    hoursUsd: +hoursUsd.toFixed(2),
+    expensesNetUsd: +expensesNetUsd.toFixed(2),
+    markupUsd: +markupUsd.toFixed(2),
+    totalUsd: +(hoursUsd + expensesNetUsd + markupUsd).toFixed(2),
+    lineCount: lines.length,
+  };
+
+  // Soft-delete prior drafts so "current" is unambiguous; keep audit trail.
+  await db
+    .update(atelierInvoiceLineDrafts)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(atelierInvoiceLineDrafts.engagementId, engagementId),
+        isNull(atelierInvoiceLineDrafts.deletedAt),
+      ),
+    );
+
+  const draftId = rid("ild");
+  await db.insert(atelierInvoiceLineDrafts).values({
+    id: draftId,
+    engagementId,
+    composedByUserId,
+    composerRunId,
+    rateCardId,
+    lines,
+    totals,
+    status: "draft",
+  });
+
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "invoice_line_draft",
+    entityId: draftId,
+    actorType: composedByUserId ? "human" : "agent",
+    actorId: composedByUserId,
+    actorLabel: "Invoice Composer",
+    action: "wallet.invoice_composer.run",
+    payload: { engagementId, totals, rateCardId } as never,
+    payloadSummary: `Composed ${lines.length} draft line(s); total $${totals.totalUsd.toFixed(2)}.`,
+  });
+
+  return {
+    draftId,
+    engagementId,
+    rateCardId,
+    lines,
+    totals,
+    composedAt: new Date().toISOString(),
+  };
+}
+
+// Used by the Salon Publish Sentinel kind=expense extension.
+export async function expensePublishSentinelChecks(args: {
+  expenseId: string;
+}): Promise<{
+  status: "pass" | "warn" | "fail";
+  publishAllowed: boolean;
+  checks: Array<{ name: string; status: "pass" | "warn" | "fail"; detail: string }>;
+  redactionProposal: string | null;
+  confidence: "green" | "amber" | "red";
+}> {
+  const [ex] = await db
+    .select()
+    .from(atelierExpenses)
+    .where(and(eq(atelierExpenses.id, args.expenseId), isNull(atelierExpenses.deletedAt)));
+  const checks: Array<{ name: string; status: "pass" | "warn" | "fail"; detail: string }> = [];
+  if (!ex) {
+    return {
+      status: "fail",
+      publishAllowed: false,
+      checks: [{ name: "exists", status: "fail", detail: "Expense not found" }],
+      redactionProposal: null,
+      confidence: "red",
+    };
+  }
+
+  // 1) Must be lead-approved before the third gate.
+  if (ex.status !== "approved") {
+    checks.push({
+      name: "lead_approved",
+      status: "fail",
+      detail: `Expense status is "${ex.status}" — must be lead-approved before client-bill.`,
+    });
+  } else {
+    checks.push({ name: "lead_approved", status: "pass", detail: "Lead-approved." });
+  }
+
+  // 2) clientBillable must be set.
+  if (!ex.clientBillable) {
+    checks.push({
+      name: "client_billable_flag",
+      status: "fail",
+      detail: "Expense not flagged client-billable.",
+    });
+  } else {
+    checks.push({
+      name: "client_billable_flag",
+      status: "pass",
+      detail: "Marked client-billable.",
+    });
+  }
+
+  // 3) Markup vs contract band: contract allows 0–15% on T&E; AMBER if outside.
+  const mp = ex.markupPct ?? 0;
+  if (mp < 0 || mp > 0.15) {
+    checks.push({
+      name: "markup_band",
+      status: "warn",
+      detail: `Markup ${(mp * 100).toFixed(1)}% is outside the standard 0–15% T&E band.`,
+    });
+  } else {
+    checks.push({
+      name: "markup_band",
+      status: "pass",
+      detail: `Markup ${(mp * 100).toFixed(1)}% within contract band.`,
+    });
+  }
+
+  // 4) Contract-allowed category — block "alcohol", "personal" outright;
+  // AMBER on "entertainment" (varies per master agreement).
+  const cat = (ex.category ?? "other").toLowerCase();
+  const blocked = ["alcohol", "personal", "fines"];
+  const ambered = ["entertainment", "gifts"];
+  if (blocked.includes(cat)) {
+    checks.push({
+      name: "category_allowed",
+      status: "fail",
+      detail: `Category "${cat}" is never client-billable per master contract.`,
+    });
+  } else if (ambered.includes(cat)) {
+    checks.push({
+      name: "category_allowed",
+      status: "warn",
+      detail: `Category "${cat}" requires explicit contract clause; verify before billing.`,
+    });
+  } else {
+    checks.push({
+      name: "category_allowed",
+      status: "pass",
+      detail: `Category "${cat}" allowed for client billing.`,
+    });
+  }
+
+  // 5) Watermark / receipt evidence — receipt ref must be present.
+  if (!ex.receiptFileRef && !ex.receiptFixtureKey && ex.captureSource !== "per_diem") {
+    checks.push({
+      name: "watermark_receipt",
+      status: "warn",
+      detail: "No receipt reference attached; client may dispute.",
+    });
+  } else {
+    checks.push({
+      name: "watermark_receipt",
+      status: "pass",
+      detail: "Receipt evidence present.",
+    });
+  }
+
+  const failed = checks.some((c) => c.status === "fail");
+  const warned = checks.some((c) => c.status === "warn");
+  const status: "pass" | "warn" | "fail" = failed ? "fail" : warned ? "warn" : "pass";
+  return {
+    status,
+    publishAllowed: !failed,
+    checks,
+    redactionProposal: failed
+      ? "Re-categorise or remove client-billable flag, or invoke Partner override with rationale."
+      : null,
+    confidence: failed ? "red" : warned ? "amber" : "green",
+  };
+}
