@@ -1440,6 +1440,13 @@ router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
     res.status(404).json({ error: "not-found" });
     return;
   }
+  // Mirror the approve endpoint: only proposed rows are eligible for
+  // rejection. Approved/paid rows must be reversed via a new flow, not
+  // silently flipped back to rejected.
+  if (row.status !== "proposed") {
+    res.status(409).json({ error: "not-proposed", status: row.status });
+    return;
+  }
   await db
     .update(atelierContractorPayments)
     .set({
@@ -1525,6 +1532,13 @@ router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
     );
   if (!row) {
     res.status(404).json({ error: "not-found" });
+    return;
+  }
+  // Mirror the approve endpoint: only proposed rows are eligible for
+  // rejection. Approved/paid rows must be reversed via a new flow, not
+  // silently flipped back to rejected.
+  if (row.status !== "proposed") {
+    res.status(409).json({ error: "not-proposed", status: row.status });
     return;
   }
   await db
