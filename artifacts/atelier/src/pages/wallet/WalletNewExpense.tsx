@@ -18,15 +18,58 @@ const FIXTURE_KEYS = [
 ];
 
 interface Engagement { id: string; name: string }
+interface CardOption {
+  id: string;
+  cardholderName: string;
+  last4: string;
+  network: string;
+  issuingCurrency: string;
+}
+interface Finding { ruleId: string; severity: "amber" | "red"; category: string; message: string }
+interface AuditorProposal {
+  category: string;
+  vatTreatment: string;
+  vatAmount: number;
+  clientBillable: boolean;
+  markupPct: number;
+  summary: string;
+  ocrConfidence: "green" | "amber" | "red";
+  refused?: boolean;
+  reason?: string;
+}
+interface ExpenseDraft {
+  id: string;
+  usdAmount?: number;
+  policyStatus: "green" | "amber" | "red";
+  policyFindings: Finding[];
+  auditorProposal: AuditorProposal | null;
+}
+interface CreateBody {
+  captureSource: "manual" | "card_feed" | "mileage" | "per_diem";
+  engagementId: string | null;
+  expenseDate: string;
+  amount?: number;
+  currency?: string;
+  merchant?: string;
+  description?: string;
+  vatCountry?: string | null;
+  receiptFixtureKey?: string | null;
+  receiptFileName?: string | null;
+  cardId?: string | null;
+  km?: number;
+  days?: number;
+  perDiemUsd?: number;
+}
 
 export default function WalletNewExpense() {
   const [, setLocation] = useLocation();
   const [path, setPath] = React.useState<"manual" | "card_feed" | "mileage" | "per_diem">("manual");
   const [engagements, setEngagements] = React.useState<Engagement[]>([]);
+  const [cards, setCards] = React.useState<CardOption[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [proposal, setProposal] = React.useState<any>(null);
-  const [draft, setDraft] = React.useState<any>(null);
+  const [proposal, setProposal] = React.useState<AuditorProposal | null>(null);
+  const [draft, setDraft] = React.useState<ExpenseDraft | null>(null);
 
   // form fields
   const [engagementId, setEngagementId] = React.useState<string>("");
@@ -36,6 +79,8 @@ export default function WalletNewExpense() {
   const [currency, setCurrency] = React.useState("USD");
   const [vatCountry, setVatCountry] = React.useState("");
   const [fixtureKey, setFixtureKey] = React.useState<string>("riyadh_taxi_01");
+  const [receiptFileName, setReceiptFileName] = React.useState<string>("");
+  const [cardId, setCardId] = React.useState<string>("");
   const [km, setKm] = React.useState<number>(0);
   const [days, setDays] = React.useState<number>(1);
   const [perDiemUsd, setPerDiemUsd] = React.useState<number>(75);
@@ -45,14 +90,25 @@ export default function WalletNewExpense() {
       .then((r) => r.json())
       .then((d) => setEngagements(d ?? []))
       .catch(() => setEngagements([]));
+    void fetch("/api/atelier/wallet/cards", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: { cards?: CardOption[] }) => setCards(d.cards ?? []))
+      .catch(() => setCards([]));
   }, []);
+
+  // Auto-pick the cardholder's currency when a card is selected.
+  React.useEffect(() => {
+    if (!cardId) return;
+    const c = cards.find((x) => x.id === cardId);
+    if (c) setCurrency(c.issuingCurrency);
+  }, [cardId, cards]);
 
   async function createDraft() {
     setBusy(true);
     setError(null);
     setProposal(null);
     try {
-      const body: any = {
+      const body: CreateBody = {
         captureSource: path,
         engagementId: engagementId || null,
         expenseDate: new Date().toISOString().slice(0, 10),
@@ -64,6 +120,8 @@ export default function WalletNewExpense() {
         body.description = description;
         body.vatCountry = vatCountry || null;
         body.receiptFixtureKey = path === "manual" ? fixtureKey : null;
+        body.receiptFileName = path === "manual" && receiptFileName ? receiptFileName : null;
+        body.cardId = path === "card_feed" && cardId ? cardId : null;
       } else if (path === "mileage") {
         body.km = km;
         body.merchant = merchant || `Mileage ${km} km`;
@@ -112,7 +170,7 @@ export default function WalletNewExpense() {
       const j = await r.json();
       if (!r.ok) {
         setError(j.message || j.error || "Submit failed");
-        if (j.findings) setDraft({ ...draft, policyFindings: j.findings, policyStatus: j.error.includes("red") ? "red" : "amber" });
+        if (j.findings) setDraft({ ...draft, policyFindings: j.findings as Finding[], policyStatus: String(j.error).includes("red") ? "red" : "amber" });
         return;
       }
       setLocation(`/wallet/expenses/${draft.id}`);
@@ -163,6 +221,19 @@ export default function WalletNewExpense() {
 
             {(path === "manual" || path === "card_feed") && (
               <>
+                {path === "card_feed" && (
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Card-feed draft (pick a synthetic line)</label>
+                    <select className={inputCls} value={cardId} onChange={(e) => setCardId(e.target.value)} data-testid="select-card">
+                      <option value="">— select a card —</option>
+                      {cards.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.cardholderName} · {c.network} ••{c.last4} ({c.issuingCurrency})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className={labelCls}>Merchant</label>
                   <input className={inputCls} value={merchant} onChange={(e) => setMerchant(e.target.value)} data-testid="input-merchant" />
@@ -188,12 +259,27 @@ export default function WalletNewExpense() {
                   </select>
                 </div>
                 {path === "manual" && (
-                  <div className="md:col-span-2">
-                    <label className={labelCls}>Receipt fixture (deterministic OCR seed)</label>
-                    <select className={inputCls} value={fixtureKey} onChange={(e) => setFixtureKey(e.target.value)} data-testid="select-fixture">
-                      {FIXTURE_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
+                  <>
+                    <div className="md:col-span-2">
+                      <label className={labelCls}>Receipt file (image / PDF — name only is captured for the encrypted ref)</label>
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className={inputCls}
+                        onChange={(e) => setReceiptFileName(e.target.files?.[0]?.name ?? "")}
+                        data-testid="input-receipt-file"
+                      />
+                      {receiptFileName ? (
+                        <p className="text-[10px] font-mono text-text-mute mt-1">attached: {receiptFileName}</p>
+                      ) : null}
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className={labelCls}>OCR fixture (deterministic preview when no real OCR runs)</label>
+                      <select className={inputCls} value={fixtureKey} onChange={(e) => setFixtureKey(e.target.value)} data-testid="select-fixture">
+                        {FIXTURE_KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
+                      </select>
+                    </div>
+                  </>
                 )}
                 <div className="md:col-span-2">
                   <label className={labelCls}>Description</label>
@@ -266,7 +352,7 @@ export default function WalletNewExpense() {
               <div className="text-xs font-mono">USD {draft.usdAmount?.toFixed(2)} · policy <MonoChip tone={draft.policyStatus === "red" ? "red" : draft.policyStatus === "amber" ? "gold" : "green"}>{draft.policyStatus}</MonoChip></div>
               {draft.policyFindings?.length > 0 && (
                 <ul className="text-xs font-mono">
-                  {draft.policyFindings.map((f: any, i: number) => (
+                  {draft.policyFindings.map((f: Finding, i: number) => (
                     <li key={i} className={f.severity === "red" ? "text-red-400" : "text-amber-400"}>⚑ {f.message}</li>
                   ))}
                 </ul>

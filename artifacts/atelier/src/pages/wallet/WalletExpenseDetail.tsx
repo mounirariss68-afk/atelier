@@ -9,6 +9,18 @@ interface Finding {
   message: string;
 }
 
+interface AuditorProposal {
+  category: string;
+  vatTreatment: string;
+  vatAmount: number;
+  clientBillable: boolean;
+  markupPct: number;
+  summary: string;
+  ocrConfidence: "green" | "amber" | "red";
+  refused?: boolean;
+  reason?: string;
+}
+
 interface Expense {
   id: string;
   personId: string;
@@ -32,7 +44,7 @@ interface Expense {
   policyFindings: Finding[];
   overrideRationale: string | null;
   auditorRunId: string | null;
-  auditorProposal: any;
+  auditorProposal: AuditorProposal | null;
   summary: string | null;
   submittedAt: string | null;
   approvedAt: string | null;
@@ -65,7 +77,7 @@ export default function WalletExpenseDetail() {
     void load();
   }, [load]);
 
-  async function action(path: string, body: any = {}) {
+  async function action(path: string, body: Record<string, unknown> = {}) {
     if (!id) return;
     setBusy(true);
     setError(null);

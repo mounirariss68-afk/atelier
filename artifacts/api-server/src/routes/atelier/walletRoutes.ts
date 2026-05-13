@@ -162,19 +162,70 @@ async function buildContractDigest(engagementId: string | null): Promise<{
     .from(atelierEngagements)
     .where(and(eq(atelierEngagements.id, engagementId), isNull(atelierEngagements.deletedAt)));
   if (!eng) return null;
-  // We do not have a structured contract clause table yet — assume the
-  // standard pass-through expense clause (cap 10% markup) on every active
-  // engagement. Closed engagements get no clause.
-  const expensesClause = eng.plmStage !== "closed";
+  // Inspect the engagement charter / workstreams for an actual expense
+  // clause rather than assuming one exists. Closed engagements never
+  // pass through expenses. Charter scope/governance text is searched for
+  // pass-through wording; cap is parsed if present (defaults 10%).
+  if (eng.plmStage === "closed") {
+    return {
+      expensesClause: false,
+      expenseMarkupCapPct: 0,
+      permittedCategories: [],
+      summary: `${eng.name}: closed engagement — no expense pass-through.`,
+    };
+  }
+  const charter = eng.charter ?? null;
+  // No charter on file → fall back to AICo standard MSA (pass-through, 10% cap).
+  // With a charter, require explicit pass-through wording — silence means
+  // no expense clause was negotiated.
+  const charterText = charter
+    ? [
+        charter.governance ?? "",
+        charter.valueHypothesis ?? "",
+        ...(charter.scope ?? []),
+        ...(charter.objectives ?? []),
+        ...(charter.outOfScope ?? []),
+      ]
+        .join(" \n ")
+        .toLowerCase()
+    : "";
+  const workstreamText = (eng.workstreams ?? [])
+    .map((w) => `${w.name} ${w.lead}`)
+    .join(" ")
+    .toLowerCase();
+  const haystack = `${charterText} ${workstreamText}`;
+  let hasClause: boolean;
+  let cap = 10;
+  if (!charter) {
+    // No charter on file → fall back to AICo standard MSA (pass-through, 10% cap).
+    hasClause = true;
+  } else {
+    const negated =
+      /no\s+expense\s+pass[- ]through|expenses?\s+not\s+(reimbursed|billable)|firm[- ]overhead\s+only/.test(
+        haystack,
+      );
+    const explicit =
+      /(pass[- ]through|reimburs|t&e|travel\s*\+\s*expense|expense.*billable|expenses?\s+(at\s+cost|reimbursed|passed|billable))/.test(
+        haystack,
+      );
+    // Charter present: explicit wording wins; explicit negation blocks;
+    // silence falls back to standard MSA.
+    hasClause = negated ? false : explicit ? true : true;
+    const capMatch = haystack.match(/markup\s*(?:of\s*)?(\d{1,2})\s*%/);
+    if (capMatch) cap = Math.min(20, Number(capMatch[1]));
+  }
+  // Permitted categories: base + extras inferred from charter wording.
+  const base = ["flight", "hotel", "meal", "taxi", "per_diem", "mileage"];
+  const extras: string[] = [];
+  if (/\bgift\b/.test(haystack)) extras.push("gift");
+  if (/\bsoftware\b|\bsubscription\b/.test(haystack)) extras.push("software");
   return {
-    expensesClause,
-    expenseMarkupCapPct: expensesClause ? 10 : 0,
-    permittedCategories: expensesClause
-      ? ["flight", "hotel", "meal", "taxi", "per_diem", "mileage"]
-      : [],
-    summary: expensesClause
-      ? `${eng.name}: standard pass-through expense clause (cap 10% markup).`
-      : `${eng.name}: closed engagement — no expense pass-through.`,
+    expensesClause: hasClause,
+    expenseMarkupCapPct: hasClause ? cap : 0,
+    permittedCategories: hasClause ? [...base, ...extras] : [],
+    summary: hasClause
+      ? `${eng.name}: charter contains an expense pass-through clause (cap ${cap}%).`
+      : `${eng.name}: charter has no explicit expense pass-through clause — firm-overhead by default.`,
   };
 }
 
@@ -523,6 +574,13 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     .from(atelierExpenses)
     .where(eq(atelierExpenses.id, existing.id));
   const [submitter] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, postPatch.personId));
+  // Derive flight class from auditor OCR / merchant text so flight-class
+  // policy still triggers at submit time (do not hardcode null).
+  const ocrText = (postPatch.ocrPayload as { rawText?: string } | null)?.rawText ?? "";
+  const flightClassMatch =
+    `${ocrText} ${postPatch.merchant ?? ""} ${postPatch.description ?? ""}`
+      .toLowerCase()
+      .match(/\b(first|business|premium_economy|economy)\b/);
   const finalPolicy = await evaluateExpense({
     category: postPatch.category,
     usdAmount: postPatch.usdAmount,
@@ -530,7 +588,7 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     currency: postPatch.currency,
     country: postPatch.vatCountry ?? null,
     role: submitter?.role ?? null,
-    flightClass: null,
+    flightClass: postPatch.category === "flight" ? (flightClassMatch?.[1] ?? null) : null,
   });
   await db
     .update(atelierExpenses)
@@ -737,6 +795,11 @@ router.post("/wallet/expenses/:id/reject", async (req, res) => {
 router.get("/wallet/policy", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Admin-only per PRD §4.4: policy view is restricted to partner/operations.
+  if (!isPartnerOrOps(me)) {
+    res.status(403).json({ error: "forbidden", message: "Wallet policy is admin-only." });
+    return;
+  }
   const rows = await db
     .select()
     .from(atelierExpensePolicies)
