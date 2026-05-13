@@ -92,10 +92,28 @@ export function rejectClientRealm(
   res: Response,
   next: NextFunction,
 ): void {
+  // Reject if the resolved internal persona is a client_user (defense in
+  // depth — should never happen since salon users live in atelier_salon_users).
   if (req.atelierPersona && req.atelierPersona.role === "client_user") {
     res.status(403).json({
       error: "wrong-realm",
       message: "client_user personas must use /api/salon/*",
+    });
+    return;
+  }
+  // Authoritative realm guard (Task #242 round-5): if the request carries a
+  // salon_persona cookie but no resolvable internal persona, the caller is a
+  // Salon principal — refuse all internal Atelier routes regardless of which
+  // particular endpoint is being hit.
+  const salonCookie = req.cookies?.["salon_persona"];
+  if (
+    !req.atelierPersona &&
+    typeof salonCookie === "string" &&
+    salonCookie.length > 0
+  ) {
+    res.status(403).json({
+      error: "wrong-realm",
+      message: "Salon (client) sessions must use /api/salon/*",
     });
     return;
   }

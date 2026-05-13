@@ -33,11 +33,18 @@ export function rejectInternalRealm(
 ): void {
   const internal = req.cookies?.[ATELIER_PERSONA_COOKIE];
   const salon = req.cookies?.[SALON_PERSONA_COOKIE];
-  // Only reject when the request carries an internal cookie WITHOUT an
-  // accompanying salon cookie. Mixed-cookie sessions defer to
-  // ensureSalonPersona, which authenticates against the salon_persona
-  // identity (salon role) — preserving the realm boundary while letting
-  // demo flows recover from leftover internal cookies.
+  // Sign-in bootstrap exemption (Task #242 round-5): always allow the
+  // persona-listing and persona-switch endpoints through, so an internal
+  // user landing on /salon with a stale atelier_persona cookie can still
+  // see personas and pick one (which sets salon_persona).
+  const path = req.path || "";
+  if (path === "/personas" || path === "/persona" || path === "/me") {
+    next();
+    return;
+  }
+  // Otherwise: reject when atelier cookie is present without a salon cookie.
+  // Mixed-cookie sessions defer to ensureSalonPersona which authenticates
+  // against the salon identity.
   if (
     typeof internal === "string" &&
     internal.length > 0 &&
