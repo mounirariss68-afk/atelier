@@ -452,25 +452,18 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
   // Wrap the deterministic sweep in the standard agent-run lifecycle so
   // Burn Sentinel shows up alongside other agents in the runs list with
   // start/complete telemetry, duration, and alertsWritten as output.
-  // Failures inside the sweep are recorded as a `blocked` run rather
-  // than crashing the scheduler.
+  // Fail-fast on startRun: budget/DB faults must surface, not be
+  // swallowed while we still mutate ledger state.
   const startedAt = Date.now();
-  let runId: string | null = null;
-  try {
-    runId = await startRun({
-      agentId: "ag_burn_sentinel",
-      triggeredByUserId: null,
-      targetType: "ledger.burn_sentinel",
-      targetId: "firm",
-      targetLabel: "Firm-wide burn sweep",
-      actorLabel: "Burn Sentinel",
-      inputs: { force: !!opts.force },
-    });
-  } catch (err) {
-    // Budget rejection or DB unavailable — fall back to a telemetry-less
-    // run rather than dropping the deterministic alerts.
-    console.warn("[burn-sentinel] startRun failed, continuing without telemetry:", err);
-  }
+  const runId = await startRun({
+    agentId: "ag_burn_sentinel",
+    triggeredByUserId: null,
+    targetType: "ledger.burn_sentinel",
+    targetId: "firm",
+    targetLabel: "Firm-wide burn sweep",
+    actorLabel: "Burn Sentinel",
+    inputs: { force: !!opts.force },
+  });
   const burns = await computeEngagementBurns();
   let alertsWritten = 0;
 
@@ -547,25 +540,19 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
       }
     }
   }
-  if (runId) {
-    try {
-      await completeRun({
-        runId,
-        output: { alertsWritten, engagementsScanned: burns.length },
-        confidence: alertsWritten > 0 ? "amber" : "green",
-        costUsd: 0,
-        durationMs: Date.now() - startedAt,
-        sourcesCount: burns.length,
-        actorLabel: "Burn Sentinel",
-        targetType: "ledger.burn_sentinel",
-        targetId: "firm",
-        targetLabel: "Firm-wide burn sweep",
-        source: "mock_config",
-      });
-    } catch (err) {
-      console.warn("[burn-sentinel] completeRun failed:", err);
-    }
-  }
+  await completeRun({
+    runId,
+    output: { alertsWritten, engagementsScanned: burns.length },
+    confidence: alertsWritten > 0 ? "amber" : "green",
+    costUsd: 0,
+    durationMs: Date.now() - startedAt,
+    sourcesCount: burns.length,
+    actorLabel: "Burn Sentinel",
+    targetType: "ledger.burn_sentinel",
+    targetId: "firm",
+    targetLabel: "Firm-wide burn sweep",
+    source: "mock_config",
+  });
   return { alertsWritten, engagementsScanned: burns.length };
 }
 

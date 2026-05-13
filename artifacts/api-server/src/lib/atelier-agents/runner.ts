@@ -4345,12 +4345,10 @@ export async function runUtilizationAnalyst(args: {
       return { runId, output };
     }
 
-    let promptBody = "";
-    try {
-      promptBody = loadPrompt("utilization_analyst");
-    } catch {
-      promptBody = "Utilization Analyst — fallback prompt missing on disk.";
-    }
+    // Fail-fast on missing prompt — consistent with every other agent in
+    // this file. A missing prompt is a configuration defect, not a
+    // runtime condition to silently degrade through.
+    const promptBody = loadPrompt("utilization_analyst");
     const userPrompt = JSON.stringify({
       view: args.view,
       targetId: args.targetId,
