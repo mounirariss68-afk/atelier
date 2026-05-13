@@ -23,6 +23,9 @@ import {
   type SubIndustryRow,
 } from "@/lib/reference-data";
 
+// TODO(Task #292 — Persona Replacement / A3): replace this temporary role
+// gate with the canonical `can_admin_reference_data` capability check once
+// the 9-persona model ships.
 const ADMIN_ROLES = new Set(["partner", "operations"]);
 const REGIONS = ["MENA", "Africa", "Asia", "Europe", "Americas", "Oceania", "Antarctica"];
 const OFFERING_ANCHORS = [
