@@ -46,6 +46,7 @@ import type {
   AtelierContactGraph,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
+  AtelierCreateStageTransition200,
   AtelierCredential,
   AtelierCredentialInput,
   AtelierCritiqueInput,
@@ -91,6 +92,7 @@ import type {
   AtelierScoutInput,
   AtelierSendDeliverableInput,
   AtelierStageChangeInput,
+  AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
   AtelierWhitespaceCanvas,
@@ -100,6 +102,8 @@ import type {
   Engagement,
   HealthStatus,
   Opportunity,
+  OpportunityStageTransition,
+  PipelineForecastSummary,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1019,6 +1023,352 @@ export const useAtelierUpdateOpportunityStage = <
   TContext
 > => {
   return useMutation(getAtelierUpdateOpportunityStageMutationOptions(options));
+};
+
+/**
+ * @summary Move opportunity to a new sales stage with rationale + evidence
+ */
+export const getAtelierCreateStageTransitionUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/stage-transition`;
+};
+
+export const atelierCreateStageTransition = async (
+  oppId: string,
+  atelierStageTransitionInput: AtelierStageTransitionInput,
+  options?: RequestInit,
+): Promise<AtelierCreateStageTransition200> => {
+  return customFetch<AtelierCreateStageTransition200>(
+    getAtelierCreateStageTransitionUrl(oppId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierStageTransitionInput),
+    },
+  );
+};
+
+export const getAtelierCreateStageTransitionMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateStageTransition>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierStageTransitionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateStageTransition>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierStageTransitionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateStageTransition"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateStageTransition>>,
+    { oppId: string; data: BodyType<AtelierStageTransitionInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierCreateStageTransition(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateStageTransitionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateStageTransition>>
+>;
+export type AtelierCreateStageTransitionMutationBody =
+  BodyType<AtelierStageTransitionInput>;
+export type AtelierCreateStageTransitionMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Move opportunity to a new sales stage with rationale + evidence
+ */
+export const useAtelierCreateStageTransition = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateStageTransition>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierStageTransitionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateStageTransition>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierStageTransitionInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateStageTransitionMutationOptions(options));
+};
+
+/**
+ * @summary Stage transition history for an opportunity (most recent first)
+ */
+export const getAtelierGetStageHistoryUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/stage-history`;
+};
+
+export const atelierGetStageHistory = async (
+  oppId: string,
+  options?: RequestInit,
+): Promise<OpportunityStageTransition[]> => {
+  return customFetch<OpportunityStageTransition[]>(
+    getAtelierGetStageHistoryUrl(oppId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetStageHistoryQueryKey = (oppId: string) => {
+  return [`/api/atelier/opportunities/${oppId}/stage-history`] as const;
+};
+
+export const getAtelierGetStageHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetStageHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetStageHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetStageHistoryQueryKey(oppId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetStageHistory>>
+  > = ({ signal }) =>
+    atelierGetStageHistory(oppId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!oppId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetStageHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetStageHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetStageHistory>>
+>;
+export type AtelierGetStageHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Stage transition history for an opportunity (most recent first)
+ */
+
+export function useAtelierGetStageHistory<
+  TData = Awaited<ReturnType<typeof atelierGetStageHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  oppId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetStageHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetStageHistoryQueryOptions(oppId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Weighted-pipeline + stage bucket roll-up (Pipeline Forecaster output)
+ */
+export const getAtelierGetPipelineForecastUrl = () => {
+  return `/api/atelier/pipeline/forecast`;
+};
+
+export const atelierGetPipelineForecast = async (
+  options?: RequestInit,
+): Promise<PipelineForecastSummary> => {
+  return customFetch<PipelineForecastSummary>(
+    getAtelierGetPipelineForecastUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetPipelineForecastQueryKey = () => {
+  return [`/api/atelier/pipeline/forecast`] as const;
+};
+
+export const getAtelierGetPipelineForecastQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetPipelineForecast>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPipelineForecast>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetPipelineForecastQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetPipelineForecast>>
+  > = ({ signal }) => atelierGetPipelineForecast({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPipelineForecast>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetPipelineForecastQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetPipelineForecast>>
+>;
+export type AtelierGetPipelineForecastQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Weighted-pipeline + stage bucket roll-up (Pipeline Forecaster output)
+ */
+
+export function useAtelierGetPipelineForecast<
+  TData = Awaited<ReturnType<typeof atelierGetPipelineForecast>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPipelineForecast>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetPipelineForecastQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Trigger Pipeline Forecaster agent run (refreshes summary + flags stalled)
+ */
+export const getAtelierRunPipelineForecasterUrl = () => {
+  return `/api/atelier/pipeline/forecast/run`;
+};
+
+export const atelierRunPipelineForecaster = async (
+  options?: RequestInit,
+): Promise<PipelineForecastSummary> => {
+  return customFetch<PipelineForecastSummary>(
+    getAtelierRunPipelineForecasterUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierRunPipelineForecasterMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRunPipelineForecaster>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRunPipelineForecaster>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["atelierRunPipelineForecaster"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRunPipelineForecaster>>,
+    void
+  > = () => {
+    return atelierRunPipelineForecaster(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRunPipelineForecasterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRunPipelineForecaster>>
+>;
+
+export type AtelierRunPipelineForecasterMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Trigger Pipeline Forecaster agent run (refreshes summary + flags stalled)
+ */
+export const useAtelierRunPipelineForecaster = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRunPipelineForecaster>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRunPipelineForecaster>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getAtelierRunPipelineForecasterMutationOptions(options));
 };
 
 export const getAtelierGetQualifierUrl = (oppId: string) => {

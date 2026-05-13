@@ -547,6 +547,24 @@ export interface AtelierPersonaSwitchInput {
   personaId: string;
 }
 
+/**
+ * v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.
+ */
+export type SalesStage = (typeof SalesStage)[keyof typeof SalesStage];
+
+export const SalesStage = {
+  lead: "lead",
+  qualified: "qualified",
+  discovery_scheduled: "discovery_scheduled",
+  pov_in_flight: "pov_in_flight",
+  proposal_in_flight: "proposal_in_flight",
+  submitted: "submitted",
+  verbal_commit: "verbal_commit",
+  signed: "signed",
+  lost_no_decision: "lost_no_decision",
+  withdrawn: "withdrawn",
+} as const;
+
 export interface Account {
   id: string;
   name: string;
@@ -563,6 +581,7 @@ export interface Opportunity {
   accountId: string;
   accountName: string;
   plmStage: PlmStage;
+  salesStage?: SalesStage;
   /** @nullable */
   buyerPersona?: string | null;
   /** @nullable */
@@ -574,8 +593,66 @@ export interface Opportunity {
   weightedValueUsd: number;
   daysInStage: number;
   nextMilestone: string;
+  /** @nullable */
+  nextMilestoneDate?: string | null;
   sourceLead: string;
+  stalled?: boolean;
   createdAt: string;
+}
+
+export interface OpportunityStageTransition {
+  id: string;
+  opportunityId: string;
+  fromStage?: SalesStage | null;
+  toStage: SalesStage;
+  transitionedByUserId: string;
+  /** @nullable */
+  transitionedByName?: string | null;
+  /** @nullable */
+  rationaleText?: string | null;
+  evidenceArtifactIds?: string[];
+  /** @nullable */
+  priorProbabilityPct?: number | null;
+  /** @nullable */
+  newProbabilityPct?: number | null;
+  /** @nullable */
+  nextMilestone?: string | null;
+  /** @nullable */
+  nextMilestoneDate?: string | null;
+  agentRecommended?: boolean;
+  partnerOverride?: boolean;
+  createdAt: string;
+}
+
+export interface AtelierStageTransitionInput {
+  toStage: SalesStage;
+  /** @minLength 1 */
+  rationaleText: string;
+  evidenceArtifactIds?: string[];
+  /** @nullable */
+  newProbabilityPct?: number | null;
+  /** @nullable */
+  nextMilestone?: string | null;
+  /** @nullable */
+  nextMilestoneDate?: string | null;
+  partnerOverride?: boolean;
+}
+
+export interface PipelineStageBucket {
+  stage: SalesStage;
+  count: number;
+  dealSumUsd: number;
+  weightedSumUsd: number;
+  avgDaysInStage: number;
+}
+
+export interface PipelineForecastSummary {
+  totalCount: number;
+  totalDealSumUsd: number;
+  weightedPipelineUsd: number;
+  stalledCount: number;
+  asOf: string;
+  buckets: PipelineStageBucket[];
 }
 
 export type EngagementRaidStatus =
@@ -1947,6 +2024,11 @@ export interface AtelierAgentRunSummary {
 
 export type AtelierGetActivityParams = {
   limit?: number;
+};
+
+export type AtelierCreateStageTransition200 = {
+  opportunity: Opportunity;
+  transition: OpportunityStageTransition;
 };
 
 export type AtelierListAccountsParams = {

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PlmStage } from "./plmStage";
+import type { SalesStage } from "./salesStage";
 
 export interface Opportunity {
   id: string;
@@ -14,6 +15,7 @@ export interface Opportunity {
   accountId: string;
   accountName: string;
   plmStage: PlmStage;
+  salesStage?: SalesStage;
   /** @nullable */
   buyerPersona?: string | null;
   /** @nullable */
@@ -25,6 +27,9 @@ export interface Opportunity {
   weightedValueUsd: number;
   daysInStage: number;
   nextMilestone: string;
+  /** @nullable */
+  nextMilestoneDate?: string | null;
   sourceLead: string;
+  stalled?: boolean;
   createdAt: Date;
 }

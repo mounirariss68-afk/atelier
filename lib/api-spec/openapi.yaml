@@ -224,6 +224,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+  /atelier/opportunities/{oppId}/stage-transition:
+    post:
+      operationId: atelierCreateStageTransition
+      tags: [atelier]
+      summary: Move opportunity to a new sales stage with rationale + evidence
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierStageTransitionInput"
+      responses:
+        "200":
+          description: Updated opportunity with new transition row
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [opportunity, transition]
+                properties:
+                  opportunity: { $ref: "#/components/schemas/Opportunity" }
+                  transition: { $ref: "#/components/schemas/OpportunityStageTransition" }
+        "412":
+          description: Stage gate not satisfied (e.g. 5C missing for late stages)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/opportunities/{oppId}/stage-history:
+    get:
+      operationId: atelierGetStageHistory
+      tags: [atelier]
+      summary: Stage transition history for an opportunity (most recent first)
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Transitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OpportunityStageTransition" }
+  /atelier/pipeline/forecast:
+    get:
+      operationId: atelierGetPipelineForecast
+      tags: [atelier]
+      summary: Weighted-pipeline + stage bucket roll-up (Pipeline Forecaster output)
+      responses:
+        "200":
+          description: Forecast summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineForecastSummary"
+  /atelier/pipeline/forecast/run:
+    post:
+      operationId: atelierRunPipelineForecaster
+      tags: [atelier]
+      summary: Trigger Pipeline Forecaster agent run (refreshes summary + flags stalled)
+      responses:
+        "200":
+          description: Forecast summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineForecastSummary"
   /atelier/opportunities/{oppId}/qualifier:
     get:
       operationId: atelierGetQualifier
@@ -1979,6 +2054,21 @@ components:
       type: string
       enum: [identify, shape, pursue, mobilize, deliver, compound, won, lost, no_go, closed]
 
+    SalesStage:
+      type: string
+      description: v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.
+      enum:
+        - lead
+        - qualified
+        - discovery_scheduled
+        - pov_in_flight
+        - proposal_in_flight
+        - submitted
+        - verbal_commit
+        - signed
+        - lost_no_decision
+        - withdrawn
+
     Account:
       type: object
       required: [id, name, country, sector]
@@ -2014,6 +2104,7 @@ components:
         accountId: { type: string }
         accountName: { type: string }
         plmStage: { $ref: "#/components/schemas/PlmStage" }
+        salesStage: { $ref: "#/components/schemas/SalesStage" }
         buyerPersona: { type: ["string", "null"] }
         offeringAnchor: { type: ["string", "null"] }
         partnerOwnerName: { type: string }
@@ -2023,8 +2114,76 @@ components:
         weightedValueUsd: { type: number }
         daysInStage: { type: integer }
         nextMilestone: { type: string }
+        nextMilestoneDate: { type: ["string", "null"] }
         sourceLead: { type: string }
+        stalled: { type: boolean }
         createdAt: { type: string, format: date-time }
+
+    OpportunityStageTransition:
+      type: object
+      required: [id, opportunityId, toStage, transitionedByUserId, createdAt]
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        fromStage: { oneOf: [{ $ref: "#/components/schemas/SalesStage" }, { type: "null" }] }
+        toStage: { $ref: "#/components/schemas/SalesStage" }
+        transitionedByUserId: { type: string }
+        transitionedByName: { type: ["string", "null"] }
+        rationaleText: { type: ["string", "null"] }
+        evidenceArtifactIds:
+          type: array
+          items: { type: string }
+        priorProbabilityPct: { type: ["number", "null"] }
+        newProbabilityPct: { type: ["number", "null"] }
+        nextMilestone: { type: ["string", "null"] }
+        nextMilestoneDate: { type: ["string", "null"] }
+        agentRecommended: { type: boolean }
+        partnerOverride: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    AtelierStageTransitionInput:
+      type: object
+      required: [toStage, rationaleText]
+      properties:
+        toStage: { $ref: "#/components/schemas/SalesStage" }
+        rationaleText: { type: string, minLength: 1 }
+        evidenceArtifactIds:
+          type: array
+          items: { type: string }
+          default: []
+        newProbabilityPct: { type: ["number", "null"] }
+        nextMilestone: { type: ["string", "null"] }
+        nextMilestoneDate: { type: ["string", "null"] }
+        partnerOverride: { type: boolean, default: false }
+
+    PipelineStageBucket:
+      type: object
+      required: [stage, count, dealSumUsd, weightedSumUsd, avgDaysInStage]
+      properties:
+        stage: { $ref: "#/components/schemas/SalesStage" }
+        count: { type: integer }
+        dealSumUsd: { type: number }
+        weightedSumUsd: { type: number }
+        avgDaysInStage: { type: number }
+
+    PipelineForecastSummary:
+      type: object
+      required:
+        - totalCount
+        - totalDealSumUsd
+        - weightedPipelineUsd
+        - stalledCount
+        - asOf
+        - buckets
+      properties:
+        totalCount: { type: integer }
+        totalDealSumUsd: { type: number }
+        weightedPipelineUsd: { type: number }
+        stalledCount: { type: integer }
+        asOf: { type: string, format: date-time }
+        buckets:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineStageBucket" }
 
     Engagement:
       type: object

@@ -248,6 +248,23 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
     "no_go",
     "closed",
   ]),
+  salesStage: zod
+    .enum([
+      "lead",
+      "qualified",
+      "discovery_scheduled",
+      "pov_in_flight",
+      "proposal_in_flight",
+      "submitted",
+      "verbal_commit",
+      "signed",
+      "lost_no_decision",
+      "withdrawn",
+    ])
+    .optional()
+    .describe(
+      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+    ),
   buyerPersona: zod.string().nullish(),
   offeringAnchor: zod.string().nullish(),
   partnerOwnerName: zod.string(),
@@ -257,7 +274,9 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
   weightedValueUsd: zod.number(),
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
+  nextMilestoneDate: zod.string().nullish(),
   sourceLead: zod.string(),
+  stalled: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
 export const AtelierListOpportunitiesResponse = zod.array(
@@ -307,6 +326,23 @@ export const AtelierGetOpportunityResponse = zod.object({
     "no_go",
     "closed",
   ]),
+  salesStage: zod
+    .enum([
+      "lead",
+      "qualified",
+      "discovery_scheduled",
+      "pov_in_flight",
+      "proposal_in_flight",
+      "submitted",
+      "verbal_commit",
+      "signed",
+      "lost_no_decision",
+      "withdrawn",
+    ])
+    .optional()
+    .describe(
+      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+    ),
   buyerPersona: zod.string().nullish(),
   offeringAnchor: zod.string().nullish(),
   partnerOwnerName: zod.string(),
@@ -316,7 +352,9 @@ export const AtelierGetOpportunityResponse = zod.object({
   weightedValueUsd: zod.number(),
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
+  nextMilestoneDate: zod.string().nullish(),
   sourceLead: zod.string(),
+  stalled: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -365,6 +403,23 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
     "no_go",
     "closed",
   ]),
+  salesStage: zod
+    .enum([
+      "lead",
+      "qualified",
+      "discovery_scheduled",
+      "pov_in_flight",
+      "proposal_in_flight",
+      "submitted",
+      "verbal_commit",
+      "signed",
+      "lost_no_decision",
+      "withdrawn",
+    ])
+    .optional()
+    .describe(
+      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+    ),
   buyerPersona: zod.string().nullish(),
   offeringAnchor: zod.string().nullish(),
   partnerOwnerName: zod.string(),
@@ -374,8 +429,286 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
   weightedValueUsd: zod.number(),
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
+  nextMilestoneDate: zod.string().nullish(),
   sourceLead: zod.string(),
+  stalled: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Move opportunity to a new sales stage with rationale + evidence
+ */
+export const AtelierCreateStageTransitionParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierCreateStageTransitionBodyEvidenceArtifactIdsDefault = [];
+export const atelierCreateStageTransitionBodyPartnerOverrideDefault = false;
+
+export const AtelierCreateStageTransitionBody = zod.object({
+  toStage: zod
+    .enum([
+      "lead",
+      "qualified",
+      "discovery_scheduled",
+      "pov_in_flight",
+      "proposal_in_flight",
+      "submitted",
+      "verbal_commit",
+      "signed",
+      "lost_no_decision",
+      "withdrawn",
+    ])
+    .describe(
+      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+    ),
+  rationaleText: zod.string().min(1),
+  evidenceArtifactIds: zod
+    .array(zod.string())
+    .default(atelierCreateStageTransitionBodyEvidenceArtifactIdsDefault),
+  newProbabilityPct: zod.number().nullish(),
+  nextMilestone: zod.string().nullish(),
+  nextMilestoneDate: zod.string().nullish(),
+  partnerOverride: zod
+    .boolean()
+    .default(atelierCreateStageTransitionBodyPartnerOverrideDefault),
+});
+
+export const AtelierCreateStageTransitionResponse = zod.object({
+  opportunity: zod.object({
+    id: zod.string(),
+    slug: zod.string(),
+    name: zod.string(),
+    accountId: zod.string(),
+    accountName: zod.string(),
+    plmStage: zod.enum([
+      "identify",
+      "shape",
+      "pursue",
+      "mobilize",
+      "deliver",
+      "compound",
+      "won",
+      "lost",
+      "no_go",
+      "closed",
+    ]),
+    salesStage: zod
+      .enum([
+        "lead",
+        "qualified",
+        "discovery_scheduled",
+        "pov_in_flight",
+        "proposal_in_flight",
+        "submitted",
+        "verbal_commit",
+        "signed",
+        "lost_no_decision",
+        "withdrawn",
+      ])
+      .optional()
+      .describe(
+        "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+      ),
+    buyerPersona: zod.string().nullish(),
+    offeringAnchor: zod.string().nullish(),
+    partnerOwnerName: zod.string(),
+    engagementLeadName: zod.string(),
+    dealSizeUsd: zod.number(),
+    probabilityPct: zod.number(),
+    weightedValueUsd: zod.number(),
+    daysInStage: zod.number(),
+    nextMilestone: zod.string(),
+    nextMilestoneDate: zod.string().nullish(),
+    sourceLead: zod.string(),
+    stalled: zod.boolean().optional(),
+    createdAt: zod.coerce.date(),
+  }),
+  transition: zod.object({
+    id: zod.string(),
+    opportunityId: zod.string(),
+    fromStage: zod
+      .union([
+        zod
+          .enum([
+            "lead",
+            "qualified",
+            "discovery_scheduled",
+            "pov_in_flight",
+            "proposal_in_flight",
+            "submitted",
+            "verbal_commit",
+            "signed",
+            "lost_no_decision",
+            "withdrawn",
+          ])
+          .describe(
+            "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+          ),
+        zod.null(),
+      ])
+      .optional(),
+    toStage: zod
+      .enum([
+        "lead",
+        "qualified",
+        "discovery_scheduled",
+        "pov_in_flight",
+        "proposal_in_flight",
+        "submitted",
+        "verbal_commit",
+        "signed",
+        "lost_no_decision",
+        "withdrawn",
+      ])
+      .describe(
+        "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+      ),
+    transitionedByUserId: zod.string(),
+    transitionedByName: zod.string().nullish(),
+    rationaleText: zod.string().nullish(),
+    evidenceArtifactIds: zod.array(zod.string()).optional(),
+    priorProbabilityPct: zod.number().nullish(),
+    newProbabilityPct: zod.number().nullish(),
+    nextMilestone: zod.string().nullish(),
+    nextMilestoneDate: zod.string().nullish(),
+    agentRecommended: zod.boolean().optional(),
+    partnerOverride: zod.boolean().optional(),
+    createdAt: zod.coerce.date(),
+  }),
+});
+
+/**
+ * @summary Stage transition history for an opportunity (most recent first)
+ */
+export const AtelierGetStageHistoryParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierGetStageHistoryResponseItem = zod.object({
+  id: zod.string(),
+  opportunityId: zod.string(),
+  fromStage: zod
+    .union([
+      zod
+        .enum([
+          "lead",
+          "qualified",
+          "discovery_scheduled",
+          "pov_in_flight",
+          "proposal_in_flight",
+          "submitted",
+          "verbal_commit",
+          "signed",
+          "lost_no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+        ),
+      zod.null(),
+    ])
+    .optional(),
+  toStage: zod
+    .enum([
+      "lead",
+      "qualified",
+      "discovery_scheduled",
+      "pov_in_flight",
+      "proposal_in_flight",
+      "submitted",
+      "verbal_commit",
+      "signed",
+      "lost_no_decision",
+      "withdrawn",
+    ])
+    .describe(
+      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+    ),
+  transitionedByUserId: zod.string(),
+  transitionedByName: zod.string().nullish(),
+  rationaleText: zod.string().nullish(),
+  evidenceArtifactIds: zod.array(zod.string()).optional(),
+  priorProbabilityPct: zod.number().nullish(),
+  newProbabilityPct: zod.number().nullish(),
+  nextMilestone: zod.string().nullish(),
+  nextMilestoneDate: zod.string().nullish(),
+  agentRecommended: zod.boolean().optional(),
+  partnerOverride: zod.boolean().optional(),
+  createdAt: zod.coerce.date(),
+});
+export const AtelierGetStageHistoryResponse = zod.array(
+  AtelierGetStageHistoryResponseItem,
+);
+
+/**
+ * @summary Weighted-pipeline + stage bucket roll-up (Pipeline Forecaster output)
+ */
+export const AtelierGetPipelineForecastResponse = zod.object({
+  totalCount: zod.number(),
+  totalDealSumUsd: zod.number(),
+  weightedPipelineUsd: zod.number(),
+  stalledCount: zod.number(),
+  asOf: zod.coerce.date(),
+  buckets: zod.array(
+    zod.object({
+      stage: zod
+        .enum([
+          "lead",
+          "qualified",
+          "discovery_scheduled",
+          "pov_in_flight",
+          "proposal_in_flight",
+          "submitted",
+          "verbal_commit",
+          "signed",
+          "lost_no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+        ),
+      count: zod.number(),
+      dealSumUsd: zod.number(),
+      weightedSumUsd: zod.number(),
+      avgDaysInStage: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Trigger Pipeline Forecaster agent run (refreshes summary + flags stalled)
+ */
+export const AtelierRunPipelineForecasterResponse = zod.object({
+  totalCount: zod.number(),
+  totalDealSumUsd: zod.number(),
+  weightedPipelineUsd: zod.number(),
+  stalledCount: zod.number(),
+  asOf: zod.coerce.date(),
+  buckets: zod.array(
+    zod.object({
+      stage: zod
+        .enum([
+          "lead",
+          "qualified",
+          "discovery_scheduled",
+          "pov_in_flight",
+          "proposal_in_flight",
+          "submitted",
+          "verbal_commit",
+          "signed",
+          "lost_no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+        ),
+      count: zod.number(),
+      dealSumUsd: zod.number(),
+      weightedSumUsd: zod.number(),
+      avgDaysInStage: zod.number(),
+    }),
+  ),
 });
 
 export const AtelierGetQualifierParams = zod.object({

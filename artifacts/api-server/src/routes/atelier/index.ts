@@ -38,6 +38,11 @@ import {
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler } from "./auditPdf";
 import agentRoutes from "./agentRoutes";
+import {
+  STALLED_THRESHOLD_DAYS,
+  deriveSalesStage,
+  isSalesStage,
+} from "../../lib/atelier-agents/pipeline.js";
 import proposalRoutes from "./proposalRoutes";
 import knowledgeRoutes from "./knowledgeRoutes";
 import accountRoutes from "./accountRoutes";
@@ -351,6 +356,9 @@ async function buildOpportunityWire(
     .select()
     .from(atelierUsers)
     .where(eq(atelierUsers.id, o.engagementLeadId));
+  const salesStage = (isSalesStage(o.salesStage)
+    ? o.salesStage
+    : deriveSalesStage(o.plmStage, o.probabilityPct)) as string;
   return {
     id: o.id,
     slug: o.slug,
@@ -358,6 +366,7 @@ async function buildOpportunityWire(
     accountId: o.accountId,
     accountName: acct?.name ?? o.accountId,
     plmStage: o.plmStage,
+    salesStage,
     buyerPersona: o.buyerPersona,
     offeringAnchor: o.offeringAnchor,
     partnerOwnerName: partner?.name ?? o.partnerOwnerId,
@@ -367,7 +376,13 @@ async function buildOpportunityWire(
     weightedValueUsd: (o.dealSizeHypothesis * o.probabilityPct) / 100,
     daysInStage: o.daysInStage,
     nextMilestone: o.nextMilestone,
+    nextMilestoneDate: o.nextMilestoneDate ?? null,
     sourceLead: o.sourceLead,
+    stalled:
+      o.daysInStage > STALLED_THRESHOLD_DAYS &&
+      salesStage !== "signed" &&
+      salesStage !== "lost_no_decision" &&
+      salesStage !== "withdrawn",
     createdAt: o.createdAt.toISOString(),
   };
 }

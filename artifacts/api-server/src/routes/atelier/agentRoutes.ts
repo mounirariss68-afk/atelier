@@ -10,7 +10,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 import {
   db,
   atelierOpportunities,
@@ -24,7 +24,17 @@ import {
   atelierPovVersions,
   atelierMeetings,
   atelierTranscripts,
+  atelierOpportunityStageTransitions,
+  atelierPaneAItems,
 } from "@workspace/db";
+import {
+  SALES_TO_PLM,
+  SALES_STAGE_DEFAULT_PROB,
+  STALLED_THRESHOLD_DAYS,
+  deriveSalesStage,
+  isSalesStage,
+  type SalesStage,
+} from "../../lib/atelier-agents/pipeline.js";
 import {
   AtelierCreateOpportunityBody,
   AtelierUpdateOpportunityStageBody,
@@ -34,6 +44,9 @@ import {
   AtelierStartPovBody,
   AtelierSubmitMeetingBody,
   AtelierRecordAgentDecisionBody,
+  AtelierCreateStageTransitionBody,
+  AtelierGetPipelineForecastResponse,
+  AtelierGetStageHistoryResponse,
 } from "@workspace/api-zod";
 import {
   runPursuitScout,
@@ -41,6 +54,7 @@ import {
   runPovDraft,
   runMeetingScribe,
   recordDecision,
+  runPipelineForecaster,
   type AgentFact,
   type PursuitScoutOutput,
   type PovOutline,
@@ -80,6 +94,9 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
   const [acct] = await db.select().from(atelierAccounts).where(eq(atelierAccounts.id, o.accountId));
   const [partner] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, o.partnerOwnerId));
   const [lead] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, o.engagementLeadId));
+  const salesStage = (isSalesStage(o.salesStage)
+    ? o.salesStage
+    : deriveSalesStage(o.plmStage, o.probabilityPct)) as string;
   return {
     id: o.id,
     slug: o.slug,
@@ -87,6 +104,7 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     accountId: o.accountId,
     accountName: acct?.name ?? o.accountId,
     plmStage: o.plmStage,
+    salesStage,
     buyerPersona: o.buyerPersona,
     offeringAnchor: o.offeringAnchor,
     partnerOwnerName: partner?.name ?? o.partnerOwnerId,
@@ -96,7 +114,13 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     weightedValueUsd: (o.dealSizeHypothesis * o.probabilityPct) / 100,
     daysInStage: o.daysInStage,
     nextMilestone: o.nextMilestone,
+    nextMilestoneDate: o.nextMilestoneDate ?? null,
     sourceLead: o.sourceLead,
+    stalled:
+      o.daysInStage > STALLED_THRESHOLD_DAYS &&
+      salesStage !== "signed" &&
+      salesStage !== "lost_no_decision" &&
+      salesStage !== "withdrawn",
     createdAt: o.createdAt.toISOString(),
   };
 }
@@ -270,9 +294,17 @@ router.patch("/opportunities/:oppId/stage", async (req, res) => {
       return;
     }
   }
+  // v1/v2 lockstep: derive a sales_stage from the legacy plm_stage so the
+  // v2 kanban + forecast remain consistent when callers hit the v1 route.
+  const derivedSales = deriveSalesStage(toStage, opp.probabilityPct);
   const [updated] = await db
     .update(atelierOpportunities)
-    .set({ plmStage: toStage, daysInStage: 0, updatedAt: new Date() })
+    .set({
+      plmStage: toStage,
+      salesStage: derivedSales,
+      daysInStage: 0,
+      updatedAt: new Date(),
+    })
     .where(eq(atelierOpportunities.id, opp.id))
     .returning();
   await db.insert(atelierAuditEvents).values({
@@ -283,7 +315,7 @@ router.patch("/opportunities/:oppId/stage", async (req, res) => {
     actorId: me.id,
     actorLabel: me.name,
     action: "opportunity.stage_change",
-    payload: { from: opp.plmStage, to: toStage, rationale },
+    payload: { from: opp.plmStage, to: toStage, derivedSalesStage: derivedSales, rationale },
     payloadSummary: `${me.name} moved "${opp.name}" from ${opp.plmStage} → ${toStage}${rationale ? ` (${rationale.slice(0, 100)})` : ""}.`,
   });
   res.json(await buildOppWire(updated));
@@ -1032,6 +1064,246 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     sourcesCount: r2.sourcesCount,
     createdAt: r2.createdAt.toISOString(),
   });
+});
+
+// =============================================================
+// v2 — Sales-stage transitions (rationale + evidence + probability)
+// =============================================================
+router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const opp = await loadOpp(req.params.oppId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const parsed = AtelierCreateStageTransitionBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const {
+    toStage,
+    rationaleText,
+    evidenceArtifactIds,
+    newProbabilityPct,
+    nextMilestone,
+    nextMilestoneDate,
+    partnerOverride,
+  } = parsed.data;
+
+  // Gate: late-stage moves require a completed 5C qualifier with go decision,
+  // unless an explicit partner_override is supplied.
+  const lateStages: SalesStage[] = [
+    "proposal_in_flight",
+    "submitted",
+    "verbal_commit",
+    "signed",
+  ];
+  if (lateStages.includes(toStage as SalesStage) && !partnerOverride) {
+    const q = opp.qualify5c ?? null;
+    const decision = opp.goNoGoDecision ?? null;
+    const filled =
+      q &&
+      (["client", "competition", "capability", "capacity", "contract"] as const).every(
+        (k) => typeof q[k] === "string" && q[k]!.trim().length > 0,
+      );
+    if (!filled || !decision || decision.decision !== "go") {
+      res.status(412).json({ error: "qualifier-required" });
+      return;
+    }
+  }
+
+  const fromSales = (isSalesStage(opp.salesStage)
+    ? opp.salesStage
+    : deriveSalesStage(opp.plmStage, opp.probabilityPct)) as SalesStage;
+  const priorProb = opp.probabilityPct;
+  const newProb =
+    typeof newProbabilityPct === "number" && newProbabilityPct !== null
+      ? newProbabilityPct
+      : SALES_STAGE_DEFAULT_PROB[toStage as SalesStage];
+  const derivedPlm = SALES_TO_PLM[toStage as SalesStage];
+
+  const [updated] = await db
+    .update(atelierOpportunities)
+    .set({
+      salesStage: toStage,
+      plmStage: derivedPlm,
+      probabilityPct: newProb,
+      nextMilestone: nextMilestone ?? opp.nextMilestone,
+      nextMilestoneDate: nextMilestoneDate ?? opp.nextMilestoneDate,
+      daysInStage: 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierOpportunities.id, opp.id))
+    .returning();
+
+  const transitionId = rid("stxn");
+  await db.insert(atelierOpportunityStageTransitions).values({
+    id: transitionId,
+    opportunityId: opp.id,
+    fromStage: fromSales,
+    toStage,
+    transitionedByUserId: me.id,
+    rationaleText: rationaleText.trim(),
+    evidenceArtifactIds: evidenceArtifactIds ?? [],
+    priorProbabilityPct: priorProb,
+    newProbabilityPct: newProb,
+    nextMilestone: nextMilestone ?? null,
+    nextMilestoneDate: nextMilestoneDate ?? null,
+    agentRecommended: false,
+    partnerOverride: !!partnerOverride,
+  });
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: opp.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "opportunity.stage_transition",
+    payload: {
+      from: fromSales,
+      to: toStage,
+      priorProb,
+      newProb,
+      partnerOverride: !!partnerOverride,
+      evidenceCount: (evidenceArtifactIds ?? []).length,
+    },
+    payloadSummary: `${me.name} moved "${opp.name}" ${fromSales} → ${toStage} (prob ${priorProb}% → ${newProb}%): ${rationaleText.slice(0, 120)}`,
+  });
+
+  res.json({
+    opportunity: await buildOppWire(updated),
+    transition: {
+      id: transitionId,
+      opportunityId: opp.id,
+      fromStage: fromSales,
+      toStage,
+      transitionedByUserId: me.id,
+      transitionedByName: me.name,
+      rationaleText: rationaleText.trim(),
+      evidenceArtifactIds: evidenceArtifactIds ?? [],
+      priorProbabilityPct: priorProb,
+      newProbabilityPct: newProb,
+      nextMilestone: nextMilestone ?? null,
+      nextMilestoneDate: nextMilestoneDate ?? null,
+      agentRecommended: false,
+      partnerOverride: !!partnerOverride,
+      createdAt: new Date().toISOString(),
+    },
+  });
+});
+
+router.get("/opportunities/:oppId/stage-history", async (req, res) => {
+  const opp = await loadOpp(req.params.oppId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(atelierOpportunityStageTransitions)
+    .where(eq(atelierOpportunityStageTransitions.opportunityId, opp.id))
+    .orderBy(desc(atelierOpportunityStageTransitions.createdAt));
+  const userIds = Array.from(new Set(rows.map((r) => r.transitionedByUserId)));
+  const users = userIds.length
+    ? await db.select().from(atelierUsers).where(inArray(atelierUsers.id, userIds))
+    : [];
+  const nameById = new Map(users.map((u) => [u.id, u.name] as const));
+  res.json(
+    AtelierGetStageHistoryResponse.parse(
+      rows.map((r) => ({
+        id: r.id,
+        opportunityId: r.opportunityId,
+        fromStage: r.fromStage,
+        toStage: r.toStage,
+        transitionedByUserId: r.transitionedByUserId,
+        transitionedByName: nameById.get(r.transitionedByUserId) ?? null,
+        rationaleText: r.rationaleText,
+        evidenceArtifactIds: r.evidenceArtifactIds ?? [],
+        priorProbabilityPct: r.priorProbabilityPct,
+        newProbabilityPct: r.newProbabilityPct,
+        nextMilestone: r.nextMilestone,
+        nextMilestoneDate: r.nextMilestoneDate,
+        agentRecommended: r.agentRecommended,
+        partnerOverride: r.partnerOverride,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    ),
+  );
+});
+
+// =============================================================
+// v2 — Pipeline Forecaster (deterministic roll-up)
+// =============================================================
+async function computeForecast() {
+  const rows = await db
+    .select()
+    .from(atelierOpportunities)
+    .where(isNull(atelierOpportunities.deletedAt));
+
+  const buckets = new Map<
+    SalesStage,
+    { count: number; deal: number; weighted: number; daysSum: number }
+  >();
+  let totalCount = 0;
+  let totalDeal = 0;
+  let weightedTotal = 0;
+  let stalled = 0;
+  for (const o of rows) {
+    const s = (isSalesStage(o.salesStage)
+      ? o.salesStage
+      : deriveSalesStage(o.plmStage, o.probabilityPct)) as SalesStage;
+    const w = (o.dealSizeHypothesis * o.probabilityPct) / 100;
+    const cur = buckets.get(s) ?? { count: 0, deal: 0, weighted: 0, daysSum: 0 };
+    cur.count += 1;
+    cur.deal += o.dealSizeHypothesis;
+    cur.weighted += w;
+    cur.daysSum += o.daysInStage;
+    buckets.set(s, cur);
+    if (s !== "signed" && s !== "lost_no_decision" && s !== "withdrawn") {
+      totalCount += 1;
+      totalDeal += o.dealSizeHypothesis;
+      weightedTotal += w;
+      if (o.daysInStage > STALLED_THRESHOLD_DAYS) stalled += 1;
+    }
+  }
+  const bucketsWire = Array.from(buckets.entries()).map(([stage, b]) => ({
+    stage,
+    count: b.count,
+    dealSumUsd: b.deal,
+    weightedSumUsd: b.weighted,
+    avgDaysInStage: b.count ? b.daysSum / b.count : 0,
+  }));
+  return {
+    totalCount,
+    totalDealSumUsd: totalDeal,
+    weightedPipelineUsd: weightedTotal,
+    stalledCount: stalled,
+    asOf: new Date().toISOString(),
+    buckets: bucketsWire,
+  };
+}
+
+router.get("/pipeline/forecast", async (_req, res) => {
+  const summary = await computeForecast();
+  res.json(AtelierGetPipelineForecastResponse.parse(summary));
+});
+
+router.post("/pipeline/forecast/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const summary = await computeForecast();
+  // Side effect: agent runner records audit + flags stalled deals into Pane A.
+  try {
+    await runPipelineForecaster({ actorId: me.id, actorLabel: me.name, summary });
+  } catch (e) {
+    // Forecaster is mock-first; never fail the HTTP response on a side-effect error.
+    // eslint-disable-next-line no-console
+    console.error("[pipeline-forecaster] side-effect error", e);
+  }
+  res.json(AtelierGetPipelineForecastResponse.parse(summary));
 });
 
 export default router;

@@ -1,72 +1,87 @@
 import { useState, useMemo } from "react";
 import {
   useAtelierListOpportunities,
-  useAtelierUpdateOpportunityStage,
+  useAtelierGetPipelineForecast,
+  useAtelierRunPipelineForecaster,
   getAtelierListOpportunitiesQueryKey,
+  getAtelierGetPipelineForecastQueryKey,
   getAtelierListAuditQueryKey,
+  type SalesStage,
+  type Opportunity,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { SectionHead, PageHero, Card, PlmPill, PillButton } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LayoutGrid, List as ListIcon, AlertTriangle, Plus, ArrowUp, ArrowDown } from "lucide-react";
+import {
+  LayoutGrid,
+  List as ListIcon,
+  AlertTriangle,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  RefreshCw,
+} from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
-import { QualifierSheet } from "@/components/QualifierSheet";
+import { StageTransitionDialog } from "@/components/StageTransitionDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
+  SALES_STAGES,
+  SALES_STAGE_LABEL,
+  STALLED_THRESHOLD_DAYS,
+  stageTone,
+} from "@/lib/sales-stages";
 
-const PLM_STAGES = ["identify", "shape", "pursue", "won", "lost", "no_go"] as const;
-type Stage = (typeof PLM_STAGES)[number];
-
-import type { Opportunity } from "@workspace/api-client-react";
 type OppItem = Opportunity;
 
-function StageColumn({ stage, children, count }: { stage: Stage; children: React.ReactNode; count: number }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `stage:${stage}` });
+function fmtUsd(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
+  return `$${n.toFixed(0)}`;
+}
+
+function StageColumn({
+  stage,
+  children,
+  count,
+  weighted,
+}: {
+  stage: SalesStage;
+  children: React.ReactNode;
+  count: number;
+  weighted: number;
+}) {
   return (
-    <div
-      ref={setNodeRef}
-      className={`min-w-[300px] w-[300px] shrink-0 flex flex-col gap-3 snap-start rounded-md p-2 transition-colors ${
-        isOver ? "bg-gold/5 outline-2 outline-dashed outline-gold/40" : ""
-      }`}
-    >
+    <div className="min-w-[280px] w-[280px] shrink-0 flex flex-col gap-3 snap-start rounded-md p-2">
       <div className="flex items-center justify-between pb-2 border-b border-gold/30">
-        <span className="font-mono text-sm tracking-widest uppercase text-text-mute">{stage.replace("_", " ")}</span>
-        <span className="font-mono text-xs text-text-faint">{count}</span>
+        <span className="font-mono text-[11px] tracking-widest uppercase text-text-mute">
+          {SALES_STAGE_LABEL[stage]}
+        </span>
+        <span className="font-mono text-xs text-text-faint">
+          {count} · <span className="text-gold">{fmtUsd(weighted)}</span>
+        </span>
       </div>
       <div className="flex flex-col gap-3">{children}</div>
     </div>
   );
 }
 
-function OppCard({ opp }: { opp: OppItem }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `opp:${opp.id}` });
+function OppCard({ opp, onClick }: { opp: OppItem; onClick: () => void }) {
+  const isStalled = (opp as { stalled?: boolean }).stalled ?? opp.daysInStage > STALLED_THRESHOLD_DAYS;
   return (
-    <Card
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className={`p-4 space-y-3 hover:border-gold/50 transition-all group cursor-grab active:cursor-grabbing ${
-        isDragging ? "opacity-40" : ""
-      }`}
-    >
+    <Card className="p-4 space-y-3 hover:border-gold/50 transition-all group">
       <div className="flex justify-between items-start gap-2">
-        <Link href={`/pipeline/${opp.id}`} className="font-medium text-text group-hover:text-gold transition-colors block leading-tight">
+        <Link
+          href={`/opportunities/${opp.id}`}
+          className="font-medium text-text group-hover:text-gold transition-colors block leading-tight"
+        >
           {opp.name}
         </Link>
-        {opp.daysInStage > 30 && (
+        {isStalled && (
           <span
             className="shrink-0 inline-flex items-center gap-1 rounded-full border border-danger/60 bg-danger/15 text-danger text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
-            title={`${opp.daysInStage} days in stage — aging`}
+            title={`${opp.daysInStage} days in stage — stalled`}
           >
             <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d
           </span>
@@ -77,20 +92,22 @@ function OppCard({ opp }: { opp: OppItem }) {
         <div className="flex flex-col gap-1">
           <span className="text-xs text-text-faint font-mono">Value · Weighted</span>
           <span className="text-sm font-semibold text-text">
-            ${(opp.dealSizeUsd / 1000).toFixed(0)}k
+            {fmtUsd(opp.dealSizeUsd)}
             <span className="text-text-mute font-normal"> · </span>
-            <span className="text-gold">${((opp.dealSizeUsd * opp.probabilityPct) / 100 / 1000).toFixed(0)}k</span>
+            <span className="text-gold">{fmtUsd((opp.dealSizeUsd * opp.probabilityPct) / 100)}</span>
           </span>
         </div>
-        <div className="flex -space-x-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClick}
+            className="text-[10px] font-mono uppercase tracking-wider text-text-mute hover:text-gold transition-colors border border-border-soft hover:border-gold/40 rounded px-2 py-1"
+          >
+            Move
+          </button>
           <Avatar className="w-6 h-6 border-2 border-bg-elevate">
             <AvatarFallback className="text-[10px] bg-bg-deep text-gold">
               {opp.partnerOwnerName.split(" ").map((n: string) => n[0]).join("")}
-            </AvatarFallback>
-          </Avatar>
-          <Avatar className="w-6 h-6 border-2 border-bg-elevate">
-            <AvatarFallback className="text-[10px] bg-bg-deep text-text-mute">
-              {opp.engagementLeadName.split(" ").map((n: string) => n[0]).join("")}
             </AvatarFallback>
           </Avatar>
         </div>
@@ -99,14 +116,20 @@ function OppCard({ opp }: { opp: OppItem }) {
   );
 }
 
-type SortKey = "name" | "accountName" | "plmStage" | "dealSizeUsd" | "probabilityPct" | "daysInStage";
+type SortKey = "name" | "accountName" | "salesStage" | "dealSizeUsd" | "probabilityPct" | "daysInStage";
 
 export default function Pipeline() {
   const { data: opps, isLoading } = useAtelierListOpportunities();
+  const { data: forecast } = useAtelierGetPipelineForecast();
+  const runForecaster = useAtelierRunPipelineForecaster();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
   const [view, setView] = useState<"kanban" | "table">("kanban");
-  const [qualifyOpp, setQualifyOpp] = useState<{ id: string; name: string } | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("dealSizeUsd");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [moveTarget, setMoveTarget] = useState<OppItem | null>(null);
+
   const sortedOpps = useMemo(() => {
     const arr = [...(opps ?? [])];
     arr.sort((a, b) => {
@@ -119,6 +142,7 @@ export default function Pipeline() {
     });
     return arr;
   }, [opps, sortKey, sortDir]);
+
   function toggleSort(k: SortKey) {
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(k); setSortDir("desc"); }
@@ -137,44 +161,32 @@ export default function Pipeline() {
       </th>
     );
   }
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const updateStage = useAtelierUpdateOpportunityStage();
-  const qc = useQueryClient();
-  const { toast } = useToast();
 
-  async function commitMove(oppId: string, opp: OppItem, toStage: Stage) {
-    if (toStage === opp.plmStage) return;
+  async function refreshForecast() {
     try {
-      await updateStage.mutateAsync({ oppId, data: { toStage } });
+      await runForecaster.mutateAsync();
+      qc.invalidateQueries({ queryKey: getAtelierGetPipelineForecastQueryKey() });
       qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
       qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
-      toast({ title: `Moved to ${toStage}` });
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 412 && toStage === "pursue") {
-        // 5C qualifier required.
-        setQualifyOpp({ id: opp.id, name: opp.name });
-        toast({
-          title: "5C Qualifier required",
-          description: "Complete the 5C and approve to move into Pursue.",
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Could not move", description: String(err), variant: "destructive" });
-      }
+      toast({ title: "Forecast refreshed" });
+    } catch (err) {
+      toast({ title: "Forecaster failed", description: String(err), variant: "destructive" });
     }
   }
 
-  function onDragEnd(e: DragEndEvent) {
-    const oppKey = String(e.active.id);
-    const overKey = e.over?.id ? String(e.over.id) : "";
-    if (!oppKey.startsWith("opp:") || !overKey.startsWith("stage:")) return;
-    const oppId = oppKey.slice(4);
-    const toStage = overKey.slice(6) as Stage;
-    const opp = opps?.find((o) => o.id === oppId);
-    if (!opp) return;
-    void commitMove(oppId, opp, toStage);
-  }
+  // Build per-stage roll-up locally (also use forecast.buckets for consistency).
+  const bucketByStage = useMemo(() => {
+    const m = new Map<SalesStage, { count: number; weighted: number }>();
+    for (const s of SALES_STAGES) m.set(s, { count: 0, weighted: 0 });
+    for (const o of opps ?? []) {
+      const s = (o as { salesStage?: SalesStage }).salesStage ?? ("lead" as SalesStage);
+      const cur = m.get(s) ?? { count: 0, weighted: 0 };
+      cur.count += 1;
+      cur.weighted += (o.dealSizeUsd * o.probabilityPct) / 100;
+      m.set(s, cur);
+    }
+    return m;
+  }, [opps]);
 
   if (isLoading) {
     return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
@@ -183,48 +195,86 @@ export default function Pipeline() {
   return (
     <div className="flex flex-col h-full min-h-[calc(100vh-3.5rem)]">
       <PageHero>
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <SectionHead headline="Opportunity Pipeline" lede="Active originations and pursuits. Drag a card to change stage. Pursue requires a signed 5C." />
-          <div className="flex items-center gap-3 shrink-0">
-            <CreateOpportunityDialog
-              trigger={
-                <PillButton variant="primary">
-                  <span className="inline-flex items-center gap-1"><Plus className="w-3 h-3" /> New opportunity</span>
-                </PillButton>
-              }
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <SectionHead
+              headline="Opportunity Pipeline"
+              lede="10-stage sales lifecycle. Click Move on a card to log a stage transition with rationale + evidence. Pipeline Forecaster re-rolls weighted value and flags stalled deals."
             />
-            <div className="flex items-center gap-2 bg-bg-elevate p-1 rounded-full border border-border">
-              <button
-                onClick={() => setView("kanban")}
-                className={`p-2 rounded-full transition-colors ${view === "kanban" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setView("table")}
-                className={`p-2 rounded-full transition-colors ${view === "table" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-              >
-                <ListIcon className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-3 shrink-0">
+              <CreateOpportunityDialog
+                trigger={
+                  <PillButton variant="primary">
+                    <span className="inline-flex items-center gap-1"><Plus className="w-3 h-3" /> New opportunity</span>
+                  </PillButton>
+                }
+              />
+              <PillButton variant="ghost" onClick={refreshForecast} disabled={runForecaster.isPending}>
+                <span className="inline-flex items-center gap-1.5">
+                  <RefreshCw className={`w-3 h-3 ${runForecaster.isPending ? "animate-spin" : ""}`} />
+                  Refresh forecast
+                </span>
+              </PillButton>
+              <div className="flex items-center gap-2 bg-bg-elevate p-1 rounded-full border border-border">
+                <button
+                  onClick={() => setView("kanban")}
+                  className={`p-2 rounded-full transition-colors ${view === "kanban" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setView("table")}
+                  className={`p-2 rounded-full transition-colors ${view === "table" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
+                >
+                  <ListIcon className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Forecast summary strip */}
+          {forecast && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Card className="p-4">
+                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">In-flight deals</div>
+                <div className="text-2xl font-light text-text mt-1">{forecast.totalCount}</div>
+              </Card>
+              <Card className="p-4">
+                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Pipeline value</div>
+                <div className="text-2xl font-light text-text mt-1">{fmtUsd(forecast.totalDealSumUsd)}</div>
+              </Card>
+              <Card className="p-4 border-gold/40">
+                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Weighted pipeline</div>
+                <div className="text-2xl font-light text-gold mt-1">{fmtUsd(forecast.weightedPipelineUsd)}</div>
+              </Card>
+              <Card className={`p-4 ${forecast.stalledCount > 0 ? "border-danger/40" : ""}`}>
+                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Stalled (&gt;{STALLED_THRESHOLD_DAYS}d)</div>
+                <div className={`text-2xl font-light mt-1 ${forecast.stalledCount > 0 ? "text-danger" : "text-text"}`}>
+                  {forecast.stalledCount}
+                </div>
+              </Card>
+            </div>
+          )}
         </div>
       </PageHero>
 
       <div className={`py-10 space-y-8 flex-1 flex flex-col ${view === "kanban" ? "px-[clamp(16px,3vw,32px)] min-w-0" : "container-atelier"}`}>
         {view === "kanban" ? (
-          <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-            <div className="flex-1 flex gap-4 overflow-x-auto scrollbar-thin pb-6 snap-x">
-              {PLM_STAGES.map((stage) => {
-                const stageOpps = (opps ?? []).filter((o) => o.plmStage === stage);
-                return (
-                  <StageColumn key={stage} stage={stage} count={stageOpps.length}>
-                    {stageOpps.map((opp) => <OppCard key={opp.id} opp={opp} />)}
-                  </StageColumn>
-                );
-              })}
-            </div>
-          </DndContext>
+          <div className="flex-1 flex gap-4 overflow-x-auto scrollbar-thin pb-6 snap-x">
+            {SALES_STAGES.map((stage) => {
+              const stageOpps = (opps ?? []).filter(
+                (o) => ((o as { salesStage?: SalesStage }).salesStage ?? "lead") === stage,
+              );
+              const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: 0 };
+              return (
+                <StageColumn key={stage} stage={stage} count={bucket.count} weighted={bucket.weighted}>
+                  {stageOpps.map((opp) => (
+                    <OppCard key={opp.id} opp={opp} onClick={() => setMoveTarget(opp)} />
+                  ))}
+                </StageColumn>
+              );
+            })}
+          </div>
         ) : (
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
@@ -233,50 +283,67 @@ export default function Pipeline() {
                   <tr>
                     <SortHead k="name" label="Opportunity" />
                     <SortHead k="accountName" label="Account" />
-                    <SortHead k="plmStage" label="Stage" />
+                    <SortHead k="salesStage" label="Stage" />
                     <SortHead k="dealSizeUsd" label="Value" />
                     <SortHead k="probabilityPct" label="Probability" />
                     <th className="p-4 font-normal">Team</th>
                     <SortHead k="daysInStage" label="Aging" />
                     <th className="p-4 font-normal">Next Milestone</th>
+                    <th className="p-4 font-normal" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {sortedOpps.map((opp) => (
-                    <tr key={opp.id} className="hover:bg-bg-elevate-2 transition-colors">
-                      <td className="p-4">
-                        <Link href={`/pipeline/${opp.id}`} className="font-medium text-text hover:text-gold transition-colors">
-                          {opp.name}
-                        </Link>
-                        {opp.daysInStage > 30 && (
-                          <span className="ml-2 text-[10px] text-danger font-mono border border-danger/30 rounded px-1">
-                            {opp.daysInStage}d aged
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-text-mute">{opp.accountName}</td>
-                      <td className="p-4"><PlmPill stage={opp.plmStage} /></td>
-                      <td className="p-4 font-mono">
-                        ${(opp.dealSizeUsd / 1000).toFixed(0)}k
-                        <span className="text-text-faint"> · </span>
-                        <span className="text-gold">${((opp.dealSizeUsd * opp.probabilityPct) / 100 / 1000).toFixed(0)}k</span>
-                      </td>
-                      <td className="p-4 font-mono text-text-mute">{opp.probabilityPct}%</td>
-                      <td className="p-4 text-text-mute">
-                        {opp.partnerOwnerName.split(" ")[0]} / {opp.engagementLeadName.split(" ")[0]}
-                      </td>
-                      <td className="p-4 font-mono text-xs">
-                        {opp.daysInStage > 30 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-danger/60 bg-danger/15 text-danger text-[10px] uppercase tracking-wider px-2 py-0.5">
-                            <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d
-                          </span>
-                        ) : (
-                          <span className="text-text-mute">{opp.daysInStage}d</span>
-                        )}
-                      </td>
-                      <td className="p-4 text-text-mute text-xs truncate max-w-[200px]">{opp.nextMilestone}</td>
-                    </tr>
-                  ))}
+                  {sortedOpps.map((opp) => {
+                    const s = (opp as { salesStage?: SalesStage }).salesStage ?? "lead";
+                    const isStalled =
+                      (opp as { stalled?: boolean }).stalled ?? opp.daysInStage > STALLED_THRESHOLD_DAYS;
+                    return (
+                      <tr key={opp.id} className="hover:bg-bg-elevate-2 transition-colors">
+                        <td className="p-4">
+                          <Link href={`/opportunities/${opp.id}`} className="font-medium text-text hover:text-gold transition-colors">
+                            {opp.name}
+                          </Link>
+                          {isStalled && (
+                            <span className="ml-2 text-[10px] text-danger font-mono border border-danger/30 rounded px-1">
+                              {opp.daysInStage}d stalled
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 text-text-mute">{opp.accountName}</td>
+                        <td className="p-4">
+                          <MonoChip tone={stageTone(s)}>{SALES_STAGE_LABEL[s]}</MonoChip>
+                        </td>
+                        <td className="p-4 font-mono">
+                          {fmtUsd(opp.dealSizeUsd)}
+                          <span className="text-text-faint"> · </span>
+                          <span className="text-gold">{fmtUsd((opp.dealSizeUsd * opp.probabilityPct) / 100)}</span>
+                        </td>
+                        <td className="p-4 font-mono text-text-mute">{opp.probabilityPct}%</td>
+                        <td className="p-4 text-text-mute">
+                          {opp.partnerOwnerName.split(" ")[0]} / {opp.engagementLeadName.split(" ")[0]}
+                        </td>
+                        <td className="p-4 font-mono text-xs">
+                          {isStalled ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-danger/60 bg-danger/15 text-danger text-[10px] uppercase tracking-wider px-2 py-0.5">
+                              <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d
+                            </span>
+                          ) : (
+                            <span className="text-text-mute">{opp.daysInStage}d</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-text-mute text-xs truncate max-w-[200px]">{opp.nextMilestone}</td>
+                        <td className="p-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setMoveTarget(opp)}
+                            className="text-[10px] font-mono uppercase tracking-wider text-text-mute hover:text-gold transition-colors border border-border-soft hover:border-gold/40 rounded px-2 py-1"
+                          >
+                            Move
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -284,23 +351,13 @@ export default function Pipeline() {
         )}
       </div>
 
-      {qualifyOpp && (
-        <QualifierSheet
-          oppId={qualifyOpp.id}
+      {moveTarget && (
+        <StageTransitionDialog
+          oppId={moveTarget.id}
+          oppName={moveTarget.name}
+          currentStage={(moveTarget as { salesStage?: SalesStage }).salesStage ?? "lead"}
           open={true}
-          onOpenChange={(o) => { if (!o) setQualifyOpp(null); }}
-          onCommitted={async (decision) => {
-            if (decision === "go") {
-              const opp = opps?.find((o) => o.id === qualifyOpp.id);
-              if (opp) {
-                await updateStage.mutateAsync({ oppId: qualifyOpp.id, data: { toStage: "pursue" } });
-                qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
-                qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
-                toast({ title: "Moved to Pursue" });
-              }
-            }
-            setQualifyOpp(null);
-          }}
+          onOpenChange={(o) => { if (!o) setMoveTarget(null); }}
         />
       )}
     </div>

@@ -16,9 +16,10 @@
  * amber→red).
  */
 
-import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities } from "@workspace/db";
+import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems } from "@workspace/db";
 import { eq, and, gte, isNull } from "drizzle-orm";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
+import { STALLED_THRESHOLD_DAYS } from "./pipeline.js";
 
 // ------- shared types -------
 
@@ -2514,6 +2515,106 @@ export async function runQbrComposer(args: {
     return { runId, output: value, costUsd };
   } catch (err) {
     await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "account", targetId: args.accountId });
+    throw err;
+  }
+}
+
+// =============================================================
+// Pipeline Forecaster (Task #239 / PRD §2.3)
+// Deterministic roll-up: weighted pipeline + stalled flags. Mock-first —
+// no Claude call. Records an agent_run + audit event, and inserts a
+// Pane A "Stalled deal" item per stalled opportunity for the partner_owner.
+// =============================================================
+export interface PipelineForecastSummary {
+  totalCount: number;
+  totalDealSumUsd: number;
+  weightedPipelineUsd: number;
+  stalledCount: number;
+  asOf: string;
+  buckets: Array<{
+    stage: string;
+    count: number;
+    dealSumUsd: number;
+    weightedSumUsd: number;
+    avgDaysInStage: number;
+  }>;
+}
+
+function fid(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function runPipelineForecaster(args: {
+  actorId: string;
+  actorLabel: string;
+  summary: PipelineForecastSummary;
+}): Promise<{ runId: string; flagged: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_pipeline_forecaster",
+    triggeredByUserId: args.actorId,
+    targetType: "pipeline",
+    targetId: "atelier-global",
+    targetLabel: "Atelier Pipeline",
+    actorLabel: args.actorLabel,
+  });
+  try {
+    await progressRun(runId, 60, "Computing weighted pipeline + flagging stalled deals");
+
+    // Find stalled, in-flight deals owned by this actor and surface them in Pane A.
+    const stalledRows = await db
+      .select()
+      .from(atelierOpportunities)
+      .where(
+        and(
+          isNull(atelierOpportunities.deletedAt),
+          eq(atelierOpportunities.partnerOwnerId, args.actorId),
+        ),
+      );
+    const TERMINAL = new Set(["signed", "lost_no_decision", "withdrawn", "won", "lost", "no_go"]);
+    let flagged = 0;
+    for (const o of stalledRows) {
+      if (TERMINAL.has(o.salesStage) || TERMINAL.has(o.plmStage)) continue;
+      if (o.daysInStage <= STALLED_THRESHOLD_DAYS) continue;
+      try {
+        await db.insert(atelierPaneAItems).values({
+          id: fid("pa"),
+          userId: args.actorId,
+          title: `Stalled: ${o.name}`,
+          summary: `${o.daysInStage}d in ${o.salesStage} — ${o.nextMilestone || "no next milestone set"}.`,
+          priority: o.daysInStage > 45 ? "high" : "medium",
+          hrefKind: "opportunity",
+          hrefTargetId: o.id,
+          dueLabel: "Stalled",
+          sortKey: 100 - Math.min(99, o.daysInStage),
+        });
+        flagged += 1;
+      } catch {
+        // ignore duplicate insert collisions; Pane A is best-effort
+      }
+    }
+
+    await completeRun({
+      runId,
+      output: { ...args.summary, flagged } as unknown,
+      confidence: "green",
+      costUsd: 0,
+      durationMs: Date.now() - t0,
+      sourcesCount: args.summary.buckets.length,
+      actorLabel: args.actorLabel,
+      targetType: "pipeline",
+      targetId: "atelier-global",
+      targetLabel: "Atelier Pipeline",
+      source: "deterministic",
+      warning: null,
+    });
+    return { runId, flagged };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "pipeline",
+      targetId: "atelier-global",
+    });
     throw err;
   }
 }

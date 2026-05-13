@@ -2,12 +2,14 @@ import * as React from "react";
 import {
   useAtelierGetOpportunity,
   useAtelierGetMe,
+  useAtelierGetStageHistory,
   getAtelierGetOpportunityQueryKey,
+  getAtelierGetStageHistoryQueryKey,
+  type SalesStage,
 } from "@workspace/api-client-react";
 import {
   SectionHead,
   PageHero,
-  PlmPill,
   MonoChip,
   PillButton,
   BackLink,
@@ -27,7 +29,9 @@ import { MeetingsTab } from "@/components/tabs/MeetingsTab";
 import { ProposalTab } from "@/components/tabs/ProposalTab";
 import { PrototypeButton } from "@/components/tabs/PrototypeButton";
 import { QualifierSheet } from "@/components/QualifierSheet";
-import { FileText, FilePlus2, Mic, Telescope, Folder } from "lucide-react";
+import { StageTransitionDialog } from "@/components/StageTransitionDialog";
+import { SALES_STAGE_LABEL, STALLED_THRESHOLD_DAYS, stageTone } from "@/lib/sales-stages";
+import { FileText, FilePlus2, Mic, Telescope, Folder, ArrowRight, AlertTriangle } from "lucide-react";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -42,23 +46,33 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function Opportunity() {
-  const [, params] = useRoute("/pipeline/:oppId");
-  const oppId = params?.oppId || "";
+  const [, paramsV2] = useRoute("/opportunities/:oppId");
+  const [, paramsV1] = useRoute("/pipeline/:oppId");
+  const oppId = paramsV2?.oppId ?? paramsV1?.oppId ?? "";
 
   const { data: opp, isLoading, isError } = useAtelierGetOpportunity(oppId, {
     query: { enabled: !!oppId, queryKey: getAtelierGetOpportunityQueryKey(oppId) },
   });
   const { data: me } = useAtelierGetMe();
+  const { data: history } = useAtelierGetStageHistory(oppId, {
+    query: { enabled: !!oppId, queryKey: getAtelierGetStageHistoryQueryKey(oppId) },
+  });
 
   const [activeTab, setActiveTab] = React.useState<TabId>("brief");
   const [qualifierOpen, setQualifierOpen] = React.useState(false);
+  const [moveOpen, setMoveOpen] = React.useState(false);
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (isError || !opp) return <div className="container-atelier py-12 text-danger">Failed to load opportunity.</div>;
 
   const personaName = me?.name ?? "You";
   const dealLabel = `$${(opp.dealSizeUsd / 1000).toFixed(0)}k`;
-  const wonLost = opp.plmStage === "won" ? "WON" : opp.plmStage === "lost" ? "LOST" : null;
+  const salesStage: SalesStage =
+    (opp as { salesStage?: SalesStage }).salesStage ?? ("lead" as SalesStage);
+  const isStalled =
+    (opp as { stalled?: boolean }).stalled ??
+    opp.daysInStage > STALLED_THRESHOLD_DAYS;
+  const recentTransitions = (Array.isArray(history) ? history : []).slice(0, 5);
 
   return (
     <div className="animate-in fade-in">
@@ -75,13 +89,44 @@ export default function Opportunity() {
               value={dealLabel}
               caption={
                 <>
-                  <PlmPill stage={opp.plmStage} />
+                  <MonoChip tone={stageTone(salesStage)}>{SALES_STAGE_LABEL[salesStage]}</MonoChip>
                   <MonoChip>Prob {opp.probabilityPct}%</MonoChip>
-                  {wonLost && <MonoChip tone={wonLost === "WON" ? "green" : "red"}>{wonLost}</MonoChip>}
+                  {isStalled && (
+                    <MonoChip tone="red">
+                      <span className="inline-flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d stalled
+                      </span>
+                    </MonoChip>
+                  )}
                   <span className="text-text-faint">Deal value</span>
                 </>
               }
             />
+
+            {recentTransitions.length > 0 && (
+              <div className="rounded-md border border-border-soft bg-bg-elevate/60 p-3 space-y-2">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+                  Stage history · last {recentTransitions.length}
+                </div>
+                <ol className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[11px] font-mono">
+                  {recentTransitions.map((t, i) => (
+                    <li key={t.id ?? i} className="inline-flex items-center gap-2">
+                      <span className="text-text-mute">
+                        {t.fromStage ? SALES_STAGE_LABEL[t.fromStage] : "—"}
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-text-faint" />
+                      <span className="text-gold">{SALES_STAGE_LABEL[t.toStage]}</span>
+                      <span className="text-text-faint">
+                        · {new Date(t.createdAt).toLocaleDateString()}
+                      </span>
+                      {i < recentTransitions.length - 1 && (
+                        <span className="text-text-faint mx-1">|</span>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </div>
 
           <OwnershipPanel
@@ -116,6 +161,11 @@ export default function Opportunity() {
               <span className="inline-flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> Capture meeting</span>
             </PillButton>
             <PrototypeButton oppId={opp.id} oppName={opp.name} />
+            <PillButton variant="ghost" onClick={() => setMoveOpen(true)}>
+              <span className="inline-flex items-center gap-1.5">
+                <ArrowRight className="w-3.5 h-3.5" /> Move stage
+              </span>
+            </PillButton>
           </div>
           {/* Secondary references row — research + scoring. */}
           <div className="flex flex-wrap gap-2">
@@ -166,6 +216,13 @@ export default function Opportunity() {
       </div>
 
       <QualifierSheet oppId={opp.id} open={qualifierOpen} onOpenChange={setQualifierOpen} />
+      <StageTransitionDialog
+        oppId={opp.id}
+        oppName={opp.name}
+        currentStage={salesStage}
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+      />
     </div>
   );
 }

@@ -1153,6 +1153,26 @@ const AGENTS: AgentSeed[] = [
     humanCheckpoints: ["Partner approves before client send"],
     runsLast30d: 3,
   },
+  // ---- Task #239: Pipeline Forecaster ----
+  {
+    id: "ag_pipeline_forecaster",
+    name: "Pipeline Forecaster",
+    group: "CRM",
+    stage: "Pursue",
+    purpose:
+      "Roll up the 10-stage sales pipeline into a weighted forecast and flag stalled deals into Pane A for the partner-owner.",
+    model: "deterministic",
+    starred: true,
+    status: "mvp",
+    tools: ["sql.read", "knowledge.search"],
+    guardrails: [
+      "Probabilities use the published stage defaults unless explicitly overridden",
+      "Stalled = >21 days in stage, in-flight stages only",
+      "Read-only with respect to opportunity records — only writes Pane A items + agent runs",
+    ],
+    humanCheckpoints: ["Partner reviews stalled-deal Pane A items"],
+    runsLast30d: 12,
+  },
 ];
 
 // ============================================================

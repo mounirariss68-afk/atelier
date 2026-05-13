@@ -235,6 +235,12 @@ export const atelierOpportunities = pgTable(
     buyerPersona: text("buyer_persona"),
     offeringAnchor: text("offering_anchor"),
     plmStage: text("plm_stage").notNull(),
+    // v2 sales stage (PRD §2.3) — finer-grained 10-value lifecycle.
+    // plmStage is now derived from salesStage at write-time via SALES_TO_PLM.
+    salesStage: text("sales_stage").notNull().default("lead"),
+    // 'lead' | 'qualified' | 'discovery_scheduled' | 'pov_in_flight'
+    // | 'proposal_in_flight' | 'submitted' | 'verbal_commit' | 'signed'
+    // | 'lost_no_decision' | 'withdrawn'
     partnerOwnerId: text("partner_owner_id").notNull(),
     engagementLeadId: text("engagement_lead_id").notNull(),
     dealSizeHypothesis: doublePrecision("deal_size_hypothesis").notNull(),
@@ -264,7 +270,39 @@ export const atelierOpportunities = pgTable(
   (t) => [
     index("idx_atelier_opps_org").on(t.orgId),
     index("idx_atelier_opps_stage").on(t.plmStage),
+    index("idx_atelier_opps_sales_stage").on(t.salesStage),
     index("idx_atelier_opps_account").on(t.accountId),
+  ],
+);
+
+// ============================================================
+// OPPORTUNITY STAGE TRANSITIONS (v2 — PRD §2.3)
+// First-class auditable record of every stage move.
+// ============================================================
+export const atelierOpportunityStageTransitions = pgTable(
+  "atelier_opportunity_stage_transitions",
+  {
+    id: text("id").primaryKey(),
+    opportunityId: text("opportunity_id").notNull(),
+    fromStage: text("from_stage"), // null on initial create
+    toStage: text("to_stage").notNull(),
+    transitionedByUserId: text("transitioned_by_user_id").notNull(),
+    rationaleText: text("rationale_text"),
+    evidenceArtifactIds: jsonb("evidence_artifact_ids")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    priorProbabilityPct: doublePrecision("prior_probability_pct"),
+    newProbabilityPct: doublePrecision("new_probability_pct"),
+    nextMilestone: text("next_milestone"),
+    nextMilestoneDate: text("next_milestone_date"),
+    agentRecommended: boolean("agent_recommended").notNull().default(false),
+    partnerOverride: boolean("partner_override").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_opp_transitions_opp").on(t.opportunityId),
+    index("idx_atelier_opp_transitions_created").on(t.createdAt),
   ],
 );
 
