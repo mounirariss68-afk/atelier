@@ -395,9 +395,12 @@ router.post("/roster/people/:id/skills", async (req, res) => {
   // employee. partner_attested / evidence_atelier / certification require
   // verifier role.
   if (source === "self") {
+    // Provenance rule: source=self may only be written by the subject
+    // user themselves. Verifier roles must use partner_attested or
+    // evidence_atelier when speaking on someone else's behalf.
     const linkedUserId =
       person.workerType === "employee" ? await userIdForEmployee(person.id) : null;
-    if (linkedUserId !== me.id && !canVerify(me)) {
+    if (linkedUserId !== me.id) {
       res.status(403).json({ error: "self-attestation-must-be-by-the-person" });
       return;
     }
@@ -609,9 +612,16 @@ function termMatchesSkill(term: string, sk: SkillWire): boolean {
   );
 }
 
-function rowScore(source: SkillSource, proficiency: number, status: string): number {
+function rowScore(
+  source: SkillSource,
+  proficiency: number,
+  status: string,
+  verifiedAt: Date | null,
+): number {
   if (status !== "active") return 0;
-  // Verified human sources rank well above agent_inferred.
+  // Verified human sources rank well above agent_inferred. A verified
+  // agent_inferred row earns a small bump (+1) so reviewer attention has
+  // observable effect on ranking, but it still sits below any human source.
   const sourceWeight: Record<SkillSource, number> = {
     certification: 5,
     partner_attested: 4,
@@ -619,7 +629,8 @@ function rowScore(source: SkillSource, proficiency: number, status: string): num
     self: 2,
     agent_inferred: 1,
   };
-  return sourceWeight[source] * proficiency;
+  const verifiedBump = source === "agent_inferred" && verifiedAt ? 1 : 0;
+  return (sourceWeight[source] + verifiedBump) * proficiency;
 }
 
 router.get("/roster/skill-graph/search", async (req, res) => {
@@ -666,7 +677,7 @@ router.get("/roster/skill-graph/search", async (req, res) => {
   type Bucket = {
     personType: "employee" | "contractor";
     personId: string;
-    matched: Map<string, SearchTermMatch>;
+    matched: Map<string, SearchTermMatch & { verifiedAt: Date | null }>;
     score: number;
     evidenceIds: Set<string>;
   };
@@ -688,17 +699,23 @@ router.get("/roster/skill-graph/search", async (req, res) => {
     }
     for (const { term, skillIds } of termSkillIds) {
       if (!skillIds.includes(ps.skillId)) continue;
-      const candidate: SearchTermMatch = {
+      const candidate = {
         term,
         matchedSkill: skillToWire(sk),
         proficiency: ps.proficiency,
         source: ps.source as SkillSource,
         status: ps.status,
+        verifiedAt: ps.verifiedAt ?? null,
       };
       const prev = bucket.matched.get(term);
-      const candScore = rowScore(candidate.source, candidate.proficiency, candidate.status);
+      const candScore = rowScore(
+        candidate.source,
+        candidate.proficiency,
+        candidate.status,
+        candidate.verifiedAt,
+      );
       const prevScore = prev
-        ? rowScore(prev.source, prev.proficiency, prev.status)
+        ? rowScore(prev.source, prev.proficiency, prev.status, prev.verifiedAt)
         : -1;
       if (candScore > prevScore) bucket.matched.set(term, candidate);
     }
@@ -715,7 +732,7 @@ router.get("/roster/skill-graph/search", async (req, res) => {
     if (mode === "OR" && matchedTerms.length === 0) continue;
     let score = 0;
     for (const m of bucket.matched.values()) {
-      score += rowScore(m.source, m.proficiency, m.status);
+      score += rowScore(m.source, m.proficiency, m.status, m.verifiedAt);
     }
     bucket.score = score;
     candidates.push({
@@ -807,7 +824,9 @@ router.get("/roster/skill-graph/search", async (req, res) => {
         title: ("title" in row ? (row.title as string | null) : null) ?? null,
         role: ("role" in row ? (row.role as string | null) : null) ?? null,
         score: c.score,
-        matchedTerms: Array.from(c.matched.values()),
+        matchedTerms: Array.from(c.matched.values()).map(
+          ({ verifiedAt: _v, ...m }): SearchTermMatch => m,
+        ),
         unmatchedTerms: c.unmatched,
         evidence: Array.from(c.evidenceIds)
           .map((id) => evidenceLabels.get(id))
