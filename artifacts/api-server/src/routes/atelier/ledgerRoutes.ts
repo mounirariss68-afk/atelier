@@ -812,6 +812,13 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const role = (req.body?.role as string) ?? "lead";
+  // Engagement-scoped countersign: callers approve only entries belonging
+  // to a specific engagement bucket. `engagementId === null` (or omitted +
+  // explicit __internal__) targets non-billable / internal rows.
+  const rawEng = req.body?.engagementId;
+  const engagementId: string | null =
+    rawEng === undefined || rawEng === null || rawEng === "__internal__" ? null : String(rawEng);
+
   const [week] = await db
     .select()
     .from(atelierTimesheetWeeks)
@@ -820,32 +827,74 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
     res.status(404).json({ error: "week-not-found" });
     return;
   }
-  if (role === "lead") {
-    if (!canApproveLead(me)) return void res.status(403).json({ error: "forbidden" });
-    if (week.status !== "submitted")
-      return void res.status(409).json({ error: "out-of-order", reason: `Week is ${week.status}.` });
+  if (role !== "lead" && role !== "partner") {
+    return void res.status(400).json({ error: "invalid-role" });
+  }
+  if (role === "lead" && !canApproveLead(me)) return void res.status(403).json({ error: "forbidden" });
+  if (role === "partner" && !canApprovePartner(me)) return void res.status(403).json({ error: "forbidden" });
+
+  // Object-level authorization: an engagement_lead persona may only
+  // countersign entries on engagements they actually lead. Partners and
+  // operations bypass this check (broad rights).
+  if (engagementId && me.role === "engagement_lead") {
+    const [eng] = await db
+      .select()
+      .from(atelierEngagements)
+      .where(and(eq(atelierEngagements.id, engagementId), isNull(atelierEngagements.deletedAt)));
+    if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
+    if (eng.engagementLeadId !== me.id)
+      return void res.status(403).json({ error: "forbidden", reason: "Not the engagement lead." });
+  }
+
+  // Source entry status we'll advance, and target status. Lead countersign
+  // requires entries currently 'submitted'; partner countersign requires
+  // 'lead_approved'.
+  const fromStatus = role === "lead" ? "submitted" : "lead_approved";
+  const toStatus = role === "lead" ? "lead_approved" : "approved";
+
+  // Engagement-scoped entry update. Build the engagement filter so null
+  // (internal) is matched explicitly.
+  const engFilter = engagementId
+    ? eq(atelierTimesheetEntries.engagementId, engagementId)
+    : isNull(atelierTimesheetEntries.engagementId);
+  const updated = await db
+    .update(atelierTimesheetEntries)
+    .set({ status: toStatus, updatedAt: new Date() })
+    .where(
+      and(
+        eq(atelierTimesheetEntries.weekId, week.id),
+        engFilter,
+        eq(atelierTimesheetEntries.status, fromStatus),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ),
+    )
+    .returning({ id: atelierTimesheetEntries.id });
+
+  if (updated.length === 0)
+    return void res
+      .status(409)
+      .json({ error: "no-eligible-entries", reason: `No entries in '${fromStatus}' for that engagement.` });
+
+  // Derive week status from entry roll-up rather than mutating it directly.
+  // Lead pass: when no entries remain in 'submitted', week → lead_approved.
+  // Partner pass: when no entries remain in 'lead_approved' AND no entries
+  // remain in 'submitted', week → partner_approved.
+  const remaining = await db
+    .select({ status: atelierTimesheetEntries.status })
+    .from(atelierTimesheetEntries)
+    .where(and(eq(atelierTimesheetEntries.weekId, week.id), isNull(atelierTimesheetEntries.deletedAt)));
+  const remainStatuses = new Set(remaining.map((r) => r.status));
+  if (role === "lead" && week.status === "submitted" && !remainStatuses.has("submitted")) {
     await db
       .update(atelierTimesheetWeeks)
       .set({ status: "lead_approved", leadApprovedAt: new Date(), leadApprovedByUserId: me.id, updatedAt: new Date() })
       .where(eq(atelierTimesheetWeeks.id, week.id));
-    // Cascade: every submitted entry in this week becomes lead_approved so
-    // the entry-level audit trail mirrors the week-level approval state.
-    await db
-      .update(atelierTimesheetEntries)
-      .set({ status: "lead_approved", updatedAt: new Date() })
-      .where(
-        and(
-          eq(atelierTimesheetEntries.weekId, week.id),
-          eq(atelierTimesheetEntries.status, "submitted"),
-          isNull(atelierTimesheetEntries.deletedAt),
-        ),
-      );
-  } else if (role === "partner") {
-    if (!canApprovePartner(me)) return void res.status(403).json({ error: "forbidden" });
-    if (week.status !== "lead_approved")
-      return void res
-        .status(409)
-        .json({ error: "out-of-order", reason: `Partner approval requires lead_approved (currently ${week.status}).` });
+  } else if (
+    role === "partner" &&
+    (week.status === "lead_approved" || week.status === "submitted") &&
+    !remainStatuses.has("submitted") &&
+    !remainStatuses.has("lead_approved")
+  ) {
     await db
       .update(atelierTimesheetWeeks)
       .set({
@@ -855,22 +904,17 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
         updatedAt: new Date(),
       })
       .where(eq(atelierTimesheetWeeks.id, week.id));
-    await db
-      .update(atelierTimesheetEntries)
-      .set({ status: "approved", updatedAt: new Date() })
-      .where(eq(atelierTimesheetEntries.weekId, week.id));
-  } else {
-    return void res.status(400).json({ error: "invalid-role" });
   }
+
   await audit({
     entityType: "timesheet_week",
     entityId: week.id,
     actor: me,
     action: `ledger.approve.${role}`,
-    payload: { role },
-    summary: `${me.name} approved week ${week.weekIso} (${role})`,
+    payload: { role, engagementId, entriesAdvanced: updated.length },
+    summary: `${me.name} ${role}-approved ${updated.length} entr${updated.length === 1 ? "y" : "ies"} on week ${week.weekIso} (eng=${engagementId ?? "internal"})`,
   });
-  res.json({ ok: true });
+  res.json({ ok: true, entriesAdvanced: updated.length });
 });
 
 // =====================================================================

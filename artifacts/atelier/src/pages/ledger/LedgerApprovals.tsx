@@ -85,14 +85,14 @@ export default function LedgerApprovals() {
 
   React.useEffect(() => { load(); }, [load]);
 
-  const approve = async (row: WeekRow, role: "lead" | "partner") => {
+  const approve = async (row: WeekRow, role: "lead" | "partner", engagementId: string | null) => {
     setBusyId(row.id);
     try {
       const r = await fetch(`/api/atelier/ledger/approvals/${row.id}/approve`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role, engagementId: engagementId ?? "__internal__" }),
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
@@ -202,12 +202,12 @@ export default function LedgerApprovals() {
                         </button>
                         <div className="ml-auto flex gap-2">
                           {row.status === "submitted" && (
-                            <PillButton onClick={() => approve(row, "lead")} disabled={busyId === row.id} className="min-h-[44px]">
+                            <PillButton onClick={() => approve(row, "lead", g.engagementId)} disabled={busyId === row.id} className="min-h-[44px]">
                               Lead approve
                             </PillButton>
                           )}
                           {row.status === "lead_approved" && (
-                            <PillButton onClick={() => approve(row, "partner")} disabled={busyId === row.id} className="min-h-[44px]">
+                            <PillButton onClick={() => approve(row, "partner", g.engagementId)} disabled={busyId === row.id} className="min-h-[44px]">
                               Partner approve
                             </PillButton>
                           )}
