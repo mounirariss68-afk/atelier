@@ -376,7 +376,10 @@ export default function WalletNewExpense() {
               <div>
                 <label className={labelCls}>VAT treatment {editVatTreatment !== proposal.vatTreatment && <span className="text-gold">(edited)</span>}</label>
                 <select className={inputCls} value={editVatTreatment} onChange={(e) => setEditVatTreatment(e.target.value)} data-testid="edit-vat-treatment">
-                  {["recoverable","export","exempt","none"].map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value="ksa_15">ksa_15 (KSA recoverable 15%)</option>
+                  <option value="uae_5">uae_5 (UAE recoverable 5%)</option>
+                  <option value="zero_rated_export">zero_rated_export</option>
+                  <option value="none">none</option>
                 </select>
               </div>
               <div>

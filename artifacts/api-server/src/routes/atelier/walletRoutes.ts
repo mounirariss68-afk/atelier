@@ -568,6 +568,27 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
       .where(eq(atelierExpenses.id, existing.id));
   }
 
+  // Recompute FX at submission date so the USD reference reflects the
+  // rate on the day the expense is actually submitted (drafts created
+  // earlier don't carry stale FX into VAT/rollups).
+  {
+    const [pre] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.id, existing.id));
+    const submitDate = new Date().toISOString().slice(0, 10);
+    const fx = await convertToUsd(pre.amount, pre.currency, submitDate);
+    await db
+      .update(atelierExpenses)
+      .set({
+        fxRate: fx.rate,
+        fxRateDate: fx.rateDate,
+        usdAmount: +fx.usdAmount.toFixed(2),
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierExpenses.id, existing.id));
+  }
+
   // Re-evaluate policy on the final (post-patch) values so the user can't
   // smuggle a violation in through the patch.
   const [postPatch] = await db
@@ -1101,13 +1122,12 @@ router.get("/wallet/fx", async (req, res) => {
 // =============================================================
 // Retention sweep — 90d OCR-payload redaction
 // =============================================================
-router.post("/wallet/retention/run", async (req, res) => {
-  const me = ensurePersona(req, res);
-  if (!me) return;
-  if (!isPartnerOrOps(me)) {
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
+/**
+ * Reusable 90-day OCR-payload redaction sweep. Called both by the manual
+ * POST /wallet/retention/run endpoint and by the daily wallet-retention
+ * cron in lib/scheduler.ts.
+ */
+export async function runWalletRetentionSweep(): Promise<{ redacted: number; scanned: number }> {
   const cutoff = new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - 90);
   const candidates = await db
@@ -1133,15 +1153,26 @@ router.post("/wallet/retention/run", async (req, res) => {
       .where(eq(atelierExpenses.id, c.id));
     redacted++;
   }
+  return { redacted, scanned: candidates.length };
+}
+
+router.post("/wallet/retention/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isPartnerOrOps(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const result = await runWalletRetentionSweep();
   await audit({
     entityType: "wallet_retention",
     entityId: "sweep",
     actor: me,
     action: "wallet.retention.run",
-    payload: { redacted, scanned: candidates.length },
-    summary: `Retention sweep: redacted ${redacted}/${candidates.length} OCR payloads older than 90d.`,
+    payload: result,
+    summary: `Retention sweep: redacted ${result.redacted}/${result.scanned} OCR payloads older than 90d.`,
   });
-  res.json({ ok: true, redacted, scanned: candidates.length });
+  res.json({ ok: true, ...result });
 });
 
 export default router;

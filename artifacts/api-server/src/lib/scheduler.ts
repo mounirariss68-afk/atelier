@@ -4,12 +4,15 @@ import { logger } from "./logger";
 import { db, atelierUsers } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
 import { runRosterSteward } from "../routes/atelier/rosterLifecycleRoutes";
+import { runWalletRetentionSweep } from "../routes/atelier/walletRoutes";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
+const WALLET_RETENTION_CRON = process.env.WALLET_RETENTION_CRON ?? "0 4 * * *";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
+let walletRetentionTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -84,6 +87,29 @@ export function startScheduler(): void {
       "Invalid ROSTER_STEWARD_CRON expression, Roster Steward not scheduled",
     );
   }
+
+  // Daily Wallet retention sweep — redacts OCR payloads older than 90 days
+  // so receipt images / parsed text don't linger past the retention window.
+  if (cron.validate(WALLET_RETENTION_CRON)) {
+    walletRetentionTask = cron.schedule(
+      WALLET_RETENTION_CRON,
+      async () => {
+        try {
+          const out = await runWalletRetentionSweep();
+          logger.info(out, "Wallet retention sweep finished");
+        } catch (err) {
+          logger.error({ err }, "Wallet retention sweep encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: WALLET_RETENTION_CRON }, "Wallet retention scheduler started");
+  } else {
+    logger.error(
+      { cron: WALLET_RETENTION_CRON },
+      "Invalid WALLET_RETENTION_CRON expression, wallet retention not scheduled",
+    );
+  }
 }
 
 export function stopScheduler(): void {
@@ -96,6 +122,11 @@ export function stopScheduler(): void {
     rosterStewardTask.stop();
     rosterStewardTask = null;
     logger.info("Roster Steward scheduler stopped");
+  }
+  if (walletRetentionTask) {
+    walletRetentionTask.stop();
+    walletRetentionTask = null;
+    logger.info("Wallet retention scheduler stopped");
   }
 }
 
