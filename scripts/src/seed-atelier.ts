@@ -3845,10 +3845,10 @@ async function main() {
   lastWeekDate.setUTCDate(lastWeekDate.getUTCDate() - 7);
   const weekA = isoWeekOfDate(lastWeekDate);
 
-  // Seed calendar events for the named employees we have personas for.
-  const LEDGER_PEOPLE = employeesToInsert
-    .filter((e) => e.role !== "partner_firm_resource")
-    .slice(0, 4);
+  // Seed calendar events + 2 weeks of timesheets for ALL eligible seeded
+  // employees so downstream tasks (approvals, partner ledger summary, agent
+  // tick coverage) have broad data — not just the four named personas.
+  const LEDGER_PEOPLE = employeesToInsert.filter((e) => e.role !== "partner_firm_resource");
 
   type CalSeed = typeof atelierCalendarEvents.$inferInsert;
   const calRows: CalSeed[] = [];
@@ -4022,6 +4022,16 @@ async function main() {
       ],
     });
     pushWeek({ person: sara, wk: weekB, status: "draft", entrySpecs: [] });
+  }
+
+  // Coverage backfill: for every other LEDGER_PEOPLE row not in the named
+  // matrix above, seed two standard weeks (weekA submitted, weekB draft) so
+  // approvers + the steward tick have realistic data across the roster.
+  const namedIds = new Set(["emp_p_mounir_ariss", "emp_p_layla_haddad", "emp_p_omar_najjar", "emp_p_sara_qureshi"]);
+  for (const emp of LEDGER_PEOPLE) {
+    if (namedIds.has(emp.id)) continue;
+    pushWeek({ person: emp, wk: weekA, status: "submitted", entrySpecs: standardWeek(TASAMA_ENG_ID) });
+    pushWeek({ person: emp, wk: weekB, status: "draft", entrySpecs: standardWeek(TASAMA_ENG_ID).slice(0, 3) });
   }
 
   if (weeks.length) await db.insert(atelierTimesheetWeeks).values(weeks).onConflictDoNothing();
