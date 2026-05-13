@@ -143,7 +143,7 @@ export default function Crm() {
                   )}
                   <MonoChip>{a.openOpportunityCount} open opp{a.openOpportunityCount === 1 ? "" : "s"}</MonoChip>
                   <MonoChip>{a.activeEngagementCount} active eng{a.activeEngagementCount === 1 ? "" : "s"}</MonoChip>
-                  {a.pendingUpdateCount > 0 && (
+                  {(a.pendingUpdateCount ?? 0) > 0 && (
                     <MonoChip tone="amber">{a.pendingUpdateCount} pending update{a.pendingUpdateCount === 1 ? "" : "s"}</MonoChip>
                   )}
                 </div>

@@ -12,6 +12,8 @@ import {
   type AtelierContact,
   type AtelierContactRelationship,
   type AtelierContactDisposition,
+  type AtelierAccountWorkspace,
+  type AtelierProfileUpdateProposal,
 } from "@workspace/api-client-react";
 import {
   BackLink,
@@ -79,7 +81,10 @@ export default function Account() {
   const qc = useQueryClient();
 
   const { data: ws, isLoading, isError } = useAtelierGetAccountWorkspace(accountId, {
-    query: { enabled: !!accountId },
+    query: {
+      enabled: !!accountId,
+      queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
+    },
   });
   const refresh = useAtelierRefreshAccountCartographer();
   const [tab, setTab] = useState<TabKey>("profile");
@@ -230,11 +235,10 @@ function ProfileTab({
   pending,
   onDecide,
 }: {
-  ws: ReturnType<typeof useAtelierGetAccountWorkspace>["data"] & {};
-  pending: NonNullable<typeof ws extends infer T ? (T extends { account: { pendingProfileUpdates: infer U } } ? U : never) : never>;
+  ws: AtelierAccountWorkspace;
+  pending: AtelierProfileUpdateProposal[];
   onDecide: (id: string, d: "approve" | "reject") => void;
 }) {
-  if (!ws) return null;
   const a = ws.account;
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -431,7 +435,7 @@ function DecisionMakersTab({ contacts, accountId }: { contacts: AtelierContact[]
 function OpportunitiesTab({
   opps,
 }: {
-  opps: NonNullable<ReturnType<typeof useAtelierGetAccountWorkspace>["data"]>["opportunities"];
+  opps: AtelierAccountWorkspace["opportunities"];
 }) {
   if (opps.length === 0) {
     return (
@@ -468,7 +472,7 @@ function OpportunitiesTab({
 function EngagementsTab({
   engs,
 }: {
-  engs: NonNullable<ReturnType<typeof useAtelierGetAccountWorkspace>["data"]>["engagements"];
+  engs: AtelierAccountWorkspace["engagements"];
 }) {
   if (engs.length === 0) {
     return (
@@ -679,7 +683,7 @@ function QbrTab({ accountId }: { accountId: string }) {
 function AuditTab({
   events,
 }: {
-  events: NonNullable<ReturnType<typeof useAtelierGetAccountWorkspace>["data"]>["audit"];
+  events: AtelierAccountWorkspace["audit"];
 }) {
   if (events.length === 0) {
     return (

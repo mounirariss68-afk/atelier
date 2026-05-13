@@ -33,6 +33,36 @@ type EngAccess = Awaited<ReturnType<typeof accessibleEngagementIds>>;
 function canSeeEng(access: EngAccess, engId: string) {
   return access.all || access.ids.has(engId);
 }
+
+/**
+ * Account-level visibility. Partners see all accounts. Non-partners see
+ * an account only if they hold at least one engagement-grant on an
+ * engagement that belongs to this account, OR they are listed as the
+ * account's partnerOwner. Prevents IDOR-style reads of CRM intelligence
+ * (contacts, signals, pending updates) by anyone with a valid persona.
+ */
+async function canSeeAccount(
+  access: EngAccess,
+  me: { id: string },
+  accountId: string,
+): Promise<boolean> {
+  if (access.all) return true;
+  const engs = await db
+    .select({ id: atelierEngagements.id })
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.accountId, accountId),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
+  if (engs.some((e) => access.ids.has(e.id))) return true;
+  const [a] = await db
+    .select({ partnerOwnerId: atelierAccounts.partnerOwnerId })
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, accountId));
+  return a?.partnerOwnerId === me.id;
+}
 import {
   AtelierUpdateContactDispositionBody as AtelierContactDispositionInput,
   AtelierDecideProfileUpdateBody as AtelierProfileUpdateDecisionInput,
@@ -306,6 +336,10 @@ router.get("/accounts/:accountId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
   const ws = await buildWorkspace(req.params.accountId, access);
   if (!ws) {
     res.status(404).json({ error: "not-found" });
@@ -385,6 +419,10 @@ router.get("/accounts/:accountId/contacts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
   const ws = await buildWorkspace(req.params.accountId, access);
   if (!ws) {
     res.status(404).json({ error: "not-found" });
@@ -397,6 +435,11 @@ router.get("/accounts/:accountId/contacts", async (req, res) => {
 router.get("/accounts/:accountId/whitespace", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
   const a = await loadAccount(req.params.accountId);
   if (!a) {
     res.status(404).json({ error: "not-found" });
@@ -434,6 +477,11 @@ function toWhitespaceWire(accountId: string, output: WhitespaceOutput) {
 router.get("/accounts/:accountId/qbr", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
   const a = await loadAccount(req.params.accountId);
   if (!a) {
     res.status(404).json({ error: "not-found" });

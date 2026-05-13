@@ -192,23 +192,25 @@ type AccountExt = {
   relationshipStrength?: number;
   enrichedAt?: Date;
   sourceSignals?: Array<{
-    kind: string;
+    kind: "news" | "linkedin" | "press" | "filing" | "manual";
     title: string;
     summary?: string;
     url: string;
-    capturedAt: string;
-    confidence: "green" | "amber" | "red";
+    publishedAt?: string;
+    confidence?: "green" | "amber" | "red";
   }>;
   strategicPriorities?: string[];
   aicoHypothesis?: string;
   pendingProfileUpdates?: Array<{
     id: string;
-    field: string;
-    proposedValue: unknown;
-    rationale: string;
-    sourceAgentRunId?: string;
-    status: "pending" | "approved" | "rejected";
+    proposedBy: string;
     proposedAt: string;
+    field: string;
+    fromValue: unknown;
+    toValue: unknown;
+    rationale: string;
+    oppId?: string;
+    status: "pending" | "approved" | "rejected";
   }>;
 };
 
@@ -2379,7 +2381,6 @@ async function main() {
       "guardrail.pass",
       "All 4 guardrails passed (PII, sourcing, scope, evidence).",
       HOURS_AGO(2),
-      null,
     ),
     aud(
       "agent_run",
