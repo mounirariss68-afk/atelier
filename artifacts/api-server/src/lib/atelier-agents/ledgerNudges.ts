@@ -16,7 +16,7 @@ import {
   atelierEmployees,
   atelierContractors,
 } from "@workspace/db";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { runTimeSteward } from "./runner.js";
 
 type NudgeKind = "submit_due" | "approve_due";
@@ -241,8 +241,24 @@ function isoWeekIdFromDateLocal(d: Date): { weekIso: string; weekStartDate: stri
   };
 }
 
+// Snapshots are derived from approved timesheet entries which only change on
+// human action; recomputing every 15 minutes is wasted I/O. Gate the tick so
+// it only runs when the most recent snapshot is older than this interval.
+const SNAPSHOT_RECOMPUTE_GATE_MS = 12 * 60 * 60 * 1000;
+
 export async function runUtilizationSnapshotTick(opts: { force?: boolean; weeksBack?: number } = {}): Promise<{ snapshotsWritten: number }> {
   const weeksBack = opts.weeksBack ?? 6;
+
+  if (!opts.force) {
+    const [latest] = await db
+      .select({ computedAt: atelierUtilizationSnapshots.computedAt })
+      .from(atelierUtilizationSnapshots)
+      .orderBy(desc(atelierUtilizationSnapshots.computedAt))
+      .limit(1);
+    if (latest?.computedAt && Date.now() - new Date(latest.computedAt).getTime() < SNAPSHOT_RECOMPUTE_GATE_MS) {
+      return { snapshotsWritten: 0 };
+    }
+  }
 
   // Build the list of (personId, weekIso) targets from existing weeks
   // rows so we never invent a snapshot for a person that doesn't track

@@ -1826,44 +1826,144 @@ router.post("/ledger/utilization/narrative", async (req, res) => {
     targetId?: string;
     targetLabel?: string;
     period?: string;
-    numericBlock?: Record<string, unknown> | null;
-    computedAt?: string | null;
   };
   if (!body.view || !body.targetId) {
     return void res.status(400).json({ error: "view-and-targetId-required" });
   }
-  // Resolve the freshness anchor server-side from the snapshot store so the
-  // client can't fake recency by omitting computedAt.
-  let computedAt: string | null = body.computedAt ?? null;
-  if (!computedAt) {
-    if (body.view === "person") {
-      const [snap] = await db
-        .select({ computedAt: atelierUtilizationSnapshots.computedAt })
-        .from(atelierUtilizationSnapshots)
-        .where(eq(atelierUtilizationSnapshots.personId, body.targetId))
-        .orderBy(desc(atelierUtilizationSnapshots.computedAt))
-        .limit(1);
-      computedAt = snap?.computedAt ? new Date(snap.computedAt).toISOString() : null;
-    } else {
-      const [snap] = await db
-        .select({ computedAt: atelierUtilizationSnapshots.computedAt })
-        .from(atelierUtilizationSnapshots)
-        .orderBy(desc(atelierUtilizationSnapshots.computedAt))
-        .limit(1);
-      computedAt = snap?.computedAt ? new Date(snap.computedAt).toISOString() : null;
-    }
-  }
+  // Hydrate the numeric block server-side from the canonical snapshot/data
+  // store. Any client-supplied numericBlock is intentionally ignored — the
+  // analyst contract is "deterministic numbers first", so the only numbers
+  // it ever sees are ones we computed ourselves on this turn. This also
+  // lets us derive the freshness anchor (computedAt) from the same source.
+  const hydrated = await hydrateUtilizationNumericBlock(body.view, body.targetId, me);
+  if ("error" in hydrated) return void res.status(hydrated.status).json({ error: hydrated.error });
   const out = await runUtilizationAnalyst({
     view: body.view,
     targetId: body.targetId,
     targetLabel: body.targetLabel ?? body.targetId,
     period: body.period ?? "rolling-4w",
-    numericBlock: body.numericBlock ?? null,
-    computedAt,
+    numericBlock: hydrated.numericBlock,
+    computedAt: hydrated.computedAt,
     triggeredByUserId: me.id,
   });
   res.json(out);
 });
+
+// Server-side numeric-block hydrator. Mirrors the math in the corresponding
+// GET handlers but only returns the fields the analyst is allowed to cite.
+async function hydrateUtilizationNumericBlock(
+  view: "person" | "engagement" | "firm",
+  targetId: string,
+  me: { id: string; role: string },
+): Promise<
+  | { numericBlock: Record<string, unknown> | null; computedAt: string | null }
+  | { error: string; status: number }
+> {
+  if (view === "person") {
+    const [emp] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(and(
+        isNull(atelierEmployees.deletedAt),
+        targetId.startsWith("emp_") ? eq(atelierEmployees.id, targetId) : eq(atelierEmployees.userId, targetId),
+      ));
+    const isLeadership = me.role === "partner" || me.role === "operations" || me.role === "engagement_lead";
+    if (!isLeadership && (!emp || emp.userId !== me.id)) return { error: "forbidden", status: 403 };
+    const resolvedId = emp?.id ?? targetId;
+    const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
+    const snaps = await db
+      .select()
+      .from(atelierUtilizationSnapshots)
+      .where(eq(atelierUtilizationSnapshots.personId, resolvedId));
+    const last4 = snaps.filter((s) => last4Iso.includes(s.weekIso));
+    const ytd = snaps.filter((s) => s.weekIso.startsWith(String(new Date().getUTCFullYear())));
+    const sum = (arr: typeof snaps) => ({
+      bill: arr.reduce((s, r) => s + Number(r.billableHours), 0),
+      avail: arr.reduce((s, r) => s + Number(r.availableHours), 0),
+    });
+    const r4 = sum(last4); const yt = sum(ytd);
+    const targetPct = emp?.utilizationTargetPct ? emp.utilizationTargetPct / 100 : defaultTargetPctFor(emp?.role, emp?.seniority);
+    const utilizationPct = r4.avail > 0 ? r4.bill / r4.avail : 0;
+    const computedAt = snaps[0]?.computedAt ? new Date(snaps[0].computedAt).toISOString() : null;
+    return {
+      numericBlock: {
+        utilizationPct,
+        targetPct,
+        ytdUtilPct: yt.avail > 0 ? yt.bill / yt.avail : 0,
+        variancePct: utilizationPct - targetPct,
+        weeks: last4.length,
+      },
+      computedAt,
+    };
+  }
+  if (view === "engagement") {
+    const [eng] = await db
+      .select()
+      .from(atelierEngagements)
+      .where(and(
+        isNull(atelierEngagements.deletedAt),
+        targetId.includes("eng_") ? eq(atelierEngagements.id, targetId) : eq(atelierEngagements.slug, targetId),
+      ));
+    if (!eng) return { error: "engagement-not-found", status: 404 };
+    const isLeadership = me.role === "partner" || me.role === "operations";
+    const isLead = me.id === eng.engagementLeadId || me.id === eng.partnerOwnerId;
+    if (!isLeadership && !isLead) return { error: "forbidden", status: 403 };
+    // Reuse the engagement endpoint's pricing + actuals math by calling the
+    // same helper. Cheap path: re-run the queries inline (kept terse).
+    const [pricing] = eng.opportunityId
+      ? await db.select().from(atelierDealPricings).where(and(eq(atelierDealPricings.opportunityId, eng.opportunityId), isNull(atelierDealPricings.deletedAt)))
+      : [undefined as never];
+    const teamMix = (pricing?.teamMix as Array<{ ftePct: number }>) ?? [];
+    const durationWeeks = pricing ? Number(pricing.durationWeeks) : 0;
+    const plannedHours = teamMix.reduce((s, t) => s + Number(t.ftePct || 0) * durationWeeks * 40, 0);
+    const actuals = await db
+      .select({ hours: atelierTimesheetEntries.hours, billable: atelierTimesheetEntries.billable })
+      .from(atelierTimesheetEntries)
+      .where(and(
+        eq(atelierTimesheetEntries.engagementId, eng.id),
+        inArray(atelierTimesheetEntries.status, ["submitted", "lead_approved", "approved", "partner_approved"]),
+        isNull(atelierTimesheetEntries.deletedAt),
+      ));
+    const actualHours = actuals.reduce((s, a) => s + Number(a.hours || 0), 0);
+    const burnPct = plannedHours > 0 ? actualHours / plannedHours : 0;
+    const plannedMarginPct = pricing ? Number(pricing.computedMarginPct) : 0;
+    return {
+      numericBlock: {
+        plannedHours,
+        actualHours,
+        burnPct,
+        plannedMarginPct,
+        plmStage: eng.plmStage,
+      },
+      computedAt: pricing?.updatedAt ? new Date(pricing.updatedAt).toISOString() : null,
+    };
+  }
+  // view === "firm"
+  if (me.role !== "partner") return { error: "partner-only", status: 403 };
+  const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
+  const snaps = await db.select().from(atelierUtilizationSnapshots).where(inArray(atelierUtilizationSnapshots.weekIso, last4Iso));
+  const totalBill = snaps.reduce((s, r) => s + Number(r.billableHours), 0);
+  const totalAvail = snaps.reduce((s, r) => s + Number(r.availableHours), 0);
+  const apr = await db
+    .select({ status: atelierTimesheetEntries.status, hours: atelierTimesheetEntries.hours })
+    .from(atelierTimesheetEntries)
+    .where(and(
+      eq(atelierTimesheetEntries.billable, true),
+      inArray(atelierTimesheetEntries.status, ["lead_approved", "approved", "partner_approved"]),
+      isNull(atelierTimesheetEntries.deletedAt),
+    ));
+  const fullRateAvail = apr.reduce((s, r) => s + Number(r.hours), 0);
+  const fullRateInv = apr.filter((r) => r.status === "approved" || r.status === "partner_approved").reduce((s, r) => s + Number(r.hours), 0);
+  return {
+    numericBlock: {
+      firmUtilizationPct: totalAvail > 0 ? totalBill / totalAvail : 0,
+      realizationRatePct: fullRateAvail > 0 ? fullRateInv / fullRateAvail : 0,
+      peopleCount: new Set(snaps.map((s) => s.personId)).size,
+      weeks: last4Iso.length,
+    },
+    computedAt: snaps[0]?.computedAt ? new Date(snaps[0].computedAt).toISOString() : null,
+  };
+}
 
 // ---------------------------------------------------------------------
 // POST /ledger/utilization/snapshot/run (Partner/Operations) — manual recompute.

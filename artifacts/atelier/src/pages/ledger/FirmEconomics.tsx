@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Link } from "wouter";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
 interface PartnerSummary { partnerId: string; partnerName: string; utilPct: number; targetPct: number; peopleCount: number; people: { personId: string; name: string; utilPct: number; targetPct: number }[]; }
@@ -101,7 +102,21 @@ export default function FirmEconomics() {
             {data.partnerSummary.length === 0 ? (
               <p className="text-sm text-text-mute">No partner-attributed utilization in window.</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              <div className="h-64 w-full">
+                <ResponsiveContainer>
+                  <BarChart data={data.partnerSummary.map((p) => ({ name: p.partnerName, util: Math.round(p.utilPct * 100), target: Math.round(p.targetPct * 100) }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
+                    <YAxis stroke="#94a3b8" fontSize={12} unit="%" domain={[0, 100]} />
+                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="util" name="Actual %" fill="#34d399" />
+                    <Bar dataKey="target" name="Target %" fill="#fbbf2466" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <table className="mt-4 w-full text-sm">
                 <thead className="text-left text-text-mute">
                   <tr>
                     <th className="py-1">Partner</th>
@@ -121,6 +136,7 @@ export default function FirmEconomics() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </Card>
 
@@ -129,7 +145,25 @@ export default function FirmEconomics() {
             {data.sectorSummary.length === 0 ? (
               <p className="text-sm text-text-mute">No sector data yet.</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              <div className="h-64 w-full">
+                <ResponsiveContainer>
+                  <BarChart data={data.sectorSummary.map((s) => ({ name: s.sector, planned: Math.round(s.plannedMarginPct * 100), realized: Math.round(s.realizedMarginPct * 100) }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
+                    <YAxis stroke="#94a3b8" fontSize={12} unit="%" />
+                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="planned" name="Planned %" fill="#fbbf2466" />
+                    <Bar dataKey="realized" name="Realized %">
+                      {data.sectorSummary.map((s, i) => (
+                        <Cell key={i} fill={s.realizedMarginPct < s.plannedMarginPct - 0.05 ? "#f87171" : s.realizedMarginPct < s.plannedMarginPct ? "#fbbf24" : "#34d399"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <table className="mt-4 w-full text-sm">
                 <thead className="text-left text-text-mute">
                   <tr>
                     <th className="py-1">Sector</th>
@@ -151,6 +185,7 @@ export default function FirmEconomics() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </Card>
 

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useParams } from "wouter";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
 interface RollupRow { partnerFirmId: string; hours: number; costAmount: number; costCurrency: string; }
@@ -104,21 +105,13 @@ export default function EngagementEconomics() {
     setNarrLoading(true);
     setNarrative(null);
     try {
-      const numericBlock = {
-        utilizationPct: util.burnPct,
-        targetPct: 1.0,
-        plannedHours: util.planned.hours,
-        actualHours: util.actual.hours,
-        plannedMarginPct: util.planned.marginPct,
-        realizedMarginPct: util.actual.marginPct,
-        burnPct: util.burnPct,
-        weeksOfRunway: util.weeksOfRunway,
-      };
+      // Server hydrates the numeric block from canonical sources; client is
+      // not trusted to supply numbers the analyst will reason over.
       const r = await fetch(`/api/atelier/ledger/utilization/narrative`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ view: "engagement", targetId: util.engagementId, targetLabel: util.engagementName, period: "to-date", numericBlock }),
+        body: JSON.stringify({ view: "engagement", targetId: util.engagementId, targetLabel: util.engagementName, period: "to-date" }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.reason || j.error || `HTTP ${r.status}`);
@@ -184,7 +177,25 @@ export default function EngagementEconomics() {
             {util.planVsActual.length === 0 ? (
               <p className="text-sm text-text-mute">No deal-pricing baseline; planned hours unavailable.</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              <div className="h-64 w-full">
+                <ResponsiveContainer>
+                  <BarChart data={util.planVsActual.map((r) => ({ name: r.seniority, planned: Math.round(r.plannedHours), actual: Math.round(r.actualHours) }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
+                    <YAxis stroke="#94a3b8" fontSize={12} />
+                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="planned" name="Planned hrs" fill="#fbbf2466" />
+                    <Bar dataKey="actual" name="Actual hrs">
+                      {util.planVsActual.map((r, i) => (
+                        <Cell key={i} fill={r.plannedHours > 0 && r.variancePct > 0.1 ? "#f87171" : r.plannedHours > 0 && r.variancePct > 0 ? "#fbbf24" : "#34d399"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <table className="mt-4 w-full text-sm">
                 <thead className="text-left text-text-mute">
                   <tr>
                     <th className="py-1">Seniority</th>
@@ -212,6 +223,7 @@ export default function EngagementEconomics() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </Card>
 

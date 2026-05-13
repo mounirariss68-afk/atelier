@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useParams, Link } from "wouter";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
 interface WeekRow { weekIso: string; weekStartDate: string; billableHours: number; totalHours: number; utilizationPct: number; targetPct: number; }
@@ -78,19 +79,14 @@ export default function Utilization() {
     setNarrLoading(true);
     setNarrative(null);
     try {
-      const numericBlock = {
-        utilizationPct: data.rolling4UtilPct,
-        targetPct: data.targetPct,
-        ytdUtilPct: data.ytdUtilPct,
-        variancePct: data.variancePct,
-        weeks: data.weeks,
-        engagementMix: data.engagementMix,
-      };
+      // numericBlock is hydrated server-side from the snapshot store; we
+      // only send the view + target so the analyst's numbers can never be
+      // forged by the browser.
       const r = await fetch(`/api/atelier/ledger/utilization/narrative`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ view: "person", targetId: data.personId, targetLabel: data.personLabel, period: "rolling-4w", numericBlock }),
+        body: JSON.stringify({ view: "person", targetId: data.personId, targetLabel: data.personLabel, period: "rolling-4w" }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.reason || j.error || `HTTP ${r.status}`);
@@ -142,8 +138,21 @@ export default function Utilization() {
           </div>
 
           <Card className="p-4">
-            <h3 className="mb-3 text-sm font-semibold text-text-mute">Weekly trend</h3>
-            <table className="w-full text-sm">
+            <h3 className="mb-3 text-sm font-semibold text-text-mute">Weekly utilization trend</h3>
+            <div className="h-64 w-full">
+              <ResponsiveContainer>
+                <LineChart data={data.weeks.map((w) => ({ week: w.weekIso.slice(5), util: Math.round(w.utilizationPct * 100), target: Math.round(w.targetPct * 100) }))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+                  <XAxis dataKey="week" stroke="#94a3b8" fontSize={12} />
+                  <YAxis stroke="#94a3b8" fontSize={12} domain={[0, 100]} unit="%" />
+                  <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <ReferenceLine y={Math.round(data.targetPct * 100)} stroke="#fbbf24" strokeDasharray="4 4" label={{ value: "Target", position: "right", fill: "#fbbf24", fontSize: 11 }} />
+                  <Line type="monotone" dataKey="util" name="Utilization %" stroke="#34d399" strokeWidth={2} dot />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <table className="mt-4 w-full text-sm">
               <thead className="text-left text-text-mute">
                 <tr>
                   <th className="py-1">Week</th>
@@ -172,7 +181,23 @@ export default function Utilization() {
             {data.engagementMix.length === 0 ? (
               <p className="text-sm text-text-mute">No billable engagements in the window.</p>
             ) : (
-              <table className="w-full text-sm">
+              <>
+              <div className="h-56 w-full">
+                <ResponsiveContainer>
+                  <BarChart data={data.engagementMix.slice(0, 8).map((m) => ({ name: m.name.length > 22 ? m.name.slice(0, 22) + "…" : m.name, hours: m.hours, billable: m.billable }))} layout="vertical" margin={{ left: 32 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
+                    <XAxis type="number" stroke="#94a3b8" fontSize={12} />
+                    <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={140} />
+                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
+                    <Bar dataKey="hours" name="Hours">
+                      {data.engagementMix.slice(0, 8).map((m, i) => (
+                        <Cell key={i} fill={m.billable ? "#34d399" : "#94a3b8"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <table className="mt-4 w-full text-sm">
                 <thead className="text-left text-text-mute">
                   <tr>
                     <th className="py-1">Engagement</th>
@@ -194,6 +219,7 @@ export default function Utilization() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </Card>
 
