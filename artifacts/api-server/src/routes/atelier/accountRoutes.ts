@@ -558,6 +558,18 @@ router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (re
       updates.hqCity = target.toValue;
     } else if (f === "size" && typeof target.toValue === "string") {
       updates.size = target.toValue;
+    } else if (f === "sourceSignals" && Array.isArray(target.toValue)) {
+      const incoming = target.toValue as Array<{ url?: string }>;
+      const existing = (a.sourceSignals as Array<{ url?: string }> | null) ?? [];
+      const seen = new Set(existing.map((s) => s.url).filter(Boolean));
+      const merged = [...existing];
+      for (const sig of incoming) {
+        if (sig?.url && !seen.has(sig.url)) {
+          merged.push(sig);
+          seen.add(sig.url);
+        }
+      }
+      updates.sourceSignals = merged.slice(-50) as typeof a.sourceSignals;
     }
   }
   const newList = list.map((u) =>
@@ -577,7 +589,15 @@ router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (re
       actorId: me.id,
       actorLabel: me.name,
       action: `profile_update.${decision}`,
-      payload: { updateId: target.id, field: target.field, toValue: target.toValue },
+      payload: {
+        updateId: target.id,
+        field: target.field,
+        toValue: target.toValue,
+        appliedSignalCount:
+          decision === "approve" && target.field === "sourceSignals" && Array.isArray(target.toValue)
+            ? (target.toValue as unknown[]).length
+            : undefined,
+      },
       payloadSummary: `${me.name} ${decision}d Cartographer proposal on field "${target.field}".`,
     });
   });

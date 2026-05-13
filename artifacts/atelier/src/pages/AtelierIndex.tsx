@@ -196,6 +196,7 @@ function PromptsView() {
 function CredentialsView() {
   const { data: me } = useAtelierGetMe();
   const { data: credentials, isLoading } = useAtelierListCredentials();
+  const [showCreate, setShowCreate] = React.useState(false);
   const isPartner = me?.role === "partner";
   if (isLoading) return <Skeleton className="h-64 mt-8 bg-bg-elevate" />;
   const list = credentials ?? [];
@@ -206,14 +207,28 @@ function CredentialsView() {
           Reusable proof: anonymized case studies and outcome metrics the firm cites in proposals.
           {!isPartner && " Read-only — partners curate."}
         </p>
-        {isPartner && (
-          <span className="text-xs font-mono text-gold/70 shrink-0">Partner-curated</span>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {isPartner && (
+            <span className="text-xs font-mono text-gold/70">Partner-curated</span>
+          )}
+          {isPartner && (
+            <button
+              onClick={() => setShowCreate((v) => !v)}
+              className="text-[10px] font-mono uppercase tracking-wider px-3 py-1 rounded border border-gold/40 text-gold hover:bg-gold/10"
+              data-testid="button-new-credential"
+            >
+              {showCreate ? "Cancel" : "+ New credential"}
+            </button>
+          )}
+        </div>
       </div>
-      {list.length === 0 && (
+      {isPartner && showCreate && (
+        <CreateCredentialForm onClose={() => setShowCreate(false)} />
+      )}
+      {list.length === 0 && !showCreate && (
         <Card className="p-8 text-center border-dashed bg-bg-deep">
           <p className="text-text-mute">
-            No credentials yet. {isPartner ? "Add one via POST /api/atelier/credentials." : "Ask a partner to publish one."}
+            No credentials yet. {isPartner ? "Use “New credential” above to publish one." : "Ask a partner to publish one."}
           </p>
         </Card>
       )}
@@ -266,6 +281,120 @@ function CredentialsView() {
         ))}
       </div>
     </div>
+  );
+}
+
+function CreateCredentialForm({ onClose }: { onClose: () => void }) {
+  const [title, setTitle] = React.useState("");
+  const [clientName, setClientName] = React.useState("");
+  const [sector, setSector] = React.useState("");
+  const [engagementType, setEngagementType] = React.useState("agentic_build");
+  const [anonymizationStatus, setAnonymizationStatus] = React.useState("redacted");
+  const [redactedAbstract, setRedactedAbstract] = React.useState("");
+  const [attributedAbstract, setAttributedAbstract] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  async function submit() {
+    setErr(null);
+    if (!title.trim() || !clientName.trim() || !sector.trim() || !redactedAbstract.trim()) {
+      setErr("Title, client, sector, and redacted abstract are required.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const r = await fetch(`/api/atelier/credentials`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          title: title.trim(),
+          clientName: clientName.trim(),
+          sector: sector.trim(),
+          engagementType,
+          anonymizationStatus,
+          redactedAbstract: redactedAbstract.trim(),
+          attributedAbstract: attributedAbstract.trim() || undefined,
+        }),
+      });
+      if (!r.ok) {
+        setErr(`Create failed (${r.status})`);
+        setSubmitting(false);
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Network error");
+      setSubmitting(false);
+    }
+  }
+
+  const inputCls =
+    "w-full bg-bg-deep border border-border rounded px-2 py-1.5 text-sm text-text focus:outline-none focus:border-gold";
+  const labelCls = "block text-[10px] font-mono uppercase tracking-wider text-text-mute mb-1";
+
+  return (
+    <Card className="p-5 border-gold/30 bg-bg-deep" data-testid="form-new-credential">
+      <h4 className="font-semibold text-text mb-4">New credential</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Title *</label>
+          <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} data-testid="input-credential-title" />
+        </div>
+        <div>
+          <label className={labelCls}>Client name *</label>
+          <input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)} data-testid="input-credential-client" />
+        </div>
+        <div>
+          <label className={labelCls}>Sector *</label>
+          <input className={inputCls} value={sector} onChange={(e) => setSector(e.target.value)} data-testid="input-credential-sector" />
+        </div>
+        <div>
+          <label className={labelCls}>Engagement type</label>
+          <select className={inputCls} value={engagementType} onChange={(e) => setEngagementType(e.target.value)} data-testid="select-credential-engagement-type">
+            <option value="agentic_build">agentic_build</option>
+            <option value="pov">pov</option>
+            <option value="transformation">transformation</option>
+            <option value="advisory">advisory</option>
+            <option value="other">other</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Anonymization</label>
+          <select className={inputCls} value={anonymizationStatus} onChange={(e) => setAnonymizationStatus(e.target.value)} data-testid="select-credential-anonymization">
+            <option value="redacted">redacted</option>
+            <option value="attributed">attributed</option>
+            <option value="under_nda">under_nda</option>
+          </select>
+        </div>
+      </div>
+      <div className="mt-3">
+        <label className={labelCls}>Redacted abstract *</label>
+        <textarea className={inputCls} rows={3} value={redactedAbstract} onChange={(e) => setRedactedAbstract(e.target.value)} data-testid="input-credential-redacted" />
+      </div>
+      <div className="mt-3">
+        <label className={labelCls}>Attributed abstract (optional)</label>
+        <textarea className={inputCls} rows={2} value={attributedAbstract} onChange={(e) => setAttributedAbstract(e.target.value)} data-testid="input-credential-attributed" />
+      </div>
+      {err && <p className="mt-3 text-xs text-red-400 font-mono">{err}</p>}
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          onClick={onClose}
+          disabled={submitting}
+          className="text-[10px] font-mono uppercase tracking-wider px-3 py-1 rounded border border-border text-text-mute hover:border-text disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="text-[10px] font-mono uppercase tracking-wider px-3 py-1 rounded border border-gold text-gold hover:bg-gold/10 disabled:opacity-50"
+          data-testid="button-submit-credential"
+        >
+          {submitting ? "Publishing…" : "Publish credential"}
+        </button>
+      </div>
+    </Card>
   );
 }
 
