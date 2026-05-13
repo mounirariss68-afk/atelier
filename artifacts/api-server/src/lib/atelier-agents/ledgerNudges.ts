@@ -449,9 +449,12 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
   // "crossed" when the current burn ≥ threshold AND the highest
   // previously-recorded threshold for this engagement was strictly less.
   // This makes the contract auditable (the audit row IS the previous
-  // state) and lets us distinguish first-time crosses from re-crosses
-  // after replanning (which produce a fresh audit row when the plan
-  // shifts and the band is re-entered).
+  // state) and gives us deterministic, single-fire-ever behavior per
+  // (engagement, band): once 60/80/100 has fired it will not fire again
+  // until prior audit rows are explicitly reset. Re-firing on plan
+  // revisions is intentionally NOT supported here; if that becomes a
+  // requirement, key the audit lookup off a pricing/plan version so a
+  // replanned engagement starts from a fresh threshold history.
   const prevAuditRows = await db
     .select({ entityId: atelierAuditEvents.entityId, payload: atelierAuditEvents.payload })
     .from(atelierAuditEvents)

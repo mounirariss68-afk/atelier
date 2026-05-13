@@ -4283,20 +4283,26 @@ export async function runUtilizationAnalyst(args: {
   computedAt?: string | null;
   triggeredByUserId: string | null;
 }): Promise<{ runId: string; output: UtilizationAnalystOutput }> {
-  // Pre-flight guardrail. Two refusal conditions — both about *source*
+  // Pre-flight guardrail. Three refusal conditions — all about *source*
   // freshness, not value content:
   //   1) numeric block is null or has no keys (hydrator returned nothing
   //      because there's no source data to read),
-  //   2) `computedAt` is older than SNAPSHOT_FRESHNESS_MS.
+  //   2) `computedAt` is missing/null/unparseable (we cannot prove the
+  //      numbers are fresh, so we refuse rather than narrate blind),
+  //   3) `computedAt` is older than SNAPSHOT_FRESHNESS_MS.
   // A block whose values are all zero is *not* refused: zero billable
   // hours / zero margin can be a valid deterministic outcome and the
   // analyst is expected to narrate it ("the team didn't bill any hours
   // this period").
   const emptyBlock = !args.numericBlock || Object.keys(args.numericBlock).length === 0;
   let computedAtStale = false;
-  if (args.computedAt) {
-    const ts = Date.parse(args.computedAt);
-    if (!Number.isNaN(ts) && Date.now() - ts > SNAPSHOT_FRESHNESS_MS) computedAtStale = true;
+  if (!emptyBlock) {
+    if (!args.computedAt) {
+      computedAtStale = true;
+    } else {
+      const ts = Date.parse(args.computedAt);
+      if (Number.isNaN(ts) || Date.now() - ts > SNAPSHOT_FRESHNESS_MS) computedAtStale = true;
+    }
   }
   const blockIsStale = emptyBlock || computedAtStale;
 
