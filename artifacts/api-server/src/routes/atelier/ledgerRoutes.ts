@@ -1931,7 +1931,7 @@ async function hydrateUtilizationNumericBlock(
     const durationWeeks = pricing ? Number(pricing.durationWeeks) : 0;
     const plannedHours = teamMix.reduce((s, t) => s + Number(t.ftePct || 0) * durationWeeks * 40, 0);
     const actuals = await db
-      .select({ hours: atelierTimesheetEntries.hours, billable: atelierTimesheetEntries.billable })
+      .select({ hours: atelierTimesheetEntries.hours, billable: atelierTimesheetEntries.billable, updatedAt: atelierTimesheetEntries.updatedAt })
       .from(atelierTimesheetEntries)
       .where(and(
         eq(atelierTimesheetEntries.engagementId, eng.id),
@@ -1952,7 +1952,17 @@ async function hydrateUtilizationNumericBlock(
         plannedMarginPct,
         plmStage: eng.plmStage,
       },
-      computedAt: pricing?.updatedAt ? new Date(pricing.updatedAt).toISOString() : null,
+      // Engagement freshness must reflect the *most recent of* pricing
+      // baseline and actual time entries — pricing changes infrequently
+      // but timesheet flow drives realized economics. Anchoring on
+      // pricing.updatedAt alone falsely staled live engagements.
+      computedAt: (() => {
+        const candidates: number[] = [];
+        if (pricing?.updatedAt) candidates.push(new Date(pricing.updatedAt).getTime());
+        for (const a of actuals) if (a.updatedAt) candidates.push(new Date(a.updatedAt).getTime());
+        if (candidates.length === 0) return null;
+        return new Date(Math.max(...candidates)).toISOString();
+      })(),
     };
   }
   // view === "firm"
