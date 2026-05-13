@@ -481,6 +481,10 @@ router.post("/engagements/:engId/raid", async (req, res) => {
 router.patch("/engagements/:engId/raid/:raidId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Engagement ACL gate first — never let an unauthorized persona probe
+  // RAID-id existence via PATCH (fixes the IDOR write path the architect
+  // flagged).
+  if (!(await ensureEngAccess(res, me, req.params.engId))) return;
   const parsed = AtelierRaidItemPatch.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body" });

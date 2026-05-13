@@ -8,6 +8,7 @@ import { CharterTab } from "@/components/tabs/CharterTab";
 import { WorkplanTab } from "@/components/tabs/WorkplanTab";
 import { DeliverablesTab } from "@/components/tabs/DeliverablesTab";
 import { ArtifactsTab } from "@/components/tabs/ArtifactsTab";
+import { AgentsTab } from "@/components/tabs/AgentsTab";
 import { ArrowLeft, Code } from "lucide-react";
 
 const TABS = [
@@ -83,8 +84,9 @@ export default function Engagement() {
           {activeTab === 'workplan' && <WorkplanTab engId={eng.id} />}
           {activeTab === 'deliverables' && <DeliverablesTab engId={eng.id} />}
           {activeTab === 'artifacts' && <ArtifactsTab engId={eng.id} />}
+          {activeTab === 'agents' && <AgentsTab engId={eng.id} />}
           {activeTab === 'audit' && <AuditTab entityType="engagement" entityId={eng.id} />}
-          {(activeTab === 'agents' || activeTab === 'processes' || activeTab === 'meetings') && (
+          {(activeTab === 'processes' || activeTab === 'meetings') && (
             <Card className="p-12 flex flex-col items-center justify-center text-center border-dashed bg-bg-deep">
               <div className="w-12 h-12 bg-bg-elevate rounded-full flex items-center justify-center mb-4 text-gold">
                 <Code className="w-6 h-6" />

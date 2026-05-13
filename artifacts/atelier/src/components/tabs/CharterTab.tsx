@@ -26,10 +26,13 @@ export function CharterTab({ engId }: { engId: string }) {
   const redraft = useAtelierRedraftCharter();
   const approve = useAtelierApproveCharterVersion();
   const [selectedVid, setSelectedVid] = React.useState<string | null>(null);
+  const [diffMode, setDiffMode] = React.useState(false);
+  const [compareVid, setCompareVid] = React.useState<string | null>(null);
 
   const live = versions?.find((v) => v.status === "live") ?? null;
   const latest = versions?.[0] ?? null;
   const selected = versions?.find((v) => v.id === selectedVid) ?? latest;
+  const compare = versions?.find((v) => v.id === compareVid) ?? null;
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: getAtelierListCharterVersionsQueryKey(engId) });
@@ -156,7 +159,30 @@ export function CharterTab({ engId }: { engId: string }) {
                 </div>
               )}
 
-              <CharterBody body={selected.body as never} />
+              <div className="flex items-center justify-end gap-2 -mt-2">
+                {(versions ?? []).length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiffMode((m) => !m);
+                      if (!diffMode) {
+                        const other = (versions ?? []).find((v) => v.id !== selected.id);
+                        setCompareVid(other?.id ?? null);
+                      }
+                    }}
+                    data-testid="btn-toggle-diff"
+                    className="text-[11px] font-mono uppercase text-text-mute hover:text-gold transition-colors"
+                  >
+                    {diffMode ? "Hide diff" : "Compare versions…"}
+                  </button>
+                )}
+              </div>
+
+              {diffMode && compare ? (
+                <CharterDiff a={compare} b={selected} versions={versions ?? []} onPickA={setCompareVid} />
+              ) : (
+                <CharterBody body={selected.body as never} />
+              )}
             </Card>
 
             <Card className="p-5 space-y-3">
@@ -234,6 +260,85 @@ function CharterBody({ body }: { body: unknown }) {
       )}
     </div>
   );
+}
+
+type CharterVersionLike = {
+  id: string;
+  versionNumber: number;
+  body: unknown;
+  meceFlags?: string[];
+};
+
+function CharterDiff({
+  a,
+  b,
+  versions,
+  onPickA,
+}: {
+  a: CharterVersionLike;
+  b: CharterVersionLike;
+  versions: CharterVersionLike[];
+  onPickA: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-3" data-testid="charter-diff">
+      <div className="flex items-center gap-2 text-xs font-mono text-text-mute">
+        <span>Compare</span>
+        <select
+          value={a.id}
+          onChange={(e) => onPickA(e.target.value)}
+          data-testid="select-diff-base"
+          className="bg-bg-elevate border border-border rounded-md px-2 py-1 text-text"
+        >
+          {versions
+            .filter((v) => v.id !== b.id)
+            .map((v) => (
+              <option key={v.id} value={v.id}>
+                v{v.versionNumber}
+              </option>
+            ))}
+        </select>
+        <span>against current v{b.versionNumber}</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="border border-border-soft rounded-md p-3 bg-bg-deep">
+          <div className="text-[10px] font-mono uppercase text-text-mute mb-2">
+            v{a.versionNumber} (base)
+          </div>
+          <CharterBody body={a.body as never} />
+        </div>
+        <div className="border border-gold/40 rounded-md p-3 bg-bg-deep">
+          <div className="text-[10px] font-mono uppercase text-gold mb-2">
+            v{b.versionNumber} (current)
+          </div>
+          <CharterBody body={b.body as never} />
+        </div>
+      </div>
+      <pre
+        className="text-[11px] font-mono text-text-mute bg-bg-deep border border-border-soft rounded-md p-3 overflow-auto whitespace-pre-wrap"
+        data-testid="charter-diff-raw"
+      >
+        {renderJsonDiff(a.body, b.body)}
+      </pre>
+    </div>
+  );
+}
+
+function renderJsonDiff(a: unknown, b: unknown): string {
+  const aStr = JSON.stringify(a, null, 2).split("\n");
+  const bStr = JSON.stringify(b, null, 2).split("\n");
+  const out: string[] = [];
+  const max = Math.max(aStr.length, bStr.length);
+  for (let i = 0; i < max; i++) {
+    const left = aStr[i] ?? "";
+    const right = bStr[i] ?? "";
+    if (left === right) out.push("  " + left);
+    else {
+      if (left) out.push("- " + left);
+      if (right) out.push("+ " + right);
+    }
+  }
+  return out.join("\n");
 }
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
