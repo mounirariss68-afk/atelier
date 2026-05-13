@@ -506,6 +506,10 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
       ...summary,
       notes: a.notes ?? null,
       strategicPriorities: a.strategicPriorities ?? [],
+      strategicPriorityRefs: (a.strategicPriorityRefs ?? []) as Array<{
+        text: string;
+        sourceUrls: string[];
+      }>,
       aicoHypothesis: a.aicoHypothesis ?? null,
       sourceSignals: a.sourceSignals ?? [],
       pendingProfileUpdates: a.pendingProfileUpdates ?? [],
@@ -538,6 +542,8 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
       lastContactAt: c.lastContactAt ? new Date(c.lastContactAt).toISOString() : null,
       contactOwnerId: c.contactOwnerId ?? null,
       notes: c.notes ?? null,
+      sourceUrl: c.sourceUrl ?? null,
+      confidence: ((c.confidence ?? "inferred") as "verified" | "inferred"),
     })),
     relationships: rels.map((r) => ({
       id: r.id,
@@ -593,41 +599,148 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   const parsed = AtelierCartographerRefreshInput.safeParse(req.body ?? {});
   const focusOpportunityId = parsed.success ? (parsed.data.focusOpportunityId ?? null) : null;
 
-  const { output } = await runAccountCartographer({
+  const { output, source, warning } = await runAccountCartographer({
     accountId: a.id,
     accountName: a.name,
     accountSector: a.sector,
     accountCountry: a.country,
+    accountHqCity: a.hqCity ?? null,
     triggeredByUserId: me.id,
     actorLabel: "Account Cartographer",
     focusOpportunityId,
   });
 
-  // Governed-write: persist signals + queue proposed updates as pending
-  // chips on the account. Do NOT auto-apply — partner must approve.
-  const existingPending = a.pendingProfileUpdates ?? [];
-  const newProposals = (output.proposedProfileUpdates ?? []).map((p) => ({
-    id: rid("ppu"),
-    proposedBy: "ag_account_cartographer",
-    proposedAt: new Date().toISOString(),
-    field: p.field,
-    fromValue: p.fromValue,
-    toValue: p.toValue,
-    rationale: p.rationale,
-    status: "pending" as const,
+  // Task #275 — DIRECT WRITE. Cartographer is now grounded by Anthropic
+  // web_search and produces citation URLs for every priority + contact,
+  // so we apply the result straight to the account workspace instead of
+  // queuing pending proposals. Refresh-from-web is idempotent: signals
+  // dedupe on URL, contacts dedupe on lower-cased fullName.
+  const incomingSignals = output.sourceSignals ?? [];
+  const existingSignals = a.sourceSignals ?? [];
+  const seenSignalUrls = new Set(existingSignals.map((s) => s.url));
+  const mergedSignals = [
+    ...existingSignals,
+    ...incomingSignals.filter((s) => !seenSignalUrls.has(s.url)),
+  ].slice(-20);
+
+  const priorities = output.account.strategicPriorities ?? [];
+  const priorityTexts = priorities.map((p) => p.text);
+  const priorityRefs = priorities.map((p) => ({
+    text: p.text,
+    sourceUrls: Array.isArray(p.sourceUrls) ? p.sourceUrls.filter((u) => typeof u === "string") : [],
   }));
-  const mergedSignals = [...(a.sourceSignals ?? []), ...(output.sourceSignals ?? [])].slice(-20);
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(atelierAccounts)
-      .set({
-        sourceSignals: mergedSignals,
-        pendingProfileUpdates: [...existingPending, ...newProposals],
-        enrichedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(atelierAccounts.id, a.id));
+    // ---- Account: direct-write profile fields ----
+    const accountUpdate: Partial<typeof atelierAccounts.$inferInsert> = {
+      sourceSignals: mergedSignals,
+      enrichedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (priorityTexts.length > 0) {
+      accountUpdate.strategicPriorities = priorityTexts;
+      accountUpdate.strategicPriorityRefs = priorityRefs;
+    }
+    if (output.account.aicoHypothesis && output.account.aicoHypothesis.trim().length > 0) {
+      accountUpdate.aicoHypothesis = output.account.aicoHypothesis;
+    }
+    if (output.account.refreshedSummary && output.account.refreshedSummary.trim().length > 0) {
+      accountUpdate.notes = output.account.refreshedSummary;
+    }
+    await tx.update(atelierAccounts).set(accountUpdate).where(eq(atelierAccounts.id, a.id));
+
+    // ---- Contacts: upsert by fullName (case-insensitive) ----
+    const existingContacts = await tx
+      .select()
+      .from(atelierContacts)
+      .where(
+        and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)),
+      );
+    const byName = new Map<string, (typeof existingContacts)[number]>();
+    for (const c of existingContacts) byName.set(c.fullName.toLowerCase(), c);
+    const fullNameToId = new Map<string, string>();
+    for (const c of existingContacts) fullNameToId.set(c.fullName.toLowerCase(), c.id);
+
+    let inserted = 0;
+    let updated = 0;
+    for (const dm of output.decisionMakers ?? []) {
+      const key = dm.fullName.toLowerCase();
+      const existing = byName.get(key);
+      if (existing) {
+        await tx
+          .update(atelierContacts)
+          .set({
+            title: dm.title ?? existing.title,
+            seniority: dm.seniority ?? existing.seniority,
+            buyerPersona: dm.buyerPersona ?? existing.buyerPersona,
+            sourceUrl: dm.sourceUrl ?? existing.sourceUrl,
+            confidence: dm.confidence ?? existing.confidence,
+            updatedAt: new Date(),
+          })
+          .where(eq(atelierContacts.id, existing.id));
+        updated += 1;
+      } else {
+        const newId = rid("ct");
+        await tx.insert(atelierContacts).values({
+          id: newId,
+          accountId: a.id,
+          fullName: dm.fullName,
+          title: dm.title ?? null,
+          seniority: dm.seniority ?? null,
+          buyerPersona: dm.buyerPersona ?? null,
+          influenceScore: dm.seniority === "c_suite" ? 5 : dm.seniority === "vp" ? 4 : 3,
+          disposition: "unknown",
+          notes: dm.rationale ?? null,
+          sourceUrl: dm.sourceUrl ?? null,
+          confidence: dm.confidence,
+          createdByUserId: me.id,
+        });
+        fullNameToId.set(key, newId);
+        inserted += 1;
+      }
+    }
+
+    // ---- Relationships: rebuild reports_to edges from reportsToName ----
+    const reportsEdges: Array<{
+      fromId: string;
+      toId: string;
+    }> = [];
+    for (const dm of output.decisionMakers ?? []) {
+      if (!dm.reportsToName) continue;
+      const fromId = fullNameToId.get(dm.fullName.toLowerCase());
+      const toId = fullNameToId.get(dm.reportsToName.toLowerCase());
+      if (fromId && toId && fromId !== toId) {
+        reportsEdges.push({ fromId, toId });
+      }
+    }
+    if (reportsEdges.length > 0) {
+      // Clear cartographer-managed reports_to edges for this account, then
+      // rewrite. We only touch reports_to (not partners_with/blocks, which
+      // are partner-curated relationships).
+      const existingEdges = await tx
+        .select()
+        .from(atelierContactRelationships)
+        .where(
+          and(
+            eq(atelierContactRelationships.accountId, a.id),
+            eq(atelierContactRelationships.type, "reports_to"),
+            isNull(atelierContactRelationships.deletedAt),
+          ),
+        );
+      const haveEdge = new Set(existingEdges.map((e) => `${e.fromContactId}->${e.toContactId}`));
+      for (const e of reportsEdges) {
+        const k = `${e.fromId}->${e.toId}`;
+        if (haveEdge.has(k)) continue;
+        await tx.insert(atelierContactRelationships).values({
+          id: rid("cr"),
+          accountId: a.id,
+          fromContactId: e.fromId,
+          toContactId: e.toId,
+          type: "reports_to",
+        });
+        haveEdge.add(k);
+      }
+    }
 
     await tx.insert(atelierAuditEvents).values({
       id: rid("aud"),
@@ -637,8 +750,15 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
       actorId: "ag_account_cartographer",
       actorLabel: "Account Cartographer",
       action: "cartographer.refresh",
-      payload: { proposedCount: newProposals.length, signalCount: output.sourceSignals?.length ?? 0 },
-      payloadSummary: `Cartographer queued ${newProposals.length} profile-update proposal(s) for ${a.name}.`,
+      payload: {
+        signalCount: incomingSignals.length,
+        priorityCount: priorityTexts.length,
+        contactsInserted: inserted,
+        contactsUpdated: updated,
+        source,
+        warning: warning ?? null,
+      },
+      payloadSummary: `Cartographer ${source === "claude" ? "wrote" : "(mock) wrote"} ${priorityTexts.length} priorities, ${incomingSignals.length} signals, ${inserted}+${updated} contacts for ${a.name}.`,
     });
   });
 

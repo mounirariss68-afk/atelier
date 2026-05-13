@@ -7,7 +7,8 @@
     "dev": "export NODE_ENV=development && export ATELIER_MOCK_AGENTS=${ATELIER_MOCK_AGENTS:-1} && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
+    "tsx": "catalog:",
     "@types/express": "^5.0.6",
     "@types/node": "catalog:",
     "@types/node-cron": "^3.0.11",

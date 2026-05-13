@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierAccountSummary } from "./atelierAccountSummary";
+import type { AtelierAccountWorkspaceAccountStrategicPriorityRefsItem } from "./atelierAccountWorkspaceAccountStrategicPriorityRefsItem";
 import type { AtelierProfileUpdateProposal } from "./atelierProfileUpdateProposal";
 import type { AtelierSourceSignal } from "./atelierSourceSignal";
 
@@ -13,6 +14,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   /** @nullable */
   notes?: string | null;
   strategicPriorities?: string[];
+  strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
   /** @nullable */
   aicoHypothesis?: string | null;
   sourceSignals?: AtelierSourceSignal[];

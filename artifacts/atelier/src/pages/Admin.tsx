@@ -50,9 +50,7 @@ export default function Admin() {
     saudization?: { status: "ok" | "warn" | "unknown"; pct: number | null };
     fxFreshness?: { status: "ok" | "warn" | "unknown"; hours: number | null };
     receiptEncryption?: { status: "ok" | "warn" | "unknown"; unencryptedCount: number | null };
-    jurisdictions?:
-      | string[]
-      | Array<{ key: string; label: string; status: "ok" | "warn" | "unknown"; detail: string }>;
+    jurisdictions?: Array<{ key: string; label: string; status: "ok" | "warn" | "unknown"; detail: string }>;
   };
   const [posture, setPosture] = React.useState<Posture | null>(null);
   const [todos, setTodos] = React.useState<string[]>([]);

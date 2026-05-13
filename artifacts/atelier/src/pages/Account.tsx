@@ -164,7 +164,7 @@ export default function Account() {
                 data-testid="button-cartographer-refresh"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
-                Cartographer ★
+                Refresh from web
               </button>
             )}
           </div>
@@ -295,13 +295,36 @@ function ProfileTab({
           {(a.strategicPriorities ?? []).length === 0 ? (
             <p className="text-text-mute italic text-sm">None recorded.</p>
           ) : (
-            <ul className="space-y-2">
-              {(a.strategicPriorities ?? []).map((p, i) => (
-                <li key={i} className="flex gap-2 text-text">
-                  <span className="text-gold mt-1">·</span>
-                  {p}
-                </li>
-              ))}
+            <ul className="space-y-3">
+              {(a.strategicPriorities ?? []).map((p, i) => {
+                const refs = (a.strategicPriorityRefs ?? []).find((r) => r.text === p);
+                const sourceUrls = refs?.sourceUrls ?? [];
+                return (
+                  <li key={i} className="flex gap-2 text-text">
+                    <span className="text-gold mt-1">·</span>
+                    <div className="flex-1">
+                      <div>{p}</div>
+                      {sourceUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {sourceUrls.slice(0, 4).map((u, j) => (
+                            <a
+                              key={j}
+                              href={u}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] font-mono uppercase tracking-wider text-text-faint hover:text-gold inline-flex items-center gap-1"
+                              data-testid={`link-priority-source-${i}-${j}`}
+                            >
+                              source {j + 1}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
@@ -454,6 +477,26 @@ function DecisionMakersTab({
             {selected.buyerPersona && <MonoChip>{selected.buyerPersona}</MonoChip>}
             <MonoChip tone="gold">Influence {selected.influenceScore}/5</MonoChip>
             {selected.email && <MonoChip>{selected.email}</MonoChip>}
+            {selected.sourceUrl ? (
+              <a
+                href={selected.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={selected.sourceUrl}
+                onClick={(e) => e.stopPropagation()}
+                data-testid={`link-contact-source-${selected.id}`}
+              >
+                <MonoChip tone={selected.confidence === "verified" ? "green" : "amber"}>
+                  {selected.confidence}
+                </MonoChip>
+              </a>
+            ) : (
+              <span title="No citation URL — title/role inferred from org-chart heuristics.">
+                <MonoChip tone={selected.confidence === "verified" ? "green" : "amber"}>
+                  {selected.confidence}
+                </MonoChip>
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3 text-xs font-mono text-text-mute">
             <div>
@@ -512,6 +555,26 @@ function DecisionMakersTab({
             {c.buyerPersona && <MonoChip>{c.buyerPersona}</MonoChip>}
             <MonoChip tone="gold">Influence {c.influenceScore}/5</MonoChip>
             {c.email && <MonoChip>{c.email}</MonoChip>}
+            {c.sourceUrl ? (
+              <a
+                href={c.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={c.sourceUrl}
+                onClick={(e) => e.stopPropagation()}
+                data-testid={`link-contact-source-card-${c.id}`}
+              >
+                <MonoChip tone={c.confidence === "verified" ? "green" : "amber"}>
+                  {c.confidence}
+                </MonoChip>
+              </a>
+            ) : (
+              <span title="No citation URL — title/role inferred from org-chart heuristics.">
+                <MonoChip tone={c.confidence === "verified" ? "green" : "amber"}>
+                  {c.confidence}
+                </MonoChip>
+              </span>
+            )}
           </div>
           {c.notes && (
             <p className="text-sm text-text-mute leading-snug border-t border-border-soft pt-3">

@@ -2142,7 +2142,7 @@ components:
 
     AtelierContact:
       type: object
-      required: [id, accountId, fullName, disposition, influenceScore]
+      required: [id, accountId, fullName, disposition, influenceScore, confidence]
       properties:
         id: { type: string }
         accountId: { type: string }
@@ -2158,6 +2158,15 @@ components:
         lastContactAt: { type: ["string", "null"] }
         contactOwnerId: { type: ["string", "null"] }
         notes: { type: ["string", "null"] }
+        # Task #275 — cartographer provenance.
+        sourceUrl: { type: ["string", "null"] }
+        confidence:
+          type: string
+          enum: [verified, inferred]
+          description: |
+            "verified" when at least one citation directly names the
+            person; "inferred" when the contact came from a heuristic
+            (title pattern, org chart inference) without a direct cite.
 
     AtelierContactRelationship:
       type: object
@@ -2289,6 +2298,18 @@ components:
                 strategicPriorities:
                   type: array
                   items: { type: string }
+                # Task #275 — sourced strategic priorities. Mirrors
+                # `strategicPriorities` 1:1 with citation URLs per entry.
+                strategicPriorityRefs:
+                  type: array
+                  items:
+                    type: object
+                    required: [text, sourceUrls]
+                    properties:
+                      text: { type: string }
+                      sourceUrls:
+                        type: array
+                        items: { type: string }
                 aicoHypothesis: { type: ["string", "null"] }
                 sourceSignals:
                   type: array

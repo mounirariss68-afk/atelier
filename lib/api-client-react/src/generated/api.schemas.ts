@@ -381,6 +381,20 @@ export const AtelierContactSeniorityProperty = {
   unknown: "unknown",
 } as const;
 
+/**
+ * "verified" when at least one citation directly names the
+person; "inferred" when the contact came from a heuristic
+(title pattern, org chart inference) without a direct cite.
+
+ */
+export type AtelierContactConfidence =
+  (typeof AtelierContactConfidence)[keyof typeof AtelierContactConfidence];
+
+export const AtelierContactConfidence = {
+  verified: "verified",
+  inferred: "inferred",
+} as const;
+
 export interface AtelierContact {
   id: string;
   accountId: string;
@@ -409,6 +423,13 @@ export interface AtelierContact {
   contactOwnerId?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** "verified" when at least one citation directly names the
+person; "inferred" when the contact came from a heuristic
+(title pattern, org chart inference) without a direct cite.
+ */
+  confidence: AtelierContactConfidence;
 }
 
 export type AtelierContactRelationshipType =
@@ -536,10 +557,16 @@ export interface AtelierAuditEventLite {
   createdAt: string;
 }
 
+export type AtelierAccountWorkspaceAccountStrategicPriorityRefsItem = {
+  text: string;
+  sourceUrls: string[];
+};
+
 export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   /** @nullable */
   notes?: string | null;
   strategicPriorities?: string[];
+  strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
   /** @nullable */
   aicoHypothesis?: string | null;
   sourceSignals?: AtelierSourceSignal[];

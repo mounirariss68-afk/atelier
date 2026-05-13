@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierContactConfidence } from "./atelierContactConfidence";
 import type { AtelierContactDisposition } from "./atelierContactDisposition";
 import type { AtelierContactSeniorityProperty } from "./atelierContactSeniorityProperty";
 
@@ -36,4 +37,11 @@ export interface AtelierContact {
   contactOwnerId?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** "verified" when at least one citation directly names the
+person; "inferred" when the contact came from a heuristic
+(title pattern, org chart inference) without a direct cite.
+ */
+  confidence: AtelierContactConfidence;
 }

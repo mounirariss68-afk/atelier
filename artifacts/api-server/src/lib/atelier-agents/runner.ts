@@ -2216,7 +2216,9 @@ export async function runProposalComposer(args: {
 export interface CartographerOutput {
   account: {
     refreshedSummary: string;
-    strategicPriorities: string[];
+    // Sourced strategic priorities. `text` mirrors the v1 string list,
+    // `sourceUrls` contains the citation URLs the agent pulled (Task #275).
+    strategicPriorities: Array<{ text: string; sourceUrls: string[] }>;
     aicoHypothesis: string;
   };
   sourceSignals: Array<{
@@ -2227,17 +2229,16 @@ export interface CartographerOutput {
     publishedAt?: string;
     confidence?: "green" | "amber" | "red";
   }>;
-  proposedProfileUpdates: Array<{
-    field: string;
-    fromValue: unknown;
-    toValue: unknown;
-    rationale: string;
-  }>;
-  contactsToAdd?: Array<{
+  // Task #275 — named decision-makers with provenance. Replaces the old
+  // proposedProfileUpdates queue; cartographer now direct-writes.
+  decisionMakers: Array<{
     fullName: string;
     title?: string;
     seniority?: "c_suite" | "vp" | "director" | "manager" | "ic";
     buyerPersona?: string;
+    sourceUrl?: string | null;
+    confidence: "verified" | "inferred";
+    reportsToName?: string | null;
     rationale?: string;
   }>;
 }
@@ -2247,62 +2248,134 @@ function mockCartographer(args: {
   sector: string;
   country: string;
 }): CartographerOutput {
+  // Mock fallback only — used when the Anthropic key is missing or the
+  // web_search call errors. Marked low-confidence so the UI surfaces it
+  // as "deterministic mock data — do NOT treat as evidence".
   return {
     account: {
-      refreshedSummary: `${args.accountName} is consolidating its ${args.sector} platform investments and accelerating AI-led modernisation in the ${args.country} market.`,
-      strategicPriorities: [
-        "Scale agentic AI use cases across shared services",
-        "Tighten governance and procurement velocity",
-        "Drive measurable adoption of digital channels",
-      ],
-      aicoHypothesis: `AICo can land a 90-day diagnostic by anchoring on the named exec sponsor and offering a fixed-fee scoping artefact, then expand into an agentic-build engagement on the top operational pain.`,
+      refreshedSummary: `${args.accountName} (mock fallback) — ${args.sector} player in ${args.country}. Real cartographer call did not run.`,
+      strategicPriorities: [],
+      aicoHypothesis: "",
     },
-    sourceSignals: [
-      {
-        kind: "press",
-        title: `${args.accountName} announces enterprise AI program`,
-        url: "https://example.com/press/ai-program",
-        summary: "Board-approved push into productivity AI across operations.",
-        publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 21).toISOString(),
-        confidence: "green",
-      },
-      {
-        kind: "news",
-        title: `${args.sector} sector outlook — ${args.country}`,
-        url: "https://example.com/news/sector-outlook",
-        summary: "Consolidation accelerating; two or three platform vendors emerging.",
-        publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 9).toISOString(),
-        confidence: "amber",
-      },
-      {
-        kind: "linkedin",
-        title: "New CIO appointed",
-        url: "https://example.com/linkedin/new-cio",
-        summary: "CIO transition signals fresh budget cycle and new pursuit window.",
-        publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
-        confidence: "amber",
-      },
-    ],
-    proposedProfileUpdates: [
-      {
-        field: "strategicPriorities",
-        fromValue: [],
-        toValue: [
-          "Scale agentic AI use cases across shared services",
-          "Tighten governance and procurement velocity",
-          "Drive measurable adoption of digital channels",
-        ],
-        rationale: "Triangulated from press release and investor day deck.",
-      },
-      {
-        field: "aicoHypothesis",
-        fromValue: null,
-        toValue: `AICo can anchor on a 90-day diagnostic with a named exec sponsor.`,
-        rationale: "Hypothesis aligned with stated CEO ambition and recent CIO appointment.",
-      },
-    ],
-    contactsToAdd: [],
+    sourceSignals: [],
+    decisionMakers: [],
   };
+}
+
+/**
+ * Task #275 — Anthropic web_search-grounded JSON call.
+ *
+ * Wires Anthropic's server-side `web_search_20250305` tool so the model
+ * actually pulls public sources before answering. We then parse a single
+ * JSON object out of the final `text` block. We also harvest citation
+ * URLs from any `web_search_tool_result` blocks so callers can append
+ * them to source signals even if the model forgot to inline them.
+ */
+async function callClaudeJsonWithWebSearch<T>(
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  fallback: () => T,
+  opts: { maxSearches?: number } = {},
+): Promise<{
+  value: T;
+  costUsd: number;
+  tokensIn: number;
+  tokensOut: number;
+  source: "claude" | "mock_config" | "mock_fallback";
+  warning?: string;
+  citationUrls: Array<{ url: string; title?: string }>;
+}> {
+  if (MOCK_MODE) {
+    return {
+      value: fallback(),
+      costUsd: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      source: "mock_config",
+      citationUrls: [],
+    };
+  }
+  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  try {
+    const ac = new AbortController();
+    const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90_000);
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    const resp = await anthropic.messages
+      .create(
+        {
+          model,
+          max_tokens: 8192,
+          system: `${systemPrompt}\n\nIMPORTANT: After your research is complete, your FINAL message MUST contain ONLY one JSON object that matches the schema. No prose, no code fences.`,
+          messages: [{ role: "user", content: userPrompt }],
+          tools: [
+            {
+              type: "web_search_20250305",
+              name: "web_search",
+              max_uses: opts.maxSearches ?? 6,
+            },
+          ],
+        },
+        { signal: ac.signal },
+      )
+      .finally(() => clearTimeout(timer));
+    // Find the last text block (Claude returns interleaved tool-use,
+    // tool-result, and text blocks; the final text is the answer).
+    const textBlocks = resp.content.filter(
+      (b): b is { type: "text"; text: string } & typeof b =>
+        b.type === "text" && typeof (b as { text?: unknown }).text === "string",
+    );
+    const lastText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : "";
+    const stripped = lastText
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+    // Extract JSON object even if model wrapped it in stray text.
+    const firstBrace = stripped.indexOf("{");
+    const lastBrace = stripped.lastIndexOf("}");
+    const json =
+      firstBrace >= 0 && lastBrace > firstBrace
+        ? stripped.slice(firstBrace, lastBrace + 1)
+        : stripped;
+    const value = JSON.parse(json) as T;
+    // Harvest citation URLs from web_search_tool_result blocks.
+    const citationUrls: Array<{ url: string; title?: string }> = [];
+    for (const block of resp.content) {
+      const b = block as {
+        type?: string;
+        content?: Array<{ type?: string; url?: string; title?: string }>;
+      };
+      if (b.type === "web_search_tool_result" && Array.isArray(b.content)) {
+        for (const item of b.content) {
+          if (item?.type === "web_search_result" && typeof item.url === "string") {
+            citationUrls.push({ url: item.url, title: item.title ?? undefined });
+          }
+        }
+      }
+    }
+    const tokensIn = resp.usage.input_tokens;
+    const tokensOut = resp.usage.output_tokens;
+    const inRate = model.includes("haiku") ? 1 : 3;
+    const outRate = model.includes("haiku") ? 5 : 15;
+    const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
+    return { value, costUsd, tokensIn, tokensOut, source: "claude", citationUrls };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      "[atelier-agents] Cartographer web_search call failed; returning mock-fallback:",
+      msg,
+    );
+    return {
+      value: fallback(),
+      costUsd: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      source: "mock_fallback",
+      warning: `Cartographer web_search call failed (${msg.slice(0, 160)}); output is deterministic mock — do NOT treat as evidence.`,
+      citationUrls: [],
+    };
+  }
 }
 
 export async function runAccountCartographer(args: {
@@ -2310,10 +2383,11 @@ export async function runAccountCartographer(args: {
   accountName: string;
   accountSector: string;
   accountCountry: string;
+  accountHqCity?: string | null;
   triggeredByUserId: string | null;
   actorLabel: string;
   focusOpportunityId?: string | null;
-}): Promise<{ runId: string; output: CartographerOutput; costUsd: number }> {
+}): Promise<{ runId: string; output: CartographerOutput; costUsd: number; source: "claude" | "mock_config" | "mock_fallback"; warning?: string }> {
   const t0 = Date.now();
   const runId = await startRun({
     agentId: "account_cartographer",
@@ -2325,32 +2399,89 @@ export async function runAccountCartographer(args: {
     actorLabel: args.actorLabel,
   });
   try {
-    const system = (() => {
-      try {
-        return loadPrompt("account_cartographer" as AtelierAgentId);
-      } catch {
-        return "You are Account Cartographer for an AI consulting firm. Refresh strategic-priorities and citable signals; never invent figures.";
+    const system = loadPrompt("account_cartographer");
+    await progressRun(runId, 25, "Searching the public web");
+    const { value, costUsd, source, warning, citationUrls } =
+      await callClaudeJsonWithWebSearch<CartographerOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify({
+          accountName: args.accountName,
+          accountCountry: args.accountCountry,
+          accountSector: args.accountSector,
+          accountHqCity: args.accountHqCity ?? null,
+        }),
+        () =>
+          mockCartographer({
+            accountName: args.accountName,
+            sector: args.accountSector,
+            country: args.accountCountry,
+          }),
+      );
+    await progressRun(runId, 80, "Triangulating sources", {
+      name: "cart.synth",
+      durationMs: Date.now() - t0,
+    });
+
+    // Defensive normalisation — the model occasionally returns the v1
+    // shape (strategicPriorities: string[]) or omits decisionMakers.
+    // Coerce so the route handler can rely on the v2 shape.
+    const normalised: CartographerOutput = {
+      account: {
+        refreshedSummary: value?.account?.refreshedSummary ?? "",
+        strategicPriorities: Array.isArray(value?.account?.strategicPriorities)
+          ? value.account.strategicPriorities
+              .map((p) =>
+                typeof p === "string"
+                  ? { text: p, sourceUrls: [] as string[] }
+                  : { text: String(p?.text ?? ""), sourceUrls: Array.isArray(p?.sourceUrls) ? p.sourceUrls.filter((u): u is string => typeof u === "string") : [] },
+              )
+              .filter((p) => p.text.trim().length > 0)
+          : [],
+        aicoHypothesis: value?.account?.aicoHypothesis ?? "",
+      },
+      sourceSignals: Array.isArray(value?.sourceSignals)
+        ? value.sourceSignals.filter((s) => typeof s?.url === "string" && /^https?:\/\//.test(s.url))
+        : [],
+      decisionMakers: Array.isArray(value?.decisionMakers)
+        ? value.decisionMakers
+            .filter((d) => typeof d?.fullName === "string" && d.fullName.trim().length > 0)
+            .map((d) => ({
+              fullName: d.fullName.trim(),
+              title: d.title ?? undefined,
+              seniority: d.seniority,
+              buyerPersona: d.buyerPersona ?? undefined,
+              sourceUrl: d.sourceUrl ?? null,
+              confidence: d.confidence === "verified" ? "verified" : "inferred",
+              reportsToName: d.reportsToName ?? null,
+              rationale: d.rationale ?? undefined,
+            }))
+        : [],
+    };
+    // If the model produced fewer signals than the search returned,
+    // backfill with raw citation URLs so the UI still surfaces evidence.
+    if (normalised.sourceSignals.length < 3 && citationUrls.length > 0) {
+      const seen = new Set(normalised.sourceSignals.map((s) => s.url));
+      for (const c of citationUrls) {
+        if (seen.has(c.url)) continue;
+        normalised.sourceSignals.push({
+          kind: "news",
+          title: c.title ?? c.url,
+          url: c.url,
+          confidence: "amber",
+        });
+        seen.add(c.url);
+        if (normalised.sourceSignals.length >= 8) break;
       }
-    })();
-    await progressRun(runId, 30, "Pulling source signals");
-    const { value, costUsd, source, warning } = await callClaudeJson<CartographerOutput>(
-      "claude-sonnet-4-6",
-      system,
-      JSON.stringify({
-        accountName: args.accountName,
-        accountSector: args.accountSector,
-        accountCountry: args.accountCountry,
-      }),
-      () => mockCartographer({ accountName: args.accountName, sector: args.accountSector, country: args.accountCountry }),
-    );
-    await progressRun(runId, 80, "Drafting hypothesis", { name: "cart.synth", durationMs: Date.now() - t0 });
+    }
+
     await completeRun({
       runId,
-      output: value as unknown,
-      confidence: "amber",
+      output: normalised as unknown,
+      confidence: source === "claude" ? "green" : "amber",
       costUsd,
       durationMs: Date.now() - t0,
-      sourcesCount: value.sourceSignals?.length ?? 0,
+      sourcesCount: normalised.sourceSignals.length,
       actorLabel: args.actorLabel,
       targetType: "account",
       targetId: args.accountId,
@@ -2358,7 +2489,7 @@ export async function runAccountCartographer(args: {
       source,
       warning,
     });
-    return { runId, output: value, costUsd };
+    return { runId, output: normalised, costUsd, source, warning };
   } catch (err) {
     await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "account", targetId: args.accountId });
     throw err;

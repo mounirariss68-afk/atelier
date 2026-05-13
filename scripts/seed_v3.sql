@@ -22,7 +22,7 @@
 --
 --  IDEMPOTENCY
 --  -----------
---  Every INSERT is gated by `ON CONFLICT DO NOTHING` against the table's
+--  Every INSERT is gated by \`ON CONFLICT DO NOTHING\` against the table's
 --  primary key, so re-running this file is a no-op once fixtures land.
 -- =====================================================================
 

@@ -2054,6 +2054,14 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       zod.object({
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
         aicoHypothesis: zod.string().nullish(),
         sourceSignals: zod
           .array(
@@ -2127,6 +2135,12 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
       notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
     }),
   ),
   relationships: zod.array(
@@ -2266,6 +2280,14 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       zod.object({
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
         aicoHypothesis: zod.string().nullish(),
         sourceSignals: zod
           .array(
@@ -2341,6 +2363,12 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
       notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
     }),
   ),
   relationships: zod.array(
@@ -2473,6 +2501,12 @@ export const AtelierListAccountContactsResponse = zod.object({
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
       notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
     }),
   ),
   relationships: zod.array(
@@ -2579,6 +2613,14 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       zod.object({
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
         aicoHypothesis: zod.string().nullish(),
         sourceSignals: zod
           .array(
@@ -2652,6 +2694,12 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
       notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
     }),
   ),
   relationships: zod.array(
@@ -2797,6 +2845,12 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
   lastContactAt: zod.string().nullish(),
   contactOwnerId: zod.string().nullish(),
   notes: zod.string().nullish(),
+  sourceUrl: zod.string().nullish(),
+  confidence: zod
+    .enum(["verified", "inferred"])
+    .describe(
+      '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+    ),
 });
 
 /**

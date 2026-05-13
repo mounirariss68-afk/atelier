@@ -252,6 +252,11 @@ type AccountExt = {
   }>;
 };
 
+// Task #275 — Cartographer is now grounded by Anthropic web_search and
+// direct-writes strategic priorities, source signals, decision-makers,
+// and the AICo hypothesis. The seed only carries account *base* fields
+// (tier, owner, currency, language, HQ); narrative content is filled in
+// by `scripts/src/cartographer-backfill.ts` after the seed completes.
 const ACCOUNT_EXT: Record<string, AccountExt> = {
   acc_tasama: {
     size: "enterprise",
@@ -262,54 +267,6 @@ const ACCOUNT_EXT: Record<string, AccountExt> = {
     status: "active",
     partnerOwnerId: "p_mounir_ariss",
     relationshipStrength: 88,
-    enrichedAt: HOURS_AGO(36),
-    strategicPriorities: [
-      "Scale Agentic BPO marketplace to 12 verticals by FY27",
-      "Lift utilization on Maven AI agent fleet from 38% to 65%",
-      "Lock in Saudi public-sector logos as anchor tenants",
-    ],
-    aicoHypothesis:
-      "Tasama is the marquee proof-point that an Agentic BPO can outperform conventional BPO economics by 3–4x. AICo's role is to graduate the marketplace from pilot into a defensible operating system.",
-    sourceSignals: [
-      {
-        kind: "press",
-        title: "Tasama announces FY26 expansion of shared-services platform",
-        summary: "Highlights three new sectors and Maven AI integration.",
-        url: "https://www.example.com/tasama-fy26",
-        publishedAt: HOURS_AGO(72).toISOString(),
-        confidence: "green",
-      },
-      {
-        kind: "news",
-        title: "New COO appointment at Tasama",
-        summary: "Ex-Aramco operations leader joins; mandate is digitalisation.",
-        url: "https://www.example.com/tasama-coo",
-        publishedAt: HOURS_AGO(120).toISOString(),
-        confidence: "amber",
-      },
-    ],
-    pendingProfileUpdates: [
-      {
-        id: "ppu_tasama_priority",
-        proposedBy: "ag_account_cartographer",
-        proposedAt: HOURS_AGO(2).toISOString(),
-        field: "strategicPriorities",
-        fromValue: [
-          "Scale Agentic BPO marketplace to 12 verticals by FY27",
-          "Lift utilization on Maven AI agent fleet from 38% to 65%",
-          "Lock in Saudi public-sector logos as anchor tenants",
-        ],
-        toValue: [
-          "Scale Agentic BPO marketplace to 12 verticals by FY27",
-          "Lift utilization on Maven AI agent fleet from 38% to 65%",
-          "Lock in Saudi public-sector logos as anchor tenants",
-          "Establish Tasama Academy for agent operators",
-        ],
-        rationale:
-          "Cartographer ★ found three press mentions of an Academy concept across Q1 2026.",
-        status: "pending",
-      },
-    ],
   },
   acc_dubai_municipality: {
     hqCity: "Dubai",
@@ -318,14 +275,6 @@ const ACCOUNT_EXT: Record<string, AccountExt> = {
     tier: "A",
     partnerOwnerId: "p_mounir_ariss",
     relationshipStrength: 82,
-    enrichedAt: HOURS_AGO(60),
-    strategicPriorities: [
-      "Service-design transformation across 60+ touchpoints",
-      "Citizen NPS lift of +20 by year-end",
-      "Single-window digital concierge across departments",
-    ],
-    aicoHypothesis:
-      "DM is the lighthouse smart-city service-design account in the GCC. Win two more departments to convert into multi-year retainer.",
   },
   acc_dge: {
     hqCity: "Abu Dhabi",
@@ -334,13 +283,6 @@ const ACCOUNT_EXT: Record<string, AccountExt> = {
     tier: "A",
     partnerOwnerId: "p_mounir_ariss",
     relationshipStrength: 79,
-    enrichedAt: HOURS_AGO(48),
-    strategicPriorities: [
-      "Effortless agent program scale to 8 ministries",
-      "Federation across UAE government data spines",
-    ],
-    aicoHypothesis:
-      "DGE is our most replicable agentic-government story. Codify the playbook so other emirates buy on rails.",
   },
   acc_tahakom: {
     hqCity: "Riyadh",
@@ -401,217 +343,10 @@ type ContactSeed = {
 };
 
 const CONTACTS: ContactSeed[] = [
-  // Tasama
-  {
-    id: "ct_tasama_ceo",
-    accountId: "acc_tasama",
-    fullName: "Faisal Al-Otaibi",
-    title: "CEO",
-    seniority: "c_suite",
-    buyerPersona: "Economic Buyer",
-    influenceScore: 5,
-    disposition: "champion",
-    notes: "Personally sponsors the Agentic BPO platform.",
-  },
-  {
-    id: "ct_tasama_coo",
-    accountId: "acc_tasama",
-    fullName: "Hala Mansour",
-    title: "COO",
-    seniority: "c_suite",
-    buyerPersona: "Operations Sponsor",
-    influenceScore: 4,
-    disposition: "supporter",
-    notes: "New hire — owns operational scale-up. First QBR in 6 weeks.",
-  },
-  {
-    id: "ct_tasama_cto",
-    accountId: "acc_tasama",
-    fullName: "Bader Al-Harbi",
-    title: "CTO",
-    seniority: "c_suite",
-    buyerPersona: "Technical Buyer",
-    influenceScore: 4,
-    disposition: "supporter",
-  },
-  {
-    id: "ct_tasama_cfo",
-    accountId: "acc_tasama",
-    fullName: "Reema Al-Saud",
-    title: "CFO",
-    seniority: "c_suite",
-    buyerPersona: "Economic Approver",
-    influenceScore: 4,
-    disposition: "skeptic",
-    notes: "Pushes hard on unit economics. Needs proof of margin uplift.",
-  },
-  {
-    id: "ct_tasama_head_ai",
-    accountId: "acc_tasama",
-    fullName: "Tariq Younis",
-    title: "Head of AI Programs",
-    seniority: "vp",
-    buyerPersona: "Champion",
-    influenceScore: 5,
-    disposition: "champion",
-    notes: "Day-to-day partner. Joined Maven AI co-design sessions.",
-  },
-  // Dubai Municipality
-  {
-    id: "ct_dm_dg",
-    accountId: "acc_dubai_municipality",
-    fullName: "Khalifa Al-Marri",
-    title: "Director General",
-    seniority: "c_suite",
-    buyerPersona: "Economic Buyer",
-    influenceScore: 5,
-    disposition: "supporter",
-  },
-  {
-    id: "ct_dm_chiefdigital",
-    accountId: "acc_dubai_municipality",
-    fullName: "Noura Al-Falasi",
-    title: "Chief Digital Officer",
-    seniority: "vp",
-    buyerPersona: "Champion",
-    influenceScore: 5,
-    disposition: "champion",
-    notes: "Driving the citizen-NPS program. Weekly working sessions.",
-  },
-  {
-    id: "ct_dm_servicedesign",
-    accountId: "acc_dubai_municipality",
-    fullName: "Yasmin Hashemi",
-    title: "Head of Service Design",
-    seniority: "director",
-    buyerPersona: "Practitioner",
-    influenceScore: 3,
-    disposition: "supporter",
-  },
-  {
-    id: "ct_dm_procurement",
-    accountId: "acc_dubai_municipality",
-    fullName: "Salem Al-Nuaimi",
-    title: "Head of Procurement",
-    seniority: "director",
-    buyerPersona: "Approver",
-    influenceScore: 3,
-    disposition: "neutral",
-  },
-  // DGE
-  {
-    id: "ct_dge_chair",
-    accountId: "acc_dge",
-    fullName: "Mohammed Al-Hashimi",
-    title: "Chairman",
-    seniority: "c_suite",
-    buyerPersona: "Economic Buyer",
-    influenceScore: 5,
-    disposition: "supporter",
-  },
-  {
-    id: "ct_dge_dg",
-    accountId: "acc_dge",
-    fullName: "Aisha Al-Romaithi",
-    title: "Director General",
-    seniority: "c_suite",
-    buyerPersona: "Economic Buyer",
-    influenceScore: 5,
-    disposition: "champion",
-    notes: "Personally championed the Effortless rollout.",
-  },
-  {
-    id: "ct_dge_headai",
-    accountId: "acc_dge",
-    fullName: "Omar Khoury",
-    title: "Head of AI",
-    seniority: "vp",
-    buyerPersona: "Technical Buyer",
-    influenceScore: 4,
-    disposition: "champion",
-  },
-  // Tahakom (KSA traffic / smart-mobility authority)
-  {
-    id: "ct_tahakom_ceo",
-    accountId: "acc_tahakom",
-    fullName: "Abdulrahman Al-Qahtani",
-    title: "Chief Executive Officer",
-    seniority: "c_suite",
-    buyerPersona: "CEO",
-    influenceScore: 5,
-    disposition: "neutral",
-  },
-  {
-    id: "ct_tahakom_coo",
-    accountId: "acc_tahakom",
-    fullName: "Maha Al-Sudairi",
-    title: "Chief Operations Officer",
-    seniority: "c_suite",
-    buyerPersona: "COO",
-    influenceScore: 4,
-    disposition: "supporter",
-  },
-  {
-    id: "ct_tahakom_cdo",
-    accountId: "acc_tahakom",
-    fullName: "Ziyad Al-Ghamdi",
-    title: "Chief Data Officer",
-    seniority: "c_suite",
-    buyerPersona: "CDO",
-    influenceScore: 4,
-    disposition: "champion",
-  },
-  {
-    id: "ct_tahakom_proc",
-    accountId: "acc_tahakom",
-    fullName: "Faris Al-Mutairi",
-    title: "Head of Procurement",
-    seniority: "director",
-    buyerPersona: "procurement",
-    influenceScore: 3,
-    disposition: "skeptic",
-  },
-  // Aldrees (KSA logistics / fuel retail)
-  {
-    id: "ct_aldrees_ceo",
-    accountId: "acc_aldrees",
-    fullName: "Hamad Al-Drees",
-    title: "Chief Executive Officer",
-    seniority: "c_suite",
-    buyerPersona: "CEO",
-    influenceScore: 5,
-    disposition: "champion",
-  },
-  {
-    id: "ct_aldrees_cfo",
-    accountId: "acc_aldrees",
-    fullName: "Sultan Al-Subaie",
-    title: "Chief Financial Officer",
-    seniority: "c_suite",
-    buyerPersona: "CFO",
-    influenceScore: 4,
-    disposition: "skeptic",
-  },
-  {
-    id: "ct_aldrees_cio",
-    accountId: "acc_aldrees",
-    fullName: "Lina Al-Faisal",
-    title: "Chief Information Officer",
-    seniority: "c_suite",
-    buyerPersona: "CIO",
-    influenceScore: 4,
-    disposition: "supporter",
-  },
-  {
-    id: "ct_aldrees_ops",
-    accountId: "acc_aldrees",
-    fullName: "Yousef Al-Harthi",
-    title: "VP Logistics Operations",
-    seniority: "vp",
-    buyerPersona: "business_head",
-    influenceScore: 3,
-    disposition: "neutral",
-  },
+  // Task #275 — Decision-makers are now produced by the Account Cartographer
+  // agent (Anthropic web_search) and direct-written via the cartographer
+  // refresh route. Run `pnpm tsx scripts/src/cartographer-backfill.ts`
+  // after the seed to populate org charts for the 7 seeded accounts.
 ];
 
 const CONTACT_RELATIONSHIPS: Array<{
@@ -619,32 +354,11 @@ const CONTACT_RELATIONSHIPS: Array<{
   accountId: string;
   fromContactId: string;
   toContactId: string;
-  type: "reports_to" | "partners_with" | "blocks" | "mentors";
+  type: 'reports_to' | 'partners_with' | 'blocks' | 'mentors';
   notes?: string | null;
 }> = [
-  // Tasama
-  { id: "cr_tasama_coo_ceo", accountId: "acc_tasama", fromContactId: "ct_tasama_coo", toContactId: "ct_tasama_ceo", type: "reports_to" },
-  { id: "cr_tasama_cto_ceo", accountId: "acc_tasama", fromContactId: "ct_tasama_cto", toContactId: "ct_tasama_ceo", type: "reports_to" },
-  { id: "cr_tasama_cfo_ceo", accountId: "acc_tasama", fromContactId: "ct_tasama_cfo", toContactId: "ct_tasama_ceo", type: "reports_to" },
-  { id: "cr_tasama_headai_cto", accountId: "acc_tasama", fromContactId: "ct_tasama_head_ai", toContactId: "ct_tasama_cto", type: "reports_to" },
-  { id: "cr_tasama_cfo_blocks", accountId: "acc_tasama", fromContactId: "ct_tasama_cfo", toContactId: "ct_tasama_head_ai", type: "blocks", notes: "Margin scrutiny on AI program." },
-  // DM
-  { id: "cr_dm_cdo_dg", accountId: "acc_dubai_municipality", fromContactId: "ct_dm_chiefdigital", toContactId: "ct_dm_dg", type: "reports_to" },
-  { id: "cr_dm_sd_cdo", accountId: "acc_dubai_municipality", fromContactId: "ct_dm_servicedesign", toContactId: "ct_dm_chiefdigital", type: "reports_to" },
-  { id: "cr_dm_proc_dg", accountId: "acc_dubai_municipality", fromContactId: "ct_dm_procurement", toContactId: "ct_dm_dg", type: "reports_to" },
-  // DGE
-  { id: "cr_dge_dg_chair", accountId: "acc_dge", fromContactId: "ct_dge_dg", toContactId: "ct_dge_chair", type: "reports_to" },
-  { id: "cr_dge_ai_dg", accountId: "acc_dge", fromContactId: "ct_dge_headai", toContactId: "ct_dge_dg", type: "reports_to" },
-  // Tahakom
-  { id: "cr_tahakom_coo_ceo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_coo", toContactId: "ct_tahakom_ceo", type: "reports_to" },
-  { id: "cr_tahakom_cdo_ceo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_cdo", toContactId: "ct_tahakom_ceo", type: "reports_to" },
-  { id: "cr_tahakom_proc_coo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_proc", toContactId: "ct_tahakom_coo", type: "reports_to" },
-  { id: "cr_tahakom_proc_blocks_cdo", accountId: "acc_tahakom", fromContactId: "ct_tahakom_proc", toContactId: "ct_tahakom_cdo", type: "blocks", notes: "Procurement holds the AI program until SLA terms are signed." },
-  // Aldrees
-  { id: "cr_aldrees_cfo_ceo", accountId: "acc_aldrees", fromContactId: "ct_aldrees_cfo", toContactId: "ct_aldrees_ceo", type: "reports_to" },
-  { id: "cr_aldrees_cio_ceo", accountId: "acc_aldrees", fromContactId: "ct_aldrees_cio", toContactId: "ct_aldrees_ceo", type: "reports_to" },
-  { id: "cr_aldrees_ops_ceo", accountId: "acc_aldrees", fromContactId: "ct_aldrees_ops", toContactId: "ct_aldrees_ceo", type: "reports_to" },
-  { id: "cr_aldrees_cio_partners_ops", accountId: "acc_aldrees", fromContactId: "ct_aldrees_cio", toContactId: "ct_aldrees_ops", type: "partners_with", notes: "Co-sponsors of the BOQ digitisation initiative." },
+  // Task #275 — Cartographer rebuilds reports_to edges from the LLM
+  // `reportsToName` field on every refresh.
 ];
 
 // ============================================================

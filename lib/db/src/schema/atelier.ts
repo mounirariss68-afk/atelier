@@ -95,6 +95,13 @@ export const atelierAccounts = pgTable(
       .$type<string[]>()
       .notNull()
       .default([]),
+    // Task #275 — sourced strategic priorities. Each entry mirrors
+    // `strategicPriorities[i]` and carries the citation URLs the
+    // Cartographer used. Empty array means "no sources captured yet".
+    strategicPriorityRefs: jsonb("strategic_priority_refs")
+      .$type<Array<{ text: string; sourceUrls: string[] }>>()
+      .notNull()
+      .default([]),
     aicoHypothesis: text("aico_hypothesis"),
     pendingProfileUpdates: jsonb("pending_profile_updates")
       .$type<
@@ -146,6 +153,12 @@ export const atelierContacts = pgTable(
     lastContactAt: timestamp("last_contact_at"),
     contactOwnerId: text("contact_owner_id"), // FK to atelier_users
     notes: text("notes"),
+    // Task #275 — provenance for cartographer-sourced contacts.
+    // sourceUrl is the canonical citation (e.g. LinkedIn profile, press
+    // release, leadership page). confidence is 'verified' when at least
+    // one citation backs the title + name, otherwise 'inferred'.
+    sourceUrl: text("source_url"),
+    confidence: text("confidence").notNull().default("inferred"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
