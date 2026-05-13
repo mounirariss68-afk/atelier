@@ -6,8 +6,8 @@ import {
   useAtelierListPersonas,
   useAtelierConciergeSearch,
 } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip } from "@/components/ui/primitives";
-import { Link, useRoute } from "wouter";
+import { SectionHead, PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Search, FileText, Users, KeyRound, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -47,7 +47,7 @@ function AssetsView() {
 
   return (
     <div className="mt-8 space-y-6">
-      <Card className="p-5 space-y-3 border-gold/30 bg-bg-deep">
+      <Card className="p-5 space-y-3 border-l-4 border-l-gold">
         <h3 className="font-mono text-sm tracking-widest uppercase text-gold flex items-center gap-2">
           <Sparkles className="w-4 h-4" /> Knowledge Concierge
         </h3>
@@ -270,23 +270,17 @@ export default function AtelierIndex() {
       </PageHero>
 
       <div className="container-atelier py-10">
-        <div className="border-b border-border">
-          <div className="flex gap-6 overflow-x-auto scrollbar-thin">
-            {SUB_ROUTES.map((sub) => (
-              <Link
-                key={sub.id}
-                href={`/atelier/${sub.id}`}
-                className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                  section === sub.id
-                    ? "border-gold text-gold"
-                    : "border-transparent text-text-mute hover:text-text"
-                }`}
-              >
-                {sub.label}
-              </Link>
-            ))}
-          </div>
-        </div>
+        <TabNav>
+          {SUB_ROUTES.map((sub) => (
+            <TabNavLink
+              key={sub.id}
+              href={`/atelier/${sub.id}`}
+              active={section === sub.id}
+            >
+              {sub.label}
+            </TabNavLink>
+          ))}
+        </TabNav>
 
         {section === "assets" && <AssetsView />}
         {section === "prompts" && <PromptsView />}

@@ -1,6 +1,6 @@
 import * as React from "react";
-import { Link, useRoute } from "wouter";
-import { ArrowLeft, FileText, Wand2, Send, AlertTriangle, ShieldCheck } from "lucide-react";
+import { useRoute } from "wouter";
+import { FileText, Wand2, Send, AlertTriangle, ShieldCheck } from "lucide-react";
 import {
   useAtelierGetDeliverable,
   useAtelierDraftDeliverable,
@@ -12,7 +12,7 @@ import {
   getAtelierListDeliverablesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { SectionHead, PageHero, MonoChip, Card, PillButton } from "@/components/ui/primitives";
+import { SectionHead, PageHero, MonoChip, Card, PillButton, BackLink, TabNav, TabNavItem } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuditTab } from "@/components/AuditTab";
 import { useToast } from "@/hooks/use-toast";
@@ -71,13 +71,9 @@ export default function Deliverable() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <Link
-          href={`/engagements/${engId}`}
-          className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors"
-          data-testid="link-back-engagement"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to engagement
-        </Link>
+        <BackLink href={`/engagements/${engId}`} data-testid="link-back-engagement">
+          Back to engagement
+        </BackLink>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <SectionHead
@@ -134,22 +130,18 @@ export default function Deliverable() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-8">
-        <div className="border-b border-border">
-          <div className="flex gap-6 overflow-x-auto scrollbar-thin">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                data-testid={`tab-deliverable-${tab.id}`}
-                onClick={() => setActiveTab(tab.id)}
-                className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                  activeTab === tab.id ? "border-gold text-gold" : "border-transparent text-text-mute hover:text-text"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <TabNav>
+          {TABS.map((tab) => (
+            <TabNavItem
+              key={tab.id}
+              data-testid={`tab-deliverable-${tab.id}`}
+              active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </TabNavItem>
+          ))}
+        </TabNav>
 
         <div className="py-4">
           {activeTab === "audit" && <AuditTab entityType="deliverable" entityId={delId} />}

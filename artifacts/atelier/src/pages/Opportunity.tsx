@@ -4,8 +4,20 @@ import {
   useAtelierGetMe,
   getAtelierGetOpportunityQueryKey,
 } from "@workspace/api-client-react";
-import { SectionHead, PageHero, PlmPill, MonoChip, PillButton } from "@/components/ui/primitives";
-import { Link, useRoute } from "wouter";
+import {
+  SectionHead,
+  PageHero,
+  PlmPill,
+  MonoChip,
+  PillButton,
+  BackLink,
+  TabNav,
+  TabNavItem,
+  HeroStat,
+  OwnershipPanel,
+  MockFallbackBanner,
+} from "@/components/ui/primitives";
+import { useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuditTab } from "@/components/AuditTab";
 import { BriefTab } from "@/components/tabs/BriefTab";
@@ -15,7 +27,7 @@ import { MeetingsTab } from "@/components/tabs/MeetingsTab";
 import { ProposalTab } from "@/components/tabs/ProposalTab";
 import { PrototypeButton } from "@/components/tabs/PrototypeButton";
 import { QualifierSheet } from "@/components/QualifierSheet";
-import { ArrowLeft, Shield, FileText, FilePlus2, Mic, Telescope, Folder } from "lucide-react";
+import { FileText, FilePlus2, Mic, Telescope, Folder } from "lucide-react";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -27,6 +39,8 @@ const TABS = [
   { id: "audit", label: "Audit Trail" },
 ] as const;
 
+type TabId = (typeof TABS)[number]["id"];
+
 export default function Opportunity() {
   const [, params] = useRoute("/pipeline/:oppId");
   const oppId = params?.oppId || "";
@@ -36,99 +50,113 @@ export default function Opportunity() {
   });
   const { data: me } = useAtelierGetMe();
 
-  const [activeTab, setActiveTab] = React.useState<(typeof TABS)[number]["id"]>("brief");
+  const [activeTab, setActiveTab] = React.useState<TabId>("brief");
   const [qualifierOpen, setQualifierOpen] = React.useState(false);
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (isError || !opp) return <div className="container-atelier py-12 text-danger">Failed to load opportunity.</div>;
 
   const personaName = me?.name ?? "You";
+  const dealLabel = `$${(opp.dealSizeUsd / 1000).toFixed(0)}k`;
+  const wonLost = opp.plmStage === "won" ? "WON" : opp.plmStage === "lost" ? "LOST" : null;
 
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <Link href="/pipeline" className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Pipeline
-        </Link>
+        <BackLink href="/pipeline">Back to Pipeline</BackLink>
 
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-          <SectionHead
-            eyebrow={opp.accountName}
-            headline={opp.name}
-            lede={
-              <div className="flex items-center gap-4 mt-2">
-                <PlmPill stage={opp.plmStage} />
-                <MonoChip>Prob: {opp.probabilityPct}%</MonoChip>
-                <span className="text-gold font-mono">${(opp.dealSizeUsd / 1000).toFixed(0)}k</span>
-              </div>
-            }
-          />
-          <div className="flex flex-col items-end gap-2 text-sm text-text-mute text-right">
-            <div>Partner: <span className="text-text font-medium">{opp.partnerOwnerName}</span></div>
-            <div>Lead: <span className="text-text font-medium">{opp.engagementLeadName}</span></div>
-            <div className="text-xs font-mono mt-2 pt-2 border-t border-border/50">
-              Next: <span className="text-text">{opp.nextMilestone}</span>
-            </div>
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
+          <div className="space-y-6 min-w-0 flex-1">
+            <SectionHead
+              eyebrow={opp.accountName}
+              headline={opp.name}
+            />
+            <HeroStat
+              value={dealLabel}
+              caption={
+                <>
+                  <PlmPill stage={opp.plmStage} />
+                  <MonoChip>Prob {opp.probabilityPct}%</MonoChip>
+                  {wonLost && <MonoChip tone={wonLost === "WON" ? "green" : "red"}>{wonLost}</MonoChip>}
+                  <span className="text-text-faint">Deal value</span>
+                </>
+              }
+            />
           </div>
+
+          <OwnershipPanel
+            className="shrink-0"
+            rows={[
+              { label: "Partner", name: opp.partnerOwnerName },
+              { label: "Engagement Lead", name: opp.engagementLeadName },
+              { label: "Next milestone", name: opp.nextMilestone, meta: true },
+            ]}
+          />
         </div>
       </PageHero>
 
       <div className="container-atelier py-8 space-y-6">
-        {/* Five-button gold toolbar — the partner's primary action surface. */}
-        <div className="flex flex-wrap gap-2 p-3 bg-gradient-to-b from-bg-elevate to-bg-deep border border-gold/40 rounded-lg shadow-[0_0_0_1px_rgba(212,170,53,0.08)_inset] items-center justify-between">
+        {/* Banner is gated on a real fallback signal. Until the API surfaces
+            `agent.mock_fallback` (see api-server/src/lib/atelier-agents/runner.ts
+            `source: "mock_fallback"`) on a client-readable field, we keep this
+            inactive so the assertive copy never displays speculatively. */}
+        <MockFallbackBanner active={false} />
+
+        {/* Primary creative-work toolbar — anchored next to the tabs.
+            Gold accent reserved for the Draft POV primary action. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             <PillButton variant="primary" onClick={() => setActiveTab("pov")}>
-              <span className="inline-flex items-center gap-1"><FileText className="w-3 h-3" /> Draft POV</span>
+              <span className="inline-flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Draft POV</span>
             </PillButton>
             <PillButton variant="ghost" onClick={() => setActiveTab("proposal")}>
-              <span className="inline-flex items-center gap-1"><FilePlus2 className="w-3 h-3" /> Build proposal</span>
+              <span className="inline-flex items-center gap-1.5"><FilePlus2 className="w-3.5 h-3.5" /> Build proposal</span>
             </PillButton>
             <PillButton variant="ghost" onClick={() => setActiveTab("meetings")}>
-              <span className="inline-flex items-center gap-1"><Mic className="w-3 h-3" /> Capture meeting</span>
-            </PillButton>
-            <PillButton variant="ghost" onClick={() => setActiveTab("research")}>
-              <span className="inline-flex items-center gap-1"><Telescope className="w-3 h-3" /> Research account</span>
+              <span className="inline-flex items-center gap-1.5"><Mic className="w-3.5 h-3.5" /> Capture meeting</span>
             </PillButton>
             <PrototypeButton oppId={opp.id} oppName={opp.name} />
           </div>
-          <PillButton variant="ghost" onClick={() => setQualifierOpen(true)}>
-            <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3" /> 5C Qualifier</span>
-          </PillButton>
-        </div>
-        <p className="text-xs text-text-faint font-mono">
-          All agent runs and human decisions are logged to the Audit Trail · run.status=blocked indicates a mock-fallback (Claude unavailable) — output is synthetic and must not be treated as evidence.
-        </p>
-
-        <div className="border-b border-border">
-          <div className="flex gap-6 overflow-x-auto scrollbar-thin">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                  activeTab === tab.id ? "border-gold text-gold" : "border-transparent text-text-mute hover:text-text"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+          {/* Secondary references row — research + scoring. */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("research")}
+              className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-gold transition-colors"
+            >
+              <Telescope className="w-3.5 h-3.5" /> Research account
+            </button>
           </div>
         </div>
 
+        <TabNav>
+          {TABS.map((tab) => (
+            <TabNavItem
+              key={tab.id}
+              active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </TabNavItem>
+          ))}
+        </TabNav>
+
         <div className="py-2">
-          {activeTab === "brief" && <BriefTab oppId={opp.id} />}
+          {activeTab === "brief" && (
+            <BriefTab oppId={opp.id} onOpenQualifier={() => setQualifierOpen(true)} />
+          )}
           {activeTab === "research" && <ResearchTab oppId={opp.id} />}
           {activeTab === "pov" && <PovTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "meetings" && <MeetingsTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "proposal" && <ProposalTab oppId={opp.id} />}
           {activeTab === "artifacts" && (
-            <div className="rounded-lg border border-dashed border-gold/30 bg-bg-deep p-12 text-center">
+            <div className="rounded-lg border border-dashed border-border bg-bg-elevate/40 p-12 text-center">
               <Folder className="w-8 h-8 text-gold/60 mx-auto mb-3" />
               <h3 className="text-lg font-semibold text-text mb-1">Artifacts</h3>
               <p className="text-text-mute text-sm max-w-xl mx-auto">
-                Proposals, decks, prototypes and exports linked to <span className="font-mono text-text">{opp.name}</span> live here. Use the
-                {" "}<span className="text-gold font-mono">Build proposal</span> or <span className="text-gold font-mono">Prototype</span> actions in the
-                gold toolbar to spin up a new artifact, or drag-drop assets to attach existing ones.
+                Proposals, decks, prototypes and exports linked to <span className="font-mono text-text">{opp.name}</span> live here. Use
+                {" "}<span className="text-gold font-mono">Build proposal</span> or <span className="text-gold font-mono">Prototype</span> from the
+                toolbar to spin up a new artifact, or drag-drop assets to attach existing ones.
               </p>
               <p className="text-xs text-text-faint mt-4 font-mono">No artifacts attached yet.</p>
             </div>

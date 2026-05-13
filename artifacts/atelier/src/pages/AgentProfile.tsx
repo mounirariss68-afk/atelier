@@ -3,10 +3,10 @@ import {
   useAtelierListAgentRuns,
   getAtelierListAgentRunsQueryKey,
 } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip, PillButton, BackLink, HeroStat } from "@/components/ui/primitives";
 import { Link, useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Cpu, Shield, Wrench, UserCheck, FileText, Activity } from "lucide-react";
+import { Cpu, Shield, Wrench, UserCheck, FileText, Activity } from "lucide-react";
 
 export default function AgentProfile() {
   const [, params] = useRoute("/agents/:agentId");
@@ -28,12 +28,7 @@ export default function AgentProfile() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <Link
-          href="/agents"
-          className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Registry
-        </Link>
+        <BackLink href="/agents">Back to Registry</BackLink>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <SectionHead
@@ -138,8 +133,7 @@ export default function AgentProfile() {
 
           <Card className="p-6 space-y-4">
             <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute">30-Day Activity</h3>
-            <div className="text-3xl font-light text-text">{agent.runsLast30d}</div>
-            <div className="text-xs text-text-faint font-mono uppercase tracking-wider">Total runs</div>
+            <HeroStat value={agent.runsLast30d} caption={<span>Total runs</span>} size="md" />
           </Card>
         </div>
       </div>

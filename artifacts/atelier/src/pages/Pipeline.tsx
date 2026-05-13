@@ -211,10 +211,10 @@ export default function Pipeline() {
         </div>
       </PageHero>
 
-      <div className="container-atelier py-10 space-y-8 flex-1 flex flex-col">
+      <div className={`py-10 space-y-8 flex-1 flex flex-col ${view === "kanban" ? "px-[clamp(16px,3vw,32px)] min-w-0" : "container-atelier"}`}>
         {view === "kanban" ? (
           <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-            <div className="flex-1 flex gap-4 overflow-x-auto pb-6 snap-x">
+            <div className="flex-1 flex gap-4 overflow-x-auto scrollbar-thin pb-6 snap-x">
               {PLM_STAGES.map((stage) => {
                 const stageOpps = (opps ?? []).filter((o) => o.plmStage === stage);
                 return (

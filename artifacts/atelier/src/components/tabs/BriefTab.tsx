@@ -7,12 +7,13 @@ import {
   getAtelierListAuditQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, PillButton } from "@/components/ui/primitives";
+import { Card, PillButton, StatusCard, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { ConfidenceDot } from "./ConfidenceDot";
+import { Shield } from "lucide-react";
 
-export function BriefTab({ oppId }: { oppId: string }) {
+export function BriefTab({ oppId, onOpenQualifier }: { oppId: string; onOpenQualifier?: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data, isLoading } = useAtelierGetBrief(oppId);
@@ -30,7 +31,7 @@ export function BriefTab({ oppId }: { oppId: string }) {
 
   if (!data?.brief) {
     return (
-      <Card className="p-12 text-center border-dashed bg-bg-deep">
+      <Card className="p-12 text-center border-dashed">
         <h3 className="text-lg font-semibold text-text mb-2">No brief yet</h3>
         <p className="text-text-mute mb-6 max-w-md mx-auto">
           Run Pursuit Scout to draft an evidence-cited account snapshot, buyer landscape, and 5C draft.
@@ -43,19 +44,35 @@ export function BriefTab({ oppId }: { oppId: string }) {
   }
 
   const b = data.brief;
+  const confidence = data.confidence ?? "amber";
+  const ranAt = data.createdAt ? new Date(data.createdAt).toLocaleString() : "";
+  const tone: "amber" | "green" = confidence === "green" ? "green" : "amber";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ConfidenceDot confidence={data.confidence ?? "amber"} />
-          <span className="text-sm text-text-mute font-mono">
-            {data.createdAt ? new Date(data.createdAt).toLocaleString() : ""}
-          </span>
-        </div>
-        <PillButton variant="ghost" onClick={rerun} disabled={run.isPending}>
-          {run.isPending ? "Re-running…" : "Re-run Scout"}
-        </PillButton>
-      </div>
+      <StatusCard
+        tone={tone}
+        status={
+          <div className="flex items-center gap-2">
+            <ConfidenceDot confidence={confidence} />
+            <MonoChip tone={tone}>Pursuit Scout</MonoChip>
+          </div>
+        }
+        title="Pursuit Scout · awaiting verification"
+        detail={ranAt ? `Last run ${ranAt}` : undefined}
+        actions={
+          <>
+            <PillButton variant="ghost" onClick={rerun} disabled={run.isPending}>
+              {run.isPending ? "Re-running…" : "Re-run Scout"}
+            </PillButton>
+            {onOpenQualifier && (
+              <PillButton variant="primary" onClick={onOpenQualifier}>
+                <span className="inline-flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> Verify · 5C Qualifier</span>
+              </PillButton>
+            )}
+          </>
+        }
+      />
 
       <Card className="p-6 space-y-3">
         <h3 className="text-xs uppercase tracking-widest font-mono text-text-faint">Account snapshot</h3>

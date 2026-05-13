@@ -255,7 +255,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1">
           <main
             className={cn(
-              "page-light flex-1 w-full pb-20 transition-all duration-300",
+              "flex-1 w-full pb-20 transition-all duration-300",
               collapsed ? "pr-12" : "pr-12 lg:pr-80",
             )}
           >

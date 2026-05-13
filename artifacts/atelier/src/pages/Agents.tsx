@@ -1,5 +1,5 @@
 import { useAtelierListAgents } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip, SectionLabel } from "@/components/ui/primitives";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star, Activity, Cpu } from "lucide-react";
@@ -26,15 +26,12 @@ export default function Agents() {
           const groupAgents = agents.filter(a => a.group === group);
           return (
             <div key={group} className="space-y-4">
-              <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-3">
-                {group}
-                <span className="flex-1 h-px bg-border" />
-              </h3>
-              
+              <SectionLabel>{group}</SectionLabel>
+
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {groupAgents.map(agent => (
                   <Link key={agent.id} href={`/agents/${agent.id}`}>
-                    <Card className="p-5 h-full flex flex-col justify-between hover:border-gold/50 transition-colors group">
+                    <Card hover className="p-5 h-full flex flex-col justify-between group">
                       <div className="space-y-3">
                         <div className="flex justify-between items-start gap-2">
                           <div className="flex items-center gap-2">

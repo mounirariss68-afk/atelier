@@ -27,7 +27,7 @@ export default function Engagements() {
 
       <div className="container-atelier py-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {engagements.map((eng) => (
-          <Card key={eng.id} className="p-5 space-y-4 hover:border-gold/50 transition-colors group flex flex-col justify-between">
+          <Card key={eng.id} hover className="p-5 space-y-4 group flex flex-col justify-between">
             <div className="space-y-4">
               <div className="flex justify-between items-start gap-2">
                 <Link href={`/engagements/${eng.id}`} className="font-semibold text-lg text-text group-hover:text-gold transition-colors block leading-tight">

@@ -4,13 +4,13 @@
 
 /* ============================================================
    THE ATELIER — Brand system
-   Carries over the public AICo / Maven AI brand: deep navy + gold,
-   warm cream text, Manrope body, Fraunces italic accent, JetBrains
-   Mono eyebrows / audit log / agent telemetry.
+   Internal employee portal: deep navy + gold, warm cream text,
+   Manrope body, Fraunces italic accent, JetBrains Mono telemetry.
+   The portal is one unified dark surface; cards distinguish via
+   border + subtle elevation, never via fill swap.
    ============================================================ */
 
 :root {
-  /* Spec §1 — exact tokens */
   --bg:           #0E1F3D;
   --bg-deep:      #091428;
   --bg-elevate:   #15294A;
@@ -28,16 +28,8 @@
   --danger:       #F87171;
   --grid-line:    rgba(255, 255, 255, 0.025);
   --shadow:       0 30px 60px -20px rgba(0, 0, 0, 0.5);
+  --shadow-lift:  0 18px 36px -18px rgba(0, 0, 0, 0.6);
 
-  /* Light "page surface" palette — used inside .page-light scope so
-     workspace pages read cream-on-navy headers, then warm-cream body
-     with deep-navy ink. Cards re-swap to the dark theme. */
-  --surface:      #F7F4ED;
-  --surface-soft: #FFFFFF;
-  --ink:          #15294A;
-  --ink-mute:     #5C6E89;
-  --ink-faint:    #8FA0B7;
-  --ink-border:   #DCD4C1;
   --radius:       4px;
   --radius-lg:    8px;
   --container:    1240px;
@@ -122,7 +114,6 @@
     letter-spacing: -0.01em;
   }
 
-  /* Fraunces italic accent inside headings */
   em.accent, .accent-italic {
     font-family: var(--font-serif);
     font-style: italic;
@@ -132,7 +123,7 @@
 }
 
 /* ============================================================
-   Reusable primitives — used across every page.
+   Reusable primitives — shared across every page.
    ============================================================ */
 
 @layer components {
@@ -163,6 +154,34 @@
     background: var(--gold);
   }
 
+  /* Maven-style 48×3 gold section divider — used to introduce major sections. */
+  .section-divider {
+    display: block;
+    width: 48px;
+    height: 3px;
+    background: var(--gold);
+    border-radius: 2px;
+  }
+
+  /* Section label: mono uppercase + flex hairline rule (used on Home, Agents, etc.) */
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-mute);
+  }
+  .section-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
   /* 540px lede with 2px gold left border */
   .lede {
     max-width: 540px;
@@ -173,17 +192,26 @@
     line-height: 1.6;
   }
 
-  /* Card: --bg-elevate background, 1px --border, 8px radius, soft shadow */
+  /* Card: subtle elevation, never competes with body via fill. */
   .card {
     background: var(--bg-elevate);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-lift);
   }
   .card-flat {
     background: var(--bg-elevate);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+  }
+  /* Add hover-lift to interactive cards (Maven-inspired). */
+  .card-hover {
+    transition: transform 200ms var(--ease), box-shadow 200ms var(--ease), border-color 200ms var(--ease);
+  }
+  .card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 24px 44px -20px rgba(0, 0, 0, 0.7);
+    border-color: rgba(232, 158, 44, 0.45);
   }
 
   /* 999px pill button */
@@ -217,6 +245,10 @@
   .pill-btn-ghost:hover {
     border-color: var(--gold);
     color: var(--gold-soft);
+  }
+  .pill-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* Mono telemetry chip — used in agent activity, audit, plm stage */
@@ -268,52 +300,58 @@
     font-weight: 600;
     letter-spacing: -0.025em;
   }
+
+  /* ----- Shared TabNav -----
+     Active tab: 2px gold underline, brighter text.
+     Hover: between active and muted.
+     Inactive: muted, no underline. */
+  .tab-nav {
+    display: flex;
+    gap: 28px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-nav-item {
+    position: relative;
+    padding: 10px 0 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-faint);
+    white-space: nowrap;
+    transition: color 160ms var(--ease);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+  }
+  .tab-nav-item::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: transparent;
+    transition: background 160ms var(--ease);
+  }
+  .tab-nav-item:hover { color: var(--text); }
+  .tab-nav-item:hover::after { background: rgba(232, 158, 44, 0.35); }
+  .tab-nav-item[aria-current="true"],
+  .tab-nav-item.is-active {
+    color: var(--gold);
+  }
+  .tab-nav-item[aria-current="true"]::after,
+  .tab-nav-item.is-active::after {
+    background: var(--gold);
+  }
 }
 
-/* ============================================================
-   Light page surface — workspace pages render cream + navy ink
-   while the top nav and each page's hero band stay deep navy.
-   Tokens are re-swapped inside cards / hero so those elements
-   keep their original dark-on-cream theme without any markup
-   changes inside them.
-   ============================================================ */
-
-.page-light {
-  background: var(--surface);
-  color: var(--ink);
-  --text: var(--ink);
-  --text-mute: var(--ink-mute);
-  --text-faint: var(--ink-faint);
-  --border: var(--ink-border);
-  --border-soft: rgba(21, 41, 74, 0.08);
-  --bg: var(--surface);
-  --bg-deep: var(--surface-soft);
-}
-
-/* Restore the navy theme inside dark surfaces (cards + hero band). */
-.page-light .card,
-.page-light .card-flat,
-.page-light .page-hero {
-  --text: #F1EEE6;
-  --text-mute: #8FA3C0;
-  --text-faint: #5E708A;
-  --border: #243F66;
-  --border-soft: rgba(255, 255, 255, 0.06);
-  --bg: #0E1F3D;
-  --bg-deep: #091428;
-  color: var(--text);
-}
-
-/* Page hero band — navy section that contains the eyebrow + headline.
-   Spans the full width of <main>; inner container re-aligns to the
-   1240px page grid. */
+/* Page hero band — the full-width header section that contains the
+   eyebrow + headline + ownership/meta. Sits on top of the unified
+   dark body; differentiates only with a 1px hairline border-bottom. */
 .page-hero {
   background: var(--bg);
-  padding-block: clamp(2.25rem, 4.5vw, 3.5rem);
-  border-bottom: 1px solid #243F66;
-}
-.page-hero > .container-atelier {
-  /* container-atelier already handles horizontal padding + max-width */
+  padding-block: clamp(2rem, 4vw, 3rem);
+  border-bottom: 1px solid var(--border);
 }
 
 @layer utilities {
@@ -328,8 +366,9 @@
   .border-atelier { border-color: var(--border); }
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: rgba(232, 158, 44, 0.25) transparent;
   }
   .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(232, 158, 44, 0.25); border-radius: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(232, 158, 44, 0.45); }
 }

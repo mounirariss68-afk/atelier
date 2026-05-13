@@ -1,5 +1,5 @@
 import { useAtelierGetHome } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip, PlmPill, PillButton } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip, PlmPill, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Clock, FileText, ArrowRight, Download } from "lucide-react";
@@ -53,14 +53,11 @@ export default function Home() {
         
         {/* PANE A: What needs me today */}
         <div className="xl:col-span-2 space-y-6">
-          <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-3">
-            What needs me today
-            <span className="flex-1 h-px bg-border" />
-          </h3>
-          
+          <SectionLabel>What needs me today</SectionLabel>
+
           <div className="space-y-4">
             {home.paneA.map((item) => (
-              <Card key={item.id} className="p-5 flex flex-col sm:flex-row gap-5 items-start sm:items-center hover:border-gold/50 transition-colors group">
+              <Card key={item.id} hover className="p-5 flex flex-col sm:flex-row gap-5 items-start sm:items-center group">
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-3">
                     <MonoChip tone={item.priority === 'high' ? 'gold' : item.priority === 'medium' ? 'amber' : 'default'}>
@@ -98,16 +95,13 @@ export default function Home() {
           
           {/* PANE B: Pipeline & Engagements */}
           <div className="space-y-6">
-            <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-3">
-              At a glance
-              <span className="flex-1 h-px bg-border" />
-            </h3>
-            
+            <SectionLabel>At a glance</SectionLabel>
+
             <div className="grid grid-cols-2 gap-4">
-              <Card className="p-5 space-y-3 bg-bg-deep border-border-soft">
+              <Card className="p-5 space-y-3">
                 <div className="text-xs font-mono text-text-mute uppercase tracking-wider">Active Engagements</div>
                 <div className="text-3xl font-light text-text">{home.engagements.activeCount}</div>
-                <div className="flex flex-col gap-1.5 pt-2 border-t border-border/50">
+                <div className="flex flex-col gap-1.5 pt-2 border-t border-border-soft">
                   <div className="flex justify-between text-xs">
                     <span className="text-text-faint">Due this week</span>
                     <span className="text-text">{home.engagements.deliverablesDueThisWeek}</span>
@@ -119,21 +113,22 @@ export default function Home() {
                   </div>
                 </div>
               </Card>
-              
-              <Card className="p-5 space-y-3 bg-bg-deep border-border-soft flex flex-col justify-between">
+
+              <Card className="p-5 flex flex-col justify-between gap-3">
                 <div className="text-xs font-mono text-text-mute uppercase tracking-wider">Pipeline Value</div>
-                <div className="text-3xl font-light text-gold">
-                  ${(home.pipeline.reduce((acc, p) => acc + p.weightedValueUsd, 0) / 1000000).toFixed(1)}M
-                </div>
-                <div className="text-xs text-text-faint font-mono">Weighted Total</div>
+                <HeroStat
+                  size="md"
+                  value={`$${(home.pipeline.reduce((acc, p) => acc + p.weightedValueUsd, 0) / 1000000).toFixed(1)}M`}
+                  caption={<span className="normal-case tracking-normal">Weighted total</span>}
+                />
               </Card>
             </div>
 
             <Card className="p-0 overflow-hidden">
-              <div className="p-3 bg-bg-deep border-b border-border text-xs font-mono text-text-mute uppercase tracking-wider">
+              <div className="p-3 bg-bg-elevate-2/40 border-b border-border-soft text-xs font-mono text-text-mute uppercase tracking-wider">
                 Pipeline Stages
               </div>
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border-soft">
                 {home.pipeline.map(stage => (
                   <div key={stage.stage} className="flex items-center justify-between p-3 hover:bg-bg-elevate-2 transition-colors">
                     <PlmPill stage={stage.stage} />
@@ -154,14 +149,11 @@ export default function Home() {
 
           {/* PANE C: From the Atelier */}
           <div className="space-y-6">
-            <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-3">
-              From the Atelier
-              <span className="flex-1 h-px bg-border" />
-            </h3>
-            
+            <SectionLabel>From the Atelier</SectionLabel>
+
             <div className="space-y-4">
               {home.paneC.map((asset) => (
-                <Card key={asset.id} className="p-4 space-y-3 bg-bg-deep border-border-soft">
+                <Card key={asset.id} className="p-4 space-y-3">
                   <div className="flex justify-between items-start gap-2">
                     <MonoChip>{asset.kind.replace('_', ' ')}</MonoChip>
                     <button 
