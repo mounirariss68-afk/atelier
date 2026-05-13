@@ -54,6 +54,11 @@ export function TopNav() {
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
     ...(canSeeRoster ? [{ href: "/roster/people", label: "Roster" }] : []),
+    // Ledger UI is hidden from partner_firm_resource personas — their hours
+    // come via the partner-firm CSV upload (engagement-economics passthrough),
+    // not the per-person timesheet surface.
+    ...(me?.role !== "partner_firm_resource" ? [{ href: "/ledger", label: "Ledger" }] : []),
+    ...(canSeeRoster ? [{ href: "/ledger/approvals", label: "Approvals" }] : []),
     { href: "/forecast", label: "Forecast" },
     { href: "/atelier", label: "Atelier" },
     { href: "/agents", label: "Agents" },

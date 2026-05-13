@@ -38,6 +38,11 @@ import {
   atelierEmployees,
   atelierContractors,
   atelierPartnerFirms,
+  atelierCalendarEvents,
+  atelierTimesheetWeeks,
+  atelierTimesheetEntries,
+  atelierTimesheetSignals,
+  atelierPartnerFirmHours,
   atelierPartnerFirmResources,
   atelierPersonDocuments,
   atelierConflictDisclosures,
@@ -3779,6 +3784,265 @@ async function main() {
         createdByUserId: "p_mounir_ariss",
       })),
     )
+    .onConflictDoNothing();
+
+  // ============================================================
+  // v3 Ledger (Task #257) — Time Steward agent + calendar events,
+  // timesheet weeks across statuses, partner-firm hours.
+  // Idempotent via deterministic ids + onConflictDoNothing.
+  // ============================================================
+  console.log("[seed-atelier] v3 ledger (Task #257): Time Steward agent…");
+  await db
+    .insert(atelierAgents)
+    .values({
+      id: "ag_time_steward",
+      name: "Time Steward",
+      group: "Ledger",
+      stage: "Govern",
+      purpose:
+        "Drafts weekly timesheets from calendar events, meeting attendance, deliverable edits, and Salon decisions. Writes immutable signal rows so approvers can trace every proposed hour back to its evidence. Never auto-submits.",
+      model: "claude-haiku-4-5",
+      starred: false,
+      status: "mvp",
+      tools: ["calendar.scan", "meeting.scan", "deliverable.scan", "salon.scan", "audit.write"],
+      guardrails: [
+        "Never auto-submits — humans always click Submit",
+        "Never proposes for partner-firm resources (their hours come via partner-firm CSV)",
+        "Caps any single day at 10 drafted hours; routes >14h to suspicious-pattern flag at submit",
+      ],
+      humanCheckpoints: [
+        "Submitter reviews + edits before Submit",
+        "Engagement Lead approves",
+        "Partner approves",
+      ],
+      runsLast30d: 0,
+    })
+    .onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 ledger: calendar events…");
+  // Anchor everything to the Monday of the most recent fully-completed ISO
+  // week so the seed is stable from day to day. We seed two consecutive
+  // weeks: weekA (older) and weekB (current).
+  function isoWeekOfDate(d: Date): { weekIso: string; monday: Date } {
+    const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+    const monday = new Date(d);
+    const md = monday.getUTCDay() || 7;
+    monday.setUTCDate(monday.getUTCDate() - (md - 1));
+    monday.setUTCHours(0, 0, 0, 0);
+    return { weekIso: `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`, monday };
+  }
+  const today = new Date();
+  const weekB = isoWeekOfDate(today);
+  const lastWeekDate = new Date(today);
+  lastWeekDate.setUTCDate(lastWeekDate.getUTCDate() - 7);
+  const weekA = isoWeekOfDate(lastWeekDate);
+
+  // Seed calendar events for the named employees we have personas for.
+  const LEDGER_PEOPLE = employeesToInsert
+    .filter((e) => e.role !== "partner_firm_resource")
+    .slice(0, 4);
+
+  type CalSeed = typeof atelierCalendarEvents.$inferInsert;
+  const calRows: CalSeed[] = [];
+  for (const emp of LEDGER_PEOPLE) {
+    for (const wk of [weekA, weekB]) {
+      // 3 calendar events per week per person
+      for (let day = 0; day < 5; day += 2) {
+        const start = new Date(wk.monday);
+        start.setUTCDate(start.getUTCDate() + day);
+        start.setUTCHours(10, 0, 0, 0);
+        const end = new Date(start);
+        end.setUTCHours(11, 0, 0, 0);
+        calRows.push({
+          id: `cal_seed_${emp.id}_${wk.weekIso}_${day}`,
+          personId: emp.id,
+          personType: "employee",
+          title: `Tasama working session ${wk.weekIso} d${day}`,
+          startsAt: start,
+          endsAt: end,
+          durationMins: 60,
+          attendees: [{ name: emp.fullName, email: emp.email }],
+          engagementHint: TASAMA_ENG_ID,
+          sourceProvider: "synthetic",
+        });
+      }
+    }
+  }
+  if (calRows.length) await db.insert(atelierCalendarEvents).values(calRows).onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 ledger: timesheet weeks + entries…");
+  // Status matrix:
+  //   - Mounir (partner) weekA: partner_approved, weekB: draft
+  //   - Layla (lead) weekA: lead_approved, weekB: submitted (with 1 flag)
+  //   - Omar (sme) weekA: rejected, weekB: draft
+  //   - Sara (ai_engineer) weekA: submitted (suspicious >14h day), weekB: draft
+  type WkSeed = typeof atelierTimesheetWeeks.$inferInsert;
+  type EntrySeed = typeof atelierTimesheetEntries.$inferInsert;
+  type SigSeed = typeof atelierTimesheetSignals.$inferInsert;
+  const weeks: WkSeed[] = [];
+  const entries: EntrySeed[] = [];
+  const signals: SigSeed[] = [];
+  const seedDate = new Date("2026-01-01T00:00:00Z");
+
+  function pushWeek(opts: {
+    person: (typeof LEDGER_PEOPLE)[number];
+    wk: { weekIso: string; monday: Date };
+    status: string;
+    entrySpecs: Array<{ dayOffset: number; eng: string | null; hours: number; billable: boolean; narrative: string }>;
+    flags?: string[];
+    rejectionReason?: string;
+  }) {
+    const weekId = `tsw_seed_${opts.person.id}_${opts.wk.weekIso}`;
+    const total = opts.entrySpecs.reduce((s, e) => s + e.hours, 0);
+    const billable = opts.entrySpecs.filter((e) => e.billable).reduce((s, e) => s + e.hours, 0);
+    weeks.push({
+      id: weekId,
+      personId: opts.person.id,
+      personType: "employee",
+      weekIso: opts.wk.weekIso,
+      weekStartDate: opts.wk.monday.toISOString().slice(0, 10),
+      status: opts.status,
+      submittedAt: ["submitted", "lead_approved", "partner_approved", "rejected"].includes(opts.status) ? seedDate : null,
+      submittedByUserId: ["submitted", "lead_approved", "partner_approved", "rejected"].includes(opts.status) ? opts.person.userId : null,
+      leadApprovedAt: ["lead_approved", "partner_approved"].includes(opts.status) ? seedDate : null,
+      leadApprovedByUserId: ["lead_approved", "partner_approved"].includes(opts.status) ? "p_layla_haddad" : null,
+      partnerApprovedAt: opts.status === "partner_approved" ? seedDate : null,
+      partnerApprovedByUserId: opts.status === "partner_approved" ? "p_mounir_ariss" : null,
+      rejectedAt: opts.status === "rejected" ? seedDate : null,
+      rejectedByUserId: opts.status === "rejected" ? "p_layla_haddad" : null,
+      rejectionReason: opts.rejectionReason ?? null,
+      totalHours: total,
+      billableHours: billable,
+      suspiciousFlags: opts.flags ?? [],
+    });
+    opts.entrySpecs.forEach((spec, i) => {
+      const d = new Date(opts.wk.monday);
+      d.setUTCDate(d.getUTCDate() + spec.dayOffset);
+      const workDate = d.toISOString().slice(0, 10);
+      const entryId = `tse_seed_${opts.person.id}_${opts.wk.weekIso}_${i}`;
+      const sigId = `tsig_seed_${opts.person.id}_${opts.wk.weekIso}_${i}`;
+      // One synthetic signal per agent-drafted entry
+      const isAgentDrafted = i === 0;
+      if (isAgentDrafted && spec.eng) {
+        signals.push({
+          id: sigId,
+          weekId,
+          personId: opts.person.id,
+          workDate,
+          signalType: "calendar",
+          sourceRefType: "calendar_event",
+          sourceRefId: `cal_seed_${opts.person.id}_${opts.wk.weekIso}_0`,
+          engagementHint: spec.eng,
+          evidenceSummary: `Synthetic seed: working session block`,
+          weightHours: spec.hours,
+        });
+      }
+      entries.push({
+        id: entryId,
+        weekId,
+        personId: opts.person.id,
+        personType: "employee",
+        workDate,
+        engagementId: spec.eng,
+        activityCode: spec.eng ? "billable" : "internal",
+        hours: spec.hours,
+        billable: spec.billable,
+        narrative: spec.narrative,
+        source: isAgentDrafted ? "agent_drafted" : "human",
+        draftedByAgentId: isAgentDrafted ? "ag_time_steward" : null,
+        signalIds: isAgentDrafted && spec.eng ? [sigId] : [],
+        status: opts.status === "partner_approved" ? "approved" : opts.status === "rejected" ? "draft" : opts.status === "submitted" || opts.status === "lead_approved" ? "submitted" : "draft",
+        createdByUserId: opts.person.userId,
+      });
+    });
+  }
+
+  // Find the named seeded employees if present.
+  const findEmp = (id: string) => LEDGER_PEOPLE.find((e) => e.id === id);
+  const standardWeek = (eng: string) => [
+    { dayOffset: 0, eng, hours: 8, billable: true, narrative: "Working session + standup (auto)" },
+    { dayOffset: 1, eng, hours: 8, billable: true, narrative: "Stakeholder review" },
+    { dayOffset: 2, eng, hours: 7.5, billable: true, narrative: "Synthesis + writeup" },
+    { dayOffset: 3, eng, hours: 8, billable: true, narrative: "Workshop facilitation" },
+    { dayOffset: 4, eng: null, hours: 4, billable: false, narrative: "Internal — pursuit support" },
+  ];
+  const mounir = findEmp("emp_p_mounir_ariss");
+  const layla = findEmp("emp_p_layla_haddad");
+  const omar = findEmp("emp_p_omar_najjar");
+  const sara = findEmp("emp_p_sara_qureshi");
+
+  if (mounir) {
+    pushWeek({ person: mounir, wk: weekA, status: "partner_approved", entrySpecs: standardWeek(TASAMA_ENG_ID) });
+    pushWeek({ person: mounir, wk: weekB, status: "draft", entrySpecs: standardWeek(TASAMA_ENG_ID).slice(0, 3) });
+  }
+  if (layla) {
+    pushWeek({ person: layla, wk: weekA, status: "lead_approved", entrySpecs: standardWeek(TASAMA_ENG_ID) });
+    pushWeek({
+      person: layla,
+      wk: weekB,
+      status: "submitted",
+      entrySpecs: standardWeek(TASAMA_ENG_ID),
+      flags: ["double_booked:" + weekB.monday.toISOString().slice(0, 10) + ":" + TASAMA_ENG_ID],
+    });
+  }
+  if (omar) {
+    pushWeek({
+      person: omar,
+      wk: weekA,
+      status: "rejected",
+      entrySpecs: standardWeek(TASAMA_ENG_ID),
+      rejectionReason: "Friday hours need a narrative — please redraft.",
+    });
+    pushWeek({ person: omar, wk: weekB, status: "draft", entrySpecs: standardWeek(TASAMA_ENG_ID).slice(0, 2) });
+  }
+  if (sara) {
+    // Suspicious: 16h on Wed (>14h), fully billable, no meetings.
+    pushWeek({
+      person: sara,
+      wk: weekA,
+      status: "submitted",
+      entrySpecs: [
+        { dayOffset: 0, eng: TASAMA_ENG_ID, hours: 8, billable: true, narrative: "Heads-down build" },
+        { dayOffset: 1, eng: TASAMA_ENG_ID, hours: 8, billable: true, narrative: "Heads-down build" },
+        { dayOffset: 2, eng: TASAMA_ENG_ID, hours: 16, billable: true, narrative: "All-nighter for demo" },
+        { dayOffset: 3, eng: TASAMA_ENG_ID, hours: 8, billable: true, narrative: "Polish + bugfix" },
+        { dayOffset: 4, eng: TASAMA_ENG_ID, hours: 6, billable: true, narrative: "Demo support" },
+      ],
+      flags: [
+        `day_overload:${(() => { const d = new Date(weekA.monday); d.setUTCDate(d.getUTCDate() + 2); return d.toISOString().slice(0, 10); })()}:16h`,
+        "fully_billable_no_meetings",
+      ],
+    });
+    pushWeek({ person: sara, wk: weekB, status: "draft", entrySpecs: [] });
+  }
+
+  if (weeks.length) await db.insert(atelierTimesheetWeeks).values(weeks).onConflictDoNothing();
+  if (signals.length) await db.insert(atelierTimesheetSignals).values(signals).onConflictDoNothing();
+  if (entries.length) await db.insert(atelierTimesheetEntries).values(entries).onConflictDoNothing();
+
+  console.log("[seed-atelier] v3 ledger: partner-firm hours…");
+  await db
+    .insert(atelierPartnerFirmHours)
+    .values([
+      {
+        id: `pfh_seed_bgts_${weekA.weekIso}`,
+        engagementId: TASAMA_ENG_ID,
+        partnerFirmId: "pf_bgts",
+        partnerFirmResourceId: "pfr_bgts_yara",
+        resourceName: "Yara Al-Suwaidi",
+        weekIso: weekA.weekIso,
+        hours: 38,
+        costAmount: 57000,
+        costCurrency: "SAR",
+        csvUploadRef: "pfh_seed_batch_001",
+        uploadedByUserId: "p_mounir_ariss",
+        notes: "Seed — week A partner-firm passthrough",
+      },
+    ])
     .onConflictDoNothing();
 
   console.log(

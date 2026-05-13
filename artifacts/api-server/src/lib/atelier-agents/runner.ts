@@ -3787,3 +3787,316 @@ export async function emitAccessSentinelEvent(ev: SentinelEvent): Promise<void> 
   // eslint-disable-next-line no-console
   console.log("[access-sentinel] (stub)", ev);
 }
+
+// =============================================================
+// Time Steward (Task #257) — v3 Ledger
+// =============================================================
+// Pulls calendar events + meeting attendance + deliverable edits + Salon
+// decisions from the past week and proposes draft timesheet entries plus
+// immutable signal evidence. Never auto-submits. Routes wrap this in
+// startRun/completeRun so it shows up in the activity stream.
+import {
+  atelierCalendarEvents,
+  atelierMeetings,
+  atelierDeliverableVersions,
+  atelierDeliverables,
+  atelierTimesheetEntries,
+  atelierTimesheetSignals,
+  atelierTimesheetWeeks,
+  atelierEmployees,
+} from "@workspace/db";
+import { sql } from "drizzle-orm";
+
+export interface TimeStewardOutput {
+  weekId: string;
+  personId: string;
+  signalsCreated: number;
+  draftEntriesCreated: number;
+  totalHoursDrafted: number;
+}
+
+export async function runTimeSteward(args: {
+  weekId: string;
+  personId: string;
+  weekStartDate: string; // ISO date (Mon)
+  triggeredByUserId: string | null;
+}): Promise<TimeStewardOutput> {
+  const runId = await startRun({
+    agentId: "ag_time_steward",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "timesheet_week",
+    targetId: args.weekId,
+    targetLabel: `Timesheet ${args.weekId.slice(-12)}`,
+    inputs: { personId: args.personId, weekStart: args.weekStartDate },
+    actorLabel: "Time Steward",
+  });
+
+  const t0 = Date.now();
+  try {
+    const weekStart = new Date(`${args.weekStartDate}T00:00:00Z`);
+    const weekEnd = new Date(weekStart.getTime() + 7 * 86400 * 1000);
+    // Pre-load engagement-id↦accountId map so signals carry the hint
+    // even when the calendar event itself doesn't carry the engagement.
+
+    // 1) Calendar — every event in the window for this person.
+    const cals = await db
+      .select()
+      .from(atelierCalendarEvents)
+      .where(
+        and(
+          eq(atelierCalendarEvents.personId, args.personId),
+          gte(atelierCalendarEvents.startsAt, weekStart),
+          isNull(atelierCalendarEvents.deletedAt),
+        ),
+      );
+    const calsInWeek = cals.filter((c) => c.startsAt < weekEnd);
+
+    // 2) Meetings — atelier_meetings whose attendees JSONB contains this
+    //    person's id or email. Fallback: parentType='engagement' anchor.
+    const empRow = (
+      await db
+        .select()
+        .from(atelierEmployees)
+        .where(eq(atelierEmployees.id, args.personId))
+    )[0];
+    const personEmail = empRow?.email?.toLowerCase() ?? null;
+    const personName = empRow?.fullName ?? null;
+    const meetings = await db
+      .select()
+      .from(atelierMeetings)
+      .where(isNull(atelierMeetings.deletedAt));
+    const meetingsHit = meetings.filter((m) => {
+      if (!m.date) return false;
+      const d = new Date(`${m.date}T00:00:00Z`);
+      if (d < weekStart || d >= weekEnd) return false;
+      const att = (m.attendees as Array<{ email?: string; name?: string }>) ?? [];
+      return att.some(
+        (a) =>
+          (personEmail && a.email?.toLowerCase() === personEmail) ||
+          (personName && a.name && a.name.toLowerCase().includes(personName.toLowerCase())),
+      );
+    });
+
+    // 3) Deliverable edits — versions authored this week by user_id matching
+    //    the employee's user_id (employees may have userId; contractors don't).
+    const userId = empRow?.userId ?? null;
+    const deliverableEdits = userId
+      ? await db
+          .select({
+            id: atelierDeliverableVersions.id,
+            deliverableId: atelierDeliverableVersions.deliverableId,
+            createdAt: atelierDeliverableVersions.createdAt,
+            versionNumber: atelierDeliverableVersions.versionNumber,
+          })
+          .from(atelierDeliverableVersions)
+          .where(
+            and(
+              eq(atelierDeliverableVersions.createdByUserId, userId),
+              gte(atelierDeliverableVersions.createdAt, weekStart),
+              isNull(atelierDeliverableVersions.deletedAt),
+            ),
+          )
+      : [];
+    const editsInWeek = deliverableEdits.filter((d) => d.createdAt < weekEnd);
+
+    // 4) Salon decisions are NOT used as a steward signal: salon decisions
+    //    are recorded on behalf of client (Salon) users, not AICo employees,
+    //    so attributing them to a specific person here would inflate
+    //    unrelated colleagues' drafted hours. A future task can correlate
+    //    AICo participation in salon publishes via meeting attendees.
+    const salonHits: Array<{ id: string; engagementId: string; kind: string; headline: string; decidedAt: Date }> = [];
+
+    // ---- Idempotency: a re-run replaces both prior signals and prior
+    //      agent-drafted entries for THIS week, so the steward never
+    //      stacks duplicate evidence row by row. Human entries are left
+    //      alone (their hours are still included in totals below).
+    await db
+      .delete(atelierTimesheetSignals)
+      .where(eq(atelierTimesheetSignals.weekId, args.weekId));
+
+    // ---- Materialize signals (immutable within a run) ----
+    const signalRows: Array<typeof atelierTimesheetSignals.$inferInsert> = [];
+    const sigId = (n: number) => `tsig_${args.weekId}_${n}_${Math.random().toString(36).slice(2, 6)}`;
+    let n = 0;
+    for (const c of calsInWeek) {
+      const dateIso = c.startsAt.toISOString().slice(0, 10);
+      signalRows.push({
+        id: sigId(n++),
+        weekId: args.weekId,
+        personId: args.personId,
+        workDate: dateIso,
+        signalType: "calendar",
+        sourceRefType: "calendar_event",
+        sourceRefId: c.id,
+        engagementHint: c.engagementHint ?? null,
+        evidenceSummary: `${c.title} — ${Math.round(c.durationMins / 6) / 10}h calendar block`,
+        weightHours: c.durationMins / 60,
+        runId,
+      });
+    }
+    for (const m of meetingsHit) {
+      const att = (m.attendees as Array<unknown>) ?? [];
+      const hours = Math.max(0.5, Math.min(2, att.length * 0.25 + 0.5));
+      signalRows.push({
+        id: sigId(n++),
+        weekId: args.weekId,
+        personId: args.personId,
+        workDate: m.date,
+        signalType: "meeting",
+        sourceRefType: "meeting",
+        sourceRefId: m.id,
+        engagementHint: m.parentType === "engagement" ? m.parentId : null,
+        evidenceSummary: `Meeting: ${m.title} (${att.length} attendees)`,
+        weightHours: hours,
+        runId,
+      });
+    }
+    for (const e of editsInWeek) {
+      const dateIso = e.createdAt.toISOString().slice(0, 10);
+      // Look up the engagement via the deliverable
+      const [del] = await db
+        .select({ engagementId: atelierDeliverables.engagementId })
+        .from(atelierDeliverables)
+        .where(eq(atelierDeliverables.id, e.deliverableId));
+      signalRows.push({
+        id: sigId(n++),
+        weekId: args.weekId,
+        personId: args.personId,
+        workDate: dateIso,
+        signalType: "deliverable_edit",
+        sourceRefType: "deliverable_version",
+        sourceRefId: e.id,
+        engagementHint: del?.engagementId ?? null,
+        evidenceSummary: `Authored deliverable v${e.versionNumber}`,
+        weightHours: 1.5,
+        runId,
+      });
+    }
+    for (const s of salonHits) {
+      const dateIso = s.decidedAt.toISOString().slice(0, 10);
+      signalRows.push({
+        id: sigId(n++),
+        weekId: args.weekId,
+        personId: args.personId,
+        workDate: dateIso,
+        signalType: "salon_decision",
+        sourceRefType: "salon_decision",
+        sourceRefId: s.id,
+        engagementHint: s.engagementId,
+        evidenceSummary: `Salon ${s.kind}: ${s.headline}`,
+        weightHours: 0.5,
+        runId,
+      });
+    }
+    if (signalRows.length) {
+      await db.insert(atelierTimesheetSignals).values(signalRows);
+    }
+
+    // ---- Aggregate signals into draft entries (one per workDate × engagement) ----
+    type Bucket = { workDate: string; engagementId: string | null; hours: number; signalIds: string[]; narratives: string[] };
+    const buckets = new Map<string, Bucket>();
+    for (const s of signalRows) {
+      const key = `${s.workDate}__${s.engagementHint ?? "none"}`;
+      const b = buckets.get(key) ?? {
+        workDate: s.workDate as string,
+        engagementId: (s.engagementHint as string | null) ?? null,
+        hours: 0,
+        signalIds: [],
+        narratives: [],
+      };
+      b.hours += Number(s.weightHours);
+      b.signalIds.push(s.id as string);
+      b.narratives.push(s.evidenceSummary as string);
+      buckets.set(key, b);
+    }
+
+    // Wipe prior agent-drafted rows for this week so re-runs are idempotent.
+    await db
+      .delete(atelierTimesheetEntries)
+      .where(
+        and(
+          eq(atelierTimesheetEntries.weekId, args.weekId),
+          eq(atelierTimesheetEntries.source, "agent_drafted"),
+        ),
+      );
+
+    const entries: Array<typeof atelierTimesheetEntries.$inferInsert> = [];
+    let m2 = 0;
+    let totalDrafted = 0;
+    for (const b of buckets.values()) {
+      const hours = Math.min(10, Math.round(b.hours * 2) / 2); // round to .5, cap 10
+      if (hours <= 0) continue;
+      totalDrafted += hours;
+      entries.push({
+        id: `tse_${args.weekId}_${m2++}_${Math.random().toString(36).slice(2, 6)}`,
+        weekId: args.weekId,
+        personId: args.personId,
+        personType: empRow ? "employee" : "contractor",
+        workDate: b.workDate,
+        engagementId: b.engagementId,
+        activityCode: b.engagementId ? "billable" : "internal",
+        hours,
+        billable: !!b.engagementId,
+        narrative: b.narratives.slice(0, 3).join(" · "),
+        source: "agent_drafted",
+        draftedByAgentId: "ag_time_steward",
+        signalIds: b.signalIds,
+        status: "draft",
+      });
+    }
+    if (entries.length) {
+      await db.insert(atelierTimesheetEntries).values(entries);
+    }
+
+    // Recompute week aggregate across BOTH agent-drafted and human entries
+    // so the totals stay correct after a steward re-run on a partially
+    // hand-edited week.
+    const allEntries = await db
+      .select()
+      .from(atelierTimesheetEntries)
+      .where(
+        and(
+          eq(atelierTimesheetEntries.weekId, args.weekId),
+          isNull(atelierTimesheetEntries.deletedAt),
+        ),
+      );
+    const totalAll = allEntries.reduce((s, e) => s + Number(e.hours || 0), 0);
+    const billAll = allEntries.reduce((s, e) => s + (e.billable ? Number(e.hours || 0) : 0), 0);
+    await db
+      .update(atelierTimesheetWeeks)
+      .set({ totalHours: totalAll, billableHours: billAll, updatedAt: new Date() })
+      .where(eq(atelierTimesheetWeeks.id, args.weekId));
+
+    const out: TimeStewardOutput = {
+      weekId: args.weekId,
+      personId: args.personId,
+      signalsCreated: signalRows.length,
+      draftEntriesCreated: entries.length,
+      totalHoursDrafted: totalDrafted,
+    };
+    await completeRun({
+      runId,
+      output: out,
+      confidence: signalRows.length === 0 ? "amber" : "green",
+      costUsd: 0,
+      durationMs: Date.now() - t0,
+      sourcesCount: signalRows.length,
+      actorLabel: "Time Steward",
+      targetType: "timesheet_week",
+      targetId: args.weekId,
+      targetLabel: `Timesheet ${args.weekId.slice(-12)}`,
+      source: "mock_config",
+    });
+    return out;
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: "Time Steward",
+      targetType: "timesheet_week",
+      targetId: args.weekId,
+    });
+    throw err;
+  }
+}
+
+// keep `sql` import in use without polluting other call sites.
+void sql;

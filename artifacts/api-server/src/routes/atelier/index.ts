@@ -59,6 +59,7 @@ import reportsRoutes from "./reportsRoutes";
 import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
+import ledgerRoutes from "./ledgerRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -99,6 +100,9 @@ router.use((req, res, next) => {
   const p = req.path;
   if (p === "/me" || p.startsWith("/personas")) return next();
   if (p === "/engagements" || p.startsWith("/engagements/")) return next();
+  // Contractors may view/submit their OWN timesheet; partner-firm resources
+  // never appear in the ledger UI (their hours come via partner-firm CSV).
+  if (me.role === "contractor" && p.startsWith("/ledger/timesheets")) return next();
   // Allow per-person dossier endpoints only for the caller's OWN identity
   // (no IDOR enumeration of other people's PII / HR metadata). The :id
   // segment must equal the active persona id; bare `/roster/people` and
@@ -147,6 +151,8 @@ router.use(rosterRoutes);
 router.use(rosterLifecycleRoutes);
 // Task #256 — Skill graph + Skill Mapper.
 router.use(skillGraphRoutes);
+// Task #257 — v3 Ledger: Timesheets + Time Steward.
+router.use(ledgerRoutes);
 
 function ensurePersona(
   req: Request,

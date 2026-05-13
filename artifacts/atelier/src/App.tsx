@@ -34,6 +34,8 @@ import RosterOnboarding from "@/pages/roster/RosterOnboarding";
 import RosterOffboarding from "@/pages/roster/RosterOffboarding";
 import RosterCompliance from "@/pages/roster/RosterCompliance";
 import RosterSkillGraph from "@/pages/roster/RosterSkillGraph";
+import Timesheet from "@/pages/ledger/Timesheet";
+import LedgerApprovals from "@/pages/ledger/LedgerApprovals";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 
 const queryClient = new QueryClient();
@@ -74,6 +76,10 @@ function Router() {
         <Route path="/roster/people" component={RosterPeople} />
         <Route path="/roster/people/:id" component={RosterPerson} />
         <Route path="/roster/people/:id/:tab" component={RosterPerson} />
+        <Route path="/ledger" component={Timesheet} />
+        <Route path="/ledger/timesheet" component={Timesheet} />
+        <Route path="/ledger/timesheets/:personId/:weekIso" component={Timesheet} />
+        <Route path="/ledger/approvals" component={LedgerApprovals} />
         <Route path="/accounts/:accountId" component={Account} />
         <Route path="/agents" component={Agents} />
         <Route path="/agents/runs/:runId" component={AgentRun} />

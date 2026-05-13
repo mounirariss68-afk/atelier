@@ -2083,3 +2083,159 @@ export const atelierPersonSkills = pgTable(
     ),
   ],
 );
+
+// ============================================================
+// LEDGER — TIMESHEETS + CALENDAR + PARTNER-FIRM HOURS (Task #257)
+// v3 §11 — Time Steward agent writes draft entries + immutable signals;
+// humans submit, leads/partners approve. Partner-firm resources never
+// appear in /ledger/timesheets — their hours land in atelier_partner_firm_hours
+// via a partner-firm CSV upload (cost passthrough into engagement economics).
+// Indexes per PRD: (person_id, work_date), (engagement_id, work_date), (status).
+// ============================================================
+export const atelierCalendarEvents = pgTable(
+  "atelier_calendar_events",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personId: text("person_id").notNull(), // employee.id (emp_*) or contractor.id
+    personType: text("person_type").notNull().default("employee"), // employee | contractor
+    title: text("title").notNull(),
+    startsAt: timestamp("starts_at").notNull(),
+    endsAt: timestamp("ends_at").notNull(),
+    durationMins: integer("duration_mins").notNull(),
+    attendees: jsonb("attendees").$type<Array<{ name: string; email?: string; org?: string }>>().notNull().default([]),
+    engagementHint: text("engagement_hint"), // engagement_id if Steward could match
+    sourceProvider: text("source_provider").notNull().default("synthetic"), // synthetic | google | outlook
+    sourceEventId: text("source_event_id"),
+    rawPayload: jsonb("raw_payload").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_cal_person_date").on(t.personId, t.startsAt),
+    index("idx_atelier_cal_org").on(t.orgId),
+  ],
+);
+
+export const atelierTimesheetWeeks = pgTable(
+  "atelier_timesheet_weeks",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personId: text("person_id").notNull(), // employee.id or contractor.id
+    personType: text("person_type").notNull(), // employee | contractor
+    weekIso: text("week_iso").notNull(), // YYYY-Www (ISO 8601 week)
+    weekStartDate: text("week_start_date").notNull(), // ISO date — Monday
+    status: text("status").notNull().default("draft"),
+    // draft | submitted | lead_approved | partner_approved | rejected
+    submittedAt: timestamp("submitted_at"),
+    submittedByUserId: text("submitted_by_user_id"),
+    leadApprovedAt: timestamp("lead_approved_at"),
+    leadApprovedByUserId: text("lead_approved_by_user_id"),
+    partnerApprovedAt: timestamp("partner_approved_at"),
+    partnerApprovedByUserId: text("partner_approved_by_user_id"),
+    rejectedAt: timestamp("rejected_at"),
+    rejectedByUserId: text("rejected_by_user_id"),
+    rejectionReason: text("rejection_reason"),
+    totalHours: doublePrecision("total_hours").notNull().default(0),
+    billableHours: doublePrecision("billable_hours").notNull().default(0),
+    suspiciousFlags: jsonb("suspicious_flags").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_ts_week").on(t.personId, t.weekIso),
+    index("idx_atelier_ts_week_status").on(t.status),
+    index("idx_atelier_ts_week_org").on(t.orgId),
+  ],
+);
+
+export const atelierTimesheetEntries = pgTable(
+  "atelier_timesheet_entries",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    weekId: text("week_id").notNull(),
+    personId: text("person_id").notNull(),
+    personType: text("person_type").notNull(),
+    workDate: text("work_date").notNull(), // ISO date
+    engagementId: text("engagement_id"), // nullable for non-billable activities
+    activityCode: text("activity_code"), // billable | internal | training | bench | leave | partner_firm
+    hours: doublePrecision("hours").notNull().default(0),
+    billable: boolean("billable").notNull().default(false),
+    narrative: text("narrative"),
+    source: text("source").notNull().default("human"), // human | agent_drafted
+    draftedByAgentId: text("drafted_by_agent_id"),
+    signalIds: jsonb("signal_ids").$type<string[]>().notNull().default([]),
+    status: text("status").notNull().default("draft"), // draft | submitted | approved | rejected
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_ts_entry_person_date").on(t.personId, t.workDate),
+    index("idx_atelier_ts_entry_eng_date").on(t.engagementId, t.workDate),
+    index("idx_atelier_ts_entry_status").on(t.status),
+    index("idx_atelier_ts_entry_week").on(t.weekId),
+  ],
+);
+
+// Immutable evidence rows. The Time Steward writes one row per detected
+// signal (calendar event, meeting attendance, deliverable edit, Salon
+// decision) and never deletes them; entries reference them by id so the
+// approval UI can show "why was this proposed?" provenance.
+export const atelierTimesheetSignals = pgTable(
+  "atelier_timesheet_signals",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    weekId: text("week_id").notNull(),
+    personId: text("person_id").notNull(),
+    workDate: text("work_date").notNull(),
+    signalType: text("signal_type").notNull(), // calendar | meeting | deliverable_edit | salon_decision
+    sourceRefType: text("source_ref_type").notNull(),
+    sourceRefId: text("source_ref_id").notNull(),
+    engagementHint: text("engagement_hint"),
+    evidenceSummary: text("evidence_summary").notNull(),
+    weightHours: doublePrecision("weight_hours").notNull().default(0),
+    observedAt: timestamp("observed_at").notNull().defaultNow(),
+    runId: text("run_id"), // atelier_agent_runs.id of the Steward run that emitted it
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_ts_signal_week").on(t.weekId),
+    index("idx_atelier_ts_signal_person_date").on(t.personId, t.workDate),
+  ],
+);
+
+export const atelierPartnerFirmHours = pgTable(
+  "atelier_partner_firm_hours",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    partnerFirmResourceId: text("partner_firm_resource_id"),
+    resourceName: text("resource_name").notNull(),
+    weekIso: text("week_iso").notNull(),
+    workDate: text("work_date"), // optional per-day breakdown
+    hours: doublePrecision("hours").notNull().default(0),
+    costAmount: doublePrecision("cost_amount").notNull().default(0),
+    costCurrency: text("cost_currency").notNull().default("USD"),
+    csvUploadRef: text("csv_upload_ref"), // identifier of the upload batch
+    uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+    uploadedByUserId: text("uploaded_by_user_id"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pfh_eng").on(t.engagementId),
+    index("idx_atelier_pfh_firm").on(t.partnerFirmId),
+    index("idx_atelier_pfh_week").on(t.weekIso),
+  ],
+);
