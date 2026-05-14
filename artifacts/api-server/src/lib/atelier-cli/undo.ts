@@ -166,6 +166,18 @@ const raidSoftDelete: InverseOp = {
   },
 };
 
+/**
+ * Test-only handle exposed for the cli-use-cases regression that
+ * verifies partial-undo semantics (missing rows must report ok=false
+ * with an explanatory errorMessage rather than silently succeed).
+ * Production code uses INVERSE_OPS directly.
+ */
+export const raidSoftDeleteSelfTest = (args: { ids: string[]; orgId: string }) =>
+  raidSoftDelete.run(
+    { persona: { id: "test", name: "test", role: "founding_partner", orgId: args.orgId }, turnId: "t", sessionId: "s", stepIdx: 0 },
+    args,
+  );
+
 const INVERSE_OPS: Record<string, InverseOp> = {
   // Both the v1 (`add_raid_item` — used by the mock router and the
   // current preview→commit flow) and the v2 capability point at the

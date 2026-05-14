@@ -330,6 +330,26 @@ async function main(): Promise<void> {
     }
   });
 
+  // 6b. Partial-undo regression — when some reversible IDs are missing
+  // (e.g. the partner already hard-deleted the row in another surface)
+  // the inverse op must fail gracefully via ensureAffected and report
+  // the partial outcome rather than silently claim success.
+  await step("partial undo — missing tenant-scoped row reports honestly", async () => {
+    const { raidSoftDeleteSelfTest } = await import(
+      "../../src/lib/atelier-cli/undo.js"
+    );
+    assert.equal(typeof raidSoftDeleteSelfTest, "function", "helper not exported");
+    const out = (await raidSoftDeleteSelfTest({
+      ids: ["raid_does_not_exist_xxx"],
+      orgId: "aico",
+    })) as { ok: boolean; errorMessage?: string };
+    assert.equal(out.ok, false, "partial-undo with bogus id must report ok=false");
+    assert.ok(
+      typeof out.errorMessage === "string" && out.errorMessage.length > 0,
+      "partial-undo must include an explanatory errorMessage",
+    );
+  });
+
   // 7. Evals harness.
   await step("runEvals: seed fixtures pass", async () => {
     const results = await runEvals({ baseUrl: BASE, cookie: COOKIE });

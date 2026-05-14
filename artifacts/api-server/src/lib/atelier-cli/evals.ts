@@ -185,11 +185,18 @@ export async function runEvals(opts: {
   fixtures?: EvalFixture[];
 }): Promise<EvalResult[]> {
   // Determinism guard — the harness asserts toolName classification, so
-  // it is meaningless against a live LLM. Refuse to run if the api-server
-  // is not in MOCK_MODE.
-  if (process.env.MOCK_MODE === "0" || process.env.MOCK_MODE === "false") {
+  // it is meaningless against a live LLM. The orchestrator's mock toggle
+  // is `ATELIER_MOCK_AGENTS=1` plus "no Anthropic env"; we mirror that
+  // here so the harness refuses to run against a live model regardless
+  // of which env the operator set (code-review iter 7 alignment).
+  const mockOn =
+    process.env.ATELIER_MOCK_AGENTS === "1" ||
+    (!process.env.ANTHROPIC_API_KEY && !process.env.REPLIT_AI_GATEWAY_TOKEN);
+  if (!mockOn || process.env.MOCK_MODE === "0" || process.env.MOCK_MODE === "false") {
     throw new Error(
-      "runEvals requires MOCK_MODE (deterministic router). Re-run with MOCK_MODE=1 (the default).",
+      "runEvals requires the api-server to be in mock mode " +
+        "(ATELIER_MOCK_AGENTS=1 or no Anthropic creds). Refusing to run " +
+        "against a live LLM — results would be non-deterministic.",
     );
   }
   const fixtures = opts.fixtures ?? EVAL_FIXTURES;
