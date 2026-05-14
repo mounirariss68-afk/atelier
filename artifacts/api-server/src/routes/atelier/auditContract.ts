@@ -55,6 +55,9 @@ export const V3_AUDIT_ACTIONS = {
 
   // Compensation column policy lock --------------------------------------
   POLICY_READ_RESTRICTED: "policy.read.restricted",
+
+  // Principle override (breakglass) — Task #293 -------------------------
+  PRINCIPLE_OVERRIDE_GRANTED: "principle_override.granted",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

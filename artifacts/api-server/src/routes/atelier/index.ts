@@ -62,6 +62,7 @@ import skillGraphRoutes from "./skillGraphRoutes";
 import ledgerRoutes from "./ledgerRoutes";
 import walletRoutes from "./walletRoutes";
 import referenceRoutes from "./referenceRoutes";
+import principleOverrideRoutes from "./principleOverrideRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -166,6 +167,7 @@ router.use(ledgerRoutes);
 router.use(walletRoutes);
 // Task #290 — Reference-data lookups (countries / industries / sub-industries).
 router.use(referenceRoutes);
+router.use(principleOverrideRoutes);
 
 function ensurePersona(
   req: Request,

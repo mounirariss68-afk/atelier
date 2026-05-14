@@ -36,6 +36,8 @@ export function registerAtelierRlsDefaults(): void {
       .query(
         "SELECT set_config('app.org_id', 'aico', false), " +
           "set_config('app.user_id', '', false), " +
+          "set_config('app.user_role', '', false), " +
+          "set_config('app.principle_override', '', false), " +
           "set_config('app.engagement_ids', '', false)",
       )
       .catch((err) => {
@@ -51,6 +53,7 @@ export function registerAtelierRlsDefaults(): void {
 export interface AtelierRlsContext {
   orgId: string;
   userId: string;
+  userRole: string;
   engagementIds: string[];
 }
 
@@ -59,6 +62,12 @@ function ctxFromReq(req: Request): AtelierRlsContext {
   return {
     orgId: persona?.orgId ?? "aico",
     userId: persona?.id ?? "",
+    // Task #293 — `app.user_role` is consumed by the column-level RLS
+    // mask helpers (atelier_can_view_comp / atelier_can_view_personnel)
+    // defined in lib/db/drizzle/0025_atelier_column_rls.sql. Empty when
+    // there is no active persona — the mask helpers then return FALSE
+    // (i.e. mask everything), which is the correct fail-safe.
+    userRole: persona?.role ?? "",
     // Future: derive from atelier_engagement_members. For the MVP every
     // signed-in persona may see every engagement in the firm.
     engagementIds: (req.atelierEngagementIds as string[] | undefined) ?? [],
@@ -82,6 +91,8 @@ export async function withRls<T>(
     await tx.execute(sql`SELECT
       set_config('app.org_id', ${ctx.orgId}, true),
       set_config('app.user_id', ${ctx.userId}, true),
+      set_config('app.user_role', ${ctx.userRole}, true),
+      set_config('app.principle_override', '', true),
       set_config('app.engagement_ids', ${ctx.engagementIds.join(",")}, true)`);
     return fn(tx);
   });

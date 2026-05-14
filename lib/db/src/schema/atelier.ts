@@ -2683,3 +2683,35 @@ export const atelierInvoiceLineDrafts = pgTable(
     index("idx_atelier_ild_status").on(t.status),
   ],
 );
+
+// ============================================================
+// Task #293 — Principle Override (breakglass) audit ledger
+// ============================================================
+// Append-only ledger of every breakglass read/write that bypasses the
+// column-level RLS masks defined in 0025_atelier_column_rls.sql. The
+// helper SQL function `atelier_breakglass(...)` writes a row here AND
+// flips the per-transaction GUC `app.principle_override = 'true'` so
+// the masking helpers (`atelier_can_view_comp()` /
+// `atelier_can_view_personnel(...)`) return TRUE for the rest of the
+// transaction. Outside that transaction the override is gone — no
+// session-wide breakglass is ever held.
+export const atelierPrincipleOverride = pgTable(
+  "atelier_principle_override",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    actorUserId: text("actor_user_id").notNull(),
+    actorRole: text("actor_role").notNull(),
+    targetTable: text("target_table").notNull(),
+    targetId: text("target_id"),
+    sensitivityClass: text("sensitivity_class").notNull(), // 'compensation' | 'personnel_contract'
+    reason: text("reason").notNull(),
+    grantedAt: timestamp("granted_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at"),
+  },
+  (t) => [
+    index("idx_atelier_principle_override_actor").on(t.actorUserId),
+    index("idx_atelier_principle_override_target").on(t.targetTable, t.targetId),
+    index("idx_atelier_principle_override_granted").on(t.grantedAt),
+  ],
+);

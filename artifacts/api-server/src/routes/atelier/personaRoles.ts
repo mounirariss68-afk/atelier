@@ -44,6 +44,13 @@ const LEAD_APPROVERS = SET("founding_partner", "partner", "senior_manager", "fin
 // Compensation viewers (day rates, base comp). HR + finance + leadership.
 const COMP_VIEWERS = SET("founding_partner", "partner", "finance", "hr");
 
+// Personnel-contract viewers (employment contract, NDA, COI, ID/tax docs).
+// Subjects can always read their own — caller-side check, not in this set.
+// Task #293 — pairs with the column-level RLS mask
+// `atelier_can_view_personnel(owner_user_id)` defined in
+// lib/db/drizzle/0025_atelier_column_rls.sql.
+const PERSONNEL_CONTRACT_VIEWERS = SET("founding_partner", "partner", "hr");
+
 // Restricted personas that must be narrowed to their explicit engagement
 // grants (no firm-wide visibility). Board observers are intentionally not
 // here — their realm gate is handled separately when the board shell ships.
@@ -75,6 +82,24 @@ export const canApproveAsPartner = (r: RoleLike): boolean =>
 /** Compensation read access (base, day rate, cost). */
 export const canViewCompensation = (r: RoleLike): boolean =>
   !!r && COMP_VIEWERS.has(r);
+
+/**
+ * Personnel-contract read access (employment contract, NDA, COI, ID/tax,
+ * cert files). Self-access (the subject reading their own docs) is checked
+ * by the caller against the doc's owner — this helper only answers the
+ * "is this persona on the firm-wide allow-list?" question. Task #293.
+ */
+export const canViewPersonnelContract = (r: RoleLike): boolean =>
+  !!r && PERSONNEL_CONTRACT_VIEWERS.has(r);
+
+/**
+ * Principle-override (breakglass) actor allow-list. Only partner-tier may
+ * invoke `atelier_breakglass(...)` to unmask comp / personnel-contract
+ * sensitivity for one transaction. The DB function enforces this too.
+ * Task #293.
+ */
+export const canBreakglass = (r: RoleLike): boolean =>
+  !!r && LEADERSHIP.has(r);
 
 /**
  * Persona requires per-engagement scoping and never sees the firm-wide

@@ -35,6 +35,7 @@ import {
   type TeamMixEntry,
 } from "../../lib/atelier-pricing.js";
 import { runPricingStrategist } from "../../lib/atelier-agents/runner.js";
+import { canViewCompensation } from "./personaRoles.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -121,7 +122,9 @@ const router: IRouter = Router();
 // =============================================================
 // Rate cards
 // =============================================================
-router.get("/rate-cards", async (_req, res) => {
+router.get("/rate-cards", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
   const cards = await db
     .select()
     .from(atelierRateCards)
@@ -181,6 +184,8 @@ router.post("/rate-cards", async (req, res) => {
 });
 
 router.get("/rate-cards/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
   const [card] = await db
     .select()
     .from(atelierRateCards)
@@ -193,6 +198,10 @@ router.get("/rate-cards/:id", async (req, res) => {
     .select()
     .from(atelierRateCardRows)
     .where(and(eq(atelierRateCardRows.rateCardId, card.id), isNull(atelierRateCardRows.deletedAt)));
+  // Task #293 — internal day-rate cost is compensation-class data; mask in
+  // route handler as defense-in-depth alongside DB-level RLS on
+  // atelier_rate_card_rows_v (when callers cut over to the view).
+  const showCost = canViewCompensation(me.role);
   res.json({
     id: card.id,
     name: card.name,
@@ -207,7 +216,7 @@ router.get("/rate-cards/:id", async (req, res) => {
       id: r.id,
       role: r.role,
       seniority: r.seniority,
-      dayRateInternalCost: r.dayRateInternalCost,
+      dayRateInternalCost: showCost ? r.dayRateInternalCost : null,
       dayRateClientPrice: r.dayRateClientPrice,
       overheadPct: r.overheadPct,
       currency: r.currency,

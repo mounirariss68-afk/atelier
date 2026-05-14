@@ -84,3 +84,32 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+-- ============================================================
+-- Task #293 — Column-level RLS, self-service invariant, breakglass.
+-- The detailed DDL lives in drizzle/0025_atelier_column_rls.sql so the
+-- migration is replayable; the source-of-truth summary is mirrored here
+-- for code-readers who go to atelier-rls.sql first.
+--
+-- 1. Sensitivity classes (column masks via SECURITY-INVOKER views):
+--      compensation         -> atelier_employees_v.base_compensation,
+--                              atelier_contractors_v.day_rate_internal_cost,
+--                              atelier_partner_firm_resources_v.cost_to_aico_per_day,
+--                              atelier_partner_economics_v.* (revenue_share, base_amount, ...),
+--                              iban / swift / notice / payment_terms / day_rate_amount
+--                              Allow-list: founding_partner | partner | finance | hr.
+--      personnel_contract   -> atelier_person_documents_v.title/file_ref/file_url/notes
+--                              Allow-list: founding_partner | partner | hr | self.
+--    Both classes can be unmasked for one transaction by calling
+--    atelier_breakglass(target_table, target_id, sensitivity, reason),
+--    which writes an audit row to atelier_principle_override and sets
+--    app.principle_override='true' for the calling transaction only.
+--
+-- 2. Self-service invariant — additive permissive policies guarantee
+--    every persona can see/mutate their own row regardless of engagement
+--    narrowing:
+--      atelier_users.id            = app.user_id
+--      atelier_expenses.person_id  = app.user_id
+--      atelier_timesheet_entries.person_id ANY (atelier_caller_person_ids())
+--    Read 0025_atelier_column_rls.sql for the exact DDL.
+-- ============================================================

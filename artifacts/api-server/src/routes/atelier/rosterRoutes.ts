@@ -79,7 +79,7 @@ interface PersonWire {
 }
 
 // Task #292 — Compensation visibility now spans leadership + finance + HR.
-import { canViewCompensation } from "./personaRoles.js";
+import { canViewCompensation, canViewPersonnelContract } from "./personaRoles.js";
 
 function canSeeComp(role: string | undefined | null): boolean {
   return canViewCompensation(role);
@@ -775,6 +775,16 @@ router.get("/roster/people/:id/documents", async (req, res, next) => {
       res.status(404).json({ error: "person-not-found" });
       return;
     }
+    // Task #293 — personnel-contract sensitivity. The DB view
+    // `atelier_person_documents_v` masks file_url/file_ref/notes for
+    // non-viewers; here we additionally hard-gate the list endpoint to
+    // personnel-contract roles or the document owner themself.
+    const ownerUserId = await resolveLinkedUserId(person);
+    const isSelf = !!ownerUserId && ownerUserId === me.id;
+    if (!isSelf && !canViewPersonnelContract(me.role)) {
+      res.status(403).json({ error: "personnel-contract-forbidden" });
+      return;
+    }
     const docs = await db
       .select()
       .from(atelierPersonDocuments)
@@ -866,6 +876,13 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
     const person = await getPerson(req.params.id, canSeeComp(me.role));
     if (!person) {
       res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    // Task #293 — gate the streamed download identically to the list view.
+    const ownerUserId = await resolveLinkedUserId(person);
+    const isSelf = !!ownerUserId && ownerUserId === me.id;
+    if (!isSelf && !canViewPersonnelContract(me.role)) {
+      res.status(403).json({ error: "personnel-contract-forbidden" });
       return;
     }
     const [doc] = await db
