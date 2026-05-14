@@ -18,7 +18,8 @@ export function PrototypeButton({ oppId, oppName }: { oppId: string; oppName: st
     me?.role === "founding_partner" ||
     me?.role === "partner" ||
     me?.role === "senior_manager";
-  const isPartner = me?.role === "partner";
+  // Task #292 — partner-tier (founding_partner|partner) is the partner approver.
+  const isPartner = me?.role === "partner" || me?.role === "founding_partner";
 
   const forge = useAtelierForgePrototype({
     mutation: {
