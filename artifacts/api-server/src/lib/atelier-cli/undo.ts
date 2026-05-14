@@ -28,6 +28,7 @@ import {
   atelierAuditEvents,
   atelierAssets,
   atelierFirmProfile,
+  atelierEngagements,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -125,15 +126,38 @@ const raidSoftDelete: InverseOp = {
   label: "soft-delete the RAID item",
   async run(_ctx, { ids, orgId }) {
     if (ids.length === 0) return { ok: false, undoneEntityIds: [], errorMessage: "no entity id" };
-    // RAID items have no orgId column — they are scoped via engagementId.
-    // Caller persona is already org-checked, and the row was created
-    // by this user's CLI turn, so we filter on id + soft-delete state.
+    // RAID items have no orgId column directly — they are scoped via
+    // engagementId. To harden multi-tenant isolation (code-review iter
+    // 6), we first resolve the candidate id set against the engagements
+    // table filtered by orgId, then soft-delete only the survivors.
+    // Without this, a forged turn referencing another tenant's RAID id
+    // could in principle slip through (defence-in-depth — the calling
+    // persona is already org-checked upstream).
+    const scoped = await db
+      .select({ id: atelierRaidItems.id })
+      .from(atelierRaidItems)
+      .innerJoin(
+        atelierEngagements,
+        eq(atelierEngagements.id, atelierRaidItems.engagementId),
+      )
+      .where(
+        and(
+          inArray(atelierRaidItems.id, ids),
+          eq(atelierEngagements.orgId, orgId),
+          isNull(atelierRaidItems.deletedAt),
+          isNull(atelierEngagements.deletedAt),
+        ),
+      );
+    const scopedIds = scoped.map((r) => r.id);
+    if (scopedIds.length === 0) {
+      return { ok: false, undoneEntityIds: [], errorMessage: "no rows in tenant scope" };
+    }
     const rows = await db
       .update(atelierRaidItems)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(
         and(
-          inArray(atelierRaidItems.id, ids),
+          inArray(atelierRaidItems.id, scopedIds),
           isNull(atelierRaidItems.deletedAt),
         ),
       )
