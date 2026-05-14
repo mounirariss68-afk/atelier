@@ -44,7 +44,12 @@ function nextStageFor(role: string | undefined): { stage: "submitted" | "lead_ap
 }
 
 function TimesheetApprovalsCard({ role }: { role: string }) {
-  const next = nextStageFor(role);
+  // `nextStageFor` returns a fresh object literal every call. Memoize on the
+  // primitive `role` so `next` is reference-stable across renders — otherwise
+  // the `load` callback below gets a new identity every render and the
+  // `useEffect([load])` re-fires forever, flipping `loading` and causing the
+  // priority card to flicker between skeleton/null and content.
+  const next = React.useMemo(() => nextStageFor(role), [role]);
   const [groups, setGroups] = React.useState<ApprovalGroup[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [expanded, setExpanded] = React.useState(false);
@@ -257,82 +262,100 @@ function WorkspaceShelf({ role }: { role: string }) {
   const canSeeFinance = role === "partner";
   const canSeeTimesheet = role !== "partner_firm_resource";
 
-  // Live tile state — kept lightweight, fail-soft to "—".
-  const [ts, setTs] = React.useState<CurrentTimesheet | null>(null);
-  const [headcount, setHeadcount] = React.useState<number | null>(null);
-  const [marginTarget, setMarginTarget] = React.useState<number | null>(null);
+  // Consolidated tile state — a single `Promise.all` resolves all three
+  // fetches together so the tile grid mounts once with all data instead of
+  // re-rendering three times and visibly reflowing as each fetch lands.
+  const [shelf, setShelf] = React.useState<{
+    ts: CurrentTimesheet | null;
+    headcount: number | null;
+    marginTarget: number | null;
+  }>({ ts: null, headcount: null, marginTarget: null });
 
   React.useEffect(() => {
-    if (!canSeeTimesheet) return;
     let alive = true;
-    void fetch("/api/atelier/ledger/timesheets/current", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: CurrentTimesheet | null) => { if (alive) setTs(j); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [canSeeTimesheet]);
+    const safeFetch = async <T,>(url: string, fallback: T): Promise<T> => {
+      try {
+        const r = await fetch(url, { credentials: "include" });
+        if (!r.ok) return fallback;
+        return (await r.json()) as T;
+      } catch {
+        return fallback;
+      }
+    };
 
-  React.useEffect(() => {
-    if (!canSeeRoster) return;
-    let alive = true;
-    void fetch("/api/atelier/roster/people", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { people: [] }))
-      .then((j: { people?: unknown[] }) => { if (alive) setHeadcount((j.people ?? []).length); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [canSeeRoster]);
+    void Promise.all([
+      canSeeTimesheet
+        ? safeFetch<CurrentTimesheet | null>("/api/atelier/ledger/timesheets/current", null)
+        : Promise.resolve(null),
+      canSeeRoster
+        ? safeFetch<{ people?: unknown[] }>("/api/atelier/roster/people", { people: [] })
+        : Promise.resolve(null),
+      canSeeFinance
+        ? safeFetch<{ targetMarginPct?: number } | null>("/api/atelier/pricing/margin-policy", null)
+        : Promise.resolve(null),
+    ]).then(([tsRes, rosterRes, marginRes]) => {
+      if (!alive) return;
+      setShelf({
+        ts: tsRes,
+        headcount: rosterRes ? (rosterRes.people ?? []).length : null,
+        marginTarget:
+          marginRes && typeof marginRes.targetMarginPct === "number"
+            ? marginRes.targetMarginPct
+            : null,
+      });
+    });
 
-  React.useEffect(() => {
-    if (!canSeeFinance) return;
-    let alive = true;
-    void fetch("/api/atelier/pricing/margin-policy", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { targetMarginPct?: number } | null) => {
-        if (alive && j && typeof j.targetMarginPct === "number") setMarginTarget(j.targetMarginPct);
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [canSeeFinance]);
+    return () => {
+      alive = false;
+    };
+  }, [canSeeTimesheet, canSeeRoster, canSeeFinance]);
 
-  const tiles: Array<{ href: string; label: string; icon: React.ReactNode; state: React.ReactNode; testid: string }> = [];
-  if (canSeeTimesheet) {
-    const w = ts?.week;
-    tiles.push({
-      href: "/ledger",
-      label: "Timesheet",
-      icon: <ClipboardList className="w-4 h-4" />,
-      state: w
-        ? <>
-            <span className="text-text">{w.totalHours.toFixed(1)}h</span>
-            <span className="text-text-faint"> · </span>
-            <span className="text-text-mute capitalize">{w.status.replace("_", " ")}</span>
-          </>
-        : <span className="text-text-faint">log this week</span>,
-      testid: "tile-workspace-timesheet",
-    });
-  }
-  if (canSeeRoster) {
-    tiles.push({
-      href: "/roster/people",
-      label: "Roster",
-      icon: <Users className="w-4 h-4" />,
-      state: headcount != null
-        ? <><span className="text-text">{headcount}</span><span className="text-text-faint"> people</span></>
-        : <span className="text-text-faint">firm-wide</span>,
-      testid: "tile-workspace-roster",
-    });
-  }
-  if (canSeeFinance) {
-    tiles.push({
-      href: "/finance",
-      label: "Finance",
-      icon: <Wallet className="w-4 h-4" />,
-      state: marginTarget != null
-        ? <><span className="text-text-mute">target</span> <span className="text-text">{(marginTarget * 100).toFixed(0)}%</span></>
-        : <span className="text-text-faint">rate cards</span>,
-      testid: "tile-workspace-finance",
-    });
-  }
+  const { ts, headcount, marginTarget } = shelf;
+
+  // Memoize the tile array so identical data doesn't allocate new
+  // references every render.
+  const tiles = React.useMemo<Array<{ href: string; label: string; icon: React.ReactNode; state: React.ReactNode; testid: string }>>(() => {
+    const out: Array<{ href: string; label: string; icon: React.ReactNode; state: React.ReactNode; testid: string }> = [];
+    if (canSeeTimesheet) {
+      const w = ts?.week;
+      out.push({
+        href: "/ledger",
+        label: "Timesheet",
+        icon: <ClipboardList className="w-4 h-4" />,
+        state: w
+          ? <>
+              <span className="text-text">{w.totalHours.toFixed(1)}h</span>
+              <span className="text-text-faint"> · </span>
+              <span className="text-text-mute capitalize">{w.status.replace("_", " ")}</span>
+            </>
+          : <span className="text-text-faint">log this week</span>,
+        testid: "tile-workspace-timesheet",
+      });
+    }
+    if (canSeeRoster) {
+      out.push({
+        href: "/roster/people",
+        label: "Roster",
+        icon: <Users className="w-4 h-4" />,
+        state: headcount != null
+          ? <><span className="text-text">{headcount}</span><span className="text-text-faint"> people</span></>
+          : <span className="text-text-faint">firm-wide</span>,
+        testid: "tile-workspace-roster",
+      });
+    }
+    if (canSeeFinance) {
+      out.push({
+        href: "/finance",
+        label: "Finance",
+        icon: <Wallet className="w-4 h-4" />,
+        state: marginTarget != null
+          ? <><span className="text-text-mute">target</span> <span className="text-text">{(marginTarget * 100).toFixed(0)}%</span></>
+          : <span className="text-text-faint">rate cards</span>,
+        testid: "tile-workspace-finance",
+      });
+    }
+    return out;
+  }, [canSeeTimesheet, canSeeRoster, canSeeFinance, ts, headcount, marginTarget]);
 
   if (tiles.length === 0) return null;
 
@@ -358,12 +381,15 @@ function WorkspaceShelf({ role }: { role: string }) {
 }
 
 export default function Home() {
-  const { data: home, isLoading } = useAtelierGetHome();
+  // Use `isPending` (initial load only) instead of `isLoading` so background
+  // refetches — e.g. on window focus or after a persona switch — don't flip
+  // the page back into the full-page skeleton and snap to content again.
+  const { data: home, isPending } = useAtelierGetHome();
   const { data: me } = useAtelierGetMe();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="container-atelier py-12 space-y-12">
         <Skeleton className="h-8 w-48 bg-bg-elevate" />
