@@ -99,6 +99,11 @@ export interface CliTurn {
   asyncJob?: { jobId: string; turnId: string };
   /** Per-step exclusion checkboxes for bulk plans (>20 steps). */
   excludedStepIndexes?: number[];
+  /** Inline plan-row label edits keyed by step index, applied before
+   * confirmation. Forwarded with the confirm POST as `planEdits`; the
+   * server confirm route currently ignores unknown body fields, so
+   * this is forward-safe for downstream Tasks #334/#335 enforcement. */
+  planEdits?: Record<number, string>;
 }
 
 export interface CliCapability {

@@ -267,14 +267,14 @@ router.get("/cli/sessions/:id", async (req, res) => {
 router.get("/cli/capabilities", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const persona = {
+  // Match CliPersona shape exactly (lib/atelier-cli/index.ts:89) — no
+  // `locale` field, so no `as never` cast required.
+  const caps = capabilitiesForPersona({
     id: me.id,
+    name: me.name,
     role: me.role,
     orgId: me.orgId,
-    name: me.name,
-    locale: (me.locale ?? "en") as "en" | "ar",
-  };
-  const caps = capabilitiesForPersona(persona as never);
+  });
   res.json({
     schemaVersion: CATALOG_SCHEMA_VERSION,
     capabilities: caps.map((c) => ({

@@ -65,14 +65,23 @@ export interface UseCliReturn {
   confirm: (
     typedName?: string,
     excludedStepIndexes?: number[],
+    planEdits?: Record<number, string>,
   ) => Promise<void>;
   cancel: () => Promise<void>;
   pickDisambig: (optionId: string, optionLabel: string) => Promise<void>;
   toggleStepExclusion: (stepIndex: number) => void;
+  /** Inline-edit a plan row's label on the in-flight turn. Persisted
+   * via the `planEdits` map on the turn and forwarded to the server
+   * with the confirm POST. */
+  setPlanRowEdit: (stepIndex: number, label: string) => void;
   abort: () => void;
   reset: () => void;
   capabilities: CliCapability[];
   capabilitiesError: string | null;
+  /** Server-reported catalog schemaVersion (Task #332); used for stale
+   * detection on saved prompts so a save authored against v1 surfaces
+   * a warning when the catalog rolls forward. */
+  catalogSchemaVersion: number | null;
 }
 
 /** Parse one fully-buffered SSE message block into a `CliFrame`. */
@@ -154,7 +163,7 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       };
     }
     case "needs_confirmation": {
-      const d = frame.data as CliPendingConfirmation;
+      const d = frame.data as unknown as CliPendingConfirmation;
       return {
         ...turn,
         status: "needs_confirmation",
@@ -193,10 +202,29 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
         sessionId?: string;
         result?: CliResultCard;
       };
-      const next: CliTurnStatus =
-        turn.status === "partial" ? "partial" :
-        turn.status === "async_handoff" ? "async_handoff" :
-        d.status === "cancelled" ? "cancelled" : "complete";
+      // The server emits a `final` frame after every terminal *and*
+      // after every interactive pause (needs_confirmation,
+      // needs_disambiguation, async_dispatched). The orchestrator's
+      // status enum (`success` | `awaiting_confirmation` | `partial` |
+      // `cancelled` | `error` | `async_dispatched` | `read_only_no_op`)
+      // does not 1:1 match the client's status enum, so we map
+      // explicitly. Coercing to "complete" by default — as a previous
+      // revision did — clobbers the interactive states the rest of
+      // the UI keys off of.
+      const ss = d.status;
+      let next: CliTurnStatus;
+      if (ss === "awaiting_confirmation") next = "needs_confirmation";
+      else if (ss === "async_dispatched") next = "async_handoff";
+      else if (ss === "partial") next = "partial";
+      else if (ss === "cancelled") next = "cancelled";
+      else if (ss === "error") next = "error";
+      else if (turn.status === "needs_disambiguation") {
+        // Server has no dedicated status string for this; preserve.
+        next = "needs_disambiguation";
+      } else {
+        // success / read_only_no_op / undefined → terminal complete.
+        next = "complete";
+      }
       return {
         ...turn,
         status: next,
@@ -225,6 +253,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
   const [current, setCurrent] = useState<CliTurn | null>(null);
   const [capabilities, setCapabilities] = useState<CliCapability[]>([]);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
+  const [catalogSchemaVersion, setCatalogSchemaVersion] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   /**
    * Token of the in-flight turn. Stream callbacks read this on every
@@ -242,9 +271,10 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     let alive = true;
     fetch("/api/atelier/cli/capabilities", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((j: { capabilities?: CliCapability[] }) => {
+      .then((j: { capabilities?: CliCapability[]; schemaVersion?: number }) => {
         if (alive) {
           setCapabilities(j.capabilities ?? []);
+          setCatalogSchemaVersion(j.schemaVersion ?? null);
           setCapabilitiesError(null);
         }
       })
@@ -397,7 +427,11 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
   );
 
   const confirm = useCallback(
-    async (typedName?: string, excludedStepIndexes?: number[]): Promise<void> => {
+    async (
+      typedName?: string,
+      excludedStepIndexes?: number[],
+      planEdits?: Record<number, string>,
+    ): Promise<void> => {
       if (!current?.serverTurnId) return;
       abortRef.current?.abort();
       const ctrl = new AbortController();
@@ -420,6 +454,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
               // confirm route ignores unknown fields (see cliRoutes.ts:
               // body destructures only `typedName`).
               excludedStepIndexes: excludedStepIndexes ?? [],
+              planEdits: planEdits ?? {},
             }),
             signal: ctrl.signal,
           },
@@ -492,6 +527,21 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     });
   }, []);
 
+  const setPlanRowEdit = useCallback((stepIndex: number, label: string) => {
+    setCurrent((c) => {
+      if (!c) return c;
+      const next: Record<number, string> = { ...(c.planEdits ?? {}) };
+      if (label.trim() === "") {
+        delete next[stepIndex];
+      } else {
+        next[stepIndex] = label;
+      }
+      const updated: CliTurn = { ...c, planEdits: next };
+      setTurns((t) => [updated, ...t.filter((x) => x.clientTurnKey !== updated.clientTurnKey)]);
+      return updated;
+    });
+  }, []);
+
   const abort = useCallback(() => {
     abortRef.current?.abort();
   }, []);
@@ -513,9 +563,11 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     cancel,
     pickDisambig,
     toggleStepExclusion,
+    setPlanRowEdit,
     abort,
     reset,
     capabilities,
     capabilitiesError,
+    catalogSchemaVersion,
   };
 }

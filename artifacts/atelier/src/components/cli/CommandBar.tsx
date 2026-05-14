@@ -237,6 +237,18 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
     const text = input.trim();
     if (!text || cli.status === "streaming") return;
     if (text.length > MAX_INPUT_CHARS) return;
+    // /help is a pure client-side concern: it opens the catalog drawer
+    // instead of round-tripping to the orchestrator. Match the locale's
+    // alias plus the bare /help and /? canonical forms so a user typing
+    // any of them gets the drawer.
+    const head = text.split(/\s/)[0].toLowerCase();
+    if (head === "/help" || head === "/?" || head === "/aide" || head === "/مساعدة") {
+      setHelpOpen(true);
+      setSavedOpen(false);
+      setInput("");
+      setSlashOpen(false);
+      return;
+    }
     lastPromptRef.current = text;
     setInput("");
     setSlashOpen(false);
@@ -266,8 +278,10 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
     void cli.confirm(
       required ? typedName.trim() : undefined,
       cli.current?.excludedStepIndexes ?? [],
+      cli.current?.planEdits ?? {},
     );
     setTypedName("");
+    setEditingPlanRow(null);
   }
 
   function handleAttach(files: FileList | null) {
@@ -364,7 +378,10 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
       label,
       prompt: c.prompt,
       locale,
-      schemaVersionAtSave: 1,
+      // Stamp the prompt with the catalog version active at save time;
+      // a later catalog roll surfaces the stale-warning chip in the
+      // saved drawer (SavedPanel below).
+      schemaVersionAtSave: cli.catalogSchemaVersion ?? 1,
     });
     setSavedPrompts((rows) => [sp, ...rows]);
   }
@@ -432,7 +449,7 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
           ) : savedOpen ? (
             <SavedPanel
               prompts={savedPrompts}
-              currentSchemaVersion={1}
+              currentSchemaVersion={cli.catalogSchemaVersion ?? 1}
               locale={locale}
               onRun={(p) => {
                 setSavedOpen(false);
@@ -463,6 +480,7 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
               onCancelTurn={() => void cli.cancel()}
               onPickDisambig={(id, label) => void cli.pickDisambig(id, label)}
               onToggleStep={cli.toggleStepExclusion}
+              onSetRowEdit={cli.setPlanRowEdit}
               onPickSuggestion={(text) => {
                 setInput(text);
                 requestAnimationFrame(() => composerRef.current?.focus());
@@ -772,6 +790,7 @@ function Transcript({
   onCancelTurn,
   onPickDisambig,
   onToggleStep,
+  onSetRowEdit,
   onPickSuggestion,
   onCopyJson,
   onCopyMarkdown,
@@ -794,6 +813,7 @@ function Transcript({
   onCancelTurn: () => void;
   onPickDisambig: (id: string, label: string) => void;
   onToggleStep: (i: number) => void;
+  onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
   onCopyJson: (t: CliTurn) => void;
   onCopyMarkdown: (t: CliTurn) => void;
@@ -858,6 +878,7 @@ function Transcript({
                   onCancelTurn={onCancelTurn}
                   onPickDisambig={onPickDisambig}
                   onToggleStep={onToggleStep}
+                  onSetRowEdit={onSetRowEdit}
                   onPickSuggestion={onPickSuggestion}
                   onCopyJson={() => onCopyJson(t)}
                   onCopyMarkdown={() => onCopyMarkdown(t)}
@@ -888,6 +909,7 @@ function TurnBody({
   onCancelTurn,
   onPickDisambig,
   onToggleStep,
+  onSetRowEdit,
   onPickSuggestion,
   onCopyJson,
   onCopyMarkdown,
@@ -908,6 +930,7 @@ function TurnBody({
   onCancelTurn: () => void;
   onPickDisambig: (id: string, label: string) => void;
   onToggleStep: (i: number) => void;
+  onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
   onCopyJson: () => void;
   onCopyMarkdown: () => void;
@@ -984,12 +1007,14 @@ function TurnBody({
         <PlanCard
           plan={turn.proposedPlan}
           excluded={turn.excludedStepIndexes ?? []}
+          planEdits={turn.planEdits ?? {}}
           locale={locale}
           showAll={showAllSteps}
           setShowAll={setShowAllSteps}
           editingRow={editingPlanRow}
           setEditingRow={setEditingPlanRow}
           onToggleStep={onToggleStep}
+          onSetRowEdit={onSetRowEdit}
           isReadOnly={!isCurrent || turn.status !== "needs_confirmation"}
         />
       )}
@@ -1151,22 +1176,26 @@ function TurnBody({
 function PlanCard({
   plan,
   excluded,
+  planEdits,
   locale,
   showAll,
   setShowAll,
   editingRow,
   setEditingRow,
   onToggleStep,
+  onSetRowEdit,
   isReadOnly,
 }: {
   plan: import("./types").CliPlanStep[];
   excluded: number[];
+  planEdits: Record<number, string>;
   locale: CliLocale;
   showAll: boolean;
   setShowAll: (v: boolean) => void;
   editingRow: number | null;
   setEditingRow: (n: number | null) => void;
   onToggleStep: (i: number) => void;
+  onSetRowEdit: (i: number, label: string) => void;
   isReadOnly: boolean;
 }) {
   const isBulk = plan.length > 20;
@@ -1222,14 +1251,56 @@ function PlanCard({
               <span className="text-text-faint font-mono text-xs mt-0.5 shrink-0">
                 {i + 1}.
               </span>
-              <span className="flex-1 leading-snug">{step.label}</span>
+              {!isReadOnly && editingRow === i ? (
+                <input
+                  type="text"
+                  defaultValue={planEdits[i] ?? step.label}
+                  autoFocus
+                  onBlur={(e) => {
+                    onSetRowEdit(i, e.currentTarget.value);
+                    setEditingRow(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onSetRowEdit(i, (e.target as HTMLInputElement).value);
+                      setEditingRow(null);
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      setEditingRow(null);
+                    }
+                  }}
+                  className="flex-1 bg-bg-deep border border-gold/50 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold"
+                  data-testid="cli-plan-row-edit"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => !isReadOnly && setEditingRow(i)}
+                  disabled={isReadOnly}
+                  className={cn(
+                    "flex-1 text-start leading-snug",
+                    !isReadOnly && "hover:bg-bg-elevate-2 rounded px-1 cursor-text",
+                  )}
+                  title={isReadOnly ? undefined : "Click to edit"}
+                  data-testid="cli-plan-row-label"
+                >
+                  {planEdits[i] ?? step.label}
+                  {planEdits[i] !== undefined && (
+                    <span
+                      className="ml-1 text-[10px] font-mono text-gold"
+                      title="edited"
+                      data-testid="cli-plan-row-edited"
+                    >
+                      ✎
+                    </span>
+                  )}
+                </button>
+              )}
               {step.isWrite && (
                 <span className="text-[10px] font-mono text-gold" title="write">
                   ✎
                 </span>
-              )}
-              {!isReadOnly && editingRow === i && (
-                <span className="text-[10px] text-text-faint italic">edit inline</span>
               )}
             </div>
           );
