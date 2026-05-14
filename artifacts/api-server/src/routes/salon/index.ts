@@ -1079,10 +1079,10 @@ async function buildPublicProposal(proposalId: string, recipient: typeof atelier
     ),
     pricingModel: pricing
       ? {
-          totalRevenueUsd: Number(pricing.totalRevenueUsd ?? 0),
-          totalCostUsd: Number(pricing.totalCostUsd ?? 0),
-          marginPct: Number(pricing.marginPct ?? 0),
-          verdict: pricing.verdict ?? "n/a",
+          totalRevenueUsd: Number(pricing.computedPriceUsd ?? 0),
+          totalCostUsd: Number(pricing.computedCostUsd ?? 0),
+          marginPct: Number(pricing.computedMarginPct ?? 0),
+          verdict: pricing.marginLockStatus ?? "n/a",
         }
       : null,
     complianceMatrix: (proposal.complianceMatrix as Array<{
