@@ -1686,7 +1686,13 @@ export async function runTurn(
           sessionId: dispatchSessionId,
           persona,
           pending: dispatchPending,
-        }).catch(() => undefined);
+        }).catch((err) => {
+          console.error(
+            "[atelier-cli] runAsyncJob crashed",
+            jobId,
+            err instanceof Error ? err.message : String(err),
+          );
+        });
       });
       pendingWrite = null;
     }
@@ -1722,29 +1728,38 @@ export async function runTurn(
           },
         });
       }
-      // Best-effort persistence — never let DB hiccups mask the original
-      // error path or skip the audit row.
-      await db
-        .update(atelierCliTurns)
-        .set({
-          status,
-          statusMessage: pendingWrite ? "awaiting confirmation" : runtimeError ?? status,
-          frames,
-          toolCalls,
-          pendingWrite,
-          planJson,
-          stepResults,
-          costCents,
-          tokensIn: totalIn,
-          tokensOut: totalOut,
-          model: lastModel,
-          latencyMs,
-          lastStepIdx: toolCalls.length,
-          finishedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(atelierCliTurns.id, turnId))
-        .catch(() => undefined);
+      // Persist terminal state. We attempt every write so a failure on
+      // one (e.g. transient DB error during the audit insert) does not
+      // skip the others, but if ANY persist fails we mark the turn
+      // `error`, log the failures, and surface an error frame so the
+      // caller is not misled by a phantom success.
+      const persistErrors: string[] = [];
+      try {
+        await db
+          .update(atelierCliTurns)
+          .set({
+            status,
+            statusMessage: pendingWrite ? "awaiting confirmation" : runtimeError ?? status,
+            frames,
+            toolCalls,
+            pendingWrite,
+            planJson,
+            stepResults,
+            costCents,
+            tokensIn: totalIn,
+            tokensOut: totalOut,
+            model: lastModel,
+            latencyMs,
+            lastStepIdx: toolCalls.length,
+            finishedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(atelierCliTurns.id, turnId));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[atelier-cli] turn persist failed", turnId, msg);
+        persistErrors.push(`turn:${msg}`);
+      }
 
       // Update session bookkeeping. Maintain a short rolling summary by
       // appending a one-line trace per turn (capped at ~2KB).
@@ -1754,20 +1769,31 @@ export async function runTurn(
         .filter((l) => l.trim().length > 0)
         .slice(-30)
         .join("\n");
-      await db
-        .update(atelierCliSessions)
-        .set({
-          turnCount: (session.turnCount ?? 0) + 1,
-          recentTurnIds: [...((session.recentTurnIds as string[]) ?? []), turnId].slice(-20),
-          rollingSummary: nextSummary.slice(0, 2000),
-          lastTurnAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(atelierCliSessions.id, session.id))
-        .catch(() => undefined);
+      try {
+        await db
+          .update(atelierCliSessions)
+          .set({
+            turnCount: (session.turnCount ?? 0) + 1,
+            recentTurnIds: [...((session.recentTurnIds as string[]) ?? []), turnId].slice(-20),
+            rollingSummary: nextSummary.slice(0, 2000),
+            lastTurnAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(atelierCliSessions.id, session.id));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[atelier-cli] session bookkeeping failed", session.id, msg);
+        persistErrors.push(`session:${msg}`);
+      }
 
       if (costCents > 0) {
-        await chargeSession(session.id, costCents).catch(() => undefined);
+        try {
+          await chargeSession(session.id, costCents);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[atelier-cli] chargeSession failed", session.id, msg);
+          persistErrors.push(`charge:${msg}`);
+        }
       }
 
       // Single canonical `cli.turn` audit row per turn. We only write it
@@ -1777,37 +1803,55 @@ export async function runTurn(
       // write the canonical row when those flows actually terminate.
       const writeTerminalAudit =
         status !== "awaiting_confirmation" && status !== "async_dispatched";
-      if (writeTerminalAudit) await db
-        .insert(atelierAuditEvents)
-        .values({
-          id: rid("aud"),
-          entityType: "cli_turn",
-          entityId: turnId,
-          actorType: "human",
-          actorId: persona.id,
-          actorLabel: persona.name,
-          action: "cli.turn",
-          payload: {
-            sessionId: session.id,
-            intent: input.intent ?? null,
-            status,
-            toolCount: toolCalls.length,
-            writeStepCount: writeStepCount(),
-            costCents,
-            tokensIn: totalIn,
-            tokensOut: totalOut,
-            latencyMs,
-            model: lastModel,
-            mock: MOCK_MODE,
-            dryRun: input.dryRun === true,
-            attachmentCount: (input.attachmentIds ?? []).length,
-            hasPageContext: !!pageCtx,
-            classifier: classification,
-            error: runtimeError ?? undefined,
-          },
-          payloadSummary: `CLI turn ${status} (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})${input.intent ? ` · intent=${input.intent}` : ""}${input.dryRun ? " · dryRun" : ""}${runtimeError ? ` · err=${runtimeError.slice(0, 80)}` : ""}`,
-        })
-        .catch(() => undefined);
+      if (writeTerminalAudit) {
+        try {
+          await db.insert(atelierAuditEvents).values({
+            id: rid("aud"),
+            entityType: "cli_turn",
+            entityId: turnId,
+            actorType: "human",
+            actorId: persona.id,
+            actorLabel: persona.name,
+            action: "cli.turn",
+            payload: {
+              sessionId: session.id,
+              intent: input.intent ?? null,
+              status,
+              toolCount: toolCalls.length,
+              writeStepCount: writeStepCount(),
+              costCents,
+              tokensIn: totalIn,
+              tokensOut: totalOut,
+              latencyMs,
+              model: lastModel,
+              mock: MOCK_MODE,
+              dryRun: input.dryRun === true,
+              attachmentCount: (input.attachmentIds ?? []).length,
+              hasPageContext: !!pageCtx,
+              classifier: classification,
+              error: runtimeError ?? undefined,
+              persistErrors: persistErrors.length ? persistErrors : undefined,
+            },
+            payloadSummary: `CLI turn ${status} (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})${input.intent ? ` · intent=${input.intent}` : ""}${input.dryRun ? " · dryRun" : ""}${runtimeError ? ` · err=${runtimeError.slice(0, 80)}` : ""}`,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error("[atelier-cli] audit insert failed", turnId, msg);
+          persistErrors.push(`audit:${msg}`);
+        }
+      }
+
+      // If any critical persistence failed, demote the reported status
+      // to `error` and surface an error frame so the caller cannot mis-
+      // interpret a phantom success.
+      if (persistErrors.length) {
+        const summary = persistErrors.join("; ");
+        if (!frames.some((f) => f.type === "error")) {
+          record({ type: "error", data: { code: "persistence", message: summary } });
+        }
+        status = "error";
+        runtimeError = runtimeError ?? `persistence: ${summary}`;
+      }
     }
 
     return { turnId, sessionId: session.id, status };

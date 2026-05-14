@@ -136,8 +136,18 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
   openSse(res);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
   const emit = (frame: CliFrame) => writeSseFrame(res, frame);
+  // Confirm performs the actual write — it must serialize through the
+  // same per-user FIFO queue runTurn uses so a confirm never races
+  // another in-flight write for the same user.
   try {
-    await confirmPendingWrite(req.params.id, persona, emit);
+    await runTurn(
+      {
+        sessionId: null,
+        prompt: "(confirm)",
+        confirmTurnId: req.params.id,
+      },
+      { persona, emit },
+    );
   } catch (err) {
     emit({
       type: "error",
