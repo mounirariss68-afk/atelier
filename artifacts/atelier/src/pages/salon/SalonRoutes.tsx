@@ -570,11 +570,60 @@ function EngagementRoute(props: { slug: string; me: SalonMe }) {
   );
 }
 
+// =============================================================
+// Task #297 — Per-recipient proposal view. Token IS the auth — no
+// salon persona required. We render the API's HTML inside a sandboxed
+// iframe and let the watermark in the HTML do the heavy lifting; we
+// add a thin Salon-style chrome so the recipient knows where they are.
+// =============================================================
+function SalonProposalView({ proposalId, token }: { proposalId: string; token: string }) {
+  const src = `/api/salon/proposal/${proposalId}/${token}/html`;
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    // HEAD-style fetch on the JSON endpoint to detect 404/410 cleanly.
+    fetch(`/api/salon/proposal/${proposalId}/${token}`, { credentials: "include" })
+      .then((r) => {
+        if (r.status === 404) setError("This share link is not valid.");
+        else if (r.status === 410) setError("This share link has expired or been revoked.");
+        else if (!r.ok) setError(`Could not load (${r.status}).`);
+      })
+      .catch(() => setError("Could not reach the server."));
+  }, [proposalId, token]);
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg p-6">
+        <div className="max-w-md w-full border border-border rounded p-6 text-center">
+          <div className="text-base font-medium text-text">Unavailable</div>
+          <div className="text-sm text-text-mute mt-2">{error}</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="min-h-screen w-full bg-white" data-testid="salon-proposal-view">
+      <iframe
+        src={src}
+        title="Proposal"
+        sandbox="allow-same-origin"
+        className="block w-full"
+        style={{ height: "100vh", border: 0 }}
+        data-testid="salon-proposal-iframe"
+      />
+    </div>
+  );
+}
+
 export function SalonRoot() {
+  const [matchProposal, proposalParams] = useRoute<{ proposalId: string; token: string }>("/salon/proposal/:proposalId/:token");
   const [matchEng] = useRoute<{ slug: string }>("/salon/:slug/:rest*");
   const [matchEngTop] = useRoute<{ slug: string }>("/salon/:slug");
   const [matchSignin] = useRoute("/salon/sign-in");
   if (matchSignin) return <SalonSignIn />;
+  if (matchProposal && proposalParams) {
+    return <SalonProposalView proposalId={proposalParams.proposalId} token={proposalParams.token} />;
+  }
 
   return (
     <MeWrapper>

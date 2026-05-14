@@ -18,6 +18,7 @@ import Agents from "@/pages/Agents";
 import AgentProfile from "@/pages/AgentProfile";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
+import FirmProfile from "@/pages/FirmProfile";
 import ReferenceData from "@/pages/admin/ReferenceData";
 import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
@@ -89,6 +90,7 @@ function Router() {
         <Route path="/engagements" component={Engagements} />
         <Route path="/engagements/:engId" component={Engagement} />
         <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
+        <Route path="/atelier/firm-profile" component={FirmProfile} />
         <Route path="/atelier" component={AtelierIndex} />
         <Route path="/atelier/:section" component={AtelierIndex} />
         <Route path="/roster/access-matrix" component={RosterAccessMatrix} />

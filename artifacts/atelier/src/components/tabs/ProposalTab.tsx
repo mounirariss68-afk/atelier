@@ -65,12 +65,19 @@ export function ProposalTab({ oppId }: { oppId: string }) {
   const [sheetDeadline, setSheetDeadline] = React.useState("");
   const [sheetMargin, setSheetMargin] = React.useState("45");
   const [sheetWeeks, setSheetWeeks] = React.useState("12");
+  // Task #297 — 15-section spine. Cover + Company Profile + Annexes + Appendices added.
   const [sheetSections, setSheetSections] = React.useState<string[]>([
-    "context","approach","workplan","team","pricing","case_studies","terms","compliance",
+    "cover","exec_summary","context","hypothesis","approach","workplan","team","pricing",
+    "case_studies","company_profile","value_case","terms","compliance","annexes","appendices",
   ]);
   const [sheetTeam, setSheetTeam] = React.useState("partner:15,lead:80,consultant:60,consultant:80");
   const [sheetRfpName, setSheetRfpName] = React.useState<string | null>(null);
-  const ALL_SECTIONS = ["context","approach","workplan","team","pricing","case_studies","terms","compliance"] as const;
+  const ALL_SECTIONS = [
+    "cover","exec_summary","context","hypothesis","approach","workplan","team","pricing",
+    "case_studies","company_profile","value_case","terms","compliance","annexes","appendices",
+  ] as const;
+  // Task #297 — top-level workspace tab (workspace | preview | recipients).
+  const [view, setView] = React.useState<"workspace" | "preview" | "recipients">("workspace");
   const approvePricing = useAtelierApproveProposalPricing({
     mutation: {
       onSuccess: () => qc.invalidateQueries({ queryKey: getAtelierGetProposalQueryKey(oppId) }),
@@ -210,10 +217,30 @@ export function ProposalTab({ oppId }: { oppId: string }) {
 
   return (
     <div className="space-y-5" data-testid="tab-proposal-content">
-      {showSheet && (
+      {/* Task #297 — Workspace / Live preview / Recipients top-tab. */}
+      <div className="flex items-center gap-1 text-xs font-mono uppercase tracking-wide" data-testid="proposal-view-tabs">
+        {(["workspace", "preview", "recipients"] as const).map((v) => (
+          <button
+            key={v}
+            data-testid={`proposal-view-${v}`}
+            onClick={() => setView(v)}
+            className={`px-3 py-1.5 rounded border ${view === v ? "border-text bg-bg-elevate text-text" : "border-border-soft text-text-mute hover:border-text-mute"}`}
+          >{v === "workspace" ? "Workspace" : v === "preview" ? "Live preview" : "Recipients"}</button>
+        ))}
+      </div>
+      {view === "preview" ? (
+        <ProposalLivePreview proposalId={proposal.id} />
+      ) : view === "recipients" ? (
+        <ProposalRecipients proposalId={proposal.id} />
+      ) : null}
+      {view !== "workspace" ? null : showSheet && (
         <PromptSheet submitLabel="Recompose with these inputs"
           onSubmit={() => compose.mutate({ oppId, data: buildComposeBody() })} />
       )}
+      {view !== "workspace" ? null : <></>}
+      {view !== "workspace" ? null : (
+      <>
+
       <Card className="p-4 space-y-2">
         <div className="flex items-center justify-between">
           <div>
@@ -475,6 +502,163 @@ export function ProposalTab({ oppId }: { oppId: string }) {
           </div>
         </Card>
       )}
+      </>
+      )}
     </div>
+  );
+}
+
+// =============================================================
+// Task #297 — Live preview iframe + recipient share-link manager.
+// Use raw fetch (no codegen) for the new endpoints.
+// =============================================================
+const ATELIER_API = `${(import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? "/"}api/atelier`;
+
+function ProposalLivePreview({ proposalId }: { proposalId: string }) {
+  // Bust the iframe cache when the proposal id (or a manual refresh) changes.
+  const [tick, setTick] = React.useState(0);
+  const src = `${ATELIER_API}/proposals/${proposalId}/preview-html?t=${tick}`;
+  return (
+    <Card className="p-3 space-y-2" data-testid="proposal-live-preview">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Live preview</div>
+        <PillButton variant="ghost" data-testid="refresh-preview" onClick={() => setTick((x) => x + 1)}>Refresh</PillButton>
+      </div>
+      <div className="rounded border border-border-soft overflow-hidden bg-white" style={{ height: "75vh" }}>
+        <iframe
+          key={tick}
+          src={src}
+          title="Proposal live preview"
+          className="w-full h-full"
+          data-testid="proposal-preview-iframe"
+        />
+      </div>
+    </Card>
+  );
+}
+
+interface RecipientWire {
+  id: string;
+  recipientName: string;
+  recipientEmail: string | null;
+  recipientOrg: string | null;
+  shareUrl: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  openCount: number;
+  lastOpenedAt: string | null;
+  createdAt: string;
+}
+
+function ProposalRecipients({ proposalId }: { proposalId: string }) {
+  const [rows, setRows] = React.useState<RecipientWire[] | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [name, setName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [org, setOrg] = React.useState("");
+  const [expiry, setExpiry] = React.useState("30");
+  const [busy, setBusy] = React.useState(false);
+
+  const reload = React.useCallback(async () => {
+    try {
+      const res = await fetch(`${ATELIER_API}/proposals/${proposalId}/recipients`, { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const j = (await res.json()) as { recipients: RecipientWire[] };
+      setRows(j.recipients);
+    } catch (e) { setErr((e as Error).message); }
+  }, [proposalId]);
+
+  React.useEffect(() => { reload(); }, [reload]);
+
+  async function add() {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`${ATELIER_API}/proposals/${proposalId}/recipients`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientName: name.trim(),
+          recipientEmail: email.trim() || undefined,
+          recipientOrg: org.trim() || undefined,
+          expiresInDays: Number(expiry) || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setName(""); setEmail(""); setOrg("");
+      await reload();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function revoke(id: string) {
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`${ATELIER_API}/proposal-recipients/${id}/revoke`, {
+        method: "POST", credentials: "include",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await reload();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Card className="p-4 space-y-3" data-testid="proposal-recipients">
+      <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Recipients</div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+        <input className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text"
+          placeholder="Recipient name" value={name} onChange={(e) => setName(e.target.value)} data-testid="input-recipient-name" />
+        <input className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text"
+          placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="input-recipient-email" />
+        <input className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text"
+          placeholder="Org (optional)" value={org} onChange={(e) => setOrg(e.target.value)} data-testid="input-recipient-org" />
+        <div className="flex items-center gap-2">
+          <input className="rounded border border-border-soft bg-bg-deep px-3 py-2 text-sm text-text w-20"
+            placeholder="days" value={expiry} onChange={(e) => setExpiry(e.target.value)} data-testid="input-recipient-expiry" />
+          <PillButton onClick={add} disabled={busy || !name.trim()} data-testid="add-recipient">
+            {busy ? "Adding…" : "Add"}
+          </PillButton>
+        </div>
+      </div>
+      {err ? <div className="text-sm text-red-400">{err}</div> : null}
+      {!rows ? <div className="text-sm text-text-mute">Loading…</div> : rows.length === 0 ? (
+        <div className="text-sm text-text-mute">No share links yet — add a recipient to mint one.</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="text-xs uppercase text-text-mute">
+            <tr>
+              <th className="text-left py-1">Recipient</th>
+              <th className="text-left py-1">Share URL</th>
+              <th className="text-left py-1">Opens</th>
+              <th className="text-left py-1">Last opened</th>
+              <th className="text-left py-1">Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-t border-border-soft" data-testid={`recipient-row-${r.id}`}>
+                <td className="py-1">
+                  <div className="text-text">{r.recipientName}</div>
+                  <div className="text-xs text-text-mute">{[r.recipientOrg, r.recipientEmail].filter(Boolean).join(" · ") || "—"}</div>
+                </td>
+                <td className="py-1">
+                  <a className="text-xs underline text-text" href={`${r.shareUrl}/html`} target="_blank" rel="noreferrer" data-testid={`open-recipient-${r.id}`}>{r.shareUrl}</a>
+                </td>
+                <td className="py-1">{r.openCount}</td>
+                <td className="py-1 text-text-mute">{r.lastOpenedAt ? new Date(r.lastOpenedAt).toLocaleString() : "—"}</td>
+                <td className="py-1"><MonoChip>{r.revokedAt ? "revoked" : r.expiresAt && new Date(r.expiresAt).getTime() < Date.now() ? "expired" : "active"}</MonoChip></td>
+                <td className="py-1">
+                  {!r.revokedAt ? (
+                    <button onClick={() => revoke(r.id)} disabled={busy} className="text-xs underline text-text-mute" data-testid={`revoke-recipient-${r.id}`}>Revoke</button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
   );
 }

@@ -30,7 +30,11 @@ import {
   atelierEngagementAccess,
   atelierWinThemes,
   atelierAccounts,
+  atelierFirmProfile,
+  atelierProposalRecipients,
 } from "@workspace/db";
+import { renderProposalHtml, orderSectionsBySpine } from "../../lib/atelier-proposal-html.js";
+import { randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
 import {
   runAgentArchitect,
@@ -497,14 +501,22 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
     rfpFileName?: string;
   };
   const sectionsRequired = body.sectionsRequired ?? [
+    // Task #297 — 15-section spine.
+    "cover",
+    "exec_summary",
     "context",
+    "hypothesis",
     "approach",
     "workplan",
     "team",
     "pricing",
     "case_studies",
+    "company_profile",
+    "value_case",
     "terms",
     "compliance",
+    "annexes",
+    "appendices",
   ];
   // Pre-pull the most-recent Charter Architect run for THIS opportunity's
   // engagement(s) only — never org-wide. We:
@@ -1238,4 +1250,218 @@ router.get("/artifacts/:filename", async (req, res) => {
 
 type ProposalDocsInputPricing = Parameters<typeof generateProposalDocs>[0]["pricingModel"];
 
+// ============================================================
+// Task #297 — HTML preview + per-recipient watermarked share links.
+// ============================================================
+
+async function loadPublishedFirmProfile(): Promise<
+  | typeof atelierFirmProfile.$inferSelect["payload"]
+  | null
+> {
+  const [row] = await db
+    .select({ payload: atelierFirmProfile.payload })
+    .from(atelierFirmProfile)
+    .where(
+      and(
+        eq(atelierFirmProfile.status, "published"),
+        isNull(atelierFirmProfile.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierFirmProfile.publishedAt))
+    .limit(1);
+  return row?.payload ?? null;
+}
+
+async function buildProposalRenderInput(
+  proposalId: string,
+  recipient: typeof atelierProposalRecipients.$inferSelect | null = null,
+) {
+  const [proposal] = await db
+    .select()
+    .from(atelierProposals)
+    .where(and(eq(atelierProposals.id, proposalId), isNull(atelierProposals.deletedAt)));
+  if (!proposal) return null;
+  const sections = await db
+    .select()
+    .from(atelierProposalSections)
+    .where(and(eq(atelierProposalSections.proposalId, proposalId), isNull(atelierProposalSections.deletedAt)));
+  const [pricing] = await db
+    .select()
+    .from(atelierDealPricings)
+    .where(and(eq(atelierDealPricings.opportunityId, proposal.opportunityId), isNull(atelierDealPricings.deletedAt)))
+    .orderBy(desc(atelierDealPricings.createdAt))
+    .limit(1);
+  const profile = await loadPublishedFirmProfile();
+  const orderedSections = orderSectionsBySpine(
+    sections.map((s) => ({
+      sectionId: s.sectionId,
+      name: s.name,
+      ownerAgent: s.ownerAgent,
+      status: s.status,
+      content: s.content,
+    })),
+  );
+  return {
+    proposalId,
+    title: proposal.title,
+    winThemes: (proposal.winThemes as string[] | null) ?? [],
+    sections: orderedSections,
+    pricingModel: pricing
+      ? {
+          totalRevenueUsd: Number(pricing.totalRevenueUsd ?? 0),
+          totalCostUsd: Number(pricing.totalCostUsd ?? 0),
+          marginPct: Number(pricing.marginPct ?? 0),
+          verdict: pricing.verdict ?? "n/a",
+        }
+      : null,
+    complianceMatrix: (proposal.complianceMatrix as Array<{
+      rfpReqId: string;
+      requirement: string;
+      status: string;
+      evidence: string;
+    }> | null) ?? [],
+    firmProfile: profile,
+    recipient: recipient
+      ? {
+          recipientName: recipient.recipientName,
+          recipientEmail: recipient.recipientEmail,
+          recipientOrg: recipient.recipientOrg,
+        }
+      : null,
+  };
+}
+
+router.get("/proposals/:proposalId/preview-html", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [proposal] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(and(eq(atelierProposals.id, req.params.proposalId), isNull(atelierProposals.deletedAt)));
+  if (!proposal) { res.status(404).json({ error: "not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  const data = await buildProposalRenderInput(req.params.proposalId, null);
+  if (!data) { res.status(404).json({ error: "not-found" }); return; }
+  const html = renderProposalHtml(data);
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.send(html);
+});
+
+router.get("/proposals/:proposalId/recipients", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [proposal] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(and(eq(atelierProposals.id, req.params.proposalId), isNull(atelierProposals.deletedAt)));
+  if (!proposal) { res.status(404).json({ error: "not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  const rows = await db
+    .select()
+    .from(atelierProposalRecipients)
+    .where(eq(atelierProposalRecipients.proposalId, req.params.proposalId))
+    .orderBy(desc(atelierProposalRecipients.createdAt));
+  res.json({
+    recipients: rows.map((r) => ({
+      id: r.id,
+      proposalId: r.proposalId,
+      recipientName: r.recipientName,
+      recipientEmail: r.recipientEmail,
+      recipientOrg: r.recipientOrg,
+      shareUrl: `/salon/proposal/${r.proposalId}/${r.token}`,
+      expiresAt: r.expiresAt,
+      revokedAt: r.revokedAt,
+      openCount: r.openCount,
+      lastOpenedAt: r.lastOpenedAt,
+      createdAt: r.createdAt,
+    })),
+  });
+});
+
+router.post("/proposals/:proposalId/recipients", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [proposal] = await db
+    .select({ id: atelierProposals.id, opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(and(eq(atelierProposals.id, req.params.proposalId), isNull(atelierProposals.deletedAt)));
+  if (!proposal) { res.status(404).json({ error: "not-found" }); return; }
+  if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  const body = req.body as {
+    recipientName?: string;
+    recipientEmail?: string;
+    recipientOrg?: string;
+    expiresInDays?: number;
+  };
+  if (!body.recipientName?.trim()) {
+    res.status(400).json({ error: "recipient-name-required" });
+    return;
+  }
+  const token = randomBytes(24).toString("base64url");
+  const expiresAt = body.expiresInDays
+    ? new Date(Date.now() + body.expiresInDays * 86_400_000)
+    : null;
+  const id = rid("prc");
+  await db.insert(atelierProposalRecipients).values({
+    id,
+    proposalId: proposal.id,
+    recipientName: body.recipientName.trim(),
+    recipientEmail: body.recipientEmail ?? null,
+    recipientOrg: body.recipientOrg ?? null,
+    token,
+    expiresAt,
+    createdByUserId: me.id,
+  });
+  await audit({
+    entityType: "proposal",
+    entityId: proposal.id,
+    actor: me,
+    action: "proposal.recipient.created",
+    payload: { recipientId: id, recipientName: body.recipientName.trim(), hasEmail: !!body.recipientEmail, expiresInDays: body.expiresInDays ?? null },
+    summary: `Recipient share link created for ${body.recipientName.trim()}`,
+  });
+  res.status(201).json({
+    recipient: {
+      id,
+      proposalId: proposal.id,
+      recipientName: body.recipientName.trim(),
+      recipientEmail: body.recipientEmail ?? null,
+      recipientOrg: body.recipientOrg ?? null,
+      shareUrl: `/salon/proposal/${proposal.id}/${token}`,
+      expiresAt,
+      openCount: 0,
+    },
+  });
+});
+
+router.post("/proposal-recipients/:recipientId/revoke", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [r] = await db
+    .select()
+    .from(atelierProposalRecipients)
+    .where(eq(atelierProposalRecipients.id, req.params.recipientId));
+  if (!r) { res.status(404).json({ error: "not-found" }); return; }
+  const [proposal] = await db
+    .select({ opportunityId: atelierProposals.opportunityId })
+    .from(atelierProposals)
+    .where(eq(atelierProposals.id, r.proposalId));
+  if (!proposal || !(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  await db
+    .update(atelierProposalRecipients)
+    .set({ revokedAt: new Date() })
+    .where(eq(atelierProposalRecipients.id, r.id));
+  await audit({
+    entityType: "proposal",
+    entityId: r.proposalId,
+    actor: me,
+    action: "proposal.recipient.revoked",
+    payload: { recipientId: r.id, recipientName: r.recipientName },
+    summary: `Revoked share link for ${r.recipientName}`,
+  });
+  res.json({ ok: true });
+});
+
+export { buildProposalRenderInput };
 export default router;

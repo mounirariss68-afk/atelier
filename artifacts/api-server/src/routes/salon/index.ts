@@ -26,7 +26,17 @@ import {
   atelierDeliverablePublishes,
   atelierMeetings,
   atelierAuditEvents,
+  atelierProposals,
+  atelierProposalSections,
+  atelierDealPricings,
+  atelierFirmProfile,
+  atelierProposalRecipients,
 } from "@workspace/db";
+import { sql } from "drizzle-orm";
+import {
+  renderProposalHtml,
+  orderSectionsBySpine,
+} from "../../lib/atelier-proposal-html.js";
 import {
   attachSalonPersona,
   setSalonPersonaCookie,
@@ -1012,6 +1022,148 @@ router.get("/engagements/:slug/notifications", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// =============================================================
+// Task #297 — Per-recipient proposal hosting. Token IS the auth, so
+// no salon persona is required. Each open is audited.
+// =============================================================
+async function loadRecipient(token: string) {
+  const [r] = await db
+    .select()
+    .from(atelierProposalRecipients)
+    .where(eq(atelierProposalRecipients.token, token));
+  return r ?? null;
+}
+
+async function buildPublicProposal(proposalId: string, recipient: typeof atelierProposalRecipients.$inferSelect) {
+  const [proposal] = await db
+    .select()
+    .from(atelierProposals)
+    .where(and(eq(atelierProposals.id, proposalId), isNull(atelierProposals.deletedAt)));
+  if (!proposal) return null;
+  const sections = await db
+    .select()
+    .from(atelierProposalSections)
+    .where(and(eq(atelierProposalSections.proposalId, proposalId), isNull(atelierProposalSections.deletedAt)));
+  const [pricing] = await db
+    .select()
+    .from(atelierDealPricings)
+    .where(and(eq(atelierDealPricings.opportunityId, proposal.opportunityId), isNull(atelierDealPricings.deletedAt)))
+    .orderBy(desc(atelierDealPricings.createdAt))
+    .limit(1);
+  const [profile] = await db
+    .select({ payload: atelierFirmProfile.payload })
+    .from(atelierFirmProfile)
+    .where(and(eq(atelierFirmProfile.status, "published"), isNull(atelierFirmProfile.deletedAt)))
+    .orderBy(desc(atelierFirmProfile.publishedAt))
+    .limit(1);
+  return {
+    proposalId,
+    title: proposal.title,
+    winThemes: (proposal.winThemes as string[] | null) ?? [],
+    sections: orderSectionsBySpine(
+      sections.map((s) => ({
+        sectionId: s.sectionId,
+        name: s.name,
+        ownerAgent: s.ownerAgent,
+        status: s.status,
+        content: s.content,
+      })),
+    ),
+    pricingModel: pricing
+      ? {
+          totalRevenueUsd: Number(pricing.totalRevenueUsd ?? 0),
+          totalCostUsd: Number(pricing.totalCostUsd ?? 0),
+          marginPct: Number(pricing.marginPct ?? 0),
+          verdict: pricing.verdict ?? "n/a",
+        }
+      : null,
+    complianceMatrix: (proposal.complianceMatrix as Array<{
+      rfpReqId: string;
+      requirement: string;
+      status: string;
+      evidence: string;
+    }> | null) ?? [],
+    firmProfile: profile?.payload ?? null,
+    recipient: {
+      recipientName: recipient.recipientName,
+      recipientEmail: recipient.recipientEmail,
+      recipientOrg: recipient.recipientOrg,
+    },
+  };
+}
+
+async function recordOpen(
+  recipient: typeof atelierProposalRecipients.$inferSelect,
+  req: Request,
+  format: "html" | "json",
+) {
+  // Atomic increment + lastOpenedAt stamp.
+  await db
+    .update(atelierProposalRecipients)
+    .set({
+      openCount: sql`${atelierProposalRecipients.openCount} + 1`,
+      lastOpenedAt: new Date(),
+    })
+    .where(eq(atelierProposalRecipients.id, recipient.id));
+  // Mirror an internal audit row so AICo sees every recipient open.
+  await db.insert(atelierAuditEvents).values({
+    id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    entityType: "proposal",
+    entityId: recipient.proposalId,
+    actorType: "external",
+    actorId: recipient.id,
+    actorLabel: recipient.recipientName,
+    action: "proposal.recipient.opened",
+    payload: {
+      recipientId: recipient.id,
+      format,
+      ip: req.ip ?? null,
+      userAgent: (req.headers["user-agent"] as string | undefined) ?? null,
+    },
+    payloadSummary: `${recipient.recipientName} opened proposal (${format})`,
+  });
+}
+
+function recipientStillValid(r: typeof atelierProposalRecipients.$inferSelect): { ok: boolean; reason?: string } {
+  if (r.revokedAt) return { ok: false, reason: "revoked" };
+  if (r.expiresAt && r.expiresAt.getTime() < Date.now()) return { ok: false, reason: "expired" };
+  return { ok: true };
+}
+
+router.get("/proposal/:proposalId/:token", async (req, res, next) => {
+  try {
+    const r = await loadRecipient(req.params.token);
+    if (!r || r.proposalId !== req.params.proposalId) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const validity = recipientStillValid(r);
+    if (!validity.ok) { res.status(410).json({ error: validity.reason }); return; }
+    const data = await buildPublicProposal(r.proposalId, r);
+    if (!data) { res.status(404).json({ error: "not-found" }); return; }
+    await recordOpen(r, req, "json");
+    res.json(data);
+  } catch (err) { next(err); }
+});
+
+router.get("/proposal/:proposalId/:token/html", async (req, res, next) => {
+  try {
+    const r = await loadRecipient(req.params.token);
+    if (!r || r.proposalId !== req.params.proposalId) {
+      res.status(404).type("text/plain").send("Not found");
+      return;
+    }
+    const validity = recipientStillValid(r);
+    if (!validity.ok) { res.status(410).type("text/plain").send(`Link ${validity.reason}`); return; }
+    const data = await buildPublicProposal(r.proposalId, r);
+    if (!data) { res.status(404).type("text/plain").send("Not found"); return; }
+    await recordOpen(r, req, "html");
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    res.setHeader("cache-control", "no-store");
+    res.send(renderProposalHtml(data));
+  } catch (err) { next(err); }
 });
 
 router.get("/engagements/:slug/curator", async (req, res, next) => {

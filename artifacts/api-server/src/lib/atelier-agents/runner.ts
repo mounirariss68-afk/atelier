@@ -2034,6 +2034,41 @@ function mockProposal(args: {
   rfpRequirements: { id: string; requirement: string; severity: string }[];
 }): ProposalComposerOutput {
   const sectionLib: Record<string, { name: string; owner: string; content: (oid: string) => string }> = {
+    cover: {
+      name: "Cover",
+      owner: "brand_profile_writer",
+      content: (oid) => `Proposal cover for ${oid}.`,
+    },
+    exec_summary: {
+      name: "Executive Summary",
+      owner: "context_writer",
+      content: (oid) => `Executive summary for ${oid}: a focused, senior-overseen agentic engagement with bilingual EN/AR coverage and an audit trail. Three workstreams, twelve weeks, outcomes-tied pricing.`,
+    },
+    hypothesis: {
+      name: "Hypothesis",
+      owner: "context_writer",
+      content: () => `We believe agentifying the top-priority services with senior oversight will compress cycle time by ≥40% and lift CSAT by ≥6 points within 90 days, without hiring growth.`,
+    },
+    company_profile: {
+      name: "Company Profile",
+      owner: "brand_profile_writer",
+      content: () => `(rendered from the published Firm Profile — see Company Profile section below.)`,
+    },
+    value_case: {
+      name: "Value Case",
+      owner: "approach_writer",
+      content: () => `Value bridge: 1) Cost-per-case −40% via senior-overseen drafter agents, 2) Cycle-time −60% via parallel agent + reviewer pipeline, 3) Audit posture lifted to ISO27001-aligned with full trail.`,
+    },
+    annexes: {
+      name: "Annexes",
+      owner: "context_writer",
+      content: () => `Annex A — Reference architecture · Annex B — Data isolation diagram · Annex C — Sample audit report · Annex D — Bilingual style guide.`,
+    },
+    appendices: {
+      name: "Appendices",
+      owner: "context_writer",
+      content: () => `Appendix 1 — Detailed CVs · Appendix 2 — Expanded case study deck · Appendix 3 — Tooling provenance.`,
+    },
     context: {
       name: "Context",
       owner: "context_writer",
@@ -2245,6 +2280,145 @@ export async function runProposalComposer(args: {
     return { runId, output: value, costUsd };
   } catch (err) {
     await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "opportunity", targetId: args.opportunityId });
+    throw err;
+  }
+}
+
+// =============================================================
+// Task #297 — Brand Profile Writer (Front of House). Canonical brand
+// copy source. Persisted via firmProfileRoutes (atelier_firm_profile).
+// =============================================================
+
+export interface BrandProfileOutput {
+  firmName: string;
+  tagline: string;
+  missionStatement: string;
+  voiceAttributes: string[];
+  principles: { name: string; description: string }[];
+  boilerplateShort: string;
+  boilerplateLong: string;
+  capabilitiesPitch: string;
+  differentiators: string[];
+  proofPoints: { label: string; metric: string }[];
+  legalEntities: { name: string; jurisdiction: string }[];
+  contactBlock: string;
+  brandColors?: { primary?: string; ink?: string; gold?: string };
+}
+
+function mockBrandProfile(args: {
+  firmName: string;
+  existingProfile?: Partial<BrandProfileOutput> | null;
+  userBrief?: string | null;
+}): BrandProfileOutput {
+  const existing = args.existingProfile ?? {};
+  return {
+    firmName: existing.firmName ?? args.firmName,
+    tagline: existing.tagline ?? "Senior-overseen agentic operations.",
+    missionStatement:
+      existing.missionStatement ??
+      "We operationalise agentic systems for ambitious firms in the GCC. Senior partners stay on the wheel; the audit trail is the proof. Bilingual EN/AR by default.",
+    voiceAttributes: existing.voiceAttributes ?? [
+      "Senior-overseen",
+      "Audit-trailed",
+      "Bilingual EN/AR",
+      "Outcomes-tied",
+      "Concrete, never theatrical",
+    ],
+    principles: existing.principles ?? [
+      { name: "No shadow autopilot", description: "Every consequential action is reviewed by a senior before it ships." },
+      { name: "Evidence over rhetoric", description: "Every claim cites a metric or a source — never both empty." },
+      { name: "Bilingual by default", description: "EN/AR coverage is built in, not retrofitted." },
+      { name: "Audit-first build", description: "Trails are designed before features." },
+    ],
+    boilerplateShort:
+      existing.boilerplateShort ??
+      `${args.firmName} operationalises agentic systems for GCC firms. Senior-overseen, audit-trailed, bilingual EN/AR. We ship outcomes, not pilots.`,
+    boilerplateLong:
+      existing.boilerplateLong ??
+      `${args.firmName} is a senior-led agentic operations firm working with banks, telcos, public-sector advisory and insurance carriers in the GCC. We design, build and run agent pipelines that compress cycle time and lift first-contact resolution while keeping a full audit trail. Our partners stay on the wheel — every consequential action is reviewed by a senior before it ships. Engagements are bilingual EN/AR by default and ISO27001-aligned.`,
+    capabilitiesPitch:
+      existing.capabilitiesPitch ??
+      "We cover the agent operating loop end-to-end: discovery and policy mapping; agent build with senior reviewer pipelines; bilingual drafting; telemetry and adoption; governance and ISO27001-aligned controls. Engagements are typically 12 weeks with outcomes-tied pricing and partner-approved go-lives.",
+    differentiators: existing.differentiators ?? [
+      "Senior-on-the-wheel pattern with explicit reviewer queues — no shadow autopilot",
+      "Bilingual EN/AR drafter agents from day one",
+      "ISO27001-aligned audit trail wired before features ship",
+      "Outcomes-tied pricing with partner-overrideable margin floors",
+    ],
+    proofPoints: existing.proofPoints ?? [
+      { label: "ACME Retail refund triage", metric: "Cycle 5d → 18h, cost/case −41%" },
+      { label: "Nile Bank KYC packets", metric: "92% straight-through with reviewer signoff" },
+      { label: "Mawared RFP responses", metric: "11d → 3d response, win-rate +14pts" },
+    ],
+    legalEntities: existing.legalEntities ?? [
+      { name: `${args.firmName} DIFC Ltd`, jurisdiction: "DIFC, UAE" },
+      { name: `${args.firmName} KSA`, jurisdiction: "Riyadh, Saudi Arabia" },
+    ],
+    contactBlock:
+      existing.contactBlock ??
+      `Gate Village 4, DIFC, Dubai\nfirm@${args.firmName.toLowerCase().replace(/\s+/g, "")}.ai\n+971 4 000 0000`,
+    brandColors: existing.brandColors ?? { primary: "#0f172a", ink: "#0f172a", gold: "#b8852b" },
+  };
+}
+
+export async function runBrandProfileWriter(args: {
+  firmName: string;
+  existingProfile?: Partial<BrandProfileOutput> | null;
+  userBrief?: string | null;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+  orgId?: string;
+}): Promise<{ runId: string; output: BrandProfileOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "brand_profile_writer",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "firm",
+    targetId: args.orgId ?? "firm_profile",
+    targetLabel: args.firmName,
+    inputs: { firmName: args.firmName, hasBrief: !!args.userBrief, hasExisting: !!args.existingProfile },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("brand_profile_writer");
+    await progressRun(runId, 20, "Loading evidence corpus");
+    await progressRun(runId, 50, "Drafting voice + boilerplate");
+    await progressRun(runId, 80, "Drafting differentiators + proof points");
+    const { value, costUsd, source, warning } = await callClaudeJson<BrandProfileOutput>(
+      "claude-sonnet-4-5",
+      system,
+      JSON.stringify({
+        firmName: args.firmName,
+        existingProfile: args.existingProfile ?? null,
+        userBrief: args.userBrief ?? null,
+        evidenceCorpus: [],
+      }),
+      () => mockBrandProfile({ firmName: args.firmName, existingProfile: args.existingProfile, userBrief: args.userBrief }),
+    );
+    // Guardrails on length budgets the prompt promises.
+    if ((value.boilerplateShort ?? "").length > 500) {
+      value.boilerplateShort = value.boilerplateShort.slice(0, 500);
+    }
+    if ((value.boilerplateLong ?? "").length > 1500) {
+      value.boilerplateLong = value.boilerplateLong.slice(0, 1500);
+    }
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: "green",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: (value.proofPoints ?? []).length,
+      actorLabel: args.actorLabel,
+      targetType: "firm",
+      targetId: args.orgId ?? "firm_profile",
+      targetLabel: args.firmName,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "firm", targetId: args.orgId ?? "firm_profile" });
     throw err;
   }
 }

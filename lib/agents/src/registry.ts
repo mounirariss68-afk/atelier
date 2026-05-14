@@ -183,6 +183,69 @@ export const POVDraft = defineAgent({
   ],
 });
 
+// Task #297 — Brand Profile Writer (Front of House). Canonical source of
+// firm brand copy: tagline, mission, boilerplate, differentiators, proof
+// points, legal entities, contact block. Other agents (Proposal Composer,
+// POV Author, Case Study Picker) consume the published profile rather
+// than writing firm boilerplate themselves.
+export const BrandProfileWriter = defineAgent({
+  id: "ag_brand_profile_writer",
+  name: "Brand Profile Writer",
+  group: "Front of House",
+  stage: "Cross-cutting",
+  purpose: "Canonical source of firm brand copy (tagline, mission, boilerplate, differentiators).",
+  model: "claude-sonnet-4-6",
+  starred: false,
+  status: "mvp",
+  systemPromptRef: "prompts/brand_profile_writer/v1.md",
+  inputSchema: z.object({
+    firmName: z.string(),
+    existingProfile: z.unknown().nullable().optional(),
+    userBrief: z.string().nullable().optional(),
+    evidenceCorpus: z.array(z.object({
+      id: z.string(),
+      kind: z.string(),
+      snippet: z.string(),
+    })).optional(),
+  }),
+  outputSchema: z.object({
+    firmName: z.string(),
+    tagline: z.string(),
+    missionStatement: z.string(),
+    voiceAttributes: z.array(z.string()),
+    principles: z.array(z.object({ name: z.string(), description: z.string() })),
+    boilerplateShort: z.string(),
+    boilerplateLong: z.string(),
+    capabilitiesPitch: z.string(),
+    differentiators: z.array(z.string()),
+    proofPoints: z.array(z.object({ label: z.string(), metric: z.string() })),
+    legalEntities: z.array(z.object({ name: z.string(), jurisdiction: z.string() })),
+    contactBlock: z.string(),
+    brandColors: z.object({
+      primary: z.string().optional(),
+      ink: z.string().optional(),
+      gold: z.string().optional(),
+    }).optional(),
+  }).passthrough(),
+  tools: ["knowledge.search"],
+  guardrails: [
+    "Boilerplate-short ≤ 500 chars; boilerplate-long ≤ 1500 chars",
+    "Every differentiator must be concrete and observable",
+    "Every proof point cites a metric — never inventory unverified claims",
+  ],
+  humanCheckpoints: [
+    {
+      id: "cp_publish",
+      label: "Founding partner / HR publishes the version",
+      decider: "partner",
+      blocking: true,
+    },
+  ],
+  evals: [
+    { id: "ev_short_len", description: "boilerplateShort ≤ 500 chars", threshold: 1 },
+  ],
+});
+
 export const ProposalComposer = defineAgent({
   id: "ag_proposal_composer",
   name: "Proposal Composer",
@@ -920,6 +983,7 @@ export const ATELIER_AGENTS: Agent[] = [
   PursuitScout,
   POVAuthor,
   POVDraft,
+  BrandProfileWriter,
   ProposalComposer,
   MeetingScribe,
   CharterArchitect,

@@ -2744,3 +2744,77 @@ export const atelierPrincipleOverride = pgTable(
     index("idx_atelier_principle_override_granted").on(t.grantedAt),
   ],
 );
+
+// ============================================================
+// Task #297 — FIRM PROFILE (canonical brand-copy source).
+// Versioned single-row-per-version: drafts may stack, but exactly
+// one row per (orgId) carries publishedAt != null + supersededAt = null
+// at any time. Brand Profile Writer (front_of_house) seeds drafts;
+// founding_partner / hr publish.
+// ============================================================
+export const atelierFirmProfile = pgTable(
+  "atelier_firm_profile",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    version: integer("version").notNull(),
+    status: text("status").notNull().default("draft"), // draft | published | superseded
+    payload: jsonb("payload").$type<{
+      firmName: string;
+      tagline: string;
+      missionStatement: string;
+      voiceAttributes: string[];
+      principles: Array<{ name: string; description: string }>;
+      boilerplateShort: string;
+      boilerplateLong: string;
+      capabilitiesPitch: string;
+      differentiators: string[];
+      proofPoints: Array<{ label: string; metric: string }>;
+      legalEntities: Array<{ name: string; jurisdiction: string }>;
+      contactBlock: string;
+      brandColors?: { primary?: string; ink?: string; gold?: string };
+    }>().notNull().default({} as never),
+    runId: text("run_id"),
+    notes: text("notes"),
+    publishedAt: timestamp("published_at"),
+    publishedByUserId: text("published_by_user_id"),
+    publishedByName: text("published_by_name"),
+    supersededAt: timestamp("superseded_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_firm_profile_status").on(t.status),
+    uniqueIndex("uq_atelier_firm_profile_version").on(t.orgId, t.version),
+  ],
+);
+
+// ============================================================
+// Task #297 — PROPOSAL RECIPIENTS. Per-recipient watermarked
+// Salon URL: /salon/proposal/:proposalId/:token. Token is the
+// auth — no Salon persona required. Each open is audited.
+// ============================================================
+export const atelierProposalRecipients = pgTable(
+  "atelier_proposal_recipients",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    proposalId: text("proposal_id").notNull(),
+    recipientName: text("recipient_name").notNull(),
+    recipientEmail: text("recipient_email"),
+    recipientOrg: text("recipient_org"),
+    token: text("token").notNull(),
+    expiresAt: timestamp("expires_at"),
+    revokedAt: timestamp("revoked_at"),
+    openCount: integer("open_count").notNull().default(0),
+    lastOpenedAt: timestamp("last_opened_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_proposal_recipients_token").on(t.token),
+    index("idx_atelier_proposal_recipients_proposal").on(t.proposalId),
+  ],
+);

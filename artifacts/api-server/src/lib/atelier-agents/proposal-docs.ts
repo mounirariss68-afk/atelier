@@ -3,6 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import PDFDocument from "pdfkit";
 import { Document, Packer, Paragraph, HeadingLevel, TextRun } from "docx";
+import {
+  PROPOSAL_SPINE,
+  orderSectionsBySpine,
+  renderProposalHtml,
+  type FirmProfileLite,
+  type ProposalSectionLite as RenderSectionLite,
+  type RecipientLite,
+} from "../atelier-proposal-html.js";
+
+export { renderProposalHtml, PROPOSAL_SPINE } from "../atelier-proposal-html.js";
 
 export const ATELIER_ARTIFACT_DIR = join(tmpdir(), "atelier-artifacts");
 
@@ -38,17 +48,51 @@ function ensureDir(): string {
   return ATELIER_ARTIFACT_DIR;
 }
 
-export async function generateProposalDocs(input: ProposalDocsInput): Promise<{
+export async function generateProposalDocs(
+  input: ProposalDocsInput & {
+    firmProfile?: FirmProfileLite | null;
+    recipient?: RecipientLite | null;
+  },
+): Promise<{
   pdfPath: string;
   docxPath: string;
   pdfFile: string;
   docxFile: string;
+  htmlPath: string;
+  htmlFile: string;
 }> {
   const dir = ensureDir();
   const pdfFile = `proposal-${input.proposalId}.pdf`;
   const docxFile = `proposal-${input.proposalId}.docx`;
+  const htmlFile = `proposal-${input.proposalId}.html`;
   const pdfPath = join(dir, pdfFile);
   const docxPath = join(dir, docxFile);
+  const htmlPath = join(dir, htmlFile);
+
+  // Task #297 — HTML is the canonical deliverable. Both PDF and DOCX
+  // walk the same spine-ordered section list as the renderer, so the
+  // export content cannot drift from what the recipient sees in Salon.
+  const spineSections: RenderSectionLite[] = orderSectionsBySpine(
+    input.sections.map((s) => ({
+      sectionId: s.sectionId,
+      name: s.name,
+      ownerAgent: s.ownerAgent,
+      status: s.status,
+      content: s.content,
+    })),
+  );
+
+  const html = renderProposalHtml({
+    proposalId: input.proposalId,
+    title: input.title,
+    winThemes: input.winThemes,
+    sections: spineSections,
+    pricingModel: input.pricingModel ?? null,
+    complianceMatrix: input.complianceMatrix ?? [],
+    firmProfile: input.firmProfile ?? null,
+    recipient: input.recipient ?? null,
+  });
+  await import("node:fs/promises").then((m) => m.writeFile(htmlPath, html, "utf8"));
 
   // ---- PDF (pdfkit) ----
   await new Promise<void>((resolve, reject) => {
@@ -64,7 +108,7 @@ export async function generateProposalDocs(input: ProposalDocsInput): Promise<{
       doc.moveDown(0.5);
     }
     doc.fillColor("black");
-    for (const s of input.sections) {
+    for (const s of spineSections) {
       doc.fontSize(14).text(s.name);
       doc.fontSize(9).fillColor("#888").text(`owner: ${s.ownerAgent}  ·  status: ${s.status}`);
       doc.fillColor("black");
@@ -106,7 +150,7 @@ export async function generateProposalDocs(input: ProposalDocsInput): Promise<{
       }),
     );
   }
-  for (const s of input.sections) {
+  for (const s of spineSections) {
     children.push(
       new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(s.name)] }),
       new Paragraph({
@@ -137,5 +181,5 @@ export async function generateProposalDocs(input: ProposalDocsInput): Promise<{
   const buf = await Packer.toBuffer(docx);
   await import("node:fs/promises").then((m) => m.writeFile(docxPath, buf));
 
-  return { pdfPath, docxPath, pdfFile, docxFile };
+  return { pdfPath, docxPath, pdfFile, docxFile, htmlPath, htmlFile };
 }

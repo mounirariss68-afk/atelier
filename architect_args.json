@@ -1,0 +1,23 @@
+{
+  "task": "Evaluate the just-completed work for Atelier Task #297. \nTask summary: \"Make HTML proposal the primary deliverable hosted at per-recipient watermarked Salon URL with sticky TOC, scroll-snap, print stylesheet. Add `firm_profile` table + Brand Profile Writer agent (front_of_house) as canonical brand-copy source. Restructure `atelier_proposal_sections` to 15-section spine. DOCX/PDF become exports from HTML. Live preview tab in Proposal Workspace.\"\nVerify if the implementation covers all aspects of the task, specifically checking:\n1. HTML proposal hosting at per-recipient watermarked Salon URL.\n2. Sticky TOC, scroll-snap, and print stylesheet in HTML proposal.\n3. `firm_profile` table addition and Brand Profile Writer agent integration.\n4. Restructuring of `atelier_proposal_sections` to 15-section spine.\n5. DOCX/PDF export logic from HTML.\n6. Live preview tab in Proposal Workspace.",
+  "relevantFiles": [
+    "artifacts/api-server/src/lib/atelier-proposal-html.ts",
+    "artifacts/api-server/src/routes/atelier/proposalRoutes.ts",
+    "artifacts/api-server/src/routes/atelier/firmProfileRoutes.ts",
+    "artifacts/api-server/src/routes/atelier/index.ts",
+    "artifacts/api-server/src/routes/salon/index.ts",
+    "artifacts/api-server/src/lib/atelier-agents/runner.ts",
+    "artifacts/api-server/src/lib/atelier-agents/loader.ts",
+    "artifacts/api-server/src/lib/atelier-agents/proposal-docs.ts",
+    "artifacts/api-server/prompts/brand_profile_writer/v1.md",
+    "artifacts/api-server/tests/proposal-html/run.ts",
+    "artifacts/atelier/src/components/tabs/ProposalTab.tsx",
+    "artifacts/atelier/src/pages/FirmProfile.tsx",
+    "artifacts/atelier/src/pages/salon/SalonRoutes.tsx",
+    "artifacts/atelier/src/App.tsx",
+    "lib/agents/src/registry.ts",
+    "lib/db/src/schema/atelier.ts"
+  ],
+  "responsibility": "evaluate_task",
+  "includeGitDiff": true
+}

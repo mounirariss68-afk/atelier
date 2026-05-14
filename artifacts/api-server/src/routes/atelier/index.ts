@@ -63,6 +63,7 @@ import ledgerRoutes from "./ledgerRoutes";
 import walletRoutes from "./walletRoutes";
 import referenceRoutes from "./referenceRoutes";
 import principleOverrideRoutes from "./principleOverrideRoutes";
+import firmProfileRoutes from "./firmProfileRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -168,6 +169,7 @@ router.use(walletRoutes);
 // Task #290 — Reference-data lookups (countries / industries / sub-industries).
 router.use(referenceRoutes);
 router.use(principleOverrideRoutes);
+router.use(firmProfileRoutes);
 
 function ensurePersona(
   req: Request,
