@@ -133,7 +133,7 @@ export function CharterTab({ engId }: { engId: string }) {
                       <Check className="w-3.5 h-3.5 mr-1.5" /> Lead approve
                     </PillButton>
                   )}
-                  {selected.status === "lead_approved" && me?.role === "partner" && (
+                  {selected.status === "lead_approved" && (me?.role === "partner" || me?.role === "founding_partner") && (
                     <PillButton
                       variant="primary"
                       onClick={() => onApprove("partner", selected.id)}

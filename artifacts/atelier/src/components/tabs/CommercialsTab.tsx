@@ -134,7 +134,7 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
   const pricing = data.pricing;
   const policy = data.policy;
   const rateCardRows = data.rateCardRows ?? [];
-  const isPartner = me?.role === "partner";
+  const isPartner = (me?.role === "partner" || me?.role === "founding_partner");
 
   const persistedMargin = pricing.computedMarginPct;
   const persistedStatus = pricing.marginLockStatus as "green" | "amber" | "red";

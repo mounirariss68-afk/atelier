@@ -68,7 +68,7 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
 function isLeadership(me: typeof atelierUsers.$inferSelect): boolean {
   return (
     me.role === "founding_partner" ||
-    me.role === "partner" ||
+    (me.role === "partner" || me.role === "founding_partner") ||
     me.role === "finance"
   );
 }
@@ -1331,7 +1331,7 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
 router.get("/wallet/approvals", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -1408,7 +1408,7 @@ router.get("/wallet/approvals", async (req, res) => {
 router.post("/wallet/approvals/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner" && !isPartnerOrOps(me)) {
+  if ((me.role !== "partner" && me.role !== "founding_partner") && !isPartnerOrOps(me)) {
     res.status(403).json({ error: "forbidden" });
     return;
   }
@@ -1428,7 +1428,7 @@ router.post("/wallet/approvals/run", async (req, res) => {
 router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -1474,7 +1474,7 @@ router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
 router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -1522,7 +1522,7 @@ router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
 router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -1568,7 +1568,7 @@ router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
 router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }

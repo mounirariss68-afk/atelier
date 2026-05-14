@@ -207,7 +207,7 @@ router.post("/opportunities/:oppId/win-loss/run", async (req, res) => {
 router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -400,7 +400,7 @@ router.post("/win-loss/overdue/scan", async (req, res) => {
 router.post("/opportunities/:oppId/win-loss/override", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }

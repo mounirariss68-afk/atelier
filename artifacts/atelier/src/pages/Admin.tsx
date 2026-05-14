@@ -18,7 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 export default function Admin() {
   const { data: me, isLoading } = useAtelierGetMe();
   const { data: settings, isLoading: settingsLoading } = useAtelierGetAdminSettings({
-    query: { enabled: me?.role === "partner", queryKey: getAtelierGetAdminSettingsQueryKey() },
+    query: { enabled: (me?.role === "partner" || me?.role === "founding_partner"), queryKey: getAtelierGetAdminSettingsQueryKey() },
   });
   const { data: agents } = useAtelierListAgents();
   const qc = useQueryClient();
@@ -55,7 +55,7 @@ export default function Admin() {
   const [posture, setPosture] = React.useState<Posture | null>(null);
   const [todos, setTodos] = React.useState<string[]>([]);
   React.useEffect(() => {
-    if (me?.role !== "partner") return;
+    if ((me?.role !== "partner" && me?.role !== "founding_partner")) return;
     void fetch("/api/atelier/admin/compliance", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => j && setPosture(j));
@@ -88,7 +88,7 @@ export default function Admin() {
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (!me) return null;
 
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     return (
       <div className="container-atelier py-20 flex flex-col items-center text-center animate-in fade-in">
         <div className="w-16 h-16 bg-danger/10 rounded-full flex items-center justify-center mb-6 text-danger">

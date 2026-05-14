@@ -81,7 +81,7 @@ async function ensureOppAccess(
     return null;
   }
   const isOwner = opp.partnerOwnerId === me.id || opp.engagementLeadId === me.id;
-  const isPartner = me.role === "partner";
+  const isPartner = (me.role === "partner" || me.role === "founding_partner");
   if (!isOwner && !isPartner) {
     res.status(403).json({ error: "no-opportunity-access" });
     return null;
@@ -105,7 +105,7 @@ async function canAccessEngagement(
     .where(and(eq(atelierEngagements.id, engId), isNull(atelierEngagements.deletedAt)));
   if (!eng) return false;
   if (eng.orgId !== me.orgId) return false;
-  if (me.role === "partner") return true;
+  if ((me.role === "partner" || me.role === "founding_partner")) return true;
   const [grant] = await db
     .select({ userId: atelierEngagementAccess.userId })
     .from(atelierEngagementAccess)
@@ -259,7 +259,7 @@ router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, r
   if (!me) return;
   const eng = await ensureEngAccess(res, me, req.params.engId);
   if (!eng) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "only-partner-may-promote" });
     return;
   }
@@ -831,7 +831,7 @@ router.post("/prototypes/:prototypeId/approve-brief", async (req, res) => {
 router.post("/prototypes/:prototypeId/approve-prompt", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "only-partner-may-approve-prompt" });
     return;
   }
@@ -875,7 +875,7 @@ router.post("/prototypes/:prototypeId/approve-prompt", async (req, res) => {
 router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "only-partner-may-approve-pricing" });
     return;
   }
@@ -924,7 +924,7 @@ router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
 router.post("/proposals/:proposalId/override-pricing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "only-partner-may-override-pricing" });
     return;
   }
@@ -1012,7 +1012,7 @@ router.post("/proposals/:proposalId/confirm-section-assignments", async (req, re
 router.post("/proposals/:proposalId/partner-final-read", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "only-partner-may-record-final-read" });
     return;
   }
@@ -1050,7 +1050,7 @@ router.post("/proposals/:proposalId/partner-final-read", async (req, res) => {
 router.post("/proposals/:proposalId/send", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "only-partner-may-send-proposal" });
     return;
   }

@@ -33,7 +33,7 @@ export default function Pricing() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: cards } = useAtelierListRateCards({
-    query: { enabled: me?.role === "partner", queryKey: getAtelierListRateCardsQueryKey() },
+    query: { enabled: (me?.role === "partner" || me?.role === "founding_partner"), queryKey: getAtelierListRateCardsQueryKey() },
   });
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -47,7 +47,7 @@ export default function Pricing() {
     },
   });
   const { data: policy } = useAtelierGetMarginPolicy({
-    query: { enabled: me?.role === "partner", queryKey: getAtelierGetMarginPolicyQueryKey() },
+    query: { enabled: (me?.role === "partner" || me?.role === "founding_partner"), queryKey: getAtelierGetMarginPolicyQueryKey() },
   });
 
   const updatePolicy = useAtelierUpdateMarginPolicy({
@@ -142,7 +142,7 @@ export default function Pricing() {
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (!me) return null;
 
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     return (
       <div className="container-atelier py-20 flex flex-col items-center text-center animate-in fade-in">
         <div className="w-16 h-16 bg-danger/10 rounded-full flex items-center justify-center mb-6 text-danger">

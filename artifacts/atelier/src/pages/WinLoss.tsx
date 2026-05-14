@@ -143,7 +143,7 @@ export default function WinLoss() {
       </div>
     );
 
-  const isPartner = me?.role === "partner";
+  const isPartner = (me?.role === "partner" || me?.role === "founding_partner");
   return (
     <div className="p-6 md:p-10 space-y-8 max-w-5xl">
       <PageHero

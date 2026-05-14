@@ -780,7 +780,7 @@ router.post("/deliverables/:id/publish", async (req, res, next) => {
     // Sentinel policy (Task #242): fail = hard block (no override).
     // warn = Partner-only override with audited rationale.
     const sentinelStatus = sentinel.output.status; // "pass" | "warn" | "fail"
-    const isPartner = me.role === "partner";
+    const isPartner = (me.role === "partner" || me.role === "founding_partner");
     let allowed = false;
     if (sentinelStatus === "pass") {
       allowed = true;

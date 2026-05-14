@@ -278,7 +278,7 @@ router.post("/accounts", async (req, res) => {
         primaryLanguage: input.primaryLanguage,
         tier: input.tier,
         status: input.status,
-        partnerOwnerId: input.partnerOwnerId ?? (me.role === "partner" ? me.id : null),
+        partnerOwnerId: input.partnerOwnerId ?? ((me.role === "partner" || me.role === "founding_partner") ? me.id : null),
         relationshipStrength: 0,
         sourceSignals: [],
         strategicPriorities: (input.strategicPriorities ?? []).map((s) => s.trim()).filter(Boolean),
@@ -894,7 +894,7 @@ function toQbrWire(accountId: string, o: QbrOutput) {
 router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only", reason: "Only a partner persona can approve or reject Cartographer profile-update proposals." });
     return;
   }
@@ -1084,7 +1084,7 @@ router.get("/credentials", async (req, res) => {
 router.post("/credentials", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -1145,7 +1145,7 @@ router.post("/credentials", async (req, res) => {
 router.put("/credentials/:credentialId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -1217,7 +1217,7 @@ router.put("/credentials/:credentialId", async (req, res) => {
 router.delete("/credentials/:credentialId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return;
   }

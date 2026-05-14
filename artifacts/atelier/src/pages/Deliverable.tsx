@@ -108,7 +108,7 @@ export default function Deliverable() {
             readiness={d.criticReadiness}
             partnerApprovedByName={d.partnerApprovedByName ?? null}
             sentAt={d.sentAt ?? null}
-            isPartner={me?.role === "partner"}
+            isPartner={(me?.role === "partner" || me?.role === "founding_partner")}
             sending={send.isPending}
             onSend={async (override, rationale) => {
               try {

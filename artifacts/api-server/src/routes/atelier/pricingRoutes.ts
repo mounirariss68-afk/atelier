@@ -51,7 +51,7 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
 }
 
 function requirePartner(me: typeof atelierUsers.$inferSelect, res: Response): boolean {
-  if (me.role !== "partner") {
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
     res.status(403).json({ error: "partner-only" });
     return false;
   }

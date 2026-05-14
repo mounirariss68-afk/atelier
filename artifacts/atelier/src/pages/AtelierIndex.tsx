@@ -297,7 +297,7 @@ function CredentialsView() {
   const { data: me } = useAtelierGetMe();
   const { data: credentials, isLoading } = useAtelierListCredentials();
   const [showCreate, setShowCreate] = React.useState(false);
-  const isPartner = me?.role === "partner";
+  const isPartner = (me?.role === "partner" || me?.role === "founding_partner");
   if (isLoading) return <Skeleton className="h-64 mt-8 bg-bg-elevate" />;
   const list = credentials ?? [];
   return (

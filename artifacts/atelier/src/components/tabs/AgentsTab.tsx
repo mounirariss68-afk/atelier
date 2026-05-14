@@ -40,7 +40,7 @@ export function AgentsTab({ engId }: { engId: string }) {
       },
     },
   });
-  const isPartner = me?.role === "partner";
+  const isPartner = (me?.role === "partner" || me?.role === "founding_partner");
   const { data: usageRows } = useAtelierAgentsUsageCounts();
   const designAgents = (agents ?? []).filter((a) => a.group === "Engagement");
   const usageByName = React.useMemo(() => {

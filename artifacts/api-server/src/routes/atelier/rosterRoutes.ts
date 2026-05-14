@@ -991,7 +991,7 @@ router.get("/roster/access-matrix", async (req, res, next) => {
     // ("Partner / Operations only"); both have firm-wide roster scope per
     // PRD §8.1 and need the matrix view to audit grants.
     // Task #254 acceptance — Partner-only per PRD §8.1.
-    if (me.role !== "partner") {
+    if ((me.role !== "partner" && me.role !== "founding_partner")) {
       res.status(403).json({ error: "access-matrix-partner-only" });
       return;
     }

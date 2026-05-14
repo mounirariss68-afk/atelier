@@ -93,11 +93,12 @@ export function CreateAccountDialog({ trigger }: Props) {
   const { data: accounts } = useAtelierListAccounts();
 
   const partners = React.useMemo(
-    () => (personas ?? []).filter((p) => p.role === "partner"),
+    // Task #292 — partner-tier owners include founding_partner.
+    () => (personas ?? []).filter((p) => p.role === "partner" || p.role === "founding_partner"),
     [personas],
   );
   const defaultPartnerId =
-    me?.role === "partner" ? me.id : partners[0]?.id ?? "";
+    (me?.role === "partner" || me?.role === "founding_partner") ? me.id : partners[0]?.id ?? "";
 
   const [form, setForm] = React.useState<FormState>(() =>
     makeInitial({ partnerOwnerId: defaultPartnerId }),

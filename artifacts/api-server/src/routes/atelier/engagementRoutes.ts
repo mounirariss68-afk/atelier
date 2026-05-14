@@ -874,7 +874,7 @@ router.post("/deliverables/:delId/send", async (req, res) => {
   //      partner sees fresh readiness.
   //   4. If readiness is not GREEN, the partner must explicitly set
   //      override:true to acknowledge the HAPA override.
-  const isPartner = me.role === "partner";
+  const isPartner = (me.role === "partner" || me.role === "founding_partner");
   const hasRationale = (parsed.data.rationale ?? "").trim().length >= 8;
 
   if (!isPartner) {

@@ -1588,7 +1588,7 @@ router.get("/ledger/utilization/engagement/:slug", async (req, res) => {
 router.get("/ledger/utilization/firm", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner") return void res.status(403).json({ error: "partner-only" });
+  if ((me.role !== "partner" && me.role !== "founding_partner")) return void res.status(403).json({ error: "partner-only" });
 
   // Last 4 weeks for utilization
   const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
@@ -2001,7 +2001,7 @@ async function hydrateUtilizationNumericBlock(
     };
   }
   // view === "firm"
-  if (me.role !== "partner") return { error: "partner-only", status: 403 };
+  if ((me.role !== "partner" && me.role !== "founding_partner")) return { error: "partner-only", status: 403 };
   const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
   const snaps = await db.select().from(atelierUtilizationSnapshots).where(inArray(atelierUtilizationSnapshots.weekIso, last4Iso));
   // Hard refusal: no snapshots in the window = nothing to anchor on.

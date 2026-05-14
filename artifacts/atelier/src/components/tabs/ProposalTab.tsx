@@ -203,7 +203,7 @@ export function ProposalTab({ oppId }: { oppId: string }) {
   };
   const assignmentsConfirmedAt = sheetExtras.sectionAssignmentsConfirmedAt;
   const partnerFinalReadAt = sheetExtras.partnerFinalReadAt;
-  const isPartner = me?.role === "partner";
+  const isPartner = (me?.role === "partner" || me?.role === "founding_partner");
   const pricingNeedsOverride = pricing?.verdict === "partner_override_required";
   const pricingCheckpointMet = pricingNeedsOverride ? !!pricingOverrideAt : !!pricingApprovedAt;
   const matrix = (proposal.complianceMatrix ?? []) as { rfpReqId: string; requirement: string; status: string; evidence: string }[];
