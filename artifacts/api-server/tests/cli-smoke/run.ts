@@ -19,6 +19,10 @@ interface Smoke {
 
 const SMOKES: Smoke[] = [
   { prompt: "Add a new account Ministry of Energy in the UAE", expectTool: "account_create" },
+  // Regression for "X as a new account" phrasing — captureAfter
+  // returned an empty name for this shape, which then ran the tool
+  // and rendered as "✗ account_create" / "Done." in the bar.
+  { prompt: "Add Ministry of Energy in the UAE as a new account", expectTool: "account_create" },
   { prompt: "Create an opportunity for Tasama Holding", expectTool: "opportunity_create" },
   { prompt: "Move Acme to pursue", expectTool: "opportunity_move_stage" },
   { prompt: "Approve Sara's timesheet for last week", expectTool: "ledger_approve_timesheet" },

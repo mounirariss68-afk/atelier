@@ -1224,18 +1224,35 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
   if (!p) return null;
 
   // ---- Account create ----------------------------------------------
-  if (/(add|create|new|register)\s+(a\s+)?(new\s+)?account\b/.test(p)) {
-    const name =
-      captureAfter(promptRaw, "account") ??
-      captureAfter(promptRaw, "for") ??
+  // Two phrasings supported:
+  //   (a) "Add Ministry of Energy in the UAE as a new account"
+  //   (b) "Create account Ministry of Energy" / "New account for Acme"
+  if (/(add|create|new|register)\s+(a\s+)?(new\s+)?account\b/.test(p) ||
+      /(add|create|register)\b.+\bas\s+(a\s+)?(new\s+)?account\b/i.test(promptRaw)) {
+    // Prefer the "X as a new account" pattern — it carries the entity
+    // name in the head rather than the tail.
+    const asAccountMatch = promptRaw.match(
+      /(?:add|create|register)\s+(?:a\s+|the\s+)?(.+?)\s+(?:as\s+(?:a\s+)?(?:new\s+)?)?account\b/i,
+    );
+    let name =
+      (asAccountMatch?.[1] ?? "").trim() ||
+      captureAfter(promptRaw, "account") ||
+      captureAfter(promptRaw, "for") ||
       "";
-    const countryMatch = promptRaw.match(/\bin\s+(?:the\s+)?([A-Z][\p{L} ]{2,40})/u);
+    // Strip a trailing "in <country>" so we can lift it into its own field.
+    const countryMatch =
+      name.match(/\s+in\s+(?:the\s+)?([\p{L} ]{2,40})$/iu) ??
+      promptRaw.match(/\bin\s+(?:the\s+)?([A-Z][\p{L} ]{2,40})/u);
+    if (countryMatch && name) {
+      name = name.replace(/\s+in\s+(?:the\s+)?[\p{L} ]{2,40}$/iu, "").trim();
+    }
+    name = name.replace(/^a\s+new\s+/i, "").replace(/^new\s+/i, "").trim();
     const sectorMatch = promptRaw.match(/\b(?:sector|industry)\s+([\p{L} &/-]{2,40})/iu);
     return {
       toolName: "account_create",
       confidence: name ? "high" : "low",
       input: {
-        name: name.replace(/^a\s+new\s+/i, "").replace(/\s+in\s+.*$/i, "").trim(),
+        name,
         country: countryMatch?.[1]?.trim() ?? "",
         sector: sectorMatch?.[1]?.trim() ?? "",
       },
@@ -1612,6 +1629,48 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
  * (if any) or explicitly says the action isn't available from the
  * assistant yet and points to the UI surface that does it.
  */
+/**
+ * Convert a snake_case tool name into a human-readable verb phrase
+ * for assistant narration. "account_create" → "create an account",
+ * "opportunity_move_stage" → "move the opportunity stage". Falls
+ * back to a simple space-joined form if no verb is recognized.
+ */
+export function humanizeToolName(toolName: string): string {
+  const parts = toolName.split("_");
+  const verbObjectMap: Record<string, string> = {
+    create: "create",
+    add: "add",
+    update: "update",
+    move: "move",
+    set: "set",
+    send: "send",
+    compose: "compose",
+    draft: "draft",
+    approve: "approve",
+    close: "close",
+    log: "log",
+    capture: "capture",
+    delete: "delete",
+    refresh: "refresh",
+    archive: "archive",
+  };
+  // Common shape: <noun>_<verb>[_<extra>] e.g. account_create, raid_add,
+  // opportunity_move_stage. Detect the verb and re-order.
+  if (parts.length >= 2) {
+    const noun = parts[0]!;
+    const verbIdx = parts.findIndex((p) => verbObjectMap[p]);
+    if (verbIdx > 0) {
+      const verb = verbObjectMap[parts[verbIdx]!]!;
+      const article = /^[aeiou]/i.test(noun) ? "an" : "a";
+      const tail = parts.slice(verbIdx + 1).join(" ");
+      return tail
+        ? `${verb} the ${noun.replace(/-/g, " ")} ${tail}`
+        : `${verb} ${article} ${noun.replace(/-/g, " ")}`;
+    }
+  }
+  return toolName.replace(/_/g, " ");
+}
+
 export function noToolFallbackMessage(promptText: string): string {
   const routed = routePromptToCapability(promptText);
   if (routed) {
@@ -1656,8 +1715,39 @@ function mockModelStep(args: {
     }
   }
   if (lastTool) {
+    // Inspect the last tool_result to tailor the closing narration.
+    // Saying "Done." after a failure is misleading; surfacing the
+    // capability's errorMessage gives the user something actionable.
+    const blocks = (lastTool.content as Array<Record<string, unknown>>) ?? [];
+    const tr = blocks.find((b) => b?.type === "tool_result") as
+      | { content?: unknown; is_error?: boolean }
+      | undefined;
+    let closing = "Done.";
+    let isErr = false;
+    let needsConfirm = false;
+    try {
+      const raw = tr?.content;
+      const text = Array.isArray(raw)
+        ? (raw as Array<{ text?: string }>).map((b) => b?.text ?? "").join("")
+        : String(raw ?? "");
+      const parsed = text ? JSON.parse(text) : {};
+      isErr = parsed?.ok === false || tr?.is_error === true;
+      needsConfirm = parsed?.confirmation && parsed?.ok !== false;
+      if (isErr) {
+        const msg =
+          parsed?.errorMessage ?? parsed?.error?.message ?? "I couldn't complete that.";
+        closing = `I couldn't complete that — ${String(msg).replace(/[.?!]+$/, "")}.`;
+      } else if (needsConfirm) {
+        const summary = parsed?.confirmation?.summary;
+        closing = summary
+          ? `Ready to confirm: ${String(summary).replace(/[.?!]+$/, "")}.`
+          : "Ready when you confirm below.";
+      }
+    } catch {
+      // Best effort — leave default "Done." if the payload isn't JSON.
+    }
     return {
-      text: "Done.",
+      text: closing,
       toolCall: null,
       stop: "end_turn",
       costUsd: 0,
@@ -1721,8 +1811,11 @@ function mockModelStep(args: {
   if (!toolCall) {
     const routed = routePromptToCapability(promptText);
     if (routed) {
+      // Friendly verb-first narration. Avoids the "a account create"
+      // article-mismatch bug and reads as a human sentence.
+      const verbPhrase = humanizeToolName(routed.toolName);
       return {
-        text: `I'll prepare a ${routed.toolName.replace(/_/g, " ")} for you to confirm.`,
+        text: `Got it — I'll ${verbPhrase}. Review and confirm below.`,
         toolCall: { id: rid("tu"), name: routed.toolName, input: routed.input },
         stop: "tool_use",
         costUsd: 0,

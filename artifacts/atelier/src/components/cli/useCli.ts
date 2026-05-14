@@ -119,13 +119,22 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       };
     }
     case "plan_step": {
-      const d = frame.data as { index?: number; label?: string };
+      // The orchestrator currently emits `{step, hasTool}` for every
+      // model step; the bar rendered "?. " for those because the old
+      // shape expected `{index, label}`. Skip frames with no
+      // human-readable label entirely — they're noise.
+      const d = frame.data as { index?: number; label?: string; step?: number };
+      if (!d.label || !String(d.label).trim()) {
+        return { ...turn, status: "streaming" };
+      }
+      const idx = d.index ?? d.step;
+      const prefix = typeof idx === "number" ? `${idx}. ` : "";
       return {
         ...turn,
         status: "streaming",
         trace: [
           ...turn.trace,
-          { kind: "step", text: `${d.index ?? "?"}. ${d.label ?? ""}`, at: frame.receivedAt },
+          { kind: "step", text: `${prefix}${d.label}`, at: frame.receivedAt },
         ],
       };
     }
