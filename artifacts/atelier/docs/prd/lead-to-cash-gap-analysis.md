@@ -981,7 +981,47 @@ There are also two **proposed** tasks in the queue (#358 — let
 editors update v5 records from the portal; #359 — recruiter access
 test on /studio). Neither touches L2C.
 
-### F.4 Where to start
+### F.4 Assumptions & intentional deviations from the task brief
+
+These are deliberate product decisions, called out so downstream task
+authors do not re-litigate them:
+
+1. **Persona model: 11 roles, not 12.** The task brief referenced a
+   12-persona model. The codebase today (`personaRoles.ts`) enumerates
+   11; the missing slot is the deferred `client_user` external persona
+   (out of scope until v6 ships a public client portal). C.1 documents
+   this and how to extend C.2/C.3 if `client_user` lands later.
+2. **Treasury IA lives under `/wallet`, not as a standalone Commercial
+   sub-area.** The brief's phrasing implied Treasury could mount as a
+   Commercial sub-area sibling to CRM/Pipeline. The doc places all
+   finance surfaces (RevRec, WIP, Invoices, AR, Treasury, Collections)
+   under `/wallet` because Wallet is already the firm's finance home;
+   adding a parallel Commercial sub-area would split finance across
+   two top-nav realms. The single top-nav addition is `/codex`
+   (commercial-realm sibling), because the contract artifact pre-dates
+   invoicing and is referenced from both Opportunity and Engagement
+   workspaces.
+3. **Cash forecast lands as 13-week** (vs v4's 12-week). Treasury
+   convention is 13 weeks (a quarter); same data model.
+
+### F.5 Best-practice anchors (references appendix)
+
+Where this document cites "best practice" (A.1 column 6, A.4
+definitions), the underlying frameworks are:
+
+- **ASC 606 / IFRS 15** — *Revenue from Contracts with Customers*
+  (FASB / IASB) — anchors G03 revenue recognition methods (POC,
+  ratable, milestone) and the period-posting immutability rule.
+- **SPI Research / Service Performance Insight benchmarks** — anchors
+  the realization, utilization, and engagement-margin KPI definitions
+  (A.4) and the "top-quartile services CFO" bar referenced in A.1.
+- **TSIA / PSA practice** — anchors NRR / GRR / renewal-rate framing
+  (G11) and the QBR-to-renewal motion.
+- **ZATCA Phase-2 (KSA) and FTA e-invoicing (UAE)** — anchor G06
+  jurisdiction-correct invoicing requirements; cited explicitly in v4
+  §6.B.9.
+
+### F.6 Where to start
 
 The next implementing task agent should pick up **Wave 1 (G01 + G02)**
 as a single project task. The seam is clean (new schema + new routes
