@@ -489,8 +489,171 @@ router.get("/cli/admin/digest/weekly", async (req, res) => {
         gte(atelierCliTurns.createdAt, since),
       ),
     );
+
+  // Spec-required digest sections — fetched off the same window so a
+  // mailer worker (Task #336) can render the email without further
+  // round-trips.
+  const previousWeek = new Date(since.getTime() - 7 * 24 * 60 * 60 * 1000);
+  // (1) New failures — turns this week with status=error whose
+  //     errorMessage signature was NOT seen the previous week.
+  // Error info lives on `statusMessage` + per-step `stepResults.errorCode`
+  // (the schema doesn't carry top-level errorMessage / errorCode columns).
+  const thisWeekErrors = await db
+    .select({
+      id: atelierCliTurns.id,
+      prompt: atelierCliTurns.prompt,
+      statusMessage: atelierCliTurns.statusMessage,
+      stepResults: atelierCliTurns.stepResults,
+    })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.orgId, me.orgId),
+        gte(atelierCliTurns.createdAt, since),
+        eq(atelierCliTurns.status, "error"),
+      ),
+    )
+    .limit(200);
+  const priorWeekErrors = await db
+    .select({ statusMessage: atelierCliTurns.statusMessage })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.orgId, me.orgId),
+        gte(atelierCliTurns.createdAt, previousWeek),
+        sql`${atelierCliTurns.createdAt} < ${since.toISOString()}`,
+        eq(atelierCliTurns.status, "error"),
+      ),
+    );
+  const errorSig = (s: string | null | undefined) =>
+    (s ?? "").slice(0, 80).toLowerCase().replace(/[a-f0-9-]{8,}/g, "<id>");
+  const priorSigs = new Set(priorWeekErrors.map((r) => errorSig(r.statusMessage)));
+  const newFailures = thisWeekErrors
+    .filter((r) => !priorSigs.has(errorSig(r.statusMessage)))
+    .slice(0, 20)
+    .map((r) => ({
+      turnId: r.id,
+      prompt: (r.prompt ?? "").slice(0, 120),
+      statusMessage: (r.statusMessage ?? "").slice(0, 200),
+    }));
+
+  // (2) Top error types — derived from per-step errorCode in stepResults.
+  const errorCodeCounts = new Map<string, number>();
+  for (const r of thisWeekErrors) {
+    const steps = (r.stepResults as Array<{ errorCode?: string; ok?: boolean }> | null) ?? [];
+    const codes = steps
+      .filter((s) => s.ok === false && typeof s.errorCode === "string")
+      .map((s) => s.errorCode!);
+    for (const c of codes.length > 0 ? codes : ["<unknown>"]) {
+      errorCodeCounts.set(c, (errorCodeCounts.get(c) ?? 0) + 1);
+    }
+  }
+  const errorTypeRows = Array.from(errorCodeCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([code, count]) => ({ code, count }));
+
+  // (3) Unmapped intents — turns where the orchestrator returned no
+  //     tool_calls AND status is not read_only_no_op (the partner
+  //     prompt couldn't be matched to a capability).
+  const unmappedRows = await db
+    .select({
+      id: atelierCliTurns.id,
+      prompt: atelierCliTurns.prompt,
+      status: atelierCliTurns.status,
+    })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.orgId, me.orgId),
+        gte(atelierCliTurns.createdAt, since),
+        sql`coalesce(jsonb_array_length(${atelierCliTurns.toolCalls}), 0) = 0`,
+        sql`${atelierCliTurns.status} <> 'read_only_no_op'`,
+      ),
+    )
+    .limit(20);
+  const unmappedIntents = unmappedRows.map((r) => ({
+    turnId: r.id,
+    prompt: (r.prompt ?? "").slice(0, 120),
+    status: r.status,
+  }));
+
+  // (4) Declining-satisfaction capabilities — tools whose 👎 share
+  //     this week is materially worse than the prior week.
+  const thisWeekFeedback = await db
+    .select({
+      toolCalls: atelierCliTurns.toolCalls,
+      thumb: sql<string>`${atelierCliTurns.feedback}->>'thumb'`,
+    })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.orgId, me.orgId),
+        gte(atelierCliTurns.createdAt, since),
+        sql`${atelierCliTurns.feedback}->>'thumb' is not null`,
+      ),
+    );
+  const priorWeekFeedback = await db
+    .select({
+      toolCalls: atelierCliTurns.toolCalls,
+      thumb: sql<string>`${atelierCliTurns.feedback}->>'thumb'`,
+    })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.orgId, me.orgId),
+        gte(atelierCliTurns.createdAt, previousWeek),
+        sql`${atelierCliTurns.createdAt} < ${since.toISOString()}`,
+        sql`${atelierCliTurns.feedback}->>'thumb' is not null`,
+      ),
+    );
+  const thumbsByTool = (
+    rows: Array<{ toolCalls: unknown; thumb: string }>,
+  ): Map<string, { up: number; down: number }> => {
+    const m = new Map<string, { up: number; down: number }>();
+    for (const r of rows) {
+      const calls = (r.toolCalls as Array<{ tool?: string }> | null) ?? [];
+      for (const c of calls) {
+        if (typeof c.tool !== "string") continue;
+        const v = m.get(c.tool) ?? { up: 0, down: 0 };
+        if (r.thumb === "up") v.up += 1;
+        else if (r.thumb === "down") v.down += 1;
+        m.set(c.tool, v);
+      }
+    }
+    return m;
+  };
+  const thisMap = thumbsByTool(thisWeekFeedback);
+  const priorMap = thumbsByTool(priorWeekFeedback);
+  const decliningSatisfaction: Array<{
+    tool: string;
+    thisWeekDownRate: number;
+    priorWeekDownRate: number;
+    delta: number;
+  }> = [];
+  for (const [tool, v] of thisMap) {
+    const total = v.up + v.down;
+    if (total < 3) continue;
+    const thisRate = v.down / total;
+    const prior = priorMap.get(tool);
+    const priorTotal = (prior?.up ?? 0) + (prior?.down ?? 0);
+    const priorRate = priorTotal > 0 ? (prior!.down / priorTotal) : 0;
+    const delta = thisRate - priorRate;
+    if (delta >= 0.15) {
+      decliningSatisfaction.push({
+        tool,
+        thisWeekDownRate: Math.round(thisRate * 1000) / 1000,
+        priorWeekDownRate: Math.round(priorRate * 1000) / 1000,
+        delta: Math.round(delta * 1000) / 1000,
+      });
+    }
+  }
+  decliningSatisfaction.sort((a, b) => b.delta - a.delta);
+
   res.json({
     weekOf: since.toISOString().slice(0, 10),
+    rangeStart: since.toISOString(),
+    rangeEnd: new Date().toISOString(),
     headline: agg ?? {
       turnCount: 0,
       totalCostCents: 0,
@@ -500,6 +663,10 @@ router.get("/cli/admin/digest/weekly", async (req, res) => {
     },
     topUsers,
     topTools,
+    newFailures,
+    topErrorTypes: errorTypeRows,
+    unmappedIntents,
+    decliningSatisfaction: decliningSatisfaction.slice(0, 10),
     catalog: {
       schemaVersion: CATALOG_SCHEMA_VERSION,
       capabilityCount: capabilitiesForPersona({
@@ -509,6 +676,9 @@ router.get("/cli/admin/digest/weekly", async (req, res) => {
         orgId: me.orgId,
       }).length,
     },
+    notes: [
+      "Mailer scheduling is owned by Task #336; this endpoint is the payload contract that worker will render.",
+    ],
   });
 });
 

@@ -377,10 +377,26 @@ defineCapability({
           "No reversible action found in your last 20 turns. Irreversible writes (delete, send) cannot be undone from the CLI.",
       };
     }
+    // Typed-name guard (Use Case #62) — the partner must echo the
+    // short turn-handle back to us before we replay any inverse plan.
+    // This protects against an accidental "/undo" that wipes a turn
+    // they didn't intend to reverse.
+    const typedNameExpected = `undo ${hit.turnId.slice(-6)}`;
+    if (input.confirm === true) {
+      const typed = typeof input.typedName === "string" ? input.typedName.trim().toLowerCase() : "";
+      if (typed !== typedNameExpected) {
+        return {
+          ok: false,
+          errorCode: "typed_name_required",
+          errorMessage: `Type \`${typedNameExpected}\` to confirm the undo. (Got: ${typed || "<empty>"})`,
+        };
+      }
+    }
     if (input.confirm !== true) {
       const totalRecords = hit.reversibleSteps.reduce((n, s) => n + s.entityIds.length, 0);
       const summaryParts = [
         `Undo last action — ${hit.reversibleSteps.length} reversible step${hit.reversibleSteps.length === 1 ? "" : "s"}, ${totalRecords} record${totalRecords === 1 ? "" : "s"} from turn ${hit.turnId}.`,
+        `Type \`${typedNameExpected}\` in the confirm field to proceed.`,
       ];
       if (hit.irreversibleSiblings.length > 0) {
         summaryParts.push(
@@ -408,7 +424,10 @@ defineCapability({
               partial: hit.irreversibleSiblings.length > 0,
             },
           },
-          pending: { tool: "undo_last_action", input: { confirm: true } },
+          pending: {
+            tool: "undo_last_action",
+            input: { confirm: true, typedName: typedNameExpected },
+          },
         },
       };
     }
