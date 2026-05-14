@@ -21,7 +21,7 @@ async function main(): Promise<void> {
         name: p.name,
         role: p.role,
         email: p.email ?? null,
-      } as never,
+      },
       emit: (frame) => frames.push(frame),
     },
   );

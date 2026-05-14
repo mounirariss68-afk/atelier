@@ -740,9 +740,22 @@ export async function getOrCreateSession(
 
 const SYSTEM_PROMPT = [
   "You are the Atelier CLI orchestrator. Help the user accomplish a task using the tools you are given.",
-  "Be concise. Prefer one tool call per step. Do not invent data.",
-  "When a write-tool returns a confirmation diff, STOP and let the user confirm — do not retry.",
-  "When a tool returns disambiguation options, STOP and let the user pick — do not guess.",
+  "Be concise. Prefer one tool call per step.",
+  "HARD RULES — these are non-negotiable:",
+  "1. NEVER invent identifiers (engagement IDs, account IDs, user IDs, RAID IDs, etc.).",
+  "   If you do not have an explicit ID from the user or from a prior tool result in this",
+  "   turn, you MUST call a resolver tool (e.g. `resolve_account_by_name`) FIRST.",
+  "2. RESOLVER-BEFORE-WRITE: every write tool call MUST be preceded — in this same turn —",
+  "   by a resolver/lookup that produced the IDs the write depends on. Do not guess.",
+  "3. AMBIGUITY: when more than one plausible target exists, you MUST call",
+  "   `present_choices` and STOP. Do not pick one arbitrarily.",
+  "4. PREFER LIVE LOOKUP: rolling-summary primers and prior-turn context are hints only.",
+  "   When acting on entities, re-fetch via the appropriate read tool rather than relying",
+  "   on summarized or stale data.",
+  "5. CONFIRMATION: when a write-tool returns a confirmation diff, STOP and let the user",
+  "   confirm — do not retry, do not re-call the tool.",
+  "6. DISAMBIGUATION: when a tool returns disambiguation options, STOP and let the user",
+  "   pick — do not guess.",
   "Wrap up with a one-line `final` narration that summarises what happened.",
 ].join("\n");
 
@@ -774,22 +787,50 @@ async function modelStep(args: {
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), Number(process.env.ATELIER_CLI_TIMEOUT_MS ?? 30_000));
-  try {
-    const resp = await anthropic.messages.create(
+  // Retry-with-jitter on transient upstream failures (5xx / network / 429).
+  // Permanent errors (4xx other than 429) bubble up immediately.
+  const MAX_TOKENS = Number(process.env.ATELIER_CLI_MAX_TOKENS ?? 2048);
+  const RETRY_MAX = Number(process.env.ATELIER_CLI_RETRY_MAX ?? 2);
+  const isTransient = (e: unknown): boolean => {
+    const err = e as { status?: number; name?: string; message?: string };
+    if (err?.name === "AbortError") return false;
+    const s = err?.status ?? 0;
+    if (s === 429) return true;
+    if (s >= 500 && s < 600) return true;
+    const msg = String(err?.message ?? "");
+    return /ECONNRESET|ETIMEDOUT|ENETUNREACH|fetch failed/i.test(msg);
+  };
+  const callOnce = () =>
+    anthropic.messages.create(
       {
         model: process.env.ATELIER_CLI_MODEL ?? "claude-sonnet-4-5",
-        max_tokens: 2048,
+        max_tokens: MAX_TOKENS,
         system: SYSTEM_PROMPT + (args.intent ? `\n\nUser intent: ${args.intent}` : ""),
         tools: args.tools.map((t) => ({
           name: t.name,
           description: t.description,
-          input_schema: t.input_schema as never,
+          input_schema: t.input_schema as Record<string, unknown>,
         })),
-        // `messages` is typed broadly — we rely on Anthropic SDK's content-block runtime parsing.
-        messages: args.history as never,
+        messages: args.history as Parameters<typeof anthropic.messages.create>[0]["messages"],
       },
       { signal: ac.signal },
     );
+  try {
+    let resp;
+    let attempt = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      try {
+        resp = await callOnce();
+        break;
+      } catch (err) {
+        if (attempt >= RETRY_MAX || !isTransient(err)) throw err;
+        const baseMs = 250 * Math.pow(2, attempt);
+        const jitter = Math.floor(Math.random() * 250);
+        await new Promise((r) => setTimeout(r, baseMs + jitter));
+        attempt++;
+      }
+    }
     let text = "";
     let toolCall: ClaudeToolCall | null = null;
     for (const block of resp.content) {
@@ -1177,11 +1218,28 @@ export async function runTurn(
         status = "partial";
         break;
       }
-      const claudeStep = await modelStep({
-        history,
-        tools,
-        intent: input.intent ?? null,
-      });
+      let claudeStep: ClaudeStep;
+      try {
+        claudeStep = await modelStep({
+          history,
+          tools,
+          intent: input.intent ?? null,
+        });
+      } catch (err) {
+        // Upstream model failed after retry budget — surface a typed
+        // `temporarily_unavailable` frame and end the turn `partial` rather
+        // than collapsing into a generic internal error.
+        record({
+          type: "error",
+          data: {
+            code: "temporarily_unavailable",
+            message: "AI temporarily unavailable — please retry shortly",
+            detail: String((err as { message?: string })?.message ?? err),
+          },
+        });
+        status = "partial";
+        break;
+      }
       totalCost += claudeStep.costUsd;
       totalIn += claudeStep.tokensIn;
       totalOut += claudeStep.tokensOut;
@@ -1660,17 +1718,43 @@ export async function confirmPendingWrite(
     })
     .where(eq(atelierCliTurns.id, turnId));
 
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "cli_turn",
-    entityId: turnId,
-    actorType: "human",
-    actorId: persona.id,
-    actorLabel: persona.name,
-    action: "cli.turn.confirmed",
-    payload: { sessionId: turn.sessionId, tool: pending.tool, ok: result.ok },
-    payloadSummary: `CLI confirm ${pending.tool} ${result.ok ? "ok" : "fail"}`,
-  });
+  await db.insert(atelierAuditEvents).values([
+    {
+      id: rid("aud"),
+      entityType: "cli_turn",
+      entityId: turnId,
+      actorType: "human",
+      actorId: persona.id,
+      actorLabel: persona.name,
+      action: "cli.turn.confirmed",
+      payload: { sessionId: turn.sessionId, tool: pending.tool, ok: result.ok },
+      payloadSummary: `CLI confirm ${pending.tool} ${result.ok ? "ok" : "fail"}`,
+    },
+    // Terminal `cli.turn` snapshot — required so audit consumers can scan a
+    // single action type for the final state of every turn (success / error
+    // / partial / cancelled / no-op).
+    {
+      id: rid("aud"),
+      entityType: "cli_turn",
+      entityId: turnId,
+      actorType: "human",
+      actorId: persona.id,
+      actorLabel: persona.name,
+      action: "cli.turn",
+      payload: {
+        sessionId: turn.sessionId,
+        status: newStatus,
+        terminal: true,
+        confirmed: true,
+        tool: pending.tool,
+        ok: result.ok,
+        replayedIdempotent: Boolean(
+          (result as { replayedIdempotent?: boolean }).replayedIdempotent,
+        ),
+      },
+      payloadSummary: `CLI turn ${newStatus} (confirm ${pending.tool})`,
+    },
+  ]);
 
   return { turnId, sessionId: turn.sessionId, status: newStatus };
 }
@@ -1695,17 +1779,36 @@ export async function cancelPendingWrite(
       updatedAt: new Date(),
     })
     .where(eq(atelierCliTurns.id, turnId));
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "cli_turn",
-    entityId: turnId,
-    actorType: "human",
-    actorId: persona.id,
-    actorLabel: persona.name,
-    action: "cli.turn.cancelled",
-    payload: { sessionId: turn.sessionId },
-    payloadSummary: "CLI confirm cancelled",
-  });
+  await db.insert(atelierAuditEvents).values([
+    {
+      id: rid("aud"),
+      entityType: "cli_turn",
+      entityId: turnId,
+      actorType: "human",
+      actorId: persona.id,
+      actorLabel: persona.name,
+      action: "cli.turn.cancelled",
+      payload: { sessionId: turn.sessionId },
+      payloadSummary: "CLI confirm cancelled",
+    },
+    // Terminal `cli.turn` snapshot for the cancelled outcome.
+    {
+      id: rid("aud"),
+      entityType: "cli_turn",
+      entityId: turnId,
+      actorType: "human",
+      actorId: persona.id,
+      actorLabel: persona.name,
+      action: "cli.turn",
+      payload: {
+        sessionId: turn.sessionId,
+        status: "cancelled" as const,
+        terminal: true,
+        cancelled: true,
+      },
+      payloadSummary: "CLI turn cancelled",
+    },
+  ]);
   return { status: "cancelled" };
 }
 
@@ -1725,5 +1828,3 @@ export function _internalGetInflightSize(): number {
   return inflight.size;
 }
 
-// Avoid unused warnings for helpers used only in tests.
-export const _unused = { atelierUsers, gte };
