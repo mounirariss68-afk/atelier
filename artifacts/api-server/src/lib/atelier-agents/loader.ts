@@ -64,7 +64,13 @@ export type AtelierAgentId =
   // v5 — IP / Asset catalog
   | "ip_steward"
   | "oss_compliance_sentinel"
-  | "demo_environment_curator";
+  | "demo_environment_curator"
+  // L2C Wave 1 — Codex (CLM)
+  | "contract_composer"
+  | "redline_analyst"
+  | "esign_orchestrator"
+  | "dpa_sentinel"
+  | "renewal_watchdog";
 
 /**
  * Load an agent prompt from `prompts/<agentId>/v<version>.md`.

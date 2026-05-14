@@ -1653,6 +1653,168 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "home_summary", confidence: "high", input: {} };
   }
 
+  // =====================================================================
+  // L2C Wave 1 (Task #360, W1-S8) — Codex / CLM, change-orders,
+  // deliverable-acceptance routing. Each branch matches the
+  // representative prompts shipped with the catalog entries and
+  // extracts the canonical id/value the corresponding tool expects.
+  // Order matters: more-specific phrases (record acceptance, dispatch
+  // contract) must come before broader ones (acceptance, contract).
+  // =====================================================================
+
+  // Counterparty create — "Add … as a (new) counterparty (in <country>)"
+  // /  "Create … counterparty …".
+  if (/\bcounterpart(?:y|ies)\b/i.test(promptRaw) && /\b(add|create|new|register)\b/i.test(promptRaw)) {
+    const m = promptRaw.match(/(?:add|create|register)\s+(?:a\s+|the\s+)?(.+?)\s+(?:as\s+(?:a\s+)?(?:new\s+)?)?(?:vendor\s+|client\s+|partner[-\s]firm\s+)?counterparty\b/i)
+      ?? promptRaw.match(/counterparty\s+(?:named\s+)?([\p{L}0-9 .'’&\-]+)/iu);
+    let name = (m?.[1] ?? "").trim();
+    const countryMatch = name.match(/\s+in\s+(?:the\s+)?([\p{L} ]{2,40})$/iu);
+    if (countryMatch) name = name.replace(/\s+in\s+(?:the\s+)?[\p{L} ]{2,40}$/iu, "").trim();
+    const kind = /vendor/i.test(promptRaw) ? "vendor" : /partner[-\s]firm/i.test(promptRaw) ? "partner_firm" : "client";
+    return {
+      toolName: "codex_counterparty_create",
+      confidence: name ? "high" : "low",
+      input: {
+        kind,
+        legalName: name,
+        displayName: name,
+        jurisdiction: countryMatch?.[1]?.trim() ?? "",
+      },
+    };
+  }
+
+  // Clause publish — "Publish the … clause [version N]".
+  if (/\bpublish\b.*\bclause\b/i.test(promptRaw)) {
+    const v = promptRaw.match(/\bversion\s+(\d+)\b/i);
+    return {
+      toolName: "codex_clause_publish",
+      confidence: "low",
+      input: { clauseId: "", versionHint: v ? Number(v[1]) : null },
+    };
+  }
+
+  // Contract dispatch — must precede "compose" because "send" is broader.
+  if (/(dispatch|send)\b.*\b(contract|sow|msa|nda)\b/i.test(promptRaw) && /\b(signature|sign|procurement|client|counterparty)\b/i.test(promptRaw)) {
+    const contractId = findIdLike(promptRaw, ["ct", "contract", "sow", "msa"]) ?? "";
+    return { toolName: "codex_contract_dispatch", confidence: contractId ? "high" : "low", input: { contractId } };
+  }
+
+  // Contract redline — "Record … redline on …".
+  if (/\bredline\b/i.test(promptRaw)) {
+    const contractId = findIdLike(promptRaw, ["ct", "contract", "sow", "msa"]) ?? "";
+    return {
+      toolName: "codex_contract_record_redline",
+      confidence: contractId ? "high" : "low",
+      input: { contractId, redlineBody: promptRaw },
+    };
+  }
+
+  // Contract compose — "Compose / draft / build the … contract|sow|msa|nda".
+  if (/(compose|draft|build|generate)\b.*\b(contract|sow|msa|nda)\b/i.test(promptRaw)) {
+    const contractId = findIdLike(promptRaw, ["ct", "contract", "sow", "msa"]) ?? "";
+    return { toolName: "codex_contract_compose", confidence: contractId ? "high" : "low", input: { contractId } };
+  }
+
+  // DPA review — "Review the … DPA …".
+  if (/\bdpa\b/i.test(promptRaw) && /(review|check|scan|run)/i.test(promptRaw)) {
+    const dpaId = findIdLike(promptRaw, ["dpa"]) ?? "";
+    return { toolName: "codex_dpa_review", confidence: dpaId ? "high" : "low", input: { dpaId } };
+  }
+
+  // Renewal Watchdog — "Show contracts expiring …" / "Run renewal watchdog".
+  if (/(contracts?\s+expiring|expiring\s+contracts?|renewal\s+watchdog|expiry|renewals?)\b/i.test(promptRaw) && !/\bredline\b/i.test(promptRaw)) {
+    const days = promptRaw.match(/\b(\d{1,3})\s*(?:days?|d)\b/i);
+    return {
+      toolName: "codex_renewal_watchdog_run",
+      confidence: "high",
+      input: { windowDays: days ? Number(days[1]) : 90 },
+    };
+  }
+
+  // Change-order record acceptance — must precede broader "acceptance" routing.
+  if (/\bchange[-\s]order\b/i.test(promptRaw) && /(record|capture|log)\b.*\bacceptance\b/i.test(promptRaw)) {
+    const coId = findIdLike(promptRaw, ["co", "chgord"]) ?? "";
+    return {
+      toolName: "change_order_record_acceptance",
+      confidence: coId ? "high" : "low",
+      input: { changeOrderId: coId, acceptanceEvidenceUrl: "" },
+    };
+  }
+
+  // Change-order dispatch — "Send change order … to the client".
+  if (/\bchange[-\s]order\b/i.test(promptRaw) && /(send|dispatch|forward)\b/i.test(promptRaw)) {
+    const coId = findIdLike(promptRaw, ["co", "chgord"]) ?? "";
+    return { toolName: "change_order_dispatch", confidence: coId ? "high" : "low", input: { changeOrderId: coId } };
+  }
+
+  // Change-order partner approve.
+  if (/\bchange[-\s]order\b/i.test(promptRaw) && /\bapprove\b/i.test(promptRaw)) {
+    const coId = findIdLike(promptRaw, ["co", "chgord"]) ?? "";
+    return { toolName: "change_order_partner_approve", confidence: coId ? "high" : "low", input: { changeOrderId: coId } };
+  }
+
+  // Change-order propose — "Propose a $25k change order on eng_xxx for …".
+  if (/(propose|new|add|create)\b.*\bchange[-\s]order\b/i.test(promptRaw)) {
+    const engId = findIdLike(promptRaw, ["eng"]) ?? "";
+    const money = findMoney(promptRaw)
+      ?? (() => {
+        const m = promptRaw.match(/\$?\s*(\d+(?:[\.,]\d+)?)\s*k\b/i);
+        return m ? { amount: Number(m[1].replace(",", ".")) * 1000, currency: "USD" } : null;
+      })();
+    const forMatch = promptRaw.match(/\bfor\s+(.+?)$/i);
+    return {
+      toolName: "change_order_propose",
+      confidence: engId && money ? "high" : "low",
+      input: {
+        engagementId: engId,
+        title: forMatch?.[1]?.trim().replace(/[.?!]+$/, "") ?? "Change order",
+        valueDeltaUsd: money?.amount ?? 0,
+        scopeDelta: forMatch?.[1]?.trim() ?? promptRaw,
+      },
+    };
+  }
+
+  // Deliverable-acceptance: record signed — must precede "submit".
+  if (/\bacceptance\b/i.test(promptRaw) && /(record|capture|log)\b.*\b(sign|signed|evidence)\b/i.test(promptRaw)) {
+    const accId = findIdLike(promptRaw, ["dlacc", "acc"]) ?? "";
+    const url = promptRaw.match(/https?:\/\/\S+/)?.[0] ?? "";
+    return {
+      toolName: "deliverable_acceptance_record_signed",
+      confidence: accId ? "high" : "low",
+      input: { acceptanceId: accId, evidenceUrl: url },
+    };
+  }
+
+  // Deliverable-acceptance: submit — "Send the … acceptance to <email>".
+  if (/\bacceptance\b/i.test(promptRaw) && /(send|submit|dispatch)\b/i.test(promptRaw)) {
+    const accId = findIdLike(promptRaw, ["dlacc", "acc"]) ?? "";
+    const email = findEmail(promptRaw) ?? "";
+    return {
+      toolName: "deliverable_acceptance_submit",
+      confidence: email ? "high" : "low",
+      input: {
+        acceptanceId: accId,
+        clientSignerName: "",
+        clientSignerEmail: email,
+      },
+    };
+  }
+
+  // Deliverable-acceptance: create — "Draft an acceptance attestation …".
+  if (/\b(acceptance|attestation)\b/i.test(promptRaw) && /(draft|create|new|prepare)\b/i.test(promptRaw)) {
+    const engId = findIdLike(promptRaw, ["eng"]) ?? "";
+    const forMatch = promptRaw.match(/\bfor\s+(.+?)$/i);
+    return {
+      toolName: "deliverable_acceptance_create",
+      confidence: engId || forMatch ? "high" : "low",
+      input: {
+        engagementId: engId,
+        title: forMatch?.[1]?.trim().replace(/[.?!]+$/, "") ?? "Deliverable acceptance",
+        attestationText: forMatch?.[1]?.trim() ?? promptRaw,
+      },
+    };
+  }
+
   return null;
 }
 

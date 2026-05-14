@@ -5634,3 +5634,975 @@ export function dispatchV5ModeExtension(
   }
   return undefined;
 }
+
+// =============================================================
+// Task #360 (L2C Wave 1) — Codex agents
+// =============================================================
+//
+// Two new agents live behind the Codex routes:
+//   - contract_composer  → first-draft body + clause picks for a new
+//                          contract instrument.
+//   - redline_analyst    → clause-by-clause risk reading on an inbound
+//                          counterparty markup.
+//
+// Both follow the established `start → progress → callClaudeJson →
+// complete | fail` pattern. Mock outputs are deterministic so CLI
+// smoke fixtures (W1-S8) and the /codex UI (W1-S10) can render
+// against them with `ATELIER_MOCK_AGENTS=1`.
+// =============================================================
+
+export interface ContractComposerInput {
+  instrumentType:
+    | "msa"
+    | "sow"
+    | "nda"
+    | "dpa"
+    | "change_order"
+    | "side_letter"
+    | "renewal";
+  counterparty: {
+    id: string;
+    legalName: string;
+    jurisdiction: string;
+    vatNumber: string;
+    paymentTermsDays: number;
+  };
+  engagement?: {
+    id: string;
+    name: string;
+    partnerOwnerName?: string;
+    engagementLeadName?: string;
+    plannedEndDate?: string | null;
+  } | null;
+  opportunity?: {
+    id: string;
+    name: string;
+    dealSizeUsd: number;
+    currency: string;
+    scopeSummary: string;
+  } | null;
+  parentContractId?: string | null;
+  clauseLibrary: Array<{
+    id: string;
+    family: string;
+    title: string;
+    body: string;
+    riskTier: "low" | "medium" | "high";
+    jurisdictionTags: string[];
+    instrumentTypes: string[];
+  }>;
+  acceptanceHistory?: Array<{
+    clauseId: string;
+    counterpartyId: string;
+    customizationsJson: unknown;
+  }>;
+  houseRules?: {
+    governingLaw?: string;
+    currency?: string;
+    defaultPaymentTermsDays?: number;
+  };
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}
+
+export interface ContractComposerOutput {
+  renderedBody: string;
+  renderedBodyFormat: "markdown";
+  proposedClauses: Array<{
+    clauseId: string;
+    position: number;
+    customizations: Record<string, unknown> | null;
+    whyChosen: string;
+  }>;
+  flaggedRisks: Array<{
+    severity: "low" | "medium" | "high";
+    summary: string;
+  }>;
+  partiesProposed: Array<{
+    side: "aico" | "counterparty";
+    role: "signer" | "witness" | "notice_party" | "observer";
+    signerName: string;
+    signerEmail: string;
+    signerTitle: string;
+  }>;
+  metadata: Record<string, unknown>;
+}
+
+function mockContractComposer(
+  input: ContractComposerInput,
+): ContractComposerOutput {
+  const eligible = input.clauseLibrary
+    .filter((c) =>
+      c.instrumentTypes.length === 0 ||
+      c.instrumentTypes.includes(input.instrumentType),
+    )
+    .filter(
+      (c) =>
+        c.jurisdictionTags.length === 0 ||
+        c.jurisdictionTags.includes(input.counterparty.jurisdiction),
+    )
+    .slice(0, 8);
+  const proposedClauses = eligible.map((c, i) => ({
+    clauseId: c.id,
+    position: i,
+    customizations: null,
+    whyChosen: `${c.family} clause matches ${input.instrumentType.toUpperCase()} for ${input.counterparty.jurisdiction || "unspecified jurisdiction"}.`,
+  }));
+  const flaggedRisks: ContractComposerOutput["flaggedRisks"] = [];
+  if (eligible.length === 0) {
+    flaggedRisks.push({
+      severity: "high",
+      summary:
+        "No clause-library entries matched this instrument + jurisdiction. Partner review required before sending.",
+    });
+  }
+  if (
+    input.opportunity?.scopeSummary?.toLowerCase().includes("personal data") &&
+    input.instrumentType !== "dpa"
+  ) {
+    flaggedRisks.push({
+      severity: "high",
+      summary:
+        "Scope mentions personal data; a separate DPA must be referenced before signing.",
+    });
+  }
+  const titleLine = `${input.instrumentType.toUpperCase()} — ${input.counterparty.legalName}${input.opportunity ? " — " + input.opportunity.name : ""}`;
+  const body = [
+    `# ${titleLine}`,
+    "",
+    `**Counterparty:** ${input.counterparty.legalName} (${input.counterparty.jurisdiction || "—"})`,
+    `**Payment terms:** ${input.counterparty.paymentTermsDays} days`,
+    input.opportunity
+      ? `**Estimated value:** ${input.opportunity.currency} ${input.opportunity.dealSizeUsd.toLocaleString()}`
+      : "",
+    "",
+    ...eligible.flatMap((c) => [
+      `## ${c.title}`,
+      c.body,
+      "",
+    ]),
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return {
+    renderedBody: body,
+    renderedBodyFormat: "markdown",
+    proposedClauses,
+    flaggedRisks,
+    partiesProposed: [
+      {
+        side: "aico",
+        role: "signer",
+        signerName: "AICo Partner — to be assigned",
+        signerEmail: "partner@aico.example",
+        signerTitle: "Partner",
+      },
+      {
+        side: "counterparty",
+        role: "signer",
+        signerName: `${input.counterparty.legalName} — authorised signatory`,
+        signerEmail: "signer@counterparty.example",
+        signerTitle: "Authorised signatory",
+      },
+    ],
+    metadata: {
+      instrumentType: input.instrumentType,
+      counterpartyId: input.counterparty.id,
+      engagementId: input.engagement?.id ?? null,
+      opportunityId: input.opportunity?.id ?? null,
+    },
+  };
+}
+
+export async function runContractComposer(
+  input: ContractComposerInput,
+): Promise<{
+  runId: string;
+  output: ContractComposerOutput;
+  costUsd: number;
+}> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "contract_composer",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "contract",
+    targetId: input.engagement?.id ?? input.opportunity?.id ?? input.counterparty.id,
+    targetLabel: `${input.instrumentType.toUpperCase()} · ${input.counterparty.legalName}`,
+    inputs: {
+      instrumentType: input.instrumentType,
+      clauseLibrarySize: input.clauseLibrary.length,
+    },
+    actorLabel: input.actorLabel,
+  });
+  try {
+    const system = loadPrompt("contract_composer");
+    await progressRun(runId, 15, "Selecting clauses from library");
+    await progressRun(runId, 40, "Honouring acceptance history");
+    await progressRun(runId, 65, "Rendering body + flagging risks");
+    const { value, costUsd, source, warning } =
+      await callClaudeJson<ContractComposerOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify(input),
+        () => mockContractComposer(input),
+      );
+    const conf: "green" | "amber" =
+      value.flaggedRisks.some((r) => r.severity === "high") ? "amber" : "green";
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: conf,
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.proposedClauses.length,
+      actorLabel: input.actorLabel,
+      targetType: "contract",
+      targetId:
+        input.engagement?.id ?? input.opportunity?.id ?? input.counterparty.id,
+      targetLabel: `${input.instrumentType.toUpperCase()} · ${input.counterparty.legalName}`,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: input.actorLabel,
+      targetType: "contract",
+      targetId:
+        input.engagement?.id ?? input.opportunity?.id ?? input.counterparty.id,
+    });
+    throw err;
+  }
+}
+
+export interface RedlineAnalystInput {
+  contract: {
+    id: string;
+    instrumentType: string;
+    status: string;
+    title: string;
+  };
+  latestVersion: {
+    id: string;
+    version: number;
+    renderedBody: string;
+    bodyHash: string;
+  };
+  inboundBody: string;
+  clauseLibraryAtSend: Array<{
+    id: string;
+    family: string;
+    title: string;
+    body: string;
+    riskTier: "low" | "medium" | "high";
+  }>;
+  houseRules: {
+    nonNegotiables: string[];
+    softPreferences: string[];
+  };
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}
+
+export interface RedlineAnalystOutput {
+  diffSummary: string;
+  redlines: Array<{
+    clauseId: string | null;
+    positionHint: number | null;
+    proposedBody: string;
+    diff: { before: string; after: string; ops: unknown[] };
+    riskTier: "low" | "medium" | "high";
+    riskCommentary: string;
+    recommendation: "accept" | "accept_with_conditions" | "reject";
+    rationale: string;
+  }>;
+  overallRecommendation:
+    | "accept"
+    | "partial_accept"
+    | "reject_and_negotiate"
+    | "escalate_to_partner";
+}
+
+function mockRedlineAnalyst(input: RedlineAnalystInput): RedlineAnalystOutput {
+  const beforeLen = input.latestVersion.renderedBody.length;
+  const afterLen = input.inboundBody.length;
+  const drift = Math.abs(afterLen - beforeLen);
+  const looksMaterial = drift > 200;
+  const redlines: RedlineAnalystOutput["redlines"] = looksMaterial
+    ? [
+        {
+          clauseId: input.clauseLibraryAtSend[0]?.id ?? null,
+          positionHint: 0,
+          proposedBody: input.inboundBody.slice(0, 240),
+          diff: {
+            before: input.latestVersion.renderedBody.slice(0, 240),
+            after: input.inboundBody.slice(0, 240),
+            ops: [],
+          },
+          riskTier: "medium",
+          riskCommentary:
+            "Material drift detected vs. last AICo version (mock heuristic). Human review recommended.",
+          recommendation: "accept_with_conditions",
+          rationale:
+            "Counterparty changed clause body length materially; partner should review the actual diff before accepting.",
+        },
+      ]
+    : [];
+  const overall: RedlineAnalystOutput["overallRecommendation"] = looksMaterial
+    ? "escalate_to_partner"
+    : "accept";
+  return {
+    diffSummary: looksMaterial
+      ? `Inbound body differs from v${input.latestVersion.version} by ${drift} characters. ${redlines.length} clause(s) flagged.`
+      : `Inbound body matches v${input.latestVersion.version} within tolerance; no redlines.`,
+    redlines,
+    overallRecommendation: overall,
+  };
+}
+
+export async function runRedlineAnalyst(
+  input: RedlineAnalystInput,
+): Promise<{
+  runId: string;
+  output: RedlineAnalystOutput;
+  costUsd: number;
+}> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "redline_analyst",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "contract",
+    targetId: input.contract.id,
+    targetLabel: input.contract.title,
+    inputs: {
+      contractId: input.contract.id,
+      latestVersion: input.latestVersion.version,
+      inboundBytes: input.inboundBody.length,
+    },
+    actorLabel: input.actorLabel,
+  });
+  try {
+    const system = loadPrompt("redline_analyst");
+    await progressRun(runId, 20, "Diffing inbound vs. last version");
+    await progressRun(runId, 55, "Binding to clauses + classifying risk");
+    await progressRun(runId, 85, "Composing reviewer commentary");
+    const { value, costUsd, source, warning } =
+      await callClaudeJson<RedlineAnalystOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify(input),
+        () => mockRedlineAnalyst(input),
+      );
+    // Guardrail: never let recommendation=accept escape on a high-risk row.
+    for (const r of value.redlines) {
+      if (r.riskTier === "high" && r.recommendation === "accept") {
+        r.recommendation = "accept_with_conditions";
+      }
+    }
+    const conf: "green" | "amber" | "red" =
+      value.overallRecommendation === "escalate_to_partner"
+        ? "red"
+        : value.overallRecommendation === "reject_and_negotiate"
+          ? "amber"
+          : "green";
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: conf,
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.redlines.length,
+      actorLabel: input.actorLabel,
+      targetType: "contract",
+      targetId: input.contract.id,
+      targetLabel: input.contract.title,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: input.actorLabel,
+      targetType: "contract",
+      targetId: input.contract.id,
+    });
+    throw err;
+  }
+}
+
+// =============================================================
+// Task #360 (L2C Wave 1) — E-Sign Orchestrator
+// =============================================================
+
+export interface EsignOrchestratorInput {
+  contract: {
+    id: string;
+    instrumentType: string;
+    status: string;
+    title: string;
+    currency: string;
+    contractValue: number;
+  };
+  parties: Array<{
+    id: string;
+    side: "aico" | "counterparty";
+    role: "signer" | "witness" | "notice_party" | "observer";
+    signerName: string;
+    signerEmail: string;
+    signerTitle: string;
+    signMethod: "docusign" | "tabellio" | "wet_ink_pdf";
+    signState: "pending" | "sent" | "signed" | "declined" | "expired";
+  }>;
+  latestVersion: { id: string; version: number; renderedBody: string; bodyHash: string };
+  countersign: {
+    state: "pending" | "partner_a_signed" | "both_signed" | "declined";
+  };
+  providerHint: "docusign" | "tabellio" | "auto";
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}
+
+export interface EsignOrchestratorOutput {
+  envelope: {
+    provider: "docusign" | "tabellio" | "wet_ink_pdf";
+    envelopeId: string;
+    routingOrder: Array<{ partyId: string; order: number; signerEmail: string }>;
+    sentAt: string | null;
+    statusAfterSend: string;
+  };
+  reconciledPartyStates: Array<{
+    partyId: string;
+    signState: "pending" | "sent" | "signed" | "declined" | "expired";
+    signedAt: string | null;
+    evidenceUrl: string;
+  }>;
+  contractStatusAfter: string;
+  warnings: string[];
+}
+
+function pickProvider(
+  hint: EsignOrchestratorInput["providerHint"],
+  parties: EsignOrchestratorInput["parties"],
+): "docusign" | "tabellio" | "wet_ink_pdf" {
+  if (hint !== "auto") return hint;
+  if (parties.some((p) => p.signMethod === "tabellio")) return "tabellio";
+  if (parties.every((p) => p.signMethod === "wet_ink_pdf")) return "wet_ink_pdf";
+  return "docusign";
+}
+
+function mockEsignOrchestrator(
+  input: EsignOrchestratorInput,
+): EsignOrchestratorOutput {
+  const warnings: string[] = [];
+  if (input.countersign.state !== "both_signed") {
+    warnings.push(
+      `Refusing to dispatch: two-partner countersign state is "${input.countersign.state}", not "both_signed".`,
+    );
+    return {
+      envelope: {
+        provider: "docusign",
+        envelopeId: "",
+        routingOrder: [],
+        sentAt: null,
+        statusAfterSend: input.contract.status,
+      },
+      reconciledPartyStates: input.parties.map((p) => ({
+        partyId: p.id,
+        signState: p.signState,
+        signedAt: null,
+        evidenceUrl: "",
+      })),
+      contractStatusAfter: input.contract.status,
+      warnings,
+    };
+  }
+  const provider = pickProvider(input.providerHint, input.parties);
+  // AICo signers first, then counterparty signers, witnesses, notice parties.
+  const orderRank = (
+    p: EsignOrchestratorInput["parties"][number],
+  ): number => {
+    const sideBoost = p.side === "aico" ? 0 : 100;
+    const roleBoost =
+      p.role === "signer"
+        ? 0
+        : p.role === "witness"
+          ? 200
+          : p.role === "notice_party"
+            ? 300
+            : 400;
+    return sideBoost + roleBoost;
+  };
+  const sortedParties = input.parties
+    .map((p, i) => ({ p, rank: orderRank(p) + i }))
+    .sort((a, b) => a.rank - b.rank);
+  const routingOrder = sortedParties.map(({ p }, i) => ({
+    partyId: p.id,
+    order: i + 1,
+    signerEmail: p.signerEmail,
+  }));
+  return {
+    envelope: {
+      provider,
+      envelopeId: `mock_${provider}_${input.contract.id.slice(-8)}`,
+      routingOrder,
+      sentAt: new Date().toISOString(),
+      statusAfterSend: "external_dispatched",
+    },
+    reconciledPartyStates: input.parties.map((p) => ({
+      partyId: p.id,
+      signState: "sent",
+      signedAt: null,
+      evidenceUrl: "",
+    })),
+    contractStatusAfter: "external_dispatched",
+    warnings,
+  };
+}
+
+export async function runEsignOrchestrator(
+  input: EsignOrchestratorInput,
+): Promise<{
+  runId: string;
+  output: EsignOrchestratorOutput;
+  costUsd: number;
+}> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "esign_orchestrator",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "contract",
+    targetId: input.contract.id,
+    targetLabel: input.contract.title,
+    inputs: {
+      provider: input.providerHint,
+      partyCount: input.parties.length,
+      countersignState: input.countersign.state,
+    },
+    actorLabel: input.actorLabel,
+  });
+  try {
+    const system = loadPrompt("esign_orchestrator");
+    await progressRun(runId, 25, "Validating two-partner countersign gate");
+    await progressRun(runId, 55, "Composing routing order + provider pick");
+    await progressRun(runId, 85, "Reconciling party states");
+    const { value, costUsd, source, warning } =
+      await callClaudeJson<EsignOrchestratorOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify(input),
+        () => mockEsignOrchestrator(input),
+      );
+    const conf: "green" | "amber" | "red" =
+      value.warnings.length > 0
+        ? "red"
+        : value.contractStatusAfter === "fully_executed"
+          ? "green"
+          : "amber";
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: conf,
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: value.reconciledPartyStates.length,
+      actorLabel: input.actorLabel,
+      targetType: "contract",
+      targetId: input.contract.id,
+      targetLabel: input.contract.title,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: input.actorLabel,
+      targetType: "contract",
+      targetId: input.contract.id,
+    });
+    throw err;
+  }
+}
+
+// =============================================================
+// Task #360 (L2C Wave 1) — DPA Sentinel
+// =============================================================
+
+export interface DpaSentinelInput {
+  engagement: {
+    id: string;
+    name: string;
+    scopeSummary: string;
+    plannedEndDate: string | null;
+  };
+  counterparty: {
+    id: string;
+    legalName: string;
+    jurisdiction: string;
+  };
+  existingDpa: {
+    id: string;
+    status: "required" | "drafted" | "signed" | "active" | "reviewed" | "expired";
+    dataClasses: string[];
+    expiresAt: string | null;
+    lastReviewedAt: string | null;
+    signedAt?: string | null;
+  } | null;
+  linkedClauses: Array<{ family: string; title: string; body: string }>;
+  dataSignalInputs: Array<{
+    source: "scope_summary" | "deliverable" | "clause";
+    text: string;
+  }>;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}
+
+export interface DpaSentinelOutput {
+  isDpaRequired: boolean;
+  detectedDataClasses: Array<"pii" | "phi" | "financial" | "regulated_other">;
+  processorChainInferred: Array<{ name: string; role: string; jurisdiction: string }>;
+  recommendedStatus:
+    | "required"
+    | "drafted"
+    | "signed"
+    | "active"
+    | "reviewed"
+    | "expired";
+  rationale: string;
+  alerts: Array<{
+    severity: "low" | "medium" | "high";
+    audience: "compliance_officer" | "partner" | "engagement_lead";
+    summary: string;
+  }>;
+}
+
+const PII_KEYS = [
+  "personal data",
+  "customer record",
+  "employee record",
+  "name",
+  "email",
+  "phone",
+  "address",
+  "biometric",
+  "id number",
+  "passport",
+  "national id",
+];
+const PHI_KEYS = ["health", "medical", "diagnosis", "patient", "phi"];
+const FIN_KEYS = ["account number", "iban", "card number", "transaction", "salary", "payroll", "kyc", "aml"];
+
+function mockDpaSentinel(input: DpaSentinelInput): DpaSentinelOutput {
+  const corpus = input.dataSignalInputs
+    .map((s) => s.text.toLowerCase())
+    .join("\n");
+  const classes = new Set<"pii" | "phi" | "financial" | "regulated_other">();
+  if (PII_KEYS.some((k) => corpus.includes(k))) classes.add("pii");
+  if (PHI_KEYS.some((k) => corpus.includes(k))) classes.add("phi");
+  if (FIN_KEYS.some((k) => corpus.includes(k))) classes.add("financial");
+  const isRequired = classes.size > 0;
+  const alerts: DpaSentinelOutput["alerts"] = [];
+  let recommended: DpaSentinelOutput["recommendedStatus"] = "required";
+  const now = Date.now();
+  if (input.existingDpa) {
+    const expiresAt = input.existingDpa.expiresAt
+      ? Date.parse(input.existingDpa.expiresAt)
+      : null;
+    if (expiresAt && expiresAt < now) {
+      recommended = "expired";
+      alerts.push({
+        severity: "high",
+        audience: "compliance_officer",
+        summary: `DPA for ${input.counterparty.legalName} expired on ${input.existingDpa.expiresAt}.`,
+      });
+    } else if (
+      input.existingDpa.status === "signed" &&
+      input.existingDpa.signedAt
+    ) {
+      recommended = "active";
+    } else if (
+      input.existingDpa.status === "active" &&
+      input.existingDpa.lastReviewedAt
+    ) {
+      const reviewedMs = Date.parse(input.existingDpa.lastReviewedAt);
+      if (now - reviewedMs < 365 * 24 * 3600 * 1000) {
+        recommended = "reviewed";
+      } else {
+        recommended = "active";
+        alerts.push({
+          severity: "medium",
+          audience: "compliance_officer",
+          summary:
+            "DPA last review > 12 months ago — schedule a fresh review.",
+        });
+      }
+    } else {
+      recommended = input.existingDpa.status;
+    }
+  } else if (isRequired) {
+    alerts.push({
+      severity: "high",
+      audience: "compliance_officer",
+      summary: `Personal-data signals detected for ${input.engagement.name} but no DPA row exists.`,
+    });
+  }
+  return {
+    isDpaRequired: isRequired,
+    detectedDataClasses: Array.from(classes),
+    processorChainInferred: input.existingDpa?.dataClasses
+      ? []
+      : isRequired
+        ? [
+            {
+              name: "AICo (controller-as-processor)",
+              role: "processor",
+              jurisdiction: input.counterparty.jurisdiction || "unspecified",
+            },
+          ]
+        : [],
+    recommendedStatus: recommended,
+    rationale: isRequired
+      ? `Detected data classes: ${Array.from(classes).join(", ")}. Recommended status: ${recommended}.`
+      : "No personal-data signals detected in the supplied inputs.",
+    alerts,
+  };
+}
+
+export async function runDpaSentinel(input: DpaSentinelInput): Promise<{
+  runId: string;
+  output: DpaSentinelOutput;
+  costUsd: number;
+}> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "dpa_sentinel",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "engagement",
+    targetId: input.engagement.id,
+    targetLabel: input.engagement.name,
+    inputs: {
+      counterparty: input.counterparty.legalName,
+      hasExistingDpa: input.existingDpa !== null,
+      signalCount: input.dataSignalInputs.length,
+    },
+    actorLabel: input.actorLabel,
+  });
+  try {
+    const system = loadPrompt("dpa_sentinel");
+    await progressRun(runId, 30, "Scanning data signals");
+    await progressRun(runId, 65, "Classifying data classes");
+    await progressRun(runId, 90, "Composing recommendations + alerts");
+    const { value, costUsd, source, warning } =
+      await callClaudeJson<DpaSentinelOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify(input),
+        () => mockDpaSentinel(input),
+      );
+    // Guardrail: never recommend `active` without a signed_at present.
+    if (
+      value.recommendedStatus === "active" &&
+      !input.existingDpa?.signedAt
+    ) {
+      value.recommendedStatus = "signed";
+      value.alerts.push({
+        severity: "medium",
+        audience: "compliance_officer",
+        summary:
+          "Downgraded recommendation from `active` to `signed`: existing DPA has no signed_at timestamp.",
+      });
+    }
+    const conf: "green" | "amber" | "red" = value.alerts.some(
+      (a) => a.severity === "high",
+    )
+      ? "red"
+      : value.alerts.length > 0
+        ? "amber"
+        : "green";
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: conf,
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: input.dataSignalInputs.length,
+      actorLabel: input.actorLabel,
+      targetType: "engagement",
+      targetId: input.engagement.id,
+      targetLabel: input.engagement.name,
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: input.actorLabel,
+      targetType: "engagement",
+      targetId: input.engagement.id,
+    });
+    throw err;
+  }
+}
+
+// =============================================================
+// Task #360 (L2C Wave 1) — Renewal Watchdog (daemon agent)
+// =============================================================
+
+export interface RenewalWatchdogInput {
+  now: string;
+  warningWindows: { contractDays: number; dpaDays: number };
+  activeContracts: Array<{
+    id: string;
+    title: string;
+    instrumentType: string;
+    status: string;
+    termEnd: string | null;
+    currency: string;
+    contractValueUsd: number;
+    counterpartyLegalName: string;
+  }>;
+  activeDpas: Array<{
+    id: string;
+    status: string;
+    expiresAt: string | null;
+    counterpartyLegalName: string;
+    engagementId: string;
+  }>;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}
+
+export interface RenewalWatchdogOutput {
+  contractRecommendations: Array<{
+    contractId: string;
+    daysToExpiry: number;
+    recommendation: "renew" | "expire" | "terminate" | "review";
+    rationale: string;
+    targetStatus: "expiring" | "active";
+    severity: "low" | "medium" | "high";
+  }>;
+  dpaRecommendations: Array<{
+    dpaId: string;
+    daysToExpiry: number;
+    recommendation: "renew" | "review" | "retire";
+    rationale: string;
+    severity: "low" | "medium" | "high";
+  }>;
+  summaryForPartner: string;
+}
+
+function mockRenewalWatchdog(input: RenewalWatchdogInput): RenewalWatchdogOutput {
+  const now = Date.parse(input.now);
+  const dayMs = 86_400_000;
+  const contractRecommendations: RenewalWatchdogOutput["contractRecommendations"] = [];
+  for (const c of input.activeContracts) {
+    if (c.status === "terminated" || c.status === "expired") continue;
+    if (!c.termEnd) continue;
+    const days = Math.round((Date.parse(c.termEnd) - now) / dayMs);
+    if (days > input.warningWindows.contractDays) continue;
+    const severity: "low" | "medium" | "high" =
+      days < 30 ? "high" : days <= 60 ? "medium" : "low";
+    const recommendation =
+      c.contractValueUsd > 100_000 || c.instrumentType === "msa"
+        ? "renew"
+        : "review";
+    contractRecommendations.push({
+      contractId: c.id,
+      daysToExpiry: days,
+      recommendation,
+      rationale: `${c.instrumentType.toUpperCase()} with ${c.counterpartyLegalName} expires in ${days}d.`,
+      targetStatus: c.status === "active" ? "expiring" : "active",
+      severity,
+    });
+  }
+  const dpaRecommendations: RenewalWatchdogOutput["dpaRecommendations"] = [];
+  for (const d of input.activeDpas) {
+    if (!d.expiresAt) continue;
+    const days = Math.round((Date.parse(d.expiresAt) - now) / dayMs);
+    if (days > input.warningWindows.dpaDays) continue;
+    const severity: "low" | "medium" | "high" =
+      days < 30 ? "high" : "medium";
+    dpaRecommendations.push({
+      dpaId: d.id,
+      daysToExpiry: days,
+      recommendation: days < 0 ? "retire" : "renew",
+      rationale: `DPA with ${d.counterpartyLegalName} ${days < 0 ? "lapsed" : "expires in " + days + "d"}.`,
+      severity,
+    });
+  }
+  const loudest =
+    contractRecommendations.find((r) => r.severity === "high") ??
+    dpaRecommendations.find((r) => r.severity === "high") ??
+    contractRecommendations[0] ??
+    dpaRecommendations[0];
+  const summary = `${contractRecommendations.length} contract(s) and ${dpaRecommendations.length} DPA(s) in the renewal window${loudest ? "; loudest item: " + ("contractId" in loudest ? loudest.contractId : loudest.dpaId) + " (" + loudest.severity + ")" : ""}.`;
+  return { contractRecommendations, dpaRecommendations, summaryForPartner: summary };
+}
+
+export async function runRenewalWatchdog(
+  input: RenewalWatchdogInput,
+): Promise<{
+  runId: string;
+  output: RenewalWatchdogOutput;
+  costUsd: number;
+}> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "renewal_watchdog",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "engagement",
+    targetId: "_daemon_",
+    targetLabel: "Renewal Watchdog daily sweep",
+    inputs: {
+      contracts: input.activeContracts.length,
+      dpas: input.activeDpas.length,
+      contractWindowDays: input.warningWindows.contractDays,
+      dpaWindowDays: input.warningWindows.dpaDays,
+    },
+    actorLabel: input.actorLabel,
+  });
+  try {
+    const system = loadPrompt("renewal_watchdog");
+    await progressRun(runId, 35, "Walking active contracts");
+    await progressRun(runId, 70, "Walking active DPAs");
+    await progressRun(runId, 90, "Composing partner summary");
+    const { value, costUsd, source, warning } =
+      await callClaudeJson<RenewalWatchdogOutput>(
+        "claude-haiku-4-5",
+        system,
+        JSON.stringify(input),
+        () => mockRenewalWatchdog(input),
+      );
+    const highCount =
+      value.contractRecommendations.filter((r) => r.severity === "high").length +
+      value.dpaRecommendations.filter((r) => r.severity === "high").length;
+    const conf: "green" | "amber" | "red" =
+      highCount > 0
+        ? "red"
+        : value.contractRecommendations.length + value.dpaRecommendations.length > 0
+          ? "amber"
+          : "green";
+    await completeRun({
+      runId,
+      output: value as unknown,
+      confidence: conf,
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount:
+        value.contractRecommendations.length + value.dpaRecommendations.length,
+      actorLabel: input.actorLabel,
+      targetType: "engagement",
+      targetId: "_daemon_",
+      targetLabel: "Renewal Watchdog daily sweep",
+      source,
+      warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: input.actorLabel,
+      targetType: "engagement",
+      targetId: "_daemon_",
+    });
+    throw err;
+  }
+}

@@ -55,7 +55,14 @@ export type CapabilityModule =
   | "proposal"
   | "agent"
   | "admin"
-  | "meta";
+  | "meta"
+  // L2C Wave 1 (Task #360) — Codex/CLM, change orders, deliverable
+  // acceptance. Restricted personas (contractor, partner_firm_resource,
+  // recruiter) and board_observer are denied at the catalog gate
+  // regardless of `requiredRoles`. See `capabilitiesForPersona` below.
+  | "codex"
+  | "change_order"
+  | "deliverable_acceptance";
 
 /**
  * Outbound side-effect channel a capability fires when it commits.
@@ -103,7 +110,19 @@ export type ResultCard =
   | "section_card"
   | "time_series"
   | "timesheet_card"
-  | "undo_card";
+  | "undo_card"
+  // L2C Wave 1 (Task #360) — typed renderers for the new Codex/CLM,
+  // change-order and deliverable-acceptance result shapes. The cards
+  // are declared up-front (W1-S9 will land the front-end renderers);
+  // any cap referencing one of these names that ships before the
+  // renderer must use the `assertNever` placeholder fallback.
+  | "counterparty_card"
+  | "clause_card"
+  | "contract_card"
+  | "redline_card"
+  | "dpa_card"
+  | "change_order_card"
+  | "deliverable_acceptance_card";
 
 export type SurfaceContext =
   | "engagement_dashboard"
@@ -311,8 +330,29 @@ export function __resetCatalogForTests(): void {
  * persona is allowed to invoke. Board observers see only `meta` +
  * read-only `raid` (mirrors the read-only UI shell they get).
  */
+// L2C Wave 1 (Task #360, W1-S8) — modules a restricted persona
+// (contractor / partner_firm_resource / recruiter) is never permitted
+// to see in the CLI catalog. Mirrors the route-layer
+// `canRead(role) = !isRestrictedPersona(role) && !isBoardObserver(role)`
+// gate enforced by `codexRoutes`, `changeOrderRoutes` and
+// `deliverableAcceptanceRoutes`. Defence-in-depth: even if a future
+// `requiredRoles` declaration accidentally allows a restricted role,
+// the catalog gate strips the entry from the per-persona slice the
+// orchestrator ever sees.
+const RESTRICTED_DENIED_MODULES: ReadonlySet<CapabilityModule> = new Set([
+  "codex",
+  "change_order",
+  "deliverable_acceptance",
+]);
+
 export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   const role = persona.role as AtelierRole;
+  const restrictedSet: ReadonlySet<AtelierRole> = new Set([
+    "contractor",
+    "partner_firm_resource",
+    "recruiter",
+  ]);
+  const isRestricted = restrictedSet.has(role);
   return REGISTRY.filter((e) => {
     if (role === "board_observer") {
       // Strict read-only perimeter — writes are denied regardless of
@@ -320,7 +360,17 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
       // agent mapped to `meta`) cannot leak a mutation onto the
       // observer surface.
       if (e.isWrite) return false;
+      // Board observer also denied L2C surfaces (no contract / change-
+      // order / acceptance visibility) until the boardroom realm ships.
+      if (RESTRICTED_DENIED_MODULES.has(e.module)) return false;
       return e.module === "meta" || e.module === "raid";
+    }
+    // L2C Wave 1 restricted-set deny gate — applies to contractor /
+    // partner_firm_resource / recruiter. They never see Codex, change-
+    // order, or deliverable-acceptance verbs even if a downstream
+    // entry forgets to declare `requiredRoles`.
+    if (isRestricted && RESTRICTED_DENIED_MODULES.has(e.module)) {
+      return false;
     }
     if (e.requiredRoles && e.requiredRoles.length > 0) {
       return e.requiredRoles.includes(role);

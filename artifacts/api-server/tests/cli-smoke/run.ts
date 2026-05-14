@@ -55,6 +55,25 @@ const SMOKES: Smoke[] = [
   { prompt: "Who's over-utilized this week?", expectTool: "utilization_firm" },
   { prompt: "How is the DEWA engagement burning vs budget?", expectTool: "burn_vs_budget" },
   { prompt: "What's waiting on me?", expectTool: "approval_queue" },
+  // ---------------------------------------------------------------------
+  // Task #360 (W1-S8) — Codex / CLM, change orders, deliverable
+  // acceptance smoke prompts. These exercise the natural-language
+  // surfaces the assistant should route to the new Wave-1 verbs.
+  // ---------------------------------------------------------------------
+  { prompt: "Add Tasama Holding as a new counterparty in Saudi Arabia", expectTool: "codex_counterparty_create" },
+  { prompt: "Publish the limitation-of-liability clause version 3", expectTool: "codex_clause_publish" },
+  { prompt: "Compose the SOW draft for the DEWA engagement", expectTool: "codex_contract_compose" },
+  { prompt: "Dispatch the DEWA SOW to procurement for signature", expectTool: "codex_contract_dispatch" },
+  { prompt: "Record the counterparty redline on the DEWA SOW", expectTool: "codex_contract_record_redline" },
+  { prompt: "Review the DEWA DPA for GDPR risks", expectTool: "codex_dpa_review" },
+  { prompt: "Show contracts expiring in the next 60 days", expectTool: "codex_renewal_watchdog_run" },
+  { prompt: "Propose a $25k change order on eng_dewa for additional analytics scope", expectTool: "change_order_propose" },
+  { prompt: "Approve change order co_123 as partner", expectTool: "change_order_partner_approve" },
+  { prompt: "Send change order co_123 to the client", expectTool: "change_order_dispatch" },
+  { prompt: "Record client acceptance of change order co_123", expectTool: "change_order_record_acceptance" },
+  { prompt: "Draft an acceptance attestation for the DEWA Phase 1 final report", expectTool: "deliverable_acceptance_create" },
+  { prompt: "Send the DEWA Phase 1 acceptance to procurement@dewa.gov.ae for signing", expectTool: "deliverable_acceptance_submit" },
+  { prompt: "Record the signed acceptance evidence URL on dlacc_xyz", expectTool: "deliverable_acceptance_record_signed" },
 ];
 
 let pass = 0;

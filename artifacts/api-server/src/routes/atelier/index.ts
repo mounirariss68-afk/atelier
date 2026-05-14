@@ -68,6 +68,9 @@ import cliRoutes from "./cliRoutes";
 import cliAttachmentRoutes from "./cliAttachmentRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
+import codexRoutes from "./codexRoutes";
+import changeOrderRoutes from "./changeOrderRoutes";
+import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -200,6 +203,22 @@ router.use(cliAdminRoutes);
 // Task #354 — v5 firm-wide knowledge surfaces (Press / Alliances / Studio /
 // Guardhouse / IP catalog) backed by Postgres.
 router.use(v5Routes);
+// Task #360 — L2C Wave 1: Codex (CLM) — counterparty registry + clause
+// library (Step 2). Contract record + state machine land in Step 3 in the
+// same file. Change orders, deliverable acceptance, e-sign / DPA flows
+// ship in their own route files.
+router.use(codexRoutes);
+// Task #360 — L2C Wave 1, Step 6: Change Order workflow with the
+// draft → partner_approved → client_proposed → client_{accepted,rejected,
+// withdrawn} → posted state machine. value_delta_usd masked for
+// non-leadership / non-finance personas.
+router.use(changeOrderRoutes);
+// Task #360 — L2C Wave 1, Step 7: Deliverable Acceptance workflow.
+// pending → submitted_to_client → client_signed | client_rejected |
+// withdrawn. Wave-2 milestone state machine reads
+// atelier_milestone_acceptance_v (migration 0032) to enforce that
+// `client_accepted` requires a `client_signed` row here.
+router.use(deliverableAcceptanceRoutes);
 
 function ensurePersona(
   req: Request,

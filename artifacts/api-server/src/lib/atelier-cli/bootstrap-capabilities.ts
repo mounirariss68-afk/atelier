@@ -19,6 +19,14 @@ import "./cli-only-capabilities-reads.js";
 import "./attachment-capabilities.js";
 import "./undo.js";
 import "./parity-capabilities.js";
+// L2C Wave 1 (Task #360, W1-S8) — Codex/CLM, change order, and
+// deliverable-acceptance verbs. The catalog gate
+// (`capabilitiesForPersona`) strips the entire codex / change_order /
+// deliverable_acceptance modules from the slice the orchestrator sees
+// for restricted personas (contractor / partner_firm_resource /
+// recruiter) and board observers — defence in depth above each
+// entry's `requiredRoles`.
+import "./codex-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;
