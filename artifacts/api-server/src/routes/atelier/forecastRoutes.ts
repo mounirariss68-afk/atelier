@@ -168,8 +168,10 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
       direction: r.deltaWeightedValueUsd >= 0 ? "up" : "down",
     }));
 
-  // Conversion funnel: # of opps currently in each canonical stage.
-  const FUNNEL = ["shape", "qualifying", "proposal_in_flight", "submitted", "signed"];
+  // Conversion funnel — Task #296 canonical 5-band working stages.
+  // Terminal stages (lost / no_decision / withdrawn) are excluded;
+  // they show up in the Reports terminal sidebar instead.
+  const FUNNEL = ["suspect", "prospect", "convert", "runner", "contract"];
   const funnel = FUNNEL.map((s) => ({
     stage: s,
     count: opps.filter((o) => o.salesStage === s).length,

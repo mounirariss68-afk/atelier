@@ -33,6 +33,85 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+/**
+ * Task #296 — 5-band funnel chart + terminal stacked sidebar.
+ *
+ * Renders below the snapshot summary for the `pipeline_waterfall`
+ * template. Working stages render as proportional bars; terminal
+ * stages stack to the right so closed deals stay visible without
+ * dominating the funnel.
+ */
+function FunnelChart({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const funnel = rows.filter((r) => r.band === "funnel");
+  const terminal = rows.filter((r) => r.band === "terminal");
+  if (funnel.length === 0) return null;
+  const maxCount = Math.max(1, ...funnel.map((r) => Number(r.count) || 0));
+  const FUNNEL_LABEL: Record<string, string> = {
+    suspect: "Suspect", prospect: "Prospect", convert: "Convert",
+    runner: "Runner", contract: "Contract",
+  };
+  const TERMINAL_LABEL: Record<string, string> = {
+    lost: "Lost", no_decision: "No-decision", withdrawn: "Withdrawn",
+  };
+  return (
+    <div
+      className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-4"
+      data-testid="funnel-chart"
+    >
+      <div className="space-y-2">
+        {funnel.map((r) => {
+          const stage = String(r.stage);
+          const count = Number(r.count) || 0;
+          const weighted = Number(r.weightedValueUsd) || 0;
+          const aged = Number(r.agedRedCount) || 0;
+          const pct = Math.round((count / maxCount) * 100);
+          return (
+            <div key={stage} data-testid={`funnel-row-${stage}`}>
+              <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-text-mute mb-1">
+                <span>{FUNNEL_LABEL[stage] ?? stage}</span>
+                <span>
+                  {count}{" "}
+                  <span className="text-gold">
+                    ${(weighted / 1000).toFixed(0)}k
+                  </span>
+                  {aged > 0 && <span className="text-danger ml-2">{aged} aged</span>}
+                </span>
+              </div>
+              <div className="h-3 bg-bg-deep rounded overflow-hidden">
+                <div
+                  className="h-full bg-gold/80"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="space-y-2" data-testid="funnel-terminal-sidebar">
+        <div className="text-[11px] font-mono uppercase tracking-wider text-text-faint pb-1 border-b border-border-soft">
+          Terminal
+        </div>
+        {terminal.map((r) => {
+          const stage = String(r.stage);
+          const count = Number(r.count) || 0;
+          return (
+            <div
+              key={stage}
+              className="flex items-center justify-between text-[11px] font-mono"
+              data-testid={`funnel-terminal-${stage}`}
+            >
+              <span className="text-text-mute uppercase tracking-wider">
+                {TERMINAL_LABEL[stage] ?? stage}
+              </span>
+              <span className="text-text-faint">{count}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Reports() {
   const { toast } = useToast();
   const [templates, setTemplates] = React.useState<Template[]>([]);
@@ -166,9 +245,14 @@ export default function Reports() {
                   </a>
                 </div>
               </div>
+              {/* Funnel chart renders just under the snapshot summary
+                  for the 5-Band Sales Funnel template (Task #296). */}
               {snapshot?.id === r.id && (
                 <div className="mt-3 border-t border-border-soft pt-3 space-y-2">
                   <div className="text-sm text-text-mute italic">{snapshot.summary}</div>
+                  {r.templateId === "pipeline_waterfall" && (
+                    <FunnelChart rows={snapshot.rows} />
+                  )}
                   {snapshot.rows.length > 0 && (
                     <div className="overflow-x-auto">
                       <table className="text-xs font-mono">

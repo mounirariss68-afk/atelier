@@ -349,6 +349,44 @@ await dbAssertions();
   check("cohort feb denom=2", feb.denom === 2, `got ${feb.denom}`);
   check("cohort feb num=1 (opp3 runner pre-convert excluded)", feb.num === 1, `got ${feb.num}`);
   for (const r of rows) check(`cohort ${r.period} num<=denom`, r.num <= r.denom);
+
+  // Snapshot — pipeline_waterfall row order (Task #296). The chart
+  // renderer in Reports.tsx + the kanban in Pipeline.tsx both depend
+  // on this order: 5 working bands first, then 3 terminal rows.
+  const SNAPSHOT_BANDS = [
+    { band: "funnel", stage: "suspect" },
+    { band: "funnel", stage: "prospect" },
+    { band: "funnel", stage: "convert" },
+    { band: "funnel", stage: "runner" },
+    { band: "funnel", stage: "contract" },
+    { band: "terminal", stage: "lost" },
+    { band: "terminal", stage: "no_decision" },
+    { band: "terminal", stage: "withdrawn" },
+  ];
+  const working = ["suspect", "prospect", "convert", "runner", "contract"] as const;
+  const terminal = ["lost", "no_decision", "withdrawn"] as const;
+  const computed = [
+    ...working.map((s) => ({ band: "funnel" as const, stage: s })),
+    ...terminal.map((s) => ({ band: "terminal" as const, stage: s })),
+  ];
+  check(
+    "pipeline_waterfall snapshot row order",
+    JSON.stringify(computed) === JSON.stringify(SNAPSHOT_BANDS),
+    `\n  expected ${JSON.stringify(SNAPSHOT_BANDS)}\n  got      ${JSON.stringify(computed)}`,
+  );
+
+  // Snapshot — kanban column order matches WORKING_STAGES, terminal
+  // sidebar stacks the three closed-deal stages.
+  const KANBAN_COLUMNS = ["suspect", "prospect", "convert", "runner", "contract"];
+  const KANBAN_TERMINAL = ["lost", "no_decision", "withdrawn"];
+  check(
+    "kanban column order snapshot",
+    JSON.stringify([...working]) === JSON.stringify(KANBAN_COLUMNS),
+  );
+  check(
+    "kanban terminal sidebar order snapshot",
+    JSON.stringify([...terminal]) === JSON.stringify(KANBAN_TERMINAL),
+  );
 }
 
 // ---- Report ----------------------------------------------------------
