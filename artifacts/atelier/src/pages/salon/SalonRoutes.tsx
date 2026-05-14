@@ -606,7 +606,7 @@ function SalonProposalView({ proposalId, token }: { proposalId: string; token: s
       <iframe
         src={src}
         title="Proposal"
-        sandbox="allow-same-origin"
+        sandbox="allow-same-origin allow-scripts"
         className="block w-full"
         style={{ height: "100vh", border: 0 }}
         data-testid="salon-proposal-iframe"
