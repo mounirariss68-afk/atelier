@@ -500,9 +500,9 @@ defineCapability({
       opportunityId: opp.id,
       fromStage: opp.salesStage,
       toStage,
-      decidedByUserId: ctx.persona.id,
-      rationale: String(input.rationale ?? ""),
-    } as Record<string, unknown> as never);
+      transitionedByUserId: ctx.persona.id,
+      rationaleText: String(input.rationale ?? ""),
+    });
     await recordAudit(ctx, "opportunity", opp.id, "opportunity.stage_changed.cli", { fromStage: opp.salesStage, toStage }, `${ctx.persona.name} moved "${opp.name}" to ${toStage}.`);
     return { ok: true, data: { id: opp.id, fromStage: opp.salesStage, toStage } };
   },

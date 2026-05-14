@@ -107,9 +107,7 @@ const AGENT_INVOCABLE_ROLES: AtelierRole[] = [
   "founding_partner",
   "partner",
   "senior_manager",
-    "consultant",
-  
-  
+  "consultant",
 ];
 
 /**
