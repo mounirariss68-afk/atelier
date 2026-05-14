@@ -64,6 +64,13 @@ export const atelierAccounts = pgTable(
     brandName: text("brand_name"),
     country: text("country").notNull(),
     sector: text("sector").notNull(),
+    // Task #291 — FK code columns alongside legacy free-text. Nullable during
+    // dual-write; backfilled by the auto-mapper at seed time. Original
+    // free-text values stay in `country` / `sector` for one release as the
+    // *_legacy shadow per task spec.
+    countryCode: text("country_code"), // → atelier_countries.iso_alpha_2
+    industryCode: text("industry_code"), // → atelier_industries.code
+    subIndustryCode: text("sub_industry_code"), // → atelier_sub_industries.code
     notes: text("notes"),
     // v2 CRM extensions (Task #238 — PRD §2.1).
     parentAccountId: text("parent_account_id"),
@@ -206,6 +213,9 @@ export const atelierCredentials = pgTable(
     accountId: text("account_id"), // optional FK
     clientName: text("client_name").notNull(), // anonymized label allowed
     sector: text("sector").notNull(),
+    // Task #291 — FK code columns; legacy `sector` retained for one release.
+    industryCode: text("industry_code"),
+    subIndustryCode: text("sub_industry_code"),
     engagementType: text("engagement_type").notNull(),
     // 'diagnostic' | 'pov' | 'agentic_build' | 'transformation' | 'workshop'
     outcomeMetrics: jsonb("outcome_metrics")
@@ -554,6 +564,8 @@ export const atelierAssets = pgTable(
     bodyOrFileUrl: text("body_or_file_url"),
     provenance: text("provenance").notNull(),
     tags: jsonb("tags").notNull().default([]).$type<string[]>(),
+    // Task #291 — industry-tag FK array (codes from atelier_industries).
+    industryCodes: jsonb("industry_codes").notNull().default([]).$type<string[]>(),
     promotedFromEngagementId: text("promoted_from_engagement_id"),
     promotedByUserId: text("promoted_by_user_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1251,6 +1263,8 @@ export const atelierWinThemes = pgTable(
     contributingDebriefIds: jsonb("contributing_debrief_ids").notNull().default([]).$type<string[]>(),
     offeringTags: jsonb("offering_tags").notNull().default([]).$type<string[]>(),
     sectorTags: jsonb("sector_tags").notNull().default([]).$type<string[]>(),
+    // Task #291 — FK industry-code array alongside legacy free-text tags.
+    sectorIndustryCodes: jsonb("sector_industry_codes").notNull().default([]).$type<string[]>(),
     positioningLine: text("positioning_line"), // ready-to-paste insertion for Composer
     lastSeenAt: timestamp("last_seen_at"),
     status: text("status").notNull().default("active"), // active | archived
@@ -1586,6 +1600,9 @@ export const atelierEmployees = pgTable(
     homeOffice: text("home_office"),
     country: text("country"),
     payrollCountry: text("payroll_country"),
+    // Task #291 — FK ISO alpha-2 codes; nullable during dual-write.
+    countryCode: text("country_code"),
+    payrollCountryCode: text("payroll_country_code"),
     employmentType: text("employment_type").notNull().default("FTE"), // FTE | fixed_term | intern
     employmentStatus: text("employment_status").notNull().default("active"), // active | notice | on_leave | terminated (PRD §2.1)
     employingEntity: text("employing_entity"), // DIFC | ADGM | KSA | Other (PRD §2.1)
@@ -1622,6 +1639,8 @@ export const atelierContractors = pgTable(
     fullName: text("full_name").notNull(),
     email: text("email").notNull(),
     country: text("country"),
+    // Task #291 — FK code (atelier_countries.iso_alpha_2); legacy `country` retained.
+    countryCode: text("country_code"),
     vendorEntity: text("vendor_entity"),
     masterAgreementRef: text("master_agreement_ref"),
     contractType: text("contract_type"), // T&M | fixed_fee | retainer (PRD §2.1)
@@ -1664,6 +1683,9 @@ export const atelierPartnerFirms = pgTable(
     name: text("name").notNull(),
     country: text("country"),
     hqCountry: text("hq_country"), // PRD §2.1
+    // Task #291 — FK ISO alpha-2 codes alongside legacy text columns.
+    countryCode: text("country_code"),
+    hqCountryCode: text("hq_country_code"),
     masterAgreementRef: text("master_agreement_ref"),
     masterAgreementUrl: text("master_agreement_url"),
     masterAgreementStatus: text("master_agreement_status").notNull().default("active"), // PRD §2.1: signed | pending | expired
@@ -1698,6 +1720,8 @@ export const atelierPartnerFirmResources = pgTable(
     seniority: text("seniority"),
     seniorityBand: text("seniority_band"), // PRD §2.1
     country: text("country"),
+    // Task #291 — FK ISO alpha-2 code; legacy `country` retained.
+    countryCode: text("country_code"),
     secondedToEngagementIds: jsonb("seconded_to_engagement_ids")
       .$type<string[]>()
       .notNull()
@@ -1981,6 +2005,9 @@ export const atelierComplianceRecords = pgTable(
     partnerFirmId: text("partner_firm_id"),
     kind: text("kind").notNull(), // visa | iqama | gosi | wps | difc | adgm | ksa_cr | saudization | master_agreement | cert
     jurisdiction: text("jurisdiction"), // KSA | UAE_DIFC | UAE_ADGM | UAE_OTHER | EGY | ...
+    // Task #291 — FK ISO alpha-2 code; legacy `jurisdiction` retained for
+    // sub-jurisdictional detail (e.g. UAE_DIFC vs UAE_ADGM still matters).
+    jurisdictionCountryCode: text("jurisdiction_country_code"),
     referenceNumberRedacted: text("reference_number_redacted"), // e.g. "••••1234"
     referenceNumberLastFour: text("reference_number_last_four"),
     // Indicator that the original reference value never enters this row in
@@ -2416,6 +2443,8 @@ export const atelierExpenses = pgTable(
     vatCurrency: text("vat_currency"),
     vatTreatment: text("vat_treatment").notNull().default("none"), // ksa_15 | uae_5 | zero_rated_export | none
     vatCountry: text("vat_country"), // KSA | UAE | TR | ...
+    // Task #291 — FK ISO alpha-2 code (atelier_countries.iso_alpha_2).
+    vatCountryCode: text("vat_country_code"),
     clientBillable: boolean("client_billable").notNull().default(false),
     markupPct: doublePrecision("markup_pct").notNull().default(0),
     status: text("status").notNull().default("draft"), // draft | submitted | approved | rejected
@@ -2479,6 +2508,8 @@ export const atelierVatRegister = pgTable(
     correctionOfId: text("correction_of_id"),
     expenseDate: text("expense_date").notNull(),
     country: text("country").notNull(),
+    // Task #291 — FK ISO alpha-2 code; nullable during dual-write.
+    countryCode: text("country_code"),
     treatment: text("treatment").notNull(), // ksa_15 | uae_5 | zero_rated_export | none
     rate: doublePrecision("rate").notNull().default(0),
     netAmount: doublePrecision("net_amount").notNull().default(0),

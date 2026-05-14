@@ -2132,6 +2132,11 @@ function aud(
 }
 
 import { seedAtelierReference } from "./seed-atelier-reference.js";
+import {
+  mapCountryToCode,
+  mapSectorToCodes,
+  mapSectorTagsToCodes,
+} from "@workspace/db";
 
 async function main() {
   // Task #290 — Reference-data lookups (countries / industries / sub-industries)
@@ -2164,11 +2169,16 @@ async function main() {
   await db.insert(atelierAccounts).values(
     ACCOUNTS.map((a) => {
       const ext = ACCOUNT_EXT[a.id] ?? {};
+      const sectorCodes = mapSectorToCodes(a.sector);
       return {
         id: a.id,
         name: a.name,
         country: a.country,
         sector: a.sector,
+        // Task #291 — dual-write FK codes alongside legacy text.
+        countryCode: mapCountryToCode(a.country),
+        industryCode: sectorCodes.industryCode,
+        subIndustryCode: sectorCodes.subIndustryCode,
         notes: a.notes,
         size: ext.size ?? "enterprise",
         hqCity: ext.hqCity ?? null,
@@ -2197,7 +2207,17 @@ async function main() {
 
   console.log("[seed-atelier] credentials…");
   if (CREDENTIALS.length > 0) {
-    await db.insert(atelierCredentials).values(CREDENTIALS);
+    // Task #291 — dual-write FK codes alongside legacy `sector` text.
+    await db.insert(atelierCredentials).values(
+      CREDENTIALS.map((c) => {
+        const codes = mapSectorToCodes(c.sector);
+        return {
+          ...c,
+          industryCode: codes.industryCode,
+          subIndustryCode: codes.subIndustryCode,
+        };
+      }),
+    );
   }
 
   console.log("[seed-atelier] agents…");
@@ -2366,6 +2386,8 @@ async function main() {
       bodyOrFileUrl: a.bodyOrFileUrl,
       provenance: a.provenance,
       tags: a.tags,
+      // Task #291 — derive industry-code FK array from free-text tags.
+      industryCodes: mapSectorTagsToCodes(a.tags),
       promotedFromEngagementId: a.promotedFromEngagementId,
       promotedByUserId: a.promotedByUserId,
       createdAt: DAYS_AGO(i + 1),
@@ -2632,6 +2654,8 @@ async function main() {
       supportCount: 0,
       offeringTags: [],
       sectorTags: [],
+      // Task #291 — empty FK array; populated when win themes get tagged.
+      sectorIndustryCodes: [],
       positioningLine: t.positioningLine,
       lastSeenAt: DAYS_AGO(7),
       createdByUserId: "p_mounir_ariss",
@@ -2944,9 +2968,16 @@ async function main() {
     // Migration 0014 also backfills 'emp_' || user.id rows from atelier_users;
     // those collide on PK with our richer seeded rows. Skip silently so the
     // seed remains re-runnable.
+    // Task #291 — dual-write FK country codes alongside legacy text.
     await db
       .insert(atelierEmployees)
-      .values(employeesToInsert)
+      .values(
+        employeesToInsert.map((e) => ({
+          ...e,
+          countryCode: mapCountryToCode(e.country),
+          payrollCountryCode: mapCountryToCode(e.payrollCountry),
+        })),
+      )
       .onConflictDoNothing();
   }
 
@@ -2981,7 +3012,16 @@ async function main() {
         "Frontend contractor on Aldrees workshop tooling.",
     },
   ];
-  await db.insert(atelierContractors).values(CONTRACTORS).onConflictDoNothing();
+  await db
+    .insert(atelierContractors)
+    .values(
+      CONTRACTORS.map((c) => ({
+        ...c,
+        // Task #291 — FK code dual-write.
+        countryCode: mapCountryToCode(c.country),
+      })),
+    )
+    .onConflictDoNothing();
 
   console.log("[seed-atelier] v3 roster: partner firms…");
   const PARTNER_FIRMS = [
@@ -3007,7 +3047,17 @@ async function main() {
       notes: "Turkish mobile-first partner — front-of-house apps.",
     },
   ];
-  await db.insert(atelierPartnerFirms).values(PARTNER_FIRMS).onConflictDoNothing();
+  await db
+    .insert(atelierPartnerFirms)
+    .values(
+      PARTNER_FIRMS.map((p) => ({
+        ...p,
+        // Task #291 — FK code dual-write for both country fields.
+        countryCode: mapCountryToCode(p.country),
+        hqCountryCode: mapCountryToCode((p as { hqCountry?: string }).hqCountry ?? p.country),
+      })),
+    )
+    .onConflictDoNothing();
 
   console.log("[seed-atelier] v3 roster: partner-firm resources…");
   const PARTNER_RESOURCES = [
@@ -3076,7 +3126,16 @@ async function main() {
       secondedToEngagementIds: ["eng_tasama_bpo_phase1"],
     },
   ];
-  await db.insert(atelierPartnerFirmResources).values(PARTNER_RESOURCES).onConflictDoNothing();
+  await db
+    .insert(atelierPartnerFirmResources)
+    .values(
+      PARTNER_RESOURCES.map((r) => ({
+        ...r,
+        // Task #291 — FK code dual-write.
+        countryCode: mapCountryToCode(r.country),
+      })),
+    )
+    .onConflictDoNothing();
 
   // Task #254 — Provision a partner-firm USER persona + scoped engagement-access
   // grant. Required so the cross-realm test ("partner-firm staff in seed only
@@ -3185,9 +3244,11 @@ async function main() {
       seniority: "principal",
       title: "Principal — Engagement Lead",
       country: "AE",
+      countryCode: "AE",
       employmentType: "FTE",
       homeOffice: "Dubai",
       payrollCountry: "AE",
+      payrollCountryCode: "AE",
       employeeIdExternal: "AICO-0011",
       noticePeriodDays: 60,
       startDate: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
@@ -3324,6 +3385,8 @@ async function main() {
         personId: "emp_p_layla_haddad",
         kind: "iqama",
         jurisdiction: "KSA",
+        // Task #291 — FK ISO alpha-2 code; sub-jurisdiction stays in `jurisdiction`.
+        jurisdictionCountryCode: "SA",
         // Redacted-only — raw number never persisted.
         referenceNumberRedacted: "••••4471",
         referenceNumberLastFour: "4471",
@@ -3339,6 +3402,7 @@ async function main() {
         personId: null,
         kind: "difc",
         jurisdiction: "UAE_DIFC",
+        jurisdictionCountryCode: "AE",
         referenceNumberRedacted: "••••2018",
         referenceNumberLastFour: "2018",
         issuedDate: "2023-01-15",
@@ -3354,6 +3418,7 @@ async function main() {
         partnerFirmId: "pf_bgts",
         kind: "saudization",
         jurisdiction: "KSA",
+        jurisdictionCountryCode: "SA",
         status: "active",
         metadata: { saudizationQuotaRequired: 30, saudizationQuotaActual: 34 },
         createdByUserId: "p_mounir_ariss",
@@ -4097,6 +4162,8 @@ async function seedV3Wallet() {
       vatAmount: s.vatAmount,
       vatTreatment: s.vatTreatment,
       vatCountry: s.vatCountry,
+      // Task #291 — FK ISO alpha-2 code (legacy text retained).
+      vatCountryCode: mapCountryToCode(s.vatCountry),
       vatCurrency: s.currency,
       clientBillable: s.clientBillable,
       markupPct: s.markupPct,
@@ -4135,6 +4202,8 @@ async function seedV3Wallet() {
           expenseId: s.id,
           expenseDate: date,
           country: s.vatCountry!,
+          // Task #291 — FK ISO alpha-2 code (legacy text retained).
+          countryCode: mapCountryToCode(s.vatCountry!),
           treatment: s.vatTreatment,
           rate,
           netAmount: net,
