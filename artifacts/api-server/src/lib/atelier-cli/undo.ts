@@ -511,6 +511,10 @@ defineCapability({
     }
     await db.insert(atelierAuditEvents).values({
       id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      // Multi-tenant correctness: stamp orgId so /cli/admin/metrics
+      // and digest aggregation never mis-attribute undo events across
+      // tenants.
+      orgId: ctx.persona.orgId,
       entityType: "cli_turn",
       entityId: hit.turnId,
       actorType: "human",

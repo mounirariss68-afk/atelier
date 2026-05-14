@@ -177,6 +177,7 @@ router.post("/cli/turns/:id/feedback", async (req, res) => {
     .where(eq(atelierCliTurns.id, turn.id));
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
+    orgId: me.orgId,
     entityType: "cli_turn",
     entityId: turn.id,
     actorType: "human",
