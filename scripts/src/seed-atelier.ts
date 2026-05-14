@@ -2908,9 +2908,9 @@ async function main() {
       userId: "p_layla_haddad",
       fullName: "Layla Haddad",
       email: "layla@aico.example",
-      role: "engagement_lead",
+      role: "senior_manager",
       seniority: "principal",
-      title: "Engagement Lead",
+      title: "Senior Manager (Engagement Lead)",
       country: "SA",
       employmentType: "FTE",
       homeOffice: "Riyadh",
@@ -2927,7 +2927,7 @@ async function main() {
       userId: "p_omar_najjar",
       fullName: "Omar Najjar",
       email: "omar@aico.example",
-      role: "sme",
+      role: "consultant",
       seniority: "senior_consultant",
       title: "Subject-Matter Expert — Operations",
       country: "AE",
@@ -2946,7 +2946,7 @@ async function main() {
       userId: "p_sara_qureshi",
       fullName: "Sara Qureshi",
       email: "sara@aico.example",
-      role: "ai_engineer",
+      role: "consultant",
       seniority: "consultant",
       title: "AI Engineer",
       country: "AE",
@@ -2965,7 +2965,7 @@ async function main() {
       userId: "p_youssef_idrissi",
       fullName: "Youssef Idrissi",
       email: "youssef@aico.example",
-      role: "business_developer",
+      role: "consultant",
       seniority: "associate",
       title: "Business Developer",
       country: "SA",
@@ -3265,9 +3265,9 @@ async function main() {
       id: "emp_p_amal_haddad",
       fullName: "Amal Haddad",
       email: "amal.candidate@aico.example",
-      role: "engagement_lead",
+      role: "senior_manager",
       seniority: "principal",
-      title: "Principal — Engagement Lead",
+      title: "Principal — Senior Manager",
       country: "AE",
       countryCode: "AE",
       employmentType: "FTE",
@@ -3302,17 +3302,17 @@ async function main() {
     isComplianceGate: boolean;
     status: "pending" | "in_progress" | "done";
   }[] = [
-    { code: "nda.signed", title: "NDA signed", ownerRole: "operations", days: 0, isComplianceGate: true, status: "done" },
+    { code: "nda.signed", title: "NDA signed", ownerRole: "hr", days: 0, isComplianceGate: true, status: "done" },
     { code: "contract.signed", title: "Employment contract signed", ownerRole: "partner", days: 0, isComplianceGate: true, status: "done" },
-    { code: "payroll.registered", title: "Payroll registered (GOSI / WPS)", ownerRole: "operations", days: 1, isComplianceGate: true, status: "in_progress" },
-    { code: "sso.provisioned", title: "SSO + email provisioned", ownerRole: "operations", days: 2, isComplianceGate: false, status: "pending" },
-    { code: "slack.invited", title: "Invited to Slack workspaces", ownerRole: "operations", days: 2, isComplianceGate: false, status: "pending" },
-    { code: "calendar.welcome", title: "Welcome calendar block", ownerRole: "operations", days: 3, isComplianceGate: false, status: "pending" },
-    { code: "equipment.shipped", title: "Equipment shipped", ownerRole: "operations", days: 3, isComplianceGate: false, status: "pending" },
-    { code: "benefits.enrolled", title: "Benefits enrollment", ownerRole: "operations", days: 5, isComplianceGate: false, status: "pending" },
-    { code: "security.training", title: "Security & data-handling training", ownerRole: "operations", days: 7, isComplianceGate: false, status: "pending" },
-    { code: "manager.intro", title: "Manager intro session", ownerRole: "engagement_lead", days: 7, isComplianceGate: false, status: "pending" },
-    { code: "atelier.tour", title: "The Atelier walkthrough", ownerRole: "engagement_lead", days: 7, isComplianceGate: false, status: "pending" },
+    { code: "payroll.registered", title: "Payroll registered (GOSI / WPS)", ownerRole: "hr", days: 1, isComplianceGate: true, status: "in_progress" },
+    { code: "sso.provisioned", title: "SSO + email provisioned", ownerRole: "hr", days: 2, isComplianceGate: false, status: "pending" },
+    { code: "slack.invited", title: "Invited to Slack workspaces", ownerRole: "hr", days: 2, isComplianceGate: false, status: "pending" },
+    { code: "calendar.welcome", title: "Welcome calendar block", ownerRole: "hr", days: 3, isComplianceGate: false, status: "pending" },
+    { code: "equipment.shipped", title: "Equipment shipped", ownerRole: "hr", days: 3, isComplianceGate: false, status: "pending" },
+    { code: "benefits.enrolled", title: "Benefits enrollment", ownerRole: "hr", days: 5, isComplianceGate: false, status: "pending" },
+    { code: "security.training", title: "Security & data-handling training", ownerRole: "hr", days: 7, isComplianceGate: false, status: "pending" },
+    { code: "manager.intro", title: "Manager intro session", ownerRole: "senior_manager", days: 7, isComplianceGate: false, status: "pending" },
+    { code: "atelier.tour", title: "The Atelier walkthrough", ownerRole: "senior_manager", days: 7, isComplianceGate: false, status: "pending" },
   ];
   await db
     .insert(atelierOnboardingSteps)
@@ -3353,16 +3353,16 @@ async function main() {
     isReassignmentGate: boolean;
     status: "pending" | "in_progress" | "done";
   }[] = [
-    { code: "intent.recorded", title: "Intent to roll off recorded", ownerRole: "operations", days: 0, isReassignmentGate: false, status: "done" },
-    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "engagement_lead", days: 1, isReassignmentGate: true, status: "in_progress" },
-    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "engagement_lead", days: 3, isReassignmentGate: false, status: "pending" },
+    { code: "intent.recorded", title: "Intent to roll off recorded", ownerRole: "hr", days: 0, isReassignmentGate: false, status: "done" },
+    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "senior_manager", days: 1, isReassignmentGate: true, status: "in_progress" },
+    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "senior_manager", days: 3, isReassignmentGate: false, status: "pending" },
     { code: "client.notify", title: "Clients notified", ownerRole: "partner", days: 4, isReassignmentGate: false, status: "pending" },
-    { code: "sso.revoked", title: "SSO revoked", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
-    { code: "email.disabled", title: "Email disabled", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
-    { code: "slack.disabled", title: "Slack disabled", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
-    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
-    { code: "ip.assignment.signed", title: "IP assignment + return of property", ownerRole: "operations", days: 5, isReassignmentGate: false, status: "pending" },
-    { code: "final.payment", title: "Final invoice paid", ownerRole: "operations", days: 14, isReassignmentGate: false, status: "pending" },
+    { code: "sso.revoked", title: "SSO revoked", ownerRole: "hr", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "email.disabled", title: "Email disabled", ownerRole: "hr", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "slack.disabled", title: "Slack disabled", ownerRole: "hr", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "hr", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "ip.assignment.signed", title: "IP assignment + return of property", ownerRole: "hr", days: 5, isReassignmentGate: false, status: "pending" },
+    { code: "final.payment", title: "Final invoice paid", ownerRole: "hr", days: 14, isReassignmentGate: false, status: "pending" },
     { code: "audit.pack.signed", title: "Partner-signed audit pack issued", ownerRole: "partner", days: 14, isReassignmentGate: false, status: "pending" },
   ];
   await db
@@ -3890,10 +3890,10 @@ async function main() {
   // ============================================================
   console.log("[seed-atelier] v3 ledger (Task #258): utilization targets…");
   // role/seniority → target % (whole numbers stored as percent points)
+  // Task #292 — utilization targets keyed on the 9-persona model.
   const TARGETS: Array<{ predicate: (e: { role: string; seniority?: string | null }) => boolean; pct: number }> = [
-    { predicate: (e) => e.role === "partner" || e.seniority === "partner", pct: 50 },
-    { predicate: (e) => e.role === "ai_engineer", pct: 75 },
-    { predicate: (e) => e.role === "engagement_lead" || e.seniority === "principal", pct: 65 },
+    { predicate: (e) => e.role === "partner" || e.role === "founding_partner" || e.seniority === "partner", pct: 50 },
+    { predicate: (e) => e.role === "senior_manager" || e.seniority === "principal", pct: 65 },
     { predicate: (e) => e.seniority === "manager" || e.seniority === "senior_consultant", pct: 70 },
   ];
   for (const emp of employeesToInsert) {

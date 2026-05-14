@@ -539,7 +539,7 @@ router.post("/concierge/search", async (req, res) => {
 router.get("/admin/settings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (me.role !== "founding_partner" && me.role !== "hr") { // Task #292 admin gate
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -549,7 +549,7 @@ router.get("/admin/settings", async (req, res) => {
 router.post("/admin/settings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (me.role !== "founding_partner" && me.role !== "hr") { // Task #292 admin gate
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -575,7 +575,7 @@ router.post("/admin/settings", async (req, res) => {
 router.get("/admin/compliance", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (me.role !== "founding_partner" && me.role !== "hr") { // Task #292 admin gate
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -585,7 +585,7 @@ router.get("/admin/compliance", async (req, res) => {
 router.patch("/admin/compliance", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (me.role !== "founding_partner" && me.role !== "hr") { // Task #292 admin gate
     res.status(403).json({ error: "partner-only" });
     return;
   }
@@ -599,7 +599,7 @@ router.patch("/admin/compliance", async (req, res) => {
 router.get("/admin/founder-todos", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+  if (me.role !== "founding_partner" && me.role !== "hr") { // Task #292 admin gate
     res.status(403).json({ error: "partner-only" });
     return;
   }
