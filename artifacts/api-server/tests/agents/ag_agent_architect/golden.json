@@ -1,0 +1,35 @@
+{
+  "agentId": "ag_agent_architect",
+  "input": {
+    "engagementId": "eng_demo_001",
+    "engagementName": "Emirates AI Productivity Diagnostic",
+    "scopeHint": "Procurement intake-to-PO",
+    "source": "Procurement intake currently runs through a SharePoint form, then a 4-step approval…",
+    "depth": "design"
+  },
+  "expectedOutput": {
+    "processDiagramMermaid": "graph LR; A[Intake] --> B[Triage] --> C[Approval] --> D[PO]",
+    "steps": [
+      {
+        "id": "p1",
+        "name": "Intake",
+        "currentOwner": "Procurement Analyst",
+        "category": "data_capture",
+        "agentifiable": "yes",
+        "rationale": "Form-driven, structured fields, low judgment."
+      },
+      {
+        "id": "p2",
+        "name": "Approval",
+        "currentOwner": "Cost Center Owner",
+        "category": "judgment",
+        "agentifiable": "partial",
+        "rationale": "Agent can summarise + recommend; human approval still required."
+      }
+    ],
+    "candidateAgents": [
+      { "id": "ag_intake_clerk", "name": "Intake Clerk", "humanCheckpoint": "cp_owner_review" }
+    ]
+  },
+  "notes": "Agent Architect fixture exercises mermaid + steps + candidate agents."
+}

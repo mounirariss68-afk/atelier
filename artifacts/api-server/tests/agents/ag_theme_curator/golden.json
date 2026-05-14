@@ -1,0 +1,39 @@
+{
+  "agentId": "ag_theme_curator",
+  "input": {
+    "debriefThemes": [
+      { "tag": "trust_incumbent", "polarity": "loss", "debriefId": "deb_001", "quote": "we trusted the incumbent's track record more." },
+      { "tag": "trust_incumbent", "polarity": "loss", "debriefId": "deb_002", "quote": "vendor familiarity won out." }
+    ],
+    "openOpportunityIds": ["opp_demo_001", "opp_demo_002"]
+  },
+  "expectedOutput": {
+    "upsertThemes": [
+      {
+        "tag": "trust_incumbent",
+        "name": "Incumbent trust beats challenger pitch quality",
+        "description": "Buyers in regulated sectors discount challenger pitch quality when the incumbent has shipped recently.",
+        "polarity": "loss",
+        "contributingDebriefIds": ["deb_001", "deb_002"],
+        "positioningLine": "Bring delivery references early; offer a 2-week proof loop.",
+        "offeringTags": ["pursuit", "win_themes"],
+        "sectorTags": ["aviation"]
+      }
+    ],
+    "emergentThemes": [
+      {
+        "tag": "trust_incumbent",
+        "name": "Incumbent trust",
+        "supportingQuotes": [
+          "we trusted the incumbent's track record more.",
+          "vendor familiarity won out."
+        ]
+      }
+    ],
+    "openProposalSuggestions": [
+      { "opportunityId": "opp_demo_001", "themeTag": "trust_incumbent", "rationale": "Same incumbent risk profile applies." }
+    ],
+    "confidence": "amber"
+  },
+  "notes": "Theme Curator fixture — emergent theme has 2 supporting quotes per eval threshold."
+}

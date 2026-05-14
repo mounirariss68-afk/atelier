@@ -1,0 +1,48 @@
+{
+  "agentId": "ag_pricing_strategist",
+  "input": {
+    "opportunityId": "opp_demo_001",
+    "pricing": {
+      "id": "pr_001",
+      "teamMix": [{ "role": "Partner", "fteWeeks": 2 }, { "role": "Director", "fteWeeks": 6 }],
+      "durationWeeks": 12,
+      "pricingModel": "fixed_fee",
+      "rateCardId": "rc_2026_q1"
+    },
+    "policy": { "targetMarginPct": 38, "partnerOverrideMarginPct": 30, "twoPartnerMarginPct": 22 },
+    "primaryIntent": "Anchor on agentic-delivery value, not headcount weeks.",
+    "alternativeLenses": ["t_and_m_capped", "outcome_milestones"]
+  },
+  "expectedOutput": {
+    "primary": {
+      "pricingModel": "fixed_fee",
+      "durationWeeks": 12,
+      "teamMix": [{ "role": "Partner", "fteWeeks": 2 }],
+      "cost": 588000,
+      "price": 950000,
+      "marginPct": 38.1,
+      "marginLockStatus": "green",
+      "narrative": "Primary structure clears target margin; clean Partner sign-off."
+    },
+    "alternatives": [
+      {
+        "pricingModel": "t_and_m_capped",
+        "durationWeeks": 14,
+        "teamMix": [{ "role": "Director", "fteWeeks": 8 }],
+        "cost": 612000,
+        "price": 980000,
+        "marginPct": 37.5,
+        "marginLockStatus": "green",
+        "story": "T&M capped gives client cost ceiling but slightly less margin."
+      }
+    ],
+    "talkingPoints": ["Fixed fee anchors outcome conversation", "Alt offers cost ceiling"],
+    "risks": ["Scope creep on procurement workstream"],
+    "marginLockChip": "green",
+    "partnerOverrideRequired": false,
+    "twoPartnerRequired": false,
+    "confidence": "green",
+    "source": "claude"
+  },
+  "notes": "Pricing Strategist fixture covers margin-green happy path with alternatives + talking points."
+}

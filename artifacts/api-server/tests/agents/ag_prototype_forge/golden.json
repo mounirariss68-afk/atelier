@@ -1,0 +1,30 @@
+{
+  "agentId": "ag_prototype_forge",
+  "input": {
+    "engagementId": "eng_demo_001",
+    "engagementName": "Emirates AI Productivity Diagnostic",
+    "targetLabel": "Procurement Intake Clerk prototype",
+    "agentDesign": { "id": "ag_intake_clerk", "humanCheckpoint": "cp_owner_review" },
+    "contextNotes": "Show CIO a working clerk in 2 weeks.",
+    "brief": { "audience": "Procurement", "problem": "Manual intake", "agenticThesis": "Clerk drafts, human approves." }
+  },
+  "expectedOutput": {
+    "replitPromptMd": "# Replit prompt — Procurement Intake Clerk\n\nBuild a Next.js form that…",
+    "buildPlan": [
+      { "step": "scaffold", "owner": "Replit Agent" },
+      { "step": "wire-llm", "owner": "Replit Agent" }
+    ],
+    "demoStoryboard": [
+      { "frame": 1, "caption": "Empty intake form" },
+      { "frame": 2, "caption": "Clerk drafts a PO suggestion" }
+    ],
+    "files": [
+      { "path": "app/page.tsx", "content": "export default function Page() { return <div/>; }" }
+    ],
+    "nonNegotiables": [
+      "AICo brand chrome required",
+      "No real client data without Partner approval"
+    ]
+  },
+  "notes": "Prototype Forge fixture exercises replitPromptMd + buildPlan + non-negotiables block."
+}

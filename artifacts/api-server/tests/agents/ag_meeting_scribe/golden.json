@@ -1,0 +1,32 @@
+{
+  "agentId": "ag_meeting_scribe",
+  "input": {
+    "opportunityId": "opp_demo_001",
+    "opportunityName": "Group-wide AI productivity diagnostic",
+    "transcript": "CIO: We want a marquee win in 2026. AICo: Suggest a 12-week diagnostic with…",
+    "kind": "discovery"
+  },
+  "expectedOutput": {
+    "title": "Discovery call — Emirates Group CIO",
+    "attendees": [
+      { "name": "Group CIO", "org": "client" },
+      { "name": "L. Haddad", "org": "aico" }
+    ],
+    "summary": "CIO confirmed appetite for a marquee 2026 AI win and asked AICo to propose a 12-week diagnostic.",
+    "decisions": [
+      { "id": "d1", "statement": "Proceed to written proposal within 10 business days.", "decidedBy": "Group CIO", "confidence": "green" }
+    ],
+    "actionItems": [
+      { "id": "a1", "owner": "L. Haddad", "statement": "Send draft proposal", "due": "2026-05-23" }
+    ],
+    "openQuestions": ["Is mandate firm-wide or airline-only?"],
+    "fiveCDelta": {
+      "client": "CIO confirmed sponsor.",
+      "competition": "No incumbent named.",
+      "capability": "AICo agentic angle landed.",
+      "capacity": "Confirmed Dubai bench availability.",
+      "contract": "Open to fixed-fee diagnostic + success tail."
+    }
+  },
+  "notes": "Meeting Scribe fixture covers all required output blocks plus optional fields."
+}

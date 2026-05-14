@@ -1,8 +1,15 @@
 /**
  * Atelier deep-agent runner.
  *
- * Orchestrates the three star agents (Pursuit Scout, POV Author,
- * Meeting Scribe). Each call:
+ * 🟡 STANDARD: every Atelier agent — Drafter, Sentinel, Analyst, or
+ * Rule-based — must conform to `artifacts/atelier/AGENT_STANDARD.md`.
+ * New agents should compose `runAgent(...)` from `./runAgent.ts` rather
+ * than duplicating the lifecycle inline. The 15 hand-rolled `run<X>`
+ * functions below predate the helper but use the same primitives
+ * (`startRun`, `progressRun`, `completeRun`, `failRun`) and conform to
+ * the same lifecycle contract.
+ *
+ * Each `run<X>` call:
  *   1. Inserts an `atelier_agent_runs` row in `running` state.
  *   2. Logs an `agent.start` audit event.
  *   3. Calls Claude (or, when `MOCK_MODE` is on / the integration env vars
@@ -18,7 +25,9 @@
 
 import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings } from "@workspace/db";
 import { eq, and, gte, isNull } from "drizzle-orm";
+import { getAgent } from "@workspace/agents";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
+import { runAgent } from "./runAgent.js";
 import {
   STALLED_THRESHOLD_DAYS,
   SALES_STAGE_DEFAULT_PROB,
@@ -250,19 +259,80 @@ interface CompleteRunInput {
   warning?: string;
 }
 
+/**
+ * Validate the agent's output against its registry `outputSchema` and
+ * return a human-readable violation string if (and only if) it fails.
+ *
+ * Per AGENT_STANDARD.md §4–§5 the registry is the single source of
+ * truth for what an agent emits. Enforcement here means *every* run<X>
+ * function — even the 15 hand-rolled ones that predate runAgent.ts —
+ * has its output checked at the lifecycle boundary, and any violation
+ * lands on the run row + the audit event (queryable, alertable) without
+ * breaking the v3 walkthrough by throwing on legacy outputs.
+ *
+ * Set `ATELIER_AGENT_STRICT_OUTPUT=1` (used by `pnpm test:agents` and
+ * CI) to flip violations from soft (logged) to hard (thrown).
+ */
+function validateAgentOutput(
+  agentId: string,
+  output: unknown,
+): { ok: true } | { ok: false; reason: string } {
+  const agent = getAgent(agentId);
+  if (!agent) return { ok: true }; // not in registry — caller already warns elsewhere
+  const parsed = agent.outputSchema.safeParse(output);
+  if (parsed.success) return { ok: true };
+  // Compress the Zod issue list to a single line so it fits in
+  // `statusMessage` (240 chars) and audit `payloadSummary`.
+  const issues = parsed.error.issues
+    .slice(0, 3)
+    .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+    .join("; ");
+  return {
+    ok: false,
+    reason: `output failed registry schema (${parsed.error.issues.length} issue${parsed.error.issues.length === 1 ? "" : "s"}): ${issues}`,
+  };
+}
+
 export async function completeRun(input: CompleteRunInput): Promise<void> {
   const isFallback = input.source === "mock_fallback";
+
+  // Resolve agentId from the run row so we can validate output against
+  // the registry. We avoid threading agentId through every callsite —
+  // the row already knows.
+  let schemaWarning: string | null = null;
+  try {
+    const [row] = await db
+      .select({ agentId: atelierAgentRuns.agentId })
+      .from(atelierAgentRuns)
+      .where(eq(atelierAgentRuns.id, input.runId));
+    if (row?.agentId && !isFallback) {
+      const check = validateAgentOutput(row.agentId, input.output);
+      if (!check.ok) {
+        schemaWarning = `[${row.agentId}] ${check.reason}`;
+        if (process.env.ATELIER_AGENT_STRICT_OUTPUT === "1") {
+          throw new Error(`atelier-agent-schema-violation: ${schemaWarning}`);
+        }
+        // eslint-disable-next-line no-console
+        console.warn(`[atelier-agent-schema-violation] ${schemaWarning}`);
+      }
+    }
+  } catch (e) {
+    if (process.env.ATELIER_AGENT_STRICT_OUTPUT === "1") throw e;
+    // Best-effort lookup — never break v3 on a registry hiccup.
+  }
+
   // A mock-fallback (Claude error) is NOT a clean success — flag it so the
   // UI/audit can surface that the data is synthetic and must not be treated
   // as evidence. We still mark progress 100 so streams complete, but the
   // `status` becomes `blocked` and `confidence` is forced to red.
+  const combinedWarning = [input.warning, schemaWarning].filter(Boolean).join(" | ") || undefined;
   await db
     .update(atelierAgentRuns)
     .set({
       status: isFallback ? "blocked" : "complete",
       statusMessage: isFallback
         ? (input.warning ?? "mock fallback — Claude unavailable")
-        : "complete",
+        : (schemaWarning ? `complete (schema warning: ${schemaWarning.slice(0, 200)})` : "complete"),
       progressPct: 100,
       output: input.output as never,
       confidence: isFallback ? "red" : input.confidence,
@@ -284,12 +354,29 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
       confidence: isFallback ? "red" : input.confidence,
       costUsd: input.costUsd,
       source: input.source ?? "claude",
-      warning: input.warning,
+      warning: combinedWarning,
+      schemaWarning,
     },
     payloadSummary: isFallback
       ? `${input.actorLabel} fell back to MOCK on ${input.targetLabel} — Claude unavailable; output flagged synthetic`
-      : `${input.actorLabel} completed on ${input.targetLabel} (confidence ${input.confidence}, $${input.costUsd.toFixed(4)}, source ${input.source ?? "claude"})`,
+      : `${input.actorLabel} completed on ${input.targetLabel} (confidence ${input.confidence}, $${input.costUsd.toFixed(4)}, source ${input.source ?? "claude"})${schemaWarning ? " ⚠ schema-violation" : ""}`,
   });
+
+  // Emit a dedicated audit event when the registry schema is violated so
+  // a partner querying `atelier_audit_events.action='agent.schema_violation'`
+  // can see every contract drift across the firm in one place.
+  if (schemaWarning) {
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: input.targetType,
+      entityId: input.targetId,
+      actorType: "agent",
+      actorLabel: input.actorLabel,
+      action: "agent.schema_violation",
+      payload: { runId: input.runId, schemaWarning },
+      payloadSummary: schemaWarning.slice(0, 400),
+    });
+  }
 }
 
 export async function failRun(
@@ -603,70 +690,61 @@ export async function runPursuitScout(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; output: PursuitScoutOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "pursuit_scout",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "opportunity",
-    targetId: args.opportunityId,
-    targetLabel: args.opportunityName,
-    inputs: { accountName: args.accountName, contextBlurb: args.contextBlurb },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("pursuit_scout");
-    await progressRun(runId, 25, "Planning research lines");
-    const { value, costUsd, tokensIn, tokensOut, source, warning } = await callClaudeJson<PursuitScoutOutput>(
-      "claude-sonnet-4-6",
-      system,
-      JSON.stringify({
+  const result = await runAgent(
+    {
+      agentId: "ag_pursuit_scout",
+      input: {
         accountName: args.accountName,
         accountCountry: args.accountCountry,
         accountSector: args.accountSector,
         opportunityName: args.opportunityName,
         contextBlurb: args.contextBlurb,
-      }),
-      () => mockScoutOutput(args.accountName, args.accountSector, args.accountCountry),
-    );
-    await progressRun(runId, 70, "Synthesising 5C draft", { name: "scout.synth", durationMs: Date.now() - t0, tokensIn, tokensOut });
-    const guarded: PursuitScoutOutput = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
-    // Pursuit Scout v2 governed-write — Task #238 §2.5.
-    // Any account-profile delta the scout surfaces is enqueued onto the
-    // Cartographer approval queue (atelier_accounts.pending_profile_updates)
-    // rather than written directly. Partners decide via the Profile tab.
-    try {
-      await proposeProfileUpdatesFromScout({
-        opportunityId: args.opportunityId,
-        proposedBy: "ag_pursuit_scout",
-        output: guarded,
-      });
-    } catch (e) {
-      // governed-write must never break a successful scout run
-      console.warn("proposeProfileUpdatesFromScout failed", e);
-    }
-    await completeRun({
-      runId,
-      output: guarded as unknown,
-      confidence: guarded.confidence ?? "amber",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: guarded.facts.length,
-      actorLabel: args.actorLabel,
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
-      source,
-      warning,
-    });
-    return { runId, output: guarded, costUsd };
-  } catch (err) {
-    await failRun(runId, err, {
       actorLabel: args.actorLabel,
-      targetType: "opportunity",
-      targetId: args.opportunityId,
-    });
-    throw err;
-  }
+    },
+    async (ctx) => {
+      const system = loadPrompt("pursuit_scout");
+      await ctx.progress(25, "Planning research lines");
+      const { value, costUsd, source, warning } = await callClaudeJson<PursuitScoutOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify({
+          accountName: args.accountName,
+          accountCountry: args.accountCountry,
+          accountSector: args.accountSector,
+          opportunityName: args.opportunityName,
+          contextBlurb: args.contextBlurb,
+        }),
+        () => mockScoutOutput(args.accountName, args.accountSector, args.accountCountry),
+      );
+      await ctx.progress(70, "Synthesising 5C draft");
+      const guarded: PursuitScoutOutput = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
+      // Pursuit Scout v2 governed-write — Task #238 §2.5.
+      // Profile deltas enqueued onto the Cartographer approval queue.
+      try {
+        await proposeProfileUpdatesFromScout({
+          opportunityId: args.opportunityId,
+          proposedBy: "ag_pursuit_scout",
+          output: guarded,
+        });
+      } catch (e) {
+        console.warn("proposeProfileUpdatesFromScout failed", e);
+      }
+      return {
+        output: guarded,
+        costUsd,
+        confidence: guarded.confidence ?? "amber",
+        source,
+        warning,
+        sourcesCount: guarded.facts.length,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as PursuitScoutOutput, costUsd: result.costUsd };
 }
 
 // ------- POV Author (3-step chain) -------
@@ -727,50 +805,46 @@ export async function runPovOutline(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; outline: PovOutline; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "pov_author",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "opportunity",
-    targetId: args.opportunityId,
-    targetLabel: args.opportunityName,
-    inputs: { phase: "outline", audience: args.audience, objective: args.objective, factsCount: args.promotedFacts.length },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("pov_author");
-    await progressRun(runId, 30, "Drafting outline");
-    const { value, costUsd, tokensIn, tokensOut, source, warning } = await callClaudeJson<PovOutline>(
-      "claude-haiku-4-5",
-      system + "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.",
-      JSON.stringify({
-        opportunity: args.opportunityName,
+  const result = await runAgent(
+    {
+      agentId: "ag_pov_author",
+      input: {
+        opportunityId: args.opportunityId,
         audience: args.audience,
         objective: args.objective,
-        approvedFacts: args.promotedFacts,
-      }),
-      () => mockOutline(args.opportunityName, args.audience, args.promotedFacts),
-    );
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: "amber",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: args.promotedFacts.length,
-      actorLabel: args.actorLabel,
+        promotedFacts: args.promotedFacts,
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
-      source,
-      warning,
-    });
-    void tokensIn; void tokensOut;
-    return { runId, outline: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "opportunity", targetId: args.opportunityId });
-    throw err;
-  }
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt("pov_author");
+      await ctx.progress(30, "Drafting outline");
+      const { value, costUsd, source, warning } = await callClaudeJson<PovOutline>(
+        "claude-haiku-4-5",
+        system + "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.",
+        JSON.stringify({
+          opportunity: args.opportunityName,
+          audience: args.audience,
+          objective: args.objective,
+          approvedFacts: args.promotedFacts,
+        }),
+        () => mockOutline(args.opportunityName, args.audience, args.promotedFacts),
+      );
+      return {
+        output: value,
+        costUsd,
+        confidence: "amber",
+        source,
+        warning,
+        sourcesCount: args.promotedFacts.length,
+      };
+    },
+  );
+  return { runId: result.runId, outline: result.output as PovOutline, costUsd: result.costUsd };
 }
 
 export async function runPovDraft(args: {
@@ -781,45 +855,42 @@ export async function runPovDraft(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; draft: PovDraft; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "pov_author",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "opportunity",
-    targetId: args.opportunityId,
-    targetLabel: args.opportunityName,
-    inputs: { phase: "draft", sectionsCount: args.outline.sections.length },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("pov_author");
-    await progressRun(runId, 40, "Writing sections");
-    const { value, costUsd, source, warning } = await callClaudeJson<PovDraft>(
-      "claude-sonnet-4-6",
-      system + "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.",
-      JSON.stringify({ outline: args.outline, facts: args.promotedFacts }),
-      () => mockSections(args.outline, args.promotedFacts),
-    );
-    await progressRun(runId, 85, "Stylist polish");
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: value.citationCoverage >= 0.8 ? "green" : "amber",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: args.promotedFacts.length,
-      actorLabel: args.actorLabel,
+  const result = await runAgent(
+    {
+      agentId: "ag_pov_draft",
+      input: {
+        opportunityId: args.opportunityId,
+        opportunityName: args.opportunityName,
+        outline: args.outline,
+        promotedFacts: args.promotedFacts,
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
-      source,
-      warning,
-    });
-    return { runId, draft: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "opportunity", targetId: args.opportunityId });
-    throw err;
-  }
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt("pov_author");
+      await ctx.progress(40, "Writing sections");
+      const { value, costUsd, source, warning } = await callClaudeJson<PovDraft>(
+        "claude-sonnet-4-6",
+        system + "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.",
+        JSON.stringify({ outline: args.outline, facts: args.promotedFacts }),
+        () => mockSections(args.outline, args.promotedFacts),
+      );
+      await ctx.progress(85, "Stylist polish");
+      return {
+        output: value,
+        costUsd,
+        confidence: value.citationCoverage >= 0.8 ? "green" : "amber",
+        source,
+        warning,
+        sourcesCount: args.promotedFacts.length,
+      };
+    },
+  );
+  return { runId: result.runId, draft: result.output as PovDraft, costUsd: result.costUsd };
 }
 
 // ------- Meeting Scribe -------
@@ -884,49 +955,46 @@ export async function runMeetingScribe(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; output: MeetingScribeOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "meeting_scribe",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "opportunity",
-    targetId: args.opportunityId,
-    targetLabel: args.opportunityName,
-    inputs: { kind: args.kind, transcriptChars: args.transcript.length, hasPrior: !!args.priorBrief },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("meeting_scribe");
-    await progressRun(runId, 35, "Normalising speakers");
-    const { value, costUsd, source, warning } = await callClaudeJson<MeetingScribeOutput>(
-      "claude-haiku-4-5",
-      system,
-      JSON.stringify({
+  const result = await runAgent(
+    {
+      agentId: "ag_meeting_scribe",
+      input: {
+        opportunityId: args.opportunityId,
         transcript: args.transcript,
-        meeting_kind: args.kind,
-        prior_brief: args.priorBrief,
-      }),
-      () => mockMeeting(args.transcript, args.kind, !!args.priorBrief),
-    );
-    await progressRun(runId, 80, "Extracting decisions & actions");
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: "amber",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: value.decisions.length + value.actionItems.length,
-      actorLabel: args.actorLabel,
+        kind: args.kind,
+        priorBrief: args.priorBrief,
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
-      source,
-      warning,
-    });
-    return { runId, output: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "opportunity", targetId: args.opportunityId });
-    throw err;
-  }
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt("meeting_scribe");
+      await ctx.progress(35, "Normalising speakers");
+      const { value, costUsd, source, warning } = await callClaudeJson<MeetingScribeOutput>(
+        "claude-haiku-4-5",
+        system,
+        JSON.stringify({
+          transcript: args.transcript,
+          meeting_kind: args.kind,
+          prior_brief: args.priorBrief,
+        }),
+        () => mockMeeting(args.transcript, args.kind, !!args.priorBrief),
+      );
+      await ctx.progress(80, "Extracting decisions & actions");
+      return {
+        output: value,
+        costUsd,
+        confidence: "amber",
+        source,
+        warning,
+        sourcesCount: value.decisions.length + value.actionItems.length,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as MeetingScribeOutput, costUsd: result.costUsd };
 }
 
 // ------- decision logging (ApproveEditReject) -------
@@ -1106,63 +1174,57 @@ export async function runCharterArchitect(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; output: CharterArchitectOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "charter_architect",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "engagement",
-    targetId: args.engagementId,
-    targetLabel: args.engagementName,
-    inputs: { accountName: args.accountName, hasTranscript: !!args.kickoffTranscriptExcerpt },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("charter_architect");
-    // Sub-agent chain progress beats — surfaced in the activity stream.
-    await progressRun(runId, 15, "Objective Distiller — extracting 3–5 outcome-shaped objectives");
-    await progressRun(runId, 35, "Scope Boundarist — drawing IN/OUT scope sets (MECE)");
-    await progressRun(runId, 60, "Hypothesis Tree Builder — building tree (max depth 3)");
-    await progressRun(runId, 80, "RAID Baseliner — triaging baseline RAID items");
-    const hasBaseline = !/no baseline/i.test(args.wonProposalSummary);
-    const { value, costUsd, tokensIn, tokensOut, source, warning } = await callClaudeJson<CharterArchitectOutput>(
-      "claude-sonnet-4-6",
-      system,
-      JSON.stringify({
+  const result = await runAgent(
+    {
+      agentId: "ag_charter_architect",
+      input: {
         engagementId: args.engagementId,
         accountName: args.accountName,
         wonProposalSummary: args.wonProposalSummary,
-        kickoffTranscriptExcerpt: args.kickoffTranscriptExcerpt,
-      }),
-      () => mockCharter({ accountName: args.accountName, proposalSummary: args.wonProposalSummary, hasBaseline }),
-    );
-    // Hard guardrail: cap depth to 3.
-    if (value.hypothesisTree?.branches) {
-      value.hypothesisTree.branches.forEach((b) => {
-        if (Array.isArray(b.subHypotheses) && b.subHypotheses.length > 6) {
-          b.subHypotheses = b.subHypotheses.slice(0, 6);
-        }
-      });
-    }
-    void tokensIn; void tokensOut;
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: value.meceFlags?.length ? "amber" : "green",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: value.raidBaseline?.length ?? 0,
-      actorLabel: args.actorLabel,
+        kickoffTranscriptExcerpt: args.kickoffTranscriptExcerpt ?? undefined,
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "engagement",
       targetId: args.engagementId,
       targetLabel: args.engagementName,
-      source,
-      warning,
-    });
-    return { runId, output: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "engagement", targetId: args.engagementId });
-    throw err;
-  }
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt("charter_architect");
+      await ctx.progress(15, "Objective Distiller — extracting 3–5 outcome-shaped objectives");
+      await ctx.progress(35, "Scope Boundarist — drawing IN/OUT scope sets (MECE)");
+      await ctx.progress(60, "Hypothesis Tree Builder — building tree (max depth 3)");
+      await ctx.progress(80, "RAID Baseliner — triaging baseline RAID items");
+      const hasBaseline = !/no baseline/i.test(args.wonProposalSummary);
+      const { value, costUsd, source, warning } = await callClaudeJson<CharterArchitectOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify({
+          engagementId: args.engagementId,
+          accountName: args.accountName,
+          wonProposalSummary: args.wonProposalSummary,
+          kickoffTranscriptExcerpt: args.kickoffTranscriptExcerpt,
+        }),
+        () => mockCharter({ accountName: args.accountName, proposalSummary: args.wonProposalSummary, hasBaseline }),
+      );
+      if (value.hypothesisTree?.branches) {
+        value.hypothesisTree.branches.forEach((b) => {
+          if (Array.isArray(b.subHypotheses) && b.subHypotheses.length > 6) {
+            b.subHypotheses = b.subHypotheses.slice(0, 6);
+          }
+        });
+      }
+      return {
+        output: value,
+        costUsd,
+        confidence: value.meceFlags?.length ? "amber" : "green",
+        source,
+        warning,
+        sourcesCount: value.raidBaseline?.length ?? 0,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as CharterArchitectOutput, costUsd: result.costUsd };
 }
 
 // =============================================================
@@ -1308,50 +1370,47 @@ export async function runSynthesisCritic(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; output: SynthesisCriticOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "synthesis_critic",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "deliverable",
-    targetId: args.deliverableId,
-    targetLabel: args.deliverableName,
-    inputs: { engagementId: args.engagementId, audience: args.audience, bodyLen: args.body.length },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("synthesis_critic");
-    await progressRun(runId, 25, "Walking sections + checking pyramid structure");
-    await progressRun(runId, 60, "Auditing citations + hypothesis coverage");
-    const { value, costUsd, source, warning } = await callClaudeJson<SynthesisCriticOutput>(
-      "claude-opus-4-7",
-      system,
-      JSON.stringify({
+  const result = await runAgent(
+    {
+      agentId: "ag_synthesis_critic",
+      input: {
         deliverableId: args.deliverableId,
         body: args.body,
         hypothesisTree: args.hypothesisTree,
         audience: args.audience,
-      }),
-      () => mockCritique({ body: args.body, hypothesisTree: args.hypothesisTree }),
-    );
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: value.readiness === "green" ? "green" : value.readiness === "amber" ? "amber" : "red",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: value.issues?.length ?? 0,
-      actorLabel: args.actorLabel,
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "deliverable",
       targetId: args.deliverableId,
       targetLabel: args.deliverableName,
-      source,
-      warning,
-    });
-    return { runId, output: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "deliverable", targetId: args.deliverableId });
-    throw err;
-  }
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt("synthesis_critic");
+      await ctx.progress(25, "Walking sections + checking pyramid structure");
+      await ctx.progress(60, "Auditing citations + hypothesis coverage");
+      const { value, costUsd, source, warning } = await callClaudeJson<SynthesisCriticOutput>(
+        "claude-opus-4-7",
+        system,
+        JSON.stringify({
+          deliverableId: args.deliverableId,
+          body: args.body,
+          hypothesisTree: args.hypothesisTree,
+          audience: args.audience,
+        }),
+        () => mockCritique({ body: args.body, hypothesisTree: args.hypothesisTree }),
+      );
+      return {
+        output: value,
+        costUsd,
+        confidence: value.readiness === "green" ? "green" : value.readiness === "amber" ? "amber" : "red",
+        source,
+        warning,
+        sourcesCount: value.issues?.length ?? 0,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as SynthesisCriticOutput, costUsd: result.costUsd };
 }
 
 // =============================================================
@@ -1645,77 +1704,66 @@ export async function runAgentArchitect(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; output: AgentArchitectOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "agent_architect",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "engagement",
-    targetId: args.engagementId,
-    targetLabel: args.engagementName,
-    inputs: { scopeHint: args.scopeHint, depth: args.depth, sourceChars: args.source.length },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("agent_architect");
-    await progressRun(runId, 15, "Process Reader — normalizing input into ordered steps");
-    await progressRun(runId, 35, "Step Classifier — assigning category per step");
-    await progressRun(runId, 60, "Agentifiability Judge — yes/partial/no with rationale");
-    await progressRun(runId, 80, "Agent Designer — clustering into candidate designs");
-    const { value, costUsd, source, warning } = await callClaudeJson<AgentArchitectOutput>(
-      "claude-sonnet-4-6",
-      system,
-      JSON.stringify({ scopeHint: args.scopeHint, depth: args.depth, source: args.source }),
-      () => mockAgentArchitect({ scopeHint: args.scopeHint, source: args.source }),
-    );
-    // Server-side post-validation (defense-in-depth, runs even on
-    // real-LLM output). Any candidate whose process touches customer
-    // communications, financial commitments, or irreversible actions
-    // MUST be classified high-risk with the partner-attention guardrail.
-    const hasComm = value.steps.some(
-      (s) => s.category === "communication" || /(reply|email|sms|notify|message)/i.test(s.name),
-    );
-    const hasIrreversible = value.steps.some(
-      (s) => s.category === "irreversible_action" || /(send|publish|commit|sign|refund)/i.test(s.name),
-    );
-    const hasFinancial = value.steps.some((s) =>
-      /(refund|payment|invoice|charge|wire|price|quote)/i.test(s.name),
-    );
-    const requiresHigh = hasComm || hasIrreversible || hasFinancial;
-    value.candidateAgents.forEach((c) => {
-      if (!c.humanCheckpoints || c.humanCheckpoints.length === 0) {
-        c.humanCheckpoints = ["lead_or_partner_signs_off"];
-      }
-      const touchesComm = /comm|drafter|customer|reply|notify/i.test(c.name + " " + c.purpose);
-      const touchesAction = /action|publish|sign|commit|drafter/i.test(c.name + " " + c.purpose);
-      if (requiresHigh && (touchesComm || touchesAction) && c.riskClass !== "high") {
-        c.riskClass = "high";
-        c.guardrails = Array.from(
-          new Set([...(c.guardrails ?? []), "never_auto_send", "partner_attention_required_for_first_run"]),
-        );
-        c.humanCheckpoints = Array.from(
-          new Set([...(c.humanCheckpoints ?? []), "partner_signs_off_on_first_5_sends"]),
-        );
-      }
-    });
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: value.candidateAgents.some((c) => c.riskClass === "high") ? "amber" : "green",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: value.steps.length,
-      actorLabel: args.actorLabel,
+  const result = await runAgent(
+    {
+      agentId: "ag_agent_architect",
+      input: { scopeHint: args.scopeHint, depth: args.depth, source: args.source },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "engagement",
       targetId: args.engagementId,
       targetLabel: args.engagementName,
-      source,
-      warning,
-    });
-    return { runId, output: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "engagement", targetId: args.engagementId });
-    throw err;
-  }
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt("agent_architect");
+      await ctx.progress(15, "Process Reader — normalizing input into ordered steps");
+      await ctx.progress(35, "Step Classifier — assigning category per step");
+      await ctx.progress(60, "Agentifiability Judge — yes/partial/no with rationale");
+      await ctx.progress(80, "Agent Designer — clustering into candidate designs");
+      const { value, costUsd, source, warning } = await callClaudeJson<AgentArchitectOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify({ scopeHint: args.scopeHint, depth: args.depth, source: args.source }),
+        () => mockAgentArchitect({ scopeHint: args.scopeHint, source: args.source }),
+      );
+      // Server-side post-validation (defense-in-depth).
+      const hasComm = value.steps.some(
+        (s) => s.category === "communication" || /(reply|email|sms|notify|message)/i.test(s.name),
+      );
+      const hasIrreversible = value.steps.some(
+        (s) => s.category === "irreversible_action" || /(send|publish|commit|sign|refund)/i.test(s.name),
+      );
+      const hasFinancial = value.steps.some((s) =>
+        /(refund|payment|invoice|charge|wire|price|quote)/i.test(s.name),
+      );
+      const requiresHigh = hasComm || hasIrreversible || hasFinancial;
+      value.candidateAgents.forEach((c) => {
+        if (!c.humanCheckpoints || c.humanCheckpoints.length === 0) {
+          c.humanCheckpoints = ["lead_or_partner_signs_off"];
+        }
+        const touchesComm = /comm|drafter|customer|reply|notify/i.test(c.name + " " + c.purpose);
+        const touchesAction = /action|publish|sign|commit|drafter/i.test(c.name + " " + c.purpose);
+        if (requiresHigh && (touchesComm || touchesAction) && c.riskClass !== "high") {
+          c.riskClass = "high";
+          c.guardrails = Array.from(
+            new Set([...(c.guardrails ?? []), "never_auto_send", "partner_attention_required_for_first_run"]),
+          );
+          c.humanCheckpoints = Array.from(
+            new Set([...(c.humanCheckpoints ?? []), "partner_signs_off_on_first_5_sends"]),
+          );
+        }
+      });
+      return {
+        output: value,
+        costUsd,
+        confidence: value.candidateAgents.some((c) => c.riskClass === "high") ? "amber" : "green",
+        source,
+        warning,
+        sourcesCount: value.steps.length,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as AgentArchitectOutput, costUsd: result.costUsd };
 }
 
 // =============================================================
@@ -1823,55 +1871,48 @@ export async function runPrototypeForge(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; output: PrototypeForgeOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "prototype_forge",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: args.opportunityId ? "opportunity" : "engagement",
-    targetId: (args.opportunityId ?? args.engagementId) as string,
-    targetLabel: args.targetLabel,
-    inputs: { name: args.brief.name, demos: args.brief.demos.length },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("prototype_forge");
-    await progressRun(runId, 20, "Architecture Drafter — sketching surfaces + agent topology");
-    await progressRun(runId, 45, "Demo Storyboarder — choosing demo moments");
-    await progressRun(runId, 70, "Brand Translator — applying brand defaults/overrides");
-    await progressRun(runId, 90, "Prompt Composer — assembling Replit-ready prompt");
-    const { value: rawValue, costUsd, source, warning } = await callClaudeJson<PrototypeForgeOutput>(
-      "claude-sonnet-4-6",
-      system,
-      JSON.stringify(args.brief),
-      () => mockPrototypeForge(args.brief),
-    );
-    // Post-validate: AICo non-negotiables block must always be present in
-    // the Replit prompt regardless of model drift. If the model omits the
-    // section or the data-policy line, append the canonical block.
-    const value = enforcePrototypeNonNegotiables(rawValue, args.brief);
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: "green",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: value.demoStoryboard.length,
-      actorLabel: args.actorLabel,
+  const result = await runAgent(
+    {
+      agentId: "ag_prototype_forge",
+      input: {
+        opportunityId: args.opportunityId,
+        engagementId: args.engagementId,
+        targetLabel: args.targetLabel,
+        brief: args.brief,
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: args.opportunityId ? "opportunity" : "engagement",
       targetId: (args.opportunityId ?? args.engagementId) as string,
       targetLabel: args.targetLabel,
-      source,
-      warning,
-    });
-    return { runId, output: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, {
       actorLabel: args.actorLabel,
-      targetType: args.opportunityId ? "opportunity" : "engagement",
-      targetId: (args.opportunityId ?? args.engagementId) as string,
-    });
-    throw err;
-  }
+    },
+    async (ctx) => {
+      const system = loadPrompt("prototype_forge");
+      await ctx.progress(20, "Architecture Drafter — sketching surfaces + agent topology");
+      await ctx.progress(45, "Demo Storyboarder — choosing demo moments");
+      await ctx.progress(70, "Brand Translator — applying brand defaults/overrides");
+      await ctx.progress(90, "Prompt Composer — assembling Replit-ready prompt");
+      const { value: rawValue, costUsd, source, warning } = await callClaudeJson<PrototypeForgeOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify(args.brief),
+        () => mockPrototypeForge(args.brief),
+      );
+      // Post-validate: AICo non-negotiables block must always be present in
+      // the Replit prompt regardless of model drift. If the model omits the
+      // section or the data-policy line, append the canonical block.
+      const value = enforcePrototypeNonNegotiables(rawValue, args.brief);
+      return {
+        output: value,
+        costUsd,
+        confidence: "green",
+        source,
+        warning,
+        sourcesCount: value.demoStoryboard.length,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as PrototypeForgeOutput, costUsd: result.costUsd };
 }
 
 // =============================================================
@@ -3274,74 +3315,64 @@ export async function runWinLossInterviewer(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
 }): Promise<{ runId: string; output: WinLossInterviewerOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "win_loss_interviewer",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "opportunity",
-    targetId: args.opportunityId,
-    targetLabel: args.opportunityName,
-    inputs: {
-      outcome: args.outcome,
-      sellerReasonCount: args.sellerPerceivedReasons.length,
-      transcriptChars: args.buyerTranscript?.length ?? 0,
-    },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("win_loss_interviewer");
-    await progressRun(runId, 30, "Reading buyer transcript");
-    const { value, costUsd, source, warning } = await callClaudeJson<WinLossInterviewerOutput>(
-      "claude-sonnet-4-6",
-      system,
-      JSON.stringify({
-        opportunity_name: args.opportunityName,
-        outcome: args.outcome,
-        seller_perceived_reasons: args.sellerPerceivedReasons,
-        buyer_transcript: args.buyerTranscript ?? "",
-      }),
-      () =>
-        mockWinLoss({
-          oppName: args.opportunityName,
-          outcome: args.outcome,
-          sellerReasons: args.sellerPerceivedReasons,
-          transcript: args.buyerTranscript,
-        }),
-    );
-    await progressRun(runId, 80, "Binding themes to evidence");
-    // Evidence-binding hard rule: drop any theme without a non-empty
-    // evidenceQuote. Downgrade confidence if we drop ≥1.
-    const beforeCount = value.themes.length;
-    value.themes = value.themes.filter((t) => (t.evidenceQuote ?? "").trim().length > 0);
-    const droppedAny = value.themes.length < beforeCount;
-    const conf: "green" | "amber" | "red" = droppedAny
-      ? value.confidence === "green"
-        ? "amber"
-        : "red"
-      : value.confidence;
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: conf,
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: value.themes.length,
-      actorLabel: args.actorLabel,
+  const result = await runAgent(
+    {
+      agentId: "ag_win_loss_interviewer",
+      input: {
+        opportunityId: args.opportunityId,
+        opportunityName: args.opportunityName,
+        outcome: args.outcome as "won" | "lost" | "no_decision" | "withdrawn",
+        sellerPerceivedReasons: args.sellerPerceivedReasons,
+        buyerTranscript: args.buyerTranscript ?? "",
+      },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
-      source,
-      warning,
-    });
-    return { runId, output: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, {
       actorLabel: args.actorLabel,
-      targetType: "opportunity",
-      targetId: args.opportunityId,
-    });
-    throw err;
-  }
+    },
+    async (ctx) => {
+      const system = loadPrompt("win_loss_interviewer");
+      await ctx.progress(30, "Reading buyer transcript");
+      const { value, costUsd, source, warning } = await callClaudeJson<WinLossInterviewerOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify({
+          opportunity_name: args.opportunityName,
+          outcome: args.outcome,
+          seller_perceived_reasons: args.sellerPerceivedReasons,
+          buyer_transcript: args.buyerTranscript ?? "",
+        }),
+        () =>
+          mockWinLoss({
+            oppName: args.opportunityName,
+            outcome: args.outcome,
+            sellerReasons: args.sellerPerceivedReasons,
+            transcript: args.buyerTranscript,
+          }),
+      );
+      await ctx.progress(80, "Binding themes to evidence");
+      // Evidence-binding hard rule: drop any theme without a non-empty
+      // evidenceQuote. Downgrade confidence if we drop ≥1.
+      const beforeCount = value.themes.length;
+      value.themes = value.themes.filter((t) => (t.evidenceQuote ?? "").trim().length > 0);
+      const droppedAny = value.themes.length < beforeCount;
+      const conf: "green" | "amber" | "red" = droppedAny
+        ? value.confidence === "green"
+          ? "amber"
+          : "red"
+        : value.confidence;
+      return {
+        output: value,
+        costUsd,
+        confidence: conf,
+        source,
+        warning,
+        sourcesCount: value.themes.length,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as WinLossInterviewerOutput, costUsd: result.costUsd };
 }
 
 // =============================================================
@@ -3414,48 +3445,40 @@ export async function runThemeCurator(args: {
   debriefThemes: Array<{ tag: string; name: string; polarity: string; debriefId: string; quote: string }>;
   openOpportunityIds: string[];
 }): Promise<{ runId: string; output: ThemeCuratorOutput; costUsd: number }> {
-  const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "theme_curator",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "atelier",
-    targetId: "win_themes",
-    targetLabel: "Win Themes library",
-    inputs: { debriefThemeCount: args.debriefThemes.length, openOppCount: args.openOpportunityIds.length },
-    actorLabel: args.actorLabel,
-  });
-  try {
-    const system = loadPrompt("theme_curator");
-    await progressRun(runId, 40, "Clustering themes");
-    const { value, costUsd, source, warning } = await callClaudeJson<ThemeCuratorOutput>(
-      "claude-sonnet-4-6",
-      system,
-      JSON.stringify({
-        debrief_themes: args.debriefThemes,
-        open_opportunity_ids: args.openOpportunityIds,
-      }),
-      () => mockThemeCurator(args),
-    );
-    await progressRun(runId, 85, "Refreshing library");
-    await completeRun({
-      runId,
-      output: value as unknown,
-      confidence: value.confidence,
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: value.upsertThemes.length,
-      actorLabel: args.actorLabel,
+  const result = await runAgent(
+    {
+      agentId: "ag_theme_curator",
+      input: { debriefThemes: args.debriefThemes, openOpportunityIds: args.openOpportunityIds },
+      triggeredByUserId: args.triggeredByUserId,
       targetType: "atelier",
       targetId: "win_themes",
       targetLabel: "Win Themes library",
-      source,
-      warning,
-    });
-    return { runId, output: value, costUsd };
-  } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "atelier", targetId: "win_themes" });
-    throw err;
-  }
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt("theme_curator");
+      await ctx.progress(40, "Clustering themes");
+      const { value, costUsd, source, warning } = await callClaudeJson<ThemeCuratorOutput>(
+        "claude-sonnet-4-6",
+        system,
+        JSON.stringify({
+          debrief_themes: args.debriefThemes,
+          open_opportunity_ids: args.openOpportunityIds,
+        }),
+        () => mockThemeCurator(args),
+      );
+      await ctx.progress(85, "Refreshing library");
+      return {
+        output: value,
+        costUsd,
+        confidence: value.confidence,
+        source,
+        warning,
+        sourcesCount: value.upsertThemes.length,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as ThemeCuratorOutput, costUsd: result.costUsd };
 }
 
 // ============================================================
@@ -4448,85 +4471,73 @@ export async function runUtilizationAnalyst(args: {
   }
   const blockIsStale = emptyBlock || computedAtStale;
 
-  const runId = await startRun({
-    agentId: "ag_utilization_analyst",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: `utilization_${args.view}`,
-    targetId: args.targetId,
-    targetLabel: args.targetLabel,
-    inputs: { view: args.view, period: args.period, hasNumericBlock: !blockIsStale, computedAt: args.computedAt ?? null, computedAtStale },
-    actorLabel: "Utilization Analyst",
-  });
-  const t0 = Date.now();
-  try {
-    if (blockIsStale) {
-      const output: UtilizationAnalystOutput = {
-        refusal: "numeric-block-missing-or-stale",
-        headline: null,
-        narrative: null,
-        risks: [],
-        actions: [],
-        confidence: "red",
-      };
-      await completeRun({
-        runId,
-        output,
-        confidence: "red",
-        costUsd: 0,
-        durationMs: Date.now() - t0,
-        sourcesCount: 0,
-        actorLabel: "Utilization Analyst",
-        targetType: `utilization_${args.view}`,
+  const result = await runAgent(
+    {
+      agentId: "ag_utilization_analyst",
+      input: {
+        view: args.view,
         targetId: args.targetId,
         targetLabel: args.targetLabel,
-        source: "mock_config",
-        warning: computedAtStale
-          ? `numeric-block-stale (computedAt ${args.computedAt}); refused to generate narrative`
-          : "numeric-block-missing; refused to generate narrative",
+        period: args.period,
+        numericBlock: args.numericBlock,
+        computedAt: args.computedAt ?? null,
+      },
+      triggeredByUserId: args.triggeredByUserId,
+      targetType: `utilization_${args.view}`,
+      targetId: args.targetId,
+      targetLabel: args.targetLabel,
+      actorLabel: "Utilization Analyst",
+    },
+    async (_ctx) => {
+      if (blockIsStale) {
+        // Refusal path — numeric block is the source of truth; without
+        // it the analyst returns a structured refusal rather than
+        // narrate blind. The output still satisfies outputSchema.
+        const output: UtilizationAnalystOutput = {
+          refusal: "numeric-block-missing-or-stale",
+          headline: null,
+          narrative: null,
+          risks: [],
+          actions: [],
+          confidence: "red",
+        };
+        return {
+          output,
+          costUsd: 0,
+          confidence: "red",
+          source: "mock_config",
+          warning: computedAtStale
+            ? `numeric-block-stale (computedAt ${args.computedAt}); refused to generate narrative`
+            : "numeric-block-missing; refused to generate narrative",
+        };
+      }
+      // Fail-fast on missing prompt — consistent with every other agent in
+      // this file. A missing prompt is a configuration defect, not a
+      // runtime condition to silently degrade through.
+      const promptBody = loadPrompt("utilization_analyst");
+      const userPrompt = JSON.stringify({
+        view: args.view,
+        targetId: args.targetId,
+        targetLabel: args.targetLabel,
+        period: args.period,
+        numericBlock: args.numericBlock,
       });
-      return { runId, output };
-    }
-
-    // Fail-fast on missing prompt — consistent with every other agent in
-    // this file. A missing prompt is a configuration defect, not a
-    // runtime condition to silently degrade through.
-    const promptBody = loadPrompt("utilization_analyst");
-    const userPrompt = JSON.stringify({
-      view: args.view,
-      targetId: args.targetId,
-      targetLabel: args.targetLabel,
-      period: args.period,
-      numericBlock: args.numericBlock,
-    });
-    const { value, costUsd, source, warning } = await callClaudeJson<UtilizationAnalystOutput>(
-      "claude-haiku-4-5",
-      promptBody,
-      userPrompt,
-      () => mockUtilizationAnalyst(args.view, args.targetLabel, args.numericBlock),
-    );
-    await completeRun({
-      runId,
-      output: value,
-      confidence: value.confidence ?? "amber",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: 0,
-      actorLabel: "Utilization Analyst",
-      targetType: `utilization_${args.view}`,
-      targetId: args.targetId,
-      targetLabel: args.targetLabel,
-      source,
-      warning,
-    });
-    return { runId, output: value };
-  } catch (err) {
-    await failRun(runId, err, {
-      actorLabel: "Utilization Analyst",
-      targetType: `utilization_${args.view}`,
-      targetId: args.targetId,
-    });
-    throw err;
-  }
+      const { value, costUsd, source, warning } = await callClaudeJson<UtilizationAnalystOutput>(
+        "claude-haiku-4-5",
+        promptBody,
+        userPrompt,
+        () => mockUtilizationAnalyst(args.view, args.targetLabel, args.numericBlock),
+      );
+      return {
+        output: value,
+        costUsd,
+        confidence: value.confidence ?? "amber",
+        source,
+        warning,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output as UtilizationAnalystOutput };
 }
 
 // =====================================================================
@@ -4636,50 +4647,42 @@ export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
   runId: string;
   proposal: ExpenseAuditorProposal;
 }> {
-  const runId = await startRun({
-    agentId: "ag_expense_auditor",
-    triggeredByUserId: input.triggeredByUserId,
-    targetType: "expense",
-    targetId: input.expenseId,
-    targetLabel: `Expense ${input.expenseId}`,
-    inputs: { hasOcr: !!input.ocr, hasContract: !!input.contractDigest },
-    actorLabel: "Expense Auditor",
-  });
-  const t0 = Date.now();
-  try {
-    const promptBody = loadPrompt("expense_auditor");
-    const userPrompt = JSON.stringify({
-      ocr: input.ocr,
-      contractDigest: input.contractDigest,
-      draft: input.draft,
-    });
-    const { value, costUsd, source, warning } = await callClaudeJson<ExpenseAuditorProposal>(
-      "claude-haiku-4-5",
-      promptBody,
-      userPrompt,
-      () => mockExpenseAuditor(input),
-    );
-    await completeRun({
-      runId,
-      output: value,
-      confidence: value.ocrConfidence ?? "amber",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: 0,
-      actorLabel: "Expense Auditor",
+  const result = await runAgent(
+    {
+      agentId: "ag_expense_auditor",
+      input: {
+        expenseId: input.expenseId,
+        ocr: input.ocr,
+        contractDigest: input.contractDigest,
+        draft: input.draft,
+      },
+      triggeredByUserId: input.triggeredByUserId,
       targetType: "expense",
       targetId: input.expenseId,
       targetLabel: `Expense ${input.expenseId}`,
-      source,
-      warning,
-    });
-    return { runId, proposal: value };
-  } catch (err) {
-    await failRun(runId, err, {
       actorLabel: "Expense Auditor",
-      targetType: "expense",
-      targetId: input.expenseId,
-    });
-    throw err;
-  }
+    },
+    async (_ctx) => {
+      const promptBody = loadPrompt("expense_auditor");
+      const userPrompt = JSON.stringify({
+        ocr: input.ocr,
+        contractDigest: input.contractDigest,
+        draft: input.draft,
+      });
+      const { value, costUsd, source, warning } = await callClaudeJson<ExpenseAuditorProposal>(
+        "claude-haiku-4-5",
+        promptBody,
+        userPrompt,
+        () => mockExpenseAuditor(input),
+      );
+      return {
+        output: value,
+        costUsd,
+        confidence: value.ocrConfidence ?? "amber",
+        source,
+        warning,
+      };
+    },
+  );
+  return { runId: result.runId, proposal: result.output as ExpenseAuditorProposal };
 }

@@ -179,6 +179,9 @@ importers:
       '@types/multer':
         specifier: ^2.1.0
         version: 2.1.0
+      '@workspace/agents':
+        specifier: workspace:*
+        version: link:../../lib/agents
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod

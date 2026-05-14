@@ -1,0 +1,31 @@
+{
+  "agentId": "ag_win_loss_interviewer",
+  "input": {
+    "opportunityId": "opp_demo_001",
+    "opportunityName": "Group-wide AI productivity diagnostic",
+    "outcome": "lost",
+    "sellerPerceivedReasons": ["Price too high", "Slow follow-up"],
+    "buyerTranscript": "Buyer: Honestly, AICo's pitch was sharp but we trusted the incumbent's track record more."
+  },
+  "expectedOutput": {
+    "buyerAuthenticReasons": [
+      "Trust in incumbent's prior delivery weighed heavier than AICo's pitch quality.",
+      "Procurement preferred a known-quantity vendor on the framework."
+    ],
+    "hiddenCompetitor": "direct",
+    "themes": [
+      {
+        "name": "Incumbent trust",
+        "tag": "trust_incumbent",
+        "evidenceQuote": "we trusted the incumbent's track record more.",
+        "polarity": "loss"
+      }
+    ],
+    "whatWeWouldDoDifferently": "Bring a named delivery reference into the second meeting; surface a 2-week proof loop early.",
+    "suggestedAtelierLessons": [
+      { "title": "When you're up against an incumbent", "abstract": "Patterns for displacing a trusted vendor.", "kind": "learning" }
+    ],
+    "confidence": "amber"
+  },
+  "notes": "Win/Loss fixture exercises themes (with required quote) + lessons + hidden competitor enum."
+}

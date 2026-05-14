@@ -1,0 +1,34 @@
+{
+  "agentId": "ag_expense_auditor",
+  "input": {
+    "expenseId": "exp_001",
+    "ocr": {
+      "merchant": "Marriott Riyadh",
+      "date": "2026-05-10",
+      "total": 1150.0,
+      "tax": 150.0,
+      "currency": "SAR",
+      "country": "SA",
+      "category": "hotel",
+      "rawText": "Marriott Riyadh — 1 night",
+      "confidence": "green"
+    },
+    "contractDigest": {
+      "expensesClause": true,
+      "expenseMarkupCapPct": 10,
+      "permittedCategories": ["hotel", "flight", "taxi"],
+      "summary": "Standard MSA — expenses billable at cost +10%."
+    },
+    "draft": { "amount": 1150.0, "currency": "SAR", "country": "SA", "category": "hotel", "engagementId": "eng_demo_001" }
+  },
+  "expectedOutput": {
+    "category": "hotel",
+    "vatTreatment": "ksa_15",
+    "vatAmount": 150.0,
+    "clientBillable": true,
+    "markupPct": 10,
+    "summary": "Hotel stay in Riyadh — KSA VAT 15%, billable at +10%.",
+    "ocrConfidence": "green"
+  },
+  "notes": "Expense Auditor fixture — KSA hotel happy-path with billable=true."
+}

@@ -1,0 +1,26 @@
+{
+  "agentId": "ag_pov_draft",
+  "input": {
+    "opportunityId": "opp_demo_001",
+    "opportunityName": "Group-wide AI productivity diagnostic",
+    "outline": {
+      "title": "Why the next 12 months are Emirates Group's cheapest AI window",
+      "sections": [
+        { "id": "s1", "heading": "The window is closing", "factIds": ["f1"] }
+      ]
+    },
+    "promotedFacts": [
+      { "id": "f1", "statement": "Emirates Group reported record FY24 profits." }
+    ]
+  },
+  "expectedOutput": {
+    "sections": [
+      { "id": "s1", "heading": "The window is closing", "body": "Macro tailwinds are strongest now…", "citationIds": ["f1"] }
+    ],
+    "html": "<h1>Why the next 12 months are Emirates Group's cheapest AI window</h1><p>Macro tailwinds…<sup data-fact=\"f1\">f1</sup></p>",
+    "citationCoverage": 1.0,
+    "voiceFlags": [],
+    "wordCount": 28
+  },
+  "notes": "POV Draft phase — validates the HTML envelope + citation coverage."
+}

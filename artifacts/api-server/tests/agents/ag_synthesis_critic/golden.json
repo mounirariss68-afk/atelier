@@ -1,0 +1,26 @@
+{
+  "agentId": "ag_synthesis_critic",
+  "input": {
+    "engagementId": "eng_demo_001",
+    "deliverableId": "del_pov_001",
+    "deliverableName": "Emirates POV — AI Productivity",
+    "body": "<h1>Why now</h1><p>Group CIO has the cheapest window in years…</p>",
+    "audience": "Group CIO + EVP People"
+  },
+  "expectedOutput": {
+    "issues": [
+      {
+        "type": "evidence_thin",
+        "severity": "amber",
+        "location": "section: Why now",
+        "description": "Macro claim has no citation.",
+        "suggestion": "Add the FY24 profit citation [f1]."
+      }
+    ],
+    "pyramid_score": 0.78,
+    "evidence_coverage_pct": 0.62,
+    "off_hypothesis_sections": [],
+    "readiness": "amber"
+  },
+  "notes": "Synthesis Critic fixture exercises issue list + readiness chip."
+}

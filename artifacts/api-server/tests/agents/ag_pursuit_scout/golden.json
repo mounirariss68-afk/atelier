@@ -1,0 +1,57 @@
+{
+  "agentId": "ag_pursuit_scout",
+  "input": {
+    "accountName": "Emirates Group",
+    "accountCountry": "UAE",
+    "accountSector": "Aviation",
+    "opportunityName": "Group-wide AI productivity diagnostic",
+    "contextBlurb": "CIO is rumoured to be hunting for a marquee AI win in 2026."
+  },
+  "expectedOutput": {
+    "accountSnapshot": {
+      "oneLiner": "Emirates Group operates one of the world's largest aviation portfolios out of Dubai.",
+      "scaleHint": "USD 33B revenue, ~110k employees across airline + dnata.",
+      "recentMoves": [
+        "Announced fleet renewal with Boeing/Airbus mix",
+        "Expanded Emirates Engineering MRO capacity"
+      ]
+    },
+    "buyerLandscape": {
+      "likelyBuyers": [
+        { "title": "Group CIO", "rationale": "Owns the AI productivity P&L and rumoured 2026 marquee win." },
+        { "title": "EVP People", "rationale": "Workforce productivity outcomes flow through People." }
+      ],
+      "powerMap": "CIO sponsors; CFO controls budget; People holds the change-management vote."
+    },
+    "fiveCDraft": {
+      "client": "Emirates Group, with CIO sponsorship and Group Strategy as kingmaker.",
+      "competition": "Likely Big 3 plus Accenture/IBM Consulting; status quo is internal CoE.",
+      "capability": "AICo brings agentic delivery + governance; differentiated by Atelier IP.",
+      "capacity": "Two named senior partners + a Dubai bench of 6 are reachable for a Q1 start.",
+      "contract": "Diagnostic SOW first; success-fee tail conditional on adoption metrics."
+    },
+    "openQuestions": [
+      "Is the CIO mandate firm-wide or airline-only?",
+      "What is the existing internal AI CoE's mandate?"
+    ],
+    "facts": [
+      {
+        "id": "f1",
+        "topic": "Macro",
+        "statement": "Emirates Group reported record FY24 profits.",
+        "sourceUrl": "https://example.com/emirates-fy24",
+        "sourceTitle": "Emirates FY24 Results",
+        "snippet": "Group profit reached AED 18.7B…",
+        "confidence": "green"
+      },
+      {
+        "id": "f2",
+        "topic": "AI",
+        "statement": "Group CIO publicly committed to 'AI everywhere' at GITEX 2025.",
+        "confidence": "amber"
+      }
+    ],
+    "confidence": "amber"
+  },
+  "notes": "Canonical Drafter fixture. Validates Pursuit Scout input + a representative output against the registry's Zod schema."
+}

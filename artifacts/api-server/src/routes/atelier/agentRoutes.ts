@@ -1123,17 +1123,24 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
   // only way records become "committed memory".
   if (parsed.data.decision === "approve" && r.status !== "blocked") {
     const ts = new Date();
-    if (r.agentId === "pursuit_scout") {
+    // Accept both canonical (`ag_*`) and legacy bare IDs so historic
+    // runs created before the runAgent migration still commit. New
+    // runs always write the canonical id.
+    if (r.agentId === "ag_pursuit_scout" || r.agentId === "pursuit_scout") {
       await db
         .update(atelierBriefs)
         .set({ status: "official", approvedAt: ts, approvedByUserId: me.id, updatedAt: ts })
         .where(and(eq(atelierBriefs.runId, r.id), isNull(atelierBriefs.deletedAt)));
-    } else if (r.agentId === "meeting_scribe") {
+    } else if (r.agentId === "ag_meeting_scribe" || r.agentId === "meeting_scribe") {
       await db
         .update(atelierMeetings)
         .set({ status: "official", committedAt: ts, committedByUserId: me.id, updatedAt: ts })
         .where(and(eq(atelierMeetings.runId, r.id), isNull(atelierMeetings.deletedAt)));
-    } else if (r.agentId === "pov_author") {
+    } else if (
+      r.agentId === "ag_pov_author" ||
+      r.agentId === "pov_author" ||
+      r.agentId === "ag_pov_draft"
+    ) {
       await db
         .update(atelierPovs)
         .set({ status: "approved", updatedAt: ts })

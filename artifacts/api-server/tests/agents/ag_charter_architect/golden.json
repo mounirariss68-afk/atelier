@@ -1,0 +1,36 @@
+{
+  "agentId": "ag_charter_architect",
+  "input": {
+    "engagementId": "eng_demo_001",
+    "engagementName": "Emirates AI Productivity Diagnostic",
+    "accountName": "Emirates Group",
+    "wonProposalSummary": "12-week diagnostic across 3 functions with measurable productivity outcomes.",
+    "kickoffTranscriptExcerpt": "Sponsor confirmed scope; CFO requested weekly burn updates."
+  },
+  "expectedOutput": {
+    "charter": {
+      "objectives": [
+        { "id": "o1", "statement": "Identify 5+ agentifiable workflows by week 6" }
+      ],
+      "scope": { "in": ["Finance", "Procurement", "HR ops"], "geo": "UAE only" },
+      "outOfScope": ["Airline operations", "Cargo terminal systems"],
+      "successMetrics": [
+        { "id": "m1", "metric": "FTE-equivalent hours saved/quarter", "target": 12000 }
+      ],
+      "governance": { "steerco": "biweekly", "sponsor": "Group CIO" },
+      "valueHypothesis": "Agentic productivity unlocks USD 4-7M annualised within year one."
+    },
+    "hypothesisTree": {
+      "root": "Group CIO can win 2026 AI mandate by proving measurable productivity",
+      "children": []
+    },
+    "raidBaseline": [
+      { "kind": "risk", "id": "r1", "statement": "Change-fatigue from prior CoE rollouts" }
+    ],
+    "proposedWorkstreams": [
+      { "id": "ws1", "name": "Workflow inventory", "lead": "M. Yilmaz" }
+    ],
+    "meceFlags": []
+  },
+  "notes": "Charter Architect fixture covers full charter + hypothesis tree envelope."
+}

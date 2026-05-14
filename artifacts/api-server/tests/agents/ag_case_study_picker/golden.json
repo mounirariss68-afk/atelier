@@ -1,0 +1,22 @@
+{
+  "agentId": "ag_case_study_picker",
+  "input": {
+    "opportunityId": "opp_demo_001",
+    "opportunityContext": "Aviation, group-wide AI productivity, GCC.",
+    "candidatePool": [
+      { "id": "cs_001", "client": "Saudia", "sector": "Aviation", "outcome": "8% turnaround time reduction", "metric": "8% TAT" },
+      { "id": "cs_002", "client": "Etihad", "sector": "Aviation", "outcome": "12k FTE hours saved", "metric": "12k hours" },
+      { "id": "cs_003", "client": "Aramco", "sector": "Energy", "outcome": "agent-led procurement intake", "metric": "30% faster intake" }
+    ],
+    "n": 2
+  },
+  "expectedOutput": {
+    "selectedIds": ["cs_001", "cs_002"],
+    "rationale": "Both are GCC aviation references with quantified outcomes that map to the CIO's productivity thesis.",
+    "top3": [
+      { "id": "cs_001", "client": "Saudia", "sector": "Aviation", "outcome": "8% turnaround time reduction", "metric": "8% TAT" },
+      { "id": "cs_002", "client": "Etihad", "sector": "Aviation", "outcome": "12k FTE hours saved", "metric": "12k hours" }
+    ]
+  },
+  "notes": "Case Study Picker fixture — selectedIds drawn only from candidatePool per guardrail."
+}

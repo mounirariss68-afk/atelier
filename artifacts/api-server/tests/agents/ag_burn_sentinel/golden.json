@@ -1,0 +1,6 @@
+{
+  "agentId": "ag_burn_sentinel",
+  "input": { "force": false },
+  "expectedOutput": { "alertsWritten": 2, "engagementsScanned": 14 },
+  "notes": "Sentinel tick fixture — validates the minimal counters envelope."
+}

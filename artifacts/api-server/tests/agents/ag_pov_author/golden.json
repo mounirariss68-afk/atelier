@@ -1,0 +1,22 @@
+{
+  "agentId": "ag_pov_author",
+  "input": {
+    "opportunityId": "opp_demo_001",
+    "audience": "Group CIO and EVP People",
+    "objective": "Frame why now is the cheapest window to act on agentic productivity.",
+    "promotedFacts": [
+      { "id": "f1", "statement": "Emirates Group reported record FY24 profits." },
+      { "id": "f2", "statement": "Group CIO publicly committed to 'AI everywhere' at GITEX 2025." }
+    ]
+  },
+  "expectedOutput": {
+    "title": "Why the next 12 months are Emirates Group's cheapest AI window",
+    "thesis": "For the Group CIO, acting now compounds advantage; waiting compounds the deficit.",
+    "sections": [
+      { "id": "s1", "heading": "The window is closing", "intent": "Frame urgency with macro + sector evidence.", "factIds": ["f1", "f2"] },
+      { "id": "s2", "heading": "What good looks like", "intent": "Define operating model for agentic AI at scale.", "factIds": ["f1"] },
+      { "id": "s3", "heading": "How we would move", "intent": "Outline a 90-day diagnostic with named owners.", "factIds": ["f2"] }
+    ]
+  },
+  "notes": "POV outline phase. Validates outline contract — the draft phase has its own ag_pov_draft fixture."
+}

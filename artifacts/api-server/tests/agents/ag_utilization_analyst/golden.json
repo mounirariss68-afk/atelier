@@ -1,0 +1,24 @@
+{
+  "agentId": "ag_utilization_analyst",
+  "input": {
+    "view": "person",
+    "targetId": "user_001",
+    "targetLabel": "L. Haddad",
+    "period": "2026-Q2",
+    "numericBlock": { "billablePct": 78, "benchPct": 12, "investmentPct": 10 },
+    "computedAt": "2026-05-13T08:00:00Z"
+  },
+  "expectedOutput": {
+    "refusal": null,
+    "headline": "L. Haddad is at 78% billable in Q2 — comfortably above firm target.",
+    "narrative": "Billable utilisation of 78% is 6 points above plan; investment time held at 10%.",
+    "risks": [
+      { "id": "r1", "severity": "amber", "statement": "Bench dropping below 10% may strain July rotations." }
+    ],
+    "actions": [
+      { "id": "a1", "action": "Confirm July rotation pipeline", "owner": "L. Haddad" }
+    ],
+    "confidence": "green"
+  },
+  "notes": "Analyst happy-path fixture (non-stale numeric block, non-null narrative)."
+}
