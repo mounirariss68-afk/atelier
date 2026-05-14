@@ -196,10 +196,18 @@ defineCapability({
   resultCard: "account_deleted",
   async run(input, ctx) {
     const accountId = String(input.accountId ?? "");
+    // Task #332 — org-scope the lookup so a forged accountId from a
+    // different tenant cannot be soft-deleted via the CLI surface.
     const [acc] = await db
       .select({ id: atelierAccounts.id, name: atelierAccounts.name })
       .from(atelierAccounts)
-      .where(and(eq(atelierAccounts.id, accountId), isNull(atelierAccounts.deletedAt)))
+      .where(
+        and(
+          eq(atelierAccounts.id, accountId),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      )
       .limit(1);
     if (!acc) {
       return { ok: false, errorCode: "not_found", errorMessage: `account ${accountId} not found` };
@@ -224,7 +232,12 @@ defineCapability({
     await db
       .update(atelierAccounts)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(atelierAccounts.id, acc.id));
+      .where(
+        and(
+          eq(atelierAccounts.id, acc.id),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+        ),
+      );
     await db.insert(atelierAuditEvents).values({
       id: rid("aud"),
       entityType: "account",
