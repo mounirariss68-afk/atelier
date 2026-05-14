@@ -296,7 +296,7 @@ router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, r
     group: "Engagement",
     stage: "Deliver",
     purpose: d.purpose ?? "Promoted from process discovery.",
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-4-5",
     starred: false,
     status: "mvp",
     tools: d.tools ?? [],

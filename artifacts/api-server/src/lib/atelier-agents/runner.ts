@@ -710,7 +710,7 @@ export async function runPursuitScout(args: {
       const system = loadPrompt("pursuit_scout");
       await ctx.progress(25, "Planning research lines");
       const { value, costUsd, source, warning } = await callClaudeJson<PursuitScoutOutput>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system,
         JSON.stringify({
           accountName: args.accountName,
@@ -874,7 +874,7 @@ export async function runPovDraft(args: {
       const system = loadPrompt("pov_author");
       await ctx.progress(40, "Writing sections");
       const { value, costUsd, source, warning } = await callClaudeJson<PovDraft>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system + "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.",
         JSON.stringify({ outline: args.outline, facts: args.promotedFacts }),
         () => mockSections(args.outline, args.promotedFacts),
@@ -1197,7 +1197,7 @@ export async function runCharterArchitect(args: {
       await ctx.progress(80, "RAID Baseliner — triaging baseline RAID items");
       const hasBaseline = !/no baseline/i.test(args.wonProposalSummary);
       const { value, costUsd, source, warning } = await callClaudeJson<CharterArchitectOutput>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system,
         JSON.stringify({
           engagementId: args.engagementId,
@@ -1721,7 +1721,7 @@ export async function runAgentArchitect(args: {
       await ctx.progress(60, "Agentifiability Judge — yes/partial/no with rationale");
       await ctx.progress(80, "Agent Designer — clustering into candidate designs");
       const { value, costUsd, source, warning } = await callClaudeJson<AgentArchitectOutput>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system,
         JSON.stringify({ scopeHint: args.scopeHint, depth: args.depth, source: args.source }),
         () => mockAgentArchitect({ scopeHint: args.scopeHint, source: args.source }),
@@ -1893,7 +1893,7 @@ export async function runPrototypeForge(args: {
       await ctx.progress(70, "Brand Translator — applying brand defaults/overrides");
       await ctx.progress(90, "Prompt Composer — assembling Replit-ready prompt");
       const { value: rawValue, costUsd, source, warning } = await callClaudeJson<PrototypeForgeOutput>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system,
         JSON.stringify(args.brief),
         () => mockPrototypeForge(args.brief),
@@ -2187,7 +2187,7 @@ export async function runProposalComposer(args: {
     await progressRun(runId, 84, "Terms & Risk Writer — contractual language");
     await progressRun(runId, 95, "Compliance Reviewer — RFP matrix");
     const { value, costUsd, source, warning } = await callClaudeJson<ProposalComposerOutput>(
-      "claude-sonnet-4-6",
+      "claude-sonnet-4-5",
       system,
       JSON.stringify({
         opportunityId: args.opportunityId,
@@ -2444,7 +2444,7 @@ export async function runAccountCartographer(args: {
     await progressRun(runId, 25, "Searching the public web");
     const { value, costUsd, source, warning, citationUrls } =
       await callClaudeJsonWithWebSearch<CartographerOutput>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system,
         JSON.stringify({
           accountName: args.accountName,
@@ -2696,7 +2696,7 @@ export async function runQbrComposer(args: {
   try {
     await progressRun(runId, 50, "Composing QBR canvas");
     const { value, costUsd, source, warning } = await callClaudeJson<QbrOutput>(
-      "claude-sonnet-4-6",
+      "claude-sonnet-4-5",
       "You are QBR Composer. Produce a quarterly business-review canvas: what changed, where we created value, where we lost ground, what to compound. Honest, evidence-bound.",
       JSON.stringify({ accountName: args.accountName }),
       () => mockQbr(args.accountName),
@@ -3335,7 +3335,7 @@ export async function runWinLossInterviewer(args: {
       const system = loadPrompt("win_loss_interviewer");
       await ctx.progress(30, "Reading buyer transcript");
       const { value, costUsd, source, warning } = await callClaudeJson<WinLossInterviewerOutput>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system,
         JSON.stringify({
           opportunity_name: args.opportunityName,
@@ -3459,7 +3459,7 @@ export async function runThemeCurator(args: {
       const system = loadPrompt("theme_curator");
       await ctx.progress(40, "Clustering themes");
       const { value, costUsd, source, warning } = await callClaudeJson<ThemeCuratorOutput>(
-        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
         system,
         JSON.stringify({
           debrief_themes: args.debriefThemes,
