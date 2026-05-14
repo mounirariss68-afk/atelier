@@ -237,7 +237,6 @@ export function ProposalTab({ oppId }: { oppId: string }) {
         <PromptSheet submitLabel="Recompose with these inputs"
           onSubmit={() => compose.mutate({ oppId, data: buildComposeBody() })} />
       )}
-      {view !== "workspace" ? null : <></>}
       {view !== "workspace" ? null : (
       <>
 
