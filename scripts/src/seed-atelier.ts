@@ -2180,6 +2180,13 @@ async function main() {
       roleLabel: p.roleLabel,
       title: p.title,
       permissions: p.permissions as unknown as string[],
+      // Task #292 — persist new persona fields. Partner-tier (founding_partner /
+      // partner / senior_manager) is BD-active by invariant; consultants/PFRs
+      // honor the per-persona override; everyone else defaults to false.
+      bdActive:
+        (p as { bdActive?: boolean }).bdActive ??
+        ["founding_partner", "partner", "senior_manager"].includes(p.role),
+      legacyRole: (p as { legacyRole?: string }).legacyRole ?? null,
     })),
   );
 

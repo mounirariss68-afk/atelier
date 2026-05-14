@@ -77,16 +77,24 @@ function rid(prefix: string): string {
     .slice(2, 8)}`;
 }
 
+// Task #292 — 9-persona model. Skill verification = lead-approver tier
+// (partner-tier + senior_manager + finance). Taxonomy editing is partner-tier
+// + finance (no per-engagement leads).
 function canVerify(me: typeof atelierUsers.$inferSelect): boolean {
   return (
+    me.role === "founding_partner" ||
     me.role === "partner" ||
-    me.role === "operations" ||
-    me.role === "engagement_lead"
+    me.role === "senior_manager" ||
+    me.role === "finance"
   );
 }
 
 function canEditTaxonomy(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner" || me.role === "operations";
+  return (
+    me.role === "founding_partner" ||
+    me.role === "partner" ||
+    me.role === "finance"
+  );
 }
 
 async function audit(args: {

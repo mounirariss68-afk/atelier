@@ -34,10 +34,13 @@ interface ApprovalsResp {
 
 // What stage of the approval ladder this persona is the next approver for.
 function nextStageFor(role: string | undefined): { stage: "submitted" | "lead_approved"; role: "lead" | "partner"; label: string } | null {
-  if (role === "engagement_lead" || role === "operations") {
+  // Task #292 — 9-persona model. senior_manager + finance perform lead
+  // approve; founding_partner + partner perform partner approve. Founding
+  // partners can also lead-approve when there's no senior_manager queue.
+  if (role === "senior_manager" || role === "finance") {
     return { stage: "submitted", role: "lead", label: "Lead approve" };
   }
-  if (role === "partner") {
+  if (role === "partner" || role === "founding_partner") {
     return { stage: "lead_approved", role: "partner", label: "Partner approve" };
   }
   return null;
@@ -258,9 +261,15 @@ interface CurrentTimesheet {
 }
 
 function WorkspaceShelf({ role }: { role: string }) {
-  const canSeeRoster = role === "partner" || role === "operations" || role === "engagement_lead";
-  const canSeeFinance = role === "partner";
-  const canSeeTimesheet = role !== "partner_firm_resource";
+  // Task #292 — 9-persona model.
+  const canSeeRoster =
+    role === "founding_partner" ||
+    role === "partner" ||
+    role === "senior_manager" ||
+    role === "finance" ||
+    role === "hr";
+  const canSeeFinance = role === "founding_partner" || role === "partner" || role === "finance";
+  const canSeeTimesheet = role !== "partner_firm_resource" && role !== "board_observer";
 
   // Consolidated tile state — a single `Promise.all` resolves all three
   // fetches together so the tile grid mounts once with all data instead of

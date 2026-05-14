@@ -61,11 +61,19 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
   return req.atelierPersona;
 }
 
+// Task #292 — 9-persona model. Wallet "leadership" = partner-tier + finance
+// (operations split → finance for wallet/payroll). Per-engagement leads
+// (formerly engagement_lead) are now senior_manager and are checked
+// separately via the engagement-scoped guards below.
 function isLeadership(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner" || me.role === "operations";
+  return (
+    me.role === "founding_partner" ||
+    me.role === "partner" ||
+    me.role === "finance"
+  );
 }
 function isPartnerOrOps(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner" || me.role === "operations";
+  return isLeadership(me);
 }
 
 async function audit(args: {
@@ -242,7 +250,7 @@ async function ensureEngagementAccess(
   engagementId: string,
 ): Promise<boolean> {
   if (isPartnerOrOps(me)) return true;
-  if (me.role !== "engagement_lead") {
+  if (me.role !== "senior_manager") { // Task #292 — engagement_lead → senior_manager
     res.status(403).json({ error: "forbidden" });
     return false;
   }
@@ -778,7 +786,7 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
 router.post("/wallet/expenses/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!isPartnerOrOps(me) && me.role !== "engagement_lead") {
+  if (!isPartnerOrOps(me) && me.role !== "senior_manager") { // Task #292
     res.status(403).json({ error: "forbidden" });
     return;
   }
@@ -865,7 +873,7 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
 router.post("/wallet/expenses/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!isPartnerOrOps(me) && me.role !== "engagement_lead") {
+  if (!isPartnerOrOps(me) && me.role !== "senior_manager") { // Task #292
     res.status(403).json({ error: "forbidden" });
     return;
   }
@@ -1683,7 +1691,7 @@ router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
     return;
   }
   if (!isPartnerOrOps(me)) {
-    if (me.role !== "engagement_lead") {
+    if (me.role !== "senior_manager") { // Task #292 — engagement_lead → senior_manager
       res.status(403).json({ error: "forbidden" });
       return;
     }

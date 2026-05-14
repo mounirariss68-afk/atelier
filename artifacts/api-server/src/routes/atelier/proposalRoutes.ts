@@ -336,7 +336,7 @@ router.post("/engagements/:engId/agent-designs/:designId/approve", async (req, r
   if (!me) return;
   const eng = await ensureEngAccess(res, me, req.params.engId);
   if (!eng) return;
-  if (me.role !== "engagement_lead" && me.role !== "partner") {
+  if (me.role !== "senior_manager" && me.role !== "partner" && me.role !== "founding_partner") {
     res.status(403).json({ error: "only-lead-or-partner-may-approve" });
     return;
   }
@@ -594,8 +594,8 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
     teamProposed: body.teamProposed ?? teamFromCharter ?? [
       { role: "partner", alloc: 15 },
       { role: "lead", alloc: 80 },
-      { role: "sme", alloc: 60 },
-      { role: "ai_engineer", alloc: 80 },
+      { role: "consultant", alloc: 60 },
+      { role: "consultant", alloc: 80 },
     ],
     pricingIntent: body.pricingIntent ?? { targetMarginPct: 45, durationWeeks: 12 },
     rfpRequirements: body.rfpRequirements ?? [],
@@ -658,7 +658,7 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
 router.patch("/proposal-sections/:sectionId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "engagement_lead" && me.role !== "partner") {
+  if (me.role !== "senior_manager" && me.role !== "partner" && me.role !== "founding_partner") {
     res.status(403).json({ error: "only-lead-or-partner-may-edit" });
     return;
   }
@@ -701,7 +701,7 @@ router.patch("/proposal-sections/:sectionId", async (req, res) => {
 router.post("/proposal-sections/:sectionId/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "engagement_lead" && me.role !== "partner") {
+  if (me.role !== "senior_manager" && me.role !== "partner" && me.role !== "founding_partner") {
     res.status(403).json({ error: "only-lead-or-partner-may-reject" });
     return;
   }
@@ -745,7 +745,7 @@ router.post("/proposal-sections/:sectionId/reject", async (req, res) => {
 router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "engagement_lead" && me.role !== "partner") {
+  if (me.role !== "senior_manager" && me.role !== "partner" && me.role !== "founding_partner") {
     res.status(403).json({ error: "only-lead-or-partner-may-approve" });
     return;
   }
@@ -798,7 +798,7 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
 router.post("/prototypes/:prototypeId/approve-brief", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "engagement_lead" && me.role !== "partner") {
+  if (me.role !== "senior_manager" && me.role !== "partner" && me.role !== "founding_partner") {
     res.status(403).json({ error: "only-lead-or-partner-may-approve-brief" });
     return;
   }
@@ -975,7 +975,7 @@ router.post("/proposals/:proposalId/override-pricing", async (req, res) => {
 router.post("/proposals/:proposalId/confirm-section-assignments", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "engagement_lead" && me.role !== "partner") {
+  if (me.role !== "senior_manager" && me.role !== "partner" && me.role !== "founding_partner") {
     res.status(403).json({ error: "only-lead-or-partner-may-confirm-assignments" });
     return;
   }
