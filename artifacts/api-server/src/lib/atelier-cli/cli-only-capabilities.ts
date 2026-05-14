@@ -21,16 +21,19 @@
  *   - outbound-channel + per-day rate-limit:    deliverable.email_send
  */
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
   atelierRaidItems,
   atelierAuditEvents,
+  atelierCliSessions,
+  atelierCliTurns,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
+  getSessionDraft,
 } from "./capability-catalog.js";
 import { resolveAccount } from "./resolvers/index.js";
 import { checkAndRecord } from "./outbound-rate-limit.js";
@@ -168,6 +171,23 @@ defineCapability({
       severity: String(input.severity ?? "amber"),
       description: String(input.description ?? "").slice(0, 500),
     };
+    // Task #340 — clarification producer. If the user asked to file a
+    // RAID without a description, pause the turn and ask for it; the
+    // orchestrator will treat the next user message as the answer and
+    // re-call this tool with the merged args.
+    if (!args.description || args.description.trim().length < 3) {
+      return {
+        ok: true,
+        data: { partial: args },
+        clarification: {
+          field: "description",
+          question:
+            "What's the description for this RAID item? A single sentence is fine.",
+          tool: "raid_add_v2",
+          partial: args,
+        },
+      };
+    }
     // Task #332 — engagement ACL parity. Reuse the same accessible-id
     // helper the routes use so the CLI cannot create a RAID against an
     // engagement the persona is not actually on.
@@ -401,5 +421,524 @@ defineCapability({
       },
     ]);
     return { ok: true, data: { sent: true, deliverableId, recipient } };
+  },
+});
+
+async function fetchLiveOpenStateForPersona(persona: {
+  id: string;
+  orgId: string;
+  role: string;
+}): Promise<{ openRaids: number; activeEngagements: number }> {
+  try {
+    const acl = await accessibleEngagementIds({
+      id: persona.id,
+      role: persona.role,
+    } as Parameters<typeof accessibleEngagementIds>[0]);
+    const baseRaid = and(
+      eq(atelierRaidItems.orgId, persona.orgId),
+      eq(atelierRaidItems.status, "open"),
+      isNull(atelierRaidItems.deletedAt),
+    );
+    const raidRows = await db
+      .select({ id: atelierRaidItems.id, eng: atelierRaidItems.engagementId })
+      .from(atelierRaidItems)
+      .where(baseRaid);
+    const openRaids =
+      acl.all === true
+        ? raidRows.length
+        : raidRows.filter((r) => acl.ids.has(r.eng)).length;
+    const activeEngagements = acl.all === true ? -1 : acl.ids.size;
+    return { openRaids, activeEngagements };
+  } catch {
+    return { openRaids: 0, activeEngagements: 0 };
+  }
+}
+
+defineCapability({
+  id: "meta.recap",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "meta",
+  toolName: "recap",
+  description:
+    "Recap recent activity in this CLI session. Returns the rolling summary plus the last few referenced entities. Read-only.",
+  slashAliases: { en: ["/recap", "/catch-me-up"], fr: ["/résumé"], ar: ["/ملخص"] },
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "recap_card",
+  async run(_input, ctx) {
+    const [sess] = await db
+      .select()
+      .from(atelierCliSessions)
+      .where(eq(atelierCliSessions.id, ctx.sessionId))
+      .limit(1);
+    const draft = getSessionDraft(ctx.sessionId);
+    const recentLines = (sess?.rollingSummary ?? "")
+      .split("\n")
+      .filter((l) => l.trim().length > 0)
+      .slice(-10);
+    const entities = Object.entries(draft.entities)
+      .sort((a, b) => b[1].at - a[1].at)
+      .slice(0, 6)
+      .map(([k, v]) => ({ kind: k, id: v.id, label: v.label }));
+    const live = await fetchLiveOpenStateForPersona(ctx.persona);
+    return {
+      ok: true,
+      data: {
+        recap: recentLines,
+        entities,
+        turnCount: sess?.turnCount ?? 0,
+        lastTurnAt: sess?.lastTurnAt ?? null,
+        lastResultKind: draft.lastResultKind ?? null,
+        lastResultRowCount: Array.isArray(draft.lastResultRows)
+          ? draft.lastResultRows.length
+          : 0,
+        liveOpenState: {
+          openRaidItems: live.openRaids,
+          accessibleEngagements: live.activeEngagements,
+        },
+      },
+    };
+  },
+});
+
+defineCapability({
+  id: "meta.explain_last",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "meta",
+  toolName: "explain_last",
+  description:
+    "Explain or summarize the most recent CLI turn — what was decided, which tools ran, what changed. Read-only.",
+  slashAliases: {
+    en: ["/explain", "/why", "/summarize"],
+    fr: ["/expliquer"],
+    ar: ["/اشرح"],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      mode: { enum: ["explain", "why", "summarize"], default: "explain" },
+    },
+    additionalProperties: false,
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "explain_card",
+  async run(input, ctx) {
+    const draft = getSessionDraft(ctx.sessionId);
+    const targetTurnId = draft.lastTurnId;
+    if (!targetTurnId) {
+      return { ok: false, errorCode: "no_prior_turn", errorMessage: "no prior turn in this session" };
+    }
+    const [turn] = await db
+      .select()
+      .from(atelierCliTurns)
+      .where(eq(atelierCliTurns.id, targetTurnId))
+      .limit(1);
+    if (!turn) {
+      return { ok: false, errorCode: "not_found", errorMessage: `turn ${targetTurnId} not found` };
+    }
+    const calls = (turn.toolCalls as Array<Record<string, unknown>>) ?? [];
+    const frames = (turn.frames as Array<Record<string, unknown>>) ?? [];
+    const narrationLines = frames
+      .filter((f) => f.type === "narration")
+      .map((f) => String(((f.data as { text?: string })?.text ?? "")));
+    const mode = String(input.mode ?? "explain");
+    // Task #340 — record-grounded citations: pull every audit row written
+    // for this CLI turn so the explanation can be backed by real entity
+    // references the UI can deep-link to.
+    // Match audit rows BOTH for the cli_turn row (entityId = turn.id)
+    // AND for downstream entity mutations (payload->>'turnId' = turn.id)
+    // so citations include the actual records touched during this turn,
+    // not just the meta `cli.turn` envelope.
+    const auditRows = await db
+      .select({
+        id: atelierAuditEvents.id,
+        entityType: atelierAuditEvents.entityType,
+        entityId: atelierAuditEvents.entityId,
+        action: atelierAuditEvents.action,
+        payloadSummary: atelierAuditEvents.payloadSummary,
+        createdAt: atelierAuditEvents.createdAt,
+      })
+      .from(atelierAuditEvents)
+      .where(
+        or(
+          eq(atelierAuditEvents.entityId, turn.id),
+          sql`${atelierAuditEvents.payload}->>'turnId' = ${turn.id}`,
+        ),
+      )
+      .limit(40);
+    const toolCallEntities = calls
+      .map((c) => ({
+        tool: String(c.tool ?? ""),
+        ok: Boolean(c.ok),
+        errorCode: (c.errorCode as string | null | undefined) ?? null,
+        input: (c.input as Record<string, unknown> | undefined) ?? null,
+      }))
+      .filter((c) => c.tool.length > 0);
+    const citations = [
+      ...auditRows.map((r) => ({
+        kind: "audit" as const,
+        id: r.id,
+        entityType: r.entityType,
+        entityId: r.entityId,
+        action: r.action,
+        summary: r.payloadSummary ?? null,
+        at: r.createdAt,
+      })),
+      ...toolCallEntities.map((c, i) => ({
+        kind: "tool_call" as const,
+        id: `${turn.id}:${i}`,
+        tool: c.tool,
+        ok: c.ok,
+        errorCode: c.errorCode,
+      })),
+    ];
+    return {
+      ok: true,
+      data: {
+        mode,
+        turnId: turn.id,
+        prompt: turn.prompt,
+        status: turn.status,
+        narration: narrationLines,
+        toolCalls: toolCallEntities.map((c) => ({
+          tool: c.tool,
+          ok: c.ok,
+          errorCode: c.errorCode,
+        })),
+        citations,
+        latencyMs: turn.latencyMs ?? null,
+        costCents: turn.costCents ?? null,
+      },
+    };
+  },
+});
+
+defineCapability({
+  id: "meta.refine_last",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "meta",
+  toolName: "refine_last",
+  description:
+    "Refine the most recent list/result without re-running the original tool. Supports filter (substring across fields), groupBy (field name), justField (project a single field). Read-only.",
+  slashAliases: { en: ["/filter", "/group", "/just", "/refine"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      filter: { type: "string", maxLength: 120 },
+      groupBy: { type: "string", maxLength: 60 },
+      justField: { type: "string", maxLength: 60 },
+      limit: { type: "integer", minimum: 1, maximum: 200 },
+    },
+    additionalProperties: false,
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "refined_list",
+  async run(input, ctx) {
+    const draft = getSessionDraft(ctx.sessionId);
+    const filterTok = String(input.filter ?? "").trim().toLowerCase();
+    const groupBy = String(input.groupBy ?? "").trim();
+    const justField = String(input.justField ?? "").trim();
+    const limit = Math.min(200, Math.max(1, Number(input.limit ?? 50)));
+    let rerunUsed = false;
+    let rows: Array<Record<string, unknown>> | null =
+      Array.isArray(draft.lastResultRows) ? draft.lastResultRows : null;
+    // Task #340 — re-run originating read capability with adjusted args
+    // when we have it on file. This is a real refinement (fresh data,
+    // server-side filtering) instead of only post-filtering cached rows.
+    // Task #340 — never re-invoke meta post-processors as the "source"
+    // read tool: refine_last → refine_last would recurse forever, and
+    // recap/explain/undo aren't list-producing reads either. Only
+    // genuine source reads belong here.
+    const META_TOOLS = new Set([
+      "refine_last",
+      "recap",
+      "explain_last",
+      "undo_last",
+      "request_feature",
+    ]);
+    if (
+      draft.lastReadTool &&
+      draft.lastReadArgs &&
+      !META_TOOLS.has(draft.lastReadTool)
+    ) {
+      try {
+        const { findToolByName } = await import("./index.js");
+        const tool = findToolByName(draft.lastReadTool, ctx.persona);
+        if (tool && !tool.isWrite) {
+          const reArgs: Record<string, unknown> = { ...draft.lastReadArgs };
+          if (filterTok) reArgs.q = filterTok;
+          if (limit) reArgs.limit = limit;
+          const fresh = await tool.run(reArgs, {
+            persona: ctx.persona,
+            sessionId: ctx.sessionId,
+            turnId: ctx.turnId,
+            stepIdx: 0,
+          });
+          if (fresh.ok && fresh.data && typeof fresh.data === "object") {
+            const fd = fresh.data as Record<string, unknown>;
+            const candidate = Array.isArray(fd.items)
+              ? (fd.items as Array<Record<string, unknown>>)
+              : Array.isArray(fd.rows)
+                ? (fd.rows as Array<Record<string, unknown>>)
+                : Array.isArray(fd.results)
+                  ? (fd.results as Array<Record<string, unknown>>)
+                  : null;
+            if (candidate) {
+              rows = candidate;
+              rerunUsed = true;
+            }
+          }
+        }
+      } catch {
+        // fall through to in-memory refinement
+      }
+    }
+    if (!rows || rows.length === 0) {
+      return {
+        ok: false,
+        errorCode: "no_prior_result",
+        errorMessage: "no prior list result is available to refine",
+      };
+    }
+    let working: Array<Record<string, unknown>> = rows;
+    if (filterTok) {
+      working = working.filter((r) =>
+        Object.values(r).some(
+          (v) => typeof v === "string" && v.toLowerCase().includes(filterTok),
+        ),
+      );
+    }
+    if (justField) {
+      working = working.map((r) => ({ [justField]: r[justField] }));
+    }
+    let groups: Array<{ key: string; count: number; rows: Array<Record<string, unknown>> }> | undefined;
+    if (groupBy) {
+      const buckets = new Map<string, Array<Record<string, unknown>>>();
+      for (const r of working) {
+        const key = String(r[groupBy] ?? "(none)");
+        const arr = buckets.get(key) ?? [];
+        arr.push(r);
+        buckets.set(key, arr);
+      }
+      groups = [...buckets.entries()]
+        .sort((a, b) => b[1].length - a[1].length)
+        .map(([key, rs]) => ({ key, count: rs.length, rows: rs.slice(0, 5) }));
+    }
+    return {
+      ok: true,
+      data: {
+        sourceKind: draft.lastResultKind ?? null,
+        sourceTool: draft.lastReadTool ?? null,
+        rerunUsed,
+        total: rows.length,
+        filtered: working.length,
+        items: working.slice(0, limit),
+        groups,
+        appliedFilter: filterTok || null,
+        appliedGroupBy: groupBy || null,
+        appliedJustField: justField || null,
+      },
+    };
+  },
+});
+
+defineCapability({
+  id: "meta.undo_last",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "meta",
+  toolName: "undo_last",
+  description:
+    "Undo the most recent CLI write in this session by performing the inverse action (e.g. cancel + soft-delete a RAID item). Mutates state.",
+  slashAliases: { en: ["/undo", "/undo-last"], ar: ["/تراجع"] },
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  isWrite: true,
+  irreversible: false,
+  surfaceOn: ["global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "undo_card",
+  async run(_input, ctx) {
+    const draft = getSessionDraft(ctx.sessionId);
+    const candidateTurnId = draft.lastWriteTurnId;
+    if (!candidateTurnId) {
+      return {
+        ok: true,
+        data: {
+          canUndo: false,
+          reason: "no recent CLI write in this session",
+        },
+      };
+    }
+    const [turn] = await db
+      .select()
+      .from(atelierCliTurns)
+      .where(eq(atelierCliTurns.id, candidateTurnId))
+      .limit(1);
+    if (!turn) {
+      return {
+        ok: true,
+        data: { canUndo: false, reason: "prior write turn not found" },
+      };
+    }
+    const tool = String(draft.lastWriteTool ?? "");
+    // Task #340 — execute true inverse for supported writes.
+    if (tool === "raid_add_v2" && draft.lastWriteRaidId) {
+      const raidId = draft.lastWriteRaidId;
+      const [item] = await db
+        .select({
+          id: atelierRaidItems.id,
+          status: atelierRaidItems.status,
+          orgId: atelierRaidItems.orgId,
+          deletedAt: atelierRaidItems.deletedAt,
+        })
+        .from(atelierRaidItems)
+        .where(eq(atelierRaidItems.id, raidId))
+        .limit(1);
+      if (!item || item.deletedAt) {
+        return {
+          ok: true,
+          data: {
+            canUndo: false,
+            tool,
+            reason: "underlying RAID row already removed",
+            raidId,
+          },
+        };
+      }
+      if (item.orgId !== ctx.persona.orgId) {
+        return {
+          ok: false,
+          errorCode: "forbidden",
+          errorMessage: "raid item belongs to another org",
+        };
+      }
+      await db
+        .update(atelierRaidItems)
+        .set({ status: "cancelled", deletedAt: new Date() })
+        .where(eq(atelierRaidItems.id, raidId));
+      const auditId = rid("aud");
+      await db.insert(atelierAuditEvents).values({
+        id: auditId,
+        entityType: "raid_item",
+        entityId: raidId,
+        actorType: "human",
+        actorId: ctx.persona.id,
+        actorLabel: ctx.persona.name,
+        action: "raid.cancel.cli.undo",
+        payload: { undoOfTurnId: turn.id, viaCli: true, turnId: ctx.turnId },
+        payloadSummary: `CLI undo: cancelled RAID ${raidId}`,
+      });
+      // Prevent double-undo on the same write.
+      draft.lastWriteRaidId = undefined;
+      draft.lastWriteTurnId = undefined;
+      draft.lastWriteTool = undefined;
+      return {
+        ok: true,
+        data: {
+          canUndo: true,
+          executed: true,
+          tool,
+          turnId: turn.id,
+          inverseAction: "raid.cancel",
+          raidId,
+          auditEventId: auditId,
+        },
+      };
+    }
+    const irreversibleHint =
+      "This action does not have an inverse mapping on the CLI surface. Open the audit row to review or revert in the underlying module.";
+    return {
+      ok: true,
+      data: {
+        canUndo: false,
+        tool,
+        turnId: turn.id,
+        prompt: turn.prompt,
+        status: turn.status,
+        finishedAt: turn.finishedAt,
+        guidance: irreversibleHint,
+        auditEntityType: "cli_turn",
+        auditEntityId: turn.id,
+      },
+    };
+  },
+});
+
+defineCapability({
+  id: "meta.request_feature",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "meta",
+  toolName: "request_feature",
+  description:
+    "Capture a user-requested capability that the CLI cannot perform today. Writes a `cli.feature_request` audit row. Use after a refusal or when the user types /request.",
+  slashAliases: { en: ["/request", "/feature"], ar: ["/طلب"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      text: { type: "string", minLength: 3, maxLength: 1000 },
+      surface: { type: "string", maxLength: 60 },
+    },
+    required: ["text"],
+  },
+  isWrite: true,
+  irreversible: false,
+  twoPhaseConfirm: false,
+  surfaceOn: ["global"],
+  outboundChannel: null,
+  resultCard: "feature_request",
+  async run(input, ctx) {
+    const text = String(input.text ?? "").trim().slice(0, 1000);
+    if (text.length < 3) {
+      return {
+        ok: true,
+        data: { partial: { surface: input.surface ?? null } },
+        clarification: {
+          field: "text",
+          question:
+            "Briefly describe the capability you wanted. I'll log it as a feature request for the product team.",
+          tool: "request_feature",
+          partial: { surface: input.surface ?? null },
+        },
+      };
+    }
+    const id = rid("aud");
+    await db.insert(atelierAuditEvents).values({
+      id,
+      entityType: "cli_session",
+      entityId: ctx.sessionId,
+      actorType: "human",
+      actorId: ctx.persona.id,
+      actorLabel: ctx.persona.name,
+      action: "cli.feature_request",
+      payload: {
+        sessionId: ctx.sessionId,
+        turnId: ctx.turnId,
+        text,
+        surface: input.surface ?? null,
+      },
+      payloadSummary: `CLI feature request: ${text.slice(0, 100)}`,
+    });
+    return {
+      ok: true,
+      data: {
+        captured: true,
+        auditEventId: id,
+        text,
+        message:
+          "Thanks — I logged this as a feature request. The product team reviews these in the weekly CLI sync.",
+      },
+    };
   },
 });

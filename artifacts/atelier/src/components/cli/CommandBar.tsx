@@ -22,6 +22,7 @@
  */
 
 import * as React from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   X,
@@ -56,7 +57,7 @@ import {
   type SavedPrompt,
 } from "./savedPrompts";
 import { emitCliOpened } from "./telemetry";
-import type { CliCapability, CliLocale, CliTurn } from "./types";
+import type { CliCapability, CliClarification, CliLocale, CliTurn } from "./types";
 
 const MAX_INPUT_CHARS = 4000;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -577,6 +578,15 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
                 setInput(text);
                 requestAnimationFrame(() => composerRef.current?.focus());
               }}
+              onRequestCapability={(prompt) =>
+                void cli.submit({
+                  prompt: `/request ${prompt}`,
+                  pageContext: pageCtx,
+                })
+              }
+              onSubmitClarification={(answer) =>
+                void cli.submit({ prompt: answer, pageContext: pageCtx })
+              }
               onCopyJson={(t) => copyText(JSON.stringify(t.proposedPlan ?? t.pending ?? {}, null, 2))}
               onCopyMarkdown={(t) =>
                 copyText(`# ${t.prompt}\n\n${t.result?.summary ?? ""}`)
@@ -886,6 +896,8 @@ function Transcript({
   onToggleStep,
   onSetRowEdit,
   onPickSuggestion,
+  onRequestCapability,
+  onSubmitClarification,
   onCopyJson,
   onCopyMarkdown,
   onExport,
@@ -909,6 +921,8 @@ function Transcript({
   onToggleStep: (i: number) => void;
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
+  onRequestCapability: (prompt: string) => void;
+  onSubmitClarification: (answer: string) => void;
   onCopyJson: (t: CliTurn) => void;
   onCopyMarkdown: (t: CliTurn) => void;
   onExport: () => void;
@@ -987,6 +1001,8 @@ function Transcript({
                   onToggleStep={onToggleStep}
                   onSetRowEdit={onSetRowEdit}
                   onPickSuggestion={onPickSuggestion}
+                  onRequestCapability={onRequestCapability}
+                  onSubmitClarification={onSubmitClarification}
                   onCopyJson={() => onCopyJson(t)}
                   onCopyMarkdown={() => onCopyMarkdown(t)}
                   onExport={onExport}
@@ -1018,6 +1034,8 @@ function TurnBody({
   onToggleStep,
   onSetRowEdit,
   onPickSuggestion,
+  onRequestCapability,
+  onSubmitClarification,
   onCopyJson,
   onCopyMarkdown,
   onExport,
@@ -1039,6 +1057,8 @@ function TurnBody({
   onToggleStep: (i: number) => void;
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
+  onRequestCapability: (prompt: string) => void;
+  onSubmitClarification: (answer: string) => void;
   onCopyJson: () => void;
   onCopyMarkdown: () => void;
   onExport: () => void;
@@ -1082,6 +1102,97 @@ function TurnBody({
               {s("cancel", locale)}
             </button>
           )}
+        </div>
+      )}
+
+      {turn.proactiveRecap && (
+        <div
+          className="bg-bg-elevate border border-gold/30 rounded-md p-3 space-y-1.5"
+          data-testid="cli-proactive-recap"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-mono uppercase tracking-wider text-gold">
+              {s("recapTitle", locale)}
+            </div>
+            {typeof turn.proactiveRecap.dormantMs === "number" &&
+              turn.proactiveRecap.dormantMs > 0 && (
+                <div className="text-[10px] font-mono text-text-faint">
+                  {s("recapDormantHours", locale).replace(
+                    "{h}",
+                    String(Math.round(turn.proactiveRecap.dormantMs / 3_600_000)),
+                  )}
+                </div>
+              )}
+          </div>
+          {turn.proactiveRecap.summary && (
+            <div className="text-sm text-text leading-relaxed whitespace-pre-wrap">
+              {turn.proactiveRecap.summary}
+            </div>
+          )}
+          {turn.proactiveRecap.entities && turn.proactiveRecap.entities.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {turn.proactiveRecap.entities.map((e) => (
+                <span
+                  key={`${e.kind}:${e.id}`}
+                  className="text-[10px] font-mono bg-bg-deep border border-border rounded px-1.5 py-0.5 text-text-mute"
+                >
+                  {e.kind}: {e.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {turn.clarification && turn.status === "needs_clarification" && isCurrent && (
+        <ClarificationCard
+          clarification={turn.clarification}
+          locale={locale}
+          onSubmit={(answer) => onSubmitClarification(answer)}
+          onCancel={onCancelTurn}
+        />
+      )}
+
+      {turn.refusal && (
+        <div
+          className="bg-bg-elevate border border-warning/40 rounded-md p-3 space-y-2"
+          data-testid="cli-refusal"
+        >
+          <div className="text-xs font-mono uppercase tracking-wider text-warning">
+            {s("refusalTitle", locale)}
+          </div>
+          <div className="text-sm text-text leading-relaxed">{turn.refusal.reason}</div>
+          {turn.refusal.suggestion && (
+            <div className="text-xs text-text-mute leading-relaxed">
+              {turn.refusal.suggestion}
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {turn.refusal.pageHref && (
+              <a
+                href={turn.refusal.pageHref}
+                className="text-xs bg-bg-deep border border-gold/50 hover:border-gold rounded px-2.5 py-1.5 text-text"
+                data-testid="cli-refusal-open-page"
+              >
+                {s("refusalOpenPage", locale)}
+              </a>
+            )}
+            {turn.refusal.requestCapability && (
+              <button
+                type="button"
+                onClick={() =>
+                  // Task #340 — one-click feature-request capture: submit
+                  // the request_feature command directly instead of just
+                  // pre-filling the input box.
+                  onRequestCapability(turn.refusal!.requestCapability!.prompt)
+                }
+                className="text-xs bg-bg-deep border border-warning/50 hover:border-warning rounded px-2.5 py-1.5 text-text"
+                data-testid="cli-refusal-request"
+              >
+                {s("refusalRequest", locale)}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -1323,6 +1434,86 @@ function TurnBody({
           onFollowUp={onPickSuggestion}
         />
       )}
+    </div>
+  );
+}
+
+function ClarificationCard({
+  clarification,
+  locale,
+  onSubmit,
+  onCancel,
+}: {
+  clarification: CliClarification;
+  locale: CliLocale;
+  onSubmit: (answer: string) => void;
+  onCancel: () => void;
+}) {
+  const [answer, setAnswer] = useState("");
+  return (
+    <div
+      className="bg-bg-elevate border border-gold/50 rounded-md p-3 space-y-2.5"
+      data-testid="cli-clarification"
+    >
+      <div className="text-xs font-mono uppercase tracking-wider text-gold">
+        {s("clarificationTitle", locale)}
+        {clarification.tool && (
+          <span className="ml-2 text-text-faint normal-case">
+            · {clarification.tool}
+          </span>
+        )}
+      </div>
+      <div className="text-sm text-text leading-relaxed">
+        {clarification.question}
+      </div>
+      {clarification.suggestions && clarification.suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {clarification.suggestions.map((sg) => (
+            <button
+              key={sg.id}
+              type="button"
+              onClick={() => onSubmit(sg.label)}
+              className="text-xs bg-bg-deep border border-border hover:border-gold/50 rounded px-2 py-1"
+              data-testid="cli-clarification-suggestion"
+              title={sg.hint}
+            >
+              {sg.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={answer}
+          onChange={(e) => setAnswer(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && answer.trim()) {
+              e.preventDefault();
+              onSubmit(answer.trim());
+            }
+          }}
+          placeholder={clarification.field}
+          className="flex-1 bg-bg-deep border border-border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold"
+          data-testid="cli-clarification-input"
+        />
+        <button
+          type="button"
+          onClick={() => answer.trim() && onSubmit(answer.trim())}
+          disabled={!answer.trim()}
+          className="text-sm bg-gold text-bg-deep font-semibold px-3 py-1.5 rounded disabled:opacity-50"
+          data-testid="cli-clarification-submit"
+        >
+          {s("clarificationSubmit", locale)}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-sm text-text-mute hover:text-danger px-2 py-1.5 rounded hover:bg-bg-elevate-2"
+        >
+          {s("cancel", locale)}
+        </button>
+      </div>
     </div>
   );
 }

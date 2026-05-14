@@ -184,6 +184,62 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
         proposedPlan: d.steps ?? turn.proposedPlan,
       };
     }
+    case "needs_clarification": {
+      const d = frame.data as {
+        field?: string;
+        question?: string;
+        tool?: string;
+        partial?: Record<string, unknown>;
+        suggestions?: Array<{ id: string; label: string; hint?: string }>;
+      };
+      return {
+        ...turn,
+        status: "needs_clarification",
+        clarification: {
+          field: d.field ?? "value",
+          question: d.question ?? "",
+          tool: d.tool ?? "",
+          partial: d.partial ?? {},
+          suggestions: d.suggestions ?? [],
+        },
+      };
+    }
+    case "refusal": {
+      const d = frame.data as {
+        reason?: string;
+        closestCapabilityId?: string | null;
+        pageHref?: string | null;
+        suggestion?: string | null;
+        requestCapability?: { tool: string; prompt: string };
+      };
+      return {
+        ...turn,
+        refusal: {
+          reason: d.reason ?? "Not available on the CLI surface.",
+          closestCapabilityId: d.closestCapabilityId ?? null,
+          pageHref: d.pageHref ?? null,
+          suggestion: d.suggestion ?? null,
+          requestCapability: d.requestCapability,
+        },
+      };
+    }
+    case "proactive_recap": {
+      const d = frame.data as {
+        summary?: string;
+        turnCount?: number;
+        dormantMs?: number;
+        entities?: Array<{ kind: string; id: string; label: string }>;
+      };
+      return {
+        ...turn,
+        proactiveRecap: {
+          summary: d.summary ?? "",
+          turnCount: d.turnCount ?? 0,
+          dormantMs: d.dormantMs,
+          entities: d.entities ?? [],
+        },
+      };
+    }
     case "async_dispatched": {
       const d = frame.data as { jobId?: string; turnId?: string };
       return {
@@ -233,6 +289,7 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       const ss = d.status;
       let next: CliTurnStatus;
       if (ss === "awaiting_confirmation") next = "needs_confirmation";
+      else if (ss === "awaiting_clarification") next = "needs_clarification";
       else if (ss === "async_dispatched") next = "async_handoff";
       else if (ss === "partial") next = "partial";
       else if (ss === "cancelled") next = "cancelled";

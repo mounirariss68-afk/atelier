@@ -118,6 +118,20 @@ export const STRINGS = {
     ar: "اسأل Atelier بلغة طبيعيّة — جرّب \"ما المهام التي بانتظاري اليوم؟\".",
   },
   firstRunTooltipDismiss: { en: "Got it", ar: "فهمت" },
+  clarificationTitle: {
+    en: "I need a quick clarification",
+    ar: "أحتاج إلى توضيح سريع",
+  },
+  clarificationSubmit: { en: "Send answer", ar: "إرسال الإجابة" },
+  refusalTitle: {
+    en: "I can't do that from here yet",
+    ar: "لا أستطيع تنفيذ ذلك من هنا بعد",
+  },
+  refusalRequest: { en: "Request this capability", ar: "اطلب هذه الإمكانية" },
+  refusalOpenPage: { en: "Open the right page", ar: "افتح الصفحة المناسبة" },
+  refusalRequested: { en: "Request logged. Thanks.", ar: "تم تسجيل الطلب. شكرًا." },
+  recapTitle: { en: "Catching you up", ar: "تذكير سريع" },
+  recapDormantHours: { en: "Dormant {h}h", ar: "غير نشط {h} س" },
 } satisfies Record<string, Bilingual>;
 
 export function s(key: keyof typeof STRINGS, locale: CliLocale): string {
@@ -140,4 +154,22 @@ export function sFmt(
 /** "Respond in English." / "أجب بالعربية." — prepended to the user's prompt. */
 export function localeInstruction(locale: CliLocale): string {
   return locale === "ar" ? "أجب بالعربيّة." : "Respond in English.";
+}
+
+/**
+ * Inverse of localeInstruction — strips the known locale preamble (and
+ * the trailing blank line that `submit` injects) from a wrapped prompt.
+ * Used server-side to recover the raw user answer when the deterministic
+ * clarification continuation merges it back into a tool input field.
+ */
+const LOCALE_PREAMBLES = ["Respond in English.", "أجب بالعربيّة.", "أجب بالعربية."] as const;
+export function stripLocalePreamble(text: string): string {
+  let t = text ?? "";
+  for (const p of LOCALE_PREAMBLES) {
+    if (t.startsWith(p)) {
+      t = t.slice(p.length).replace(/^\r?\n+/, "");
+      break;
+    }
+  }
+  return t;
 }

@@ -267,36 +267,156 @@ export function findById(id: string): CapabilityEntry | undefined {
   return REGISTRY.find((e) => e.id === id);
 }
 
-/**
- * Saved-prompt drift check (Task #339).
- *
- * A "saved prompt" is a previously-built `{ tool, input }` pair the
- * user pinned for one-click re-run. If the underlying capability's
- * input schema has changed since the prompt was saved, replaying the
- * old input against the new shape may silently misbehave (e.g. a
- * required field was added, or an enum value was removed). Returning
- * a non-null warning lets the UI surface a "review before running"
- * banner instead of executing blindly.
- *
- * Returns `null` when the saved hash matches the current hash, when
- * the tool is unknown (caller decides how to handle), or when the
- * pinned hash is missing (prompts saved before #339 — caller should
- * treat as "untrusted, needs review").
- */
-export function pinnedPromptDrift(pinned: {
-  toolName: string;
-  schemaHash?: string | null;
-}): { warning: string; currentHash: string; pinnedHash: string | null } | null {
-  const cap = findByToolName(pinned.toolName);
-  if (!cap) return null;
-  const pinnedHash = pinned.schemaHash ?? null;
-  if (pinnedHash && pinnedHash === cap.schemaHash) return null;
-  return {
-    warning:
-      pinnedHash === null
-        ? `Saved prompt for ${cap.toolName} predates schema hashing — review the inputs before running.`
-        : `Saved prompt for ${cap.toolName} was pinned to schema ${pinnedHash}; current schema is ${cap.schemaHash}. Review before running.`,
-    currentHash: cap.schemaHash,
-    pinnedHash,
+// Task #340 — conversation depth: per-session ephemeral draft store.
+// In-memory map keyed by sessionId. Holds the last referenced entities
+// (for pronoun resolution + clarification merge) plus a snapshot of
+// the most recent tool result so meta.refine_last / meta.explain_last
+// / meta.undo_last can operate without re-querying the model.
+// =====================================================================
+
+export interface CliEntityRef {
+  kind: string;
+  id: string;
+  label: string;
+  href?: string | null;
+  at: number;
+}
+
+export interface SessionDraft {
+  entities: Record<string, CliEntityRef>;
+  lastTurnId?: string;
+  lastWriteTurnId?: string;
+  lastWriteTool?: string;
+  /** Most recent read tool + args, captured for refine_last re-runs. */
+  lastReadTool?: string;
+  lastReadArgs?: Record<string, unknown>;
+  /** Captured raid item id for undo. */
+  lastWriteRaidId?: string;
+  lastResultKind?: string;
+  lastResultRows?: Array<Record<string, unknown>>;
+  lastResultSummary?: string;
+  lastResultAt?: number;
+  lastFeatureRequestAt?: number;
+  pendingClarification?: {
+    field: string;
+    question: string;
+    originalPrompt: string;
+    partial: Record<string, unknown>;
+    tool: string;
+  } | null;
+}
+
+const SESSION_DRAFTS = new Map<string, SessionDraft>();
+const DRAFT_TTL_MS = 60 * 60 * 1000;
+const DRAFT_MAX_SIZE = 1000;
+
+export function getSessionDraft(sessionId: string): SessionDraft {
+  let cur = SESSION_DRAFTS.get(sessionId);
+  if (!cur) {
+    cur = { entities: {} };
+    SESSION_DRAFTS.set(sessionId, cur);
+  }
+  return cur;
+}
+
+export function recordSessionEntity(sessionId: string, ref: Omit<CliEntityRef, "at">): void {
+  if (!ref.id || !ref.kind) return;
+  const d = getSessionDraft(sessionId);
+  d.entities[ref.kind] = { ...ref, at: Date.now() };
+}
+
+export function recordSessionResult(
+  sessionId: string,
+  patch: Partial<SessionDraft>,
+): void {
+  const d = getSessionDraft(sessionId);
+  Object.assign(d, patch);
+  d.lastResultAt = Date.now();
+}
+
+export function clearSessionDraft(sessionId: string): void {
+  SESSION_DRAFTS.delete(sessionId);
+}
+
+export function pruneSessionDrafts(now: number = Date.now()): void {
+  for (const [k, v] of SESSION_DRAFTS.entries()) {
+    const at = v.lastResultAt ?? Math.max(0, ...Object.values(v.entities).map((e) => e.at));
+    if (now - at > DRAFT_TTL_MS) SESSION_DRAFTS.delete(k);
+  }
+  if (SESSION_DRAFTS.size > DRAFT_MAX_SIZE) {
+    const entries = [...SESSION_DRAFTS.entries()];
+    entries.sort((a, b) => (a[1].lastResultAt ?? 0) - (b[1].lastResultAt ?? 0));
+    for (const [k] of entries.slice(0, entries.length - DRAFT_MAX_SIZE)) {
+      SESSION_DRAFTS.delete(k);
+    }
+  }
+}
+
+export function summarizeSessionDraft(sessionId: string): string {
+  const d = SESSION_DRAFTS.get(sessionId);
+  if (!d) return "";
+  const ents = Object.entries(d.entities)
+    .sort((a, b) => b[1].at - a[1].at)
+    .slice(0, 6);
+  const lines: string[] = [];
+  if (ents.length > 0) {
+    lines.push("Recent entities (resolve 'it'/'that one' to these):");
+    for (const [k, v] of ents) lines.push(`- ${k}: "${v.label}" (id ${v.id})`);
+  }
+  if (d.lastResultKind && Array.isArray(d.lastResultRows)) {
+    lines.push(`Last result: ${d.lastResultRows.length} ${d.lastResultKind}.`);
+  }
+  if (d.pendingClarification) {
+    lines.push(
+      `Awaiting clarification on field "${d.pendingClarification.field}" for ${d.pendingClarification.tool}.`,
+    );
+  }
+  return lines.join("\n");
+}
+
+export function ingestEntitiesFromToolResult(
+  sessionId: string,
+  toolName: string,
+  data: unknown,
+): void {
+  if (!data || typeof data !== "object") return;
+  const o = data as Record<string, unknown>;
+  const tryRef = (kind: string, id: unknown, label: unknown): void => {
+    if (typeof id === "string" && id.length > 0) {
+      recordSessionEntity(sessionId, {
+        kind,
+        id,
+        label: typeof label === "string" && label.length > 0 ? label : id,
+      });
+    }
   };
+  tryRef("account", o.accountId ?? (o.account as { id?: unknown })?.id, o.accountName ?? (o.account as { name?: unknown })?.name ?? o.name);
+  tryRef("engagement", o.engagementId ?? (o.engagement as { id?: unknown })?.id, o.engagementName ?? (o.engagement as { name?: unknown })?.name);
+  tryRef("raid_item", o.raidItemId ?? (toolName.startsWith("raid_") ? o.id : undefined), o.description ?? o.label);
+  tryRef("deliverable", o.deliverableId, o.deliverableName ?? o.label);
+  tryRef("opportunity", o.opportunityId, o.opportunityName ?? o.label);
+  if (Array.isArray(o.options)) {
+    for (const opt of o.options as Array<Record<string, unknown>>) {
+      if (opt && typeof opt.id === "string") {
+        recordSessionEntity(sessionId, {
+          kind: "candidate",
+          id: opt.id,
+          label: typeof opt.label === "string" ? opt.label : opt.id,
+        });
+      }
+    }
+  }
+  const rows: Array<Record<string, unknown>> | null = Array.isArray(o.items)
+    ? (o.items as Array<Record<string, unknown>>)
+    : Array.isArray(o.rows)
+      ? (o.rows as Array<Record<string, unknown>>)
+      : Array.isArray(o.results)
+        ? (o.results as Array<Record<string, unknown>>)
+        : null;
+  if (rows && rows.length > 0) {
+    recordSessionResult(sessionId, {
+      lastResultRows: rows.slice(0, 200),
+      lastResultKind: toolName,
+    });
+  }
 }

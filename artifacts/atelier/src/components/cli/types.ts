@@ -11,10 +11,13 @@ export type CliFrameType =
   | "narration"
   | "plan_step"
   | "proposed_plan"
+  | "proactive_recap"
   | "tool_call"
   | "tool_result"
   | "needs_disambiguation"
   | "needs_confirmation"
+  | "needs_clarification"
+  | "refusal"
   | "async_dispatched"
   | "partial_success"
   | "final"
@@ -33,11 +36,35 @@ export type CliTurnStatus =
   | "streaming"
   | "needs_disambiguation"
   | "needs_confirmation"
+  | "needs_clarification"
   | "async_handoff"
   | "complete"
   | "partial"
   | "error"
   | "cancelled";
+
+export interface CliClarification {
+  field: string;
+  question: string;
+  tool: string;
+  partial?: Record<string, unknown>;
+  suggestions?: Array<{ id: string; label: string; hint?: string }>;
+}
+
+export interface CliRefusal {
+  reason: string;
+  closestCapabilityId?: string | null;
+  pageHref?: string | null;
+  suggestion?: string | null;
+  requestCapability?: { tool: string; prompt: string };
+}
+
+export interface CliProactiveRecap {
+  summary: string;
+  turnCount: number;
+  dormantMs?: number;
+  entities?: Array<{ kind: string; id: string; label: string }>;
+}
 
 export interface CliPlanStep {
   index?: number;
@@ -111,6 +138,15 @@ export interface CliTurn {
    * server confirm route currently ignores unknown body fields, so
    * this is forward-safe for downstream Tasks #334/#335 enforcement. */
   planEdits?: Record<number, string>;
+  /** Task #340 — clarification dialog state when the server pauses the
+   * turn awaiting a missing required field. Cleared on next submit. */
+  clarification?: CliClarification;
+  /** Task #340 — graceful refusal payload, rendered as a card with a
+   * "Request this capability" CTA bound to meta.request_feature. */
+  refusal?: CliRefusal;
+  /** Task #340 — proactive open-state recap surfaced before the model
+   * loop runs on a re-opened session. Informational only. */
+  proactiveRecap?: CliProactiveRecap;
 }
 
 export interface CliCapability {

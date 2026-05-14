@@ -45,6 +45,11 @@ import {
   capabilitiesForPersona,
   findByToolName,
   CATALOG_SCHEMA_VERSION,
+  getSessionDraft,
+  recordSessionResult,
+  ingestEntitiesFromToolResult,
+  summarizeSessionDraft,
+  pruneSessionDrafts,
 } from "./capability-catalog.js";
 // Task #339 — single bootstrap entry point. Imports cli-only entries,
 // attachment+rubric capabilities, and walks the agent registry.
@@ -66,7 +71,10 @@ export type CliFrameType =
   | "tool_result"
   | "needs_disambiguation"
   | "needs_confirmation"
+  | "needs_clarification"
   | "proposed_plan"
+  | "proactive_recap"
+  | "refusal"
   | "budget_exceeded"
   | "async_dispatched"
   | "progress"
@@ -81,6 +89,7 @@ export interface CliFrame {
 export type CliTurnStatus =
   | "streaming"
   | "awaiting_confirmation"
+  | "awaiting_clarification"
   | "partial"
   | "success"
   | "cancelled"
@@ -414,6 +423,30 @@ export interface ToolResult {
     diff: Record<string, unknown>;
     /** The exact pending mutation to replay on confirm. */
     pending: { tool: string; input: Record<string, unknown> };
+  };
+  /**
+   * Task #340 — when set, the orchestrator emits a `needs_clarification`
+   * SSE frame and pauses the turn `awaiting_clarification`. The next
+   * user message is treated as the missing field's value and re-merged
+   * into `partial` before re-invoking the originating tool.
+   */
+  clarification?: {
+    field: string;
+    question: string;
+    tool: string;
+    partial?: Record<string, unknown>;
+    suggestions?: Array<{ id: string; label: string; hint?: string }>;
+  };
+  /**
+   * Task #340 — graceful refusal envelope. The orchestrator emits a
+   * `refusal` frame that the client renders with a "Request this
+   * capability" CTA bound to meta.request_feature.
+   */
+  refusal?: {
+    reason: string;
+    closestCapabilityId?: string | null;
+    pageHref?: string | null;
+    suggestion?: string | null;
   };
 }
 
@@ -1918,6 +1951,13 @@ export async function runTurn(
       return result;
     }
 
+    pruneSessionDrafts();
+    // Task #340 — DO NOT clear pendingClarification at turn start.
+    // The current user prompt is the answer to that pending field; we
+    // want it to flow into the originating tool. The directive is
+    // injected into history below and the orchestrator clears the
+    // draft only after the originating tool runs successfully.
+
     // --- Cheap classifier (advisory) ------------------------------------
     // Run before the expensive Sonnet loop so we can short-circuit
     // obvious resets and budget appropriately. Result is recorded on
@@ -1954,6 +1994,7 @@ export async function runTurn(
       "cancelled",
       "read_only_no_op",
       "awaiting_confirmation",
+      "awaiting_clarification",
       "async_dispatched",
     ]);
     if (input.clientTurnKey) {
@@ -2047,6 +2088,37 @@ export async function runTurn(
       toolCalls: [],
     });
 
+    // Task #340 — proactive open-state recap. When a session is being
+    // re-opened after >6h dormant or this is the first turn against an
+    // existing rolling-summary, emit a `proactive_recap` frame so the
+    // user lands on what they were doing without asking.
+    const lastTurnAt = session.lastTurnAt ? new Date(session.lastTurnAt).getTime() : 0;
+    const dormantMs = lastTurnAt > 0 ? Date.now() - lastTurnAt : 0;
+    const PROACTIVE_RECAP_DORMANT_MS = 6 * 60 * 60 * 1000;
+    const draftPriorToTurn = getSessionDraft(session.id);
+    if (
+      session.rollingSummary &&
+      session.rollingSummary.length > 0 &&
+      (dormantMs > PROACTIVE_RECAP_DORMANT_MS || (session.turnCount ?? 0) > 0 && !draftPriorToTurn.lastTurnId)
+    ) {
+      const draftEntities = Object.values(draftPriorToTurn.entities)
+        .sort((a, b) => b.at - a.at)
+        .slice(0, 5)
+        .map((e) => ({ kind: e.kind, id: e.id, label: e.label }));
+      // Note: emit (not record) — proactive recap is informational and
+      // must not be persisted into the turn frames replay buffer.
+      emit({
+        type: "proactive_recap",
+        data: {
+          summary: session.rollingSummary.split("\n").slice(-5).join("\n"),
+          turnCount: session.turnCount ?? 0,
+          dormantMs,
+          entities: draftEntities,
+          schemaVersion: CATALOG_SCHEMA_VERSION,
+        },
+      });
+    }
+
     // Build initial history. Rolling summary (if any) goes in as a
     // synthetic system extension via the user channel — we keep the
     // system prompt fixed so the SDK caching can kick in.
@@ -2067,6 +2139,36 @@ export async function runTurn(
       history.push({
         role: "user",
         content: `[page context]\n${JSON.stringify(pageCtx).slice(0, 1000)}`,
+      });
+      history.push({ role: "assistant", content: "(noted)" });
+    }
+    // Task #340 — pronoun + draft primer. Inject the most-recently
+    // referenced entities so phrases like "it"/"that one"/"the same
+    // engagement" resolve deterministically without a fresh resolver
+    // round-trip. Also surfaces any pending clarification fields the
+    // model should fill from the next user turn.
+    const draftSummary = summarizeSessionDraft(session.id);
+    if (draftSummary.length > 0) {
+      history.push({
+        role: "user",
+        content: `[recent context]\n${draftSummary}`,
+      });
+      history.push({ role: "assistant", content: "(noted)" });
+    }
+    // Task #340 — clarification continuation context primer. When a prior
+    // turn paused with `awaiting_clarification`, surface the pending
+    // field to the model as well. The orchestrator handles the
+    // continuation deterministically below, but if the deterministic
+    // path is bypassed (tool deregistered, etc.) the model still has
+    // enough context to do the right thing.
+    const _draft = getSessionDraft(session.id);
+    if (_draft.pendingClarification) {
+      const pc = _draft.pendingClarification;
+      history.push({
+        role: "user",
+        content:
+          `[clarification continuation] Previous turn paused awaiting "${pc.field}" for tool "${pc.tool}". ` +
+          `My next message is the answer to that field.`,
       });
       history.push({ role: "assistant", content: "(noted)" });
     }
@@ -2096,6 +2198,7 @@ export async function runTurn(
     let lastModel: string | undefined;
     let pendingWrite: { tool: string; input: Record<string, unknown> } | null = null;
     let runtimeError: string | null = null;
+    let clarificationHandled = false;
     const stepResults: Array<Record<string, unknown>> = [];
     const writeStepCount = (): number =>
       toolCalls.filter((c) => findToolByName(String(c.tool), persona)?.isWrite).length;
@@ -2107,7 +2210,175 @@ export async function runTurn(
     const tools = getToolsForPersona(persona);
 
     try {
-    for (let step = 0; step < MAX_TOOL_STEPS; step++) {
+    // Task #340 — DETERMINISTIC clarification continuation. Run BEFORE
+    // the model loop so a missing-field follow-up is collected
+    // server-side without depending on model compliance. If the
+    // originating tool re-runs successfully (or transitions into
+    // confirmation/clarification/refusal), we emit canonical frames
+    // and skip the Claude loop entirely.
+    if (_draft.pendingClarification) {
+      const pc = _draft.pendingClarification;
+      const tool = findToolByName(pc.tool, persona);
+      if (tool) {
+        // Task #340 — the client wraps every prompt with a locale
+        // preamble ("Respond in English." / "أجب بالعربيّة.") followed
+        // by a blank line. The model usually filters that out, but the
+        // deterministic continuation merges raw input straight into a
+        // tool field, so we must strip it here to avoid persisting the
+        // preamble inside the RAID description / feature request body.
+        const LOCALE_PREAMBLES = [
+          "Respond in English.",
+          "أجب بالعربيّة.",
+          "أجب بالعربية.",
+        ] as const;
+        let answer = input.prompt ?? "";
+        for (const p of LOCALE_PREAMBLES) {
+          if (answer.startsWith(p)) {
+            answer = answer.slice(p.length).replace(/^\r?\n+/, "");
+            break;
+          }
+        }
+        const mergedInput: Record<string, unknown> = {
+          ...(pc.partial ?? {}),
+          [pc.field]: answer,
+        };
+        const ctx0: ToolContext = {
+          persona,
+          turnId,
+          sessionId: session.id,
+          stepIdx: 0,
+        };
+        record({
+          type: "tool_call",
+          data: { step: 0, tool: pc.tool, input: mergedInput, continuation: true },
+        });
+        let cont: ToolResult;
+        try {
+          cont = await tool.run(mergedInput, ctx0);
+        } catch (err) {
+          cont = {
+            ok: false,
+            errorCode: "internal",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          };
+        }
+        toolCalls.push({
+          step: 0,
+          tool: pc.tool,
+          input: mergedInput,
+          ok: cont.ok,
+          errorCode: cont.errorCode,
+          continuation: true,
+          ms: Date.now() - t0,
+        });
+        stepResults.push({
+          stepIdx: 0,
+          tool: pc.tool,
+          ok: cont.ok,
+          errorCode: cont.errorCode,
+        });
+        record({
+          type: "tool_result",
+          data: {
+            step: 0,
+            tool: pc.tool,
+            ok: cont.ok,
+            data: cont.data,
+            errorCode: cont.errorCode,
+            errorMessage: cont.errorMessage,
+            continuation: true,
+          },
+        });
+        if (cont.ok) {
+          ingestEntitiesFromToolResult(session.id, pc.tool, cont.data);
+          recordSessionResult(session.id, { lastTurnId: turnId });
+        }
+        // Clear stale pendingClarification on EVERY continuation outcome
+        // except the "still missing more fields" case below — otherwise
+        // a follow-up prompt could be hijacked into re-running this tool.
+        const _drClear = getSessionDraft(session.id);
+        if (
+          _drClear.pendingClarification &&
+          _drClear.pendingClarification.tool === pc.tool
+        ) {
+          _drClear.pendingClarification = null;
+        }
+        if (cont.clarification) {
+          // Still missing more fields — re-pause with updated partial.
+          const cl = cont.clarification;
+          recordSessionResult(session.id, {
+            pendingClarification: {
+              field: cl.field,
+              question: cl.question,
+              originalPrompt: pc.originalPrompt,
+              partial: cl.partial ?? mergedInput,
+              tool: cl.tool,
+            },
+          });
+          record({
+            type: "needs_clarification",
+            data: {
+              step: 0,
+              field: cl.field,
+              question: cl.question,
+              tool: cl.tool,
+              partial: cl.partial ?? mergedInput,
+              suggestions: cl.suggestions ?? [],
+              continuation: true,
+            },
+          });
+          status = "awaiting_clarification";
+        } else if (cont.confirmation) {
+          // Continuation produced a confirmation request (e.g. raid_add_v2
+          // first pass). Hand off to the existing confirm protocol.
+          const conf = cont.confirmation;
+          pendingWrite = conf.pending;
+          record({
+            type: "needs_confirmation",
+            data: {
+              step: 0,
+              tool: pc.tool,
+              summary: conf.summary,
+              diff: conf.diff,
+              continuation: true,
+            },
+          });
+          status = "awaiting_confirmation";
+        } else if (cont.refusal) {
+          record({
+            type: "refusal",
+            data: {
+              step: 0,
+              reason: cont.refusal.reason,
+              closestCapabilityId: cont.refusal.closestCapabilityId ?? null,
+              pageHref: cont.refusal.pageHref ?? null,
+              suggestion: cont.refusal.suggestion ?? null,
+              requestCapability: { tool: "request_feature", prompt: input.prompt },
+            },
+          });
+          status = "success";
+        } else if (cont.ok) {
+          // Originating tool ran clean — clear the pending clarification.
+          const dr = getSessionDraft(session.id);
+          if (dr.pendingClarification && dr.pendingClarification.tool === pc.tool) {
+            dr.pendingClarification = null;
+          }
+          status = "success";
+        } else {
+          record({
+            type: "error",
+            data: {
+              code: cont.errorCode ?? "tool_error",
+              message: cont.errorMessage ?? "continuation tool failed",
+            },
+          });
+          status = "error";
+          runtimeError = cont.errorMessage ?? cont.errorCode ?? "tool_error";
+        }
+        clarificationHandled = true;
+      }
+    }
+    for (let step = 0; step < MAX_TOOL_STEPS && !clarificationHandled; step++) {
       const elapsed = Date.now() - t0;
       if (aborted) {
         record({
@@ -2201,6 +2472,30 @@ export async function runTurn(
         break;
       }
       if (claudeStep.stop === "end_turn" || !claudeStep.toolCall) {
+        if (
+          toolCalls.length === 0 &&
+          (classification.label === "other" || classification.label === "ambiguous") &&
+          (claudeStep.text ?? "").trim().length === 0
+        ) {
+          // Task #340 — refusal pageHref fallback: prefer the page the
+          // user is currently on (so "open the right page" returns them
+          // to the most relevant surface), else null.
+          const fallbackHref =
+            (pageCtx as { href?: string } | null)?.href ?? null;
+          record({
+            type: "refusal",
+            data: {
+              step,
+              reason:
+                "I couldn't match this to a capability available on your CLI surface.",
+              closestCapabilityId: null,
+              pageHref: fallbackHref,
+              suggestion:
+                "Tell me what you wanted to do and I'll log it as a feature request.",
+              requestCapability: { tool: "request_feature", prompt: input.prompt },
+            },
+          });
+        }
         status = status === "streaming" ? "success" : status;
         break;
       }
@@ -2276,6 +2571,89 @@ export async function runTurn(
           errorMessage: toolResult.errorMessage,
         },
       });
+
+      if (toolResult.ok) {
+        ingestEntitiesFromToolResult(session.id, tc.name, toolResult.data);
+        recordSessionResult(session.id, { lastTurnId: turnId });
+        if (tool.isWrite && (tc.input as { confirm?: unknown }).confirm === true) {
+          const dataObj = (toolResult.data ?? {}) as Record<string, unknown>;
+          recordSessionResult(session.id, {
+            lastWriteTurnId: turnId,
+            lastWriteTool: tc.name,
+            lastWriteRaidId:
+              tc.name === "raid_add_v2" && typeof dataObj.id === "string"
+                ? (dataObj.id as string)
+                : undefined,
+          });
+        } else if (!tool.isWrite) {
+          // Task #340 — capture last read tool + args so meta.refine_last
+          // can re-invoke the originating capability with adjusted args
+          // instead of only filtering cached rows. Skip meta
+          // post-processors so a refine_last call does not become its
+          // own next "source read".
+          const META_TOOL_NAMES = new Set([
+            "refine_last",
+            "recap",
+            "explain_last",
+            "undo_last",
+            "request_feature",
+          ]);
+          if (!META_TOOL_NAMES.has(tc.name)) {
+            recordSessionResult(session.id, {
+              lastReadTool: tc.name,
+              lastReadArgs: tc.input as Record<string, unknown>,
+            });
+          }
+        }
+        // Clear pending clarification if the originating tool just ran.
+        const dr = getSessionDraft(session.id);
+        if (dr.pendingClarification && dr.pendingClarification.tool === tc.name) {
+          dr.pendingClarification = null;
+        }
+      }
+
+      if (toolResult.clarification) {
+        const cl = toolResult.clarification;
+        recordSessionResult(session.id, {
+          pendingClarification: {
+            field: cl.field,
+            question: cl.question,
+            originalPrompt: input.prompt,
+            partial: cl.partial ?? {},
+            tool: cl.tool,
+          },
+        });
+        record({
+          type: "needs_clarification",
+          data: {
+            step,
+            field: cl.field,
+            question: cl.question,
+            tool: cl.tool,
+            partial: cl.partial ?? {},
+            suggestions: cl.suggestions ?? [],
+          },
+        });
+        status = "awaiting_clarification";
+        break;
+      }
+
+      if (toolResult.refusal) {
+        const rf = toolResult.refusal;
+        record({
+          type: "refusal",
+          data: {
+            step,
+            reason: rf.reason,
+            closestCapabilityId: rf.closestCapabilityId ?? null,
+            pageHref: rf.pageHref ?? null,
+            suggestion: rf.suggestion ?? null,
+            requestCapability: { tool: "request_feature", prompt: input.prompt },
+          },
+        });
+        status = status === "streaming" ? "success" : status;
+        break;
+      }
 
       if (toolResult.disambiguation) {
         record({
@@ -2712,6 +3090,9 @@ export async function confirmPendingWrite(
   const stepIdx = (turn.lastStepIdx ?? 0) + 1;
   const idemKey = `${turnId}:confirm:${stepIdx}`;
 
+  // Task #340 — track the just-confirmed write so meta.undo_last can
+  // find it. We update session draft AFTER the tool runs successfully
+  // below; this comment marks the intent.
   const result = await runIdempotentJob({
     idemKey,
     orgId: persona.orgId,
@@ -2741,6 +3122,23 @@ export async function confirmPendingWrite(
       confirmed: true,
     },
   });
+
+  // Task #340 — record write metadata on session draft so the next
+  // /undo or recap call can find this commit. Without this, the
+  // standard two-phase confirmed write would never reach undo_last
+  // because runTurn's in-loop tracker only fires when confirm===true
+  // is on the original input.
+  if (result.ok) {
+    const dataObj = (result.data ?? {}) as Record<string, unknown>;
+    recordSessionResult(turn.sessionId, {
+      lastWriteTurnId: turnId,
+      lastWriteTool: pending.tool,
+      lastWriteRaidId:
+        pending.tool === "raid_add_v2" && typeof dataObj.id === "string"
+          ? (dataObj.id as string)
+          : undefined,
+    });
+  }
 
   const newStatus: CliTurnStatus = result.ok ? "success" : "error";
   emit({
