@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 
 // Pages
 import SignIn from "@/pages/SignIn";
+import Cli from "@/pages/Cli";
 import Home from "@/pages/Home";
 import Pipeline from "@/pages/Pipeline";
 import Crm from "@/pages/Crm";
@@ -57,6 +58,7 @@ function Router() {
     <Shell>
       <Switch>
         <Route path="/sign-in" component={SignIn} />
+        <Route path="/cli" component={Cli} />
         <Route path="/" component={Home} />
         <Route path="/crm" component={Crm} />
         <Route path="/pipeline">

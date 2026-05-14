@@ -1,0 +1,1525 @@
+/**
+ * Task #333 — Atelier CLI Cmd+K command bar.
+ *
+ * One component, all states. Composer at the bottom, transcript above,
+ * /help drawer + saved-prompt drawer slide in over the transcript.
+ *
+ * Keyboard model:
+ *   ⌘K / Ctrl+K — open (handled in Shell.tsx via window listener)
+ *   Esc        — close, focus restored to the trigger
+ *   Enter      — submit
+ *   Shift+Enter — newline
+ *   ↑          — recall last prompt (from cursor at the start of empty composer)
+ *   ⌘↩ / Ctrl+↩ — confirm a pending plan
+ *   /          — opens slash menu (filter by typed token after the slash)
+ *
+ * A11y:
+ *   - role="dialog" aria-modal="true" with focus trap when open
+ *   - transcript: role="log" aria-live="polite" so SR doesn't read every token
+ *   - prefers-reduced-motion: removes the streaming pulse
+ *   - data-testid stable on every state for end-to-end tests
+ *   - RTL mirroring: `dir="rtl"` on the panel root when locale is `ar`
+ */
+
+import * as React from "react";
+import { useLocation } from "wouter";
+import {
+  X,
+  Send,
+  Paperclip,
+  Sparkles,
+  HelpCircle,
+  Bookmark,
+  Languages,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Copy,
+  ExternalLink,
+  XCircle,
+  RotateCcw,
+  Trash2,
+  Save,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useCli } from "./useCli";
+import { s, sFmt, localeInstruction } from "./locale";
+import { derivePageContext, suggestionsFor } from "./pageContext";
+import {
+  addSavedPrompt,
+  deleteSavedPrompt,
+  listSavedPrompts,
+  type SavedPrompt,
+} from "./savedPrompts";
+import type { CliCapability, CliLocale, CliTurn } from "./types";
+
+const MAX_INPUT_CHARS = 4000;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const ALLOWED_MIME = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
+  "text/plain",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
+
+export interface CommandBarProps {
+  open: boolean;
+  onClose: () => void;
+  /** Element to restore focus to on close (typically the top-nav button). */
+  triggerRef?: React.RefObject<HTMLElement | null>;
+}
+
+export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
+  const [location] = useLocation();
+  const [locale, setLocale] = React.useState<CliLocale>(() => {
+    if (typeof window === "undefined") return "en";
+    return (window.localStorage.getItem("atelier-cli-locale") as CliLocale) ?? "en";
+  });
+  const dir = locale === "ar" ? "rtl" : "ltr";
+
+  const cli = useCli({ locale });
+  const pageCtx = React.useMemo(() => derivePageContext(location), [location]);
+
+  const [input, setInput] = React.useState("");
+  const [attachments, setAttachments] = React.useState<
+    Array<{ id: string; name: string; size: number; mime: string; error?: string }>
+  >([]);
+  const [slashOpen, setSlashOpen] = React.useState(false);
+  const [slashIndex, setSlashIndex] = React.useState(0);
+  const [helpOpen, setHelpOpen] = React.useState(false);
+  const [savedOpen, setSavedOpen] = React.useState(false);
+  const [savedPrompts, setSavedPrompts] = React.useState<SavedPrompt[]>([]);
+  const [typedName, setTypedName] = React.useState("");
+  const [showAllSteps, setShowAllSteps] = React.useState(false);
+  const [editingPlanRow, setEditingPlanRow] = React.useState<number | null>(null);
+
+  const composerRef = React.useRef<HTMLTextAreaElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const transcriptRef = React.useRef<HTMLDivElement>(null);
+  const lastPromptRef = React.useRef<string>("");
+
+  const reduced = useReducedMotion();
+
+  // Persist locale across opens.
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("atelier-cli-locale", locale);
+    }
+  }, [locale]);
+
+  // Focus management: open → focus composer; Esc → close + restore;
+  // Tab/Shift+Tab → wrap inside the dialog so focus can never escape
+  // to the page underneath while the modal is open. We re-query the
+  // tabbable set on each Tab keypress so dynamically-rendered chrome
+  // (slash menu, drawer panels, plan rows) is included automatically.
+  React.useEffect(() => {
+    if (!open) return;
+    setSavedPrompts(listSavedPrompts());
+    const t = setTimeout(() => composerRef.current?.focus(), 30);
+
+    const TABBABLE =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === "Tab" && panelRef.current) {
+        const nodes = Array.from(
+          panelRef.current.querySelectorAll<HTMLElement>(TABBABLE),
+        ).filter((el) => !el.hasAttribute("aria-hidden") && el.offsetParent !== null);
+        if (nodes.length === 0) return;
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        // Wrap focus at both ends. Tab on last → first; Shift+Tab on
+        // first (or anywhere outside the panel) → last.
+        if (e.shiftKey) {
+          if (active === first || !panelRef.current.contains(active)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (active === last || !panelRef.current.contains(active)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+
+    // Defensive: if focus somehow lands outside (e.g., a 3rd-party
+    // tooltip portal), pull it back to the composer.
+    const onFocusIn = (e: FocusEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        composerRef.current?.focus();
+      }
+    };
+    document.addEventListener("focusin", onFocusIn);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("focusin", onFocusIn);
+      clearTimeout(t);
+      // Focus restoration: defer one frame so any close animation
+      // doesn't fight us for the active element.
+      requestAnimationFrame(() => {
+        triggerRef?.current?.focus();
+      });
+    };
+  }, [open, onClose, triggerRef]);
+
+  // Auto-scroll transcript on new content.
+  React.useEffect(() => {
+    if (!open) return;
+    const el = transcriptRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [open, cli.turns, cli.current]);
+
+  // ⌘↩ / Ctrl+↩ confirms a pending plan.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        if (cli.current?.status === "needs_confirmation") {
+          e.preventDefault();
+          handleConfirm();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  // Filtered slash candidates: filter the catalog by the token after `/`.
+  const slashToken = input.startsWith("/") ? input.slice(1).split(/\s/)[0].toLowerCase() : "";
+  const slashCandidates = React.useMemo<CliCapability[]>(() => {
+    if (!input.startsWith("/")) return [];
+    const tok = slashToken;
+    return cli.capabilities
+      .filter((c) => {
+        if (!tok) return true;
+        const aliases = [
+          ...(c.slashAliases.en ?? []),
+          ...(c.slashAliases.ar ?? []),
+          ...(c.slashAliases.fr ?? []),
+          c.toolName,
+          c.id,
+        ];
+        return aliases.some((a) => a.toLowerCase().includes(tok));
+      })
+      .slice(0, 8);
+  }, [input, slashToken, cli.capabilities]);
+
+  React.useEffect(() => {
+    setSlashOpen(input.startsWith("/") && slashCandidates.length > 0);
+    setSlashIndex(0);
+  }, [input, slashCandidates.length]);
+
+  function pickSlash(c: CliCapability) {
+    const alias = c.slashAliases[locale]?.[0] ?? c.slashAliases.en?.[0] ?? c.toolName;
+    setInput(`/${alias} `);
+    setSlashOpen(false);
+    composerRef.current?.focus();
+  }
+
+  function handleSubmit(intent: "read" | "write" | null = null, dryRun = false) {
+    const text = input.trim();
+    if (!text || cli.status === "streaming") return;
+    if (text.length > MAX_INPUT_CHARS) return;
+    lastPromptRef.current = text;
+    setInput("");
+    setSlashOpen(false);
+    setShowAllSteps(false);
+    setTypedName("");
+    setEditingPlanRow(null);
+    void cli.submit({
+      prompt: text,
+      attachmentIds: attachments.filter((a) => !a.error).map((a) => a.id),
+      pageContext: pageCtx,
+      dryRun,
+      intent,
+    });
+  }
+
+  function handleConfirm() {
+    const required = cli.current?.pending?.typedNameRequired;
+    if (required && typedName.trim() !== required.trim()) {
+      // Server will also reject; we surface the local check immediately
+      // so the user doesn't pay the round-trip.
+      return;
+    }
+    // Forward the *user-entered* typed name (not the prompt name) so
+    // the server-side audit log records what the human actually typed.
+    // Plan-row exclusions are forwarded for #334/#335 enforcement; the
+    // current server confirm path ignores unknown body fields.
+    void cli.confirm(
+      required ? typedName.trim() : undefined,
+      cli.current?.excludedStepIndexes ?? [],
+    );
+    setTypedName("");
+  }
+
+  function handleAttach(files: FileList | null) {
+    if (!files) return;
+    const next = [...attachments];
+    for (const f of Array.from(files)) {
+      const id = `att_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      let error: string | undefined;
+      if (f.size > MAX_FILE_BYTES) error = s("fileTooLarge", locale);
+      else if (f.type && !ALLOWED_MIME.has(f.type)) error = s("fileTypeRejected", locale);
+      next.push({ id, name: f.name, size: f.size, mime: f.type, error });
+    }
+    setAttachments(next);
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments(attachments.filter((a) => a.id !== id));
+  }
+
+  function recallLast() {
+    if (lastPromptRef.current) {
+      setInput(lastPromptRef.current);
+      requestAnimationFrame(() => {
+        composerRef.current?.focus();
+        composerRef.current?.setSelectionRange(
+          lastPromptRef.current.length,
+          lastPromptRef.current.length,
+        );
+      });
+    }
+  }
+
+  function onComposerKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (slashOpen) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashIndex((i) => Math.min(slashCandidates.length - 1, i + 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey && slashCandidates[slashIndex]) {
+        e.preventDefault();
+        pickSlash(slashCandidates[slashIndex]);
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+      return;
+    }
+    if (e.key === "ArrowUp" && input === "" && lastPromptRef.current) {
+      e.preventDefault();
+      recallLast();
+    }
+  }
+
+  function copyText(t: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      void navigator.clipboard.writeText(t);
+    }
+  }
+
+  function exportTranscriptMarkdown() {
+    const lines: string[] = [`# Atelier CLI transcript — ${new Date().toISOString()}`, ""];
+    for (const t of [...cli.turns].reverse()) {
+      lines.push(`## ${t.prompt}`);
+      lines.push(`_status: ${t.status}_`);
+      if (t.result) {
+        lines.push(`**${t.result.title}** — ${t.result.summary ?? ""}`);
+        for (const e of t.result.entities ?? []) lines.push(`- ${e.kind}: ${e.label}`);
+      }
+      if (t.error) lines.push(`> ERROR ${t.error.code}: ${t.error.message}`);
+      lines.push("");
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `atelier-cli-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function saveCurrentAsShortcut() {
+    const c = cli.current;
+    if (!c) return;
+    const label = c.prompt.slice(0, 60);
+    const sp = addSavedPrompt({
+      label,
+      prompt: c.prompt,
+      locale,
+      schemaVersionAtSave: 1,
+    });
+    setSavedPrompts((rows) => [sp, ...rows]);
+  }
+
+  if (!open) return null;
+
+  const status = cli.status;
+  const current = cli.current;
+  const suggestions = suggestionsFor(pageCtx, locale);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      data-testid="cli-overlay"
+    >
+      <div
+        className={cn(
+          "absolute inset-0 bg-black/60",
+          reduced ? "" : "backdrop-blur-sm transition-opacity duration-200",
+        )}
+        aria-hidden
+      />
+      <div
+        ref={panelRef}
+        dir={dir}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Atelier command bar"
+        className={cn(
+          "relative w-full sm:w-[760px] sm:max-w-[calc(100vw-2rem)]",
+          "h-[88vh] sm:h-[640px] sm:max-h-[calc(100vh-3rem)]",
+          "bg-bg-deep border border-border sm:rounded-xl shadow-2xl",
+          "flex flex-col overflow-hidden text-text",
+        )}
+        data-testid="cli-panel"
+        data-status={status}
+        data-locale={locale}
+      >
+        <Header
+          locale={locale}
+          onLocaleChange={setLocale}
+          onClose={onClose}
+          onHelp={() => {
+            setHelpOpen((v) => !v);
+            setSavedOpen(false);
+          }}
+          onSaved={() => {
+            setSavedOpen((v) => !v);
+            setHelpOpen(false);
+          }}
+          surface={pageCtx.surface}
+          status={status}
+        />
+
+        <div ref={transcriptRef} className="flex-1 overflow-y-auto scrollbar-thin">
+          {helpOpen ? (
+            <HelpPanel
+              capabilities={cli.capabilities}
+              error={cli.capabilitiesError}
+              locale={locale}
+            />
+          ) : savedOpen ? (
+            <SavedPanel
+              prompts={savedPrompts}
+              currentSchemaVersion={1}
+              locale={locale}
+              onRun={(p) => {
+                setSavedOpen(false);
+                setLocale(p.locale);
+                lastPromptRef.current = p.prompt;
+                void cli.submit({ prompt: p.prompt, pageContext: pageCtx });
+              }}
+              onDelete={(id) => {
+                deleteSavedPrompt(id);
+                setSavedPrompts(listSavedPrompts());
+              }}
+            />
+          ) : (
+            <Transcript
+              turns={cli.turns}
+              current={current}
+              suggestions={suggestions}
+              locale={locale}
+              dir={dir}
+              reduced={reduced}
+              showAllSteps={showAllSteps}
+              setShowAllSteps={setShowAllSteps}
+              editingPlanRow={editingPlanRow}
+              setEditingPlanRow={setEditingPlanRow}
+              typedName={typedName}
+              setTypedName={setTypedName}
+              onConfirm={handleConfirm}
+              onCancelTurn={() => void cli.cancel()}
+              onPickDisambig={(id, label) => void cli.pickDisambig(id, label)}
+              onToggleStep={cli.toggleStepExclusion}
+              onPickSuggestion={(text) => {
+                setInput(text);
+                requestAnimationFrame(() => composerRef.current?.focus());
+              }}
+              onCopyJson={(t) => copyText(JSON.stringify(t.proposedPlan ?? t.pending ?? {}, null, 2))}
+              onCopyMarkdown={(t) =>
+                copyText(`# ${t.prompt}\n\n${t.result?.summary ?? ""}`)
+              }
+              onExport={exportTranscriptMarkdown}
+              onSaveShortcut={saveCurrentAsShortcut}
+            />
+          )}
+        </div>
+
+        <Composer
+          input={input}
+          onInput={setInput}
+          onKeyDown={onComposerKey}
+          onSubmit={() => handleSubmit()}
+          onAttach={() => fileInputRef.current?.click()}
+          onDropFiles={(fl) => handleAttach(fl)}
+          attachments={attachments}
+          onRemoveAttachment={removeAttachment}
+          locale={locale}
+          status={status}
+          slashOpen={slashOpen}
+          slashCandidates={slashCandidates}
+          slashIndex={slashIndex}
+          onPickSlash={pickSlash}
+          composerRef={composerRef}
+        />
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => handleAttach(e.target.files)}
+          data-testid="cli-file-input"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────── Header ───────────────────────────── */
+
+function Header({
+  locale,
+  onLocaleChange,
+  onClose,
+  onHelp,
+  onSaved,
+  surface,
+  status,
+}: {
+  locale: CliLocale;
+  onLocaleChange: (l: CliLocale) => void;
+  onClose: () => void;
+  onHelp: () => void;
+  onSaved: () => void;
+  surface: string;
+  status: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-bg-elevate">
+      <Sparkles className="w-4 h-4 text-gold shrink-0" aria-hidden />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold leading-tight">The Atelier</div>
+        <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider truncate">
+          {surface.replaceAll("_", " ")} · {status}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => onLocaleChange(locale === "en" ? "ar" : "en")}
+        className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-text-mute hover:text-gold transition-colors px-2 py-1 rounded hover:bg-bg-elevate-2"
+        title={s("localeLabel", locale)}
+        data-testid="cli-locale-toggle"
+      >
+        <Languages className="w-3.5 h-3.5" />
+        {locale.toUpperCase()}
+      </button>
+      <button
+        type="button"
+        onClick={onSaved}
+        className="text-text-mute hover:text-gold p-1.5 rounded hover:bg-bg-elevate-2 transition-colors"
+        title={s("savedDrawerTitle", locale)}
+        data-testid="cli-saved-toggle"
+      >
+        <Bookmark className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onHelp}
+        className="text-text-mute hover:text-gold p-1.5 rounded hover:bg-bg-elevate-2 transition-colors"
+        title={s("helpTitle", locale)}
+        data-testid="cli-help-toggle"
+      >
+        <HelpCircle className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="text-text-mute hover:text-text p-1.5 rounded hover:bg-bg-elevate-2 transition-colors"
+        title={s("close", locale)}
+        data-testid="cli-close"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+/* ─────────────────────────── Composer ─────────────────────────── */
+
+function Composer({
+  input,
+  onInput,
+  onKeyDown,
+  onSubmit,
+  onAttach,
+  onDropFiles,
+  attachments,
+  onRemoveAttachment,
+  locale,
+  status,
+  slashOpen,
+  slashCandidates,
+  slashIndex,
+  onPickSlash,
+  composerRef,
+}: {
+  input: string;
+  onInput: (v: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onSubmit: () => void;
+  onAttach: () => void;
+  onDropFiles: (fl: FileList) => void;
+  attachments: Array<{ id: string; name: string; size: number; mime: string; error?: string }>;
+  onRemoveAttachment: (id: string) => void;
+  locale: CliLocale;
+  status: string;
+  slashOpen: boolean;
+  slashCandidates: CliCapability[];
+  slashIndex: number;
+  onPickSlash: (c: CliCapability) => void;
+  composerRef: React.RefObject<HTMLTextAreaElement | null>;
+}) {
+  const [dragOver, setDragOver] = React.useState(false);
+  const overLimit = input.length > MAX_INPUT_CHARS;
+  return (
+    <div
+      className={cn(
+        "border-t border-border bg-bg-elevate p-3 shrink-0 relative",
+        dragOver && "ring-2 ring-gold ring-inset",
+      )}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer.files) onDropFiles(e.dataTransfer.files);
+      }}
+      data-testid="cli-composer"
+    >
+      {slashOpen && (
+        <div
+          className="absolute bottom-full left-3 right-3 mb-1 bg-bg-deep border border-border rounded-md shadow-2xl overflow-hidden"
+          role="listbox"
+          aria-label="Slash commands"
+          data-testid="cli-slash-menu"
+        >
+          {slashCandidates.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              role="option"
+              aria-selected={i === slashIndex}
+              onClick={() => onPickSlash(c)}
+              className={cn(
+                "w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-3 transition-colors",
+                i === slashIndex ? "bg-bg-elevate-2 text-gold" : "hover:bg-bg-elevate text-text",
+              )}
+              data-testid="cli-slash-item"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono text-xs text-gold shrink-0">
+                  /{c.slashAliases[locale]?.[0] ?? c.slashAliases.en?.[0] ?? c.toolName}
+                </span>
+                <span className="text-text-mute text-xs truncate">{c.description}</span>
+              </div>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint shrink-0">
+                {c.module}
+                {c.irreversible ? " · ⚠" : c.isWrite ? " · ✎" : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2" data-testid="cli-attachments">
+          {attachments.map((a) => (
+            <span
+              key={a.id}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-mono border",
+                a.error
+                  ? "bg-danger/10 border-danger/40 text-danger"
+                  : "bg-bg-elevate-2 border-border text-text-mute",
+              )}
+              title={a.error ?? `${(a.size / 1024).toFixed(1)} KB · ${a.mime || "?"}`}
+              data-testid="cli-attachment-chip"
+            >
+              <Paperclip className="w-3 h-3" />
+              <span className="max-w-[160px] truncate">{a.name}</span>
+              <button
+                type="button"
+                onClick={() => onRemoveAttachment(a.id)}
+                aria-label="remove"
+                className="hover:text-text"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-end gap-2">
+        <button
+          type="button"
+          onClick={onAttach}
+          className="text-text-mute hover:text-gold p-2 rounded hover:bg-bg-elevate-2 transition-colors shrink-0"
+          title={s("attach", locale)}
+          data-testid="cli-attach-button"
+        >
+          <Paperclip className="w-4 h-4" />
+        </button>
+        <textarea
+          ref={composerRef}
+          value={input}
+          onChange={(e) => onInput(e.target.value.slice(0, MAX_INPUT_CHARS + 200))}
+          onKeyDown={onKeyDown}
+          rows={1}
+          placeholder={s("placeholder", locale)}
+          aria-invalid={overLimit || undefined}
+          aria-label={s("placeholder", locale)}
+          disabled={status === "streaming"}
+          className={cn(
+            "flex-1 resize-none text-sm leading-relaxed bg-bg-deep border rounded-md px-3 py-2",
+            "focus:outline-none focus:ring-1 max-h-40 placeholder:text-text-faint",
+            "disabled:opacity-60",
+            overLimit
+              ? "border-danger focus:ring-danger"
+              : "border-border focus:ring-gold focus:border-gold",
+          )}
+          data-testid="cli-input"
+        />
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!input.trim() || status === "streaming" || overLimit}
+          className={cn(
+            "shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-md transition-colors",
+            "bg-gold text-bg-deep hover:bg-gold/90 disabled:bg-bg-elevate-2 disabled:text-text-faint",
+          )}
+          aria-label={s("send", locale)}
+          title={s("send", locale)}
+          data-testid="cli-send"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-[10px] font-mono text-text-faint">
+        <span>
+          {s("newline", locale)} · {s("recallHint", locale)}
+        </span>
+        <span data-testid="cli-char-count">
+          {input.length}/{MAX_INPUT_CHARS}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── Transcript ─────────────────────────── */
+
+function Transcript({
+  turns,
+  current,
+  suggestions,
+  locale,
+  dir,
+  reduced,
+  showAllSteps,
+  setShowAllSteps,
+  editingPlanRow,
+  setEditingPlanRow,
+  typedName,
+  setTypedName,
+  onConfirm,
+  onCancelTurn,
+  onPickDisambig,
+  onToggleStep,
+  onPickSuggestion,
+  onCopyJson,
+  onCopyMarkdown,
+  onExport,
+  onSaveShortcut,
+}: {
+  turns: CliTurn[];
+  current: CliTurn | null;
+  suggestions: Array<{ text: string }>;
+  locale: CliLocale;
+  dir: "ltr" | "rtl";
+  reduced: boolean;
+  showAllSteps: boolean;
+  setShowAllSteps: (v: boolean) => void;
+  editingPlanRow: number | null;
+  setEditingPlanRow: (n: number | null) => void;
+  typedName: string;
+  setTypedName: (v: string) => void;
+  onConfirm: () => void;
+  onCancelTurn: () => void;
+  onPickDisambig: (id: string, label: string) => void;
+  onToggleStep: (i: number) => void;
+  onPickSuggestion: (t: string) => void;
+  onCopyJson: (t: CliTurn) => void;
+  onCopyMarkdown: (t: CliTurn) => void;
+  onExport: () => void;
+  onSaveShortcut: () => void;
+}) {
+  if (turns.length === 0) {
+    return (
+      <div className="p-6 space-y-4" data-testid="cli-empty">
+        <p className="text-sm text-text-mute leading-relaxed">{s("emptyHint", locale)}</p>
+        <div className="flex flex-col gap-2">
+          {suggestions.map((sug) => (
+            <button
+              key={sug.text}
+              type="button"
+              onClick={() => onPickSuggestion(sug.text)}
+              className="text-start text-sm bg-bg-elevate hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded-md px-3 py-2.5 transition-colors"
+              data-testid="cli-suggestion"
+            >
+              {sug.text}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="p-4 space-y-5"
+      role="log"
+      aria-live="polite"
+      aria-busy={current?.status === "streaming"}
+      data-testid="cli-transcript"
+    >
+      {[...turns].reverse().map((t) => {
+        const isCurrent = t.clientTurnKey === current?.clientTurnKey;
+        return (
+          <div key={t.clientTurnKey} data-testid="cli-turn" data-status={t.status}>
+            <div
+              className={cn("flex mb-2", dir === "rtl" ? "justify-start" : "justify-end")}
+              data-testid="cli-user-bubble"
+            >
+              <div className="max-w-[85%] bg-gold/10 border border-gold/30 text-text rounded-2xl px-3.5 py-2 text-sm leading-relaxed">
+                {t.prompt}
+              </div>
+            </div>
+            <div className={cn("flex", dir === "rtl" ? "justify-end" : "justify-start")}>
+              <div className="max-w-[92%] w-full">
+                <TurnBody
+                  turn={t}
+                  isCurrent={isCurrent}
+                  locale={locale}
+                  reduced={reduced}
+                  showAllSteps={showAllSteps}
+                  setShowAllSteps={setShowAllSteps}
+                  editingPlanRow={editingPlanRow}
+                  setEditingPlanRow={setEditingPlanRow}
+                  typedName={typedName}
+                  setTypedName={setTypedName}
+                  onConfirm={onConfirm}
+                  onCancelTurn={onCancelTurn}
+                  onPickDisambig={onPickDisambig}
+                  onToggleStep={onToggleStep}
+                  onPickSuggestion={onPickSuggestion}
+                  onCopyJson={() => onCopyJson(t)}
+                  onCopyMarkdown={() => onCopyMarkdown(t)}
+                  onExport={onExport}
+                  onSaveShortcut={onSaveShortcut}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TurnBody({
+  turn,
+  isCurrent,
+  locale,
+  reduced,
+  showAllSteps,
+  setShowAllSteps,
+  editingPlanRow,
+  setEditingPlanRow,
+  typedName,
+  setTypedName,
+  onConfirm,
+  onCancelTurn,
+  onPickDisambig,
+  onToggleStep,
+  onPickSuggestion,
+  onCopyJson,
+  onCopyMarkdown,
+  onExport,
+  onSaveShortcut,
+}: {
+  turn: CliTurn;
+  isCurrent: boolean;
+  locale: CliLocale;
+  reduced: boolean;
+  showAllSteps: boolean;
+  setShowAllSteps: (v: boolean) => void;
+  editingPlanRow: number | null;
+  setEditingPlanRow: (n: number | null) => void;
+  typedName: string;
+  setTypedName: (v: string) => void;
+  onConfirm: () => void;
+  onCancelTurn: () => void;
+  onPickDisambig: (id: string, label: string) => void;
+  onToggleStep: (i: number) => void;
+  onPickSuggestion: (t: string) => void;
+  onCopyJson: () => void;
+  onCopyMarkdown: () => void;
+  onExport: () => void;
+  onSaveShortcut: () => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      {turn.trace.length > 0 && (
+        <div
+          className="bg-bg-elevate border border-border rounded-md px-3 py-2 text-[12px] font-mono text-text-mute space-y-0.5"
+          data-testid="cli-trace"
+        >
+          {turn.trace.slice(-8).map((line, i) => (
+            <div key={i} className="leading-snug">
+              {line.text}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {turn.status === "streaming" && (
+        <div
+          className="inline-flex items-center gap-2 text-text-faint text-xs"
+          data-testid="cli-streaming"
+        >
+          <span
+            className={cn(
+              "w-1.5 h-1.5 rounded-full bg-gold",
+              reduced ? "" : "animate-pulse",
+            )}
+            aria-hidden
+          />
+          {s("thinking", locale)}
+          {isCurrent && (
+            <button
+              type="button"
+              onClick={onCancelTurn}
+              className="ml-2 text-text-mute hover:text-danger underline-offset-2 hover:underline"
+              data-testid="cli-streaming-cancel"
+            >
+              {s("cancel", locale)}
+            </button>
+          )}
+        </div>
+      )}
+
+      {turn.disambig && turn.status === "needs_disambiguation" && (
+        <div
+          className="bg-bg-elevate border border-gold/40 rounded-md p-3 space-y-2"
+          data-testid="cli-disambig"
+        >
+          <div className="text-xs font-mono uppercase tracking-wider text-gold">
+            {s("pickOne", locale)}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {turn.disambig.options.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => onPickDisambig(opt.id, opt.label)}
+                className="text-start bg-bg-deep hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded px-3 py-2 text-sm transition-colors"
+                data-testid="cli-disambig-option"
+              >
+                <div className="font-medium">{opt.label}</div>
+                {opt.hint && <div className="text-xs text-text-faint">{opt.hint}</div>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {turn.proposedPlan && turn.proposedPlan.length > 0 && (
+        <PlanCard
+          plan={turn.proposedPlan}
+          excluded={turn.excludedStepIndexes ?? []}
+          locale={locale}
+          showAll={showAllSteps}
+          setShowAll={setShowAllSteps}
+          editingRow={editingPlanRow}
+          setEditingRow={setEditingPlanRow}
+          onToggleStep={onToggleStep}
+          isReadOnly={!isCurrent || turn.status !== "needs_confirmation"}
+        />
+      )}
+
+      {turn.status === "needs_confirmation" && turn.pending && isCurrent && (
+        <div
+          className="bg-bg-elevate border border-gold rounded-md p-3 space-y-2.5"
+          data-testid="cli-confirm-card"
+        >
+          <div className="text-sm">{turn.pending.summary}</div>
+          {turn.pending.typedNameRequired && (
+            <div className="space-y-1">
+              <label
+                htmlFor="cli-typed-name"
+                className="text-xs font-mono uppercase tracking-wider text-danger"
+              >
+                {s("typedNameLabel", locale)}
+              </label>
+              <input
+                id="cli-typed-name"
+                value={typedName}
+                onChange={(e) => setTypedName(e.target.value)}
+                placeholder={turn.pending.typedNameRequired}
+                className="w-full bg-bg-deep border border-danger/50 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-danger"
+                data-testid="cli-typed-name-input"
+              />
+              {typedName && typedName.trim() !== turn.pending.typedNameRequired.trim() && (
+                <div className="text-[11px] text-danger" data-testid="cli-typed-name-mismatch">
+                  {s("typedNameMismatch", locale)}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={
+                !!turn.pending.typedNameRequired &&
+                typedName.trim() !== turn.pending.typedNameRequired.trim()
+              }
+              className="inline-flex items-center gap-1.5 bg-gold text-bg-deep font-semibold text-sm px-3 py-1.5 rounded hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="cli-confirm"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {s("confirm", locale)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingPlanRow(0)}
+              className="text-sm text-text-mute hover:text-text px-3 py-1.5 rounded hover:bg-bg-elevate-2"
+              data-testid="cli-edit"
+            >
+              {s("edit", locale)}
+            </button>
+            <button
+              type="button"
+              onClick={onCancelTurn}
+              className="text-sm text-text-mute hover:text-danger px-3 py-1.5 rounded hover:bg-bg-elevate-2"
+              data-testid="cli-cancel"
+            >
+              {s("cancel", locale)}
+            </button>
+            <span className="ml-auto text-[10px] font-mono text-text-faint">⌘↩</span>
+          </div>
+        </div>
+      )}
+
+      {turn.status === "async_handoff" && turn.asyncJob && (
+        <div
+          className="bg-bg-elevate border border-gold/40 rounded-md p-3 flex items-start gap-2"
+          data-testid="cli-async-handoff"
+        >
+          <Clock className="w-4 h-4 text-gold mt-0.5 shrink-0" />
+          <div className="flex-1 text-sm">
+            {s("asyncHandoff", locale)}
+            <div className="text-[11px] font-mono text-text-faint mt-1">
+              job {turn.asyncJob.jobId}
+            </div>
+          </div>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-gold bg-bg-deep border border-gold/40 px-1.5 py-0.5 rounded">
+            {s("asyncBadge", locale)}
+          </span>
+        </div>
+      )}
+
+      {turn.status === "partial" && turn.partial && (
+        <div
+          className="bg-danger/10 border border-danger/40 rounded-md p-3 space-y-2"
+          data-testid="cli-partial"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
+            <div className="text-sm">
+              {sFmt("partialBanner", locale, { n: turn.partial.failedStepIndex + 1 })}
+              <div className="text-xs font-mono text-danger mt-1">{turn.partial.error}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onPickSuggestion(`Resume the previous turn from step ${turn.partial!.failedStepIndex + 1}`)}
+              className="text-xs bg-bg-elevate border border-border hover:border-gold/50 rounded px-2 py-1"
+              data-testid="cli-resume"
+            >
+              {s("resume", locale)}
+            </button>
+            <button
+              type="button"
+              onClick={() => onPickSuggestion("Rollback the partially-completed turn")}
+              className="text-xs bg-bg-elevate border border-border hover:border-gold/50 rounded px-2 py-1"
+              data-testid="cli-rollback"
+            >
+              {s("rollback", locale)}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {turn.status === "error" && turn.error && (
+        <div
+          className="bg-danger/10 border border-danger/40 rounded-md p-3 flex items-start gap-2"
+          data-testid="cli-error"
+        >
+          <XCircle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
+          <div className="flex-1 text-sm">
+            <div className="font-mono text-xs uppercase tracking-wider text-danger mb-0.5">
+              {s("errorBadge", locale)} · {turn.error.code}
+            </div>
+            {turn.error.message}
+          </div>
+        </div>
+      )}
+
+      {turn.status === "cancelled" && (
+        <div
+          className="text-xs font-mono text-text-faint italic"
+          data-testid="cli-cancelled"
+        >
+          {s("cancelled", locale)}
+        </div>
+      )}
+
+      {turn.result && (turn.status === "complete" || turn.status === "partial") && (
+        <ResultCard
+          result={turn.result}
+          locale={locale}
+          onCopyJson={onCopyJson}
+          onCopyMarkdown={onCopyMarkdown}
+          onExport={onExport}
+          onSaveShortcut={onSaveShortcut}
+          onFollowUp={onPickSuggestion}
+        />
+      )}
+    </div>
+  );
+}
+
+function PlanCard({
+  plan,
+  excluded,
+  locale,
+  showAll,
+  setShowAll,
+  editingRow,
+  setEditingRow,
+  onToggleStep,
+  isReadOnly,
+}: {
+  plan: import("./types").CliPlanStep[];
+  excluded: number[];
+  locale: CliLocale;
+  showAll: boolean;
+  setShowAll: (v: boolean) => void;
+  editingRow: number | null;
+  setEditingRow: (n: number | null) => void;
+  onToggleStep: (i: number) => void;
+  isReadOnly: boolean;
+}) {
+  const isBulk = plan.length > 20;
+  const visibleSteps = isBulk && !showAll ? plan.slice(0, 5) : plan;
+  return (
+    <div
+      className="bg-bg-elevate border border-border rounded-md p-3 space-y-2"
+      data-testid="cli-plan-card"
+    >
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-mono uppercase tracking-wider text-gold">
+          {s("proposedPlan", locale)}
+        </div>
+        {isBulk && (
+          <button
+            type="button"
+            onClick={() => setShowAll(!showAll)}
+            className="text-xs text-text-mute hover:text-gold inline-flex items-center gap-1"
+            data-testid="cli-plan-toggle-all"
+          >
+            {showAll ? s("collapseAll", locale) : s("showAll", locale)}
+            {showAll ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        )}
+      </div>
+      {isBulk && !showAll && (
+        <div className="text-sm text-text-mute" data-testid="cli-plan-bulk-summary">
+          {sFmt("bulkSummary", locale, { n: plan.length })}
+        </div>
+      )}
+      <div className="space-y-1">
+        {visibleSteps.map((step, i) => {
+          const isExcluded = excluded.includes(i);
+          return (
+            <div
+              key={i}
+              className={cn(
+                "flex items-start gap-2 text-sm py-1 border-b border-border-soft last:border-0",
+                isExcluded && "opacity-50 line-through",
+              )}
+              data-testid="cli-plan-row"
+            >
+              {!isReadOnly && (
+                <input
+                  type="checkbox"
+                  checked={!isExcluded}
+                  onChange={() => onToggleStep(i)}
+                  className="mt-1 accent-gold"
+                  aria-label={`Include step ${i + 1}`}
+                  data-testid="cli-plan-row-toggle"
+                />
+              )}
+              <span className="text-text-faint font-mono text-xs mt-0.5 shrink-0">
+                {i + 1}.
+              </span>
+              <span className="flex-1 leading-snug">{step.label}</span>
+              {step.isWrite && (
+                <span className="text-[10px] font-mono text-gold" title="write">
+                  ✎
+                </span>
+              )}
+              {!isReadOnly && editingRow === i && (
+                <span className="text-[10px] text-text-faint italic">edit inline</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ResultCard({
+  result,
+  locale,
+  onCopyJson,
+  onCopyMarkdown,
+  onExport,
+  onSaveShortcut,
+  onFollowUp,
+}: {
+  result: import("./types").CliResultCard;
+  locale: CliLocale;
+  onCopyJson: () => void;
+  onCopyMarkdown: () => void;
+  onExport: () => void;
+  onSaveShortcut: () => void;
+  onFollowUp: (text: string) => void;
+}) {
+  return (
+    <div
+      className="bg-bg-elevate border border-success/40 rounded-md p-3 space-y-2.5"
+      data-testid="cli-result"
+    >
+      <div className="flex items-start gap-2">
+        <CheckCircle2 className="w-4 h-4 text-success mt-0.5 shrink-0" />
+        <div className="flex-1">
+          <div className="text-sm font-semibold">{result.title}</div>
+          {result.summary && (
+            <div className="text-xs text-text-mute mt-1">{result.summary}</div>
+          )}
+        </div>
+      </div>
+      {result.entities && result.entities.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+            {s("resultEntities", locale)}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {result.entities.map((e) => (
+              <a
+                key={`${e.kind}-${e.id}`}
+                href={e.href ?? "#"}
+                className="inline-flex items-center gap-1 text-xs bg-bg-deep border border-border hover:border-gold/50 hover:text-gold rounded px-2 py-0.5"
+                data-testid="cli-result-entity"
+              >
+                <span className="font-mono text-text-faint">{e.kind}</span>
+                <span>{e.label}</span>
+                {e.href && <ExternalLink className="w-3 h-3" />}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+      {result.followUps && result.followUps.length > 0 && (
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+            {s("followUps", locale)}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {result.followUps.slice(0, 3).map((f, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onFollowUp(f.prompt)}
+                className="text-xs bg-gold/10 border border-gold/30 hover:bg-gold/20 text-text rounded-full px-3 py-1"
+                data-testid="cli-followup-chip"
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-1 pt-1 border-t border-border-soft">
+        {result.auditEventId && (
+          <a
+            href={`/admin?audit=${encodeURIComponent(result.auditEventId)}`}
+            className="text-[11px] font-mono text-text-mute hover:text-gold inline-flex items-center gap-1 px-1.5 py-1"
+            data-testid="cli-result-audit"
+          >
+            <ExternalLink className="w-3 h-3" />
+            {s("viewAudit", locale)}
+          </a>
+        )}
+        {result.agentRunIds?.map((id) => (
+          <a
+            key={id}
+            href={`/agents/run/${encodeURIComponent(id)}`}
+            className="text-[11px] font-mono text-text-mute hover:text-gold inline-flex items-center gap-1 px-1.5 py-1"
+            data-testid="cli-result-agentrun"
+          >
+            <ExternalLink className="w-3 h-3" />
+            {s("viewAgentRun", locale)}
+          </a>
+        ))}
+        <span className="ml-auto inline-flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={onCopyMarkdown}
+            className="text-text-mute hover:text-gold p-1 rounded hover:bg-bg-elevate-2"
+            title={s("copyMarkdown", locale)}
+            data-testid="cli-action-copy-md"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onCopyJson}
+            className="text-text-mute hover:text-gold p-1 rounded hover:bg-bg-elevate-2 text-[10px] font-mono"
+            title={s("copyJson", locale)}
+            data-testid="cli-action-copy-json"
+          >
+            {"{ }"}
+          </button>
+          <button
+            type="button"
+            onClick={onExport}
+            className="text-text-mute hover:text-gold p-1 rounded hover:bg-bg-elevate-2"
+            title={s("exportTranscript", locale)}
+            data-testid="cli-action-export"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onSaveShortcut}
+            className="text-text-mute hover:text-gold p-1 rounded hover:bg-bg-elevate-2"
+            title={s("saveAsShortcut", locale)}
+            data-testid="cli-action-save"
+          >
+            <Save className="w-3.5 h-3.5" />
+          </button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────── /help ──────────────────────────── */
+
+function HelpPanel({
+  capabilities,
+  error,
+  locale,
+}: {
+  capabilities: CliCapability[];
+  error: string | null;
+  locale: CliLocale;
+}) {
+  const grouped = React.useMemo(() => {
+    const map = new Map<string, CliCapability[]>();
+    for (const c of capabilities) {
+      const arr = map.get(c.module) ?? [];
+      arr.push(c);
+      map.set(c.module, arr);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [capabilities]);
+  return (
+    <div className="p-4 space-y-3" data-testid="cli-help">
+      <div>
+        <div className="text-sm font-semibold">{s("helpTitle", locale)}</div>
+        <div className="text-xs text-text-faint mt-0.5">{s("helpHint", locale)}</div>
+      </div>
+      {error && (
+        <div className="text-xs text-danger" data-testid="cli-help-error">
+          {error}
+        </div>
+      )}
+      {grouped.length === 0 && !error && (
+        <div className="text-xs text-text-faint italic">No capabilities exposed for your role.</div>
+      )}
+      {grouped.map(([module, caps]) => (
+        <div key={module} className="space-y-1.5">
+          <div className="text-[11px] font-mono uppercase tracking-wider text-gold">
+            {module}
+          </div>
+          <div className="space-y-1">
+            {caps.map((c) => (
+              <div
+                key={c.id}
+                className="bg-bg-elevate border border-border rounded p-2"
+                data-testid="cli-help-row"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs text-gold">
+                    /{c.slashAliases[locale]?.[0] ?? c.slashAliases.en?.[0] ?? c.toolName}
+                  </span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+                    {c.irreversible ? "⚠ irreversible" : c.isWrite ? "✎ write" : "read"}
+                  </span>
+                </div>
+                <div className="text-xs text-text-mute mt-1">{c.description}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ───────────────────────── Saved drawer ───────────────────────── */
+
+function SavedPanel({
+  prompts,
+  currentSchemaVersion,
+  locale,
+  onRun,
+  onDelete,
+}: {
+  prompts: SavedPrompt[];
+  currentSchemaVersion: number;
+  locale: CliLocale;
+  onRun: (p: SavedPrompt) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="p-4 space-y-3" data-testid="cli-saved">
+      <div className="text-sm font-semibold">{s("savedDrawerTitle", locale)}</div>
+      {prompts.length === 0 ? (
+        <div className="text-xs text-text-faint italic">{s("savedDrawerEmpty", locale)}</div>
+      ) : (
+        <div className="space-y-2">
+          {prompts.map((p) => {
+            const stale = p.schemaVersionAtSave !== currentSchemaVersion;
+            return (
+              <div
+                key={p.id}
+                className="bg-bg-elevate border border-border rounded p-2.5 text-sm"
+                data-testid="cli-saved-row"
+              >
+                <div className="font-medium leading-snug">{p.label}</div>
+                <div className="text-xs text-text-mute mt-1 line-clamp-2">{p.prompt}</div>
+                {stale && (
+                  <div
+                    className="mt-1.5 text-[11px] text-warning bg-warning/10 border border-warning/30 rounded px-2 py-1"
+                    data-testid="cli-saved-stale"
+                  >
+                    ⚠ {s("savedSchemaWarning", locale)}
+                  </div>
+                )}
+                <div className="mt-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onRun(p)}
+                    className="text-xs bg-gold text-bg-deep font-semibold px-2 py-1 rounded hover:bg-gold/90 inline-flex items-center gap-1"
+                    data-testid="cli-saved-run"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    {s("savedRun", locale)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(p.id)}
+                    className="text-xs text-text-mute hover:text-danger px-2 py-1 rounded hover:bg-bg-elevate-2 inline-flex items-center gap-1"
+                    data-testid="cli-saved-delete"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    {s("savedDelete", locale)}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── prefers-reduced-motion ───────────────────────── */
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = React.useState<boolean>(false);
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return reduced;
+}

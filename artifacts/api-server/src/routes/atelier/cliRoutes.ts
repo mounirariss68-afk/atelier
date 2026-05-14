@@ -31,6 +31,10 @@ import {
   CliConcurrencyError,
   type CliFrame,
 } from "../../lib/atelier-cli/index.js";
+import {
+  capabilitiesForPersona,
+  CATALOG_SCHEMA_VERSION,
+} from "../../lib/atelier-cli/capability-catalog.js";
 
 function ensurePersona(
   req: Request,
@@ -250,6 +254,42 @@ router.get("/cli/sessions/:id", async (req, res) => {
       latencyMs: t.latencyMs,
       stepResults: t.stepResults,
       createdAt: t.createdAt.toISOString(),
+    })),
+  });
+});
+
+/**
+ * Task #333 — list role-filtered capabilities for the slash-command
+ * palette + /help drawer. The orchestrator already filters by role at
+ * tool-binding time; this endpoint mirrors that filter so the client
+ * never offers a slash that the server would reject.
+ */
+router.get("/cli/capabilities", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const persona = {
+    id: me.id,
+    role: me.role,
+    orgId: me.orgId,
+    name: me.name,
+    locale: (me.locale ?? "en") as "en" | "ar",
+  };
+  const caps = capabilitiesForPersona(persona as never);
+  res.json({
+    schemaVersion: CATALOG_SCHEMA_VERSION,
+    capabilities: caps.map((c) => ({
+      id: c.id,
+      module: c.module,
+      toolName: c.toolName,
+      description: c.description,
+      slashAliases: c.slashAliases,
+      isWrite: c.isWrite,
+      irreversible: c.irreversible,
+      surfaceOn: c.surfaceOn,
+      twoPhaseConfirm: c.twoPhaseConfirm,
+      outboundChannel: c.outboundChannel,
+      resultCard: c.resultCard,
+      inputSchema: c.inputSchema,
     })),
   });
 });

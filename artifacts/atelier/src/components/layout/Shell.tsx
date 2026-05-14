@@ -20,6 +20,8 @@ import { ChevronRight, ChevronLeft, Activity, Search, Bell, FileText, ExternalLi
 import { cn } from "@/lib/utils";
 import { ConfidenceChip } from "../ui/primitives";
 import { Progress } from "@/components/ui/progress";
+import { CommandBar } from "@/components/cli/CommandBar";
+import { CliContext } from "@/components/cli/cli-context";
 
 export function TopNav() {
   const [location] = useLocation();
@@ -114,9 +116,7 @@ export function TopNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-4">
-          <button className="text-text-mute hover:text-text transition-colors">
-            <Search className="w-4 h-4" />
-          </button>
+          <CliTrigger />
           <button className="text-text-mute hover:text-text transition-colors">
             <Bell className="w-4 h-4" />
           </button>
@@ -397,32 +397,88 @@ export function RightRail() {
   );
 }
 
+// Top-nav button that opens the CLI command bar. Lives inside the
+// CliContext provider so the same trigger ref is used for focus restore
+// when Esc closes the panel.
+function CliTrigger() {
+  const cli = React.useContext(CliContext);
+  const setRef = (el: HTMLButtonElement | null) => {
+    cli.triggerRef.current = el;
+  };
+  return (
+    <button
+      ref={setRef}
+      type="button"
+      onClick={() => cli.setOpen(true)}
+      className="inline-flex items-center gap-1.5 text-text-mute hover:text-gold transition-colors px-2 py-1 rounded hover:bg-bg-elevate-2"
+      title="Open command bar (⌘K)"
+      aria-label="Open command bar"
+      data-testid="cli-trigger"
+    >
+      <Search className="w-4 h-4" />
+      <span className="hidden md:inline text-[10px] font-mono uppercase tracking-wider">
+        ⌘K
+      </span>
+    </button>
+  );
+}
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const isSignIn = location === "/sign-in";
 
   const [collapsed, setCollapsed] = React.useState(false);
+  const [cliOpen, setCliOpen] = React.useState(false);
+  const cliTriggerRef = React.useRef<HTMLElement | null>(null);
+
+  // Global ⌘K / Ctrl+K binding. Stays mounted across pages so the bar
+  // is reachable from anywhere; ignored on the sign-in route.
+  React.useEffect(() => {
+    if (isSignIn) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCliOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isSignIn]);
 
   if (isSignIn) {
     return <div className="min-h-screen flex flex-col">{children}</div>;
   }
 
   return (
-    <RailContext.Provider value={{ collapsed, setCollapsed }}>
-      <div className="min-h-screen flex flex-col relative">
-        <TopNav />
-        <div className="flex flex-1">
-          <main
-            className={cn(
-              "flex-1 w-full pb-20 transition-all duration-300",
-              collapsed ? "pr-12" : "pr-12 lg:pr-80",
-            )}
-          >
-            {children}
-          </main>
-          <RightRail />
+    <CliContext.Provider
+      value={{
+        open: cliOpen,
+        setOpen: setCliOpen,
+        toggle: () => setCliOpen((v) => !v),
+        triggerRef: cliTriggerRef,
+      }}
+    >
+      <RailContext.Provider value={{ collapsed, setCollapsed }}>
+        <div className="min-h-screen flex flex-col relative">
+          <TopNav />
+          <div className="flex flex-1">
+            <main
+              className={cn(
+                "flex-1 w-full pb-20 transition-all duration-300",
+                collapsed ? "pr-12" : "pr-12 lg:pr-80",
+              )}
+            >
+              {children}
+            </main>
+            <RightRail />
+          </div>
+          <CommandBar
+            open={cliOpen}
+            onClose={() => setCliOpen(false)}
+            triggerRef={cliTriggerRef}
+          />
         </div>
-      </div>
-    </RailContext.Provider>
+      </RailContext.Provider>
+    </CliContext.Provider>
   );
 }
