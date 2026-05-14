@@ -16,12 +16,17 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, Search, Bell, FileText, ExternalLink } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, MessageSquare, Bell, FileText, ExternalLink, X as XIcon, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfidenceChip } from "../ui/primitives";
 import { Progress } from "@/components/ui/progress";
 import { CommandBar } from "@/components/cli/CommandBar";
 import { CliContext } from "@/components/cli/cli-context";
+import { s as cliS } from "@/components/cli/locale";
+import type { CliLocale } from "@/components/cli/types";
+import { emitCliOpened } from "@/components/cli/telemetry";
+import { derivePageContext } from "@/components/cli/pageContext";
+import { useToast } from "@/hooks/use-toast";
 
 export function TopNav() {
   const [location] = useLocation();
@@ -477,11 +482,18 @@ export function RightRail() {
   );
 }
 
-// Top-nav button that opens the CLI command bar. Lives inside the
-// CliContext provider so the same trigger ref is used for focus restore
+// Task #342 — top-nav launcher restyled as an obvious chat affordance:
+// chat-bubble icon + visible "Ask Atelier" label + ⌘K badge. Same click
+// handler + shortcut, clearer signal. Also the focus-restore target
 // when Esc closes the panel.
 function CliTrigger() {
   const cli = React.useContext(CliContext);
+  // Read the persisted CLI locale so the visible label matches the
+  // bar's chrome language without needing a global i18n provider.
+  const locale: CliLocale =
+    typeof window !== "undefined"
+      ? ((window.localStorage.getItem("atelier-cli-locale") as CliLocale) ?? "en")
+      : "en";
   const setRef = (el: HTMLButtonElement | null) => {
     cli.triggerRef.current = el;
   };
@@ -489,17 +501,151 @@ function CliTrigger() {
     <button
       ref={setRef}
       type="button"
-      onClick={() => cli.setOpen(true)}
-      className="inline-flex items-center gap-1.5 text-text-mute hover:text-gold transition-colors px-2 py-1 rounded hover:bg-bg-elevate-2"
-      title="Open command bar (⌘K)"
-      aria-label="Open command bar"
+      onClick={() => cli.openCli({ source: "header" })}
+      className="inline-flex items-center gap-2 text-text-mute hover:text-gold transition-colors px-2.5 py-1.5 rounded border border-border hover:border-gold/40 bg-bg-elevate/40 hover:bg-bg-elevate-2"
+      title={`${cliS("askAtelier", locale)} (⌘K)`}
+      aria-label={cliS("askAtelier", locale)}
       data-testid="cli-trigger"
     >
-      <Search className="w-4 h-4" />
-      <span className="hidden md:inline text-[10px] font-mono uppercase tracking-wider">
+      <MessageSquare className="w-4 h-4 text-gold/80" aria-hidden />
+      <span className="hidden sm:inline text-xs font-medium">
+        {cliS("askAtelier", locale)}
+      </span>
+      <span className="hidden md:inline text-[10px] font-mono uppercase tracking-wider text-text-faint border border-border-soft rounded px-1 py-px">
         ⌘K
       </span>
     </button>
+  );
+}
+
+/**
+ * Task #342 — bottom-right floating chat bubble. Visible on every page
+ * except `/cli`, dismissible per session (sessionStorage), respects
+ * safe-area insets on tablet, and threads the floating-bubble source
+ * into the cli.opened telemetry. Hidden on the sign-in route too via
+ * the parent guard in Shell.
+ */
+function FloatingCliBubble() {
+  const [location] = useLocation();
+  const cli = React.useContext(CliContext);
+  // Right rail is fixed-position on the right edge: w-12 (3rem) when
+  // collapsed, w-80 (20rem) when expanded. We read its state so the
+  // bubble can park to the *inside* of the rail instead of underneath
+  // it. RTL flips the rail-collision side too because the rail itself
+  // mirrors via `right-0` on the parent — when locale is RTL the rail
+  // visually sits on the left, so the bubble offsets accordingly.
+  const { collapsed: railCollapsed } = React.useContext(RailContext);
+  // Toast viewport (`components/ui/toast.tsx` Viewport): fixed bottom-0
+  // right-0 on sm+, max-w-[420px] with p-4. When at least one toast is
+  // active, lift the bubble above that lane so it doesn't sit on top
+  // of dismissable notifications. We subscribe to the toast store via
+  // the same hook the toaster uses; re-renders are cheap and bounded.
+  const { toasts } = useToast();
+  const hasToasts = toasts.length > 0;
+  const locale: CliLocale =
+    typeof window !== "undefined"
+      ? ((window.localStorage.getItem("atelier-cli-locale") as CliLocale) ?? "en")
+      : "en";
+  const dir = locale === "ar" ? "rtl" : "ltr";
+  const [dismissed, setDismissed] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.sessionStorage.getItem("atelier-cli-bubble-dismissed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  // Task #342 — restoration path. Whenever the panel transitions from
+  // open → closed, re-read sessionStorage: the header / ⌘K opener
+  // clears the dismissal key as part of the open() call, so once the
+  // user closes the bar the bubble re-appears for the rest of the
+  // session. (Without this re-sync, the locally-cached `dismissed`
+  // state from the initial mount would leave the bubble hidden.)
+  React.useEffect(() => {
+    if (cli.open) return;
+    try {
+      const stored =
+        window.sessionStorage.getItem("atelier-cli-bubble-dismissed") === "1";
+      setDismissed(stored);
+    } catch {
+      /* ignore */
+    }
+  }, [cli.open]);
+  // Hide on the assistant route itself (matches /cli + nested deep-links).
+  if (location.startsWith("/cli")) return null;
+  if (dismissed) return null;
+  if (cli.open) return null; // don't compete with the open panel
+  const handleClick = () => cli.openCli({ source: "floating_bubble" });
+  const handleDismiss = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      window.sessionStorage.setItem("atelier-cli-bubble-dismissed", "1");
+    } catch {
+      /* ignore */
+    }
+    setDismissed(true);
+  };
+  // Compute side-offset to clear the right rail. Tailwind's `right-`/
+  // `left-` arbitrary values support `calc(...)` so we can compose the
+  // rail width + a 1.5rem gutter inline.
+  const railOffsetRem = railCollapsed ? 3 : 20; // matches w-12 / w-80
+  const sideStyle: React.CSSProperties = dir === "rtl"
+    ? { left: `calc(${railOffsetRem}rem + 1.5rem)` }
+    : { right: `calc(${railOffsetRem}rem + 1.5rem)` };
+  // Bottom offset: clear the toast lane (toasts cap around 5–6rem tall
+  // each, but most show one at a time; 6rem is a safe baseline) plus
+  // the safe-area inset on tablets.
+  const bottomStyle: React.CSSProperties = {
+    bottom: hasToasts ? "calc(6.5rem + env(safe-area-inset-bottom))" : "calc(1.5rem + env(safe-area-inset-bottom))",
+  };
+  return (
+    <div
+      dir={dir}
+      style={{ ...sideStyle, ...bottomStyle }}
+      className={cn(
+        "fixed z-30 flex items-center",
+        // Smooth re-park when the rail collapses/expands or a toast
+        // pops in/out — disabled under reduced motion.
+        "transition-[bottom,right,left] duration-200 motion-reduce:transition-none",
+      )}
+      data-testid="cli-floating-bubble-wrap"
+      data-rail-collapsed={railCollapsed ? "1" : "0"}
+      data-toasts-active={hasToasts ? "1" : "0"}
+    >
+      <button
+        type="button"
+        onClick={handleClick}
+        aria-label={cliS("floatingBubbleLabel", locale)}
+        title={cliS("floatingBubbleLabel", locale)}
+        className={cn(
+          "group relative inline-flex items-center gap-2 rounded-full",
+          "bg-gold text-bg-deep shadow-2xl shadow-black/40",
+          "px-4 py-3 hover:bg-gold/90 transition-colors",
+          "motion-reduce:transition-none",
+          "focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-bg-deep",
+        )}
+        data-testid="cli-floating-bubble"
+      >
+        <Sparkles className="w-5 h-5" aria-hidden />
+        <span className="hidden sm:inline text-sm font-semibold">
+          {cliS("askAtelier", locale)}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={handleDismiss}
+        aria-label={cliS("floatingBubbleDismiss", locale)}
+        title={cliS("floatingBubbleDismiss", locale)}
+        className={cn(
+          "ml-1 inline-flex items-center justify-center w-6 h-6 rounded-full",
+          "bg-bg-elevate text-text-mute hover:text-text border border-border",
+          "shadow-md focus:outline-none focus:ring-2 focus:ring-gold",
+        )}
+        data-testid="cli-floating-bubble-dismiss"
+      >
+        <XIcon className="w-3.5 h-3.5" />
+      </button>
+    </div>
   );
 }
 
@@ -535,6 +681,32 @@ export function Shell({ children }: { children: React.ReactNode }) {
       registerInjectTurn: (fn: (t: import("@/components/cli/types").CliTurn) => void) => {
         injectTurnRef.current = fn;
       },
+      // Task #342 — single instrumented opener used by every launcher.
+      // Forwards an optional prefill prompt via the hydration queue so
+      // the user's in-progress text lands in the composer.
+      openCli: (opts: import("@/components/cli/cli-context").CliOpenOptions) => {
+        const surface = derivePageContext(
+          typeof window !== "undefined" ? window.location.pathname : "/",
+        ).surface;
+        emitCliOpened(opts.source, { prompt: opts.prompt ?? null, surface });
+        if (opts.prompt) {
+          hydrationRef.current = { prompt: opts.prompt };
+        }
+        // Task #342 — using the header (or the ⌘K shortcut) is an
+        // explicit re-engagement signal: it should *restore* the
+        // floating bubble for the rest of the session, undoing any
+        // earlier per-session dismissal. Other entry points (slash,
+        // deep link, home input/chip, the bubble itself) leave the
+        // dismissal untouched.
+        if (opts.source === "header" || opts.source === "shortcut") {
+          try {
+            window.sessionStorage.removeItem("atelier-cli-bubble-dismissed");
+          } catch {
+            /* ignore */
+          }
+        }
+        setCliOpen(true);
+      },
     }),
     [cliOpen],
   );
@@ -546,7 +718,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setCliOpen((v) => !v);
+        // Task #342 — emit cli.opened on each ⌘K open so we can
+        // attribute opens via keyboard separately from the header click.
+        setCliOpen((v) => {
+          const next = !v;
+          if (next) {
+            const surface = derivePageContext(window.location.pathname).surface;
+            emitCliOpened("shortcut", { surface });
+          }
+          return next;
+        });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -580,6 +761,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             onClose={() => setCliOpen(false)}
             triggerRef={cliTriggerRef}
           />
+          <FloatingCliBubble />
         </div>
       </RailContext.Provider>
     </CliContext.Provider>

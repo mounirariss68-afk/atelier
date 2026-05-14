@@ -54,7 +54,11 @@ export type SurfaceContext =
   | "wallet"
   | "ledger"
   | "roster"
-  | "global";
+  | "global"
+  // Task #342 — explicit Home surface so the catalog can drive the
+  // role-aware suggestion chips on the Home page (and the assistant's
+  // empty-state chips when the user opened it from Home).
+  | "home";
 
 export interface SlashAlias {
   /** Free-form aliases the slash-command palette matches against. */
@@ -113,6 +117,13 @@ export interface CapabilityEntry {
    * successful run. Free-form; client interprets.
    */
   resultCard: string;
+  /**
+   * Task #342 — optional per-locale natural-language phrasings that
+   * the assistant client can show as suggestion chips (Home page,
+   * assistant empty state, /help drawer). The first entry per locale
+   * is treated as the canonical chip label.
+   */
+  examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null;
   /**
    * Implementation. Receives the validated `input` and a `ToolContext`,
    * returns the standard `ToolResult` shape (with optional

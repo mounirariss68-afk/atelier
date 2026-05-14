@@ -342,4 +342,47 @@ router.get("/cli/capabilities", async (req, res) => {
   });
 });
 
+/**
+ * Task #342 — best-effort sink for `cli.opened` discoverability events.
+ *
+ * The client emits these via sendBeacon when each launcher (header
+ * "Ask Atelier" button, ⌘K shortcut, Home input, Home chip, floating
+ * bubble, slash command, deep link, empty-state chip, first-run
+ * tooltip) opens the CLI. Body shape:
+ *
+ *   { event: "cli.opened", source: <CliOpenedSource>,
+ *     surface?: string, prompt?: string|null, ts: number }
+ *
+ * We log and 204 — no DB writes, no validation beyond shape. A future
+ * pass can fan this out to the analytics warehouse without changing
+ * the client contract.
+ */
+router.post("/cli/events", (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const body = (req.body ?? {}) as {
+    event?: string;
+    source?: string;
+    surface?: string | null;
+    prompt?: string | null;
+    ts?: number;
+  };
+  if (body.event !== "cli.opened" || typeof body.source !== "string") {
+    res.status(204).end();
+    return;
+  }
+  // Console-only sink for now; intentionally avoids logging the prompt
+  // body to keep PII out of server logs.
+  // eslint-disable-next-line no-console
+  console.info("[atelier-cli] cli.opened", {
+    userId: me.id,
+    role: me.role,
+    source: body.source,
+    surface: body.surface ?? null,
+    hasPrompt: typeof body.prompt === "string" && body.prompt.length > 0,
+    ts: body.ts ?? Date.now(),
+  });
+  res.status(204).end();
+});
+
 export default router;

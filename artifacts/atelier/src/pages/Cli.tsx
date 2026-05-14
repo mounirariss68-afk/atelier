@@ -15,6 +15,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { CliContext } from "@/components/cli/cli-context";
+import { emitCliOpened } from "@/components/cli/telemetry";
 import * as React from "react";
 
 export default function Cli() {
@@ -31,7 +32,10 @@ export default function Cli() {
   useEffect(() => {
     if (sessionParam || turnParam || promptParam) {
       // Deep-link: hand off to the bar and keep the URL so the user
-      // can copy/share the link to a specific turn.
+      // can copy/share the link to a specific turn. Task #342 — record
+      // a distinct cli.opened source so deep-link entries are
+      // attributable separately from header / shortcut opens.
+      emitCliOpened("deep_link", { prompt: promptParam, surface: "global" });
       ctx.requestHydration({
         sessionId: sessionParam,
         turnId: turnParam,
@@ -41,6 +45,7 @@ export default function Cli() {
     }
 
     // No params → open the bar, then bounce back to the referrer.
+    emitCliOpened("deep_link", { surface: "global" });
     ctx.setOpen(true);
     const back = (() => {
       try {

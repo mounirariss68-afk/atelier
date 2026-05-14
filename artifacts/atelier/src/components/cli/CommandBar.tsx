@@ -47,13 +47,15 @@ import { cn } from "@/lib/utils";
 import { useCli } from "./useCli";
 import { CliContext } from "./cli-context";
 import { s, sFmt, localeInstruction } from "./locale";
-import { derivePageContext, suggestionsFor } from "./pageContext";
+import { derivePageContext, suggestionsFor, homeSuggestionsFor } from "./pageContext";
+import { useAtelierGetMe } from "@workspace/api-client-react";
 import {
   addSavedPrompt,
   deleteSavedPrompt,
   listSavedPrompts,
   type SavedPrompt,
 } from "./savedPrompts";
+import { emitCliOpened } from "./telemetry";
 import type { CliCapability, CliLocale, CliTurn } from "./types";
 
 const MAX_INPUT_CHARS = 4000;
@@ -259,7 +261,22 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
   }, [input, slashToken, cli.capabilities]);
 
   React.useEffect(() => {
-    setSlashOpen(input.startsWith("/") && slashCandidates.length > 0);
+    const willOpen = input.startsWith("/") && slashCandidates.length > 0;
+    setSlashOpen((wasOpen) => {
+      // Task #342 — record cli.opened with source=slash_command the
+      // first time the slash menu opens after being closed. Treats
+      // each open transition as a discrete entry-point event so we
+      // can attribute opens via the slash command syntax.
+      if (willOpen && !wasOpen) {
+        try {
+          const surface = derivePageContext(window.location.pathname).surface;
+          emitCliOpened("slash_command", { surface });
+        } catch {
+          /* ignore telemetry errors */
+        }
+      }
+      return willOpen;
+    });
     setSlashIndex(0);
   }, [input, slashCandidates.length]);
 
@@ -429,11 +446,23 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
     setSavedPrompts((rows) => [sp, ...rows]);
   }
 
+  // Task #342 — when the user opened the assistant from Home, lead the
+  // empty state with the same role-aware Home chips so the bar feels
+  // like a continuation of the Home prompt, not a separate menu.
+  // NOTE: this hook MUST be declared before the `open` early-return so
+  // hook order stays stable across the closed→open transition.
+  const { data: me } = useAtelierGetMe();
+  const suggestions = React.useMemo(() => {
+    if (pageCtx.surface === "home") {
+      return homeSuggestionsFor(me?.role, locale, cli.capabilities);
+    }
+    return suggestionsFor(pageCtx, locale);
+  }, [pageCtx, locale, me?.role, cli.capabilities]);
+
   if (!open) return null;
 
   const status = cli.status;
   const current = cli.current;
-  const suggestions = suggestionsFor(pageCtx, locale);
 
   return (
     <div
@@ -526,6 +555,20 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
               onToggleStep={cli.toggleStepExclusion}
               onSetRowEdit={cli.setPlanRowEdit}
               onPickSuggestion={(text) => {
+                // Task #342 — clicking an empty-state chip is a real
+                // discoverability entry-point: the user picked a
+                // canned prompt instead of typing their own. Emit
+                // cli.opened with source=empty_state_chip so we can
+                // attribute these picks separately from header /
+                // shortcut opens.
+                try {
+                  emitCliOpened("empty_state_chip", {
+                    surface: pageCtx.surface,
+                    prompt: text,
+                  });
+                } catch {
+                  /* ignore telemetry errors */
+                }
                 setInput(text);
                 requestAnimationFrame(() => composerRef.current?.focus());
               }}
@@ -867,9 +910,19 @@ function Transcript({
   onSaveShortcut: () => void;
 }) {
   if (turns.length === 0) {
+    // Task #342 — friendlier conversational invitation. Slash-command
+    // hint demoted to a small helper line so the bar reads as a chat,
+    // not a CLI. Slash commands remain available via `/`.
     return (
-      <div className="p-6 space-y-4" data-testid="cli-empty">
-        <p className="text-sm text-text-mute leading-relaxed">{s("emptyHint", locale)}</p>
+      <div className="p-6 space-y-5" data-testid="cli-empty">
+        <div className="space-y-1.5">
+          <h3 className="text-base font-semibold text-text leading-snug">
+            {s("emptyConversational", locale)}
+          </h3>
+          <p className="text-xs text-text-faint leading-relaxed">
+            {s("emptyHint", locale)}
+          </p>
+        </div>
         <div className="flex flex-col gap-2">
           {suggestions.map((sug) => (
             <button
@@ -883,6 +936,9 @@ function Transcript({
             </button>
           ))}
         </div>
+        <p className="text-[11px] font-mono text-text-faint pt-2 border-t border-border-soft">
+          {s("emptySlashHint", locale)}
+        </p>
       </div>
     );
   }

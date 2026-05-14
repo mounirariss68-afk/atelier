@@ -87,6 +87,37 @@ export const STRINGS = {
   retry: { en: "Retry", ar: "أعِد المحاولة" },
   recallHint: { en: "↑ to recall last prompt", ar: "↑ لاستدعاء آخر مطالبة" },
   pickOne: { en: "Pick one to continue:", ar: "اختر واحدًا للمتابعة:" },
+  // Task #342 — assistant discoverability strings.
+  askAtelier: { en: "Ask Atelier", ar: "اسأل Atelier" },
+  homeInputPlaceholder: {
+    en: "Ask Atelier anything…",
+    ar: "اسأل Atelier أي شيء…",
+  },
+  emptyConversational: {
+    en: "Hi — what would you like to do?",
+    ar: "مرحبًا — ماذا تودّ أن تفعل؟",
+  },
+  emptySlashHint: {
+    en: "Tip: type / to browse all commands.",
+    ar: "تلميح: اكتب / لتصفّح كل الأوامر.",
+  },
+  floatingBubbleLabel: {
+    en: "Ask Atelier — chat with the assistant",
+    ar: "اسأل Atelier — تحدّث مع المساعد",
+  },
+  floatingBubbleDismiss: {
+    en: "Hide for this session",
+    ar: "إخفاء لهذه الجلسة",
+  },
+  firstRunTooltipPartner: {
+    en: "Ask Atelier in plain language — try \"Approve this week's timesheets\".",
+    ar: "اسأل Atelier بلغة طبيعيّة — جرّب \"وافق على جداول الزمن لهذا الأسبوع\".",
+  },
+  firstRunTooltipDefault: {
+    en: "Ask Atelier in plain language — try \"What's on my plate today?\".",
+    ar: "اسأل Atelier بلغة طبيعيّة — جرّب \"ما المهام التي بانتظاري اليوم؟\".",
+  },
+  firstRunTooltipDismiss: { en: "Got it", ar: "فهمت" },
 } satisfies Record<string, Bilingual>;
 
 export function s(key: keyof typeof STRINGS, locale: CliLocale): string {

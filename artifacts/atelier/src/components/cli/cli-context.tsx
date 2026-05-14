@@ -14,11 +14,18 @@
 
 import * as React from "react";
 import type { CliTurn } from "./types";
+import type { CliOpenedSource } from "./telemetry";
 
 export interface CliHydrationRequest {
   sessionId?: string | null;
   turnId?: string | null;
   prompt?: string | null;
+}
+
+export interface CliOpenOptions {
+  source: CliOpenedSource;
+  prompt?: string | null;
+  surface?: string | null;
 }
 
 export interface CliContextValue {
@@ -33,6 +40,13 @@ export interface CliContextValue {
    * the /cli page (or rail click handlers) can land directly on a
    * historical turn. No-op until the bar mounts. */
   registerInjectTurn: (fn: (turn: CliTurn) => void) => void;
+  /**
+   * Task #342 — single instrumented entry point. Every launcher
+   * (header, ⌘K, Home input, Home chip, floating bubble, deep link)
+   * calls this so we can attribute opens by `source`. An optional
+   * `prompt` is forwarded to the composer via the hydration queue.
+   */
+  openCli: (opts: CliOpenOptions) => void;
 }
 
 export const CliContext = React.createContext<CliContextValue>({
@@ -43,4 +57,5 @@ export const CliContext = React.createContext<CliContextValue>({
   requestHydration: () => {},
   consumeHydration: () => null,
   registerInjectTurn: () => {},
+  openCli: () => {},
 });

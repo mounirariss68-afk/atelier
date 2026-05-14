@@ -48,14 +48,18 @@ defineCapability({
   inputSchema: { type: "object", properties: {}, additionalProperties: false },
   isWrite: false,
   irreversible: false,
-  surfaceOn: ["global"],
-  examplePhrases: {
-    en: ["what can you do?", "/help", "show me the slash commands"],
-    fr: ["que peux-tu faire ?", "/aide"],
-  },
+  // Task #342 — surface meta.help on Home so the assistant's
+  // discoverability chips can advertise "what can I ask?" as a
+  // catalog-driven prompt.
+  surfaceOn: ["global", "home"],
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "capability_list",
+  examplePhrases: {
+    en: ["Show me what I can ask Atelier", "What can Atelier do?"],
+    ar: ["اعرض ما يمكنني سؤاله للأتيليه", "ما الذي يستطيع الأتيليه فعله؟"],
+    fr: ["Montre-moi ce que je peux demander à l'Atelier"],
+  },
   async run(_input, _ctx) {
     return {
       ok: true,
@@ -81,13 +85,17 @@ defineCapability({
   },
   isWrite: false,
   irreversible: false,
-  surfaceOn: ["global", "account_workspace"],
-  examplePhrases: {
-    en: ["who is Tasama?", "find the Aramex account", "/account aramex"],
-  },
+  // Task #342 — also surfaced on Home so the discoverability chips can
+  // offer "Find an account…" as a top-level prompt.
+  surfaceOn: ["global", "account_workspace", "home"],
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "account_card",
+  examplePhrases: {
+    en: ["Find an account by name", "Look up an account"],
+    ar: ["ابحث عن حساب بالاسم", "اعثر على حساب"],
+    fr: ["Trouver un compte par nom"],
+  },
   async run(input, ctx) {
     const result = await resolveAccount(String(input.query ?? ""), ctx.persona);
     if (result.kind === "match") {

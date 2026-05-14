@@ -179,3 +179,84 @@ export function suggestionsFor(
 ): Array<{ en: string; ar: string; text: string }> {
   return BY_SURFACE[ctx.surface].map((s) => ({ ...s, text: s[locale] }));
 }
+
+/**
+ * Task #342 — role-aware Home suggestion chips. The Home surface is the
+ * primary entry point for the assistant, so the chips must convert for
+ * each persona class.
+ *
+ * Capability-catalog driven: callers pass the persona's `capabilities`
+ * (already role-filtered server-side by `capabilitiesForPersona`) and
+ * we pull anything tagged `surfaceOn: ["home"]`, rendering the first
+ * `examplePhrases[locale]` entry as the chip label. The hand-authored
+ * role-based fallback list backfills the chip set up to 4–6 entries
+ * for personas where the catalog hasn't yet been seeded with home
+ * capabilities — so the UX is never empty.
+ */
+import type { CliCapability } from "./types";
+
+export function homeSuggestionsFor(
+  role: string | undefined,
+  locale: CliLocale,
+  capabilities: CliCapability[] = [],
+): Array<{ en: string; ar: string; text: string }> {
+  const partnerTier = new Set(["founding_partner", "partner", "senior_manager", "finance"]);
+  const isPartnerTier = !!role && partnerTier.has(role);
+  const isHr = role === "hr";
+
+  const PARTNER: Suggestion[] = [
+    { en: "Approve this week's timesheets", ar: "وافق على جداول الزمن لهذا الأسبوع" },
+    { en: "Show this week's utilization across the firm", ar: "اعرض استخدام الموارد لهذا الأسبوع" },
+    { en: "Draft my Monday digest for the partners", ar: "أعدّ ملخّص الإثنين للشركاء" },
+    { en: "Show pipeline aged in Pursue over 30 days", ar: "اعرض الفرص المتقادمة في Pursue لأكثر من 30 يومًا" },
+    { en: "Open the top RAID red items across engagements", ar: "افتح أهم بنود RAID الحمراء عبر الارتباطات" },
+  ];
+  const HR_LIST: Suggestion[] = [
+    { en: "Show people whose certifications expire in 90 days", ar: "اعرض الأشخاص الذين تنتهي شهاداتهم خلال 90 يومًا" },
+    { en: "Start onboarding for a new hire", ar: "ابدأ تأهيل تعيين جديد" },
+    { en: "List people under 60% utilization this month", ar: "اعرض الأشخاص بأقلّ من 60% استخدام هذا الشهر" },
+    { en: "What's on my plate today?", ar: "ما المهام التي بانتظاري اليوم؟" },
+  ];
+  const CONSULTANT: Suggestion[] = [
+    { en: "What's on my plate today?", ar: "ما المهام التي بانتظاري اليوم؟" },
+    { en: "Resume Pursuit Scout from last brief", ar: "تابع Pursuit Scout من آخر موجز" },
+    { en: "Log my hours for this week", ar: "سجّل ساعاتي لهذا الأسبوع" },
+    { en: "Draft a partner check-in note for my engagement", ar: "أعدّ مذكّرة المتابعة للشريك في ارتباطي" },
+    { en: "Show the prompt library", ar: "اعرض مكتبة المطالبات" },
+  ];
+
+  // Catalog-driven first: any capability tagged `surfaceOn: ["home"]`
+  // contributes its first per-locale `examplePhrases` entry as a chip.
+  // We mirror the EN string when an AR fallback is needed (and vice
+  // versa) so the chip object keeps the same shape as the static
+  // fallback entries below — keeps the dedupe + rendering uniform.
+  const fromCatalog: Suggestion[] = [];
+  for (const c of capabilities) {
+    if (!Array.isArray(c.surfaceOn) || !c.surfaceOn.includes("home")) continue;
+    const ex = c.examplePhrases ?? null;
+    const en = ex?.en?.[0];
+    const ar = ex?.ar?.[0];
+    // Skip catalog entries that have no usable phrasing for either
+    // supported locale — falling back to `description` would dump
+    // Claude-facing tool docs into the chip, which reads badly.
+    if (!en && !ar) continue;
+    fromCatalog.push({
+      en: en ?? ar ?? "",
+      ar: ar ?? en ?? "",
+    });
+  }
+
+  const fallback = isPartnerTier ? PARTNER : isHr ? HR_LIST : CONSULTANT;
+  // Catalog entries take precedence; fallback fills up to 4–6 chips.
+  const merged = [...fromCatalog, ...fallback];
+  const seen = new Set<string>();
+  const out: Array<{ en: string; ar: string; text: string }> = [];
+  for (const s of merged) {
+    const text = s[locale];
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push({ ...s, text });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
