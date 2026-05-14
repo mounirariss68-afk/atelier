@@ -208,6 +208,13 @@ export interface CapabilityEntry {
   /** Surfaces where the slash-command palette should advertise this. */
   surfaceOn: SurfaceContext[];
   /**
+   * Capability ids the orchestrator should propose as follow-ups after
+   * this entry runs successfully. Declared here so a typo in the field
+   * name (e.g. `followupTriggers`) fails the build instead of being
+   * silently dropped at registration. See `FollowUpTrigger` above.
+   */
+  followUpTriggers?: FollowUpTrigger[];
+  /**
    * Task #335/342 — optional per-locale natural-language phrasings that
    * the assistant client can show as suggestion chips (Home page,
    * assistant empty state, /help drawer). The first entry per locale
