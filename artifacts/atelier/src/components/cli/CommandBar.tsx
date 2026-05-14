@@ -257,7 +257,13 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
     setEditingPlanRow(null);
     void cli.submit({
       prompt: text,
-      attachmentIds: attachments.filter((a) => !a.error).map((a) => a.id),
+      // Attachments are UI-only in this task — Task #334 ships the
+      // real upload pipeline. Sending the synthetic client-side IDs
+      // would generate dangling refs server-side, so we forward an
+      // empty list. Chips remain visible so the user sees what they
+      // attached; the file payload reaches the orchestrator only after
+      // #334 lands.
+      attachmentIds: [] as string[],
       pageContext: pageCtx,
       dryRun,
       intent,
@@ -439,7 +445,8 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
           status={status}
         />
 
-        <div ref={transcriptRef} className="flex-1 overflow-y-auto scrollbar-thin">
+        <div className="flex-1 flex min-h-0">
+        <div ref={transcriptRef} className="flex-1 overflow-y-auto scrollbar-thin min-w-0">
           {helpOpen ? (
             <HelpPanel
               capabilities={cli.capabilities}
@@ -493,6 +500,8 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
               onSaveShortcut={saveCurrentAsShortcut}
             />
           )}
+        </div>
+          <ContextPanel pageCtx={pageCtx} locale={locale} />
         </div>
 
         <Composer
@@ -1113,6 +1122,53 @@ function TurnBody({
               <div className="text-xs font-mono text-danger mt-1">{turn.partial.error}</div>
             </div>
           </div>
+          {/* Per-step status. The orchestrator may emit `stepResults` on
+              the partial_success frame (forward-safe optional field).
+              Falls back to deriving green/red from `failedStepIndex` so
+              this state is always rendered, even before the server
+              starts populating per-step records. */}
+          {turn.proposedPlan && turn.proposedPlan.length > 0 && (
+            <ul
+              className="space-y-0.5 text-xs"
+              data-testid="cli-partial-steps"
+            >
+              {turn.proposedPlan.map((step, i) => {
+                const sr = turn.partial!.stepResults?.find((x) => x.index === i);
+                const derivedStatus: "success" | "error" | "pending" | "skipped" = sr
+                  ? sr.status
+                  : i < turn.partial!.failedStepIndex
+                    ? "success"
+                    : i === turn.partial!.failedStepIndex
+                      ? "error"
+                      : "skipped";
+                const dot =
+                  derivedStatus === "success"
+                    ? "bg-success"
+                    : derivedStatus === "error"
+                      ? "bg-danger"
+                      : derivedStatus === "skipped"
+                        ? "bg-text-faint"
+                        : "bg-warning";
+                return (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2"
+                    data-testid="cli-partial-step"
+                    data-step-status={derivedStatus}
+                  >
+                    <span className={cn("w-1.5 h-1.5 mt-1.5 rounded-full shrink-0", dot)} />
+                    <span className="font-mono text-text-faint shrink-0">{i + 1}.</span>
+                    <span className="flex-1 leading-snug">{step.label}</span>
+                    {sr?.error && (
+                      <span className="text-[10px] font-mono text-danger" title={sr.error}>
+                        ⚠
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1434,6 +1490,21 @@ function ResultCard({
           </button>
           <button
             type="button"
+            onClick={() =>
+              onFollowUp(
+                locale === "ar"
+                  ? "جدول هذا الأمر ليتكرر أسبوعيًا"
+                  : "Schedule this to run every week",
+              )
+            }
+            className="text-text-mute hover:text-gold p-1 rounded hover:bg-bg-elevate-2"
+            title={locale === "ar" ? "جدولة متكرّرة" : "Schedule recurring"}
+            data-testid="cli-action-schedule"
+          >
+            <Clock className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={onSaveShortcut}
             className="text-text-mute hover:text-gold p-1 rounded hover:bg-bg-elevate-2"
             title={s("saveAsShortcut", locale)}
@@ -1448,6 +1519,77 @@ function ResultCard({
 }
 
 /* ──────────────────────────── /help ──────────────────────────── */
+
+/* ────────────────────────── Context Panel ───────────────────────── */
+/**
+ * Right-side rail shown inside the CLI dialog. Renders the current
+ * surface and any active record IDs derived from the route by
+ * `pageContext.ts`. Hidden on narrow viewports to preserve the mobile
+ * full-bleed experience.
+ */
+function ContextPanel({
+  pageCtx,
+  locale,
+}: {
+  pageCtx: import("./pageContext").DerivedPageContext;
+  locale: CliLocale;
+}) {
+  const rows: Array<{ k: string; v: string }> = [];
+  if (pageCtx.activeAccountId) rows.push({ k: "account", v: pageCtx.activeAccountId });
+  if (pageCtx.activeOpportunityId) rows.push({ k: "opportunity", v: pageCtx.activeOpportunityId });
+  if (pageCtx.activeEngagementId) rows.push({ k: "engagement", v: pageCtx.activeEngagementId });
+  if (pageCtx.activePersonId) rows.push({ k: "person", v: pageCtx.activePersonId });
+  if (pageCtx.activeExpenseId) rows.push({ k: "expense", v: pageCtx.activeExpenseId });
+  if (pageCtx.activeAgentId) rows.push({ k: "agent", v: pageCtx.activeAgentId });
+  return (
+    <aside
+      className="hidden md:flex flex-col w-48 shrink-0 border-s border-border-soft bg-bg-elevate/40 p-3 gap-3 overflow-y-auto"
+      data-testid="cli-context-panel"
+    >
+      <div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+          {locale === "ar" ? "السياق" : "context"}
+        </div>
+        <div className="text-xs font-mono text-gold" data-testid="cli-context-surface">
+          {pageCtx.surface}
+        </div>
+        <div
+          className="text-[11px] font-mono text-text-mute mt-0.5 truncate"
+          title={pageCtx.currentPath}
+        >
+          {pageCtx.currentPath}
+        </div>
+      </div>
+      {rows.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+            {locale === "ar" ? "السجلات النشطة" : "active records"}
+          </div>
+          {rows.map((r) => (
+            <div
+              key={r.k}
+              className="bg-bg-deep border border-border rounded px-1.5 py-1"
+              data-testid="cli-context-record"
+              data-record-kind={r.k}
+            >
+              <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+                {r.k}
+              </div>
+              <div className="text-[11px] font-mono text-text truncate" title={r.v}>
+                {r.v}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-[10px] text-text-faint italic mt-auto leading-snug">
+        {locale === "ar"
+          ? "سيستخدم المنسّق هذا السياق لربط 'هذا' أو 'الفرصة الحاليّة'."
+          : 'The orchestrator uses this context to resolve "this" or "the current opp".'}
+      </div>
+    </aside>
+  );
+}
 
 function HelpPanel({
   capabilities,
@@ -1502,6 +1644,21 @@ function HelpPanel({
                   </span>
                 </div>
                 <div className="text-xs text-text-mute mt-1">{c.description}</div>
+                {(() => {
+                  const ex =
+                    c.examplePhrases?.[locale] ?? c.examplePhrases?.en ?? [];
+                  if (ex.length === 0) return null;
+                  return (
+                    <ul
+                      className="mt-1.5 space-y-0.5 list-disc list-inside text-[11px] text-text-faint italic"
+                      data-testid="cli-help-examples"
+                    >
+                      {ex.slice(0, 3).map((p, i) => (
+                        <li key={i}>"{p}"</li>
+                      ))}
+                    </ul>
+                  );
+                })()}
               </div>
             ))}
           </div>

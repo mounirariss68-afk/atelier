@@ -94,6 +94,13 @@ export interface CliTurn {
     completedSteps: number;
     failedStepIndex: number;
     error: string;
+    /** Per-step status when the orchestrator reports it. Index aligns
+     * with `proposedPlan`. Used by PlanCard to draw green/red chips. */
+    stepResults?: Array<{
+      index: number;
+      status: "success" | "error" | "skipped" | "pending";
+      error?: string | null;
+    }>;
   };
   error?: { code: string; message: string };
   asyncJob?: { jobId: string; turnId: string };
@@ -118,6 +125,10 @@ export interface CliCapability {
   twoPhaseConfirm: boolean;
   outboundChannel: "email" | "slack" | "salon_publish" | null;
   resultCard: string;
+  /** Optional per-locale example phrasings rendered in the /help drawer.
+   * Falls back to the description when absent. The catalog (Task #332)
+   * may populate these later — surface field is forward-safe. */
+  examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null;
 }
 
 export interface CliAttachment {

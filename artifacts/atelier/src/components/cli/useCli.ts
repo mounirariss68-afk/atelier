@@ -184,6 +184,11 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
         completedSteps?: number;
         failedStepIndex?: number;
         error?: string;
+        stepResults?: Array<{
+          index: number;
+          status: "success" | "error" | "skipped" | "pending";
+          error?: string | null;
+        }>;
       };
       return {
         ...turn,
@@ -192,6 +197,7 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
           completedSteps: d.completedSteps ?? 0,
           failedStepIndex: d.failedStepIndex ?? -1,
           error: d.error ?? "Step failed",
+          stepResults: d.stepResults,
         },
       };
     }

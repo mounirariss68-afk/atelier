@@ -8,7 +8,7 @@ import {
   useAtelierGetActivity
 } from "@workspace/api-client-react";
 import { getAtelierGetMeQueryKey, getAtelierGetHomeQueryKey, getAtelierGetActivityQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -291,6 +291,31 @@ export function RightRail() {
     },
   );
 
+  // Task #333 — merge CLI sessions into the activity rail. Each
+  // session is rendered as a "CLI" row alongside agent activity so the
+  // user sees their command-bar history without leaving the rail.
+  // Server endpoint added in Task #331; the orchestrator increments
+  // turnCount on every committed turn.
+  const { data: cliSessionData } = useQuery<{
+    sessions: Array<{
+      id: string;
+      title: string | null;
+      turnCount: number;
+      lastTurnAt: string | null;
+      spentCentsToday: number;
+    }>;
+  }>({
+    queryKey: ["atelier-cli-sessions"],
+    queryFn: async () => {
+      const res = await fetch("/api/atelier/cli/sessions", { credentials: "include" });
+      if (!res.ok) throw new Error("cli-sessions");
+      return res.json();
+    },
+    refetchInterval: 8000,
+    refetchIntervalInBackground: false,
+  });
+  const cliSessions = cliSessionData?.sessions ?? [];
+
   const activeCount = activities?.filter(a => a.status === 'running').length || 0;
 
   return (
@@ -352,6 +377,35 @@ export function RightRail() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
+        {!collapsed && tab === "activity" && cliSessions.length > 0 && (
+          <div className="space-y-1.5" data-testid="cli-rail-sessions">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+              CLI sessions
+            </div>
+            {cliSessions.slice(0, 5).map((sess) => (
+              <a
+                key={sess.id}
+                href={`/cli?session=${encodeURIComponent(sess.id)}`}
+                className="block bg-bg-elevate border border-border hover:border-gold/40 rounded-md p-2"
+                data-testid="cli-rail-session-row"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-[11px] text-gold truncate">
+                    {sess.title ?? "command bar"}
+                  </span>
+                  <span className="text-[10px] font-mono text-text-faint shrink-0">
+                    {sess.turnCount} turn{sess.turnCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+                {sess.lastTurnAt && (
+                  <div className="text-[10px] font-mono text-text-faint mt-0.5">
+                    {new Date(sess.lastTurnAt).toLocaleString()}
+                  </div>
+                )}
+              </a>
+            ))}
+          </div>
+        )}
         {!collapsed && tab === "activity" && activities && activities.map(item => (
           <div key={item.id} className="bg-bg-elevate border border-border rounded-md p-3 text-sm animate-in fade-in zoom-in-95 duration-300">
             <div className="flex items-center justify-between mb-2">
