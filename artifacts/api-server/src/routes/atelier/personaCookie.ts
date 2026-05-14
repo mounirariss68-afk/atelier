@@ -135,15 +135,17 @@ export function personaToWire(p: typeof atelierUsers.$inferSelect) {
     id: p.id,
     name: p.name,
     email: p.email,
+    // Task #292 — 9-persona model.
     role: p.role as
+      | "founding_partner"
       | "partner"
-      | "engagement_lead"
-      | "sme"
-      | "ai_engineer"
-      | "business_developer"
-      | "operations"
+      | "finance"
+      | "hr"
+      | "senior_manager"
+      | "consultant"
       | "contractor"
-      | "partner_firm_resource",
+      | "partner_firm_resource"
+      | "board_observer",
     roleLabel: p.roleLabel,
     title: p.title,
     initials: p.initials,

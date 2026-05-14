@@ -59,8 +59,9 @@ DECLARE
     -- persona) ANY row whose engagement_id is NOT in the allow-list is
     -- denied — this includes NULL engagement_id rows (internal time,
     -- firm overhead). Org-wide visibility for those NULL rows requires
-    -- an unrestricted persona (partner / operations) where the
-    -- middleware leaves `app.engagement_ids` empty.
+    -- an unrestricted persona (founding_partner / partner / senior_manager /
+    -- finance / hr — see personaRoles.isRestrictedPersona) where the
+    -- middleware leaves `app.engagement_ids` empty. Task #292.
     'atelier_timesheet_entries','atelier_expenses'
   ];
   t text;
