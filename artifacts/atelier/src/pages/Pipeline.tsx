@@ -31,6 +31,7 @@ import {
   SALES_STAGE_LABEL,
   STALLED_THRESHOLD_DAYS,
   stageTone,
+  SALES_STAGE_DESCRIPTION,
 } from "@/lib/sales-stages";
 
 type OppItem = Opportunity;
@@ -54,13 +55,18 @@ function StageColumn({
 }) {
   return (
     <div className="min-w-[280px] w-[280px] shrink-0 flex flex-col gap-3 snap-start rounded-md p-2">
-      <div className="flex items-center justify-between pb-2 border-b border-gold/30">
-        <span className="font-mono text-[11px] tracking-widest uppercase text-text-mute">
-          {SALES_STAGE_LABEL[stage]}
-        </span>
-        <span className="font-mono text-xs text-text-faint">
-          {count} · <span className="text-gold">{fmtUsd(weighted)}</span>
-        </span>
+      <div className="pb-2 border-b border-gold/30 space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[11px] tracking-widest uppercase text-text-mute">
+            {SALES_STAGE_LABEL[stage]}
+          </span>
+          <span className="font-mono text-xs text-text-faint">
+            {count} · <span className="text-gold">{fmtUsd(weighted)}</span>
+          </span>
+        </div>
+        <p className="text-[10px] leading-snug text-text-faint">
+          {SALES_STAGE_DESCRIPTION[stage]}
+        </p>
       </div>
       <div className="flex flex-col gap-3">{children}</div>
     </div>

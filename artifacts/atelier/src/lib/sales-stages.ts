@@ -32,8 +32,22 @@ export const SALES_STAGE_LABEL: Record<SalesStage, string> = {
   submitted: "Submitted",
   verbal_commit: "Verbal commit",
   signed: "Signed",
-  lost_no_decision: "Lost / No decision",
-  withdrawn: "Withdrawn",
+  lost_no_decision: "Conceded / Folded",
+  withdrawn: "Stalled",
+};
+
+// Short blurb shown under each stage name on the kanban board.
+export const SALES_STAGE_DESCRIPTION: Record<SalesStage, string> = {
+  lead: "Unqualified inbound or sourced interest",
+  qualified: "Fit + budget signals confirmed",
+  discovery_scheduled: "Discovery session on the calendar",
+  pov_in_flight: "Proof-of-value build underway",
+  proposal_in_flight: "Drafting commercials & SoW",
+  submitted: "Proposal with the client, awaiting feedback",
+  verbal_commit: "Verbal yes — paperwork pending",
+  signed: "Countersigned and booked",
+  lost_no_decision: "Conceded to a competitor or folded with no decision",
+  withdrawn: "Stalled — we stepped away or the client withdrew",
 };
 
 export const SALES_STAGE_DEFAULT_PROB: Record<SalesStage, number> = {
