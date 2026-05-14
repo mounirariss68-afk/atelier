@@ -1363,15 +1363,20 @@ router.get("/proposals/:proposalId/recipients", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const [proposal] = await db
-    .select({ opportunityId: atelierProposals.opportunityId })
+    .select({ opportunityId: atelierProposals.opportunityId, orgId: atelierProposals.orgId })
     .from(atelierProposals)
     .where(and(eq(atelierProposals.id, req.params.proposalId), isNull(atelierProposals.deletedAt)));
   if (!proposal) { res.status(404).json({ error: "not-found" }); return; }
   if (!(await ensureOppAccess(res, me, proposal.opportunityId))) return;
+  // Task #297 — recipient reads org-scoped to the proposal's org so a
+  // mis-routed proposalId from another tenant cannot leak share links.
   const rows = await db
     .select()
     .from(atelierProposalRecipients)
-    .where(eq(atelierProposalRecipients.proposalId, req.params.proposalId))
+    .where(and(
+      eq(atelierProposalRecipients.proposalId, req.params.proposalId),
+      eq(atelierProposalRecipients.orgId, proposal.orgId),
+    ))
     .orderBy(desc(atelierProposalRecipients.createdAt));
   res.json({
     recipients: rows.map((r) => ({
@@ -1394,7 +1399,7 @@ router.post("/proposals/:proposalId/recipients", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const [proposal] = await db
-    .select({ id: atelierProposals.id, opportunityId: atelierProposals.opportunityId })
+    .select({ id: atelierProposals.id, opportunityId: atelierProposals.opportunityId, orgId: atelierProposals.orgId })
     .from(atelierProposals)
     .where(and(eq(atelierProposals.id, req.params.proposalId), isNull(atelierProposals.deletedAt)));
   if (!proposal) { res.status(404).json({ error: "not-found" }); return; }
@@ -1414,8 +1419,12 @@ router.post("/proposals/:proposalId/recipients", async (req, res) => {
     ? new Date(Date.now() + body.expiresInDays * 86_400_000)
     : null;
   const id = rid("prc");
+  // Task #297 — stamp the recipient row with the proposal's orgId so
+  // tenant scoping is enforceable at the DB layer (no implicit "aico"
+  // default).
   await db.insert(atelierProposalRecipients).values({
     id,
+    orgId: proposal.orgId,
     proposalId: proposal.id,
     recipientName: body.recipientName.trim(),
     recipientEmail: body.recipientEmail ?? null,
@@ -1449,10 +1458,15 @@ router.post("/proposals/:proposalId/recipients", async (req, res) => {
 router.post("/proposal-recipients/:recipientId/revoke", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Task #297 — revoke is org-scoped: an actor in tenant A cannot
+  // revoke a share link minted by tenant B even with a guessed id.
   const [r] = await db
     .select()
     .from(atelierProposalRecipients)
-    .where(eq(atelierProposalRecipients.id, req.params.recipientId));
+    .where(and(
+      eq(atelierProposalRecipients.id, req.params.recipientId),
+      eq(atelierProposalRecipients.orgId, me.orgId),
+    ));
   if (!r) { res.status(404).json({ error: "not-found" }); return; }
   const [proposal] = await db
     .select({ opportunityId: atelierProposals.opportunityId })
