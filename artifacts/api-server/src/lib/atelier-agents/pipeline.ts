@@ -112,6 +112,140 @@ export function isValidSubStatus(stage: SalesStage, sub: string | null | undefin
 }
 
 /**
+ * Pure per-transition gate evaluator (Task #295). Mirrors the gates
+ * enforced in agentRoutes.ts POST /opportunities/:oppId/stage-transition
+ * so the same logic is unit-testable without hitting Express + DB.
+ *
+ * Returns `null` when the transition passes; otherwise an object with
+ * `gate` (machine code) + `reason` (human) + optional `missing` list.
+ * `partnerOverride=true` skips every gate except the sub-status
+ * taxonomy check (junk strings are never welcome).
+ */
+export interface StageGateInput {
+  fromStage: SalesStage;
+  toStage: SalesStage;
+  partnerOverride?: boolean;
+  /** 5C qualifier blob (suspect→prospect gate). */
+  qualify5c?: {
+    client?: string;
+    competition?: string;
+    capability?: string;
+    capacity?: string;
+    contract?: string;
+  } | null;
+  /** Go/No-go decision blob (suspect→prospect gate). */
+  goNoGoDecision?: { decision: "go" | "no_go" } | null;
+  /** Convert→Runner gate. */
+  decider?: string | null;
+  verbalCommitDate?: string | null;
+  signaturePath?: string | null;
+  /** Runner→Contract gate. */
+  signedInstrumentFileId?: string | null;
+  evidenceArtifactIds?: readonly string[] | null;
+  /** Terminal gate. */
+  reasonCode?: string | null;
+  /** Optional sub-status taxonomy check (always enforced). */
+  subStatus?: string | null;
+}
+
+export interface StageGateError {
+  gate: string;
+  reason: string;
+  missing?: string[];
+  allowed?: readonly string[];
+}
+
+export function validateStageTransition(input: StageGateInput): StageGateError | null {
+  const { fromStage, toStage, partnerOverride } = input;
+
+  // Sub-status taxonomy is enforced even with partner override.
+  if (input.subStatus && !isValidSubStatus(toStage, input.subStatus)) {
+    return {
+      gate: "invalid_sub_status",
+      reason: `Sub-status '${input.subStatus}' not in taxonomy for ${toStage}.`,
+      allowed: SUB_STATUS_BY_STAGE[toStage],
+    };
+  }
+
+  if (partnerOverride) return null;
+
+  if (fromStage === "suspect" && toStage === "prospect") {
+    const q = input.qualify5c ?? null;
+    const filled =
+      q &&
+      (["client", "competition", "capability", "capacity", "contract"] as const).every(
+        (k) => typeof q[k] === "string" && q[k]!.trim().length > 0,
+      );
+    const decision = input.goNoGoDecision ?? null;
+    if (!filled || !decision || decision.decision !== "go") {
+      return {
+        gate: "suspect_to_prospect_5c",
+        reason: "Suspect → Prospect requires a completed 5C qualifier with a Go decision.",
+      };
+    }
+  }
+
+  if (fromStage === "convert" && toStage === "runner") {
+    const missing: string[] = [];
+    if (!input.decider?.trim()) missing.push("decider");
+    if (!input.verbalCommitDate?.trim()) missing.push("verbalCommitDate");
+    if (!input.signaturePath?.trim()) missing.push("signaturePath");
+    if (missing.length) {
+      return {
+        gate: "convert_to_runner",
+        reason: "Convert → Runner requires a named decider, verbal-commit date, and signature path.",
+        missing,
+      };
+    }
+  }
+
+  if (fromStage === "runner" && toStage === "contract") {
+    const evidenceCount = input.evidenceArtifactIds?.length ?? 0;
+    if (!input.signedInstrumentFileId?.trim() && evidenceCount === 0) {
+      return {
+        gate: "runner_to_contract",
+        reason: "Runner → Contract requires the signed instrument as an uploaded artifact.",
+      };
+    }
+  }
+
+  if (isTerminalStage(toStage)) {
+    const allowed = TERMINAL_REASON_CODES[toStage as "lost" | "no_decision" | "withdrawn"];
+    if (!input.reasonCode?.trim() || !allowed.includes(input.reasonCode.trim())) {
+      return {
+        gate: `terminal_${toStage}`,
+        reason: `Entering ${toStage} requires reasonCode ∈ ${allowed.join(", ")}.`,
+        allowed,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Sticky timestamp computer for runner_entered_at / contract_signed_at.
+ * Pure helper so the auto-fire idempotency invariant ("once set, never
+ * overwritten") is unit-testable without DB.
+ */
+export function computeStickyStageTimestamps(args: {
+  toStage: SalesStage;
+  now: Date;
+  prior: { runnerEnteredAt: Date | null; contractSignedAt: Date | null };
+}): { runnerEnteredAt: Date | null; contractSignedAt: Date | null; charterShouldFire: boolean } {
+  const runnerEnteredAt =
+    args.toStage === "runner" && !args.prior.runnerEnteredAt
+      ? args.now
+      : args.prior.runnerEnteredAt;
+  const contractSignedAt =
+    args.toStage === "contract" && !args.prior.contractSignedAt
+      ? args.now
+      : args.prior.contractSignedAt;
+  const charterShouldFire = args.toStage === "contract" && !args.prior.contractSignedAt;
+  return { runnerEnteredAt, contractSignedAt, charterShouldFire };
+}
+
+/**
  * Map a legacy 10-stage label onto the canonical 5+3. Used by the
  * stage-transition handler when migrating an opportunity that was last
  * touched on the old enum, and by the migration script as a single

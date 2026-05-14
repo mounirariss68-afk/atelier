@@ -32,13 +32,12 @@ import {
   SALES_TO_PLM,
   SALES_STAGE_DEFAULT_PROB,
   STALLED_THRESHOLD_DAYS,
-  SUB_STATUS_BY_STAGE,
-  TERMINAL_REASON_CODES,
+  computeStickyStageTimestamps,
   deriveSalesStage,
   isSalesStage,
-  isValidSubStatus,
   isTerminalStage,
   migrateLegacyStage,
+  validateStageTransition,
   type SalesStage,
 } from "../../lib/atelier-agents/pipeline.js";
 import { atelierEngagements, atelierCharterVersions } from "@workspace/db";
@@ -1234,81 +1233,25 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   const to = toStage as SalesStage;
 
   // ---- Per-transition gates (Task #295) -------------------------------
-  // Partner-override skips every gate but still records `partnerOverride`
-  // on the transition row so the Sentinel can flag late-stage forces.
-  if (!partnerOverride) {
-    // Suspect → Prospect requires a completed 5C with a Go decision.
-    if (fromSales === "suspect" && to === "prospect") {
-      const q = opp.qualify5c ?? null;
-      const decision = opp.goNoGoDecision ?? null;
-      const filled =
-        q &&
-        (["client", "competition", "capability", "capacity", "contract"] as const).every(
-          (k) => typeof q[k] === "string" && q[k]!.trim().length > 0,
-        );
-      if (!filled || !decision || decision.decision !== "go") {
-        res.status(412).json({
-          error: "qualifier-required",
-          gate: "suspect_to_prospect_5c",
-          reason: "Suspect → Prospect requires a completed 5C qualifier with a Go decision.",
-        });
-        return;
-      }
-    }
-
-    // Convert → Runner requires a named decider + verbal-commit date + signature path.
-    if (fromSales === "convert" && to === "runner") {
-      const missing: string[] = [];
-      if (!decider?.trim()) missing.push("decider");
-      if (!verbalCommitDate?.trim()) missing.push("verbalCommitDate");
-      if (!signaturePath?.trim()) missing.push("signaturePath");
-      if (missing.length) {
-        res.status(412).json({
-          error: "runner-gate-required",
-          gate: "convert_to_runner",
-          reason: "Convert → Runner requires a named decider, verbal-commit date, and signature path.",
-          missing,
-        });
-        return;
-      }
-    }
-
-    // Runner → Contract requires a signed instrument upload (artifact id).
-    if (fromSales === "runner" && to === "contract") {
-      const evidenceCount = (evidenceArtifactIds ?? []).length;
-      if (!signedInstrumentFileId?.trim() && evidenceCount === 0) {
-        res.status(412).json({
-          error: "contract-gate-required",
-          gate: "runner_to_contract",
-          reason: "Runner → Contract requires the signed instrument as an uploaded artifact (signedInstrumentFileId or evidenceArtifactIds).",
-        });
-        return;
-      }
-    }
-
-    // Any terminal entry requires a reason code from the published taxonomy.
-    if (isTerminalStage(to)) {
-      const allowed = TERMINAL_REASON_CODES[to as "lost" | "no_decision" | "withdrawn"];
-      if (!reasonCode?.trim() || !allowed.includes(reasonCode.trim())) {
-        res.status(412).json({
-          error: "terminal-gate-required",
-          gate: `terminal_${to}`,
-          reason: `Entering ${to} requires reasonCode ∈ ${allowed.join(", ")}.`,
-          allowed,
-        });
-        return;
-      }
-    }
-  }
-
-  // Sub-status validation (always enforced — partner-override doesn't
-  // license writing junk into the taxonomy).
-  if (subStatus && !isValidSubStatus(to, subStatus)) {
-    res.status(400).json({
-      error: "invalid-sub-status",
-      stage: to,
-      allowed: SUB_STATUS_BY_STAGE[to],
-    });
+  // The pure helper is unit-tested in tests/funnel/funnel.test.ts; the
+  // route's job is just to map its result onto an HTTP response.
+  const gateError = validateStageTransition({
+    fromStage: fromSales,
+    toStage: to,
+    partnerOverride: !!partnerOverride,
+    qualify5c: opp.qualify5c ?? null,
+    goNoGoDecision: opp.goNoGoDecision ?? null,
+    decider,
+    verbalCommitDate,
+    signaturePath,
+    signedInstrumentFileId,
+    evidenceArtifactIds: evidenceArtifactIds ?? [],
+    reasonCode,
+    subStatus,
+  });
+  if (gateError) {
+    const status = gateError.gate === "invalid_sub_status" ? 400 : 412;
+    res.status(status).json({ error: "stage-gate-failed", ...gateError });
     return;
   }
 
@@ -1320,13 +1263,19 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   const derivedPlm = SALES_TO_PLM[to];
   const now = new Date();
 
-  // Compute one-shot timestamps. runnerEnteredAt is sticky — set on first
-  // entry, never overwritten — so a Runner→Contract→Runner bounce keeps
-  // the original timestamp for "days as runner" reporting.
-  const runnerEnteredAt =
-    to === "runner" && !opp.runnerEnteredAt ? now : opp.runnerEnteredAt;
-  const contractSignedAt =
-    to === "contract" && !opp.contractSignedAt ? now : opp.contractSignedAt;
+  // Sticky runner_entered_at / contract_signed_at — once set, never
+  // overwritten — so a Contract→Runner→Contract bounce never re-fires
+  // the Charter Architect.
+  const sticky = computeStickyStageTimestamps({
+    toStage: to,
+    now,
+    prior: {
+      runnerEnteredAt: opp.runnerEnteredAt ?? null,
+      contractSignedAt: opp.contractSignedAt ?? null,
+    },
+  });
+  const runnerEnteredAt = sticky.runnerEnteredAt;
+  const contractSignedAt = sticky.contractSignedAt;
   // finalPlmStage captures the last-known stage of the funnel for closed
   // deals (mirrors the legacy 10-stage label when applicable).
   const finalPlmStage = isTerminalStage(to)

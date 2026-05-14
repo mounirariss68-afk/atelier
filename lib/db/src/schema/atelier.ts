@@ -279,9 +279,9 @@ export const atelierOpportunities = pgTable(
     // Set the first time the opportunity reaches `runner`. Surfaces a
     // "days as runner" badge on the kanban so partners can spot deals
     // stuck in legal/procurement.
-    runnerEnteredAt: timestamp("runner_entered_at"),
+    runnerEnteredAt: timestamp("runner_entered_at", { withTimezone: true }),
     // Set when the signed instrument is uploaded (Runner→Contract gate).
-    contractSignedAt: timestamp("contract_signed_at"),
+    contractSignedAt: timestamp("contract_signed_at", { withTimezone: true }),
     // Captured on close — preserves the legacy 10-stage label that the
     // funnel was on at the moment of migration / close, so legacy
     // reports that aggregate by the old taxonomy keep working.

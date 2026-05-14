@@ -414,8 +414,8 @@ export function StageTransitionDialog({
               >
                 <option value="">— pick reason —</option>
                 {reasonOptions.map((r) => (
-                  <option key={r} value={r}>
-                    {r.replace(/_/g, " ")}
+                  <option key={r.value} value={r.value}>
+                    {r.label}
                   </option>
                 ))}
               </select>

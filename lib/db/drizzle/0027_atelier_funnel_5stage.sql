@@ -8,8 +8,8 @@
 --
 -- Adds:
 --   atelier_opportunities.sub_status               text
---   atelier_opportunities.runner_entered_at        timestamp
---   atelier_opportunities.contract_signed_at       timestamp
+--   atelier_opportunities.runner_entered_at        timestamptz
+--   atelier_opportunities.contract_signed_at       timestamptz
 --   atelier_opportunities.final_plm_stage          text
 --   atelier_opportunity_stage_transitions.legacy_stage_label    text
 --   atelier_opportunity_stage_transitions.decider               text
@@ -27,8 +27,8 @@
 
 ALTER TABLE atelier_opportunities
   ADD COLUMN IF NOT EXISTS sub_status         text,
-  ADD COLUMN IF NOT EXISTS runner_entered_at  timestamp,
-  ADD COLUMN IF NOT EXISTS contract_signed_at timestamp,
+  ADD COLUMN IF NOT EXISTS runner_entered_at  timestamptz,
+  ADD COLUMN IF NOT EXISTS contract_signed_at timestamptz,
   ADD COLUMN IF NOT EXISTS final_plm_stage    text;
 
 ALTER TABLE atelier_opportunity_stage_transitions
@@ -99,7 +99,7 @@ SET
     WHEN 'submitted'            THEN 'pursue'
     WHEN 'verbal_commit'        THEN 'pursue'
     WHEN 'signed'               THEN 'mobilize'
-    WHEN 'lost_no_decision'     THEN 'no_decision'
+    WHEN 'lost_no_decision'     THEN 'no_go'
     ELSE o.plm_stage
   END,
   updated_at = now()
