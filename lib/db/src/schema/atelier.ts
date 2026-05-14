@@ -306,13 +306,15 @@ export const atelierOpportunities = pgTable(
       composite: number;
       band: "pursue" | "watch" | "decline";
       dimensions: Array<{
+        // The exact six dimensions specified by Task #334.
+        // `riskInverted` is scored 5 = clean, 0 = many risk markers.
         key:
-          | "fitToOffering"
-          | "buyerAccess"
-          | "budgetSignal"
-          | "timeline"
-          | "competition"
-          | "deliverability";
+          | "strategicFit"
+          | "clientQuality"
+          | "dealEconomics"
+          | "winProbability"
+          | "deliverability"
+          | "riskInverted";
         score: number;
         weight: number;
         rationale: string;
