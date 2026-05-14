@@ -124,7 +124,7 @@ const MOCK_MODE =
 const SESSION_DAILY_BUDGET_USD = Number(
   process.env.ATELIER_CLI_SESSION_DAILY_BUDGET_USD ?? 5,
 );
-const MAX_TOOL_STEPS = Number(process.env.ATELIER_CLI_MAX_STEPS ?? 8);
+const MAX_TOOL_STEPS = Number(process.env.ATELIER_CLI_MAX_STEPS ?? 12);
 
 // Wall-clock budgets per turn. Soft = emit budget_exceeded + ask the user
 // (continue / hand off to async / cancel). Hard = abort.
