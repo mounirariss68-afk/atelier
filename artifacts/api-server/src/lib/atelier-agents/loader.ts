@@ -44,9 +44,48 @@ export type AtelierAgentId =
   | "burn_sentinel"
   | "expense_auditor"
   | "account_cartographer"
-  | "brand_profile_writer";
+  | "brand_profile_writer"
+  // v5 — Press
+  | "linkedin_composer"
+  | "press_monitor"
+  | "field_notes_scheduler"
+  // v5 — Alliances
+  | "alliance_choreographer"
+  | "certification_tracker"
+  // v5 — Studio (recruiting)
+  | "interview_designer"
+  | "reference_caller"
+  | "offer_composer"
+  // v5 — Guardhouse (security & compliance)
+  | "compliance_sentinel"
+  | "incident_responder"
+  | "dsar_concierge"
+  | "backup_auditor"
+  // v5 — IP / Asset catalog
+  | "ip_steward"
+  | "oss_compliance_sentinel"
+  | "demo_environment_curator";
 
-export function loadPrompt(agentId: AtelierAgentId, version = 1): string {
-  const path = resolve(PROMPT_DIR, agentId, `v${version}.md`);
+/**
+ * Load an agent prompt from `prompts/<agentId>/v<version>.md`.
+ *
+ * Task #306 (v5) — Some v1 agents grew "mode" extensions instead of being
+ * cloned into parallel agents (see `artifacts/atelier/docs/v5-scale-and-trust.md`
+ * for the conflict-resolution discipline). Mode files live alongside the
+ * base version as `v<version>_<mode>_mode.md`. Pass `mode` to load one:
+ *
+ *   loadPrompt("pov_author", 2, "press")           // v2_press_mode.md
+ *   loadPrompt("account_cartographer", 2, "partner") // v2_partner_mode.md
+ *   loadPrompt("pursuit_scout", 2, "recruiting")    // v2_recruiting_mode.md
+ *
+ * Without `mode`, the loader resolves `v<version>.md` as before.
+ */
+export function loadPrompt(
+  agentId: AtelierAgentId,
+  version = 1,
+  mode?: string,
+): string {
+  const filename = mode ? `v${version}_${mode}_mode.md` : `v${version}.md`;
+  const path = resolve(PROMPT_DIR, agentId, filename);
   return readFileSync(path, "utf8");
 }

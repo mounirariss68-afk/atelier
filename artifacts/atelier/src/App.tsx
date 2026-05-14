@@ -50,6 +50,12 @@ import WalletVat from "@/pages/wallet/WalletVat";
 import WalletApprovals from "@/pages/wallet/WalletApprovals";
 import WalletClientBillable from "@/pages/wallet/WalletClientBillable";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
+// v5 — Scale & Trust
+import PressIndex from "@/pages/press/PressIndex";
+import AlliancesIndex from "@/pages/alliances/AlliancesIndex";
+import StudioIndex from "@/pages/studio/StudioIndex";
+import GuardhouseIndex from "@/pages/guardhouse/GuardhouseIndex";
+import IpCatalog from "@/pages/atelier/IpCatalog";
 
 const queryClient = new QueryClient();
 
@@ -93,8 +99,20 @@ function Router() {
         <Route path="/engagements/:engId" component={Engagement} />
         <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
         <Route path="/atelier/firm-profile" component={FirmProfile} />
+        {/* v5 — IP catalog extends /atelier/assets with code, OSS, demos, licensing. */}
+        <Route path="/atelier/ip" component={IpCatalog} />
+        <Route path="/atelier/ip/:section" component={IpCatalog} />
         <Route path="/atelier" component={AtelierIndex} />
         <Route path="/atelier/:section" component={AtelierIndex} />
+        {/* v5 — The Press, Alliances, The Studio, The Guardhouse. */}
+        <Route path="/press" component={PressIndex} />
+        <Route path="/press/:section" component={PressIndex} />
+        <Route path="/alliances" component={AlliancesIndex} />
+        <Route path="/alliances/:section" component={AlliancesIndex} />
+        <Route path="/studio" component={StudioIndex} />
+        <Route path="/studio/:section" component={StudioIndex} />
+        <Route path="/guardhouse" component={GuardhouseIndex} />
+        <Route path="/guardhouse/:section" component={GuardhouseIndex} />
         <Route path="/roster/access-matrix" component={RosterAccessMatrix} />
         <Route path="/roster/skill-graph" component={RosterSkillGraph} />
         <Route path="/roster/invitations" component={RosterInvitations} />

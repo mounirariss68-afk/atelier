@@ -24,6 +24,14 @@ export const ATELIER_PERSONA_ROLES = [
   "contractor",
   "partner_firm_resource",
   "board_observer",
+  // v5 — Scale & Trust personas
+  // Recruiter: write access into /studio (candidate CRM, panels, offers).
+  // Cannot see client engagements.
+  "recruiter",
+  // Compliance Officer: evidence write access in /guardhouse, plus
+  // read-only across audit-relevant surfaces (audit log, access reviews,
+  // backups, incidents, DSARs).
+  "compliance_officer",
 ] as const;
 
 export type AtelierRole = (typeof ATELIER_PERSONA_ROLES)[number];
@@ -57,7 +65,18 @@ const PERSONNEL_CONTRACT_VIEWERS = SET("founding_partner", "partner", "hr");
 // Restricted personas that must be narrowed to their explicit engagement
 // grants (no firm-wide visibility). Board observers are intentionally not
 // here — their realm gate is handled separately when the board shell ships.
-const RESTRICTED = SET("contractor", "partner_firm_resource");
+//
+// Task #306 (v5) — `recruiter` is restricted: their workspace is /studio
+// (candidates, panels, offers) and they explicitly must not see client
+// engagements. Adding them here makes the RLS middleware resolve their
+// engagement grants from `atelier_engagement_access`; with no rows they
+// receive the deny-all sentinel and any engagement-scoped table denies
+// access. `compliance_officer` is NOT restricted by engagement — by design
+// they need firm-wide read for audit (controls, evidence, incidents,
+// access reviews, backups, DSARs). They get no comp / personnel /
+// approval / breakglass capabilities elsewhere in this file, so the
+// firm-wide read is bounded to non-sensitive audit surfaces.
+const RESTRICTED = SET("contractor", "partner_firm_resource", "recruiter");
 
 // Reference-data / firm-config admin (Task #292 re-gate).
 const REFERENCE_DATA_ADMIN = SET("founding_partner", "hr");

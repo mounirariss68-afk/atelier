@@ -75,11 +75,19 @@ export function TopNav() {
     return () => { alive = false; };
   }, [isApprover, me?.role]);
 
+  // Task #306 — v5 Scale & Trust adds Press, Alliances, Studio, Guardhouse
+  // to the top nav. They sit after Engagements (the existing client-loop
+  // group) and before Atelier (the firm IP / agent group), so the nav reads
+  // commercial → scale → IP from left to right.
   const navItems = [
     { href: "/", label: "Home", badge: pendingApprovals },
     { href: "/crm", label: "Accounts" },
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
+    { href: "/alliances", label: "Alliances" },
+    { href: "/press", label: "Press" },
+    { href: "/studio", label: "Studio" },
+    { href: "/guardhouse", label: "Guardhouse" },
     { href: "/atelier", label: "Atelier" },
     { href: "/agents", label: "Agents" },
   ] as Array<{ href: string; label: string; badge?: number }>;
