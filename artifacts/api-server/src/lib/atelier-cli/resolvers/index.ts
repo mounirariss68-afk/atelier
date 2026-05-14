@@ -39,14 +39,26 @@ export type ResolverResult<T> =
 
 const MAX_CHOICES = 5;
 
-/** Account by free-text query. Public-perimeter — no per-account ACL. */
-export async function resolveAccount(query: string): Promise<ResolverResult<unknown>> {
+/**
+ * Account by free-text query. Task #332 — scoped to the persona's
+ * org so the CLI cannot leak account names from other tenants.
+ */
+export async function resolveAccount(
+  query: string,
+  persona: CliPersona,
+): Promise<ResolverResult<unknown>> {
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
   const rows = await db
     .select({ id: atelierAccounts.id, name: atelierAccounts.name, country: atelierAccounts.country })
     .from(atelierAccounts)
-    .where(and(ilike(atelierAccounts.name, `%${q}%`), isNull(atelierAccounts.deletedAt)))
+    .where(
+      and(
+        ilike(atelierAccounts.name, `%${q}%`),
+        eq(atelierAccounts.orgId, persona.orgId),
+        isNull(atelierAccounts.deletedAt),
+      ),
+    )
     .limit(MAX_CHOICES + 1);
   if (rows.length === 0) return { kind: "none" };
   if (rows.length === 1) {
@@ -64,15 +76,20 @@ export async function resolveAccount(query: string): Promise<ResolverResult<unkn
   };
 }
 
-/** Contact, optionally scoped to a single account. */
+/**
+ * Contact, optionally scoped to a single account. Task #332 —
+ * tenant-scoped via persona.orgId.
+ */
 export async function resolveContact(
   query: string,
+  persona: CliPersona,
   opts: { accountId?: string } = {},
 ): Promise<ResolverResult<unknown>> {
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
   const where = and(
     or(ilike(atelierContacts.fullName, `%${q}%`), ilike(atelierContacts.email, `%${q}%`)),
+    eq(atelierContacts.orgId, persona.orgId),
     isNull(atelierContacts.deletedAt),
     opts.accountId ? eq(atelierContacts.accountId, opts.accountId) : undefined,
   );
@@ -140,8 +157,14 @@ export async function resolveEngagement(
   };
 }
 
-/** Person (firm employee) by name or email. */
-export async function resolvePerson(query: string): Promise<ResolverResult<unknown>> {
+/**
+ * Person (firm employee) by name or email. Task #332 —
+ * tenant-scoped via persona.orgId.
+ */
+export async function resolvePerson(
+  query: string,
+  persona: CliPersona,
+): Promise<ResolverResult<unknown>> {
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
   const rows = await db
@@ -152,7 +175,12 @@ export async function resolvePerson(query: string): Promise<ResolverResult<unkno
       role: atelierUsers.role,
     })
     .from(atelierUsers)
-    .where(or(ilike(atelierUsers.name, `%${q}%`), ilike(atelierUsers.email, `%${q}%`)))
+    .where(
+      and(
+        or(ilike(atelierUsers.name, `%${q}%`), ilike(atelierUsers.email, `%${q}%`)),
+        eq(atelierUsers.orgId, persona.orgId),
+      ),
+    )
     .limit(MAX_CHOICES + 1);
   if (rows.length === 0) return { kind: "none" };
   if (rows.length === 1) {

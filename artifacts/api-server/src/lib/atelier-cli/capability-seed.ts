@@ -28,6 +28,7 @@ import {
 } from "./capability-catalog.js";
 import { resolveAccount } from "./resolvers/index.js";
 import { checkAndRecord } from "./outbound-rate-limit.js";
+import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -80,8 +81,8 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "account_card",
-  async run(input) {
-    const result = await resolveAccount(String(input.query ?? ""));
+  async run(input, ctx) {
+    const result = await resolveAccount(String(input.query ?? ""), ctx.persona);
     if (result.kind === "match") {
       return { ok: true, data: { id: result.id, label: result.label } };
     }
@@ -120,6 +121,13 @@ defineCapability({
   },
   isWrite: true,
   irreversible: false,
+  requiredRoles: [
+    "founding_partner",
+    "partner",
+    "senior_manager",
+    "manager",
+    "associate",
+  ],
   surfaceOn: ["engagement_dashboard"],
   twoPhaseConfirm: true,
   outboundChannel: null,
@@ -131,6 +139,20 @@ defineCapability({
       severity: String(input.severity ?? "amber"),
       description: String(input.description ?? "").slice(0, 500),
     };
+    // Task #332 — engagement ACL parity. Reuse the same accessible-id
+    // helper the routes use so the CLI cannot create a RAID against an
+    // engagement the persona is not actually on.
+    const acl = await accessibleEngagementIds({
+      id: ctx.persona.id,
+      role: ctx.persona.role,
+    } as Parameters<typeof accessibleEngagementIds>[0]);
+    if (acl.all !== true && !acl.ids.has(args.engagementId)) {
+      return {
+        ok: false,
+        errorCode: "forbidden",
+        errorMessage: `engagement ${args.engagementId} is outside your access`,
+      };
+    }
     if (input.confirm !== true) {
       return {
         ok: true,
