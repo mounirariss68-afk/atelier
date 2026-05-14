@@ -1449,6 +1449,160 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "contact_update_disposition", confidence: contactId && dispMatch ? "high" : "low", input: { contactId, disposition: dispMatch?.[1] ?? "" } };
   }
 
+  // ===================================================================
+  // Task #341 — read-side intent routing.
+  // Reads are dispatched by phrase patterns shared with the smoke
+  // tests. None of these mutate state, so they're confidence:"high"
+  // whenever the pattern matches; the orchestrator skips the
+  // confirm phase entirely (isWrite:false in the catalog).
+  // ===================================================================
+
+  // Pipeline by stage / forecast.
+  if (/\b(pipeline\s+forecast|weighted\s+forecast|forecast\s+summary)\b/i.test(promptRaw)) {
+    return { toolName: "forecast_summary", confidence: "high", input: {} };
+  }
+  if (/\b(pipeline\s+by\s+stage|show\s+(?:the\s+)?pipeline|(my|our|the)\s+pipeline|in\s+pursue\s+right\s+now)\b/i.test(promptRaw)) {
+    return { toolName: "pipeline_by_stage", confidence: "high", input: {} };
+  }
+  if (/\b(top\s+\d+\s+)?(opps?|opportunit\w+|deals?)\b.*\b(in|under|at)\s+(suspect|prospect|pursue|shape|identify|convert|propose|runner|negoti\w*|contract|won|lost|withdrawn)\b/i.test(promptRaw)) {
+    const m = promptRaw.match(/\b(?:in|under|at)\s+(suspect|prospect|pursue|shape|identify|convert|propose|runner|negoti\w*|contract|won|lost|withdrawn)\b/i);
+    const limMatch = promptRaw.match(/\btop\s+(\d{1,2})\b/i);
+    return {
+      toolName: "opportunity_list_by_stage",
+      confidence: "high",
+      input: { stage: (m?.[1] ?? "pursue").toLowerCase(), limit: limMatch ? Number(limMatch[1]) : 10 },
+    };
+  }
+
+  // Active engagements.
+  if (/\b(list|show)\s+(?:the\s+)?(active|in[- ]flight|current)\s+engagements?\b/i.test(promptRaw) || /\bengagements?\s+in\s+flight\b/i.test(promptRaw)) {
+    return { toolName: "engagement_list_active", confidence: "high", input: {} };
+  }
+
+  // Utilization (firm vs person). Also matches "over-utilized",
+  // "under-utilized", "bench" style questions which are firm-wide
+  // by default.
+  if (/\b((utilis|utiliz)ation|(over|under)[- ]?(utilis|utiliz)ed|on\s+the\s+bench)\b/i.test(promptRaw)) {
+    const personId = findIdLike(promptRaw, ["person", "usr", "user"]) ?? "";
+    if (personId) {
+      return { toolName: "utilization_person", confidence: "high", input: { personId } };
+    }
+    if (/\bfor\s+(?!the\s+firm\b)\w+/i.test(promptRaw) && !/\b(firm|everyone|across)\b/i.test(promptRaw)) {
+      return { toolName: "utilization_person", confidence: "low", input: { personId: "" } };
+    }
+    return { toolName: "utilization_firm", confidence: "high", input: {} };
+  }
+
+  // Burn vs budget. Accepts "burn", "burning", "burnrate" and the
+  // common phrasings "burn vs budget", "burning against plan", etc.
+  // Engagement name is extracted from "<name> engagement" or via the
+  // generic "for"/"on" capture; the capability also resolves the
+  // query server-side.
+  if (/\bburn(?:ing|rate)?\b/i.test(promptRaw) && /\b(budget|plan|engagement|eng_)\b/i.test(promptRaw)) {
+    const engId = findIdLike(promptRaw, ["eng"]) ?? "";
+    let engQuery = captureAfter(promptRaw, "for", "on") ?? "";
+    if (!engQuery && !engId) {
+      const m = promptRaw.match(/\b(?:the\s+)?([A-Za-z][A-Za-z0-9&\- ]{1,40}?)\s+engagement\b/i);
+      if (m) engQuery = m[1].trim();
+    }
+    return {
+      toolName: "burn_vs_budget",
+      confidence: engId || engQuery ? "high" : "low",
+      input: { engagementId: engId, engagementQuery: engQuery },
+    };
+  }
+
+  // Expense aging / policy violations.
+  if (/\b(expense|expenses)\b.*\b(aging|aged|older|over\s+\d+\s+days?)\b/i.test(promptRaw) || /\bold\s+expenses\b/i.test(promptRaw)) {
+    const days = promptRaw.match(/\b(\d{1,3})\s+days?\b/i);
+    return {
+      toolName: "expense_aging",
+      confidence: "high",
+      input: { olderThanDays: days ? Number(days[1]) : 30 },
+    };
+  }
+  if (/\b(policy\s+violations?|out[- ]of[- ]policy|over\s+policy|expense\s+flags)\b/i.test(promptRaw) || /\bflag\b.*\bexpense\b/i.test(promptRaw)) {
+    return { toolName: "wallet_policy_violations", confidence: "high", input: {} };
+  }
+
+  // Account dossier / changes.
+  if (/\b(dossier|account\s+summary)\b/i.test(promptRaw) || /\bsummariz?e\b.*\b(dossier|account)\b/i.test(promptRaw)) {
+    const accId = findIdLike(promptRaw, ["acct", "acc"]) ?? "";
+    const accQuery = captureAfter(promptRaw, "dossier", "for", "on") ?? "";
+    return {
+      toolName: "account_dossier",
+      confidence: accId || accQuery ? "high" : "low",
+      input: { accountId: accId, accountQuery: accQuery },
+    };
+  }
+  if (/\b(what\s+changed|changes?\s+(on|for)|recent\s+changes?)\b/i.test(promptRaw) && /\b(account|acct|on)\b/i.test(promptRaw)) {
+    const accId = findIdLike(promptRaw, ["acct", "acc"]) ?? "";
+    const accQuery = captureAfter(promptRaw, "on", "for") ?? "";
+    return {
+      toolName: "account_changes",
+      confidence: accId || accQuery ? "high" : "low",
+      input: { accountId: accId, accountQuery: accQuery },
+    };
+  }
+
+  // Agent runs.
+  if (/\b(agent\s+runs?|runs?\b.*\b(blocked|failed|errored|complete))\b/i.test(promptRaw)) {
+    let status = "";
+    if (/\b(failed|errored|error)\b/i.test(promptRaw)) status = "error";
+    else if (/\bblocked\b/i.test(promptRaw)) status = "blocked";
+    else if (/\bcomplete\b/i.test(promptRaw)) status = "complete";
+    else if (/\brunning\b/i.test(promptRaw)) status = "running";
+    return { toolName: "agent_runs_status", confidence: "high", input: { status } };
+  }
+
+  // RAID open list.
+  if (/\b(open\s+raid|raid\s+open|raid\s+items?\s+open|list\s+(?:my\s+)?(?:open\s+)?raid)\b/i.test(promptRaw) || /\b(show|list)\b.*\braid\b/i.test(promptRaw)) {
+    const engId = findIdLike(promptRaw, ["eng"]) ?? "";
+    const engQuery = captureAfter(promptRaw, "on", "for") ?? "";
+    return {
+      toolName: "raid_open_list",
+      confidence: "high",
+      input: { engagementId: engId, engagementQuery: engQuery },
+    };
+  }
+
+  // Approval queue. Includes the natural "what's waiting on me"
+  // phrasing as well as explicit "approval queue" / "sign-off"
+  // requests.
+  if (/\b(approval\s+queue|needs\s+my\s+sign[- ]?off|what\s+do\s+i\s+need\s+to\s+approve|what'?s\s+waiting\s+on\s+me|waiting\s+on\s+my\s+approval)\b/i.test(promptRaw)) {
+    return { toolName: "approval_queue", confidence: "high", input: {} };
+  }
+
+  // Roster compliance due.
+  if (/\b(certifications?|compliance|visas?|iqamas?)\b.*\b(expir\w+|renew\w+|due)\b/i.test(promptRaw) || /\bexpir\w+\b.*\b(certification|visa|iqama|compliance)\b/i.test(promptRaw)) {
+    const days = promptRaw.match(/\b(\d{1,3})\s+days?\b/i);
+    return {
+      toolName: "roster_compliance_due",
+      confidence: "high",
+      input: { withinDays: days ? Number(days[1]) : 90 },
+    };
+  }
+
+  // Timesheet (mine).
+  if (/\b(my\s+timesheet|current\s+timesheet|timesheet\s+for\s+this\s+week)\b/i.test(promptRaw)) {
+    return { toolName: "timesheet_current", confidence: "high", input: {} };
+  }
+
+  // Recent activity.
+  if (/\b(recent\s+activity|what\s+happened\s+(in|across))\b/i.test(promptRaw)) {
+    const hours = promptRaw.match(/\b(\d{1,3})\s+hours?\b/i);
+    return {
+      toolName: "recent_activity",
+      confidence: "high",
+      input: { sinceHours: hours ? Number(hours[1]) : 24 },
+    };
+  }
+
+  // Home summary.
+  if (/\b(home\s+summary|today's\s+summary|what\s+needs\s+me\s+today)\b/i.test(promptRaw)) {
+    return { toolName: "home_summary", confidence: "high", input: {} };
+  }
+
   return null;
 }
 

@@ -27,5 +27,28 @@
     { "method": "POST", "path": "/timesheet-weeks/:weekId/approve", "catalogId": "ledger.approve_timesheet" },
     { "method": "POST", "path": "/timesheet-weeks/:weekId/reject", "catalogId": "ledger.reject_timesheet" },
     { "method": "POST", "path": "/wallet/expenses", "catalogId": "wallet.create_expense" }
+  ],
+  "_reads_doc": "Task #341 — UI read view ↔ CLI catalog parity matrix. Mirrors `rows` but for read-only views the assistant must answer questions about. Each row points to the UI view + the catalog id of the read capability that powers the same answer in the CLI. Use `allowReason` for views that legitimately have no CLI surface (e.g. live SSE streams, raw chart bytes).",
+  "reads": [
+    { "view": "Home / Pane B summary", "catalogId": "home.summary" },
+    { "view": "Home / pipeline-by-stage strip", "catalogId": "pipeline.by_stage" },
+    { "view": "Home / forecast tile", "catalogId": "forecast.summary" },
+    { "view": "Home / recent activity", "catalogId": "activity.recent" },
+    { "view": "CRM / opportunity list (per stage)", "catalogId": "opportunity.list_by_stage" },
+    { "view": "CRM / account dossier", "catalogId": "account.dossier" },
+    { "view": "CRM / account audit timeline", "catalogId": "account.changes" },
+    { "view": "Engagements / list (active)", "catalogId": "engagement.list_active" },
+    { "view": "Engagements / RAID open items", "catalogId": "raid.open" },
+    { "view": "Engagements / burn vs budget", "catalogId": "burn.engagement" },
+    { "view": "Ledger / firm utilization snapshot", "catalogId": "utilization.firm" },
+    { "view": "Ledger / per-person utilization", "catalogId": "utilization.person" },
+    { "view": "Ledger / approval queue", "catalogId": "approval.queue" },
+    { "view": "Ledger / current timesheet", "catalogId": "timesheet.current" },
+    { "view": "Wallet / expense aging", "catalogId": "expense.aging" },
+    { "view": "Wallet / policy violations", "catalogId": "wallet.policy_violations" },
+    { "view": "Roster / compliance due", "catalogId": "roster.compliance_due" },
+    { "view": "Agents / agent runs status", "catalogId": "agent.runs_status" },
+    { "view": "Atelier / prompt library", "allowReason": "static catalog, surfaced via /help drawer (no read tool needed)" },
+    { "view": "Salon / live read-only mirror", "allowReason": "client-side SSE mirror of partner-published views; no separate CLI read" }
   ]
 }

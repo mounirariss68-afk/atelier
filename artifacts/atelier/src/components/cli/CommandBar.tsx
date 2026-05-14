@@ -456,7 +456,12 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
     if (pageCtx.surface === "home") {
       return homeSuggestionsFor(me?.role, locale, cli.capabilities);
     }
-    return suggestionsFor(pageCtx, locale);
+    // Task #341 — pass the visible read capabilities so per-page chips
+    // can be enriched from catalog `surfaceOn` declarations. Filter to
+    // reads (isWrite=false) so the empty state surfaces "show me…"
+    // questions, not destructive verbs.
+    const readsOnly = (cli.capabilities ?? []).filter((c) => c.isWrite === false);
+    return suggestionsFor(pageCtx, locale, readsOnly);
   }, [pageCtx, locale, me?.role, cli.capabilities]);
 
   if (!open) return null;

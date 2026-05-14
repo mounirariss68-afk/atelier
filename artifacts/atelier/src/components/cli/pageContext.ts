@@ -173,11 +173,61 @@ const BY_SURFACE: Record<DerivedPageContext["surface"], Suggestion[]> = {
   global: GLOBAL,
 };
 
+// Task #341 — map UI surface labels to the catalog `SurfaceContext`
+// vocabulary so per-page suggestion chips can be enriched from
+// catalog `surfaceOn` declarations. Several UI surfaces (crm,
+// agents, atelier, salon) collapse to "global" because the catalog
+// uses a tighter enum.
+const SURFACE_TO_CATALOG: Record<DerivedPageContext["surface"], string[]> = {
+  home: ["home"],
+  crm: ["account_workspace", "global"],
+  account_workspace: ["account_workspace"],
+  opportunity_workspace: ["opportunity_workspace"],
+  engagement_dashboard: ["engagement_dashboard"],
+  wallet: ["wallet"],
+  ledger: ["ledger"],
+  roster: ["roster"],
+  agents: ["global"],
+  atelier: ["global"],
+  salon: ["global"],
+  global: ["global"],
+};
+
 export function suggestionsFor(
   ctx: DerivedPageContext,
   locale: CliLocale,
+  capabilities: Array<{
+    surfaceOn?: string[] | null;
+    examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null;
+  }> = [],
 ): Array<{ en: string; ar: string; text: string }> {
-  return BY_SURFACE[ctx.surface].map((s) => ({ ...s, text: s[locale] }));
+  // Catalog-driven first: pull every capability whose `surfaceOn`
+  // overlaps with the catalog surfaces this UI surface maps to, and
+  // mint one chip per first locale phrasing. Hand-authored fallback
+  // backfills so no surface is ever empty.
+  const catalogSurfaces = SURFACE_TO_CATALOG[ctx.surface] ?? ["global"];
+  const fromCatalog: Suggestion[] = [];
+  for (const c of capabilities) {
+    const surfaces = c.surfaceOn ?? [];
+    if (!surfaces.some((s) => catalogSurfaces.includes(s))) continue;
+    const en = c.examplePhrases?.en?.[0];
+    const ar = c.examplePhrases?.ar?.[0];
+    if (!en && !ar) continue;
+    fromCatalog.push({ en: en ?? ar ?? "", ar: ar ?? en ?? "" });
+  }
+  const fallback = BY_SURFACE[ctx.surface] ?? GLOBAL;
+  const merged = [...fromCatalog, ...fallback];
+  const seen = new Set<string>();
+  const out: Array<{ en: string; ar: string; text: string }> = [];
+  for (const s of merged) {
+    const text = s[locale];
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push({ ...s, text });
+    // Task #341 — acceptance criteria specify a 3–5 chip cap.
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 /**
@@ -232,6 +282,10 @@ export function homeSuggestionsFor(
   // fallback entries below — keeps the dedupe + rendering uniform.
   const fromCatalog: Suggestion[] = [];
   for (const c of capabilities) {
+    // Task #341 — Home chips are read-only by contract; skip any
+    // capability flagged as a write so destructive verbs never leak
+    // into the empty-state suggestion strip.
+    if (c.isWrite !== false) continue;
     if (!Array.isArray(c.surfaceOn) || !c.surfaceOn.includes("home")) continue;
     const ex = c.examplePhrases ?? null;
     const en = ex?.en?.[0];
@@ -256,7 +310,8 @@ export function homeSuggestionsFor(
     if (!text || seen.has(text)) continue;
     seen.add(text);
     out.push({ ...s, text });
-    if (out.length >= 6) break;
+    // Task #341 — acceptance criteria specify a 3–5 chip cap.
+    if (out.length >= 5) break;
   }
   return out;
 }

@@ -22,9 +22,7 @@ import { fileURLToPath } from "node:url";
 import {
   listCapabilities,
 } from "../../src/lib/atelier-cli/capability-catalog.js";
-import "../../src/lib/atelier-cli/capability-seed.js";
-import "../../src/lib/atelier-cli/attachment-capabilities.js";
-import "../../src/lib/atelier-cli/parity-capabilities.js";
+import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 import {
   resolveSalesStage,
   resolveCharterApprovalRole,
@@ -37,9 +35,14 @@ type MatrixRow = {
   catalogId?: string;
   allowReason?: string;
 };
+type ReadRow = {
+  view: string;
+  catalogId?: string;
+  allowReason?: string;
+};
 const matrix = JSON.parse(
   fs.readFileSync(path.join(HERE, "matrix.json"), "utf8"),
-) as { rows: MatrixRow[] };
+) as { rows: MatrixRow[]; reads?: ReadRow[] };
 
 let pass = 0;
 let fail = 0;
@@ -130,6 +133,59 @@ test("charter approval role resolver maps phrases", () => {
   assert.equal(resolveCharterApprovalRole("lead"), "lead");
   assert.equal(resolveCharterApprovalRole("senior manager"), "lead");
   assert.equal(resolveCharterApprovalRole("noone"), null);
+});
+
+// ---------------------------------------------------------------
+// Task #341 — read-parity coverage.
+// ---------------------------------------------------------------
+test("read matrix is non-empty", () => {
+  assert.ok(
+    (matrix.reads ?? []).length >= 15,
+    `expected ≥15 read rows, got ${(matrix.reads ?? []).length}`,
+  );
+});
+
+test("every read row resolves to a catalog entry or has an allow-reason", () => {
+  const missing: string[] = [];
+  for (const row of matrix.reads ?? []) {
+    if (row.allowReason) continue;
+    if (!row.catalogId) {
+      missing.push(`${row.view} — no catalogId and no allowReason`);
+      continue;
+    }
+    if (!byId.has(row.catalogId)) {
+      missing.push(`${row.view} → ${row.catalogId} not in catalog`);
+    }
+  }
+  assert.deepEqual(missing, [], `read parity gaps:\n  ${missing.join("\n  ")}`);
+});
+
+test("every catalog read entry is non-mutating + zero-confirm", () => {
+  const offenders: string[] = [];
+  for (const row of matrix.reads ?? []) {
+    if (!row.catalogId) continue;
+    const e = byId.get(row.catalogId);
+    if (!e) continue;
+    if (e.isWrite) offenders.push(`${row.catalogId} marked isWrite=true`);
+    // `twoPhaseConfirm` lives on the wire shape, not the catalog
+    // entry itself; the orchestrator skips confirm whenever isWrite
+    // is false. Asserting isWrite=false is the canonical contract.
+  }
+  assert.deepEqual(offenders, [], `read offenders: ${offenders.join(", ")}`);
+});
+
+test("every read entry declares a result-card shape", () => {
+  const ALLOWED = new Set(["kpi_strip", "ranked_list", "time_series", "entity_card", "audit_timeline", "table", "chart"]);
+  const offenders: string[] = [];
+  for (const row of matrix.reads ?? []) {
+    if (!row.catalogId) continue;
+    const e = byId.get(row.catalogId) as (typeof catalog)[number] & { resultCard?: string };
+    if (!e) continue;
+    if (!e.resultCard || !ALLOWED.has(e.resultCard)) {
+      offenders.push(`${row.catalogId} resultCard=${e.resultCard ?? "<missing>"}`);
+    }
+  }
+  assert.deepEqual(offenders, [], `result-card offenders: ${offenders.join(", ")}`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

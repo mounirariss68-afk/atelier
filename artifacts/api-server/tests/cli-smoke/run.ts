@@ -10,9 +10,7 @@
  */
 import assert from "node:assert/strict";
 import { routePromptToCapability } from "../../src/lib/atelier-cli/index.js";
-import "../../src/lib/atelier-cli/capability-seed.js";
-import "../../src/lib/atelier-cli/attachment-capabilities.js";
-import "../../src/lib/atelier-cli/parity-capabilities.js";
+import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 
 interface Smoke {
   prompt: string;
@@ -30,6 +28,29 @@ const SMOKES: Smoke[] = [
   { prompt: "Draft a POV for opp_dewa on cost-to-serve", expectTool: "opportunity_draft_pov" },
   { prompt: "Approve the latest charter as partner on eng_acme", expectTool: "engagement_approve_charter" },
   { prompt: "Add a 45 USD client lunch at Sushi Roku on 2026-05-12", expectTool: "wallet_create_expense" },
+  // Task #341 — read-side parity smoke prompts.
+  { prompt: "Show pipeline by stage", expectTool: "pipeline_by_stage" },
+  { prompt: "List opportunities in pursue", expectTool: "opportunity_list_by_stage" },
+  { prompt: "List active engagements", expectTool: "engagement_list_active" },
+  { prompt: "Show firm utilization this week", expectTool: "utilization_firm" },
+  { prompt: "Show burn vs budget on eng_acme", expectTool: "burn_vs_budget" },
+  { prompt: "Show expenses aging over 30 days", expectTool: "expense_aging" },
+  { prompt: "Show policy violations on expenses", expectTool: "wallet_policy_violations" },
+  { prompt: "Summarize the Tasama dossier", expectTool: "account_dossier" },
+  { prompt: "What changed on Acme this week?", expectTool: "account_changes" },
+  { prompt: "Show agent runs that failed yesterday", expectTool: "agent_runs_status" },
+  { prompt: "List open RAID items", expectTool: "raid_open_list" },
+  { prompt: "Show my approval queue", expectTool: "approval_queue" },
+  { prompt: "Show pipeline forecast", expectTool: "forecast_summary" },
+  { prompt: "Show people whose certifications expire in 90 days", expectTool: "roster_compliance_due" },
+  { prompt: "Show my timesheet for this week", expectTool: "timesheet_current" },
+  { prompt: "Show recent activity across the firm", expectTool: "recent_activity" },
+  // Task #341 — additional natural-language phrasings called out in
+  // the read-parity acceptance criteria.
+  { prompt: "What's my pipeline this quarter?", expectTool: "pipeline_by_stage" },
+  { prompt: "Who's over-utilized this week?", expectTool: "utilization_firm" },
+  { prompt: "How is the DEWA engagement burning vs budget?", expectTool: "burn_vs_budget" },
+  { prompt: "What's waiting on me?", expectTool: "approval_queue" },
 ];
 
 let pass = 0;

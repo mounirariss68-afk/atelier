@@ -15,6 +15,7 @@
  */
 
 import "./cli-only-capabilities.js";
+import "./cli-only-capabilities-reads.js";
 import "./attachment-capabilities.js";
 import "./undo.js";
 import "./parity-capabilities.js";
