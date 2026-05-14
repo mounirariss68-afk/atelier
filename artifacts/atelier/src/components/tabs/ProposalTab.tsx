@@ -643,7 +643,7 @@ function ProposalRecipients({ proposalId }: { proposalId: string }) {
                   <div className="text-xs text-text-mute">{[r.recipientOrg, r.recipientEmail].filter(Boolean).join(" · ") || "—"}</div>
                 </td>
                 <td className="py-1">
-                  <a className="text-xs underline text-text" href={`${r.shareUrl}/html`} target="_blank" rel="noreferrer" data-testid={`open-recipient-${r.id}`}>{r.shareUrl}</a>
+                  <a className="text-xs underline text-text" href={r.shareUrl} target="_blank" rel="noreferrer" data-testid={`open-recipient-${r.id}`}>{r.shareUrl}</a>
                 </td>
                 <td className="py-1">{r.openCount}</td>
                 <td className="py-1 text-text-mute">{r.lastOpenedAt ? new Date(r.lastOpenedAt).toLocaleString() : "—"}</td>

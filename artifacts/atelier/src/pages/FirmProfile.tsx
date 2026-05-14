@@ -118,6 +118,128 @@ export default function FirmProfile() {
     finally { setLoading(false); }
   }
 
+  async function saveDraft(payload: FirmPayload, notes: string | null) {
+    setLoading(true); setErr(null);
+    try {
+      await api("/firm-profile/draft", {
+        method: "POST",
+        body: JSON.stringify({ payload, notes }),
+      });
+      await reload();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setLoading(false); }
+  }
+
+  function DraftEditor({
+    row,
+    loading,
+    onSave,
+    onPublish,
+  }: {
+    row: FirmRow;
+    loading: boolean;
+    onSave: (payload: FirmPayload, notes: string | null) => void;
+    onPublish: () => void;
+  }) {
+    const [draft, setDraft] = React.useState<FirmPayload>(row.payload);
+    const [notes, setNotes] = React.useState<string>(row.notes ?? "");
+    const [dirty, setDirty] = React.useState(false);
+    React.useEffect(() => { setDraft(row.payload); setNotes(row.notes ?? ""); setDirty(false); }, [row.id]);
+    function patch<K extends keyof FirmPayload>(k: K, v: FirmPayload[K]) {
+      setDraft((d) => ({ ...d, [k]: v }));
+      setDirty(true);
+    }
+    return (
+      <Card className="p-5 space-y-4" data-testid="firm-profile-draft-editor">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Latest draft · v{row.version}</div>
+            <div className="text-base font-medium text-text">Edit canonical brand copy before publishing.</div>
+          </div>
+          <MonoChip>{row.status}</MonoChip>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <label className="space-y-1">
+            <div className="text-xs uppercase text-text-mute">Firm name</div>
+            <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.firmName} onChange={(e) => patch("firmName", e.target.value)}
+              data-testid="firm-profile-edit-firmName" />
+          </label>
+          <label className="space-y-1">
+            <div className="text-xs uppercase text-text-mute">Tagline</div>
+            <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.tagline} onChange={(e) => patch("tagline", e.target.value)}
+              data-testid="firm-profile-edit-tagline" />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <div className="text-xs uppercase text-text-mute">Mission statement</div>
+            <textarea rows={3} className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.missionStatement} onChange={(e) => patch("missionStatement", e.target.value)}
+              data-testid="firm-profile-edit-mission" />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <div className="text-xs uppercase text-text-mute">Boilerplate (short)</div>
+            <textarea rows={2} className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.boilerplateShort} onChange={(e) => patch("boilerplateShort", e.target.value)}
+              data-testid="firm-profile-edit-boilerplateShort" />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <div className="text-xs uppercase text-text-mute">Boilerplate (long)</div>
+            <textarea rows={4} className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.boilerplateLong} onChange={(e) => patch("boilerplateLong", e.target.value)}
+              data-testid="firm-profile-edit-boilerplateLong" />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <div className="text-xs uppercase text-text-mute">Capabilities pitch</div>
+            <textarea rows={3} className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.capabilitiesPitch} onChange={(e) => patch("capabilitiesPitch", e.target.value)}
+              data-testid="firm-profile-edit-capabilitiesPitch" />
+          </label>
+          <label className="space-y-1">
+            <div className="text-xs uppercase text-text-mute">Differentiators (one per line)</div>
+            <textarea rows={4} className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.differentiators.join("\n")}
+              onChange={(e) => patch("differentiators", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))}
+              data-testid="firm-profile-edit-differentiators" />
+          </label>
+          <label className="space-y-1">
+            <div className="text-xs uppercase text-text-mute">Voice attributes (one per line)</div>
+            <textarea rows={4} className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.voiceAttributes.join("\n")}
+              onChange={(e) => patch("voiceAttributes", e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))}
+              data-testid="firm-profile-edit-voiceAttributes" />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <div className="text-xs uppercase text-text-mute">Contact block</div>
+            <textarea rows={2} className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={draft.contactBlock} onChange={(e) => patch("contactBlock", e.target.value)}
+              data-testid="firm-profile-edit-contact" />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <div className="text-xs uppercase text-text-mute">Editor notes (versioning)</div>
+            <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={notes} onChange={(e) => { setNotes(e.target.value); setDirty(true); }}
+              placeholder="What changed in this draft?"
+              data-testid="firm-profile-edit-notes" />
+          </label>
+        </div>
+        <div className="pt-3 border-t border-border-soft flex items-center gap-2">
+          <PillButton onClick={() => onSave(draft, notes.trim() || null)} disabled={loading || !dirty}
+            data-testid="save-firm-profile-draft">
+            {loading ? "Saving…" : dirty ? "Save edits as new draft" : "No edits to save"}
+          </PillButton>
+          <PillButton onClick={onPublish} disabled={loading || dirty}
+            data-testid={`publish-firm-profile-${row.id}`}>
+            Publish v{row.version}
+          </PillButton>
+          <span className="text-xs text-text-mute">
+            Saving creates a new draft version. Publishing supersedes the current published row.
+          </span>
+        </div>
+      </Card>
+    );
+  }
+
   function PayloadView({ row, label }: { row: FirmRow; label: string }) {
     const p = row.payload;
     return (
@@ -198,16 +320,22 @@ export default function FirmProfile() {
       </Card>
 
       {profile?.latestDraft ? (
-        <PayloadView row={profile.latestDraft} label="Latest draft" />
+        <DraftEditor
+          row={profile.latestDraft}
+          loading={loading}
+          onSave={(payload, notes) => saveDraft(payload, notes)}
+          onPublish={() => publish(profile.latestDraft!.id)}
+        />
       ) : (
         <Card className="p-5 text-sm text-text-mute">No drafts yet — click <em>Draft a new version</em> to seed one.</Card>
       )}
 
       {profile?.published ? (
         <PayloadView row={profile.published} label="Published" />
-      ) : (
+      ) : null}
+      {!profile?.published ? (
         <Card className="p-5 text-sm text-text-mute">Nothing published yet — proposals will fall back to a stub Company Profile.</Card>
-      )}
+      ) : null}
 
       {versions && versions.length > 0 ? (
         <Card className="p-5">
