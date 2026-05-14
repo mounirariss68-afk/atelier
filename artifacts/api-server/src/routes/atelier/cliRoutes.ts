@@ -207,6 +207,48 @@ router.get("/cli/sessions", async (req, res) => {
   });
 });
 
+/**
+ * Task #333 — recent turns across all sessions for the persona, used
+ * by the right-rail Activity tab to render per-turn `cli_turn` rows
+ * with status icon and a deep-link to /cli?session=…&turn=…
+ */
+router.get("/cli/turns/recent", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const limit = Math.min(20, Math.max(1, Number(req.query.limit ?? 10)));
+  const rows = await db
+    .select({
+      id: atelierCliTurns.id,
+      sessionId: atelierCliTurns.sessionId,
+      status: atelierCliTurns.status,
+      prompt: atelierCliTurns.prompt,
+      createdAt: atelierCliTurns.createdAt,
+    })
+    .from(atelierCliTurns)
+    .innerJoin(
+      atelierCliSessions,
+      eq(atelierCliTurns.sessionId, atelierCliSessions.id),
+    )
+    .where(
+      and(
+        eq(atelierCliSessions.userId, me.id),
+        eq(atelierCliSessions.orgId, me.orgId),
+        isNull(atelierCliSessions.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierCliTurns.createdAt))
+    .limit(limit);
+  res.json({
+    turns: rows.map((r) => ({
+      id: r.id,
+      sessionId: r.sessionId,
+      status: r.status,
+      prompt: r.prompt,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  });
+});
+
 router.get("/cli/sessions/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCli } from "./useCli";
+import { CliContext } from "./cli-context";
 import { s, sFmt, localeInstruction } from "./locale";
 import { derivePageContext, suggestionsFor } from "./pageContext";
 import {
@@ -85,6 +86,42 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
 
   const cli = useCli({ locale });
   const pageCtx = React.useMemo(() => derivePageContext(location), [location]);
+  const cliCtx = React.useContext(CliContext);
+  // Register the bar's turn-injector with the context so deep-link
+  // pages and the right-rail can land directly on a historical turn.
+  React.useEffect(() => {
+    cliCtx.registerInjectTurn(cli.injectHistoricalTurn);
+    return () => cliCtx.registerInjectTurn(() => {});
+  }, [cliCtx, cli.injectHistoricalTurn]);
+  // Drain any pending hydration request whenever the bar opens.
+  React.useEffect(() => {
+    if (!open) return;
+    const req = cliCtx.consumeHydration();
+    if (!req) return;
+    if (req.prompt) {
+      setInput(req.prompt);
+      requestAnimationFrame(() => composerRef.current?.focus());
+    }
+    if (req.sessionId) {
+      void fetch(`/api/atelier/cli/sessions/${encodeURIComponent(req.sessionId)}`, {
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { turns?: Array<Record<string, unknown>> } | null) => {
+          if (!j?.turns) return;
+          const targets = req.turnId
+            ? j.turns.filter((t) => t.id === req.turnId)
+            : j.turns.slice(0, 5);
+          for (const row of targets.reverse()) {
+            cli.injectHistoricalTurn(rowToHistoricalTurn(row));
+          }
+        })
+        .catch(() => {
+          /* silent */
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const [input, setInput] = React.useState("");
   const [attachments, setAttachments] = React.useState<
@@ -1589,6 +1626,66 @@ function ContextPanel({
       </div>
     </aside>
   );
+}
+
+/**
+ * Lift a server-side turn row (from /cli/sessions/:id) into the
+ * CliTurn shape the transcript renders. Walks `frames` defensively
+ * because the orchestrator stores them verbatim.
+ */
+function rowToHistoricalTurn(row: Record<string, unknown>): CliTurn {
+  const status = String(row.status ?? "success");
+  const mappedStatus: CliTurn["status"] =
+    status === "success"
+      ? "complete"
+      : status === "partial"
+        ? "partial"
+        : status === "error"
+          ? "error"
+          : status === "cancelled"
+            ? "cancelled"
+            : status === "awaiting_confirmation"
+              ? "needs_confirmation"
+              : status === "async_dispatched"
+                ? "async_handoff"
+                : "complete";
+  let result: CliTurn["result"];
+  const frames = row.frames;
+  if (Array.isArray(frames)) {
+    for (const f of frames) {
+      const fr = f as { type?: string; data?: { result?: CliTurn["result"] } };
+      if (fr?.type === "final" && fr.data?.result) {
+        result = fr.data.result;
+        break;
+      }
+    }
+  }
+  const stepResults = (row.stepResults as
+    | Array<{
+        index: number;
+        status: "success" | "error" | "skipped" | "pending";
+        error?: string | null;
+      }>
+    | null
+    | undefined) ?? undefined;
+  return {
+    clientTurnKey: `historical:${row.id}`,
+    serverTurnId: String(row.id ?? ""),
+    prompt: String(row.prompt ?? ""),
+    status: mappedStatus,
+    startedAt: row.createdAt ? new Date(String(row.createdAt)).getTime() : Date.now(),
+    trace: [],
+    result,
+    partial:
+      mappedStatus === "partial"
+        ? {
+            completedSteps: 0,
+            failedStepIndex: -1,
+            error: "(see transcript)",
+            stepResults,
+          }
+        : undefined,
+  };
 }
 
 function HelpPanel({

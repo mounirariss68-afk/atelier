@@ -296,25 +296,32 @@ export function RightRail() {
   // user sees their command-bar history without leaving the rail.
   // Server endpoint added in Task #331; the orchestrator increments
   // turnCount on every committed turn.
-  const { data: cliSessionData } = useQuery<{
-    sessions: Array<{
+  // Per-turn recent CLI activity: rendered inline with the agent
+  // activity feed so each `cli_turn` is independently clickable and
+  // deep-links to its result card. The /turns/recent endpoint joins
+  // through atelier_cli_sessions so RBAC is enforced server-side.
+  const { data: cliRecentData } = useQuery<{
+    turns: Array<{
       id: string;
-      title: string | null;
-      turnCount: number;
-      lastTurnAt: string | null;
-      spentCentsToday: number;
+      sessionId: string;
+      status: string;
+      prompt: string;
+      createdAt: string;
     }>;
   }>({
-    queryKey: ["atelier-cli-sessions"],
+    queryKey: ["atelier-cli-turns-recent"],
     queryFn: async () => {
-      const res = await fetch("/api/atelier/cli/sessions", { credentials: "include" });
-      if (!res.ok) throw new Error("cli-sessions");
+      const res = await fetch("/api/atelier/cli/turns/recent?limit=10", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("cli-turns-recent");
       return res.json();
     },
     refetchInterval: 8000,
     refetchIntervalInBackground: false,
   });
-  const cliSessions = cliSessionData?.sessions ?? [];
+  const cliRecentTurns = cliRecentData?.turns ?? [];
+  const cliCtx = React.useContext(CliContext);
 
   const activeCount = activities?.filter(a => a.status === 'running').length || 0;
 
@@ -377,33 +384,52 @@ export function RightRail() {
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
-        {!collapsed && tab === "activity" && cliSessions.length > 0 && (
-          <div className="space-y-1.5" data-testid="cli-rail-sessions">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
-              CLI sessions
-            </div>
-            {cliSessions.slice(0, 5).map((sess) => (
-              <a
-                key={sess.id}
-                href={`/cli?session=${encodeURIComponent(sess.id)}`}
-                className="block bg-bg-elevate border border-border hover:border-gold/40 rounded-md p-2"
-                data-testid="cli-rail-session-row"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[11px] text-gold truncate">
-                    {sess.title ?? "command bar"}
-                  </span>
-                  <span className="text-[10px] font-mono text-text-faint shrink-0">
-                    {sess.turnCount} turn{sess.turnCount === 1 ? "" : "s"}
-                  </span>
-                </div>
-                {sess.lastTurnAt && (
-                  <div className="text-[10px] font-mono text-text-faint mt-0.5">
-                    {new Date(sess.lastTurnAt).toLocaleString()}
+        {!collapsed && tab === "activity" && cliRecentTurns.length > 0 && (
+          <div className="space-y-1.5" data-testid="cli-rail-turns">
+            {cliRecentTurns.map((t) => {
+              const statusTone =
+                t.status === "success"
+                  ? "bg-success/10 text-success"
+                  : t.status === "partial"
+                    ? "bg-warning/10 text-warning"
+                    : t.status === "error"
+                      ? "bg-danger/10 text-danger"
+                      : t.status === "awaiting_confirmation"
+                        ? "bg-gold/10 text-gold"
+                        : t.status === "async_dispatched"
+                          ? "bg-gold/10 text-gold"
+                          : "bg-bg-elevate-2 text-text-mute";
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() =>
+                    cliCtx.requestHydration({ sessionId: t.sessionId, turnId: t.id })
+                  }
+                  className="w-full text-left bg-bg-elevate border border-border hover:border-gold/40 rounded-md p-2 animate-in fade-in zoom-in-95 duration-300"
+                  data-testid="cli-rail-turn-row"
+                  data-turn-status={t.status}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-mono text-[10px] text-gold uppercase tracking-wider">
+                      cli_turn
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-mono uppercase px-1.5 py-0.5 rounded",
+                        statusTone,
+                      )}
+                    >
+                      {t.status}
+                    </span>
                   </div>
-                )}
-              </a>
-            ))}
+                  <p className="text-text leading-snug text-xs line-clamp-2">{t.prompt}</p>
+                  <div className="text-[10px] font-mono text-text-faint mt-1">
+                    {new Date(t.createdAt).toLocaleTimeString()}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
         {!collapsed && tab === "activity" && activities && activities.map(item => (
@@ -484,6 +510,34 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [cliOpen, setCliOpen] = React.useState(false);
   const cliTriggerRef = React.useRef<HTMLElement | null>(null);
+  // Hydration handoff: /cli page enqueues a request, CommandBar drains
+  // it on mount/effect. Held in a ref so producer side doesn't trigger
+  // re-renders.
+  const hydrationRef = React.useRef<import("@/components/cli/cli-context").CliHydrationRequest | null>(null);
+  const injectTurnRef = React.useRef<((t: import("@/components/cli/types").CliTurn) => void) | null>(null);
+  const cliCtxValue = React.useMemo(
+    () => ({
+      open: cliOpen,
+      setOpen: setCliOpen,
+      toggle: () => setCliOpen((v) => !v),
+      triggerRef: cliTriggerRef,
+      requestHydration: (req: import("@/components/cli/cli-context").CliHydrationRequest) => {
+        hydrationRef.current = req;
+        setCliOpen(true);
+        // If the bar is already mounted with a registered injectTurn,
+        // we still leave the queue for it to drain via consumeHydration().
+      },
+      consumeHydration: () => {
+        const v = hydrationRef.current;
+        hydrationRef.current = null;
+        return v;
+      },
+      registerInjectTurn: (fn: (t: import("@/components/cli/types").CliTurn) => void) => {
+        injectTurnRef.current = fn;
+      },
+    }),
+    [cliOpen],
+  );
 
   // Global ⌘K / Ctrl+K binding. Stays mounted across pages so the bar
   // is reachable from anywhere; ignored on the sign-in route.
@@ -505,12 +559,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <CliContext.Provider
-      value={{
-        open: cliOpen,
-        setOpen: setCliOpen,
-        toggle: () => setCliOpen((v) => !v),
-        triggerRef: cliTriggerRef,
-      }}
+      value={cliCtxValue}
     >
       <RailContext.Provider value={{ collapsed, setCollapsed }}>
         <div className="min-h-screen flex flex-col relative">

@@ -82,6 +82,10 @@ export interface UseCliReturn {
    * detection on saved prompts so a save authored against v1 surfaces
    * a warning when the catalog rolls forward. */
   catalogSchemaVersion: number | null;
+  /** Inject a historical turn (from /cli/sessions/:id) into the
+   * transcript so deep-links like /cli?session=…&turn=… can land
+   * directly on a result card. Idempotent on serverTurnId. */
+  injectHistoricalTurn: (turn: CliTurn) => void;
 }
 
 /** Parse one fully-buffered SSE message block into a `CliFrame`. */
@@ -552,6 +556,24 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     abortRef.current?.abort();
   }, []);
 
+  const injectHistoricalTurn = useCallback((turn: CliTurn) => {
+    setTurns((t) => {
+      // Idempotent on serverTurnId so re-clicking the same rail row
+      // doesn't duplicate the entry. Falls back to clientTurnKey when
+      // the historical row hasn't been streamed during this session.
+      const existing = turn.serverTurnId
+        ? t.find((x) => x.serverTurnId === turn.serverTurnId)
+        : t.find((x) => x.clientTurnKey === turn.clientTurnKey);
+      if (existing) {
+        return [turn, ...t.filter((x) => x !== existing)];
+      }
+      return [turn, ...t];
+    });
+    if (turn.status === "complete" || turn.status === "partial") {
+      setCurrent(turn);
+    }
+  }, []);
+
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setSessionId(null);
@@ -575,5 +597,6 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     capabilities,
     capabilitiesError,
     catalogSchemaVersion,
+    injectHistoricalTurn,
   };
 }
