@@ -49,7 +49,37 @@ const upload = multer({
 
 const router: IRouter = Router();
 
-router.post("/cli/attachments", upload.array("files", MAX_FILES_PER_REQUEST), async (req, res) => {
+/**
+ * Wraps `upload.array(...)` so multer's own `LIMIT_FILE_SIZE` /
+ * `LIMIT_FILE_COUNT` errors return a structured 413 JSON response
+ * (rather than the default HTML error page) and the rejection still
+ * surfaces in the composer's error toast. Audit-trail rejection rows
+ * are emitted by `ingestAttachment` for any file that *did* reach the
+ * handler; multer-level rejects are pre-handler and so are reflected
+ * only in the response.
+ */
+function uploadWithErrorHandling(
+  req: Request,
+  res: Response,
+  next: (err?: unknown) => void,
+): void {
+  upload.array("files", MAX_FILES_PER_REQUEST)(req, res, (err?: unknown) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      const code = err.code;
+      const status =
+        code === "LIMIT_FILE_SIZE" || code === "LIMIT_FILE_COUNT" ? 413 : 400;
+      res.status(status).json({
+        error: code.toLowerCase().replace(/_/g, "-"),
+        message: err.message,
+      });
+      return;
+    }
+    res.status(400).json({ error: "upload-error", message: String(err) });
+  });
+}
+
+router.post("/cli/attachments", uploadWithErrorHandling, async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   // Accept either `files[]` (preferred, multi) or a legacy `file` single.
