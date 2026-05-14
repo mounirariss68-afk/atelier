@@ -35,6 +35,24 @@ import {
   findByToolName,
 } from "./capability-catalog.js";
 import type { ToolContext, ToolResult } from "./index.js";
+import { TOOL_REGISTRY } from "./index.js";
+
+/**
+ * Resolve a tool's metadata for undo purposes. The catalog
+ * (`findByToolName`) only knows the capabilities registered via
+ * `defineCapability` — but several legacy tools (e.g. `add_raid_item`)
+ * live in `TOOL_REGISTRY` only. Fall back to the registry so undo
+ * works against both worlds.
+ */
+function resolveToolMeta(
+  toolName: string,
+): { isWrite: boolean; irreversible: boolean; outboundChannel?: string | null } | null {
+  const cap = findByToolName(toolName);
+  if (cap) return { isWrite: cap.isWrite, irreversible: cap.irreversible, outboundChannel: cap.outboundChannel };
+  const reg = TOOL_REGISTRY[toolName];
+  if (!reg) return null;
+  return { isWrite: Boolean(reg.isWrite), irreversible: false, outboundChannel: null };
+}
 
 interface InverseOp {
   /** Short label for the diff. */
@@ -89,29 +107,47 @@ function entityIdsFromResult(
   if (Array.isArray(d.ids)) return d.ids.filter((x): x is string => typeof x === "string");
   // Account delete returns { deleted, name }
   if (typeof d.deleted === "string") return [d.deleted];
-  // ingest_rfp returns { id, opportunityName, accountId, ... }
+  // add_raid_item commit returns { committed: true, raid: row }
+  if (d.raid && typeof (d.raid as Record<string, unknown>).id === "string") {
+    return [(d.raid as Record<string, unknown>).id as string];
+  }
+  // Generic nested-row shape: { row: { id } } / { item: { id } }
+  for (const key of ["row", "item", "opportunity", "expense", "asset", "profile"]) {
+    const nested = d[key];
+    if (nested && typeof nested === "object" && typeof (nested as Record<string, unknown>).id === "string") {
+      return [(nested as Record<string, unknown>).id as string];
+    }
+  }
   return [];
 }
 
-const INVERSE_OPS: Record<string, InverseOp> = {
-  raid_add_v2: {
-    label: "soft-delete the RAID item",
-    async run(_ctx, { ids, orgId }) {
-      if (ids.length === 0) return { ok: false, undoneEntityIds: [], errorMessage: "no entity id" };
-      const rows = await db
-        .update(atelierRaidItems)
-        .set({ deletedAt: new Date(), updatedAt: new Date() })
-        .where(
-          and(
-            inArray(atelierRaidItems.id, ids),
-            eq(atelierRaidItems.orgId, orgId),
-            isNull(atelierRaidItems.deletedAt),
-          ),
-        )
-        .returning({ id: atelierRaidItems.id });
-      return ensureAffected(rows, ids);
-    },
+const raidSoftDelete: InverseOp = {
+  label: "soft-delete the RAID item",
+  async run(_ctx, { ids, orgId }) {
+    if (ids.length === 0) return { ok: false, undoneEntityIds: [], errorMessage: "no entity id" };
+    // RAID items have no orgId column — they are scoped via engagementId.
+    // Caller persona is already org-checked, and the row was created
+    // by this user's CLI turn, so we filter on id + soft-delete state.
+    const rows = await db
+      .update(atelierRaidItems)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          inArray(atelierRaidItems.id, ids),
+          isNull(atelierRaidItems.deletedAt),
+        ),
+      )
+      .returning({ id: atelierRaidItems.id });
+    return ensureAffected(rows, ids);
   },
+};
+
+const INVERSE_OPS: Record<string, InverseOp> = {
+  // Both the v1 (`add_raid_item` — used by the mock router and the
+  // current preview→commit flow) and the v2 capability point at the
+  // same reversal: soft-delete the row.
+  add_raid_item: raidSoftDelete,
+  raid_add_v2: raidSoftDelete,
   ingest_rfp_to_opportunity: {
     label: "soft-delete the opportunity",
     async run(_ctx, { ids, orgId }) {
@@ -292,7 +328,7 @@ async function findLastReversible(
     for (let i = calls.length - 1; i >= 0; i--) {
       const c = calls[i]!;
       if (!c.ok) continue;
-      const cap = findByToolName(c.tool);
+      const cap = resolveToolMeta(c.tool);
       if (!cap?.isWrite) continue;
       const inverse = INVERSE_OPS[c.tool];
       if (cap.irreversible || !inverse) {

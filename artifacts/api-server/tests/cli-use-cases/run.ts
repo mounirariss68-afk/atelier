@@ -206,26 +206,42 @@ async function main(): Promise<void> {
     assert.equal(typeof out.body.turnCount, "number");
   });
 
-  // 6. Undo flow — add a RAID, then /undo.
+  // 6. Undo flow — add a RAID, confirm it, then /undo.
   let raidIdToUndo: string | null = null;
   await step("seed: add+confirm a RAID via CLI", async () => {
+    // The mock router (mockModelStep in index.ts) routes the literal
+    // word "raid" + an "add/create/new/log" verb to add_raid_item, and
+    // pulls the engagementId via /eng[-_]?[a-z0-9_]+/ from the prompt
+    // text itself — pageContext primer is prefixed with "[page context]"
+    // and explicitly skipped by the mock's last-prompt finder. So we
+    // must include the eng id inline.
     const sse = await postSse("/cli/turn", {
-      prompt: `add a red risk: backup window slipping`,
+      prompt: `add raid red risk for ${ENG_ID}: backup window slipping`,
       pageContext: { engagementId: ENG_ID },
     });
     const needs = sse.frames.find((f) => f.event === "needs_confirmation");
-    if (!needs) {
-      // Mock router may not auto-discover engagement context; try
-      // direct add path.
-      const sse2 = await postSse("/cli/turn", { prompt: "add a raid item" });
-      const needs2 = sse2.frames.find((f) => f.event === "needs_confirmation");
-      if (!needs2) {
-        console.log("    (skipped — mock router did not propose a RAID add)");
-        return;
-      }
-    }
-    // Best-effort — pull the latest RAID for this engagement so undo
-    // has something to reverse if the orchestrator wired this through.
+    const finalSeed = sse.frames.find((f) => f.event === "final");
+    assert.ok(needs, "mock router did not propose a RAID add (expected needs_confirmation frame)");
+    assert.equal(
+      finalSeed?.data.status,
+      "awaiting_confirmation",
+      "RAID seed must end in awaiting_confirmation",
+    );
+    const seedTurnId = (finalSeed!.data as { turnId?: string }).turnId;
+    assert.ok(seedTurnId, "no turnId on awaiting_confirmation final");
+    const typedExp = (needs!.data as { diff?: { typedNameRequired?: string } }).diff?.typedNameRequired ?? "";
+    // raid_add_v2 in this catalog is reversible (not irreversible) so the
+    // typed-name guard is usually NOT required — but if the diff stamps
+    // one we honour it.
+    const confirmBody: Record<string, string> = {};
+    if (typedExp) confirmBody.typedName = typedExp;
+    const confirm = await postSse(`/cli/turn/${seedTurnId}/confirm`, confirmBody);
+    const confirmFinal = confirm.frames.find((f) => f.event === "final");
+    assert.ok(confirmFinal, "no final frame on RAID confirm");
+    assert.ok(
+      confirmFinal!.data.status === "success" || confirmFinal!.data.status === "partial",
+      `RAID confirm must commit, got ${confirmFinal!.data.status}`,
+    );
     const [latest] = await db
       .select({ id: atelierRaidItems.id })
       .from(atelierRaidItems)
@@ -238,6 +254,7 @@ async function main(): Promise<void> {
       .orderBy(desc(atelierRaidItems.createdAt))
       .limit(1);
     raidIdToUndo = latest?.id ?? null;
+    assert.ok(raidIdToUndo, "no RAID row created after confirm");
   });
 
   let undoTurnId: string | null = null;
@@ -288,7 +305,8 @@ async function main(): Promise<void> {
       "wrong typedName must not commit the undo",
     );
 
-    // 3. confirm with correct typed value → undo proceeds.
+    // 3. confirm with correct typed value → undo proceeds AND the
+    //    seeded RAID row is soft-deleted in the database.
     const ok = await postSse(`/cli/turn/${undoTurnId}/confirm`, {
       typedName: undoTypedNameExpected,
     });
@@ -298,6 +316,18 @@ async function main(): Promise<void> {
       okFinal!.data.status === "success" || okFinal!.data.status === "partial",
       `correct typedName must commit, got ${okFinal!.data.status}`,
     );
+    if (raidIdToUndo) {
+      const [row] = await db
+        .select({ id: atelierRaidItems.id, deletedAt: atelierRaidItems.deletedAt })
+        .from(atelierRaidItems)
+        .where(eq(atelierRaidItems.id, raidIdToUndo))
+        .limit(1);
+      assert.ok(row, "seeded RAID row vanished entirely");
+      assert.ok(
+        row.deletedAt !== null,
+        `seeded RAID ${raidIdToUndo} was NOT soft-deleted by /undo (deletedAt=${row.deletedAt})`,
+      );
+    }
   });
 
   // 7. Evals harness.

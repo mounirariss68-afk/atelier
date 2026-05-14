@@ -1243,7 +1243,24 @@ function mockModelStep(args: {
 
   let toolCall: ClaudeToolCall | null = null;
   let text = "On it.";
-  if (promptText.includes("raid") && /(add|create|new|log)/.test(promptText)) {
+  // Task #335 — slash commands route deterministically to their
+  // capability, bypassing the model classifier. The live (Claude)
+  // router sees the same catalog via tool definitions and routes
+  // organically; the mock router needs an explicit branch here so
+  // tests + dev-mode both honour `/undo`, `/help`, etc.
+  const slashMatch = promptText.match(/^\s*\/([a-z_-]+)\b/);
+  if (slashMatch) {
+    const slash = `/${slashMatch[1]}`;
+    if (slash === "/undo" || slash === "/annuler") {
+      text = "Looking up your last reversible action.";
+      toolCall = {
+        id: rid("tu"),
+        name: "undo_last_action",
+        input: {},
+      };
+    }
+  }
+  if (!toolCall && promptText.includes("raid") && /(add|create|new|log)/.test(promptText)) {
     const mEng = promptText.match(/eng[-_]?[a-z0-9_]+/i);
     text = "I'll draft a RAID item for you to review.";
     toolCall = {
@@ -2200,12 +2217,35 @@ export async function confirmPendingWrite(
       ),
     },
   ];
+  // Task #335 — `meta.undo_last_action` walks `toolCalls` to find the
+  // last reversible write. The preview run that produced this pending
+  // write never made it into `toolCalls` (the orchestrator breaks out
+  // of its loop on `awaiting_confirmation` before the push site at
+  // index.ts ~1667), so without this append the committed write would
+  // be invisible to undo and `/undo` would falsely report
+  // `no_reversible` for two-phase writes — exactly the regression the
+  // code review caught. Persist the commit step here.
+  const priorToolCalls = Array.isArray(turn.toolCalls)
+    ? (turn.toolCalls as Array<Record<string, unknown>>)
+    : [];
+  const mergedToolCalls = [
+    ...priorToolCalls,
+    {
+      step: stepIdx,
+      tool: pending.tool,
+      input: pending.input,
+      ok: result.ok,
+      errorCode: result.errorCode,
+      confirmed: true,
+    },
+  ];
   await db
     .update(atelierCliTurns)
     .set({
       status: newStatus,
       statusMessage: newStatus,
       frames: newFrames,
+      toolCalls: mergedToolCalls,
       stepResults: mergedStepResults,
       pendingWrite: null,
       lastStepIdx: stepIdx,
