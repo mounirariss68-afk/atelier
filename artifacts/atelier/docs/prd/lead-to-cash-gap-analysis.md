@@ -111,20 +111,36 @@ Severity uses three levels:
 | **Cash-conversion cycle** | DSO − DPO + DIO (services firms: DSO − DPO) | **Missing** | `/wallet/treasury` | G05, G07, G09, G10 |
 | **Backlog** | Signed contract value − recognised revenue | **Partial** — signed-value not tracked as a number; revenue side missing | Per-engagement Commercials tab; Home shelf | G01, G03 |
 | **Renewal rate** | Renewed contract value ÷ Contract value up for renewal | **Missing** | `/crm` Renewals filter header | G11 |
+| **Win rate** | Won opportunities ÷ (Won + Lost) over a period, sliceable by sector / partner / band | **Partial** — Pipeline counts the bands but does not compute a win-rate; needs a Closed-Won vs Closed-Lost denominator | Pipeline header strip on `/opportunities`; firm-level on Home shelf | none (needs new compute over existing `atelier_opportunity` rows) |
+| **Leakage rate** | (Standard-rate × billable hours − Billed $) ÷ (Standard-rate × billable hours), per engagement and rolled up by partner | **Missing** | `/wallet/wip` (firm) + per-engagement Commercials tab; ranked-list on Home shelf | G03, G05, G12 |
 
 ---
 
 ## B. UX & Information-Architecture Spec
 
-### B.1 IA principle — *no new top-nav slot per gap*
+### B.1 IA principle — *one top-nav addition (Codex), all finance under Wallet*
 
 The current `Shell.tsx` top nav exposes the Commercial realm as a small
 set of named entries (Accounts → `/crm`, Opportunities → `/opportunities`,
-plus the Scale and IP realms). The L2C waves must not bloat that header
-into an accounting product. Concretely:
+plus the Scale and IP realms). The L2C waves make exactly **one**
+addition to the top nav — `/codex` joins the Commercial realm as a
+sibling of `/crm` and `/opportunities`, because the contract artifact
+is a first-class commercial object that pre-exists invoicing and is
+referenced from both Opportunity (pre-sign) and Engagement (post-sign)
+workspaces. Everything else is a sub-surface:
 
-- **Reuse the Commercial realm.** `/wallet` is the existing finance
-  surface for the firm. New finance surfaces (Invoices, AR, Cash) are
+- **Codex placement.** `/codex` is the firm-wide clause + contract
+  library; it is **also** mirrored as a Codex tab on
+  `/opportunities/:id` (pre-sign drafting context) and on
+  `/engagements/:id` (post-sign chain-of-instruments context). The
+  same component renders all three; only the filter scope changes.
+- **Change orders are inline.** Change-order propose / approve runs
+  as a **modal launched from the Charter section** of the engagement
+  workspace, not as a separate tab — scope is owned by the charter, so
+  scope-change motion is co-located with it.
+- **Reuse the Commercial realm for finance.** `/wallet` is the
+  existing finance surface for the firm. New finance surfaces
+  (Invoices, AR, Cash, RevRec, WIP, Treasury, Collections) are
   **secondary destinations** reached from a Wallet sub-nav, not from
   the top nav.
 - **Treasury is not a persona realm.** It is a Wallet sub-section gated
@@ -274,8 +290,8 @@ B.2 is justified by a need that *cannot* be met by the existing set.
 
 | New surface | Surface route | Reached via | Top-nav badge contribution |
 |-------------|---------------|-------------|----------------------------|
-| Codex (CLM clause library) | `/wallet/codex` | Wallet sub-nav · *Documents* | none |
-| Change orders | `/engagements/:id` → new **Changes** tab | Engagement workspace | engagement-card "Δ open" chip |
+| Codex (CLM clause library) | `/codex` (top-level under the Commercial realm — sibling of `/crm` and `/opportunities`) | Top-nav · Commercial · *Codex*; **also** surfaced as a *Codex* tab on `/opportunities/:id` and `/engagements/:id` so partners reach the contract artifact in-context without leaving the workspace | none |
+| Change orders | Inline modal launched from the **Charter** section of `/engagements/:id` (the engagement charter is where scope is owned, so scope-change motion is co-located with it); list of historical change orders shows as a collapsible panel beneath the Charter | Engagement workspace · Charter section | engagement-card "Δ open" chip |
 | Revenue recognition | `/wallet/revrec` | Wallet sub-nav · *Revenue* | none (period-close badge only) |
 | WIP report | `/wallet/wip` | Wallet sub-nav · *Revenue* | none |
 | Invoices | `/wallet/invoices` | Wallet sub-nav · *Receivables* | overdue count |
@@ -354,8 +370,8 @@ Legend: **W**=write, **R**=read, **A**=approve (two-phase confirm),
 | **G06** E-invoicing submit | · | · | W | · | · | · | · | · |
 | **G07** AR aging — read | R | R | R | · | R (own accts) | · | R | R |
 | **G08** Dunning — send (outboundChannel: email) | · | A | A | · | · | · | · | · |
-| **G09** Cash receipt — apply | · | · | W | · | · | · | · | · |
-| **G09** Bank reconciliation — finalise | A | · | A | · | · | · | · | · |
+| **G09** Cash receipt — apply | A | A | W | · | · | · | · | · |
+| **G09** Bank reconciliation — finalise | A | A | A | · | · | · | · | · |
 | **G10** Cash forecast — read | R | R | R | · | · | · | R | R |
 | **G11** Renewal — open opportunity | W | W | · | · | W | · | · | · |
 | **G11** Renewal — close-lost | A | A | · | · | · | · | · | · |
@@ -663,7 +679,8 @@ representativePrompts.en:
   - "Apply the partial $20k to INV-2310 and leave the remainder open."
 resultCard: invoice_card  (status flips to paid)
 isWrite: true ; 2PC ; irrev
-requiredRoles: ["finance"]
+requiredRoles: ["finance"]   (drafts the application)
+approverRoles: ["founding_partner","partner"]   (partner+ co-approves the irreversible posting per the Treasury control model — same pattern as invoice_issue)
 
 toolName: bank_recon_finalise
 representativePrompts.en:
@@ -672,10 +689,21 @@ representativePrompts.en:
   - "Lock October bank rec — all variances cleared."
 resultCard: kpi_strip
 isWrite: true ; 2PC ; irrev
-requiredRoles: ["founding_partner","finance"]
+requiredRoles: ["finance"]
+approverRoles: ["founding_partner","partner"]   (partner+ co-approves the period close)
 ```
 
 Smoke fixtures: `cash.apply.dryrun`, `bank.recon_finalise.dryrun`.
+
+**Treasury control model (applies to G05 invoice_issue, G05 invoice_void,
+G08 dunning_send_reminder, G09 cash_apply, G09 bank_recon_finalise).**
+Every irreversible Treasury write is two-phase with the *initiator* in
+the `requiredRoles` set (typically `finance`) and an *approver* in the
+`approverRoles` set (always partner+ — `founding_partner` or `partner`).
+The catalog already supports this two-list pattern via the
+`twoPhaseConfirm` mechanism; the additional `approverRoles` field is
+new in Wave 3 (added to the `defineCapability` schema in the same PR
+that ships `invoice_issue`).
 
 ### G10 — Cash-flow forecast
 
@@ -863,8 +891,11 @@ are net-new for that wave).
 
 - Extend the `ResultCard` union with **all seven new shapes up-front**
   so the catalog hash check is monotonic across the four waves.
-- Add a `/wallet` sub-nav component in `Shell.tsx` (the top nav itself
-  does not change). Sub-nav slots are gated by the RBAC matrix in C.
+- Add the **single** new top-nav entry — `/codex` — to the Commercial
+  realm in `Shell.tsx`, sibling of `/crm` and `/opportunities`.
+- Add a `/wallet` sub-nav component in `Shell.tsx` for all other new
+  finance surfaces (RevRec, WIP, Invoices, AR, Treasury, Collections).
+  Sub-nav slots are gated by the RBAC matrix in C.
 - Add `finance` and `compliance_officer` to the Home Workspace shelf
   query so they receive the Receivables / Treasury / Margin tiles as
   their persona unlocks.
