@@ -301,10 +301,19 @@ Each new surface ships when:
 
 ## C. Persona × Capability RBAC Matrix
 
-### C.1 The 11 canonical personas — one-line descriptions
+### C.1 The persona model — one-line descriptions
 
-Source: `artifacts/api-server/src/routes/atelier/personaRoles.ts` (the
-`ATELIER_PERSONA_ROLES` constant).
+**Reconciliation note (authoritative).** The original L2C task brief
+references a 12-persona model. The codebase today
+(`artifacts/api-server/src/routes/atelier/personaRoles.ts`,
+`ATELIER_PERSONA_ROLES`) enumerates **11 roles** — the missing 12th
+slot from the brief was an early-design `client_user` (external client
+contact persona) that was deferred to v6 along with the public Salon
+client portal and is **not** in scope for any L2C wave. All RBAC, RLS,
+and capability decisions in this document target the 11 roles in
+`personaRoles.ts`; if a future task lands `client_user`, it must be
+re-checked against C.2/C.3 (read-only on its own engagement's invoices
+/ statements only; never firm-wide).
 
 | Role | One-line description | L2C posture |
 |------|----------------------|-------------|
@@ -316,7 +325,7 @@ Source: `artifacts/api-server/src/routes/atelier/personaRoles.ts` (the
 | `consultant` | Delivery staff. | Read-only Codex (for reuse); no finance access. |
 | `contractor` | External delivery; restricted to explicit engagement grants. | **Denied across L2C** (RESTRICTED set). |
 | `partner_firm_resource` | Co-delivery partner-firm staff; restricted by engagement grants. | **Denied across L2C** (RESTRICTED set). |
-| `board_observer` | External board read-only realm gate. | **Today: hard-filtered to meta+raid only.** Target post-Wave 2: read-only across L2C reporting (revrec/WIP/AR/cash forecast/leakage). |
+| `board_observer` | External board read-only realm gate. | **Today: hard-filtered to meta+raid only.** Target post-Wave 2: read-only on **rollups only** — `wip_report`, `revrec_compute_schedule`, `ar_aging_report`, `cash_forecast_13w`, `leakage_report`. **Never** granted read on individual invoices, cash receipts, or per-customer dunning cards. |
 | `recruiter` | v5 Studio persona (candidates, panels, offers). | **Denied across L2C** (RESTRICTED set). |
 | `compliance_officer` | v5 Guardhouse persona; firm-wide read for audit. | Read-only across all L2C reporting; no writes; no email side-effects. |
 
@@ -366,7 +375,7 @@ firm-wide or engagement-scoped.
 | `atelier_revenue_schedule` | **engagement-scoped** | as `atelier_contract`; **also visible to compliance_officer firm-wide** | Compliance audits revenue postings. |
 | `atelier_revenue_period_posting` | **firm-wide read for finance + leadership + compliance**, engagement-scoped for senior_manager | Period postings are immutable once written. |
 | `atelier_unbilled_wip_snapshot` | **firm-wide read for finance + leadership + compliance**, engagement-scoped for senior_manager | Snapshots are point-in-time. |
-| `atelier_invoice` / `atelier_invoice_line` | **firm-wide read for finance + leadership + compliance + board_observer (target)**, engagement-scoped for senior_manager | Restricted personas always denied. |
+| `atelier_invoice` / `atelier_invoice_line` | **firm-wide read for finance + leadership + compliance**, engagement-scoped for senior_manager | Restricted personas always denied. **`board_observer` denied on individual invoice rows** — observers see only the AR aging rollup grid (`atelier_ar_aging_view`) and KPI strips, never the line-level invoice document. |
 | `atelier_einvoice_submission` | **finance + leadership + compliance only** | Tax-authority submissions are finance-only. |
 | `atelier_dunning_event` | **firm-wide read for finance + leadership + compliance**, partner-only writes (with finance) | Email side-effect — also gated on `outboundChannel: "email"` policy. |
 | `atelier_cash_receipt` / `atelier_bank_recon_period` | **finance + leadership + compliance only** | Treasury writes; senior_manager has no read. |
@@ -374,13 +383,18 @@ firm-wide or engagement-scoped.
 
 Two non-RLS controls also bind:
 
-- **`outboundChannel: "email"` policy.** Any capability with an email
-  channel (invoice issue, dunning send, change-order propose-to-client,
-  contract countersign) is non-undoable; the catalog already encodes
-  this as `irreversible: true`. Restricted personas are blocked from
-  all `outboundChannel != null` capabilities by an additional
-  catalog-level check that must be added in Wave 1 (current code only
-  excludes `board_observer` from any capability gate).
+- **`outboundChannel: "email"` policy.** Per the integration contract
+  in §D, **only the dunning send capability** (`dunning_send_reminder`)
+  carries `outboundChannel: "email"`. All other
+  L2C writes route through purpose-built adapters (e-sign for contract
+  / change-order countersign; Xero / portal handoff for invoice
+  delivery; tax-authority API for ZATCA/FTA) and therefore set
+  `outboundChannel: null`. Any email-channel capability is
+  `irreversible: true`. Restricted personas (contractor /
+  partner_firm_resource / recruiter) are blocked from every
+  email-channel capability by an additional catalog-level check that
+  must be added in Wave 1 (the current default gate only excludes
+  `board_observer`).
 - **`compliance_officer` firm-wide read** is granted by **not** adding
   it to engagement-scoped predicates' deny list — it is the inverse of
   the restricted-set rule.
@@ -460,7 +474,7 @@ representativePrompts.en:
   - "Apply my partner countersign to the SOW for Engagement E-1042."
   - "Counter-sign the Tabellio envelope I just received from BankCo."
 resultCard: entity_card
-isWrite: true ; 2PC ; irrev ; outboundChannel: "email"
+isWrite: true ; 2PC ; irrev ; outboundChannel: null   (e-sign envelope dispatch is a server-to-DocuSign/Tabellio API call, not an email channel)
 requiredRoles: ["founding_partner","partner"]
 ```
 
@@ -488,7 +502,7 @@ representativePrompts.en:
   - "Reject CO-019 with a note: client scope reduction not supportable."
   - "Approve all pending change orders on E-1042."
 resultCard: change_order_card
-isWrite: true ; 2PC ; irrev ; outboundChannel: "email"
+isWrite: true ; 2PC ; irrev ; outboundChannel: null   (client countersign routes through the e-sign adapter, not direct email)
 requiredRoles: ["founding_partner","partner"]
 ```
 
@@ -557,7 +571,7 @@ representativePrompts.en:
   - "Issue all draft invoices for the BankCo account."
   - "Issue this draft and send the PDF to the AP contact."
 resultCard: invoice_card
-isWrite: true ; 2PC ; irrev ; outboundChannel: "email"
+isWrite: true ; 2PC ; irrev ; outboundChannel: null   (PDF delivery is a Xero/portal handoff, not an email channel; per-customer reminders go through G08 dunning)
 requiredRoles: ["founding_partner","partner","finance"]
 
 toolName: invoice_void
@@ -757,8 +771,8 @@ are net-new for that wave).
   change-order proposers (founding_partner / partner / senior_manager)
   and approvers (founding_partner / partner). **Catalog change:**
   add a restricted-set deny gate to `capabilitiesForPersona()` so
-  contractor / partner_firm_resource / recruiter cannot reach
-  `outboundChannel != null` capabilities even if the table predicate
+  contractor / partner_firm_resource / recruiter cannot reach any
+  `outboundChannel: "email"` capability even if the table predicate
   passes.
 - **Acceptance:** every `salesStage=contract` opportunity carries a
   Codex contract row; every engagement can host change orders; the v4
@@ -779,12 +793,15 @@ are net-new for that wave).
   Sentinel + RAID Watchdog rather than introducing a parallel agent
   (per v4 Resolution 1).
 - **RBAC additions:** revrec readers (all non-restricted, including
-  `compliance_officer` firm-wide and `board_observer` after the filter
-  relax noted below); period-post approvers (founding_partner +
-  finance). **Catalog change:** relax
-  `capabilitiesForPersona()` so `board_observer` is also allowed
-  read-only `wallet` / `report` modules. This unlocks the C.2 R-grants
-  for board_observer across G03 / G04 / G07 / G10 / G12.
+  `compliance_officer` firm-wide and `board_observer` on rollups only
+  after the filter relax noted below); period-post approvers
+  (founding_partner + finance). **Catalog change:** relax
+  `capabilitiesForPersona()` so `board_observer` is also allowed an
+  **explicit allow-list** of rollup capabilities (`wip_report`,
+  `revrec_compute_schedule`, `ar_aging_report`, `cash_forecast_13w`,
+  `leakage_report`). The relax must be allow-list, **not** module-wide,
+  so that individual invoice / receipt / dunning-card capabilities
+  remain denied to board observers.
 - **Depends on Wave 1** (contract value lives on the contract record).
 - **Acceptance:** period-close runs a deterministic POC schedule per
   engagement; finance can post a period; `leakage_report` returns one
@@ -853,7 +870,7 @@ are net-new for that wave).
   their persona unlocks.
 - Add the **restricted-set deny gate** to `capabilitiesForPersona()`
   so contractor / partner_firm_resource / recruiter cannot reach any
-  capability with `outboundChannel != null` regardless of
+  capability with `outboundChannel: "email"` regardless of
   `requiredRoles`.
 
 ---
