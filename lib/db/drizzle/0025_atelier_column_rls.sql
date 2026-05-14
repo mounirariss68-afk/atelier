@@ -53,12 +53,14 @@ CREATE OR REPLACE FUNCTION atelier_principle_override_active() RETURNS boolean A
   SELECT COALESCE(NULLIF(current_setting('app.principle_override', true), ''), '') = 'true';
 $$ LANGUAGE sql STABLE;
 
--- Compensation reader allow-list (mirrors personaRoles.canViewCompensation):
--- founding_partner | partner | finance | hr. Plus active breakglass.
+-- Compensation reader allow-list (mirrors personaRoles.canViewCompensation).
+-- Task #293 — strict allow-list per spec: founding_partner | partner | finance.
+-- HR is intentionally excluded from raw comp; HR retains personnel_contract
+-- visibility via atelier_can_view_personnel(). Plus active breakglass.
 CREATE OR REPLACE FUNCTION atelier_can_view_comp() RETURNS boolean AS $$
   SELECT
     atelier_principle_override_active()
-    OR atelier_user_role() IN ('founding_partner','partner','finance','hr');
+    OR atelier_user_role() IN ('founding_partner','partner','finance');
 $$ LANGUAGE sql STABLE;
 
 -- Personnel-contract reader allow-list: founding_partner | partner | hr |

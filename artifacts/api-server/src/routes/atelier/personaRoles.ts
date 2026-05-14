@@ -42,7 +42,10 @@ const LEADERSHIP = SET("founding_partner", "partner");
 const LEAD_APPROVERS = SET("founding_partner", "partner", "senior_manager", "finance");
 
 // Compensation viewers (day rates, base comp). HR + finance + leadership.
-const COMP_VIEWERS = SET("founding_partner", "partner", "finance", "hr");
+// Task #293 — Compensation visibility tightened to spec: founding_partner |
+// partner | finance only. HR keeps personnel_contract visibility but loses
+// raw comp visibility. Mirrors atelier_can_view_comp() in 0025_atelier_column_rls.sql.
+const COMP_VIEWERS = SET("founding_partner", "partner", "finance");
 
 // Personnel-contract viewers (employment contract, NDA, COI, ID/tax docs).
 // Subjects can always read their own — caller-side check, not in this set.

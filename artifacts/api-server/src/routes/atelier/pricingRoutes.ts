@@ -36,6 +36,8 @@ import {
 } from "../../lib/atelier-pricing.js";
 import { runPricingStrategist } from "../../lib/atelier-agents/runner.js";
 import { canViewCompensation } from "./personaRoles.js";
+import { withRls } from "./rls.js";
+import { sql as dsql } from "drizzle-orm";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -194,13 +196,25 @@ router.get("/rate-cards/:id", async (req, res) => {
     res.status(404).json({ error: "rate-card-not-found" });
     return;
   }
-  const rows = await db
-    .select()
-    .from(atelierRateCardRows)
-    .where(and(eq(atelierRateCardRows.rateCardId, card.id), isNull(atelierRateCardRows.deletedAt)));
-  // Task #293 — internal day-rate cost is compensation-class data; mask in
-  // route handler as defense-in-depth alongside DB-level RLS on
-  // atelier_rate_card_rows_v (when callers cut over to the view).
+  // Task #293 — read through atelier_rate_card_rows_v inside withRls so
+  // day_rate_internal_cost is masked at the DB layer (source of truth).
+  // The JS canViewCompensation check below is retained as defense-in-depth.
+  const rowsRes = await withRls(req, async (tx) => {
+    return tx.execute<{
+      id: string;
+      role: string;
+      seniority: string;
+      day_rate_internal_cost: number | null;
+      day_rate_client_price: number;
+      overhead_pct: number;
+      currency: string;
+    }>(dsql`SELECT id, role, seniority, day_rate_internal_cost,
+                   day_rate_client_price, overhead_pct, currency
+              FROM atelier_rate_card_rows_v
+             WHERE rate_card_id = ${card.id}
+               AND deleted_at IS NULL`);
+  });
+  const rows = rowsRes.rows;
   const showCost = canViewCompensation(me.role);
   res.json({
     id: card.id,
@@ -216,9 +230,9 @@ router.get("/rate-cards/:id", async (req, res) => {
       id: r.id,
       role: r.role,
       seniority: r.seniority,
-      dayRateInternalCost: showCost ? r.dayRateInternalCost : null,
-      dayRateClientPrice: r.dayRateClientPrice,
-      overheadPct: r.overheadPct,
+      dayRateInternalCost: showCost ? r.day_rate_internal_cost : null,
+      dayRateClientPrice: r.day_rate_client_price,
+      overheadPct: r.overhead_pct,
       currency: r.currency,
     })),
   });

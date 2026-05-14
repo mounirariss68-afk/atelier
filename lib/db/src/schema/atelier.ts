@@ -1654,6 +1654,10 @@ export const atelierContractors = pgTable(
     contractType: text("contract_type"), // T&M | fixed_fee | retainer (PRD §2.1)
     contractStart: text("contract_start"),
     contractEnd: text("contract_end"),
+    // Task #293 — pointer to the signed contractor agreement document (typically
+    // a row in atelier_person_documents). NULL until uploaded; the file body is
+    // gated through atelier_person_documents_v + canViewPersonnelContract.
+    contractFileId: text("contract_file_id"),
     dayRateAmount: doublePrecision("day_rate_amount"),
     dayRateInternalCost: doublePrecision("day_rate_internal_cost"), // PRD §2.1 (policy-locked)
     dayRateCurrency: text("day_rate_currency").notNull().default("USD"),
