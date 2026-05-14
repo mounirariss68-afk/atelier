@@ -2818,3 +2818,120 @@ export const atelierProposalRecipients = pgTable(
     index("idx_atelier_proposal_recipients_proposal").on(t.proposalId),
   ],
 );
+
+// ============================================================
+// Task #331 — Atelier CLI: sessions / turns / async jobs.
+//
+// The CLI orchestrator (POST /api/atelier/cli/turn, SSE) writes one
+// session row per Cmd+K conversation, one turn row per user prompt,
+// and (optionally) one job row per long-running tool call that the
+// orchestrator dispatches asynchronously.
+//
+// Org-scoped only — there is no engagement_id FK at the session/turn
+// level because a single CLI session may span multiple engagements
+// (the user might ask about deal X then engagement Y in the same
+// chat). Tool-level writes still flow through their own table's RLS.
+// ============================================================
+export const atelierCliSessions = pgTable(
+  "atelier_cli_sessions",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    userId: text("user_id").notNull(),
+    title: text("title"),
+    // Rolling summary of older turns (kept short so prompt stays small).
+    rollingSummary: text("rolling_summary").notNull().default(""),
+    // Tail of recent turn ids included verbatim in the next prompt.
+    recentTurnIds: jsonb("recent_turn_ids")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    // Per-session daily-USD spent today (rotated by createdAt date in code).
+    spentUsdToday: doublePrecision("spent_usd_today").notNull().default(0),
+    spentUsdDay: text("spent_usd_day"), // YYYY-MM-DD UTC; rotation key
+    turnCount: integer("turn_count").notNull().default(0),
+    lastTurnAt: timestamp("last_turn_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_cli_sessions_org").on(t.orgId),
+    index("idx_atelier_cli_sessions_user").on(t.userId),
+  ],
+);
+
+export const atelierCliTurns = pgTable(
+  "atelier_cli_turns",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    sessionId: text("session_id").notNull(),
+    userId: text("user_id").notNull(),
+    // streaming | awaiting_confirmation | partial | success | cancelled |
+    // error  | read_only_no_op | async_dispatched
+    status: text("status").notNull().default("streaming"),
+    statusMessage: text("status_message"),
+    userText: text("user_text").notNull(),
+    // Slash-command intent if the user used `/cmd ...` syntax — null for
+    // free-form prompts. The orchestrator may also auto-route a free-form
+    // prompt onto a known intent.
+    intent: text("intent"),
+    // The model's narration + tool-call trace for this turn (frames
+    // mirror the SSE stream).
+    frames: jsonb("frames").$type<unknown[]>().notNull().default([]),
+    // Tool-call audit trail (one entry per call: name, input, result, ms).
+    toolCalls: jsonb("tool_calls").$type<unknown[]>().notNull().default([]),
+    // Pending mutation set when status='awaiting_confirmation' — the
+    // confirm endpoint replays this exactly. Cleared on confirm/cancel.
+    pendingWrite: jsonb("pending_write").$type<unknown>(),
+    // Idempotency: callers may pass `clientTurnKey` to dedupe accidental
+    // resubmits (Cmd+Enter twice). UNIQUE per session.
+    clientTurnKey: text("client_turn_key"),
+    costUsd: doublePrecision("cost_usd").notNull().default(0),
+    tokensIn: integer("tokens_in").notNull().default(0),
+    tokensOut: integer("tokens_out").notNull().default(0),
+    model: text("model"),
+    durationMs: integer("duration_ms").notNull().default(0),
+    // Bookkeeping for partial-success: which step succeeded last.
+    lastStepIdx: integer("last_step_idx").notNull().default(0),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_cli_turns_session").on(t.sessionId),
+    index("idx_atelier_cli_turns_user").on(t.userId),
+    index("idx_atelier_cli_turns_status").on(t.status),
+    uniqueIndex("uq_atelier_cli_turns_client_key").on(t.sessionId, t.clientTurnKey),
+  ],
+);
+
+export const atelierCliJobs = pgTable(
+  "atelier_cli_jobs",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    turnId: text("turn_id").notNull(),
+    sessionId: text("session_id").notNull(),
+    userId: text("user_id").notNull(),
+    kind: text("kind").notNull(), // tool name being run async
+    status: text("status").notNull().default("queued"), // queued | running | success | error
+    input: jsonb("input").$type<unknown>(),
+    result: jsonb("result").$type<unknown>(),
+    error: text("error"),
+    // Idempotency key: ${turnId}:${stepIdx} so a retried turn does not
+    // double-dispatch the same async tool.
+    idempotencyKey: text("idempotency_key").notNull(),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_cli_jobs_turn").on(t.turnId),
+    index("idx_atelier_cli_jobs_status").on(t.status),
+    uniqueIndex("uq_atelier_cli_jobs_idem").on(t.idempotencyKey),
+  ],
+);

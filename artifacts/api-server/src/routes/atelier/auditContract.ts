@@ -58,6 +58,11 @@ export const V3_AUDIT_ACTIONS = {
 
   // Principle override (breakglass) — Task #293 -------------------------
   PRINCIPLE_OVERRIDE_GRANTED: "principle_override.granted",
+
+  // Atelier CLI — Task #331 --------------------------------------------
+  CLI_TURN: "cli.turn",
+  CLI_TURN_CONFIRMED: "cli.turn.confirmed",
+  CLI_TURN_CANCELLED: "cli.turn.cancelled",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

@@ -64,6 +64,7 @@ import walletRoutes from "./walletRoutes";
 import referenceRoutes from "./referenceRoutes";
 import principleOverrideRoutes from "./principleOverrideRoutes";
 import firmProfileRoutes from "./firmProfileRoutes";
+import cliRoutes from "./cliRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -170,6 +171,8 @@ router.use(walletRoutes);
 router.use(referenceRoutes);
 router.use(principleOverrideRoutes);
 router.use(firmProfileRoutes);
+// Task #331 — Atelier CLI: SSE turn endpoint, sessions, confirm/cancel.
+router.use(cliRoutes);
 
 function ensurePersona(
   req: Request,

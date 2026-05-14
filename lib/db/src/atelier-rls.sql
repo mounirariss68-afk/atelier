@@ -46,7 +46,10 @@ DECLARE
     'atelier_timesheet_entries','atelier_expenses',
     -- Task #290 — Reference-data lookups (countries, industries, sub_industries).
     -- Org-scoped reads/writes; deprecation governance is enforced in app code.
-    'atelier_countries','atelier_industries','atelier_sub_industries'
+    'atelier_countries','atelier_industries','atelier_sub_industries',
+    -- Task #331 — Atelier CLI sessions / turns / async jobs. Org-scoped
+    -- only; per-engagement narrowing happens inside the tool layer.
+    'atelier_cli_sessions','atelier_cli_turns','atelier_cli_jobs'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their
