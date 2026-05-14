@@ -27,6 +27,9 @@ import {
   SALES_STAGES,
   SALES_STAGE_LABEL,
   SALES_STAGE_DEFAULT_PROB,
+  SUB_STATUS_BY_STAGE,
+  SUB_STATUS_LABEL,
+  TERMINAL_REASON_CODES,
   TERMINAL_STAGES,
 } from "@/lib/sales-stages";
 
@@ -57,21 +60,54 @@ export function StageTransitionDialog({
   const [milestone, setMilestone] = React.useState("");
   const [milestoneDate, setMilestoneDate] = React.useState("");
   const [override, setOverride] = React.useState(false);
+  const [subStatus, setSubStatus] = React.useState<string>("");
+  // Convert→Runner gate fields.
+  const [decider, setDecider] = React.useState("");
+  const [verbalCommitDate, setVerbalCommitDate] = React.useState("");
+  const [signaturePath, setSignaturePath] = React.useState("");
+  // Runner→Contract gate field. (Uploads are surfaced via the artifacts
+  // tab elsewhere; this dialog accepts the artifact id directly.)
+  const [signedInstrumentFileId, setSignedInstrumentFileId] = React.useState("");
+  // Terminal-entry gate field.
+  const [reasonCode, setReasonCode] = React.useState("");
 
   React.useEffect(() => {
     if (open) {
-      setToStage(initialToStage ?? currentStage);
+      const initial = initialToStage ?? currentStage;
+      setToStage(initial);
       setRationale("");
-      setProb(SALES_STAGE_DEFAULT_PROB[initialToStage ?? currentStage]);
+      setProb(SALES_STAGE_DEFAULT_PROB[initial]);
       setMilestone("");
       setMilestoneDate("");
       setOverride(false);
+      setSubStatus("");
+      setDecider("");
+      setVerbalCommitDate("");
+      setSignaturePath("");
+      setSignedInstrumentFileId("");
+      setReasonCode("");
     }
   }, [open, initialToStage, currentStage]);
 
   React.useEffect(() => {
     setProb(SALES_STAGE_DEFAULT_PROB[toStage]);
+    setSubStatus("");
+    setReasonCode("");
   }, [toStage]);
+
+  // Per-transition gate flags. These mirror the server-side gates in
+  // agentRoutes.ts (POST /opportunities/:oppId/stage-transition); the
+  // dialog blocks submit early so the user gets a clean form error
+  // instead of a 412 round-trip.
+  const isSuspectToProspect = currentStage === "suspect" && toStage === "prospect";
+  const isConvertToRunner = currentStage === "convert" && toStage === "runner";
+  const isRunnerToContract = currentStage === "runner" && toStage === "contract";
+  const isTerminalEntry = (TERMINAL_STAGES as readonly SalesStage[]).includes(toStage);
+
+  const subStatusOptions = SUB_STATUS_BY_STAGE[toStage] ?? [];
+  const reasonOptions = isTerminalEntry
+    ? TERMINAL_REASON_CODES[toStage as "lost" | "no_decision" | "withdrawn"]
+    : [];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,6 +115,40 @@ export function StageTransitionDialog({
       toast({ title: "Rationale required", variant: "destructive" });
       return;
     }
+    // Client-side gate previews — partner-override skips them all.
+    if (!override) {
+      if (isConvertToRunner) {
+        const missing: string[] = [];
+        if (!decider.trim()) missing.push("decider");
+        if (!verbalCommitDate.trim()) missing.push("verbal-commit date");
+        if (!signaturePath.trim()) missing.push("signature path");
+        if (missing.length) {
+          toast({
+            title: "Convert → Runner gate",
+            description: `Provide ${missing.join(", ")} or use partner override.`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+      if (isRunnerToContract && !signedInstrumentFileId.trim()) {
+        toast({
+          title: "Runner → Contract gate",
+          description: "Attach the signed instrument (artifact id) or use partner override.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (isTerminalEntry && !reasonCode.trim()) {
+        toast({
+          title: `Reason required to enter ${SALES_STAGE_LABEL[toStage]}`,
+          description: "Pick a reason code so the debrief and analytics line up.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     try {
       await transition.mutateAsync({
         oppId,
@@ -90,6 +160,14 @@ export function StageTransitionDialog({
           nextMilestone: milestone.trim() || null,
           nextMilestoneDate: milestoneDate.trim() || null,
           partnerOverride: override,
+          subStatus: subStatus || null,
+          decider: isConvertToRunner ? decider.trim() || null : null,
+          verbalCommitDate: isConvertToRunner ? verbalCommitDate || null : null,
+          signaturePath: isConvertToRunner ? signaturePath.trim() || null : null,
+          signedInstrumentFileId: isRunnerToContract
+            ? signedInstrumentFileId.trim() || null
+            : null,
+          reasonCode: isTerminalEntry ? reasonCode || null : null,
         },
       });
       qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
@@ -104,11 +182,14 @@ export function StageTransitionDialog({
       onOpenChange(false);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
+      const data = (err as { response?: { data?: { gate?: string; reason?: string } } })
+        ?.response?.data;
       if (status === 412) {
         toast({
-          title: "5C qualifier required",
+          title: data?.gate ? `Gate: ${data.gate}` : "Stage gate failed",
           description:
-            "Late-stage moves require a completed 5C with a Go decision. Use partner override only if you have direct authority.",
+            data?.reason ??
+            "This transition has unmet requirements. Use partner override only if you have direct authority.",
           variant: "destructive",
         });
       } else {
@@ -116,8 +197,6 @@ export function StageTransitionDialog({
       }
     }
   }
-
-  const lateStage = ["proposal_in_flight", "submitted", "verbal_commit", "signed"].includes(toStage);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -173,6 +252,27 @@ export function StageTransitionDialog({
             />
           </div>
 
+          {subStatusOptions.length > 0 && (
+            <div className="grid gap-2">
+              <Label htmlFor="t-substatus" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                Sub-status (optional)
+              </Label>
+              <select
+                id="t-substatus"
+                value={subStatus}
+                onChange={(e) => setSubStatus(e.target.value)}
+                className="bg-bg-deep border border-border-soft rounded px-2 py-2 text-sm text-text"
+              >
+                <option value="">— none —</option>
+                {subStatusOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {SUB_STATUS_LABEL[s] ?? s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="grid gap-2">
             <div className="flex items-baseline justify-between">
               <Label className="text-xs uppercase tracking-widest font-mono text-text-faint">
@@ -192,7 +292,7 @@ export function StageTransitionDialog({
             </p>
           </div>
 
-          {!TERMINAL_STAGES.includes(toStage) && (
+          {!isTerminalEntry && (
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="t-milestone" className="text-xs uppercase tracking-widest font-mono text-text-faint">
@@ -221,7 +321,108 @@ export function StageTransitionDialog({
             </div>
           )}
 
-          {lateStage && (
+          {isSuspectToProspect && (
+            <div className="rounded border border-gold/40 bg-gold/5 p-3 text-xs text-text-mute">
+              <span className="block font-mono uppercase tracking-wider text-gold mb-1">
+                Suspect → Prospect gate
+              </span>
+              Requires a completed 5C qualifier with a Go decision. Fill the
+              5C tab on this opportunity, or tick partner override below.
+            </div>
+          )}
+
+          {isConvertToRunner && (
+            <div className="grid gap-3 rounded border border-gold/40 bg-gold/5 p-3">
+              <span className="font-mono uppercase tracking-wider text-gold text-xs">
+                Convert → Runner gate
+              </span>
+              <div className="grid gap-2">
+                <Label htmlFor="t-decider" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                  Named decider
+                </Label>
+                <Input
+                  id="t-decider"
+                  value={decider}
+                  onChange={(e) => setDecider(e.target.value)}
+                  placeholder="e.g. CFO Sarah Patel"
+                  className="bg-bg-deep border-border-soft"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="t-vcd" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                    Verbal-commit date
+                  </Label>
+                  <Input
+                    id="t-vcd"
+                    type="date"
+                    value={verbalCommitDate}
+                    onChange={(e) => setVerbalCommitDate(e.target.value)}
+                    className="bg-bg-deep border-border-soft"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="t-sigpath" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                    Signature path
+                  </Label>
+                  <Input
+                    id="t-sigpath"
+                    value={signaturePath}
+                    onChange={(e) => setSignaturePath(e.target.value)}
+                    placeholder="e.g. Procurement → CFO → DocuSign"
+                    className="bg-bg-deep border-border-soft"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isRunnerToContract && (
+            <div className="grid gap-2 rounded border border-gold/40 bg-gold/5 p-3">
+              <span className="font-mono uppercase tracking-wider text-gold text-xs">
+                Runner → Contract gate
+              </span>
+              <Label htmlFor="t-sif" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                Signed instrument · artifact id
+              </Label>
+              <Input
+                id="t-sif"
+                value={signedInstrumentFileId}
+                onChange={(e) => setSignedInstrumentFileId(e.target.value)}
+                placeholder="art_…"
+                className="bg-bg-deep border-border-soft font-mono text-xs"
+              />
+              <p className="text-[10px] text-text-faint">
+                Charter Architect auto-fires on Contract entry for the linked engagement.
+              </p>
+            </div>
+          )}
+
+          {isTerminalEntry && (
+            <div className="grid gap-2 rounded border border-amber/40 bg-amber/5 p-3">
+              <span className="font-mono uppercase tracking-wider text-amber text-xs">
+                Closing as {SALES_STAGE_LABEL[toStage]}
+              </span>
+              <Label htmlFor="t-reason" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                Reason code
+              </Label>
+              <select
+                id="t-reason"
+                value={reasonCode}
+                onChange={(e) => setReasonCode(e.target.value)}
+                className="bg-bg-deep border border-border-soft rounded px-2 py-2 text-sm text-text"
+              >
+                <option value="">— pick reason —</option>
+                {reasonOptions.map((r) => (
+                  <option key={r} value={r}>
+                    {r.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {(isSuspectToProspect || isConvertToRunner || isRunnerToContract || isTerminalEntry) && (
             <label className="flex items-start gap-2 text-xs text-text-mute cursor-pointer">
               <Checkbox
                 checked={override}
@@ -231,7 +432,7 @@ export function StageTransitionDialog({
               <span>
                 <span className="font-mono uppercase tracking-wider text-amber">Partner override</span>
                 <span className="block">
-                  Skip the 5C/Go gate. Use only when partner authority is direct and this will be reviewed at the next portfolio sync.
+                  Skip the gate above. Use only when partner authority is direct and this will be reviewed at the next portfolio sync.
                 </span>
               </span>
             </label>

@@ -1222,7 +1222,7 @@ const OPPORTUNITIES = [
     name: "Aldrees — supplier-portal copilot · no-decision",
     accountId: "acc_aldrees",
     plmStage: "lost",
-    salesStage: "lost_no_decision",
+    salesStage: "no_decision",
     buyerPersona: "VP Procurement",
     offeringAnchor: "Operations Copilots",
     partnerOwnerId: "p_gokhan_guney",
@@ -2692,7 +2692,7 @@ async function main() {
     {
       id: "wld_dge_passport",
       opportunityId: "opp_dge_passport",
-      outcome: "lost_no_decision",
+      outcome: "no_decision",
       status: "pending",
       sellerPerceivedReasons: [
         "Champion changed roles mid-cycle.",

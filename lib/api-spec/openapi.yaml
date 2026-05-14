@@ -2443,17 +2443,18 @@ components:
 
     SalesStage:
       type: string
-      description: v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.
+      description: |
+        Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is
+        derived. Working: suspect → prospect → convert → runner → contract.
+        Terminals: lost · no_decision · withdrawn.
       enum:
-        - lead
-        - qualified
-        - discovery_scheduled
-        - pov_in_flight
-        - proposal_in_flight
-        - submitted
-        - verbal_commit
-        - signed
-        - lost_no_decision
+        - suspect
+        - prospect
+        - convert
+        - runner
+        - contract
+        - lost
+        - no_decision
         - withdrawn
 
     Account:
@@ -2542,6 +2543,17 @@ components:
         nextMilestone: { type: ["string", "null"] }
         nextMilestoneDate: { type: ["string", "null"] }
         partnerOverride: { type: boolean, default: false }
+        # Task #295 — per-transition gate fields.
+        # Sub-status under the new stage (taxonomy in pipeline.ts SUB_STATUS_BY_STAGE).
+        subStatus: { type: ["string", "null"] }
+        # Convert→Runner gate: named decider + verbal-commit date + signature path.
+        decider: { type: ["string", "null"] }
+        verbalCommitDate: { type: ["string", "null"] }
+        signaturePath: { type: ["string", "null"] }
+        # Runner→Contract gate: signed instrument upload (artifact id).
+        signedInstrumentFileId: { type: ["string", "null"] }
+        # Terminal stage gate: reason code (taxonomy in pipeline.ts TERMINAL_REASON_CODES).
+        reasonCode: { type: ["string", "null"] }
 
     PipelineStageBucket:
       type: object

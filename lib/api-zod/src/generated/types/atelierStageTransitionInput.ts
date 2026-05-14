@@ -19,4 +19,16 @@ export interface AtelierStageTransitionInput {
   /** @nullable */
   nextMilestoneDate?: string | null;
   partnerOverride?: boolean;
+  /** @nullable */
+  subStatus?: string | null;
+  /** @nullable */
+  decider?: string | null;
+  /** @nullable */
+  verbalCommitDate?: string | null;
+  /** @nullable */
+  signaturePath?: string | null;
+  /** @nullable */
+  signedInstrumentFileId?: string | null;
+  /** @nullable */
+  reasonCode?: string | null;
 }

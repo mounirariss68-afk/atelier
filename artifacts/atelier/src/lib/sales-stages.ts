@@ -1,74 +1,127 @@
 /**
- * Atelier v2 sales-stage constants — must mirror
+ * Atelier sales-stage constants — must mirror
  * artifacts/api-server/src/lib/atelier-agents/pipeline.ts
+ *
+ * Task #295 — 5 canonical stages + 3 terminals.
  */
 import type { SalesStage } from "@workspace/api-client-react";
 
 export const SALES_STAGES: SalesStage[] = [
-  "lead",
-  "qualified",
-  "discovery_scheduled",
-  "pov_in_flight",
-  "proposal_in_flight",
-  "submitted",
-  "verbal_commit",
-  "signed",
-  "lost_no_decision",
+  "suspect",
+  "prospect",
+  "convert",
+  "runner",
+  "contract",
+  "lost",
+  "no_decision",
   "withdrawn",
 ];
 
+export const WORKING_STAGES: SalesStage[] = [
+  "suspect",
+  "prospect",
+  "convert",
+  "runner",
+  "contract",
+];
+
 export const TERMINAL_STAGES: SalesStage[] = [
-  "signed",
-  "lost_no_decision",
+  "lost",
+  "no_decision",
   "withdrawn",
 ];
 
 export const SALES_STAGE_LABEL: Record<SalesStage, string> = {
-  lead: "Lead",
+  suspect: "Suspect",
+  prospect: "Prospect",
+  convert: "Convert",
+  runner: "Runner",
+  contract: "Contract",
+  lost: "Lost",
+  no_decision: "No decision",
+  withdrawn: "Withdrawn",
+};
+
+export const SALES_STAGE_DESCRIPTION: Record<SalesStage, string> = {
+  suspect: "Cold or warmed signal — not yet qualified",
+  prospect: "Qualified fit + buyer engaged",
+  convert: "Active pursuit — POV, proposal, submitted",
+  runner: "Verbal yes — paperwork in motion",
+  contract: "Signed and mobilising into delivery",
+  lost: "Conceded to a competitor or other reason",
+  no_decision: "Client declined to decide",
+  withdrawn: "We stepped away or the client withdrew",
+};
+
+export const SALES_STAGE_DEFAULT_PROB: Record<SalesStage, number> = {
+  suspect: 5,
+  prospect: 20,
+  convert: 50,
+  runner: 80,
+  contract: 100,
+  lost: 0,
+  no_decision: 0,
+  withdrawn: 0,
+};
+
+export const SUB_STATUS_BY_STAGE: Record<SalesStage, readonly string[]> = {
+  suspect: ["cold", "warmed", "targeted"],
+  prospect: ["qualified", "discovery_scheduled"],
+  convert: ["pov_in_flight", "proposal_in_flight", "submitted"],
+  runner: ["verbal", "in_legal", "in_procurement"],
+  contract: ["mobilizing", "kickoff_set", "in_flight"],
+  lost: [],
+  no_decision: [],
+  withdrawn: [],
+};
+
+export const SUB_STATUS_LABEL: Record<string, string> = {
+  cold: "Cold",
+  warmed: "Warmed",
+  targeted: "Targeted",
   qualified: "Qualified",
   discovery_scheduled: "Discovery scheduled",
   pov_in_flight: "POV in flight",
   proposal_in_flight: "Proposal in flight",
   submitted: "Submitted",
-  verbal_commit: "Verbal commit",
-  signed: "Signed",
-  lost_no_decision: "Conceded / Folded",
-  withdrawn: "Stalled",
+  verbal: "Verbal commit",
+  in_legal: "In legal",
+  in_procurement: "In procurement",
+  mobilizing: "Mobilising",
+  kickoff_set: "Kickoff set",
+  in_flight: "In flight",
 };
 
-// Short blurb shown under each stage name on the kanban board.
-export const SALES_STAGE_DESCRIPTION: Record<SalesStage, string> = {
-  lead: "Unqualified inbound or sourced interest",
-  qualified: "Fit + budget signals confirmed",
-  discovery_scheduled: "Discovery session on the calendar",
-  pov_in_flight: "Proof-of-value build underway",
-  proposal_in_flight: "Drafting commercials & SoW",
-  submitted: "Proposal with the client, awaiting feedback",
-  verbal_commit: "Verbal yes — paperwork pending",
-  signed: "Countersigned and booked",
-  lost_no_decision: "Conceded to a competitor or folded with no decision",
-  withdrawn: "Stalled — we stepped away or the client withdrew",
-};
-
-export const SALES_STAGE_DEFAULT_PROB: Record<SalesStage, number> = {
-  lead: 5,
-  qualified: 15,
-  discovery_scheduled: 25,
-  pov_in_flight: 35,
-  proposal_in_flight: 50,
-  submitted: 65,
-  verbal_commit: 80,
-  signed: 100,
-  lost_no_decision: 0,
-  withdrawn: 0,
+export const TERMINAL_REASON_CODES: Record<
+  "lost" | "no_decision" | "withdrawn",
+  readonly { value: string; label: string }[]
+> = {
+  lost: [
+    { value: "competitor",   label: "Lost to competitor" },
+    { value: "price",        label: "Price" },
+    { value: "fit",          label: "Fit" },
+    { value: "timing",       label: "Timing" },
+    { value: "relationship", label: "Relationship" },
+  ],
+  no_decision: [
+    { value: "stalled",        label: "Stalled" },
+    { value: "deprioritized",  label: "Deprioritised" },
+    { value: "budget_pulled",  label: "Budget pulled" },
+  ],
+  withdrawn: [
+    { value: "conflict",        label: "Conflict of interest" },
+    { value: "capacity",        label: "Capacity constraints" },
+    { value: "strategic_fit",   label: "Strategic fit" },
+    { value: "client_request",  label: "Client request" },
+  ],
 };
 
 export const STALLED_THRESHOLD_DAYS = 21;
 
 export function stageTone(s: SalesStage): "default" | "gold" | "green" | "amber" | "red" {
-  if (s === "signed") return "green";
-  if (s === "lost_no_decision" || s === "withdrawn") return "red";
-  if (s === "verbal_commit" || s === "submitted") return "gold";
-  if (s === "proposal_in_flight" || s === "pov_in_flight") return "amber";
+  if (s === "contract") return "green";
+  if (s === "lost" || s === "no_decision" || s === "withdrawn") return "red";
+  if (s === "runner") return "gold";
+  if (s === "convert") return "amber";
   return "default";
 }

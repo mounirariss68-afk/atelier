@@ -545,10 +545,9 @@ async function runThemeCuratorAndPersist(
       and(
         isNull(atelierOpportunities.deletedAt),
         inArray(atelierOpportunities.salesStage, [
-          "shape",
-          "qualifying",
-          "proposal_in_flight",
-          "submitted",
+          "prospect",
+          "convert",
+          "runner",
         ]),
       ),
     );

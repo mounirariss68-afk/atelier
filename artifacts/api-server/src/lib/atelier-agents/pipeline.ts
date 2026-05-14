@@ -1,53 +1,94 @@
 /**
- * Atelier v2 — Sales pipeline constants + helpers (Task #239 / PRD §2.3).
+ * Atelier — Sales pipeline constants + helpers (Task #295 / PRD §2.3).
  *
- * 10-stage sales lifecycle replaces the v1 6-stage PLM. plmStage is now a
- * derived (write-time) shadow of salesStage; existing v1 routes/data continue
- * to read plmStage normally, but every write should funnel through these
- * helpers so the two columns stay in lockstep.
+ * Canonical 5-stage funnel + 3 terminals. Replaces the 10-value
+ * lifecycle introduced in Task #239. plmStage is still derived
+ * (write-time) from salesStage so existing v1 readers keep working.
+ *
+ *   Working:    suspect → prospect → convert → runner → contract
+ *   Terminals:  lost · no_decision · withdrawn
+ *
+ * `contract` is the kickoff of delivery, not a terminal — once a deal
+ * is on paper the engagement takes over. Lost/no_decision/withdrawn
+ * are the only stages that *close* the funnel.
  */
 
 export const SALES_STAGES = [
-  "lead",
-  "qualified",
-  "discovery_scheduled",
-  "pov_in_flight",
-  "proposal_in_flight",
-  "submitted",
-  "verbal_commit",
-  "signed",
-  "lost_no_decision",
+  "suspect",
+  "prospect",
+  "convert",
+  "runner",
+  "contract",
+  "lost",
+  "no_decision",
   "withdrawn",
 ] as const;
 
 export type SalesStage = (typeof SALES_STAGES)[number];
 
-/** Default win probability used by the Forecaster when no override is set. */
+export const WORKING_STAGES: readonly SalesStage[] = [
+  "suspect",
+  "prospect",
+  "convert",
+  "runner",
+  "contract",
+] as const;
+
+export const TERMINAL_STAGES: readonly SalesStage[] = [
+  "lost",
+  "no_decision",
+  "withdrawn",
+] as const;
+
+/**
+ * Default win probability used by the Forecaster when no override is set.
+ * 5/20/50/80/100 across the working funnel — ramps that match the
+ * partner playbook so the weighted-pipeline number is meaningful even
+ * when probabilities aren't manually tuned.
+ */
 export const SALES_STAGE_DEFAULT_PROB: Record<SalesStage, number> = {
-  lead: 5,
-  qualified: 15,
-  discovery_scheduled: 25,
-  pov_in_flight: 35,
-  proposal_in_flight: 50,
-  submitted: 65,
-  verbal_commit: 80,
-  signed: 100,
-  lost_no_decision: 0,
+  suspect: 5,
+  prospect: 20,
+  convert: 50,
+  runner: 80,
+  contract: 100,
+  lost: 0,
+  no_decision: 0,
   withdrawn: 0,
 };
 
-/** Map a v2 sales stage onto its v1 PLM stage so legacy reads stay valid. */
+/** Map a sales stage onto its v1 PLM stage so legacy reads stay valid. */
 export const SALES_TO_PLM: Record<SalesStage, string> = {
-  lead: "identify",
-  qualified: "identify",
-  discovery_scheduled: "shape",
-  pov_in_flight: "shape",
-  proposal_in_flight: "pursue",
-  submitted: "pursue",
-  verbal_commit: "pursue",
-  signed: "won",
-  lost_no_decision: "lost",
+  suspect: "identify",
+  prospect: "shape",
+  convert: "pursue",
+  runner: "pursue",
+  contract: "mobilize",
+  lost: "lost",
+  no_decision: "no_go",
   withdrawn: "no_go",
+};
+
+/** Sub-status taxonomy. UI uses these as the second-level chip per stage. */
+export const SUB_STATUS_BY_STAGE: Record<SalesStage, readonly string[]> = {
+  suspect: ["cold", "warmed", "targeted"],
+  prospect: ["qualified", "discovery_scheduled"],
+  convert: ["pov_in_flight", "proposal_in_flight", "submitted"],
+  runner: ["verbal", "in_legal", "in_procurement"],
+  contract: ["mobilizing", "kickoff_set", "in_flight"],
+  lost: [],
+  no_decision: [],
+  withdrawn: [],
+};
+
+/** Reason codes required when entering a terminal stage. */
+export const TERMINAL_REASON_CODES: Record<
+  "lost" | "no_decision" | "withdrawn",
+  readonly string[]
+> = {
+  lost: ["competitor", "price", "fit", "timing", "relationship"],
+  no_decision: ["stalled", "deprioritized", "budget_pulled"],
+  withdrawn: ["conflict", "capacity", "strategic_fit", "client_request"],
 };
 
 /** Days-in-stage threshold above which the Forecaster flags a deal stalled. */
@@ -57,17 +98,60 @@ export function isSalesStage(v: unknown): v is SalesStage {
   return typeof v === "string" && (SALES_STAGES as readonly string[]).includes(v);
 }
 
+export function isTerminalStage(s: SalesStage): boolean {
+  return (TERMINAL_STAGES as readonly string[]).includes(s);
+}
+
+export function isWorkingStage(s: SalesStage): boolean {
+  return (WORKING_STAGES as readonly string[]).includes(s);
+}
+
+export function isValidSubStatus(stage: SalesStage, sub: string | null | undefined): boolean {
+  if (!sub) return true;
+  return (SUB_STATUS_BY_STAGE[stage] as readonly string[]).includes(sub);
+}
+
+/**
+ * Map a legacy 10-stage label onto the canonical 5+3. Used by the
+ * stage-transition handler when migrating an opportunity that was last
+ * touched on the old enum, and by the migration script as a single
+ * source of truth for the rollover. Returns `null` for unknown values
+ * (caller falls back to deriveSalesStage).
+ */
+export function migrateLegacyStage(legacy: string): {
+  stage: SalesStage;
+  subStatus: string | null;
+} | null {
+  switch (legacy) {
+    case "lead":                return { stage: "suspect",  subStatus: "cold" };
+    case "qualified":           return { stage: "prospect", subStatus: "qualified" };
+    case "discovery_scheduled": return { stage: "prospect", subStatus: "discovery_scheduled" };
+    case "pov_in_flight":       return { stage: "convert",  subStatus: "pov_in_flight" };
+    case "proposal_in_flight":  return { stage: "convert",  subStatus: "proposal_in_flight" };
+    case "submitted":           return { stage: "convert",  subStatus: "submitted" };
+    case "verbal_commit":       return { stage: "runner",   subStatus: "verbal" };
+    case "signed":              return { stage: "contract", subStatus: "in_flight" };
+    case "lost_no_decision":    return { stage: "no_decision", subStatus: null };
+    // Already-canonical labels (lost/withdrawn/suspect/prospect/convert/
+    // runner/contract/no_decision) are no-ops — caller keeps the row.
+    default:                    return null;
+  }
+}
+
 export function deriveSalesStage(plmStage: string, probabilityPct: number | null): SalesStage {
   const p = probabilityPct ?? 0;
-  if (plmStage === "won") return "signed";
-  if (plmStage === "lost") return "lost_no_decision";
-  if (plmStage === "no_go") return "withdrawn";
-  if (plmStage === "identify") return p < 10 ? "lead" : "qualified";
-  if (plmStage === "shape") return p < 30 ? "discovery_scheduled" : "pov_in_flight";
+  if (plmStage === "won")      return "contract";
+  if (plmStage === "lost")     return "lost";
+  if (plmStage === "no_go")    return "withdrawn";
+  if (plmStage === "mobilize") return "contract";
+  if (plmStage === "deliver")  return "contract";
+  if (plmStage === "compound") return "contract";
+  if (plmStage === "closed")   return "contract";
+  if (plmStage === "identify") return p < 15 ? "suspect" : "prospect";
+  if (plmStage === "shape")    return p < 35 ? "prospect" : "convert";
   if (plmStage === "pursue") {
-    if (p < 60) return "proposal_in_flight";
-    if (p < 75) return "submitted";
-    return "verbal_commit";
+    if (p < 65) return "convert";
+    return "runner";
   }
-  return "lead";
+  return "suspect";
 }

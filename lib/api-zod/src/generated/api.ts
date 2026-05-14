@@ -291,20 +291,18 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
   ]),
   salesStage: zod
     .enum([
-      "lead",
-      "qualified",
-      "discovery_scheduled",
-      "pov_in_flight",
-      "proposal_in_flight",
-      "submitted",
-      "verbal_commit",
-      "signed",
-      "lost_no_decision",
+      "suspect",
+      "prospect",
+      "convert",
+      "runner",
+      "contract",
+      "lost",
+      "no_decision",
       "withdrawn",
     ])
     .optional()
     .describe(
-      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+      "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
   buyerPersona: zod.string().nullish(),
   offeringAnchor: zod.string().nullish(),
@@ -423,20 +421,18 @@ export const AtelierGetOpportunityResponse = zod.object({
   ]),
   salesStage: zod
     .enum([
-      "lead",
-      "qualified",
-      "discovery_scheduled",
-      "pov_in_flight",
-      "proposal_in_flight",
-      "submitted",
-      "verbal_commit",
-      "signed",
-      "lost_no_decision",
+      "suspect",
+      "prospect",
+      "convert",
+      "runner",
+      "contract",
+      "lost",
+      "no_decision",
       "withdrawn",
     ])
     .optional()
     .describe(
-      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+      "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
   buyerPersona: zod.string().nullish(),
   offeringAnchor: zod.string().nullish(),
@@ -500,20 +496,18 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
   ]),
   salesStage: zod
     .enum([
-      "lead",
-      "qualified",
-      "discovery_scheduled",
-      "pov_in_flight",
-      "proposal_in_flight",
-      "submitted",
-      "verbal_commit",
-      "signed",
-      "lost_no_decision",
+      "suspect",
+      "prospect",
+      "convert",
+      "runner",
+      "contract",
+      "lost",
+      "no_decision",
       "withdrawn",
     ])
     .optional()
     .describe(
-      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+      "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
   buyerPersona: zod.string().nullish(),
   offeringAnchor: zod.string().nullish(),
@@ -543,19 +537,17 @@ export const atelierCreateStageTransitionBodyPartnerOverrideDefault = false;
 export const AtelierCreateStageTransitionBody = zod.object({
   toStage: zod
     .enum([
-      "lead",
-      "qualified",
-      "discovery_scheduled",
-      "pov_in_flight",
-      "proposal_in_flight",
-      "submitted",
-      "verbal_commit",
-      "signed",
-      "lost_no_decision",
+      "suspect",
+      "prospect",
+      "convert",
+      "runner",
+      "contract",
+      "lost",
+      "no_decision",
       "withdrawn",
     ])
     .describe(
-      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+      "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
   rationaleText: zod.string().min(1),
   evidenceArtifactIds: zod
@@ -567,6 +559,12 @@ export const AtelierCreateStageTransitionBody = zod.object({
   partnerOverride: zod
     .boolean()
     .default(atelierCreateStageTransitionBodyPartnerOverrideDefault),
+  subStatus: zod.string().nullish(),
+  decider: zod.string().nullish(),
+  verbalCommitDate: zod.string().nullish(),
+  signaturePath: zod.string().nullish(),
+  signedInstrumentFileId: zod.string().nullish(),
+  reasonCode: zod.string().nullish(),
 });
 
 export const AtelierCreateStageTransitionResponse = zod.object({
@@ -590,20 +588,18 @@ export const AtelierCreateStageTransitionResponse = zod.object({
     ]),
     salesStage: zod
       .enum([
-        "lead",
-        "qualified",
-        "discovery_scheduled",
-        "pov_in_flight",
-        "proposal_in_flight",
-        "submitted",
-        "verbal_commit",
-        "signed",
-        "lost_no_decision",
+        "suspect",
+        "prospect",
+        "convert",
+        "runner",
+        "contract",
+        "lost",
+        "no_decision",
         "withdrawn",
       ])
       .optional()
       .describe(
-        "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+        "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
       ),
     buyerPersona: zod.string().nullish(),
     offeringAnchor: zod.string().nullish(),
@@ -626,38 +622,34 @@ export const AtelierCreateStageTransitionResponse = zod.object({
       .union([
         zod
           .enum([
-            "lead",
-            "qualified",
-            "discovery_scheduled",
-            "pov_in_flight",
-            "proposal_in_flight",
-            "submitted",
-            "verbal_commit",
-            "signed",
-            "lost_no_decision",
+            "suspect",
+            "prospect",
+            "convert",
+            "runner",
+            "contract",
+            "lost",
+            "no_decision",
             "withdrawn",
           ])
           .describe(
-            "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+            "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
           ),
         zod.null(),
       ])
       .optional(),
     toStage: zod
       .enum([
-        "lead",
-        "qualified",
-        "discovery_scheduled",
-        "pov_in_flight",
-        "proposal_in_flight",
-        "submitted",
-        "verbal_commit",
-        "signed",
-        "lost_no_decision",
+        "suspect",
+        "prospect",
+        "convert",
+        "runner",
+        "contract",
+        "lost",
+        "no_decision",
         "withdrawn",
       ])
       .describe(
-        "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+        "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
       ),
     transitionedByUserId: zod.string(),
     transitionedByName: zod.string().nullish(),
@@ -687,38 +679,34 @@ export const AtelierGetStageHistoryResponseItem = zod.object({
     .union([
       zod
         .enum([
-          "lead",
-          "qualified",
-          "discovery_scheduled",
-          "pov_in_flight",
-          "proposal_in_flight",
-          "submitted",
-          "verbal_commit",
-          "signed",
-          "lost_no_decision",
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
           "withdrawn",
         ])
         .describe(
-          "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
         ),
       zod.null(),
     ])
     .optional(),
   toStage: zod
     .enum([
-      "lead",
-      "qualified",
-      "discovery_scheduled",
-      "pov_in_flight",
-      "proposal_in_flight",
-      "submitted",
-      "verbal_commit",
-      "signed",
-      "lost_no_decision",
+      "suspect",
+      "prospect",
+      "convert",
+      "runner",
+      "contract",
+      "lost",
+      "no_decision",
       "withdrawn",
     ])
     .describe(
-      "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+      "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
   transitionedByUserId: zod.string(),
   transitionedByName: zod.string().nullish(),
@@ -749,19 +737,17 @@ export const AtelierGetPipelineForecastResponse = zod.object({
     zod.object({
       stage: zod
         .enum([
-          "lead",
-          "qualified",
-          "discovery_scheduled",
-          "pov_in_flight",
-          "proposal_in_flight",
-          "submitted",
-          "verbal_commit",
-          "signed",
-          "lost_no_decision",
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
           "withdrawn",
         ])
         .describe(
-          "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
         ),
       count: zod.number(),
       dealSumUsd: zod.number(),
@@ -784,19 +770,17 @@ export const AtelierRunPipelineForecasterResponse = zod.object({
     zod.object({
       stage: zod
         .enum([
-          "lead",
-          "qualified",
-          "discovery_scheduled",
-          "pov_in_flight",
-          "proposal_in_flight",
-          "submitted",
-          "verbal_commit",
-          "signed",
-          "lost_no_decision",
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
           "withdrawn",
         ])
         .describe(
-          "v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.",
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
         ),
       count: zod.number(),
       dealSumUsd: zod.number(),

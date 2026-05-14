@@ -7,19 +7,20 @@
  */
 
 /**
- * v2 fine-grained sales lifecycle (PRD §2.3). plmStage is derived.
+ * Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is
+derived. Working: suspect → prospect → convert → runner → contract.
+Terminals: lost · no_decision · withdrawn.
+
  */
 export type SalesStage = (typeof SalesStage)[keyof typeof SalesStage];
 
 export const SalesStage = {
-  lead: "lead",
-  qualified: "qualified",
-  discovery_scheduled: "discovery_scheduled",
-  pov_in_flight: "pov_in_flight",
-  proposal_in_flight: "proposal_in_flight",
-  submitted: "submitted",
-  verbal_commit: "verbal_commit",
-  signed: "signed",
-  lost_no_decision: "lost_no_decision",
+  suspect: "suspect",
+  prospect: "prospect",
+  convert: "convert",
+  runner: "runner",
+  contract: "contract",
+  lost: "lost",
+  no_decision: "no_decision",
   withdrawn: "withdrawn",
 } as const;

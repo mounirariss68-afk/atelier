@@ -467,8 +467,9 @@ async function buildOpportunityWire(
     sourceLead: o.sourceLead,
     stalled:
       o.daysInStage > STALLED_THRESHOLD_DAYS &&
-      salesStage !== "signed" &&
-      salesStage !== "lost_no_decision" &&
+      salesStage !== "contract" &&
+      salesStage !== "lost" &&
+      salesStage !== "no_decision" &&
       salesStage !== "withdrawn",
     createdAt: o.createdAt.toISOString(),
   };

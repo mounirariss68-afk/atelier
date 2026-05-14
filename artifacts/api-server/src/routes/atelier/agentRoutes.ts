@@ -32,10 +32,17 @@ import {
   SALES_TO_PLM,
   SALES_STAGE_DEFAULT_PROB,
   STALLED_THRESHOLD_DAYS,
+  SUB_STATUS_BY_STAGE,
+  TERMINAL_REASON_CODES,
   deriveSalesStage,
   isSalesStage,
+  isValidSubStatus,
+  isTerminalStage,
+  migrateLegacyStage,
   type SalesStage,
 } from "../../lib/atelier-agents/pipeline.js";
+import { atelierEngagements, atelierCharterVersions } from "@workspace/db";
+import { runCharterArchitect } from "../../lib/atelier-agents/runner.js";
 import {
   AtelierCreateOpportunityBody,
   AtelierUpdateOpportunityStageBody,
@@ -119,8 +126,9 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     sourceLead: o.sourceLead,
     stalled:
       o.daysInStage > STALLED_THRESHOLD_DAYS &&
-      salesStage !== "signed" &&
-      salesStage !== "lost_no_decision" &&
+      salesStage !== "contract" &&
+      salesStage !== "lost" &&
+      salesStage !== "no_decision" &&
       salesStage !== "withdrawn",
     createdAt: o.createdAt.toISOString(),
   };
@@ -1184,6 +1192,18 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
     res.status(400).json({ error: "invalid-body" });
     return;
   }
+  // Body may include any of the new Task #295 gate fields. The generated
+  // Zod schema is regenerated from openapi.yaml; the cast keeps this
+  // handler resilient if the request was validated by an older client
+  // that omits the optional gate fields.
+  const body = parsed.data as typeof parsed.data & {
+    subStatus?: string | null;
+    decider?: string | null;
+    verbalCommitDate?: string | null;
+    signaturePath?: string | null;
+    signedInstrumentFileId?: string | null;
+    reasonCode?: string | null;
+  };
   const {
     toStage,
     rationaleText,
@@ -1192,50 +1212,141 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
     nextMilestone,
     nextMilestoneDate,
     partnerOverride,
-  } = parsed.data;
+    subStatus,
+    decider,
+    verbalCommitDate,
+    signaturePath,
+    signedInstrumentFileId,
+    reasonCode,
+  } = body;
 
-  // Gate: late-stage moves require a completed 5C qualifier with go decision,
-  // unless an explicit partner_override is supplied.
-  const lateStages: SalesStage[] = [
-    "proposal_in_flight",
-    "submitted",
-    "verbal_commit",
-    "signed",
-  ];
-  if (lateStages.includes(toStage as SalesStage) && !partnerOverride) {
-    const q = opp.qualify5c ?? null;
-    const decision = opp.goNoGoDecision ?? null;
-    const filled =
-      q &&
-      (["client", "competition", "capability", "capacity", "contract"] as const).every(
-        (k) => typeof q[k] === "string" && q[k]!.trim().length > 0,
-      );
-    if (!filled || !decision || decision.decision !== "go") {
-      res.status(412).json({ error: "qualifier-required" });
-      return;
+  // Resolve the canonical from-stage. If the row still carries a legacy
+  // 10-stage label, map it through migrateLegacyStage so the gate logic
+  // sees the new taxonomy. We also remember the legacy label so the
+  // transition row can preserve it (`legacy_stage_label`).
+  const rawFromStage = isSalesStage(opp.salesStage)
+    ? (opp.salesStage as SalesStage)
+    : (deriveSalesStage(opp.plmStage, opp.probabilityPct) as SalesStage);
+  const legacyMapped = migrateLegacyStage(opp.salesStage as string);
+  const fromSales: SalesStage = legacyMapped?.stage ?? rawFromStage;
+  const legacyStageLabel = legacyMapped ? (opp.salesStage as string) : null;
+
+  const to = toStage as SalesStage;
+
+  // ---- Per-transition gates (Task #295) -------------------------------
+  // Partner-override skips every gate but still records `partnerOverride`
+  // on the transition row so the Sentinel can flag late-stage forces.
+  if (!partnerOverride) {
+    // Suspect → Prospect requires a completed 5C with a Go decision.
+    if (fromSales === "suspect" && to === "prospect") {
+      const q = opp.qualify5c ?? null;
+      const decision = opp.goNoGoDecision ?? null;
+      const filled =
+        q &&
+        (["client", "competition", "capability", "capacity", "contract"] as const).every(
+          (k) => typeof q[k] === "string" && q[k]!.trim().length > 0,
+        );
+      if (!filled || !decision || decision.decision !== "go") {
+        res.status(412).json({
+          error: "qualifier-required",
+          gate: "suspect_to_prospect_5c",
+          reason: "Suspect → Prospect requires a completed 5C qualifier with a Go decision.",
+        });
+        return;
+      }
+    }
+
+    // Convert → Runner requires a named decider + verbal-commit date + signature path.
+    if (fromSales === "convert" && to === "runner") {
+      const missing: string[] = [];
+      if (!decider?.trim()) missing.push("decider");
+      if (!verbalCommitDate?.trim()) missing.push("verbalCommitDate");
+      if (!signaturePath?.trim()) missing.push("signaturePath");
+      if (missing.length) {
+        res.status(412).json({
+          error: "runner-gate-required",
+          gate: "convert_to_runner",
+          reason: "Convert → Runner requires a named decider, verbal-commit date, and signature path.",
+          missing,
+        });
+        return;
+      }
+    }
+
+    // Runner → Contract requires a signed instrument upload (artifact id).
+    if (fromSales === "runner" && to === "contract") {
+      const evidenceCount = (evidenceArtifactIds ?? []).length;
+      if (!signedInstrumentFileId?.trim() && evidenceCount === 0) {
+        res.status(412).json({
+          error: "contract-gate-required",
+          gate: "runner_to_contract",
+          reason: "Runner → Contract requires the signed instrument as an uploaded artifact (signedInstrumentFileId or evidenceArtifactIds).",
+        });
+        return;
+      }
+    }
+
+    // Any terminal entry requires a reason code from the published taxonomy.
+    if (isTerminalStage(to)) {
+      const allowed = TERMINAL_REASON_CODES[to as "lost" | "no_decision" | "withdrawn"];
+      if (!reasonCode?.trim() || !allowed.includes(reasonCode.trim())) {
+        res.status(412).json({
+          error: "terminal-gate-required",
+          gate: `terminal_${to}`,
+          reason: `Entering ${to} requires reasonCode ∈ ${allowed.join(", ")}.`,
+          allowed,
+        });
+        return;
+      }
     }
   }
 
-  const fromSales = (isSalesStage(opp.salesStage)
-    ? opp.salesStage
-    : deriveSalesStage(opp.plmStage, opp.probabilityPct)) as SalesStage;
+  // Sub-status validation (always enforced — partner-override doesn't
+  // license writing junk into the taxonomy).
+  if (subStatus && !isValidSubStatus(to, subStatus)) {
+    res.status(400).json({
+      error: "invalid-sub-status",
+      stage: to,
+      allowed: SUB_STATUS_BY_STAGE[to],
+    });
+    return;
+  }
+
   const priorProb = opp.probabilityPct;
   const newProb =
     typeof newProbabilityPct === "number" && newProbabilityPct !== null
       ? newProbabilityPct
-      : SALES_STAGE_DEFAULT_PROB[toStage as SalesStage];
-  const derivedPlm = SALES_TO_PLM[toStage as SalesStage];
+      : SALES_STAGE_DEFAULT_PROB[to];
+  const derivedPlm = SALES_TO_PLM[to];
+  const now = new Date();
+
+  // Compute one-shot timestamps. runnerEnteredAt is sticky — set on first
+  // entry, never overwritten — so a Runner→Contract→Runner bounce keeps
+  // the original timestamp for "days as runner" reporting.
+  const runnerEnteredAt =
+    to === "runner" && !opp.runnerEnteredAt ? now : opp.runnerEnteredAt;
+  const contractSignedAt =
+    to === "contract" && !opp.contractSignedAt ? now : opp.contractSignedAt;
+  // finalPlmStage captures the last-known stage of the funnel for closed
+  // deals (mirrors the legacy 10-stage label when applicable).
+  const finalPlmStage = isTerminalStage(to)
+    ? (legacyStageLabel ?? fromSales)
+    : opp.finalPlmStage;
 
   const [updated] = await db
     .update(atelierOpportunities)
     .set({
-      salesStage: toStage,
+      salesStage: to,
       plmStage: derivedPlm,
       probabilityPct: newProb,
+      subStatus: subStatus ?? opp.subStatus,
+      runnerEnteredAt,
+      contractSignedAt,
+      finalPlmStage,
       nextMilestone: nextMilestone ?? opp.nextMilestone,
       nextMilestoneDate: nextMilestoneDate ?? opp.nextMilestoneDate,
       daysInStage: 0,
-      updatedAt: new Date(),
+      updatedAt: now,
     })
     .where(eq(atelierOpportunities.id, opp.id))
     .returning();
@@ -1245,7 +1356,7 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
     id: transitionId,
     opportunityId: opp.id,
     fromStage: fromSales,
-    toStage,
+    toStage: to,
     transitionedByUserId: me.id,
     rationaleText: rationaleText.trim(),
     evidenceArtifactIds: evidenceArtifactIds ?? [],
@@ -1255,6 +1366,13 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
     nextMilestoneDate: nextMilestoneDate ?? null,
     agentRecommended: false,
     partnerOverride: !!partnerOverride,
+    // Task #295 — preserve gate evidence on the transition row.
+    legacyStageLabel,
+    decider: decider ?? null,
+    verbalCommitDate: verbalCommitDate ?? null,
+    signaturePath: signaturePath ?? null,
+    signedInstrumentFileId: signedInstrumentFileId ?? null,
+    reasonCode: reasonCode ?? null,
   });
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),
@@ -1272,16 +1390,77 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
       partnerOverride: !!partnerOverride,
       evidenceCount: (evidenceArtifactIds ?? []).length,
     },
-    payloadSummary: `${me.name} moved "${opp.name}" ${fromSales} → ${toStage} (prob ${priorProb}% → ${newProb}%): ${rationaleText.slice(0, 120)}`,
+    payloadSummary: `${me.name} moved "${opp.name}" ${fromSales} → ${to} (prob ${priorProb}% → ${newProb}%): ${rationaleText.slice(0, 120)}`,
   });
 
-  // Task #241 — Closed-opportunity debrief hook.
-  // When an opp closes (signed | lost_no_decision | withdrawn), enqueue a
-  // pending Win/Loss debrief and a Pane A item for the partner owner, with
-  // a 14-day SLA before partner-override-required gate fires (per PRD §5.2).
-  // We do NOT block the close itself — the gate fires elsewhere, 14d after.
-  const CLOSED_STAGES: SalesStage[] = ["signed", "lost_no_decision", "withdrawn"];
-  if (CLOSED_STAGES.includes(toStage as SalesStage)) {
+  // Task #295 — Charter Architect auto-fire on Contract entry.
+  // When an opp lands in `contract` for the first time, kick off the
+  // Charter Architect for the linked engagement (idempotent: skip if a
+  // charter version already exists). If no engagement is linked yet, we
+  // surface a Pane A item for the partner owner instead of failing.
+  if (to === "contract" && !opp.contractSignedAt) {
+    try {
+      const [eng] = await db
+        .select({ id: atelierEngagements.id, name: atelierEngagements.name })
+        .from(atelierEngagements)
+        .where(
+          and(
+            eq(atelierEngagements.opportunityId, opp.id),
+            isNull(atelierEngagements.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (eng) {
+        const [existingCharter] = await db
+          .select({ id: atelierCharterVersions.id })
+          .from(atelierCharterVersions)
+          .where(eq(atelierCharterVersions.engagementId, eng.id))
+          .limit(1);
+        if (!existingCharter) {
+          // Best-effort account name lookup. The Charter Architect only
+          // needs a non-empty seed; we fall back to the account id if
+          // the join returns nothing.
+          const [acct] = await db
+            .select({ name: atelierAccounts.name })
+            .from(atelierAccounts)
+            .where(eq(atelierAccounts.id, opp.accountId))
+            .limit(1);
+          await runCharterArchitect({
+            engagementId: eng.id,
+            engagementName: eng.name,
+            accountName: acct?.name ?? opp.accountId,
+            wonProposalSummary: `${opp.name} — auto-fired on Contract entry. Re-derive from won-proposal artifacts and seeded context.`,
+            kickoffTranscriptExcerpt: null,
+            triggeredByUserId: me.id,
+            actorLabel: "Charter Architect",
+          });
+        }
+      } else {
+        await db.insert(atelierPaneAItems).values({
+          id: rid("pane"),
+          orgId: me.orgId,
+          userId: opp.partnerOwnerId,
+          priority: "high",
+          title: `Open engagement for "${opp.name}"`,
+          summary: `${opp.name} just hit Contract — open the engagement so Charter Architect can run.`,
+          hrefKind: "opportunity",
+          hrefTargetId: opp.id,
+          dueLabel: "now",
+          sortKey: 10,
+        });
+      }
+    } catch (err) {
+      req.log?.warn?.({ err, oppId: opp.id }, "charter auto-fire failed (non-blocking)");
+    }
+  }
+
+  // Task #241 / Task #295 — Closed-opportunity debrief hook.
+  // When an opp closes (lost | no_decision | withdrawn — `contract` is the
+  // working "won" state), enqueue a pending Win/Loss debrief and a Pane A
+  // item for the partner owner, with a 14-day SLA before the partner-
+  // override-required gate fires (PRD §5.2). Never blocks the close.
+  const CLOSED_STAGES: SalesStage[] = ["contract", "lost", "no_decision", "withdrawn"];
+  if (CLOSED_STAGES.includes(to)) {
     // Best-effort: never fail the stage-transition response because of a
     // debrief-side-effect failure. The 14-day SLA gate fires elsewhere.
     try {
@@ -1302,7 +1481,7 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
           id: debriefId,
           orgId: me.orgId,
           opportunityId: opp.id,
-          outcome: toStage,
+          outcome: to,
           status: "pending",
           sellerPerceivedReasons: [],
           partnerOwnerUserId: opp.partnerOwnerId,
@@ -1314,13 +1493,13 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
           id: rid("pane"),
           orgId: me.orgId,
           userId: opp.partnerOwnerId,
-          priority: toStage === "signed" ? "medium" : "high",
+          priority: to === "contract" ? "medium" : "high",
           title: `Win/Loss debrief due — ${opp.name}`,
-          summary: `${opp.name} closed as ${toStage.replace(/_/g, " ")}. Capture seller view, schedule buyer interview within 14 days.`,
+          summary: `${opp.name} closed as ${to.replace(/_/g, " ")}. Capture seller view, schedule buyer interview within 14 days.`,
           hrefKind: "opportunity",
           hrefTargetId: opp.id,
           dueLabel: "14 days",
-          sortKey: toStage === "signed" ? 50 : 20,
+          sortKey: to === "contract" ? 50 : 20,
         });
         await db.insert(atelierAuditEvents).values({
           id: rid("aud"),
@@ -1428,7 +1607,7 @@ async function computeForecast() {
     cur.weighted += w;
     cur.daysSum += o.daysInStage;
     buckets.set(s, cur);
-    if (s !== "signed" && s !== "lost_no_decision" && s !== "withdrawn") {
+    if (s !== "contract" && s !== "lost" && s !== "no_decision" && s !== "withdrawn") {
       totalCount += 1;
       totalDeal += o.dealSizeHypothesis;
       weightedTotal += w;

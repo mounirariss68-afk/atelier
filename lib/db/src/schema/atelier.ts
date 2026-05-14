@@ -269,10 +269,23 @@ export const atelierOpportunities = pgTable(
     plmStage: text("plm_stage").notNull(),
     // v2 sales stage (PRD §2.3) — finer-grained 10-value lifecycle.
     // plmStage is now derived from salesStage at write-time via SALES_TO_PLM.
-    salesStage: text("sales_stage").notNull().default("lead"),
-    // 'lead' | 'qualified' | 'discovery_scheduled' | 'pov_in_flight'
-    // | 'proposal_in_flight' | 'submitted' | 'verbal_commit' | 'signed'
-    // | 'lost_no_decision' | 'withdrawn'
+    salesStage: text("sales_stage").notNull().default("suspect"),
+    // Task #295 — 5 canonical + 3 terminal:
+    // 'suspect' | 'prospect' | 'convert' | 'runner' | 'contract'
+    // | 'lost' | 'no_decision' | 'withdrawn'
+    // Sub-status second-level chip; valid values listed in pipeline.ts
+    // SUB_STATUS_BY_STAGE. Null while no sub-status is applicable.
+    subStatus: text("sub_status"),
+    // Set the first time the opportunity reaches `runner`. Surfaces a
+    // "days as runner" badge on the kanban so partners can spot deals
+    // stuck in legal/procurement.
+    runnerEnteredAt: timestamp("runner_entered_at"),
+    // Set when the signed instrument is uploaded (Runner→Contract gate).
+    contractSignedAt: timestamp("contract_signed_at"),
+    // Captured on close — preserves the legacy 10-stage label that the
+    // funnel was on at the moment of migration / close, so legacy
+    // reports that aggregate by the old taxonomy keep working.
+    finalPlmStage: text("final_plm_stage"),
     partnerOwnerId: text("partner_owner_id").notNull(),
     engagementLeadId: text("engagement_lead_id").notNull(),
     dealSizeHypothesis: doublePrecision("deal_size_hypothesis").notNull(),
@@ -330,6 +343,18 @@ export const atelierOpportunityStageTransitions = pgTable(
     nextMilestoneDate: text("next_milestone_date"),
     agentRecommended: boolean("agent_recommended").notNull().default(false),
     partnerOverride: boolean("partner_override").notNull().default(false),
+    // Task #295 — funnel rollover: original 10-stage label captured on the
+    // legacy→canonical hop so reports keyed on the old taxonomy still work.
+    legacyStageLabel: text("legacy_stage_label"),
+    // Convert→Runner gate: named decider + verbal-commit date + signature path.
+    decider: text("decider"),
+    verbalCommitDate: text("verbal_commit_date"),
+    signaturePath: text("signature_path"),
+    // Runner→Contract gate: signed instrument upload (artifact id).
+    signedInstrumentFileId: text("signed_instrument_file_id"),
+    // Terminal gate: reason code (lost/no_decision/withdrawn taxonomy in
+    // pipeline.ts TERMINAL_REASON_CODES).
+    reasonCode: text("reason_code"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
