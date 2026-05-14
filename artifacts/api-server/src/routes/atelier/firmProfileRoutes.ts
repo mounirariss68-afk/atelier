@@ -104,6 +104,10 @@ router.get("/firm-profile/versions", async (req, res) => {
 router.post("/firm-profile/run-writer", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Task #297 — admin-gated: only founding_partner / hr may create or
+  // version the canonical brand copy at the API layer. UI gating is
+  // not sufficient; this route is the source of truth.
+  if (!ensurePublisher(me, res)) return;
   const body = req.body as { firmName?: string; userBrief?: string | null };
   const firmName = (body.firmName ?? "AICo").trim() || "AICo";
   // Seed the writer with this org's published version (if any).
@@ -159,6 +163,9 @@ router.post("/firm-profile/run-writer", async (req, res) => {
 router.post("/firm-profile/draft", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  // Task #297 — admin-gated: only founding_partner / hr may save edits
+  // to a Firm Profile draft.
+  if (!ensurePublisher(me, res)) return;
   const body = req.body as { payload?: unknown; notes?: string | null };
   if (!body.payload || typeof body.payload !== "object") {
     res.status(400).json({ error: "payload-required" });

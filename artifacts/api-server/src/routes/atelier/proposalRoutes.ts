@@ -1176,6 +1176,11 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
   }
   // Render real DOCX + PDF artifacts via the proposal-docs pipeline and
   // persist their public URLs on the proposal row.
+  // Task #297 — pass the org-scoped published Firm Profile so PDF/DOCX
+  // exports use the *same* brand copy as the hosted HTML; otherwise
+  // Company Profile in the export would silently fall back to the stub
+  // and drift from what the recipient sees in Salon.
+  const firmProfileForExport = await loadPublishedFirmProfile(proposal.orgId);
   const { pdfFile, docxFile } = await generateProposalDocs({
     proposalId: proposal.id,
     title: proposal.title,
@@ -1191,6 +1196,7 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
     complianceMatrix: (proposal.complianceMatrix as Array<{
       rfpReqId: string; requirement: string; status: string; evidence: string;
     }> | null) ?? [],
+    firmProfile: firmProfileForExport,
   });
   const pdfUrl = `/api/atelier/artifacts/${pdfFile}`;
   const docxUrl = `/api/atelier/artifacts/${docxFile}`;
@@ -1254,7 +1260,11 @@ type ProposalDocsInputPricing = Parameters<typeof generateProposalDocs>[0]["pric
 // Task #297 — HTML preview + per-recipient watermarked share links.
 // ============================================================
 
-async function loadPublishedFirmProfile(): Promise<
+/**
+ * Load the org-scoped published Firm Profile. Task #297 requires brand
+ * copy to be canonical *per firm*; cross-tenant lookups are forbidden.
+ */
+async function loadPublishedFirmProfile(orgId: string): Promise<
   | typeof atelierFirmProfile.$inferSelect["payload"]
   | null
 > {
@@ -1263,6 +1273,7 @@ async function loadPublishedFirmProfile(): Promise<
     .from(atelierFirmProfile)
     .where(
       and(
+        eq(atelierFirmProfile.orgId, orgId),
         eq(atelierFirmProfile.status, "published"),
         isNull(atelierFirmProfile.deletedAt),
       ),
@@ -1291,7 +1302,7 @@ async function buildProposalRenderInput(
     .where(and(eq(atelierDealPricings.opportunityId, proposal.opportunityId), isNull(atelierDealPricings.deletedAt)))
     .orderBy(desc(atelierDealPricings.createdAt))
     .limit(1);
-  const profile = await loadPublishedFirmProfile();
+  const profile = await loadPublishedFirmProfile(proposal.orgId);
   const orderedSections = orderSectionsBySpine(
     sections.map((s) => ({
       sectionId: s.sectionId,

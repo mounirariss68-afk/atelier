@@ -1052,10 +1052,16 @@ async function buildPublicProposal(proposalId: string, recipient: typeof atelier
     .where(and(eq(atelierDealPricings.opportunityId, proposal.opportunityId), isNull(atelierDealPricings.deletedAt)))
     .orderBy(desc(atelierDealPricings.createdAt))
     .limit(1);
+  // Task #297 — org-scoped via the proposal/recipient orgId so a
+  // recipient never sees another tenant's brand copy.
   const [profile] = await db
     .select({ payload: atelierFirmProfile.payload })
     .from(atelierFirmProfile)
-    .where(and(eq(atelierFirmProfile.status, "published"), isNull(atelierFirmProfile.deletedAt)))
+    .where(and(
+      eq(atelierFirmProfile.orgId, proposal.orgId),
+      eq(atelierFirmProfile.status, "published"),
+      isNull(atelierFirmProfile.deletedAt),
+    ))
     .orderBy(desc(atelierFirmProfile.publishedAt))
     .limit(1);
   return {
