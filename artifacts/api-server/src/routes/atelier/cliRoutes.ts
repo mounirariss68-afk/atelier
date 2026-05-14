@@ -342,9 +342,7 @@ router.get("/cli/capabilities", async (req, res) => {
       // Optional examples — Task #332 catalog may add per-locale
       // example phrasings later; surface the field as forward-safe so
       // the client /help drawer can render them when present.
-      examplePhrases:
-        (c as { examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null })
-          .examplePhrases ?? null,
+      examplePhrases: c.examplePhrases ?? null,
     })),
   });
 });

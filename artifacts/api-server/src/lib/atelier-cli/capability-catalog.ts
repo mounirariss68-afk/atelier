@@ -57,6 +57,54 @@ export type CapabilityModule =
   | "admin"
   | "meta";
 
+/**
+ * Outbound side-effect channel a capability fires when it commits.
+ * `null` means the capability is contained to internal DB state and
+ * the undo path can fully reverse it. Non-null channels (currently
+ * just "email") block undo and are surfaced in the confirmation diff
+ * so the user knows the write will leave the system.
+ */
+export type OutboundChannel = "email";
+
+/**
+ * Result-card hint the orchestrator emits alongside a successful
+ * tool result so the client can pick a typed renderer instead of
+ * falling back to raw JSON. New cards must be added here so a typo
+ * in a catalog entry breaks the build (Task #349).
+ */
+export type ResultCard =
+  | "account_card"
+  | "account_deleted"
+  | "agent_run"
+  | "asset_card"
+  | "audit_timeline"
+  | "brand_profile_draft"
+  | "capability_list"
+  | "cartographer_run"
+  | "charter_card"
+  | "contact_card"
+  | "deliverable_card"
+  | "document_chunk"
+  | "email_sent"
+  | "entity_card"
+  | "expense_batch"
+  | "expense_card"
+  | "kpi_strip"
+  | "meeting_card"
+  | "opportunity_card"
+  | "pov_card"
+  | "profile_update_decision"
+  | "proposal_card"
+  | "qualification_rubric"
+  | "qualifier_card"
+  | "raid_batch"
+  | "raid_item"
+  | "ranked_list"
+  | "section_card"
+  | "time_series"
+  | "timesheet_card"
+  | "undo_card";
+
 export type SurfaceContext =
   | "engagement_dashboard"
   | "account_workspace"
@@ -131,6 +179,23 @@ export interface CapabilityEntry {
   inputSchema: Record<string, unknown>;
   /** True if this capability mutates server state. */
   isWrite: boolean;
+  /**
+   * True if a successful run requires a separate `/confirm` POST
+   * before the run callback fires (two-phase write). Read-only
+   * capabilities should set this to `false`.
+   */
+  twoPhaseConfirm: boolean;
+  /**
+   * Outbound side-effect channel that fires when this capability
+   * commits, or `null` for purely-internal mutations. Surfaced in the
+   * confirmation diff and used by `undo` to refuse reversal.
+   */
+  outboundChannel: OutboundChannel | null;
+  /**
+   * Result-card hint used by the client to pick a typed renderer for
+   * the tool result, or `null` when no card is appropriate.
+   */
+  resultCard: ResultCard | null;
   /**
    * True if the mutation is *not* trivially undoable (delete, revoke,
    * publish-to-Salon, send-to-client, lost-mark). Server requires
