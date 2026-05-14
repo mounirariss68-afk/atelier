@@ -396,6 +396,9 @@ router.get("/cli/admin/metrics", async (req, res) => {
     .from(atelierAuditEvents)
     .where(
       and(
+        // Org scope is mandatory — without it, undo counts leak across
+        // tenants and our metrics card lies to founding partners.
+        eq(atelierAuditEvents.orgId, me.orgId),
         eq(atelierAuditEvents.action, V3_AUDIT_ACTIONS.CLI_UNDO),
         gte(atelierAuditEvents.createdAt, since),
       ),

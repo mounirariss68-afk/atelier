@@ -102,6 +102,33 @@ export const EVAL_FIXTURES: EvalFixture[] = [
     prompt: "read chunk c3 of this attachment",
     expectToolNames: [],
   },
+  // ------------------------------- raid (more variants per Use Case
+  // Catalog #1–#15)
+  {
+    id: "raid.add.assumption",
+    module: "raid",
+    prompt: "add raid assumption: vendor honors SLA",
+    expectToolNames: ["add_raid_item", "raid_add_v2"],
+  },
+  {
+    id: "raid.add.dependency",
+    module: "raid",
+    prompt: "add raid dependency on the integrations team",
+    expectToolNames: ["add_raid_item", "raid_add_v2"],
+  },
+  {
+    id: "raid.list.green",
+    module: "raid",
+    prompt: "show me my raid list",
+    expectToolNames: ["list_my_open_raid_items"],
+  },
+  // ------------------------------- account (#21–#28)
+  {
+    id: "account.who_is.short",
+    module: "account",
+    prompt: "find DXB Holdings",
+    expectToolNames: ["resolve_account_by_name", "account_lookup"],
+  },
   // ------------------------------- meta / negative
   {
     id: "meta.help.slash",

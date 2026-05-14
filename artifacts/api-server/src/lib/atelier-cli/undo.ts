@@ -215,8 +215,22 @@ interface IrreversibleStepReport {
   manualReversalHint: string;
 }
 
+interface ReversibleStep {
+  step: number;
+  toolName: string;
+  entityIds: string[];
+  inverse: InverseOp;
+}
+
 interface LastReversibleHit {
   turnId: string;
+  /**
+   * Every reversible write step from the chosen turn, ordered LIFO so
+   * we undo the latest write first (matches the persisted-step inverse
+   * plan called for in the spec).
+   */
+  reversibleSteps: ReversibleStep[];
+  /** Convenience accessor — the most-recent reversible tool name. */
   toolName: string;
   entityIds: string[];
   inverse: InverseOp;
@@ -268,10 +282,13 @@ async function findLastReversible(
   for (const row of rows) {
     if (row.status !== "success" && row.status !== "partial") continue;
     const calls = (row.toolCalls as Array<{ tool: string; ok: boolean; step?: number }> | null) ?? [];
-    // First-pass: catalogue every write step in this turn so we can
-    // report irreversible siblings alongside the reversal preview.
+    const frames = (row.frames as Array<{ type: string; data?: Record<string, unknown> }> | null) ?? [];
+
     const irreversibleSiblings: IrreversibleStepReport[] = [];
-    let hit: { idx: number; cap: NonNullable<ReturnType<typeof findByToolName>>; ids: string[]; inverse: InverseOp } | null = null;
+    const reversibleSteps: ReversibleStep[] = [];
+
+    // Walk LIFO so we build the inverse plan in reverse-execution order
+    // (last write first) — matches what a human would expect from undo.
     for (let i = calls.length - 1; i >= 0; i--) {
       const c = calls[i]!;
       if (!c.ok) continue;
@@ -289,28 +306,35 @@ async function findLastReversible(
         });
         continue;
       }
-      if (hit) continue; // already picked the most-recent reversible
-      // Find the corresponding tool_result frame to extract created ids.
-      const frames = (row.frames as Array<{ type: string; data?: Record<string, unknown> }> | null) ?? [];
+      // Find the matching tool_result payload (walk frames LIFO so a
+      // post-confirm tool_result wins over the pre-confirm one).
       let data: unknown;
       for (let f = frames.length - 1; f >= 0; f--) {
         const fr = frames[f]!;
         if (fr.type !== "tool_result") continue;
-        const fd = fr.data as { tool?: string; data?: unknown } | undefined;
+        const fd = fr.data as { tool?: string; data?: unknown; step?: number } | undefined;
         if (fd?.tool !== c.tool) continue;
+        if (typeof fd.step === "number" && typeof c.step === "number" && fd.step !== c.step) continue;
         data = fd.data;
         if (data) break;
       }
       const ids = entityIdsFromResult(c.tool, data);
       if (ids.length === 0) continue;
-      hit = { idx: i, cap, ids, inverse };
+      reversibleSteps.push({
+        step: typeof c.step === "number" ? c.step : i,
+        toolName: c.tool,
+        entityIds: ids,
+        inverse,
+      });
     }
-    if (hit) {
+    if (reversibleSteps.length > 0) {
+      const head = reversibleSteps[0]!;
       return {
         turnId: row.id,
-        toolName: calls[hit.idx]!.tool,
-        entityIds: hit.ids,
-        inverse: hit.inverse,
+        reversibleSteps,
+        toolName: head.toolName,
+        entityIds: head.entityIds,
+        inverse: head.inverse,
         irreversibleSiblings,
       };
     }
@@ -354,12 +378,13 @@ defineCapability({
       };
     }
     if (input.confirm !== true) {
+      const totalRecords = hit.reversibleSteps.reduce((n, s) => n + s.entityIds.length, 0);
       const summaryParts = [
-        `Undo last action — ${hit.inverse.label} (${hit.entityIds.length} record${hit.entityIds.length === 1 ? "" : "s"} from turn ${hit.turnId}).`,
+        `Undo last action — ${hit.reversibleSteps.length} reversible step${hit.reversibleSteps.length === 1 ? "" : "s"}, ${totalRecords} record${totalRecords === 1 ? "" : "s"} from turn ${hit.turnId}.`,
       ];
       if (hit.irreversibleSiblings.length > 0) {
         summaryParts.push(
-          `Note: ${hit.irreversibleSiblings.length} step${hit.irreversibleSiblings.length === 1 ? "" : "s"} from the same turn cannot be undone (${hit.irreversibleSiblings.map((s) => s.tool).join(", ")}).`,
+          `${hit.irreversibleSiblings.length} step${hit.irreversibleSiblings.length === 1 ? "" : "s"} cannot be undone (${hit.irreversibleSiblings.map((s) => s.tool).join(", ")}).`,
         );
       }
       return {
@@ -373,6 +398,12 @@ defineCapability({
               originalTurnId: hit.turnId,
               entityIds: hit.entityIds,
               reversal: hit.inverse.label,
+              reversibleSteps: hit.reversibleSteps.map((s) => ({
+                step: s.step,
+                tool: s.toolName,
+                entityIds: s.entityIds,
+                reversal: s.inverse.label,
+              })),
               irreversibleSteps: hit.irreversibleSiblings,
               partial: hit.irreversibleSiblings.length > 0,
             },
@@ -381,10 +412,35 @@ defineCapability({
         },
       };
     }
-    const result = await hit.inverse.run(ctx, {
-      ids: hit.entityIds,
-      orgId: ctx.persona.orgId,
-    });
+    // Replay every reversible step LIFO. We tolerate per-step failures
+    // and report them honestly — this is partial-undo by design.
+    const stepResults: Array<{
+      step: number;
+      tool: string;
+      ok: boolean;
+      undoneEntityIds: string[];
+      errorMessage?: string;
+    }> = [];
+    for (const s of hit.reversibleSteps) {
+      const r = await s.inverse.run(ctx, { ids: s.entityIds, orgId: ctx.persona.orgId });
+      stepResults.push({
+        step: s.step,
+        tool: s.toolName,
+        ok: r.ok,
+        undoneEntityIds: r.undoneEntityIds,
+        errorMessage: r.errorMessage,
+      });
+    }
+    const allUndone = stepResults.flatMap((r) => r.undoneEntityIds);
+    const anyOk = stepResults.some((r) => r.ok);
+    const result = {
+      ok: anyOk,
+      undoneEntityIds: allUndone,
+      errorMessage: anyOk
+        ? undefined
+        : stepResults.find((r) => r.errorMessage)?.errorMessage ??
+          "no reversible step affected any rows",
+    };
     if (!result.ok) {
       return {
         ok: false,
@@ -406,8 +462,10 @@ defineCapability({
         undoTurnId: ctx.turnId,
         undoneEntityIds: result.undoneEntityIds,
         reversal: hit.inverse.label,
-        // Persist the irreversible-step report so audit timelines
-        // explain the partial-undo truth even when nobody clicks /help.
+        // Per-step replay results — preserves "step 3 succeeded, step 1
+        // failed" detail so the audit timeline tells the partial-undo
+        // truth even when nobody clicks /help.
+        stepResults,
         irreversibleSteps: hit.irreversibleSiblings,
       },
       payloadSummary:
@@ -422,8 +480,9 @@ defineCapability({
         originalTurnId: hit.turnId,
         toolName: hit.toolName,
         entityIds: result.undoneEntityIds,
+        stepResults,
         irreversibleSteps: hit.irreversibleSiblings,
-        partial: hit.irreversibleSiblings.length > 0,
+        partial: hit.irreversibleSiblings.length > 0 || stepResults.some((r) => !r.ok),
       },
     };
   },
