@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { db, pool, atelierEngagementAccess } from "@workspace/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { isRestrictedPersona } from "./personaRoles.js";
 
 /**
  * Per-request Row-Level-Security context for The Atelier.
@@ -102,7 +103,7 @@ export async function withRls<T>(
  */
 export function attachRls(req: Request, _res: Response, next: NextFunction): void {
   const persona = req.atelierPersona;
-  const restricted = persona && (persona.role === "contractor" || persona.role === "partner_firm_resource");
+  const restricted = !!persona && isRestrictedPersona(persona.role);
   if (!restricted) {
     (req as Request & { atelierRls?: AtelierRlsContext }).atelierRls = ctxFromReq(req);
     return next();

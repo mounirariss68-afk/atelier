@@ -78,10 +78,11 @@ interface PersonWire {
   costToAicoPerDay?: number | null;
 }
 
-const COMP_ROLES = new Set(["partner", "operations"]);
+// Task #292 — Compensation visibility now spans leadership + finance + HR.
+import { canViewCompensation } from "./personaRoles.js";
 
 function canSeeComp(role: string | undefined | null): boolean {
-  return !!role && COMP_ROLES.has(role);
+  return canViewCompensation(role);
 }
 
 function ensurePersona(
@@ -382,11 +383,16 @@ interface SentinelResult {
 }
 
 async function runAccessSentinel(input: SentinelInput): Promise<SentinelResult> {
-  // Policy 1 — only Partner / Operations / Engagement Lead may write grants.
+  // Task #292 — Policy 1: only partner-tier (founding_partner|partner),
+  // senior_manager (replaces engagement_lead), or finance/hr (split from
+  // operations) may write grants.
+  const r = input.actor.role;
   const writerOk =
-    input.actor.role === "partner" ||
-    input.actor.role === "operations" ||
-    input.actor.role === "engagement_lead";
+    r === "founding_partner" ||
+    r === "partner" ||
+    r === "senior_manager" ||
+    r === "finance" ||
+    r === "hr";
   if (!writerOk) {
     return {
       ok: false,
@@ -1042,10 +1048,11 @@ router.post("/roster/access", async (req, res, next) => {
       return;
     }
     // Task #254 round-10 — engagement-scoped authz on the grant/revoke
-    // endpoint itself (closes a privilege-escalation path where an
-    // engagement_lead could mutate the access graph for engagements they
-    // are not on). Partner / Operations retain firm-wide scope.
-    if (me.role === "engagement_lead") {
+    // endpoint itself (closes a privilege-escalation path where a per-
+    // engagement lead could mutate the access graph for engagements they
+    // are not on). Partner-tier + finance/hr retain firm-wide scope.
+    // Task #292 — engagement_lead persona is now senior_manager.
+    if (me.role === "senior_manager") {
       const eng = await ensureEngAccess(res, me, body.engagementId);
       if (!eng) return;
     }
@@ -1155,13 +1162,16 @@ export async function revokeNonEmployeeAccessOnEngagementClose(args: {
       ),
     );
   // Internal AICo roles keep access (PRD §8.1); everyone else is auto-revoked.
+  // Task #292 — 9-persona model. partner_firm_resource and contractor are
+  // intentionally excluded so the Sentinel still revokes their grants on
+  // close. board_observer is read-only at the policy layer.
   const INTERNAL = new Set([
+    "founding_partner",
     "partner",
-    "engagement_lead",
-    "sme",
-    "ai_engineer",
-    "business_developer",
-    "operations",
+    "senior_manager",
+    "consultant",
+    "finance",
+    "hr",
   ]);
   const targets = grants.filter((g) => !INTERNAL.has(g.role));
   if (targets.length === 0) return { revokedCount: 0, revokedUserIds: [] };

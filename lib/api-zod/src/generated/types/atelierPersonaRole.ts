@@ -10,12 +10,13 @@ export type AtelierPersonaRole =
   (typeof AtelierPersonaRole)[keyof typeof AtelierPersonaRole];
 
 export const AtelierPersonaRole = {
+  founding_partner: "founding_partner",
   partner: "partner",
-  engagement_lead: "engagement_lead",
-  sme: "sme",
-  ai_engineer: "ai_engineer",
-  business_developer: "business_developer",
-  operations: "operations",
+  finance: "finance",
+  hr: "hr",
+  senior_manager: "senior_manager",
+  consultant: "consultant",
   contractor: "contractor",
   partner_firm_resource: "partner_firm_resource",
+  board_observer: "board_observer",
 } as const;

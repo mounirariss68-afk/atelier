@@ -43,7 +43,11 @@ export function TopNav() {
   // Ledger / Roster / Finance live in the Home → "Workspace" shelf;
   // Forecasts are an integrated tab inside Opportunities. The underlying
   // routes still resolve so deep-links from reports/dossiers don't die.
-  const APPROVER_ROLES = new Set(["partner", "operations", "engagement_lead"]);
+  // Task #292 — 9-persona model: founding_partner + partner sign off as
+  // partners; senior_manager + finance act as lead approvers (replacing the
+  // old engagement_lead persona and the operations split).
+  const APPROVER_ROLES = new Set(["founding_partner", "partner", "senior_manager", "finance"]);
+  const PARTNER_TIER = new Set(["founding_partner", "partner"]);
   const isApprover = !!me?.role && APPROVER_ROLES.has(me.role);
   // Pull a small count of timesheets currently waiting on the active
   // persona so the Home tab can show a peripheral cue (the badge that
@@ -51,7 +55,7 @@ export function TopNav() {
   const [pendingApprovals, setPendingApprovals] = React.useState<number>(0);
   React.useEffect(() => {
     if (!isApprover || !me?.role) { setPendingApprovals(0); return; }
-    const stage = me.role === "partner" ? "lead_approved" : "submitted";
+    const stage = PARTNER_TIER.has(me.role) ? "lead_approved" : "submitted";
     let alive = true;
     void fetch(`/api/atelier/ledger/approvals?stage=${stage}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { groups: [] }))
@@ -132,6 +136,11 @@ export function TopNav() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-bg-elevate border-border text-text">
+                {/* Task #292 — persona switcher gated behind an env flag so
+                    production builds default to the real auth identity and
+                    only demo / dev builds expose the picker. */}
+                {import.meta.env.VITE_ATELIER_PERSONA_SWITCHER === "true" && (
+                  <>
                 <div className="px-2 py-1.5 text-xs font-mono text-text-faint uppercase tracking-wider">
                   Switch Persona
                 </div>
@@ -151,11 +160,13 @@ export function TopNav() {
                     </div>
                   </DropdownMenuItem>
                 ))}
+                  </>
+                )}
                 <div className="border-t border-border mt-1 pt-1">
                   <DropdownMenuItem asChild className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer">
                     <Link href="/settings">Settings</Link>
                   </DropdownMenuItem>
-                  {me.role === "partner" && (
+                  {(me.role === "founding_partner" || me.role === "hr") && (
                     <DropdownMenuItem asChild className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer">
                       <Link href="/admin">Admin Console</Link>
                     </DropdownMenuItem>

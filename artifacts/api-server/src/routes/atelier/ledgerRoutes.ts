@@ -78,28 +78,32 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
   return req.atelierPersona;
 }
 
+// Task #292 — Approval / partner-firm-hour gates now route through the
+// 9-persona model (founding_partner | partner | finance | hr |
+// senior_manager | consultant | contractor | partner_firm_resource |
+// board_observer). See personaRoles.ts for the canonical groupings.
+import {
+  canApproveAsLead as _canApproveLead,
+  canApproveAsPartner as _canApprovePartner,
+  canUploadPartnerFirmHours as _canUploadPartnerFirmHours,
+  canViewPartnerFirmHours as _canViewPartnerFirmHours,
+  canManagePartnerFirm as _canManagePartnerFirm,
+} from "./personaRoles.js";
+
 function canApproveLead(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner" || me.role === "engagement_lead" || me.role === "operations";
+  return _canApproveLead(me.role);
 }
 function canApprovePartner(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner";
+  return _canApprovePartner(me.role);
 }
-// Partner-firm-resource personas (the partner-firm PMs) upload their own
-// firm's hours; partner/operations may also do so on their behalf.
 function canUploadPartnerFirmHours(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner_firm_resource" || me.role === "partner" || me.role === "operations";
+  return _canUploadPartnerFirmHours(me.role);
 }
-// Engagement economics consumers: leadership + the firm whose hours these are.
 function canViewPartnerFirmHours(me: typeof atelierUsers.$inferSelect): boolean {
-  return (
-    me.role === "partner" ||
-    me.role === "operations" ||
-    me.role === "engagement_lead" ||
-    me.role === "partner_firm_resource"
-  );
+  return _canViewPartnerFirmHours(me.role);
 }
 function canManagePartnerFirm(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner" || me.role === "operations";
+  return _canManagePartnerFirm(me.role);
 }
 
 // Object-level ACL for the partner-firm-hours endpoints. Returns the caller's
@@ -862,10 +866,11 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
   if (role === "lead" && !canApproveLead(me)) return void res.status(403).json({ error: "forbidden" });
   if (role === "partner" && !canApprovePartner(me)) return void res.status(403).json({ error: "forbidden" });
 
-  // Object-level authorization: an engagement_lead persona may only
-  // countersign entries on engagements they actually lead. Partners and
-  // operations bypass this check (broad rights).
-  if (engagementId && me.role === "engagement_lead") {
+  // Object-level authorization (Task #292 — 9-persona model).
+  // senior_manager (replaces engagement_lead) may only countersign entries
+  // on engagements they actually lead. Partner-tier + finance bypass this
+  // check (firm-wide scope).
+  if (engagementId && me.role === "senior_manager") {
     const [eng] = await db
       .select()
       .from(atelierEngagements)
@@ -1256,7 +1261,8 @@ router.get("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
 router.post("/ledger/nudges/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner" && me.role !== "operations") {
+  // Task #292 — partner-tier + finance can fire the manual nudge.
+  if (!canApprovePartner(me) && me.role !== "finance") {
     return void res.status(403).json({ error: "forbidden" });
   }
   const force = req.body?.force as "submit_due" | "approve_due" | undefined;
@@ -1264,13 +1270,13 @@ router.post("/ledger/nudges/run", async (req, res) => {
   res.json(out);
 });
 
-// Manual trigger for the daily Time Steward draft pass — partner/operations
-// only. Lets QA and runbooks force the same backfill that runs Mon 06:00 GST
-// from startLedgerNudgeJob's 15-minute ticker.
+// Manual trigger for the daily Time Steward draft pass — partner-tier +
+// finance only. Lets QA and runbooks force the same backfill that runs
+// Mon 06:00 GST from startLedgerNudgeJob's 15-minute ticker.
 router.post("/ledger/steward/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner" && me.role !== "operations") {
+  if (!canApprovePartner(me) && me.role !== "finance") {
     return void res.status(403).json({ error: "forbidden" });
   }
   const out = await runLedgerStewardTick({ force: true });
@@ -1302,9 +1308,10 @@ function lastNWeeks(n: number): { weekIso: string; weekStartDate: string }[] {
 }
 
 function defaultTargetPctFor(role: string | null | undefined, seniority: string | null | undefined): number {
-  if (role === "partner" || seniority === "partner") return 0.5;
-  if (role === "ai_engineer") return 0.75;
-  if (role === "engagement_lead" || seniority === "principal") return 0.65;
+  // Task #292 — partner-tier (founding_partner|partner) keeps the same
+  // 50% target; senior_manager replaces engagement_lead at 65%.
+  if (role === "partner" || role === "founding_partner" || seniority === "partner") return 0.5;
+  if (role === "senior_manager" || seniority === "principal") return 0.65;
   if (seniority === "manager" || seniority === "senior_consultant") return 0.7;
   return 0.75;
 }
@@ -1329,9 +1336,8 @@ router.get("/ledger/utilization/person/:id", async (req, res) => {
       personId.startsWith("emp_") ? eq(atelierEmployees.id, personId) : eq(atelierEmployees.userId, personId),
     ));
 
-  // ACL: self OR leadership
-  const isLeadership = me.role === "partner" || me.role === "operations" || me.role === "engagement_lead";
-  if (!isLeadership) {
+  // Task #292 — leadership for utilization viewing = lead-approver tier.
+  if (!canApproveLead(me)) {
     if (!emp || emp.userId !== me.id) return void res.status(403).json({ error: "forbidden" });
   }
   const resolvedPersonId = emp?.id ?? personId;
@@ -1429,7 +1435,8 @@ router.get("/ledger/utilization/engagement/:slug", async (req, res) => {
     ));
   if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
 
-  const isLeadership = me.role === "partner" || me.role === "operations";
+  // Task #292 — partner-tier + finance + the named engagement lead/partner.
+  const isLeadership = canApprovePartner(me) || me.role === "finance";
   const isLead = me.id === eng.engagementLeadId || me.id === eng.partnerOwnerId;
   if (!isLeadership && !isLead) return void res.status(403).json({ error: "forbidden" });
 
@@ -1896,7 +1903,8 @@ async function hydrateUtilizationNumericBlock(
         isNull(atelierEmployees.deletedAt),
         targetId.startsWith("emp_") ? eq(atelierEmployees.id, targetId) : eq(atelierEmployees.userId, targetId),
       ));
-    const isLeadership = me.role === "partner" || me.role === "operations" || me.role === "engagement_lead";
+    // Task #292 — lead-tier (partner|founding_partner|senior_manager|finance).
+    const isLeadership = canApproveLead(me);
     if (!isLeadership && (!emp || emp.userId !== me.id)) return { error: "forbidden", status: 403 };
     const resolvedId = emp?.id ?? targetId;
     const last4Iso = lastNWeeks(4).map((w) => w.weekIso);
@@ -1945,7 +1953,8 @@ async function hydrateUtilizationNumericBlock(
         targetId.includes("eng_") ? eq(atelierEngagements.id, targetId) : eq(atelierEngagements.slug, targetId),
       ));
     if (!eng) return { error: "engagement-not-found", status: 404 };
-    const isLeadership = me.role === "partner" || me.role === "operations";
+    // Task #292 — partner-tier + finance + named lead/partner-owner.
+    const isLeadership = canApprovePartner(me) || me.role === "finance";
     const isLead = me.id === eng.engagementLeadId || me.id === eng.partnerOwnerId;
     if (!isLeadership && !isLead) return { error: "forbidden", status: 403 };
     // Reuse the engagement endpoint's pricing + actuals math by calling the
@@ -2032,7 +2041,8 @@ async function hydrateUtilizationNumericBlock(
 router.post("/ledger/utilization/snapshot/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner" && me.role !== "operations") return void res.status(403).json({ error: "forbidden" });
+  // Task #292 — partner-tier + finance.
+  if (!canApprovePartner(me) && me.role !== "finance") return void res.status(403).json({ error: "forbidden" });
   const out = await runUtilizationSnapshotTick({ force: true, weeksBack: 8 });
   res.json(out);
 });
@@ -2040,7 +2050,7 @@ router.post("/ledger/utilization/snapshot/run", async (req, res) => {
 router.post("/ledger/burn-sentinel/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (me.role !== "partner" && me.role !== "operations") return void res.status(403).json({ error: "forbidden" });
+  if (!canApprovePartner(me) && me.role !== "finance") return void res.status(403).json({ error: "forbidden" });
   const out = await runBurnSentinelTick({ force: true });
   res.json(out);
 });
@@ -2053,7 +2063,8 @@ router.get("/ledger/burn-sentinel/engagement/:id", async (req, res) => {
     .from(atelierEngagements)
     .where(and(eq(atelierEngagements.id, req.params.id), isNull(atelierEngagements.deletedAt)));
   if (!eng) return void res.status(404).json({ error: "engagement-not-found" });
-  const isLeadership = me.role === "partner" || me.role === "operations";
+  // Task #292 — partner-tier + finance + named engagement lead/partner-owner.
+  const isLeadership = canApprovePartner(me) || me.role === "finance";
   const isLead = me.id === eng.engagementLeadId || me.id === eng.partnerOwnerId;
   if (!isLeadership && !isLead) return void res.status(403).json({ error: "forbidden" });
   const summary = await getEngagementBurnSummary(req.params.id);

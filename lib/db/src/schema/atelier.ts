@@ -36,7 +36,15 @@ export const atelierUsers = pgTable(
     email: text("email").notNull(),
     name: text("name").notNull(),
     initials: text("initials").notNull(),
-    role: text("role").notNull(), // partner | engagement_lead | sme | ai_engineer | business_developer
+    // Task #292 — 9-persona model: founding_partner | partner | finance | hr |
+    // senior_manager | consultant | contractor | partner_firm_resource |
+    // board_observer. Plain text (not pg enum) so the rolling migration in
+    // scripts/src/migrate-persona-enum.ts can update values without an enum
+    // ALTER. `legacy_role` preserves the pre-migration value for one release
+    // for audit; `bd_active` flags personas allowed to author BD/proposal work.
+    role: text("role").notNull(),
+    legacyRole: text("legacy_role"),
+    bdActive: boolean("bd_active").notNull().default(false),
     roleLabel: text("role_label").notNull(),
     title: text("title").notNull(),
     avatarUrl: text("avatar_url"),

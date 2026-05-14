@@ -91,66 +91,84 @@ const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 // ============================================================
 // 1) PERSONAS — five named accounts (spec §9.2)
 // ============================================================
+// Task #292 — Recast to the 9-persona model.
+//   founding_partner | partner | finance | hr | senior_manager |
+//   consultant      | contractor | partner_firm_resource | board_observer
+//
+// `bd_active` flags personas authorized to drive BD/proposal work; partner
+// tier is always BD-active regardless of the column.
 const PERSONAS = [
   {
     id: "p_mounir_ariss",
     email: "mounir@aico.ai",
     name: "Mounir Ariss",
     initials: "MA",
-    role: "partner",
+    role: "founding_partner",
     roleLabel: "Founding Partner",
     title: "Founding Partner",
     permissions: ["partner.approve", "partner.override", "admin"],
+    bdActive: true,
+    legacyRole: "partner",
   },
   {
     id: "p_gokhan_guney",
     email: "gokhan@aico.ai",
     name: "Gökhan Güney",
     initials: "GG",
-    role: "partner",
+    role: "founding_partner",
     roleLabel: "Founding Partner",
     title: "Founding Partner",
     permissions: ["partner.approve", "partner.override", "admin"],
+    bdActive: true,
+    legacyRole: "partner",
   },
   {
     id: "p_layla_haddad",
     email: "layla@aico.ai",
     name: "Layla Haddad",
     initials: "LH",
-    role: "engagement_lead",
-    roleLabel: "Engagement Lead",
+    role: "senior_manager",
+    roleLabel: "Senior Manager",
     title: "Principal · Engagements",
     permissions: ["engagement.lead", "deliverable.draft"],
+    bdActive: true,
+    legacyRole: "engagement_lead",
   },
   {
     id: "p_omar_najjar",
     email: "omar@aico.ai",
     name: "Omar Najjar",
     initials: "ON",
-    role: "sme",
-    roleLabel: "Domain SME",
-    title: "Senior SME · Public Sector",
+    role: "consultant",
+    roleLabel: "Consultant — Public Sector",
+    title: "Senior Consultant · Public Sector",
     permissions: ["sme.review"],
+    bdActive: false,
+    legacyRole: "sme",
   },
   {
     id: "p_sara_qureshi",
     email: "sara@aico.ai",
     name: "Sara Qureshi",
     initials: "SQ",
-    role: "ai_engineer",
-    roleLabel: "AI Engineer",
+    role: "consultant",
+    roleLabel: "Consultant — AI Engineering",
     title: "Lead Engineer · Agent Runtime",
     permissions: ["agent.deploy", "prompt.author"],
+    bdActive: false,
+    legacyRole: "ai_engineer",
   },
   {
     id: "p_khaled_aziz",
     email: "khaled@aico.ai",
     name: "Khaled Aziz",
     initials: "KA",
-    role: "business_developer",
-    roleLabel: "Business Development",
+    role: "consultant",
+    roleLabel: "Consultant — Pursuit",
     title: "Director · Pursuit",
     permissions: ["pipeline.write"],
+    bdActive: true,
+    legacyRole: "business_developer",
   },
 ] as const;
 

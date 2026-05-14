@@ -113,12 +113,11 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
   return req.atelierPersona;
 }
 
-// TODO(Task #292 — Persona Replacement / A3): the temporary admin gate is
-// `partner | operations` against the legacy 4-role enum. When the 9-persona
-// model lands, swap this for the canonical "can_admin_reference_data"
-// capability check derived from the new persona table.
+// Task #292 — Re-gated to founding_partner + hr per the 9-persona model.
+import { canAdminReferenceData as _canAdminReferenceData } from "./personaRoles.js";
+
 function canAdminReferenceData(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner" || me.role === "operations";
+  return _canAdminReferenceData(me.role);
 }
 
 function requireAdmin(req: Request, res: Response): typeof atelierUsers.$inferSelect | null {

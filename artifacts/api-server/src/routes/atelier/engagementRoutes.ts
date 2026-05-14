@@ -87,7 +87,8 @@ async function loadEng(id: string) {
 export async function accessibleEngagementIds(
   me: typeof atelierUsers.$inferSelect,
 ): Promise<{ all: true } | { all: false; ids: Set<string> }> {
-  if (me.role === "partner") return { all: true };
+  // Task #292 — founding_partner + partner both have firm-wide visibility.
+  if (me.role === "partner" || me.role === "founding_partner") return { all: true };
   const grants = await db
     .select({ engagementId: atelierEngagementAccess.engagementId })
     .from(atelierEngagementAccess)
@@ -117,7 +118,8 @@ export async function ensureEngAccess(
     res.status(404).json({ error: "engagement-not-found" });
     return null;
   }
-  if (me.role === "partner") return eng;
+  // Task #292 — founding_partner + partner both bypass engagement ACLs.
+  if (me.role === "partner" || me.role === "founding_partner") return eng;
   const [grant] = await db
     .select()
     .from(atelierEngagementAccess)
@@ -304,12 +306,18 @@ router.post("/engagements/:engId/charter/versions/:versionId/approve", async (re
   // Role spoofing guard: a persona may only approve in their own seat.
   // Partners may also approve as `lead` (they outrank lead); leads cannot
   // self-promote into the partner sign-off slot.
-  if (parsed.data.role === "partner" && me.role !== "partner") {
+  // Task #292 — partner sign-off open to founding_partner + partner; lead
+  // sign-off open to senior_manager (replaces engagement_lead persona) plus
+  // partner-tier outranking. Per-engagement lead rights are now ALSO
+  // controllable via atelier_engagement_access.roleOnEngagement = 'lead'
+  // (downstream task), but the persona check stays as the floor.
+  const isPartnerTier = me.role === "partner" || me.role === "founding_partner";
+  if (parsed.data.role === "partner" && !isPartnerTier) {
     res.status(403).json({ error: "role-forbidden", reason: "Only a partner persona can record partner approval." });
     return;
   }
-  if (parsed.data.role === "lead" && me.role !== "engagement_lead" && me.role !== "partner") {
-    res.status(403).json({ error: "role-forbidden", reason: "Only the engagement lead (or partner) can record lead approval." });
+  if (parsed.data.role === "lead" && me.role !== "senior_manager" && !isPartnerTier) {
+    res.status(403).json({ error: "role-forbidden", reason: "Only a senior manager (or partner) can record lead approval." });
     return;
   }
   // Two-checkpoint sequence: Lead review → Partner sign-off → live.
@@ -1136,20 +1144,22 @@ router.post("/artifacts/:artifactId/translate", async (req, res) => {
 router.patch("/engagements/:engId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (
-    me.role !== "partner" &&
-    me.role !== "engagement_lead" &&
-    me.role !== "operations"
-  ) {
+  // Task #292 — 9-persona model. Engagement updates allowed to founding
+  // partners, partners, senior managers (replaces engagement_lead), and
+  // finance (replaces ops). Per-engagement leadership is still enforced
+  // below for non-partner-tier callers.
+  const isPartnerTierUpd = me.role === "partner" || me.role === "founding_partner";
+  const isFinanceUpd = me.role === "finance";
+  if (!isPartnerTierUpd && me.role !== "senior_manager" && !isFinanceUpd) {
     res.status(403).json({ error: "actor-not-authorized-to-update-engagement" });
     return;
   }
   // Task #254 round-8 — close out IDOR on the close hook: a non-partner lead
   // must hold an active access grant on THIS engagement before being allowed
   // to mutate plmStage (which can fire the Sentinel auto-revoke side effect).
-  // Partners and Operations bypass the per-engagement check (firm-wide scope).
+  // Partner-tier + finance bypass the per-engagement check (firm-wide scope).
   let eng;
-  if (me.role === "partner" || me.role === "operations") {
+  if (isPartnerTierUpd || isFinanceUpd) {
     eng = await loadEng(req.params.engId);
   } else {
     eng = await ensureEngAccess(res, me, req.params.engId);
