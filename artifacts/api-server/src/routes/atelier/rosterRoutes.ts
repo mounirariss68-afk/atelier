@@ -80,6 +80,7 @@ interface PersonWire {
 
 // Task #292 — Compensation visibility now spans leadership + finance + HR.
 import { canViewCompensation, canViewPersonnelContract } from "./personaRoles.js";
+import { withRls } from "./rls.js";
 
 function canSeeComp(role: string | undefined | null): boolean {
   return canViewCompensation(role);
@@ -1097,6 +1098,9 @@ router.post("/roster/access", async (req, res, next) => {
 });
 
 // Conflict disclosures (read-only for this task; full CRUD lands in #255).
+// Task #293 — read through atelier_conflict_disclosures_v inside withRls so
+// disclosure_text / nature / scope_impact / notes are masked at the DB
+// layer for non personnel-contract viewers (HR + leadership + self).
 router.get("/roster/people/:id/conflicts", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1106,18 +1110,19 @@ router.get("/roster/people/:id/conflicts", async (req, res, next) => {
       res.status(404).json({ error: "person-not-found" });
       return;
     }
-    const rows = await db
-      .select()
-      .from(atelierConflictDisclosures)
-      .where(
-        and(
-          eq(atelierConflictDisclosures.personType, person.workerType),
-          eq(atelierConflictDisclosures.personId, person.id),
-          isNull(atelierConflictDisclosures.deletedAt),
-        ),
-      )
-      .orderBy(desc(atelierConflictDisclosures.disclosedAt));
-    res.json({ conflicts: rows });
+    const result = await withRls(req, async (tx) => {
+      return tx.execute(sql`
+        SELECT id, person_type, person_id, disclosure_text, disclosed_at,
+               status, notes, declared_party, nature, scope_impact,
+               declared_at, last_reviewed_at
+          FROM atelier_conflict_disclosures_v
+         WHERE person_type = ${person.workerType}
+           AND person_id   = ${person.id}
+           AND deleted_at IS NULL
+         ORDER BY disclosed_at DESC
+      `);
+    });
+    res.json({ conflicts: result.rows });
   } catch (err) {
     next(err);
   }
