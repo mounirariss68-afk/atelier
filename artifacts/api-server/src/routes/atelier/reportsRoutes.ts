@@ -35,6 +35,7 @@ import {
   atelierNotifications,
   atelierAuditEvents,
   atelierDealPricings,
+  atelierOpportunityStageTransitions,
 } from "@workspace/db";
 
 function rid(p: string): string {
@@ -60,14 +61,18 @@ type TemplateId =
   | "hidden_competitor"
   | "salon_health"
   | "atelier_reuse_leaderboard"
-  | "senior_delivery_proof";
+  | "senior_delivery_proof"
+  // Task #296 — Runner-class reports.
+  | "runner_aging"
+  | "convert_to_runner_conversion"
+  | "runner_to_contract_closure_time";
 
 const TEMPLATES: Array<{ id: TemplateId; name: string; abstract: string; columns: string[] }> = [
   {
     id: "pipeline_waterfall",
-    name: "Pipeline Waterfall",
-    abstract: "Movement of opps across stages this quarter (in / out / aged).",
-    columns: ["stage", "count", "weightedValueUsd", "agedRedCount"],
+    name: "5-Band Sales Funnel",
+    abstract: "5-band funnel — Suspect/Prospect/Convert/Runner/Contract — plus terminal sidebar.",
+    columns: ["band", "stage", "count", "weightedValueUsd", "agedRedCount"],
   },
   {
     id: "forecast_by_partner",
@@ -116,6 +121,25 @@ const TEMPLATES: Array<{ id: TemplateId; name: string; abstract: string; columns
     name: "Senior-Delivery Proof",
     abstract: "Engagements with named partner-on-the-pitch presence.",
     columns: ["engagement", "partner", "presenceLine"],
+  },
+  // Task #296 — Runner-class reports.
+  {
+    id: "runner_aging",
+    name: "Runner Aging",
+    abstract: "Every Runner-stage deal with days in stage, decider, and signature path. Sorted by age desc.",
+    columns: ["opportunity", "account", "daysInRunner", "tier", "decider", "signaturePath"],
+  },
+  {
+    id: "convert_to_runner_conversion",
+    name: "Convert→Runner Conversion",
+    abstract: "Per-period rate of deals that moved Convert→Runner, with denominator and trend.",
+    columns: ["period", "convertEntries", "runnerEntries", "conversionPct"],
+  },
+  {
+    id: "runner_to_contract_closure_time",
+    name: "Runner→Contract Closure Time",
+    abstract: "Distribution of contract_signed_at − runner_entered_at for closed deals: median, p75, p90.",
+    columns: ["bucket", "count", "medianDays", "p75Days", "p90Days"],
   },
 ];
 
@@ -199,14 +223,20 @@ async function computeReport(
 ): Promise<{ rows: Array<Record<string, unknown>>; summary: string }> {
   switch (templateId) {
     case "pipeline_waterfall": {
+      // Task #296 — 5-band canonical sales funnel + terminal sidebar.
+      // Working stages render as the funnel; lost / no_decision /
+      // withdrawn render as a stacked terminal tally so closed-deal
+      // volume stays visible without bloating the chart.
       const opps = await db
         .select()
         .from(atelierOpportunities)
         .where(isNull(atelierOpportunities.deletedAt));
-      const stages = ["identify", "shape", "pursue", "won", "lost", "no_go"];
-      const rows = stages.map((stage) => {
-        const list = opps.filter((o) => o.plmStage === stage);
+      const working = ["suspect", "prospect", "convert", "runner", "contract"] as const;
+      const terminal = ["lost", "no_decision", "withdrawn"] as const;
+      const stageRow = (stage: string, band: "funnel" | "terminal") => {
+        const list = opps.filter((o) => (o.salesStage ?? "suspect") === stage);
         return {
+          band,
           stage,
           count: list.length,
           weightedValueUsd: list.reduce(
@@ -215,8 +245,174 @@ async function computeReport(
           ),
           agedRedCount: list.filter((o) => o.daysInStage > 30).length,
         };
-      });
-      return { rows, summary: `${opps.length} live opps across ${stages.length} stages.` };
+      };
+      const rows = [
+        ...working.map((s) => stageRow(s, "funnel")),
+        ...terminal.map((s) => stageRow(s, "terminal")),
+      ];
+      const liveCount = rows
+        .filter((r) => r.band === "funnel")
+        .reduce((a, r) => a + r.count, 0);
+      const closedCount = rows
+        .filter((r) => r.band === "terminal")
+        .reduce((a, r) => a + r.count, 0);
+      return {
+        rows,
+        summary: `${liveCount} live across 5 bands · ${closedCount} closed in terminal sidebar.`,
+      };
+    }
+    case "runner_aging": {
+      // Every Runner-stage deal with days in Runner (sticky timestamp),
+      // decider name, signature path, sorted by age desc.
+      const opps = await db
+        .select()
+        .from(atelierOpportunities)
+        .where(
+          and(eq(atelierOpportunities.salesStage, "runner"), isNull(atelierOpportunities.deletedAt)),
+        );
+      const accts = await db.select().from(atelierAccounts);
+      const aMap = new Map(accts.map((a) => [a.id, a]));
+      const now = Date.now();
+      // Pull the latest Convert→Runner transition per opp so we can show
+      // decider / signaturePath captured at the gate.
+      const transitions = await db
+        .select()
+        .from(atelierOpportunityStageTransitions);
+      const lastByOpp = new Map<string, typeof transitions[number]>();
+      for (const t of transitions) {
+        if (t.toStage !== "runner") continue;
+        const prior = lastByOpp.get(t.opportunityId);
+        if (!prior || t.createdAt > prior.createdAt) lastByOpp.set(t.opportunityId, t);
+      }
+      const rows = opps
+        .map((o) => {
+          const enteredAt = o.runnerEnteredAt?.getTime() ?? null;
+          const days = enteredAt === null ? o.daysInStage : Math.max(0, Math.floor((now - enteredAt) / 86_400_000));
+          const tier = days >= 45 ? "red" : days >= 21 ? "amber" : "fresh";
+          const t = lastByOpp.get(o.id);
+          return {
+            opportunity: o.name,
+            account: aMap.get(o.accountId)?.name ?? o.accountId,
+            daysInRunner: days,
+            tier,
+            decider: t?.decider ?? "",
+            signaturePath: t?.signaturePath ?? "",
+          };
+        })
+        .sort((a, b) => b.daysInRunner - a.daysInRunner);
+      const red = rows.filter((r) => r.tier === "red").length;
+      const amber = rows.filter((r) => r.tier === "amber").length;
+      return {
+        rows,
+        summary: `${rows.length} Runner-stage deals · ${red} red (≥45d) · ${amber} amber (≥21d).`,
+      };
+    }
+    case "convert_to_runner_conversion": {
+      // Per-period Convert→Runner cohort conversion. Denominator (cohort)
+      // = distinct opps whose *first* Convert entry fell in the period.
+      // Numerator = members of that cohort who later (any time after the
+      // cohort entry) reached Runner. This guarantees pct ∈ [0, 100] and
+      // answers "of the deals we converted in month X, how many became
+      // runners?" — independent of when the runner entry happened.
+      const transitions = await db
+        .select()
+        .from(atelierOpportunityStageTransitions);
+      const sorted = [...transitions].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      );
+      const firstConvertAt = new Map<string, Date>();
+      const firstRunnerAt = new Map<string, Date>();
+      for (const t of sorted) {
+        if (t.toStage === "convert" && !firstConvertAt.has(t.opportunityId)) {
+          firstConvertAt.set(t.opportunityId, t.createdAt);
+        } else if (t.toStage === "runner" && !firstRunnerAt.has(t.opportunityId)) {
+          firstRunnerAt.set(t.opportunityId, t.createdAt);
+        }
+      }
+      const periodOf = (d: Date) =>
+        `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      type Bucket = {
+        period: string;
+        convertEntries: number;
+        runnerEntries: number;
+        conversionPct: number;
+      };
+      const cohort = new Map<string, { ids: Set<string>; converted: Set<string> }>();
+      for (const [oppId, convertedAt] of firstConvertAt) {
+        const p = periodOf(convertedAt);
+        if (!cohort.has(p)) cohort.set(p, { ids: new Set(), converted: new Set() });
+        const bucket = cohort.get(p)!;
+        bucket.ids.add(oppId);
+        const runnerAt = firstRunnerAt.get(oppId);
+        if (runnerAt && runnerAt.getTime() >= convertedAt.getTime()) {
+          bucket.converted.add(oppId);
+        }
+      }
+      const rows: Bucket[] = Array.from(cohort.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([p, b]) => ({
+          period: p,
+          convertEntries: b.ids.size,
+          runnerEntries: b.converted.size,
+          conversionPct: b.ids.size === 0 ? 0 : Math.round((b.converted.size * 1000) / b.ids.size) / 10,
+        }));
+      const denomTotal = rows.reduce((a, r) => a + r.convertEntries, 0);
+      const numTotal = rows.reduce((a, r) => a + r.runnerEntries, 0);
+      const overall = denomTotal ? Math.round((numTotal * 1000) / denomTotal) / 10 : 0;
+      return {
+        rows,
+        summary: `${rows.length} period(s) · overall Convert→Runner cohort conversion ${overall}%.`,
+      };
+    }
+    case "runner_to_contract_closure_time": {
+      // Distribution of (contract_signed_at − runner_entered_at) for
+      // every opp that has both timestamps. We bucket all deals into a
+      // single distribution row plus per-quarter rows so partners can
+      // see the trend.
+      const opps = await db
+        .select()
+        .from(atelierOpportunities)
+        .where(isNull(atelierOpportunities.deletedAt));
+      const closed = opps
+        .filter((o) => o.runnerEnteredAt && o.contractSignedAt)
+        .map((o) => ({
+          quarter: (() => {
+            const d = o.contractSignedAt!;
+            return `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+          })(),
+          days: Math.max(
+            0,
+            Math.floor(
+              (o.contractSignedAt!.getTime() - o.runnerEnteredAt!.getTime()) / 86_400_000,
+            ),
+          ),
+        }));
+      const stats = (days: number[]): { medianDays: number; p75Days: number; p90Days: number } => {
+        if (days.length === 0) return { medianDays: 0, p75Days: 0, p90Days: 0 };
+        const sorted = [...days].sort((a, b) => a - b);
+        const pick = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+        return { medianDays: pick(0.5), p75Days: pick(0.75), p90Days: pick(0.9) };
+      };
+      const allRow = {
+        bucket: "all",
+        count: closed.length,
+        ...stats(closed.map((c) => c.days)),
+      };
+      const byQ = new Map<string, number[]>();
+      for (const c of closed) {
+        if (!byQ.has(c.quarter)) byQ.set(c.quarter, []);
+        byQ.get(c.quarter)!.push(c.days);
+      }
+      const quarterRows = Array.from(byQ.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([q, ds]) => ({ bucket: q, count: ds.length, ...stats(ds) }));
+      return {
+        rows: [allRow, ...quarterRows],
+        summary:
+          closed.length === 0
+            ? "No Runner→Contract closures recorded yet."
+            : `${closed.length} closure(s) · median ${allRow.medianDays}d · p90 ${allRow.p90Days}d.`,
+      };
     }
     case "forecast_by_partner": {
       const opps = await db

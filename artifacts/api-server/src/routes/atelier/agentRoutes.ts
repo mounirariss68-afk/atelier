@@ -129,6 +129,11 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
       salesStage !== "lost" &&
       salesStage !== "no_decision" &&
       salesStage !== "withdrawn",
+    // Task #296 — sub-status chip + sticky timestamps for kanban aging
+    // and the new Runner Aging / Closure Time reports.
+    subStatus: o.subStatus ?? null,
+    runnerEnteredAt: o.runnerEnteredAt?.toISOString() ?? null,
+    contractSignedAt: o.contractSignedAt?.toISOString() ?? null,
     createdAt: o.createdAt.toISOString(),
   };
 }

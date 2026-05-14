@@ -31,5 +31,11 @@ export interface Opportunity {
   nextMilestoneDate?: string | null;
   sourceLead: string;
   stalled?: boolean;
+  /** @nullable */
+  subStatus?: string | null;
+  /** @nullable */
+  runnerEnteredAt?: Date | null;
+  /** @nullable */
+  contractSignedAt?: Date | null;
   createdAt: Date;
 }

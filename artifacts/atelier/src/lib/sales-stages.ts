@@ -118,6 +118,29 @@ export const TERMINAL_REASON_CODES: Record<
 
 export const STALLED_THRESHOLD_DAYS = 21;
 
+/**
+ * Runner-aging tier (Task #296) — drives the colored left-border on
+ * Runner-column cards in Pipeline.tsx and the "Runner Aging" report.
+ * Procurement-stuck deals are a distinct risk class: ≤21d is healthy,
+ * 21–44d amber (chase legal/procurement), ≥45d red (escalate to partner).
+ */
+export type RunnerAgeTier = "fresh" | "amber" | "red";
+export const RUNNER_AGE_AMBER_DAYS = 21;
+export const RUNNER_AGE_RED_DAYS = 45;
+
+export function runnerAgeDays(runnerEnteredAt: string | null | undefined, now: Date = new Date()): number | null {
+  if (!runnerEnteredAt) return null;
+  const t = Date.parse(runnerEnteredAt);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((now.getTime() - t) / 86_400_000));
+}
+
+export function runnerAgeTier(days: number | null): RunnerAgeTier {
+  if (days === null || days < RUNNER_AGE_AMBER_DAYS) return "fresh";
+  if (days < RUNNER_AGE_RED_DAYS) return "amber";
+  return "red";
+}
+
 export function stageTone(s: SalesStage): "default" | "gold" | "green" | "amber" | "red" {
   if (s === "contract") return "green";
   if (s === "lost" || s === "no_decision" || s === "withdrawn") return "red";

@@ -316,6 +316,9 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
   nextMilestoneDate: zod.string().nullish(),
   sourceLead: zod.string(),
   stalled: zod.boolean().optional(),
+  subStatus: zod.string().nullish(),
+  runnerEnteredAt: zod.coerce.date().nullish(),
+  contractSignedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const AtelierListOpportunitiesResponse = zod.array(
@@ -446,6 +449,9 @@ export const AtelierGetOpportunityResponse = zod.object({
   nextMilestoneDate: zod.string().nullish(),
   sourceLead: zod.string(),
   stalled: zod.boolean().optional(),
+  subStatus: zod.string().nullish(),
+  runnerEnteredAt: zod.coerce.date().nullish(),
+  contractSignedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -521,6 +527,9 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
   nextMilestoneDate: zod.string().nullish(),
   sourceLead: zod.string(),
   stalled: zod.boolean().optional(),
+  subStatus: zod.string().nullish(),
+  runnerEnteredAt: zod.coerce.date().nullish(),
+  contractSignedAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -613,6 +622,9 @@ export const AtelierCreateStageTransitionResponse = zod.object({
     nextMilestoneDate: zod.string().nullish(),
     sourceLead: zod.string(),
     stalled: zod.boolean().optional(),
+    subStatus: zod.string().nullish(),
+    runnerEnteredAt: zod.coerce.date().nullish(),
+    contractSignedAt: zod.coerce.date().nullish(),
     createdAt: zod.coerce.date(),
   }),
   transition: zod.object({

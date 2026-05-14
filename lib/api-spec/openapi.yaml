@@ -2505,6 +2505,10 @@ components:
         nextMilestoneDate: { type: ["string", "null"] }
         sourceLead: { type: string }
         stalled: { type: boolean }
+        # Task #295/#296 — sub-status chip for kanban + sticky stage timestamps.
+        subStatus: { type: ["string", "null"] }
+        runnerEnteredAt: { type: ["string", "null"], format: date-time }
+        contractSignedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
 
     OpportunityStageTransition:

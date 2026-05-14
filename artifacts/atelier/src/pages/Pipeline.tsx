@@ -28,10 +28,18 @@ import { StageTransitionDialog } from "@/components/StageTransitionDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   SALES_STAGES,
+  WORKING_STAGES,
+  TERMINAL_STAGES,
   SALES_STAGE_LABEL,
   STALLED_THRESHOLD_DAYS,
+  SUB_STATUS_LABEL,
   stageTone,
   SALES_STAGE_DESCRIPTION,
+  runnerAgeDays,
+  runnerAgeTier,
+  RUNNER_AGE_AMBER_DAYS,
+  RUNNER_AGE_RED_DAYS,
+  type RunnerAgeTier,
 } from "@/lib/sales-stages";
 
 type OppItem = Opportunity;
@@ -54,7 +62,8 @@ function StageColumn({
   weighted: number;
 }) {
   return (
-    <div className="min-w-[280px] w-[280px] shrink-0 flex flex-col gap-3 snap-start rounded-md p-2">
+    <div className="min-w-[280px] w-[280px] shrink-0 flex flex-col gap-3 snap-start rounded-md p-2"
+      data-testid={`stage-column-${stage}`}>
       <div className="pb-2 border-b border-gold/30 space-y-1">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[11px] tracking-widest uppercase text-text-mute">
@@ -73,10 +82,38 @@ function StageColumn({
   );
 }
 
+// Task #296 — Runner-age border tints. Tailwind needs the literal class
+// names at build time; keep the lookup table inline so JIT picks them up.
+const RUNNER_AGE_BORDER: Record<RunnerAgeTier, string> = {
+  fresh: "",
+  amber: "border-l-4 border-l-amber",
+  red: "border-l-4 border-l-danger",
+};
+
 function OppCard({ opp, onClick }: { opp: OppItem; onClick: () => void }) {
   const isStalled = (opp as { stalled?: boolean }).stalled ?? opp.daysInStage > STALLED_THRESHOLD_DAYS;
+  const stage = (opp as { salesStage?: SalesStage }).salesStage ?? "suspect";
+  const subStatus = (opp as { subStatus?: string | null }).subStatus ?? null;
+  const runnerAge = stage === "runner"
+    ? runnerAgeDays((opp as { runnerEnteredAt?: string | null }).runnerEnteredAt ?? null)
+    : null;
+  const ageTier = runnerAgeTier(runnerAge);
+  const ageClass = RUNNER_AGE_BORDER[ageTier];
+  const ageTitle =
+    runnerAge === null
+      ? undefined
+      : ageTier === "red"
+        ? `${runnerAge}d in Runner — escalate (≥${RUNNER_AGE_RED_DAYS}d)`
+        : ageTier === "amber"
+          ? `${runnerAge}d in Runner — chase legal/procurement (≥${RUNNER_AGE_AMBER_DAYS}d)`
+          : `${runnerAge}d in Runner`;
   return (
-    <Card className="p-4 space-y-3 hover:border-gold/50 transition-all group">
+    <Card
+      className={`p-4 space-y-3 hover:border-gold/50 transition-all group ${ageClass}`}
+      title={ageTitle}
+      data-testid={`opp-card-${opp.id}`}
+      data-runner-age-tier={ageTier}
+    >
       <div className="flex justify-between items-start gap-2">
         <Link
           href={`/opportunities/${opp.id}`}
@@ -94,6 +131,29 @@ function OppCard({ opp, onClick }: { opp: OppItem; onClick: () => void }) {
         )}
       </div>
       <div className="text-sm text-text-mute font-mono">{opp.accountName}</div>
+      {(subStatus || runnerAge !== null) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {subStatus && (
+            <span
+              className="inline-flex items-center rounded-full border border-border-soft bg-bg-deep text-text-mute text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
+              data-testid={`sub-status-${opp.id}`}
+            >
+              {SUB_STATUS_LABEL[subStatus] ?? subStatus.replace(/_/g, " ")}
+            </span>
+          )}
+          {runnerAge !== null && (
+            <span
+              className={`inline-flex items-center rounded-full text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 border ${
+                ageTier === "red" ? "border-danger/60 bg-danger/15 text-danger"
+                : ageTier === "amber" ? "border-amber/60 bg-amber/15 text-amber"
+                : "border-border-soft bg-bg-deep text-text-mute"
+              }`}
+            >
+              {runnerAge}d in runner
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex justify-between items-end pt-2 border-t border-border-soft">
         <div className="flex flex-col gap-1">
           <span className="text-xs text-text-faint font-mono">Value · Weighted</span>
@@ -271,7 +331,7 @@ export default function Pipeline() {
 
   const filteredOpps = useMemo(() => {
     return (opps ?? []).filter((o) => {
-      const s = (o as { salesStage?: SalesStage }).salesStage ?? "lead";
+      const s = (o as { salesStage?: SalesStage }).salesStage ?? "suspect";
       if (stageFilter !== "all" && s !== stageFilter) return false;
       if (ownerFilter !== "all" && o.partnerOwnerName !== ownerFilter) return false;
       return true;
@@ -327,7 +387,7 @@ export default function Pipeline() {
     const m = new Map<SalesStage, { count: number; weighted: number }>();
     for (const s of SALES_STAGES) m.set(s, { count: 0, weighted: 0 });
     for (const o of opps ?? []) {
-      const s = (o as { salesStage?: SalesStage }).salesStage ?? ("lead" as SalesStage);
+      const s = (o as { salesStage?: SalesStage }).salesStage ?? ("suspect" as SalesStage);
       const cur = m.get(s) ?? { count: 0, weighted: 0 };
       cur.count += 1;
       cur.weighted += (o.dealSizeUsd * o.probabilityPct) / 100;
@@ -347,7 +407,7 @@ export default function Pipeline() {
           <div className="flex flex-col gap-4">
             <SectionHead
               headline="Opportunity Pipeline"
-              lede="10-stage sales lifecycle. Click Move on a card to log a stage transition with rationale + evidence. Pipeline Forecaster re-rolls weighted value and flags stalled deals."
+              lede="5-band sales funnel — Suspect → Prospect → Convert → Runner → Contract. Runner cards age Amber at 21d, Red at 45d so procurement-stuck deals stand out. Click Move on a card to log a stage transition with rationale + evidence."
             />
             <div className="flex flex-wrap items-center gap-3 sm:justify-end">
               <CreateOpportunityDialog
@@ -422,7 +482,7 @@ export default function Pipeline() {
             >
               <option value="all">All stages</option>
               {SALES_STAGES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>{SALES_STAGE_LABEL[s]}</option>
               ))}
             </select>
             <select
@@ -478,10 +538,13 @@ export default function Pipeline() {
         {mode === "forecast" ? (
           <ForecastPanel initialBy={initialBy} />
         ) : view === "kanban" ? (
+          // Task #296 — 5 working columns + a stacked terminal sidebar.
+          // Lost / No-decision / Withdrawn share a sidebar so the kanban
+          // stays readable while still surfacing closed-deal volume.
           <div className="flex-1 flex gap-4 overflow-x-auto scrollbar-thin pb-6 snap-x">
-            {SALES_STAGES.map((stage) => {
+            {WORKING_STAGES.map((stage) => {
               const stageOpps = filteredOpps.filter(
-                (o) => ((o as { salesStage?: SalesStage }).salesStage ?? "lead") === stage,
+                (o) => ((o as { salesStage?: SalesStage }).salesStage ?? "suspect") === stage,
               );
               const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: 0 };
               return (
@@ -492,6 +555,36 @@ export default function Pipeline() {
                 </StageColumn>
               );
             })}
+            <div
+              className="min-w-[220px] w-[220px] shrink-0 flex flex-col gap-3 snap-start rounded-md p-2"
+              data-testid="terminal-sidebar"
+            >
+              <div className="pb-2 border-b border-border-soft">
+                <span className="font-mono text-[11px] tracking-widest uppercase text-text-faint">
+                  Closed deals
+                </span>
+              </div>
+              {TERMINAL_STAGES.map((stage) => {
+                const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: 0 };
+                return (
+                  <Card
+                    key={stage}
+                    className="p-3 space-y-1"
+                    data-testid={`terminal-card-${stage}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[11px] uppercase tracking-wider text-text-mute">
+                        {SALES_STAGE_LABEL[stage]}
+                      </span>
+                      <span className="font-mono text-xs text-text-faint">{bucket.count}</span>
+                    </div>
+                    <p className="text-[10px] leading-snug text-text-faint">
+                      {SALES_STAGE_DESCRIPTION[stage]}
+                    </p>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <Card className="overflow-hidden">
@@ -512,7 +605,7 @@ export default function Pipeline() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {sortedOpps.map((opp) => {
-                    const s = (opp as { salesStage?: SalesStage }).salesStage ?? "lead";
+                    const s = (opp as { salesStage?: SalesStage }).salesStage ?? "suspect";
                     const isStalled =
                       (opp as { stalled?: boolean }).stalled ?? opp.daysInStage > STALLED_THRESHOLD_DAYS;
                     return (
@@ -573,7 +666,7 @@ export default function Pipeline() {
         <StageTransitionDialog
           oppId={moveTarget.id}
           oppName={moveTarget.name}
-          currentStage={(moveTarget as { salesStage?: SalesStage }).salesStage ?? "lead"}
+          currentStage={(moveTarget as { salesStage?: SalesStage }).salesStage ?? "suspect"}
           open={true}
           onOpenChange={(o) => { if (!o) setMoveTarget(null); }}
         />

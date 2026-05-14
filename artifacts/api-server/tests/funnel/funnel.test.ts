@@ -255,6 +255,102 @@ async function dbAssertions() {
 
 await dbAssertions();
 
+// ---- Task #296: runner-aging helpers + report shapes ----------------
+{
+  // Inline mirrors of artifacts/atelier/src/lib/sales-stages.ts so this
+  // server-side test stays decoupled from the UI bundle.
+  const RUNNER_AGE_AMBER_DAYS = 21;
+  const RUNNER_AGE_RED_DAYS = 45;
+  const ageDays = (iso: string | null, now: Date) => {
+    if (!iso) return null;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return null;
+    return Math.max(0, Math.floor((now.getTime() - t) / 86_400_000));
+  };
+  const tier = (d: number | null) => {
+    if (d === null || d < RUNNER_AGE_AMBER_DAYS) return "fresh";
+    if (d < RUNNER_AGE_RED_DAYS) return "amber";
+    return "red";
+  };
+  const now = new Date("2026-05-14T00:00:00Z");
+  const day = (n: number) =>
+    new Date(now.getTime() - n * 86_400_000).toISOString();
+
+  check("runnerAgeDays(null) → null", ageDays(null, now) === null);
+  check("runnerAgeDays bad iso → null", ageDays("not-a-date", now) === null);
+  check("runnerAgeDays 0d boundary", ageDays(day(0), now) === 0);
+  check("runnerAgeTier null → fresh", tier(null) === "fresh");
+  check("runnerAgeTier 20d → fresh", tier(20) === "fresh");
+  check("runnerAgeTier 21d boundary → amber", tier(21) === "amber");
+  check("runnerAgeTier 44d → amber", tier(44) === "amber");
+  check("runnerAgeTier 45d boundary → red", tier(45) === "red");
+  check("runnerAgeTier 365d → red", tier(365) === "red");
+
+  // Closure-time percentile helper used by runner_to_contract_closure_time.
+  const stats = (days: number[]) => {
+    if (days.length === 0) return { medianDays: 0, p75Days: 0, p90Days: 0 };
+    const sorted = [...days].sort((a, b) => a - b);
+    const pick = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+    return { medianDays: pick(0.5), p75Days: pick(0.75), p90Days: pick(0.9) };
+  };
+  const s = stats([10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+  check(`closure stats median=60`, s.medianDays === 60, `got ${s.medianDays}`);
+  check(`closure stats p75=80`, s.p75Days === 80, `got ${s.p75Days}`);
+  check(`closure stats p90=100`, s.p90Days === 100, `got ${s.p90Days}`);
+  const sEmpty = stats([]);
+  check("closure stats empty → zeros", sEmpty.medianDays === 0 && sEmpty.p90Days === 0);
+
+  // Cohort conversion semantics — mirrors reportsRoutes
+  // convert_to_runner_conversion. Numerator must never exceed
+  // denominator, and a runner entry that predates the first convert
+  // entry must NOT count toward conversion.
+  type T = { opportunityId: string; toStage: string; createdAt: Date };
+  const cohortConversion = (transitions: T[]) => {
+    const sorted = [...transitions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const firstConvert = new Map<string, Date>();
+    const firstRunner = new Map<string, Date>();
+    for (const t of sorted) {
+      if (t.toStage === "convert" && !firstConvert.has(t.opportunityId)) firstConvert.set(t.opportunityId, t.createdAt);
+      else if (t.toStage === "runner" && !firstRunner.has(t.opportunityId)) firstRunner.set(t.opportunityId, t.createdAt);
+    }
+    const periodOf = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const cohort = new Map<string, { ids: Set<string>; converted: Set<string> }>();
+    for (const [oid, cAt] of firstConvert) {
+      const p = periodOf(cAt);
+      if (!cohort.has(p)) cohort.set(p, { ids: new Set(), converted: new Set() });
+      const b = cohort.get(p)!;
+      b.ids.add(oid);
+      const rAt = firstRunner.get(oid);
+      if (rAt && rAt.getTime() >= cAt.getTime()) b.converted.add(oid);
+    }
+    return Array.from(cohort.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([p, b]) => ({ period: p, denom: b.ids.size, num: b.converted.size }));
+  };
+  const D = (s: string) => new Date(s);
+  const txs: T[] = [
+    // opp1 converted Jan, ran Feb → counts in Jan cohort
+    { opportunityId: "opp1", toStage: "convert", createdAt: D("2026-01-10T00:00:00Z") },
+    { opportunityId: "opp1", toStage: "runner",  createdAt: D("2026-02-05T00:00:00Z") },
+    // opp2 converted Jan, never ran → in denom only
+    { opportunityId: "opp2", toStage: "convert", createdAt: D("2026-01-20T00:00:00Z") },
+    // opp3: ran BEFORE convert → must NOT count (legacy/replay safety)
+    { opportunityId: "opp3", toStage: "runner",  createdAt: D("2026-01-05T00:00:00Z") },
+    { opportunityId: "opp3", toStage: "convert", createdAt: D("2026-02-15T00:00:00Z") },
+    // opp4 converted Feb, ran Mar → counts in Feb cohort
+    { opportunityId: "opp4", toStage: "convert", createdAt: D("2026-02-01T00:00:00Z") },
+    { opportunityId: "opp4", toStage: "runner",  createdAt: D("2026-03-01T00:00:00Z") },
+  ];
+  const rows = cohortConversion(txs);
+  const jan = rows.find((r) => r.period === "2026-01")!;
+  const feb = rows.find((r) => r.period === "2026-02")!;
+  check("cohort jan denom=2", jan.denom === 2, `got ${jan.denom}`);
+  check("cohort jan num=1", jan.num === 1, `got ${jan.num}`);
+  check("cohort feb denom=2", feb.denom === 2, `got ${feb.denom}`);
+  check("cohort feb num=1 (opp3 runner pre-convert excluded)", feb.num === 1, `got ${feb.num}`);
+  for (const r of rows) check(`cohort ${r.period} num<=denom`, r.num <= r.denom);
+}
+
 // ---- Report ----------------------------------------------------------
 if (failures.length) {
   console.error(`\n[funnel] ${failures.length} failure(s):`);
