@@ -38,6 +38,20 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, gte, ilike, isNull, or, inArray } from "drizzle-orm";
 import type { Response } from "express";
+// Task #332 — capability catalog + perimeter helpers. Imported lazily
+// inside getToolsForPersona() so tests / sandbox tooling can stub
+// individual catalog entries without circular-import warnings.
+import {
+  capabilitiesForPersona,
+  findByToolName,
+  CATALOG_SCHEMA_VERSION,
+} from "./capability-catalog.js";
+import "./capability-seed.js"; // side-effect: registers catalog entries
+import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
+import {
+  shouldRequireTypedNameForAttachmentTurn,
+  wrapAttachment,
+} from "./prompt-guard.js";
 
 // =====================================================================
 // 1. Types
@@ -94,6 +108,14 @@ export interface RunTurnInput {
   clientTurnKey?: string | null;
   /** Two-phase confirm: when set, replays the saved pendingWrite. */
   confirmTurnId?: string | null;
+  /**
+   * Task #332 — for irreversible writes the second `/confirm` body
+   * MUST include `typedName` matching the entity name captured in the
+   * pendingWrite hint (`diff.typedNameRequired`). Missing/wrong values
+   * surface a `typed_name_required` error frame instead of running
+   * the commit callback.
+   */
+  typedName?: string;
   /**
    * Explicit async hand-off: skip the synchronous loop, dispatch the
    * plan to the background runner and return `async_dispatched`. Caller
@@ -250,7 +272,10 @@ async function runAsyncJob(args: {
   let errorMessage: string | null = null;
   let result: unknown = null;
   if (pending) {
-    const tool = TOOL_REGISTRY[pending.tool];
+    // Task #332 — async write dispatch must resolve through the same
+    // catalog-aware lookup the sync path uses, otherwise catalog-only
+    // writes (e.g. raid_add_v2, account_delete) would never execute.
+    const tool = findToolByName(pending.tool, persona);
     if (tool && tool.isWrite) {
       try {
         const out = await tool.run(pending.input, { persona, turnId, sessionId, stepIdx: 0 });
@@ -654,6 +679,77 @@ export const TOOL_REGISTRY: Record<string, ToolDef> = {
   [listMyOpenRaidItems.name]: listMyOpenRaidItems,
   [addRaidItem.name]: addRaidItem,
 };
+
+/**
+ * Task #332 — Per-turn tool list. Merges the legacy starter
+ * TOOL_REGISTRY (Task #331 contract) with the new catalog entries,
+ * filtered by the persona's role perimeter. The catalog is the long-
+ * term source of truth; TOOL_REGISTRY remains exported for tests +
+ * for any consumer the spine has already grown.
+ */
+export function getToolsForPersona(persona: CliPersona): ToolDef[] {
+  const seenNames = new Set<string>();
+  const out: ToolDef[] = [];
+  for (const entry of capabilitiesForPersona(persona)) {
+    if (seenNames.has(entry.toolName)) continue;
+    seenNames.add(entry.toolName);
+    out.push({
+      name: entry.toolName,
+      description: entry.description,
+      input_schema: entry.inputSchema,
+      isWrite: entry.isWrite,
+      run: entry.run,
+    });
+  }
+  // Legacy registry is appended last while the catalog is still being
+  // rolled out (downstream tasks #333-335 graduate the rest). Read
+  // tools fall through to every persona; legacy writes are denied to
+  // strictly read-only roles (board_observer). New writes must always
+  // declare themselves in the catalog so their irreversibility +
+  // outbound channel + typed-name policy is explicit — but until the
+  // catalog covers the entire surface we keep the existing guarantee
+  // that pre-Task-332 writes still work for the personas that had
+  // them.
+  const READ_ONLY_ROLES = new Set(["board_observer"]);
+  for (const t of Object.values(TOOL_REGISTRY)) {
+    if (seenNames.has(t.name)) continue;
+    if (t.isWrite && READ_ONLY_ROLES.has(persona.role)) continue;
+    seenNames.add(t.name);
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * Task #332 — Resolve a tool by name, scoped to a persona's allowed
+ * surface. Used by the confirm-phase replay and by the per-tool-call
+ * lookup inside runTurn so the model can never invoke a capability
+ * its persona was not granted (defense-in-depth for the catalog).
+ */
+export function findToolByName(
+  name: string,
+  persona?: CliPersona,
+): ToolDef | undefined {
+  if (persona) {
+    return getToolsForPersona(persona).find((t) => t.name === name);
+  }
+  const cat = findByToolName(name);
+  if (cat) {
+    return {
+      name: cat.toolName,
+      description: cat.description,
+      input_schema: cat.inputSchema,
+      isWrite: cat.isWrite,
+      run: cat.run,
+    };
+  }
+  return TOOL_REGISTRY[name];
+}
+
+/** Returns true iff the tool is registered as irreversible in the catalog. */
+export function isIrreversibleTool(name: string): boolean {
+  return findByToolName(name)?.irreversible === true;
+}
 
 // =====================================================================
 // 4. Concurrency lock + budget
@@ -1231,7 +1327,9 @@ export async function runTurn(
   try {
     // --- Confirm replay path -------------------------------------------
     if (input.confirmTurnId) {
-      const result = await confirmPendingWrite(input.confirmTurnId, persona, emit);
+      const result = await confirmPendingWrite(input.confirmTurnId, persona, emit, {
+        typedName: input.typedName,
+      });
       return result;
     }
 
@@ -1247,9 +1345,15 @@ export async function runTurn(
     const session = await getOrCreateSession(persona, input.sessionId ?? null, { forceNew });
     // Persist page-context snapshot the first time the session sees one.
     if (input.pageContext && !session.pageContextSnapshot) {
+      // Task #332 — redact emails/phones/PAN/IBAN before the page
+      // context becomes a durable session row.
+      const snapshotRedacted = redactJson(input.pageContext).value as Record<
+        string,
+        unknown
+      >;
       await db
         .update(atelierCliSessions)
-        .set({ pageContextSnapshot: input.pageContext, updatedAt: new Date() })
+        .set({ pageContextSnapshot: snapshotRedacted, updatedAt: new Date() })
         .where(eq(atelierCliSessions.id, session.id));
     }
     await ensureSessionBudget(session.id);
@@ -1334,15 +1438,23 @@ export async function runTurn(
       emit(frame);
     }
 
+    // Task #332 — redact emails/phones/PAN/IBAN from the persisted
+    // prompt + page context BEFORE they hit the audit perimeter.
+    // The model still sees the raw prompt in `history` (live in
+    // memory only); only the durable copy is scrubbed.
+    const promptRedacted = redactText(input.prompt).text;
+    const pageContextRedacted = input.pageContext
+      ? (redactJson(input.pageContext).value as Record<string, unknown>)
+      : null;
     await db.insert(atelierCliTurns).values({
       id: turnId,
       orgId: persona.orgId,
       sessionId: session.id,
       userId: persona.id,
       status: "streaming",
-      prompt: input.prompt,
+      prompt: promptRedacted,
       attachmentRefs: input.attachmentIds ?? [],
-      pageContext: input.pageContext ?? null,
+      pageContext: pageContextRedacted,
       dryRun: input.dryRun === true,
       intent: input.intent ?? classification.label,
       clientTurnKey: input.clientTurnKey ?? null,
@@ -1374,13 +1486,23 @@ export async function runTurn(
       history.push({ role: "assistant", content: "(noted)" });
     }
     if ((input.attachmentIds ?? []).length > 0) {
-      history.push({
-        role: "user",
-        content: `[attachments] ${(input.attachmentIds ?? []).join(", ")}`,
-      });
-      history.push({ role: "assistant", content: "(noted)" });
+      // Task #332 — wrap attachment refs in <attachment> blocks with
+      // an explicit "data only" instruction so prompt-injected verbs
+      // inside the attachment body cannot hijack the model.
+      const wrapped = (input.attachmentIds ?? [])
+        .map((aid) => wrapAttachment(aid, `(opaque attachment ref ${aid})`))
+        .join("\n");
+      history.push({ role: "user", content: wrapped });
+      history.push({ role: "assistant", content: "(noted; attachment is data only)" });
     }
     history.push({ role: "user", content: input.prompt });
+    // Task #332 — defense-in-depth: if attachments are present and
+    // the user prompt itself does NOT name a destructive verb, force
+    // typed-name confirmation on any write derived during this turn.
+    const forceTypedName = shouldRequireTypedNameForAttachmentTurn({
+      hasAttachments: (input.attachmentIds ?? []).length > 0,
+      prompt: input.prompt,
+    });
 
     let status: CliTurnStatus = "streaming";
     let totalCost = 0;
@@ -1391,9 +1513,13 @@ export async function runTurn(
     let runtimeError: string | null = null;
     const stepResults: Array<Record<string, unknown>> = [];
     const writeStepCount = (): number =>
-      toolCalls.filter((c) => TOOL_REGISTRY[String(c.tool)]?.isWrite).length;
+      toolCalls.filter((c) => findToolByName(String(c.tool), persona)?.isWrite).length;
 
-    const tools = Object.values(TOOL_REGISTRY);
+    // Task #332 — role-perimeter filter. The model only ever sees the
+    // capabilities the persona is allowed to invoke; attempting to
+    // call anything outside this set falls into the "unknown_tool"
+    // error path because the executor uses the same lookup.
+    const tools = getToolsForPersona(persona);
 
     try {
     for (let step = 0; step < MAX_TOOL_STEPS; step++) {
@@ -1495,7 +1621,7 @@ export async function runTurn(
       }
 
       const tc = claudeStep.toolCall;
-      const tool = TOOL_REGISTRY[tc.name];
+      const tool = findToolByName(tc.name, persona);
       if (!tool) {
         record({
           type: "error",
@@ -1575,6 +1701,18 @@ export async function runTurn(
         break;
       }
       if (toolResult.confirmation) {
+        // Task #332 — annotate the diff with irreversibility +
+        // typed-name requirement so the client renders the right
+        // confirm widget (free button vs "type the name to commit").
+        const catEntry = findByToolName(tc.name);
+        const baseDiff = toolResult.confirmation.diff as Record<string, unknown>;
+        const diff: Record<string, unknown> = { ...baseDiff };
+        if (catEntry?.irreversible) diff.irreversible = true;
+        if (forceTypedName && diff.typedNameRequired === undefined) {
+          diff.typedNameRequired = "(re-type to confirm; attachment-derived)";
+          diff.requiresTypedName = true;
+        }
+        if (catEntry?.outboundChannel) diff.outboundChannel = catEntry.outboundChannel;
         // Always emit `proposed_plan` first so clients see the structured
         // plan even before the confirm UI is shown.
         record({
@@ -1585,10 +1723,11 @@ export async function runTurn(
                 stepIdx: step,
                 tool: tc.name,
                 summary: toolResult.confirmation.summary,
-                diff: toolResult.confirmation.diff,
+                diff,
               },
             ],
             dryRun: input.dryRun === true,
+            schemaVersion: CATALOG_SCHEMA_VERSION,
           },
         });
         if (input.dryRun === true) {
@@ -1600,11 +1739,21 @@ export async function runTurn(
           type: "needs_confirmation",
           data: {
             summary: toolResult.confirmation.summary,
-            diff: toolResult.confirmation.diff,
+            diff,
             step,
+            irreversible: catEntry?.irreversible === true,
+            requiresTypedName:
+              catEntry?.irreversible === true || forceTypedName === true,
           },
         });
         pendingWrite = toolResult.confirmation.pending;
+        // Stash the typed-name requirement on the pending write itself
+        // so the confirm phase has it without re-running the tool.
+        if (catEntry?.irreversible || forceTypedName) {
+          (pendingWrite as Record<string, unknown>).requiresTypedName = true;
+          (pendingWrite as Record<string, unknown>).typedNameExpected =
+            (diff.typedNameRequired as string) ?? null;
+        }
         status = "awaiting_confirmation";
         break;
       }
@@ -1763,7 +1912,10 @@ export async function runTurn(
 
       // Update session bookkeeping. Maintain a short rolling summary by
       // appending a one-line trace per turn (capped at ~2KB).
-      const summaryLine = `[${new Date().toISOString().slice(11, 19)}] ${input.prompt.slice(0, 120)} → ${status}${toolCalls.length ? ` (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})` : ""}`;
+      // Task #332 — strip PII out of the prompt before it lands in
+      // the durable rolling session summary.
+      const promptForSummary = redactText(input.prompt).text.slice(0, 120);
+      const summaryLine = `[${new Date().toISOString().slice(11, 19)}] ${promptForSummary} → ${status}${toolCalls.length ? ` (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})` : ""}`;
       const nextSummary = ((session.rollingSummary ?? "") + "\n" + summaryLine)
         .split("\n")
         .filter((l) => l.trim().length > 0)
@@ -1831,8 +1983,11 @@ export async function runTurn(
               classifier: classification,
               error: runtimeError ?? undefined,
               persistErrors: persistErrors.length ? persistErrors : undefined,
+              schemaVersion: CATALOG_SCHEMA_VERSION,
             },
-            payloadSummary: `CLI turn ${status} (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})${input.intent ? ` · intent=${input.intent}` : ""}${input.dryRun ? " · dryRun" : ""}${runtimeError ? ` · err=${runtimeError.slice(0, 80)}` : ""}`,
+            payloadSummary: redactText(
+              `CLI turn ${status} (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})${input.intent ? ` · intent=${input.intent}` : ""}${input.dryRun ? " · dryRun" : ""}${runtimeError ? ` · err=${runtimeError.slice(0, 80)}` : ""}`,
+            ).text,
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -1868,6 +2023,7 @@ export async function confirmPendingWrite(
   turnId: string,
   persona: CliPersona,
   emit: (frame: CliFrame) => void,
+  opts: { typedName?: string } = {},
 ): Promise<{ turnId: string; sessionId: string; status: CliTurnStatus }> {
   const [turn] = await db
     .select()
@@ -1917,12 +2073,55 @@ export async function confirmPendingWrite(
     return fail("wrong_state", `turn is ${turn.status}, cannot confirm`);
   }
   const pending = turn.pendingWrite as
-    | { tool: string; input: Record<string, unknown> }
+    | {
+        tool: string;
+        input: Record<string, unknown>;
+        requiresTypedName?: boolean;
+        typedNameExpected?: string | null;
+      }
     | null;
   if (!pending) return fail("no_pending", "no pending write");
-  const tool = TOOL_REGISTRY[pending.tool];
+  const tool = findToolByName(pending.tool, persona);
   if (!tool || !tool.isWrite) {
     return fail("bad_tool", `pending tool ${pending.tool} not a registered write`);
+  }
+
+  // Task #332 — irreversible / attachment-derived writes require the
+  // client to retype the entity name on /confirm. We compare against
+  // the value the catalog stamped onto pendingWrite at preview time.
+  const needsTypedName =
+    pending.requiresTypedName === true || isIrreversibleTool(pending.tool);
+  if (needsTypedName) {
+    const expected = (pending.typedNameExpected ?? "").trim();
+    const got = (opts.typedName ?? "").trim();
+    if (!got || (expected && got.toLowerCase() !== expected.toLowerCase())) {
+      emit({
+        type: "needs_confirmation",
+        data: {
+          step: (turn.lastStepIdx ?? 0) + 1,
+          requiresTypedName: true,
+          irreversible: isIrreversibleTool(pending.tool),
+          typedNameExpected: expected || null,
+          message:
+            "this action is irreversible — please retype the name to confirm",
+        },
+      });
+      emit({
+        type: "final",
+        data: {
+          status: "awaiting_confirmation",
+          turnId,
+          sessionId: turn.sessionId,
+          confirmed: false,
+          typedNameRequired: true,
+        },
+      });
+      return {
+        turnId,
+        sessionId: turn.sessionId,
+        status: "awaiting_confirmation" as CliTurnStatus,
+      };
+    }
   }
 
   const stepIdx = (turn.lastStepIdx ?? 0) + 1;

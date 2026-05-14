@@ -136,6 +136,10 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
   openSse(res);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
   const emit = (frame: CliFrame) => writeSseFrame(res, frame);
+  // Task #332 — irreversible ops require the client to retype the
+  // entity name; we forward it to the orchestrator which checks it
+  // against the saved pendingWrite hint before the run callback fires.
+  const body = (req.body ?? {}) as { typedName?: string };
   // Confirm performs the actual write — it must serialize through the
   // same per-user FIFO queue runTurn uses so a confirm never races
   // another in-flight write for the same user.
@@ -145,6 +149,7 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
         sessionId: null,
         prompt: "(confirm)",
         confirmTurnId: req.params.id,
+        typedName: typeof body.typedName === "string" ? body.typedName : undefined,
       },
       { persona, emit },
     );
