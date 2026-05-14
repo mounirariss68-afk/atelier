@@ -36,6 +36,7 @@ import {
   type ExtractedDoc,
   type DocKind,
 } from "./extractors.js";
+import { sanitizeMetadata } from "./sanitize.js";
 import { chunkDocument, findChunkById, type DocChunk, type DocDigest } from "./chunking.js";
 import { detectIntent, topIntent, type DocIntent } from "./intent-detect.js";
 import { wrapAttachment } from "../prompt-guard.js";
@@ -131,7 +132,17 @@ export async function ingestAttachment(
   // a fresh `cli_attachment.upload` audit row so the timeline reflects
   // the new submission, but no new blob is stored and the extraction
   // is not re-run.
-  const sha256 = createSha(args.bytes);
+  // Metadata sanitization runs **before** the dedupe sha so that
+  // re-uploads of the same image (with EXIF stripped) still hash to
+  // the same key and dedupe cleanly. Sanitized bytes are what we
+  // persist; raw bytes are dropped on the floor.
+  const sanitized = sanitizeMetadata({
+    fileName: args.fileName,
+    mime: args.mime,
+    bytes: args.bytes,
+  });
+  const cleanBytes = sanitized.bytes;
+  const sha256 = createSha(cleanBytes);
   const [existing] = await db
     .select()
     .from(atelierCliAttachments)
@@ -183,12 +194,19 @@ export async function ingestAttachment(
   }
 
   // Store + extract -------------------------------------------------------
-  const stored = storeAttachmentBytes(args.bytes);
+  const stored = storeAttachmentBytes(cleanBytes);
   const extracted: ExtractedDoc = extractAttachment({
     fileName: args.fileName,
     mime: args.mime,
-    bytes: args.bytes,
+    bytes: cleanBytes,
   });
+  if (sanitized.strippedBytes > 0) {
+    extracted.warnings.push(
+      `metadata-stripped:${sanitized.strippedBytes}B`,
+    );
+  } else if (sanitized.warning) {
+    extracted.warnings.push(sanitized.warning);
+  }
   const intents = detectIntent(extracted);
   const intent = intents[0]?.intent ?? "unknown";
   const { chunks, digest } = chunkDocument({

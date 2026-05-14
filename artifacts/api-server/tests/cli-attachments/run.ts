@@ -530,6 +530,60 @@ async function main(): Promise<void> {
     assert.match(child!.extracted!.normalizedText, /Inner attachment body/);
   });
 
+  await test("ingest: strips EXIF metadata from JPEG before storage", async () => {
+    // Minimal hand-rolled JPEG with an APP1/EXIF segment containing
+    // "GPS:lat=12.34" so we can grep for it before/after.
+    const exifPayload = Buffer.concat([
+      Buffer.from("Exif\x00\x00", "binary"),
+      Buffer.from("GPS:lat=12.34;owner=alice@example.com"),
+    ]);
+    const segLen = exifPayload.length + 2;
+    const app1 = Buffer.concat([
+      Buffer.from([0xff, 0xe1, (segLen >> 8) & 0xff, segLen & 0xff]),
+      exifPayload,
+    ]);
+    // Tiny but valid-enough JPEG: SOI, APP1(EXIF), SOS, scan(0x00), EOI.
+    const sos = Buffer.from([
+      0xff, 0xda, 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0x3f, 0x00,
+    ]);
+    const jpeg = Buffer.concat([
+      Buffer.from([0xff, 0xd8]),
+      app1,
+      sos,
+      Buffer.from([0x00, 0xff, 0xd9]),
+    ]);
+    assert.ok(jpeg.includes("GPS:lat=12.34"));
+
+    const r = await ingestAttachment({
+      orgId: me.orgId,
+      userId: me.id,
+      userLabel: me.name,
+      sessionId: null,
+      turnId: null,
+      fileName: "vacation.jpg",
+      mime: "image/jpeg",
+      bytes: jpeg,
+    });
+    assert.ok(r.ok);
+    if (!r.ok) return;
+    created.attachmentIds.add(r.attachmentId);
+    // Stored bytes must no longer contain the EXIF marker.
+    const loaded = await loadAttachment(r.attachmentId, me.orgId);
+    assert.ok(loaded);
+    const storedBytes = loadAttachmentBytes(loaded!.attachment.encryptedRef);
+    assert.ok(storedBytes);
+    assert.equal(
+      storedBytes!.includes("GPS:lat=12.34"),
+      false,
+      "EXIF GPS bytes leaked into storage",
+    );
+    // Audit warning must surface that we stripped metadata.
+    assert.ok(
+      r.warnings.some((w) => w.startsWith("metadata-stripped")),
+      `expected metadata-stripped warning, got ${JSON.stringify(r.warnings)}`,
+    );
+  });
+
   // 6. Rubric ------------------------------------------------------------
   await test("rubric: weights sum to 100", () => {
     const sum = Object.values(RUBRIC_WEIGHTS).reduce((a, b) => a + b, 0);
