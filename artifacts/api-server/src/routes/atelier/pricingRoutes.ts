@@ -363,8 +363,34 @@ router.get("/opportunities/:oppId/pricing", async (req, res) => {
     res.status(409).json({ error: "no-active-rate-card" });
     return;
   }
+  // Task #293 — re-read computed_cost_usd / computed_margin_pct through
+  // the masked view so the DB is the source of truth (the row above came
+  // from the base table for write-side semantics; we replace the
+  // sensitive fields with their masked counterparts here).
+  const masked = await withRls(req, async (tx) => {
+    return tx.execute<{
+      computed_cost_usd: number | null;
+      computed_margin_pct: number | null;
+    }>(dsql`SELECT computed_cost_usd, computed_margin_pct
+              FROM atelier_deal_pricings_v
+             WHERE id = ${pricing.id}`);
+  });
+  const m = masked.rows[0] ?? { computed_cost_usd: null, computed_margin_pct: null };
+  const safePricing = {
+    ...pricing,
+    computedCostUsd: m.computed_cost_usd,
+    computedMarginPct: m.computed_margin_pct,
+  };
   const rows = await loadRateCardRows(pricing.rateCardId);
-  res.json({ pricing, policy, rateCardRows: rows });
+  // Cost-bearing rate card rows are also re-masked (loadRateCardRows
+  // hits the base table for compute purposes; never serve raw cost to
+  // non-comp viewers).
+  if (!canViewCompensation(me.role)) {
+    for (const r of rows as Array<{ dayRateInternalCost: number | null }>) {
+      r.dayRateInternalCost = null;
+    }
+  }
+  res.json({ pricing: safePricing, policy, rateCardRows: rows });
 });
 
 router.put("/opportunities/:oppId/pricing", async (req, res) => {

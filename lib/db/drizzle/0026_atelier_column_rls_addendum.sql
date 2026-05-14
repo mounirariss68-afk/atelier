@@ -42,3 +42,55 @@ SELECT
   p.pricing_strategist_output,
   p.created_at, p.updated_at, p.created_by_user_id, p.deleted_at
 FROM atelier_deal_pricings p;
+
+-- 4. Re-create atelier_contractors_v to mask the new contract_file_id
+-- column (personnel-contract class — pointer to the signed agreement
+-- document; only personnel-contract viewers may follow it).
+DROP VIEW IF EXISTS atelier_contractors_v;
+CREATE VIEW atelier_contractors_v AS
+SELECT
+  c.id, c.org_id, c.full_name, c.email, c.country, c.country_code,
+  c.vendor_entity, c.master_agreement_ref, c.contract_type,
+  c.contract_start, c.contract_end,
+  CASE WHEN atelier_can_view_personnel(NULL) THEN c.contract_file_id ELSE NULL END
+    AS contract_file_id,
+  CASE WHEN atelier_can_view_comp() THEN c.day_rate_amount         ELSE NULL END AS day_rate_amount,
+  CASE WHEN atelier_can_view_comp() THEN c.day_rate_internal_cost  ELSE NULL END AS day_rate_internal_cost,
+  c.day_rate_currency,
+  CASE WHEN atelier_can_view_comp() THEN c.payment_terms_days      ELSE NULL END AS payment_terms_days,
+  c.vat_treatment, c.engagement_scope_default, c.contracting_entity,
+  CASE WHEN atelier_can_view_personnel(NULL) THEN c.conflicts_disclosed_json ELSE '[]'::jsonb END
+    AS conflicts_disclosed_json,
+  c.start_date, c.end_date, c.status, c.notes,
+  c.created_at, c.updated_at, c.created_by_user_id, c.deleted_at
+FROM atelier_contractors c;
+
+-- 5. Masked view: conflict disclosures. Disclosure text + scope_impact
+-- + notes are personnel-contract class. Status/timestamps remain visible
+-- so dashboards can show "N active disclosures" counts without leaking
+-- the underlying narrative.
+DROP VIEW IF EXISTS atelier_conflict_disclosures_v;
+CREATE VIEW atelier_conflict_disclosures_v AS
+SELECT
+  d.id, d.org_id, d.person_type, d.person_id,
+  CASE WHEN atelier_can_view_personnel(
+    (SELECT e.user_id FROM atelier_employees e
+      WHERE e.id = d.person_id AND d.person_type = 'employee')
+  ) THEN d.disclosure_text ELSE NULL END AS disclosure_text,
+  d.disclosed_at, d.status,
+  CASE WHEN atelier_can_view_personnel(
+    (SELECT e.user_id FROM atelier_employees e
+      WHERE e.id = d.person_id AND d.person_type = 'employee')
+  ) THEN d.notes ELSE NULL END AS notes,
+  d.declared_party,
+  CASE WHEN atelier_can_view_personnel(
+    (SELECT e.user_id FROM atelier_employees e
+      WHERE e.id = d.person_id AND d.person_type = 'employee')
+  ) THEN d.nature ELSE NULL END AS nature,
+  CASE WHEN atelier_can_view_personnel(
+    (SELECT e.user_id FROM atelier_employees e
+      WHERE e.id = d.person_id AND d.person_type = 'employee')
+  ) THEN d.scope_impact ELSE NULL END AS scope_impact,
+  d.declared_at, d.last_reviewed_at,
+  d.created_at, d.updated_at, d.created_by_user_id, d.deleted_at
+FROM atelier_conflict_disclosures d;
