@@ -28,6 +28,7 @@ import {
   db,
   atelierAccounts,
   atelierEngagements,
+  atelierEngagementAccess,
   atelierOpportunities,
   atelierRaidItems,
   atelierExpenses,
@@ -37,6 +38,67 @@ import {
   atelierExtractedDocuments,
   atelierCliAttachments,
 } from "@workspace/db";
+
+/**
+ * Engagement-grant ACL parity check (mirrors `ensureEngAccess` from
+ * engagementRoutes). Returns the engagement when the persona is allowed
+ * to write to it, or a rejection result the capability can return.
+ *
+ *   - founding_partner / partner roles bypass the grant table
+ *     (firm-wide visibility, Task #292 convention).
+ *   - all other roles must hold an active, non-revoked
+ *     `atelier_engagement_access` row for the engagement.
+ *   - cross-org engagement ids surface as `not_found` so existence is
+ *     not leaked; intra-org engagements without a grant return
+ *     `forbidden`.
+ */
+async function ensureEngagementWriteAccess(
+  ctx: { persona: { id: string; orgId: string; role: string } },
+  engagementId: string,
+): Promise<
+  | { ok: true; engagement: typeof atelierEngagements.$inferSelect }
+  | { ok: false; errorCode: "not_found" | "forbidden"; errorMessage: string }
+> {
+  const [eng] = await db
+    .select()
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.id, engagementId),
+        eq(atelierEngagements.orgId, ctx.persona.orgId),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
+  if (!eng) {
+    return {
+      ok: false,
+      errorCode: "not_found",
+      errorMessage: `engagement ${engagementId} not found`,
+    };
+  }
+  if (ctx.persona.role === "founding_partner" || ctx.persona.role === "partner") {
+    return { ok: true, engagement: eng };
+  }
+  const [grant] = await db
+    .select({ id: atelierEngagementAccess.id })
+    .from(atelierEngagementAccess)
+    .where(
+      and(
+        eq(atelierEngagementAccess.engagementId, engagementId),
+        eq(atelierEngagementAccess.userId, ctx.persona.id),
+        eq(atelierEngagementAccess.status, "active"),
+        isNull(atelierEngagementAccess.deletedAt),
+      ),
+    );
+  if (!grant) {
+    return {
+      ok: false,
+      errorCode: "forbidden",
+      errorMessage: "Persona has no access grant for this engagement.",
+    };
+  }
+  return { ok: true, engagement: eng };
+}
 import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
@@ -354,25 +416,10 @@ defineCapability({
   async run(input, ctx) {
     const attachmentIds = (input.attachmentIds as string[]) ?? [];
     const engagementId = String(input.engagementId ?? "");
-    // Engagement ACL: must belong to the persona's org. Mirrors the
-    // pattern used by engagementRoutes (org-scoped + isNull deleted).
-    const [engagement] = await db
-      .select()
-      .from(atelierEngagements)
-      .where(
-        and(
-          eq(atelierEngagements.id, engagementId),
-          eq(atelierEngagements.orgId, ctx.persona.orgId),
-          isNull(atelierEngagements.deletedAt),
-        ),
-      );
-    if (!engagement) {
-      return {
-        ok: false,
-        errorCode: "not_found",
-        errorMessage: `engagement ${engagementId} not found`,
-      };
-    }
+    // Engagement ACL parity with raid/engagement routes: org scope +
+    // active grant unless persona is founding_partner / partner.
+    const acl = await ensureEngagementWriteAccess(ctx, engagementId);
+    if (!acl.ok) return acl;
     const chunks = await loadAllChunks(attachmentIds, ctx.persona.orgId);
     if (chunks.length === 0) {
       return {
@@ -513,23 +560,8 @@ defineCapability({
     // engagementId is supplied, validate it belongs to the persona's
     // org before opening a confirm dialog.
     if (engagementId) {
-      const [engagement] = await db
-        .select({ id: atelierEngagements.id })
-        .from(atelierEngagements)
-        .where(
-          and(
-            eq(atelierEngagements.id, engagementId),
-            eq(atelierEngagements.orgId, ctx.persona.orgId),
-            isNull(atelierEngagements.deletedAt),
-          ),
-        );
-      if (!engagement) {
-        return {
-          ok: false,
-          errorCode: "not_found",
-          errorMessage: `engagement ${engagementId} not found`,
-        };
-      }
+      const acl = await ensureEngagementWriteAccess(ctx, engagementId);
+      if (!acl.ok) return acl;
     }
     const drafts: Array<{
       attachmentId: string;
