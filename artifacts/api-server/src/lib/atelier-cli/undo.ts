@@ -529,12 +529,21 @@ defineCapability({
       });
     }
     const allUndone = stepResults.flatMap((r) => r.undoneEntityIds);
+    // Partial-success semantics (code-review iter 8): a step that
+    // intended to reverse N IDs and only managed M (M>0, M<N) returns
+    // ok:false from ensureAffected but still populates
+    // undoneEntityIds. Treat any reverted-ID count > 0 as partial
+    // success rather than total failure — otherwise we'd misreport an
+    // "I reverted 2 of 3" outcome as "nothing reverted".
     const anyOk = stepResults.some((r) => r.ok);
+    const anyReverted = allUndone.length > 0;
+    const allFullyOk = stepResults.every((r) => r.ok);
     const result = {
-      ok: anyOk,
+      ok: anyOk || anyReverted,
+      partial: !allFullyOk && anyReverted,
       undoneEntityIds: allUndone,
-      errorMessage: anyOk
-        ? undefined
+      errorMessage: anyReverted
+        ? stepResults.find((r) => r.errorMessage)?.errorMessage
         : stepResults.find((r) => r.errorMessage)?.errorMessage ??
           "no reversible step affected any rows",
     };

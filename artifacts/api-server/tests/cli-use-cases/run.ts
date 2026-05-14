@@ -342,12 +342,51 @@ async function main(): Promise<void> {
     const out = (await raidSoftDeleteSelfTest({
       ids: ["raid_does_not_exist_xxx"],
       orgId: "aico",
-    })) as { ok: boolean; errorMessage?: string };
-    assert.equal(out.ok, false, "partial-undo with bogus id must report ok=false");
+    })) as { ok: boolean; undoneEntityIds: string[]; errorMessage?: string };
+    assert.equal(out.ok, false, "all-missing undo must report ok=false");
+    assert.deepEqual(out.undoneEntityIds, [], "no IDs should have been reverted");
     assert.ok(
       typeof out.errorMessage === "string" && out.errorMessage.length > 0,
       "partial-undo must include an explanatory errorMessage",
     );
+  });
+
+  // Mixed-success regression (code-review iter 8): seed a real RAID,
+  // then ask the inverse op to undo [real, bogus]. The expected
+  // contract is "report partial honestly" — ok=false from
+  // ensureAffected, undoneEntityIds=[real], errorMessage names the
+  // missing id. The orchestrator wraps this into ok=true/partial=true
+  // at the run-level (verified separately in undo.run aggregation).
+  await step("mixed undo — partial success surfaces reverted IDs + names missing", async () => {
+    const { raidSoftDeleteSelfTest } = await import(
+      "../../src/lib/atelier-cli/undo.js"
+    );
+    const realId = `raid_mixundo_${Date.now().toString(36)}`;
+    await db.insert(atelierRaidItems).values({
+      id: realId,
+      orgId: "aico",
+      engagementId: ENG_ID,
+      kind: "risk",
+      severity: "amber",
+      status: "open",
+      description: "mixed-undo regression seed",
+    });
+    const out = (await raidSoftDeleteSelfTest({
+      ids: [realId, "raid_bogus_xxx"],
+      orgId: "aico",
+    })) as { ok: boolean; undoneEntityIds: string[]; errorMessage?: string };
+    assert.equal(out.ok, false, "ensureAffected must flag the missing id");
+    assert.deepEqual(out.undoneEntityIds, [realId], "real id must appear in undone list");
+    assert.ok(
+      out.errorMessage && /raid_bogus_xxx/.test(out.errorMessage),
+      `errorMessage must name the missing id, got: ${out.errorMessage}`,
+    );
+    const [row] = await db
+      .select({ deletedAt: atelierRaidItems.deletedAt })
+      .from(atelierRaidItems)
+      .where(eq(atelierRaidItems.id, realId))
+      .limit(1);
+    assert.ok(row?.deletedAt != null, "real RAID row must be soft-deleted in DB");
   });
 
   // 7. Evals harness.
