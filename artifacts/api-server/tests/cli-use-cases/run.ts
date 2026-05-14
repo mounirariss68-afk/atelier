@@ -240,19 +240,64 @@ async function main(): Promise<void> {
     raidIdToUndo = latest?.id ?? null;
   });
 
+  let undoTurnId: string | null = null;
+  let undoTypedNameExpected: string | null = null;
   await step("POST /cli/turn '/undo' returns awaiting_confirmation when reversible exists", async () => {
     const sse = await postSse("/cli/turn", { prompt: "/undo" });
     const final = sse.frames.find((f) => f.event === "final");
-    // We accept either awaiting_confirmation (eligible turn found) or
-    // a typed error frame "no_reversible" when the test seed couldn't
-    // produce one — both are valid responses, both prove the capability
-    // is wired into the catalog.
     assert.ok(final, "no final frame");
     const ok = final!.data.status === "awaiting_confirmation"
       || final!.data.status === "success"
       || sse.frames.some((f) => f.event === "tool_result"
           && (f.data as { errorCode?: string }).errorCode === "no_reversible");
     assert.ok(ok, `unexpected /undo status ${final!.data.status}`);
+    if (final!.data.status === "awaiting_confirmation") {
+      undoTurnId = (final!.data as { turnId?: string }).turnId ?? null;
+      const needs = sse.frames.find((f) => f.event === "needs_confirmation");
+      const diff = (needs?.data as { diff?: { typedNameRequired?: string } } | undefined)?.diff;
+      undoTypedNameExpected = diff?.typedNameRequired ?? null;
+    }
+  });
+
+  await step("Use Case #62 — /confirm without typedName fails; correct typedName succeeds", async () => {
+    if (!undoTurnId || !undoTypedNameExpected) {
+      console.log("    (skipped — no awaiting_confirmation undo turn was produced)");
+      return;
+    }
+    // 1. confirm with NO typed value → must NOT execute the undo.
+    const bad = await postSse(`/cli/turn/${undoTurnId}/confirm`, {});
+    const badFinal = bad.frames.find((f) => f.event === "final");
+    assert.ok(badFinal, "no final frame for empty-typedName confirm");
+    assert.equal(
+      badFinal!.data.status,
+      "awaiting_confirmation",
+      `expected awaiting_confirmation when typedName missing, got ${badFinal!.data.status}`,
+    );
+    assert.equal(
+      (badFinal!.data as { typedNameRequired?: boolean }).typedNameRequired,
+      true,
+      "expected typedNameRequired flag on rejected confirm",
+    );
+
+    // 2. confirm with WRONG typed value → still rejected.
+    const wrong = await postSse(`/cli/turn/${undoTurnId}/confirm`, { typedName: "undo wrong1" });
+    const wrongFinal = wrong.frames.find((f) => f.event === "final");
+    assert.equal(
+      wrongFinal?.data.status,
+      "awaiting_confirmation",
+      "wrong typedName must not commit the undo",
+    );
+
+    // 3. confirm with correct typed value → undo proceeds.
+    const ok = await postSse(`/cli/turn/${undoTurnId}/confirm`, {
+      typedName: undoTypedNameExpected,
+    });
+    const okFinal = ok.frames.find((f) => f.event === "final");
+    assert.ok(okFinal, "no final frame for correct-typedName confirm");
+    assert.ok(
+      okFinal!.data.status === "success" || okFinal!.data.status === "partial",
+      `correct typedName must commit, got ${okFinal!.data.status}`,
+    );
   });
 
   // 7. Evals harness.

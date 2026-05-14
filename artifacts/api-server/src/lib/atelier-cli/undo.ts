@@ -358,7 +358,11 @@ defineCapability({
     additionalProperties: false,
   },
   isWrite: true,
-  irreversible: false,
+  // The undo itself cannot be undone — and (critically for Use Case
+  // #62) flagging it irreversible makes the orchestrator enforce the
+  // typed-name guard at /confirm time using the value we stamp into
+  // `confirmation.diff.typedNameRequired` below.
+  irreversible: true,
   surfaceOn: ["global"],
   examplePhrases: {
     en: ["undo my last action", "/undo"],
@@ -377,21 +381,16 @@ defineCapability({
           "No reversible action found in your last 20 turns. Irreversible writes (delete, send) cannot be undone from the CLI.",
       };
     }
-    // Typed-name guard (Use Case #62) — the partner must echo the
-    // short turn-handle back to us before we replay any inverse plan.
-    // This protects against an accidental "/undo" that wipes a turn
-    // they didn't intend to reverse.
+    // Typed-name guard (Use Case #62) — the partner must echo this
+    // short turn-handle back to us at `/cli/turn/:id/confirm` time.
+    // The orchestrator (index.ts ~1755) reads `typedNameRequired` off
+    // the confirmation diff and stamps `pendingWrite.typedNameExpected`
+    // server-side; `confirmPendingWrite` then validates the value the
+    // client sends in the confirm body against it. We deliberately do
+    // NOT pre-fill `pending.input.typedName` here — that would let the
+    // confirm endpoint be called with no user input and bypass the
+    // safeguard.
     const typedNameExpected = `undo ${hit.turnId.slice(-6)}`;
-    if (input.confirm === true) {
-      const typed = typeof input.typedName === "string" ? input.typedName.trim().toLowerCase() : "";
-      if (typed !== typedNameExpected) {
-        return {
-          ok: false,
-          errorCode: "typed_name_required",
-          errorMessage: `Type \`${typedNameExpected}\` to confirm the undo. (Got: ${typed || "<empty>"})`,
-        };
-      }
-    }
     if (input.confirm !== true) {
       const totalRecords = hit.reversibleSteps.reduce((n, s) => n + s.entityIds.length, 0);
       const summaryParts = [
@@ -423,10 +422,17 @@ defineCapability({
               irreversibleSteps: hit.irreversibleSiblings,
               partial: hit.irreversibleSiblings.length > 0,
             },
+            // Consumed by the orchestrator to stamp
+            // pendingWrite.typedNameExpected — the confirm route then
+            // requires the client to echo this value in its body.
+            typedNameRequired: typedNameExpected,
+            requiresTypedName: true,
           },
           pending: {
             tool: "undo_last_action",
-            input: { confirm: true, typedName: typedNameExpected },
+            // typedName is intentionally NOT pre-filled — the user
+            // must type it at confirm time.
+            input: { confirm: true },
           },
         },
       };
