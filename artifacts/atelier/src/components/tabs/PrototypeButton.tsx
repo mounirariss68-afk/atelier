@@ -13,7 +13,11 @@ export function PrototypeButton({ oppId, oppName }: { oppId: string; oppName: st
   const [open, setOpen] = React.useState(false);
   const [proto, setProto] = React.useState<AtelierPrototype | null>(null);
   const { data: me } = useAtelierGetMe();
-  const isLeadOrPartner = me?.role === "engagement_lead" || me?.role === "partner";
+  // Task #292 — partner-tier + senior_manager (formerly engagement_lead).
+  const isLeadOrPartner =
+    me?.role === "founding_partner" ||
+    me?.role === "partner" ||
+    me?.role === "senior_manager";
   const isPartner = me?.role === "partner";
 
   const forge = useAtelierForgePrototype({

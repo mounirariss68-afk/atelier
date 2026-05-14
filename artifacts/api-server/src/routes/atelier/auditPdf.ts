@@ -163,7 +163,12 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
     res.status(401).json({ error: "unauthenticated" });
     return;
   }
-  const isPrivileged = persona.role === "partner" || persona.role === "operations";
+  // Task #292 — privileged audit-PDF access = partner-tier + finance + hr.
+  const isPrivileged =
+    persona.role === "founding_partner" ||
+    persona.role === "partner" ||
+    persona.role === "finance" ||
+    persona.role === "hr";
   const isSelf = persona.id === personId;
   if (!isPrivileged && !isSelf) {
     res.status(403).json({ error: "forbidden" });

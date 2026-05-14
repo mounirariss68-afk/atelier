@@ -223,7 +223,8 @@ router.get("/accounts", async (req, res) => {
 });
 
 // ---------- create ----------
-const CREATE_ROLES = new Set(["partner", "engagement_lead"]);
+// Task #292 — CRM account creation: partner-tier + senior_manager.
+const CREATE_ROLES = new Set(["founding_partner", "partner", "senior_manager"]);
 
 router.post("/accounts", async (req, res) => {
   const me = ensurePersona(req, res);

@@ -284,9 +284,9 @@ export async function runUtilizationSnapshotTick(opts: { force?: boolean; weeksB
   const empById = new Map(emps.map((e) => [e.id, e] as const));
 
   function defaultTargetPct(role: string | null | undefined, seniority: string | null | undefined): number {
-    if (role === "partner" || seniority === "partner") return 50;
-    if (role === "ai_engineer") return 75;
-    if (role === "engagement_lead" || seniority === "principal") return 65;
+    // Task #292 — partner-tier 50%; senior_manager (formerly engagement_lead) 65%.
+    if (role === "partner" || role === "founding_partner" || seniority === "partner") return 50;
+    if (role === "senior_manager" || seniority === "principal") return 65;
     if (seniority === "manager" || seniority === "senior_consultant") return 70;
     return 75;
   }

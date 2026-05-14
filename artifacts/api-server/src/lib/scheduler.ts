@@ -71,9 +71,17 @@ export function startScheduler(): void {
           const targets = await db
             .select({ id: atelierUsers.id })
             .from(atelierUsers)
-            .where(or(eq(atelierUsers.role, "partner"), eq(atelierUsers.role, "operations")));
+            // Task #292 — ops split into finance|hr; partner-tier covers both.
+            .where(
+              or(
+                eq(atelierUsers.role, "founding_partner"),
+                eq(atelierUsers.role, "partner"),
+                eq(atelierUsers.role, "finance"),
+                eq(atelierUsers.role, "hr"),
+              ),
+            );
           if (targets.length === 0) {
-            logger.warn("Roster Steward cron: no Partner/Operations users found, skipping");
+            logger.warn("Roster Steward cron: no partner-tier / finance / hr users found, skipping");
             return;
           }
           const out = await runRosterSteward({ targetUserIds: targets.map((t) => t.id) });

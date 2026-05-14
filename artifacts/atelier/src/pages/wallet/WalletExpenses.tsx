@@ -43,7 +43,11 @@ export default function WalletExpenses() {
   React.useEffect(() => { void load(); }, [load]);
 
   const filtered = items.filter((e) => statusFilter === "all" || e.status === statusFilter);
-  const isLeader = me?.role === "partner" || me?.role === "operations";
+  // Task #292 — wallet leadership = partner-tier + finance.
+  const isLeader =
+    me?.role === "founding_partner" ||
+    me?.role === "partner" ||
+    me?.role === "finance";
 
   function fmt(usd: number, currency: string, amount: number): string {
     if (display === "USD") return `$${usd.toFixed(2)}`;

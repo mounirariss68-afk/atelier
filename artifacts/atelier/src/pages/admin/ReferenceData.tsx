@@ -26,7 +26,8 @@ import {
 // TODO(Task #292 — Persona Replacement / A3): replace this temporary role
 // gate with the canonical `can_admin_reference_data` capability check once
 // the 9-persona model ships.
-const ADMIN_ROLES = new Set(["partner", "operations"]);
+// Task #292 — Reference Data admin: founding_partner + hr.
+const ADMIN_ROLES = new Set(["founding_partner", "hr"]);
 const REGIONS = ["MENA", "Africa", "Asia", "Europe", "Americas", "Oceania", "Antarctica"];
 const OFFERING_ANCHORS = [
   "agentic_ai",

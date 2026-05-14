@@ -74,19 +74,23 @@ function rid(prefix: string): string {
     .slice(2, 8)}`;
 }
 
+// Task #292 — 9-persona model. Roster lifecycle splits former Operations
+// into Finance (payroll/GOSI/WPS) and HR (people-ops). For backwards
+// compatibility this module treats both as the "ops" tier. Per-engagement
+// leads (formerly engagement_lead) are now senior_manager.
 function isPartner(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner";
+  return me.role === "partner" || me.role === "founding_partner";
 }
 function isPartnerOrOps(me: typeof atelierUsers.$inferSelect): boolean {
-  return me.role === "partner" || me.role === "operations";
+  return (
+    me.role === "founding_partner" ||
+    me.role === "partner" ||
+    me.role === "finance" ||
+    me.role === "hr"
+  );
 }
 function canManageLifecycle(me: typeof atelierUsers.$inferSelect): boolean {
-  // Partner | Operations | Engagement Lead can advance lifecycle steps.
-  return (
-    me.role === "partner" ||
-    me.role === "operations" ||
-    me.role === "engagement_lead"
-  );
+  return isPartnerOrOps(me) || me.role === "senior_manager";
 }
 
 async function audit(args: {
@@ -185,33 +189,33 @@ interface StepTemplate {
 
 const ONBOARDING_TEMPLATES: Record<WorkerType, StepTemplate[]> = {
   employee: [
-    { code: "nda.signed", title: "NDA signed", ownerRole: "operations", daysFromStart: 0, isComplianceGate: true },
+    { code: "nda.signed", title: "NDA signed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
     { code: "contract.signed", title: "Employment contract signed", ownerRole: "partner", daysFromStart: 0, isComplianceGate: true },
-    { code: "payroll.registered", title: "Payroll registered (GOSI / WPS)", ownerRole: "operations", daysFromStart: 1, isComplianceGate: true },
-    { code: "sso.provisioned", title: "SSO + email provisioned", ownerRole: "operations", daysFromStart: 2 },
-    { code: "slack.invited", title: "Invited to Slack workspaces", ownerRole: "operations", daysFromStart: 2 },
-    { code: "calendar.welcome", title: "Welcome calendar block", ownerRole: "operations", daysFromStart: 3 },
-    { code: "equipment.shipped", title: "Equipment shipped", ownerRole: "operations", daysFromStart: 3 },
-    { code: "benefits.enrolled", title: "Benefits enrollment", ownerRole: "operations", daysFromStart: 5 },
-    { code: "security.training", title: "Security & data-handling training", ownerRole: "operations", daysFromStart: 7 },
-    { code: "manager.intro", title: "Manager intro session", ownerRole: "engagement_lead", daysFromStart: 7 },
-    { code: "atelier.tour", title: "The Atelier walkthrough", ownerRole: "engagement_lead", daysFromStart: 7 },
+    { code: "payroll.registered", title: "Payroll registered (GOSI / WPS)", ownerRole: "hr", daysFromStart: 1, isComplianceGate: true },
+    { code: "sso.provisioned", title: "SSO + email provisioned", ownerRole: "hr", daysFromStart: 2 },
+    { code: "slack.invited", title: "Invited to Slack workspaces", ownerRole: "hr", daysFromStart: 2 },
+    { code: "calendar.welcome", title: "Welcome calendar block", ownerRole: "hr", daysFromStart: 3 },
+    { code: "equipment.shipped", title: "Equipment shipped", ownerRole: "hr", daysFromStart: 3 },
+    { code: "benefits.enrolled", title: "Benefits enrollment", ownerRole: "hr", daysFromStart: 5 },
+    { code: "security.training", title: "Security & data-handling training", ownerRole: "hr", daysFromStart: 7 },
+    { code: "manager.intro", title: "Manager intro session", ownerRole: "senior_manager", daysFromStart: 7 },
+    { code: "atelier.tour", title: "The Atelier walkthrough", ownerRole: "senior_manager", daysFromStart: 7 },
   ],
   contractor: [
-    { code: "nda.signed", title: "NDA signed", ownerRole: "operations", daysFromStart: 0, isComplianceGate: true },
-    { code: "msa.signed", title: "Master services agreement signed", ownerRole: "operations", daysFromStart: 0, isComplianceGate: true },
-    { code: "conflict.disclosed", title: "Conflicts of interest disclosed", ownerRole: "operations", daysFromStart: 0, isComplianceGate: true },
-    { code: "vendor.onboarded", title: "Vendor entity onboarded (AP)", ownerRole: "operations", daysFromStart: 1 },
-    { code: "sso.provisioned", title: "Limited SSO provisioned", ownerRole: "operations", daysFromStart: 2 },
-    { code: "invoice.setup", title: "Invoice cadence configured", ownerRole: "operations", daysFromStart: 3 },
-    { code: "scope.briefed", title: "Engagement scope briefed", ownerRole: "engagement_lead", daysFromStart: 3 },
+    { code: "nda.signed", title: "NDA signed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "msa.signed", title: "Master services agreement signed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "conflict.disclosed", title: "Conflicts of interest disclosed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "vendor.onboarded", title: "Vendor entity onboarded (AP)", ownerRole: "hr", daysFromStart: 1 },
+    { code: "sso.provisioned", title: "Limited SSO provisioned", ownerRole: "hr", daysFromStart: 2 },
+    { code: "invoice.setup", title: "Invoice cadence configured", ownerRole: "hr", daysFromStart: 3 },
+    { code: "scope.briefed", title: "Engagement scope briefed", ownerRole: "senior_manager", daysFromStart: 3 },
   ],
   partner_firm_resource: [
-    { code: "msa.firm.verified", title: "Firm MSA verified active", ownerRole: "operations", daysFromStart: 0, isComplianceGate: true },
-    { code: "nda.firm.verified", title: "Firm NDA covers resource", ownerRole: "operations", daysFromStart: 0, isComplianceGate: true },
-    { code: "conflict.disclosed", title: "Resource conflicts disclosed", ownerRole: "operations", daysFromStart: 0, isComplianceGate: true },
-    { code: "sso.guest", title: "Guest SSO provisioned", ownerRole: "operations", daysFromStart: 1 },
-    { code: "scope.briefed", title: "Engagement scope briefed", ownerRole: "engagement_lead", daysFromStart: 2 },
+    { code: "msa.firm.verified", title: "Firm MSA verified active", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "nda.firm.verified", title: "Firm NDA covers resource", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "conflict.disclosed", title: "Resource conflicts disclosed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "sso.guest", title: "Guest SSO provisioned", ownerRole: "hr", daysFromStart: 1 },
+    { code: "scope.briefed", title: "Engagement scope briefed", ownerRole: "senior_manager", daysFromStart: 2 },
   ],
 };
 
@@ -219,37 +223,37 @@ const ONBOARDING_TEMPLATES: Record<WorkerType, StepTemplate[]> = {
 // trimmed variant (MSA-side closure handled by the firm).
 const OFFBOARDING_TEMPLATES: Record<WorkerType, StepTemplate[]> = {
   employee: [
-    { code: "intent.recorded", title: "Intent to leave recorded", ownerRole: "operations", daysFromStart: 0 },
-    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "engagement_lead", daysFromStart: 1, isReassignmentGate: true },
-    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "engagement_lead", daysFromStart: 3 },
+    { code: "intent.recorded", title: "Intent to leave recorded", ownerRole: "hr", daysFromStart: 0 },
+    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "senior_manager", daysFromStart: 1, isReassignmentGate: true },
+    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "senior_manager", daysFromStart: 3 },
     { code: "client.notify", title: "Clients notified (where appropriate)", ownerRole: "partner", daysFromStart: 4 },
-    { code: "sso.revoked", title: "SSO revoked", ownerRole: "operations", daysFromStart: 7 },
-    { code: "email.disabled", title: "Email disabled (forward set)", ownerRole: "operations", daysFromStart: 7 },
-    { code: "slack.disabled", title: "Slack workspaces disabled", ownerRole: "operations", daysFromStart: 7 },
-    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "operations", daysFromStart: 7 },
-    { code: "ip.assignment.signed", title: "IP assignment + return-of-property signed", ownerRole: "operations", daysFromStart: 7 },
-    { code: "final.payment", title: "Final payment + EOSB processed", ownerRole: "operations", daysFromStart: 14 },
+    { code: "sso.revoked", title: "SSO revoked", ownerRole: "hr", daysFromStart: 7 },
+    { code: "email.disabled", title: "Email disabled (forward set)", ownerRole: "hr", daysFromStart: 7 },
+    { code: "slack.disabled", title: "Slack workspaces disabled", ownerRole: "hr", daysFromStart: 7 },
+    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "hr", daysFromStart: 7 },
+    { code: "ip.assignment.signed", title: "IP assignment + return-of-property signed", ownerRole: "hr", daysFromStart: 7 },
+    { code: "final.payment", title: "Final payment + EOSB processed", ownerRole: "hr", daysFromStart: 14 },
     { code: "audit.pack.signed", title: "Partner-signed audit pack issued", ownerRole: "partner", daysFromStart: 14 },
   ],
   contractor: [
-    { code: "intent.recorded", title: "Intent to roll off recorded", ownerRole: "operations", daysFromStart: 0 },
-    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "engagement_lead", daysFromStart: 1, isReassignmentGate: true },
-    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "engagement_lead", daysFromStart: 3 },
+    { code: "intent.recorded", title: "Intent to roll off recorded", ownerRole: "hr", daysFromStart: 0 },
+    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "senior_manager", daysFromStart: 1, isReassignmentGate: true },
+    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "senior_manager", daysFromStart: 3 },
     { code: "client.notify", title: "Clients notified", ownerRole: "partner", daysFromStart: 4 },
-    { code: "sso.revoked", title: "SSO revoked", ownerRole: "operations", daysFromStart: 5 },
-    { code: "email.disabled", title: "Email disabled", ownerRole: "operations", daysFromStart: 5 },
-    { code: "slack.disabled", title: "Slack disabled", ownerRole: "operations", daysFromStart: 5 },
-    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "operations", daysFromStart: 5 },
-    { code: "ip.assignment.signed", title: "IP assignment + return of property", ownerRole: "operations", daysFromStart: 5 },
-    { code: "final.payment", title: "Final invoice paid", ownerRole: "operations", daysFromStart: 14 },
+    { code: "sso.revoked", title: "SSO revoked", ownerRole: "hr", daysFromStart: 5 },
+    { code: "email.disabled", title: "Email disabled", ownerRole: "hr", daysFromStart: 5 },
+    { code: "slack.disabled", title: "Slack disabled", ownerRole: "hr", daysFromStart: 5 },
+    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "hr", daysFromStart: 5 },
+    { code: "ip.assignment.signed", title: "IP assignment + return of property", ownerRole: "hr", daysFromStart: 5 },
+    { code: "final.payment", title: "Final invoice paid", ownerRole: "hr", daysFromStart: 14 },
     { code: "audit.pack.signed", title: "Partner-signed audit pack issued", ownerRole: "partner", daysFromStart: 14 },
   ],
   partner_firm_resource: [
-    { code: "intent.recorded", title: "Resource rotation recorded", ownerRole: "operations", daysFromStart: 0 },
-    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "engagement_lead", daysFromStart: 1, isReassignmentGate: true },
-    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "engagement_lead", daysFromStart: 3 },
-    { code: "sso.revoked", title: "Guest SSO revoked", ownerRole: "operations", daysFromStart: 5 },
-    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "operations", daysFromStart: 5 },
+    { code: "intent.recorded", title: "Resource rotation recorded", ownerRole: "hr", daysFromStart: 0 },
+    { code: "reassignments.identified", title: "Engagement reassignments identified", ownerRole: "senior_manager", daysFromStart: 1, isReassignmentGate: true },
+    { code: "knowledge.transfer", title: "Knowledge transfer sessions", ownerRole: "senior_manager", daysFromStart: 3 },
+    { code: "sso.revoked", title: "Guest SSO revoked", ownerRole: "hr", daysFromStart: 5 },
+    { code: "salon.rename", title: "Salon team-member entries renamed", ownerRole: "hr", daysFromStart: 5 },
     { code: "audit.pack.signed", title: "Partner-signed audit pack issued", ownerRole: "partner", daysFromStart: 7 },
   ],
 };
@@ -1516,7 +1520,7 @@ router.post("/roster/people/:id/conflicts", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isPartnerOrOps(me) && me.role !== "engagement_lead") {
+    if (!isPartnerOrOps(me) && me.role !== "senior_manager") { // Task #292
       res.status(403).json({ error: "partner-ops-or-lead-only" });
       return;
     }
@@ -1713,7 +1717,15 @@ router.post("/roster/steward/run", async (req, res, next) => {
     const targets = await db
       .select({ id: atelierUsers.id })
       .from(atelierUsers)
-      .where(or(eq(atelierUsers.role, "partner"), eq(atelierUsers.role, "operations")));
+      .where(
+        // Task #292 — ops tier is now finance|hr; partner-tier covers both.
+        or(
+          eq(atelierUsers.role, "founding_partner"),
+          eq(atelierUsers.role, "partner"),
+          eq(atelierUsers.role, "finance"),
+          eq(atelierUsers.role, "hr"),
+        ),
+      );
     const targetUserIds = targets.length > 0 ? targets.map((t) => t.id) : [me.id];
     const out = await runRosterSteward({ targetUserIds });
     res.json({ ...out, targets: targetUserIds });

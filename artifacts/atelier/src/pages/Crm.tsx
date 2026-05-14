@@ -12,7 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Globe, Plus } from "lucide-react";
 import { CreateAccountDialog } from "@/components/CreateAccountDialog";
 
-const CREATE_ROLES = new Set(["partner", "engagement_lead"]);
+// Task #292 — Account creation: partner-tier + senior_manager.
+const CREATE_ROLES = new Set(["founding_partner", "partner", "senior_manager"]);
 
 const TIER_TONE: Record<string, "gold" | "green" | "amber" | "default"> = {
   A: "gold",

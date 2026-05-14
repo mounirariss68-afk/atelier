@@ -68,7 +68,7 @@ export function ProposalTab({ oppId }: { oppId: string }) {
   const [sheetSections, setSheetSections] = React.useState<string[]>([
     "context","approach","workplan","team","pricing","case_studies","terms","compliance",
   ]);
-  const [sheetTeam, setSheetTeam] = React.useState("partner:15,lead:80,sme:60,ai_engineer:80");
+  const [sheetTeam, setSheetTeam] = React.useState("partner:15,lead:80,consultant:60,consultant:80");
   const [sheetRfpName, setSheetRfpName] = React.useState<string | null>(null);
   const ALL_SECTIONS = ["context","approach","workplan","team","pricing","case_studies","terms","compliance"] as const;
   const approvePricing = useAtelierApproveProposalPricing({
