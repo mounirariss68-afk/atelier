@@ -263,6 +263,30 @@ router.get("/cli/admin/turns", async (req, res) => {
   if (typeof req.query.status === "string") {
     filters.push(eq(atelierCliTurns.status, req.query.status));
   }
+  if (typeof req.query.until === "string") {
+    const until = new Date(req.query.until);
+    if (!Number.isNaN(until.getTime())) {
+      filters.push(sql`${atelierCliTurns.createdAt} <= ${until.toISOString()}`);
+    }
+  }
+  if (typeof req.query.module === "string" && req.query.module.length > 0) {
+    const modTools = capabilitiesForPersona({
+      id: me.id,
+      name: me.name,
+      role: me.role,
+      orgId: me.orgId,
+    })
+      .filter((c) => c.module === req.query.module)
+      .map((c) => c.toolName);
+    if (modTools.length === 0) {
+      res.json({ turns: [] });
+      return;
+    }
+    const orParts = modTools.map(
+      (t) => sql`${atelierCliTurns.toolCalls} @> ${JSON.stringify([{ tool: t }])}::jsonb`,
+    );
+    filters.push(sql`(${sql.join(orParts, sql` OR `)})`);
+  }
   const rows = await db
     .select({
       id: atelierCliTurns.id,
@@ -292,18 +316,61 @@ router.get("/cli/admin/turns", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------
-// GET /cli/admin/metrics — aggregates over the last `days` days.
+// GET /cli/admin/metrics — aggregates + percentiles + behavioral rates.
+//
+// Filters: ?days=7  ?module=raid  ?since=ISO  ?until=ISO
 // ---------------------------------------------------------------------
 router.get("/cli/admin/metrics", async (req, res) => {
   const me = ensureFoundingPartner(req, res);
   if (!me) return;
   const days = Math.min(90, Math.max(1, Number(req.query.days ?? 7)));
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const since =
+    typeof req.query.since === "string" && !Number.isNaN(new Date(req.query.since).getTime())
+      ? new Date(req.query.since)
+      : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const filters = [
+    eq(atelierCliTurns.orgId, me.orgId),
+    gte(atelierCliTurns.createdAt, since),
+  ];
+  if (typeof req.query.until === "string") {
+    const until = new Date(req.query.until);
+    if (!Number.isNaN(until.getTime())) {
+      filters.push(sql`${atelierCliTurns.createdAt} <= ${until.toISOString()}`);
+    }
+  }
+  const moduleFilter =
+    typeof req.query.module === "string" && req.query.module.length > 0
+      ? req.query.module
+      : null;
+  // Module filter is jsonb-side: a tool_call's tool name maps to a
+  // capability whose `module` we want. We can't join against an
+  // in-memory catalog from SQL, so we materialise the matching tool
+  // names + apply a `tool_calls @> ...` predicate.
+  if (moduleFilter) {
+    const me2 = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
+    const modTools = capabilitiesForPersona(me2)
+      .filter((c) => c.module === moduleFilter)
+      .map((c) => c.toolName);
+    if (modTools.length === 0) {
+      res.json({ rangeDays: days, since: since.toISOString(), module: moduleFilter, empty: true });
+      return;
+    }
+    const orParts = modTools.map(
+      (t) => sql`${atelierCliTurns.toolCalls} @> ${JSON.stringify([{ tool: t }])}::jsonb`,
+    );
+    filters.push(sql`(${sql.join(orParts, sql` OR `)})`);
+  }
+
   const [agg] = await db
     .select({
       turnCount: sql<number>`count(*)::int`,
       totalCostCents: sql<number>`coalesce(sum(${atelierCliTurns.costCents}), 0)::int`,
       avgLatencyMs: sql<number>`coalesce(avg(${atelierCliTurns.latencyMs}), 0)::int`,
+      // Postgres percentile_cont returns numeric; cast for JSON safety.
+      p50LatencyMs: sql<number>`coalesce(percentile_cont(0.5) within group (order by ${atelierCliTurns.latencyMs}), 0)::int`,
+      p95LatencyMs: sql<number>`coalesce(percentile_cont(0.95) within group (order by ${atelierCliTurns.latencyMs}), 0)::int`,
+      p50CostCents: sql<number>`coalesce(percentile_cont(0.5) within group (order by ${atelierCliTurns.costCents}), 0)::int`,
+      p95CostCents: sql<number>`coalesce(percentile_cont(0.95) within group (order by ${atelierCliTurns.costCents}), 0)::int`,
       totalTokensIn: sql<number>`coalesce(sum(${atelierCliTurns.tokensIn}), 0)::bigint`,
       totalTokensOut: sql<number>`coalesce(sum(${atelierCliTurns.tokensOut}), 0)::bigint`,
       thumbsUp: sql<number>`count(*) filter (where ${atelierCliTurns.feedback}->>'thumb' = 'up')::int`,
@@ -311,20 +378,50 @@ router.get("/cli/admin/metrics", async (req, res) => {
       errorCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'error')::int`,
       partialCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'partial')::int`,
       successCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'success')::int`,
+      readOnlyNoOpCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'read_only_no_op')::int`,
+      asyncDispatchedCount: sql<number>`count(*) filter (where ${atelierCliTurns.status} = 'async_dispatched')::int`,
+      // Behavioral rates — confirmation = had pending_write resolved;
+      // disambiguation = a needs_disambiguation frame appeared.
+      confirmationCount: sql<number>`count(*) filter (where ${atelierCliTurns.frames}::text like '%"needs_confirmation"%')::int`,
+      disambiguationCount: sql<number>`count(*) filter (where ${atelierCliTurns.frames}::text like '%"needs_disambiguation"%')::int`,
     })
     .from(atelierCliTurns)
+    .where(and(...filters));
+
+  // Undo rate from the audit log — every cli.undo writes one row.
+  const [undoAgg] = await db
+    .select({
+      undoCount: sql<number>`count(*)::int`,
+    })
+    .from(atelierAuditEvents)
     .where(
       and(
-        eq(atelierCliTurns.orgId, me.orgId),
-        gte(atelierCliTurns.createdAt, since),
+        eq(atelierAuditEvents.action, V3_AUDIT_ACTIONS.CLI_UNDO),
+        gte(atelierAuditEvents.createdAt, since),
       ),
     );
+
+  const turnCount = agg?.turnCount ?? 0;
+  const safeRate = (n: number) => (turnCount > 0 ? Math.round((n / turnCount) * 1000) / 1000 : 0);
   res.json({
     rangeDays: days,
     since: since.toISOString(),
+    module: moduleFilter,
     ...agg,
     totalTokensIn: Number(agg?.totalTokensIn ?? 0),
     totalTokensOut: Number(agg?.totalTokensOut ?? 0),
+    rates: {
+      success: safeRate(agg?.successCount ?? 0),
+      error: safeRate(agg?.errorCount ?? 0),
+      partial: safeRate(agg?.partialCount ?? 0),
+      readOnlyNoOp: safeRate(agg?.readOnlyNoOpCount ?? 0),
+      confirmation: safeRate(agg?.confirmationCount ?? 0),
+      disambiguation: safeRate(agg?.disambiguationCount ?? 0),
+      thumbsUp: safeRate(agg?.thumbsUp ?? 0),
+      thumbsDown: safeRate(agg?.thumbsDown ?? 0),
+      undo: safeRate(undoAgg?.undoCount ?? 0),
+    },
+    undoCount: undoAgg?.undoCount ?? 0,
   });
 });
 

@@ -208,11 +208,41 @@ const INVERSE_OPS: Record<string, InverseOp> = {
   },
 };
 
+interface IrreversibleStepReport {
+  step: number;
+  tool: string;
+  reason: string;
+  manualReversalHint: string;
+}
+
 interface LastReversibleHit {
   turnId: string;
   toolName: string;
   entityIds: string[];
   inverse: InverseOp;
+  /**
+   * Steps in the same source turn that we cannot reverse. Surfaced in
+   * the confirmation diff so partners see exactly which writes will
+   * stay even after `/undo` succeeds.
+   */
+  irreversibleSiblings: IrreversibleStepReport[];
+}
+
+const MANUAL_REVERSAL_HINTS: Record<string, string> = {
+  account_delete:
+    "Account deletion is permanent in CLI surface — restore via Admin → Accounts → soft-deleted view.",
+  send_deliverable_email:
+    "Outbound email cannot be recalled. Send a follow-up email or contact the recipient directly.",
+  publish_brand_profile:
+    "Published Brand Profile versions cannot be discarded — publish a new superseding version instead.",
+};
+
+function explainIrreversible(toolName: string): string {
+  const cap = findByToolName(toolName);
+  if (!cap) return "tool no longer in catalog";
+  if (cap.outboundChannel) return `outbound ${cap.outboundChannel} cannot be recalled from the CLI`;
+  if (cap.irreversible) return "capability is flagged as irreversible in the catalog";
+  return "no inverse operation registered for this tool";
 }
 
 async function findLastReversible(
@@ -236,20 +266,31 @@ async function findLastReversible(
     .limit(20);
 
   for (const row of rows) {
-    if (row.status !== "success") continue;
-    const calls = (row.toolCalls as Array<{ tool: string; ok: boolean }> | null) ?? [];
-    // Walk write steps from latest → earliest looking for one we can reverse.
+    if (row.status !== "success" && row.status !== "partial") continue;
+    const calls = (row.toolCalls as Array<{ tool: string; ok: boolean; step?: number }> | null) ?? [];
+    // First-pass: catalogue every write step in this turn so we can
+    // report irreversible siblings alongside the reversal preview.
+    const irreversibleSiblings: IrreversibleStepReport[] = [];
+    let hit: { idx: number; cap: NonNullable<ReturnType<typeof findByToolName>>; ids: string[]; inverse: InverseOp } | null = null;
     for (let i = calls.length - 1; i >= 0; i--) {
       const c = calls[i]!;
       if (!c.ok) continue;
       const cap = findByToolName(c.tool);
-      if (!cap?.isWrite || cap.irreversible) continue;
+      if (!cap?.isWrite) continue;
       const inverse = INVERSE_OPS[c.tool];
-      if (!inverse) continue;
-      // Find the corresponding tool_result frame to extract created
-      // ids. Confirmed writes append a SECOND tool_result frame at the
-      // tail — we walk backwards so we pick the post-confirm payload
-      // first (which is the row we actually need to reverse).
+      if (cap.irreversible || !inverse) {
+        irreversibleSiblings.unshift({
+          step: typeof c.step === "number" ? c.step : i,
+          tool: c.tool,
+          reason: explainIrreversible(c.tool),
+          manualReversalHint:
+            MANUAL_REVERSAL_HINTS[c.tool] ??
+            `Reverse ${c.tool} manually in the relevant workspace.`,
+        });
+        continue;
+      }
+      if (hit) continue; // already picked the most-recent reversible
+      // Find the corresponding tool_result frame to extract created ids.
       const frames = (row.frames as Array<{ type: string; data?: Record<string, unknown> }> | null) ?? [];
       let data: unknown;
       for (let f = frames.length - 1; f >= 0; f--) {
@@ -262,7 +303,16 @@ async function findLastReversible(
       }
       const ids = entityIdsFromResult(c.tool, data);
       if (ids.length === 0) continue;
-      return { turnId: row.id, toolName: c.tool, entityIds: ids, inverse };
+      hit = { idx: i, cap, ids, inverse };
+    }
+    if (hit) {
+      return {
+        turnId: row.id,
+        toolName: calls[hit.idx]!.tool,
+        entityIds: hit.ids,
+        inverse: hit.inverse,
+        irreversibleSiblings,
+      };
     }
   }
   return null;
@@ -304,17 +354,27 @@ defineCapability({
       };
     }
     if (input.confirm !== true) {
+      const summaryParts = [
+        `Undo last action — ${hit.inverse.label} (${hit.entityIds.length} record${hit.entityIds.length === 1 ? "" : "s"} from turn ${hit.turnId}).`,
+      ];
+      if (hit.irreversibleSiblings.length > 0) {
+        summaryParts.push(
+          `Note: ${hit.irreversibleSiblings.length} step${hit.irreversibleSiblings.length === 1 ? "" : "s"} from the same turn cannot be undone (${hit.irreversibleSiblings.map((s) => s.tool).join(", ")}).`,
+        );
+      }
       return {
         ok: true,
         data: { preview: hit },
         confirmation: {
-          summary: `Undo last action — ${hit.inverse.label} (${hit.entityIds.length} record${hit.entityIds.length === 1 ? "" : "s"} from turn ${hit.turnId}).`,
+          summary: summaryParts.join(" "),
           diff: {
             undo: {
               originalToolName: hit.toolName,
               originalTurnId: hit.turnId,
               entityIds: hit.entityIds,
               reversal: hit.inverse.label,
+              irreversibleSteps: hit.irreversibleSiblings,
+              partial: hit.irreversibleSiblings.length > 0,
             },
           },
           pending: { tool: "undo_last_action", input: { confirm: true } },
@@ -346,8 +406,14 @@ defineCapability({
         undoTurnId: ctx.turnId,
         undoneEntityIds: result.undoneEntityIds,
         reversal: hit.inverse.label,
+        // Persist the irreversible-step report so audit timelines
+        // explain the partial-undo truth even when nobody clicks /help.
+        irreversibleSteps: hit.irreversibleSiblings,
       },
-      payloadSummary: `CLI undid ${hit.toolName} (${result.undoneEntityIds.length} record${result.undoneEntityIds.length === 1 ? "" : "s"})`,
+      payloadSummary:
+        hit.irreversibleSiblings.length > 0
+          ? `CLI undid ${hit.toolName} (${result.undoneEntityIds.length} record${result.undoneEntityIds.length === 1 ? "" : "s"}); ${hit.irreversibleSiblings.length} irreversible step${hit.irreversibleSiblings.length === 1 ? "" : "s"} left in place`
+          : `CLI undid ${hit.toolName} (${result.undoneEntityIds.length} record${result.undoneEntityIds.length === 1 ? "" : "s"})`,
     });
     return {
       ok: true,
@@ -356,6 +422,8 @@ defineCapability({
         originalTurnId: hit.turnId,
         toolName: hit.toolName,
         entityIds: result.undoneEntityIds,
+        irreversibleSteps: hit.irreversibleSiblings,
+        partial: hit.irreversibleSiblings.length > 0,
       },
     };
   },
