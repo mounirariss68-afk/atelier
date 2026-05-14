@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { db, pool, atelierEngagementAccess } from "@workspace/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { isRestrictedPersona } from "./personaRoles.js";
+import { isBoardObserverRestricted, isRestrictedPersona } from "./personaRoles.js";
 
 /**
  * Per-request Row-Level-Security context for The Atelier.
@@ -103,7 +103,12 @@ export async function withRls<T>(
  */
 export function attachRls(req: Request, _res: Response, next: NextFunction): void {
   const persona = req.atelierPersona;
-  const restricted = !!persona && isRestrictedPersona(persona.role);
+  // Task #292 — board_observer is deny-by-default until the boardroom realm
+  // ships (#329). Force engagement_ids=[] so RLS denies all org-wide reads;
+  // any per-engagement grants will still flow through atelier_engagement_access
+  // below.
+  const isBoardObs = !!persona && isBoardObserverRestricted(persona.role);
+  const restricted = !!persona && (isRestrictedPersona(persona.role) || isBoardObs);
   if (!restricted) {
     (req as Request & { atelierRls?: AtelierRlsContext }).atelierRls = ctxFromReq(req);
     return next();

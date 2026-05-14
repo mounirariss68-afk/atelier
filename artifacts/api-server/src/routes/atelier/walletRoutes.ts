@@ -68,7 +68,7 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
 function isLeadership(me: typeof atelierUsers.$inferSelect): boolean {
   return (
     me.role === "founding_partner" ||
-    (me.role === "partner" || me.role === "founding_partner") ||
+    me.role === "partner" ||
     me.role === "finance"
   );
 }

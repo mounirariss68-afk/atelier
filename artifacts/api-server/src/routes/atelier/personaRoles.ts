@@ -81,6 +81,12 @@ export const canViewCompensation = (r: RoleLike): boolean =>
  * aggregate. Used by the RLS middleware to decide whether to inject
  * `app.engagement_ids` from `atelier_engagement_access`.
  */
+// Task #292 — board_observer is deny-by-default at the RLS layer until the
+// boardroom realm ships (see follow-up #329). Treat it as restricted so it
+// receives no engagement-grants and no org-wide access.
+export const isBoardObserverRestricted = (r: RoleLike): boolean =>
+  r === "board_observer";
+
 export const isRestrictedPersona = (r: RoleLike): boolean =>
   !!r && RESTRICTED.has(r);
 
