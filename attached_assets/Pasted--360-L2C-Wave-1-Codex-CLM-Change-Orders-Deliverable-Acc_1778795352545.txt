@@ -1,0 +1,96 @@
+#360 - L2C Wave 1 — Codex (CLM), Change Orders, Deliverable Acceptance
+
+What & Why
+
+Wave 1 of the Lead-to-Cash roadmap (artifacts/atelier/docs/prd/lead-to-cash-gap-analysis.md §E, gaps G01 + G02) makes the contract a first-class portal artifact and lays the cross-cutting foundations every later wave needs:
+
+Codex — clause library, contract instruments (MSA / SOW / NDA / DPA / change order / side letter), version chain, two-partner countersign, e-sign dispatch (DocuSign + Tabellio for KSA), DPA gating, renewal watcher.
+Change orders — first-class in-portal scope/rate/term/team change motion with partner approval and client countersign, replacing today's RAID-as-change-order workaround.
+Deliverable Acceptance — a client-signed attestation that a milestone is complete. This is the seam between delivery and revenue — Wave 2 milestone-based revrec keys off these acceptance records, Wave 3 milestone invoicing keys off the same.
+Without this wave, the rest of the roadmap has nothing to anchor to: revrec needs contract_value + recognition_method; invoicing needs the bill-to entity + tax jurisdiction + signed-line basis; renewals need the term end-date; cash forecast needs scheduled-milestone amounts. v4 §6.A spec'd Codex first for this reason and we mirror that ordering exactly.
+
+Done looks like
+
+Operational (what a partner / finance user can do that they cannot do today)
+
+A Partner can compose an SOW from an opportunity, generate a draft from clause-library templates, request internal review, get the two-partner countersign to clear, and dispatch the envelope to DocuSign (or Tabellio for KSA) — all from /codex/contracts/:id.
+A Senior Manager can propose a scope change order on /engagements/:id; a Partner can approve it; the system dispatches the change order to the client for countersign; the engagement charter shows the new committed scope after acceptance.
+A Senior Manager can submit a Deliverable Acceptance Form to a client from the engagement Deliverables tab; Finance can record the returned client signature (PDF + signer name + date); the acceptance is bound to a milestone and visible in audit.
+The DPA Sentinel agent flags any engagement with regulated data classes that lacks an active DPA and surfaces it on the partner cockpit.
+The Renewal Watchdog agent runs daily and lists every contract within 90 / 60 / 30 days of expiry.
+Data + audit
+
+Every salesStage=contract opportunity carries a real atelier_contract row (back-fill migration for existing demo data).
+Every state transition on contract / change order / deliverable acceptance is append-only logged in atelier_audit_log and rendered as an audit_timeline card.
+All restricted personas (contractor, partner_firm_resource, recruiter) are denied on every new write and on every individual contract / change-order / acceptance read; firm-wide RLS map matches §C.3 of the L2C doc.
+Quality
+
+All capabilities (listed under Steps 8) have ≥2 representative prompts and a smoke fixture in artifacts/api-server/tests/cli-smoke/run.ts.
+Restricted-set deny gate added to capabilitiesForPersona() so contractor / partner_firm_resource / recruiter cannot reach any outboundChannel: "email" capability.
+Migration applied; canonical seed plants 3 sample contracts (1 MSA, 1 SOW, 1 change order — accepted), 12 sample clauses, 1 DPA, 1 deliverable acceptance.
+Out of scope
+
+Revenue schedule / period postings (Wave 2, #361).
+Invoice generation / e-invoicing / AR / dunning (Wave 3).
+Cash application / bank rec / cash forecast / renewal-opportunity opening (Wave 4 — note the Renewal Watchdog agent ships in this wave; the renewal_open_opportunity capability ships in Wave 4 to avoid stranded UX).
+Public client portal for clients to sign in-portal (v6+) — Wave 1 dispatches to DocuSign / Tabellio and accepts a returned signed PDF.
+Async-video reference interviews (deferred to v5 per v4 §3).
+Embedded redline editor — Redline Analyst produces a clause-by-clause diff report in Wave 1; in-portal redline editing is a v6 stretch.
+Steps
+
+Schema migration + RLS — Add 0031_atelier_l2c_codex.sql with the 12 new tables (counterparty, clause, clause_acceptance, contract, contract_clause, contract_party, contract_version, contract_redline, two_partner_countersign, change_order, deliverable_acceptance, dpa, insurance_certificate). Each engagement-scoped table follows the existing atelier_engagement_access predicate (deny restricted set) with compliance_officer firm-wide read; clauses are firm-wide read for non-restricted with finance/leadership write. Column-level RLS for contract.contract_value follows the 0025_atelier_column_rls pattern.
+Counterparty + clause library backend — Counterparty registry (client / partner_firm / contractor with KYC state, bill-to entity, jurisdiction, VAT/VRN). Clause library with version chain, jurisdiction tags, risk tier. GET routes for search; POST for publish (finance/leadership only). Clause acceptance ledger so the Composer can cite "previously accepted by this client".
+Contract record + state machine — atelier_contract with the state machine draft → internal_review → two_partner_countersigned → external_dispatched → counterparty_review → fully_executed → active → expiring → renewed | expired | terminated. Per-engagement contract chain (which MSA governs which SOW; which DPA covers which dataset). Two-Partner Countersign enforced as a hard gate before E-Sign dispatch (per v4 Resolution 6).
+Contract Composer + Redline Analyst agents — Two new agents under artifacts/api-server/prompts/atelier/. Composer drafts SOW / MSA / NDA / DPA / change order from versioned templates + opportunity context, citing previously-accepted clauses. Redline Analyst ingests a client-returned redline and produces a clause-by-clause diff with risk commentary tied to the firm's clause library. Both wired in runner.ts + registry.ts per the existing v5 agent dispatch pattern.
+E-Sign Orchestrator + DPA Sentinel + Renewal Watchdog agents — E-Sign Orchestrator with DocuSign (default) + Tabellio (KSA) adapters, multi-party signing sequence, reminder cadence, archive. Hard gate: refuses to dispatch unless two_partner_countersigned state is set. DPA Sentinel runs on engagement create/update and blocks ingestion if a regulated data class lacks an active DPA. Renewal Watchdog runs daily as a cost-capped daemon (per v4 Resolution 7), writes a run-log entry per execution, surfaces 90/60/30-day expiries to the Partner cockpit (the renewal-opportunity capability is Wave 4).
+Change-order workflow — Backend with state machine draft → partner_approved → client_proposed → client_accepted | client_rejected | withdrawn → posted (posted writes the new scope into atelier_engagement.committed_scope). Routes for propose / approve / dispatch-to-client / record-acceptance. atelier_change_order carries kind ∈ {scope, rate, term, team}, old_value_json, new_value_json, value_delta_usd, optional linked_raid_id so existing RAID items can be migrated to a real change order.
+Deliverable Acceptance workflow — atelier_deliverable_acceptance (engagement_id, deliverable_id?, milestone_id?, client_signer_name, signed_at, evidence_url, attestation_text, status). Routes for submit-for-acceptance (sends a templated form to the client signer via the existing email path) and record-client-signature (Finance attaches the returned signed PDF + signer + date). Critical contract for Wave 2: every revrec milestone keys off an atelier_deliverable_acceptance.status = client_signed row. Build the join + an atelier_milestone_acceptance_view so Wave 2 can consume it without re-implementing the lookup.
+CLI capability registration + smoke fixtures — Register all Wave 1 capabilities in capability-catalog.ts with their requiredRoles, twoPhaseConfirm, irreversible, outboundChannel, resultCard, representativePrompts per the L2C doc §D. Capabilities: codex_search_clauses, codex_compose_contract, codex_publish_clause, codex_redline_analyze, contract_two_partner_countersign, contract_dispatch_esign, contract_check_dpa_status, contract_renewal_watch_run, change_order_propose, change_order_approve, change_order_dispatch_client, change_order_record_acceptance, deliverable_acceptance_submit, deliverable_acceptance_record_signature. Add the restricted-set deny gate to capabilitiesForPersona() so contractor / partner_firm_resource / recruiter cannot reach any capability with outboundChannel: "email". Add one tests/cli-smoke/run.ts row per capability (read fixtures use seed data; write fixtures use dryRun mode).
+Result-card union extension (do once for all four waves) — Extend the ResultCard discriminated union in capability-catalog.ts with all seven new shapes (change_order_card, deliverable_acceptance_card, revenue_schedule, invoice_card, ar_aging_grid, cash_forecast_strip, dunning_card, renewal_card) up-front in this wave — the catalog hash check is monotonic so doing this in Wave 1 prevents churn in Waves 2–4. Implement the renderers needed for Wave 1 only (change_order_card, deliverable_acceptance_card); stub the rest as "coming in Wave N" placeholders that error on assertNever.
+Frontend — /codex top-nav addition + workspaces — Add /codex as the single new top-nav entry in Shell.tsx, sibling of /crm and /opportunities under the Commercial realm. Pages: /codex (clause library + contract list), /codex/contracts/:id (single-contract workspace: parties, clause panel, redline diff, countersign panel, audit timeline). Mirror the same component as a Codex tab on /opportunities/:id (pre-sign drafting context, scoped to the opp) and on /engagements/:id (post-sign chain-of-instruments view, scoped to the engagement).
+Frontend — Change orders inline on Engagement Charter — Inside CharterTab.tsx, add a "Propose change" button that launches a modal (the change-order propose form). Below the Charter, render a collapsible "Change orders" panel showing the change-order history with status pills. After acceptance, the Charter's committed-scope block updates from the posted change order.
+Frontend — Deliverable Acceptance UI — Inside DeliverablesTab.tsx, add per-deliverable "Submit for client acceptance" action (opens the Acceptance form composer) and "Record client signature" action (Finance-only — uploads the signed PDF, names the signer, sets the date). Show acceptance status as a badge on each deliverable card. Acceptance log lives below the deliverable list as a per-engagement timeline.
+Seed + back-fill — Seed canonical demo data (3 contracts: 1 MSA, 1 SOW, 1 accepted change order; 12 clauses; 1 DPA; 1 signed deliverable acceptance) so the demo personas land on a populated /codex. Back-fill migration: every existing opportunity at salesStage=contract gets a stub atelier_contract row referencing it, so Wave 2 has at least one signed-value to project from.
+Acceptance + smoke run — Run the Wave 1 smoke fixtures end-to-end against the post-merge environment. Verify (a) two-partner countersign blocks e-sign dispatch when only one partner has signed, (b) DPA Sentinel blocks ingestion when DPA is missing, (c) restricted personas are denied on all email-channel capabilities, (d) board observer is denied on individual contract reads but allowed on the contract-count rollup metric, (e) deliverable acceptance writes flip a milestone to client_accepted.
+Architectural constraints
+
+State machines are enforced server-side, not client-side. Frontend reads validNextStates from the API per record.
+Two-partner countersign is a hard gate — no API path bypasses it (per v4 Resolution 6). E-sign adapters refuse to dispatch without two_partner_countersigned = true.
+Outbound channels — only dunning_send_reminder (Wave 3) carries outboundChannel: "email" per the L2C doc; Wave 1 contract / change-order dispatch routes through DocuSign / Tabellio adapter (server-to-server), so outboundChannel: null and the catalog records the side effect via irreversible: true.
+Renewal Watchdog is a daemon with a per-engagement cost cap and a run-log entry per execution (per v4 Resolution 7 + 10) — bound to input-evidence (the AR + contract snapshot it ran on), not output-evidence.
+No new top-nav entry except /codex. All finance surfaces in Waves 2–4 mount under /wallet sub-nav.
+Integrations / secrets needed
+
+DocuSign (via Replit Integrations if available; otherwise env vars DOCUSIGN_INTEGRATION_KEY, DOCUSIGN_USER_ID, DOCUSIGN_ACCOUNT_ID, DOCUSIGN_BASE_URL). Use sandbox account in dev.
+Tabellio (KSA) — env vars TABELLIO_API_KEY, TABELLIO_ENV. Stub adapter if no live account; tests use the stub.
+Email channel reuses the existing transactional path; no new SMTP credentials needed.
+Relevant files
+
+artifacts/atelier/docs/prd/lead-to-cash-gap-analysis.md (G01, G02, Wave 1)
+artifacts/api-server/src/routes/atelier/index.ts
+artifacts/api-server/src/routes/atelier/engagementRoutes.ts
+artifacts/api-server/src/routes/atelier/personaRoles.ts
+artifacts/api-server/src/routes/atelier/rls.ts
+artifacts/api-server/src/routes/atelier/agentRoutes.ts
+artifacts/api-server/src/lib/atelier-cli/capability-catalog.ts
+artifacts/api-server/src/lib/atelier-agents/runner.ts
+artifacts/api-server/src/lib/atelier-agents/loader.ts
+artifacts/api-server/src/lib/atelier-agents/runAgent.ts
+artifacts/api-server/prompts/atelier/
+artifacts/api-server/tests/cli-smoke/run.ts
+artifacts/atelier/src/components/cli/ResultCardRenderers.tsx
+artifacts/atelier/src/components/layout/Shell.tsx
+artifacts/atelier/src/components/StageTransitionDialog.tsx
+artifacts/atelier/src/components/tabs/CharterTab.tsx
+artifacts/atelier/src/components/tabs/DeliverablesTab.tsx
+artifacts/atelier/src/components/tabs/CommercialsTab.tsx
+artifacts/atelier/src/pages/Opportunity.tsx
+artifacts/atelier/src/pages/Engagement.tsx
+artifacts/atelier/src/pages/Crm.tsx
+lib/db/src/schema/atelier.ts
+lib/db/src/schema/atelier-v5.ts
+lib/db/drizzle/
+Dependencies
+
+Lead-to-Cash gap analysis, UX/RBAC/CLI integration spec & roadmap
+Open task

@@ -1,0 +1,94 @@
+#361 - L2C Wave 2 — Revenue Recognition, WIP, Engagement Margin & Leakage
+
+What & Why
+
+Wave 2 of the Lead-to-Cash roadmap (artifacts/atelier/docs/prd/lead-to-cash-gap-analysis.md §E, gaps G03, G04, G12) moves the firm from "we billed $X" to "we earned $X". This is the hinge between delivery (Wave 1) and money (Waves 3–4). Without it:
+
+Engagement margin is unanswerable (revenue side missing).
+Backlog is unanswerable (signed value − recognised revenue).
+Invoicing in Wave 3 has nothing to draw against — milestone invoices need a recognised milestone; T&M invoices need a period-locked WIP basis; outcome invoices need a recognised outcome event.
+The board's headline question — "what have we earned but not invoiced?" — has no portal answer.
+Wave 2 ships ASC 606 / IFRS 15 — compliant per-engagement recognition (POC, ratable, milestone, outcome), an immutable period-posting ledger, an unbilled-WIP snapshot, and the leakage / realization / engagement-margin diagnostics that v4 §6.B.7 + §6.C left for "later".
+
+Done looks like
+
+Operational (what Finance / Partners can do that they cannot do today)
+
+Finance can pick a recognition method per engagement (POC by hours, POC by cost, ratable by period, milestone, outcome) on /wallet/revrec.
+Finance can compute a draft revenue schedule for a period across all active engagements, freeze it for partner review, then post the period with two-phase confirmation (founding_partner approves the irreversible post). Posted entries are immutable.
+A founding_partner can record a manual revenue adjustment with required rationale text — fully audit-logged.
+A Partner sees per-engagement margin (revenue − direct cost), realization rate (billed $ ÷ standard-rate × billable hours), and leakage variance vs. plan on the engagement Commercials tab.
+The board sees firm-wide WIP and a ranked list of engagements by realization slip on the Home shelf "Margin & WIP" tile.
+A board_observer can read the rollup capabilities (wip_report, revrec_compute_schedule, leakage_report) but is denied on per-engagement margin reads of engagements they don't sit on (matrix in §C.2).
+Data + audit
+
+Every period post writes one parent atelier_audit_log entry plus one line per engagement; rows are append-only with a period_close_lock on the period.
+Every revenue adjustment requires rationale_text (server-side validation) and is logged separately.
+WIP snapshots run daily as a cost-capped daemon and write a run-log entry per execution.
+Quality
+
+All capabilities have ≥2 representative prompts + a smoke fixture row.
+Negative-test fixtures verify board_observer is allowed on the five rollup capabilities and denied on revrec_record_adjustment, margin_engagement for non-own engagements, and any individual-line revrec read.
+POC compute is deterministic (idempotent for a given input snapshot) — fixture asserts identical output across two runs.
+Migration applied; canonical seed plants 1 POC engagement, 1 ratable engagement, 1 milestone engagement, with a closed prior month so users land on a populated WIP report.
+Out of scope
+
+Invoice generation, e-invoicing, AR aging, dunning (Wave 3).
+Cash application / bank rec / cash forecast (Wave 4).
+Renewal opportunity workflow (Wave 4).
+Tax provisioning / corporate-tax accruals (deferred — v4 §6.B.13 Tax Sentinel ships separately).
+Multi-currency translation gain/loss (Wave 2 records the engagement-currency recognition; FX revaluation is a separate close step deferred to Wave 4 alongside cash).
+Depends on
+
+Wave 1 (#360) merged — milestone-based recognition keys off atelier_deliverable_acceptance.status = client_signed; backlog KPI keys off atelier_contract.contract_value. Without Wave 1, milestone revrec degrades to partner-attest-only (no client sign-off binding) and backlog cannot be computed.
+Steps
+
+Schema + RLS migration — Add 0032_atelier_l2c_revrec.sql with the 8 new tables: atelier_revenue_method (per engagement: method + basis + currency), atelier_revenue_milestone (per engagement: name, sequence, planned_date, planned_amount, contract_clause_id?, deliverable_acceptance_id?, status), atelier_revenue_schedule (period × engagement: basis_pct, recognised_amount, deferred_balance_ending, computation_inputs_json, frozen bool), atelier_revenue_period_posting (period header: posted_at, posted_by, lines_count, gross_recognised, immutable), atelier_revenue_period_posting_line (per engagement line of a posting), atelier_revenue_adjustment (manual override, founding_partner only, requires rationale_text), atelier_unbilled_wip_snapshot (snapshot_at × engagement: hours_burned, expense_burned, recognised_revenue, unbilled_amount), atelier_engagement_margin_snapshot (snapshot_at × engagement × period: revenue_recognised, direct_cost, gross_margin_amount, gross_margin_pct, realization_rate, hours_billable, hours_billed). Plus atelier_period_close_lock (period_label, locked_at, locked_by, locked_modules[]) which gates further postings. RLS map per L2C doc §C.3 — engagement-scoped for senior_manager; firm-wide rollup read for finance + leadership + compliance + board_observer; line-level reads denied for board_observer.
+Revenue method + milestone backend — Routes for POST /api/atelier/revrec/methods (set method per engagement, requires partner+ approval), POST /api/atelier/revrec/milestones (declare milestones — bound to a contract clause when one exists), POST /api/atelier/revrec/milestones/:id/claim (consultant/SM marks delivered), POST /api/atelier/revrec/milestones/:id/partner-attest (partner agrees). Milestone state machine pending → claimed → partner_attested → client_accepted (binds to deliverable_acceptance) → earned → invoiceable. Critical contract: the client_accepted transition can only fire if a atelier_deliverable_acceptance.status = client_signed row references the milestone — server-side check, not client-side.
+Revenue Recognizer agent — Net-new agent under artifacts/api-server/prompts/atelier/revenue-recognizer.v1.md. Implements deterministic compute for the four recognition methods (POC by hours / POC by cost / ratable by period / milestone / outcome). Wired in runner.ts + registry.ts per the v5 dispatch pattern. Bound to input-evidence (the time + expense + milestone snapshot it ran on) per v4 Resolution 10. Output schema validated through the existing runAgent path with passthrough() for prompt-evolution tolerance.
+Schedule compute / freeze / post routes + 2PC — POST /api/atelier/revrec/schedules/compute (Recognizer agent run; idempotent), POST /api/atelier/revrec/schedules/:id/freeze (locks the schedule for partner review), POST /api/atelier/revrec/period-postings (the irreversible post — initiator: finance in requiredRoles, approver: founding_partner in new approverRoles field). The approverRoles field is new on defineCapability in this wave — extend the schema and the catalog-hash check in the same PR.
+Period close lock + adjustment workflow — Once a period is posted, atelier_period_close_lock blocks any further revrec_post_period for that period. The only path to alter a posted period is revrec_record_adjustment (founding_partner only, irreversible, requires rationale_text). The adjustment writes a new line to the same period_posting with a kind = adjustment discriminator — the original posting rows stay intact (append-only).
+WIP snapshot + leakage + margin views — Daemon endpoint POST /api/atelier/wip/snapshots/refresh (cost-capped, run-log per execution). Read endpoints: GET /api/atelier/wip/snapshots/latest, GET /api/atelier/leakage, GET /api/atelier/margin/engagements/:id, GET /api/atelier/margin/firm. WIP = recognised_revenue − invoiced_amount (in Wave 2 the invoiced side is read from the existing Wallet → Treasury bridge stub; Wave 3 replaces it with real atelier_invoice rows without changing this view's shape). Leakage = (standard_rate × billable_hours − billed_$) ÷ (standard_rate × billable_hours) per engagement.
+CLI capability registration + smoke fixtures — Register: revrec_set_method, revrec_compute_schedule, revrec_freeze_schedule, revrec_post_period (2PC + irrev + approverRoles), revrec_record_adjustment (founding_partner only), wip_report, wip_report_by_engagement (followUp from wip_report ranked_list), leakage_report, margin_engagement, margin_firm, milestone_claim, milestone_partner_attest. Catalog change: relax capabilitiesForPersona() so board_observer is also allowed an explicit allow-list of rollup capabilities (wip_report, revrec_compute_schedule, ar_aging_report (from Wave 3, declared up-front), cash_forecast_13w (Wave 4, declared up-front), leakage_report). The relax must be allow-list, not module-wide, so individual invoice / receipt / dunning capabilities (Waves 3–4) remain denied. Smoke fixtures cover the happy path and the negative tests: (a) board_observer allowed on rollups, denied on per-engagement margin for engagements they don't sit on, (b) milestone client_accepted blocked when no deliverable_acceptance exists, (c) period post blocked when lock is set, (d) adjustment requires rationale_text.
+Frontend — /wallet sub-nav + RevRec workspace — Add the /wallet sub-nav in Shell.tsx with three new entries: Revenue (/wallet/revrec + /wallet/wip), Margin (/wallet/margin). RevRec workspace surfaces the period-close workflow: pick period → run compute → review per-engagement schedule grid → freeze → post (with the two-partner-style 2PC dialog reusing ApproveEditReject.tsx). Adjustment dialog separate, founding_partner only.
+Frontend — Engagement Commercials tab additions — Inside CommercialsTab.tsx, add three new cards: engagement margin (kpi_strip), realization (kpi_strip), milestone status panel (per-milestone rows with claim / attest / accepted state badges). Below, a revenue_schedule card shows the engagement's recognition curve.
+Frontend — Home shelf "Margin & WIP" tile — New tile mirroring the existing Approvals / Ledger / Roster cards on Home.tsx. Surfaces firm WIP + the top 5 engagements by realization slip. Visibility gated on the matrix in §C.
+Acceptance + smoke run — Run smoke fixtures end-to-end on the post-merge environment. Verify (a) idempotent compute (two runs produce identical schedule), (b) period close lock blocks re-post, (c) board_observer can call the five rollup capabilities and is denied on revrec_record_adjustment and margin_engagement for engagements they don't sit on, (d) milestone client_accepted requires a Wave-1 deliverable acceptance row, (e) WIP snapshot daemon writes one log entry per run.
+Architectural constraints
+
+Posted periods are immutable. Adjustments are append-only; do not implement an "edit posted line" path.
+Recognizer must be deterministic. Same input snapshot → identical output. The agent prompt names the inputs and the formula explicitly; smoke fixture asserts equality across two runs.
+approverRoles is a new catalog field, not a hack on top of requiredRoles. Extend defineCapability's schema in the same PR that ships revrec_post_period. Existing two-phase capabilities (e.g. Wave 1 change_order_approve) keep working with empty approverRoles (back-compat: empty means "use requiredRoles for both phases" — the current behaviour).
+board_observer relax is allow-list, not module-wide. Hard-coding the five capability ids is correct; do not key off module === "wallet".
+Milestone → revrec → invoice chain. The Wave-2 client_accepted transition is the contract Wave 3's invoice_draft reads from. Do not couple the Wave 2 state machine to invoice state.
+Integrations / secrets needed
+
+None new. Recognizer compute uses internal Atelier data; daemon scheduling reuses the existing cost-capped daemon machinery from v4 Resolution 7.
+Relevant files
+
+artifacts/atelier/docs/prd/lead-to-cash-gap-analysis.md (G03, G04, G12, Wave 2)
+artifacts/api-server/src/routes/atelier/index.ts
+artifacts/api-server/src/routes/atelier/walletRoutes.ts
+artifacts/api-server/src/routes/atelier/ledgerRoutes.ts
+artifacts/api-server/src/routes/atelier/personaRoles.ts
+artifacts/api-server/src/routes/atelier/rls.ts
+artifacts/api-server/src/routes/atelier/agentRoutes.ts
+artifacts/api-server/src/lib/atelier-cli/capability-catalog.ts
+artifacts/api-server/src/lib/atelier-agents/runner.ts
+artifacts/api-server/src/lib/atelier-agents/registry.ts
+artifacts/api-server/src/lib/atelier-agents/runAgent.ts
+artifacts/api-server/prompts/atelier/
+artifacts/api-server/tests/cli-smoke/run.ts
+artifacts/atelier/src/components/cli/ResultCardRenderers.tsx
+artifacts/atelier/src/components/layout/Shell.tsx
+artifacts/atelier/src/components/ApproveEditReject.tsx
+artifacts/atelier/src/components/tabs/CommercialsTab.tsx
+artifacts/atelier/src/pages/wallet/
+artifacts/atelier/src/pages/Engagement.tsx
+artifacts/atelier/src/pages/Home.tsx
+lib/db/src/schema/atelier.ts
+lib/db/drizzle/
+Dependencies
+
+Lead-to-Cash gap analysis, UX/RBAC/CLI integration spec & roadmap
+Open task
