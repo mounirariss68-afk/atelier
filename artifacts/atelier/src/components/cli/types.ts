@@ -147,6 +147,20 @@ export interface CliTurn {
   /** Task #340 — proactive open-state recap surfaced before the model
    * loop runs on a re-opened session. Informational only. */
   proactiveRecap?: CliProactiveRecap;
+  /**
+   * Task #348 — captured `tool_result` frame payloads in arrival order.
+   * Each entry is the raw `data` returned by a CLI capability so the
+   * client can render a real chart (kpi_strip, ranked_list,
+   * time_series, entity_card, audit_timeline) keyed by the catalog's
+   * `resultCard` shape for that tool, instead of the JSON dump.
+   */
+  toolResults?: Array<{
+    tool: string;
+    ok: boolean;
+    data?: unknown;
+    errorCode?: string;
+    errorMessage?: string;
+  }>;
 }
 
 export interface CliCapability {

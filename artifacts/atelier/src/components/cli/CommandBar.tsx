@@ -58,6 +58,7 @@ import {
 } from "./savedPrompts";
 import { emitCliOpened } from "./telemetry";
 import type { CliCapability, CliClarification, CliLocale, CliTurn } from "./types";
+import { ToolResultCardList } from "./ResultCardRenderers";
 
 const MAX_INPUT_CHARS = 4000;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -546,6 +547,7 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
               turns={cli.turns}
               current={current}
               suggestions={suggestions}
+              capabilities={cli.capabilities}
               locale={locale}
               dir={dir}
               reduced={reduced}
@@ -881,6 +883,7 @@ function Transcript({
   turns,
   current,
   suggestions,
+  capabilities,
   locale,
   dir,
   reduced,
@@ -906,6 +909,7 @@ function Transcript({
   turns: CliTurn[];
   current: CliTurn | null;
   suggestions: Array<{ text: string }>;
+  capabilities: CliCapability[];
   locale: CliLocale;
   dir: "ltr" | "rtl";
   reduced: boolean;
@@ -987,6 +991,7 @@ function Transcript({
                 <TurnBody
                   turn={t}
                   isCurrent={isCurrent}
+                  capabilities={capabilities}
                   locale={locale}
                   reduced={reduced}
                   showAllSteps={showAllSteps}
@@ -1020,6 +1025,7 @@ function Transcript({
 function TurnBody({
   turn,
   isCurrent,
+  capabilities,
   locale,
   reduced,
   showAllSteps,
@@ -1043,6 +1049,7 @@ function TurnBody({
 }: {
   turn: CliTurn;
   isCurrent: boolean;
+  capabilities: CliCapability[];
   locale: CliLocale;
   reduced: boolean;
   showAllSteps: boolean;
@@ -1422,6 +1429,20 @@ function TurnBody({
           {s("cancelled", locale)}
         </div>
       )}
+
+      {/* Task #348 — render real result-card visualisations from the
+          captured tool_result payloads. Sits above the summary card so
+          the chart is the first thing the user reads. Hidden while the
+          turn is still mid-stream so half-arrived data doesn't flash. */}
+      {turn.toolResults && turn.toolResults.length > 0 &&
+        turn.status !== "idle" &&
+        turn.status !== "streaming" && (
+          <ToolResultCardList
+            toolResults={turn.toolResults}
+            capabilities={capabilities}
+            locale={locale}
+          />
+        )}
 
       {turn.result && (turn.status === "complete" || turn.status === "partial") && (
         <ResultCard
@@ -1902,13 +1923,33 @@ function rowToHistoricalTurn(row: Record<string, unknown>): CliTurn {
                 ? "async_handoff"
                 : "complete";
   let result: CliTurn["result"];
+  // Task #348 — also backfill toolResults from the stored frame log so
+  // historical replays render the same chart cards as live turns.
+  const toolResults: NonNullable<CliTurn["toolResults"]> = [];
   const frames = row.frames;
   if (Array.isArray(frames)) {
     for (const f of frames) {
-      const fr = f as { type?: string; data?: { result?: CliTurn["result"] } };
+      const fr = f as {
+        type?: string;
+        data?: {
+          result?: CliTurn["result"];
+          tool?: string;
+          ok?: boolean;
+          data?: unknown;
+          errorCode?: string;
+          errorMessage?: string;
+        };
+      };
       if (fr?.type === "final" && fr.data?.result) {
         result = fr.data.result;
-        break;
+      } else if (fr?.type === "tool_result" && fr.data) {
+        toolResults.push({
+          tool: fr.data.tool ?? "tool",
+          ok: fr.data.ok !== false,
+          data: fr.data.data,
+          errorCode: fr.data.errorCode,
+          errorMessage: fr.data.errorMessage,
+        });
       }
     }
   }
@@ -1928,6 +1969,7 @@ function rowToHistoricalTurn(row: Record<string, unknown>): CliTurn {
     startedAt: row.createdAt ? new Date(String(row.createdAt)).getTime() : Date.now(),
     trace: [],
     result,
+    toolResults: toolResults.length > 0 ? toolResults : undefined,
     partial:
       mappedStatus === "partial"
         ? {

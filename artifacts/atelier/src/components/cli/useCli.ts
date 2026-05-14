@@ -147,15 +147,36 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       };
     }
     case "tool_result": {
-      const d = frame.data as { tool?: string; ok?: boolean };
+      const d = frame.data as {
+        tool?: string;
+        ok?: boolean;
+        data?: unknown;
+        errorCode?: string;
+        errorMessage?: string;
+      };
+      const tool = d.tool ?? "tool";
+      const ok = d.ok !== false;
       return {
         ...turn,
         trace: [
           ...turn.trace,
           {
             kind: "tool",
-            text: `${d.ok === false ? "✗" : "✓"} ${d.tool ?? "tool"}`,
+            text: `${ok ? "✓" : "✗"} ${tool}`,
             at: frame.receivedAt,
+          },
+        ],
+        // Task #348 — keep the raw payload so the renderer can lay out
+        // a real chart instead of the JSON blob. We append in arrival
+        // order so multi-step plans show their per-tool cards stacked.
+        toolResults: [
+          ...(turn.toolResults ?? []),
+          {
+            tool,
+            ok,
+            data: d.data,
+            errorCode: d.errorCode,
+            errorMessage: d.errorMessage,
           },
         ],
       };
