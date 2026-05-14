@@ -147,6 +147,9 @@ defineCapability({
   isWrite: false,
   irreversible: false,
   surfaceOn: ["global"],
+  examplePhrases: {
+    en: ["read chunk c3 of this attachment", "/chunk c1"],
+  },
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "document_chunk",
@@ -200,6 +203,9 @@ defineCapability({
   isWrite: false,
   irreversible: false,
   surfaceOn: ["global", "opportunity_workspace"],
+  examplePhrases: {
+    en: ["score this RFP", "qualify the attached RFP", "/qualify"],
+  },
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "qualification_rubric",
@@ -252,6 +258,9 @@ defineCapability({
   irreversible: false,
   requiredRoles: ["founding_partner", "partner", "senior_manager", "manager"],
   surfaceOn: ["opportunity_workspace", "account_workspace", "global"],
+  examplePhrases: {
+    en: ["log this RFP as an opportunity for Acme", "/rfp Acme — Annual Audit"],
+  },
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "opportunity_card",
@@ -410,6 +419,9 @@ defineCapability({
     "associate",
   ],
   surfaceOn: ["engagement_dashboard", "global"],
+  examplePhrases: {
+    en: ["lift action items from this transcript", "/transcript-to-raid"],
+  },
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "raid_batch",
@@ -549,6 +561,9 @@ defineCapability({
     "associate",
   ],
   surfaceOn: ["wallet", "global"],
+  examplePhrases: {
+    en: ["log these receipts to my wallet", "/receipts"],
+  },
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "expense_batch",
@@ -684,6 +699,9 @@ defineCapability({
   irreversible: false,
   requiredRoles: ["founding_partner", "partner"],
   surfaceOn: ["global"],
+  examplePhrases: {
+    en: ["seed brand profile from this deck", "/deck-to-brand AICo"],
+  },
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "brand_profile_draft",
@@ -799,6 +817,9 @@ defineCapability({
     "associate",
   ],
   surfaceOn: ["global"],
+  examplePhrases: {
+    en: ["summarise this spreadsheet", "/summarise-sheet Q3 utilisation"],
+  },
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "asset_card",

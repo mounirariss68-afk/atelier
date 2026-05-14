@@ -48,6 +48,7 @@ import {
 } from "./capability-catalog.js";
 import "./capability-seed.js"; // side-effect: registers catalog entries
 import "./attachment-capabilities.js"; // Task #334 — attachment + rubric tools
+import "./undo.js"; // Task #335 — undo_last_action capability
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
   shouldRequireTypedNameForAttachmentTurn,
@@ -2167,8 +2168,19 @@ export async function confirmPendingWrite(
   const newFrames = [
     ...((turn.frames as CliFrame[]) ?? []),
     {
+      // Task #335 — persist `data` so the `meta.undo_last_action`
+      // capability can recover the created entity IDs without
+      // re-running the tool. Without this the confirm path silently
+      // strips the IDs the orchestrator just wrote.
       type: "tool_result" as const,
-      data: { step: stepIdx, tool: pending.tool, ok: result.ok, confirmed: true },
+      data: {
+        step: stepIdx,
+        tool: pending.tool,
+        ok: result.ok,
+        data: result.data,
+        errorCode: result.errorCode,
+        confirmed: true,
+      },
     },
     { type: "final" as const, data: { status: newStatus, confirmed: true } },
   ];

@@ -69,6 +69,9 @@ export const V3_AUDIT_ACTIONS = {
   CLI_TURN: "cli.turn",
   CLI_TURN_CONFIRMED: "cli.turn.confirmed",
   CLI_TURN_CANCELLED: "cli.turn.cancelled",
+  // Task #335 — feedback + undo audit actions.
+  CLI_FEEDBACK: "cli.feedback",
+  CLI_UNDO: "cli.undo",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

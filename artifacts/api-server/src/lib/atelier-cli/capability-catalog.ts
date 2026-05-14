@@ -92,6 +92,12 @@ export interface CapabilityEntry {
   /** Surfaces where the slash-command palette should advertise this. */
   surfaceOn: SurfaceContext[];
   /**
+   * Task #335 — natural-language example phrasings shown by `/help` and
+   * the page-aware suggestion strip. Optional + per-locale; the client
+   * falls back to `en` when its locale is missing.
+   */
+  examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null;
+  /**
    * If true, the orchestrator treats `confirm:true` as the commit
    * phase (existing two-phase contract). Defaults to true for writes.
    */
@@ -158,4 +164,9 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
 /** Used by orchestrator to look up a capability by toolName. */
 export function findByToolName(toolName: string): CapabilityEntry | undefined {
   return REGISTRY.find((e) => e.toolName === toolName);
+}
+
+/** Task #335 — id-keyed lookup (used by undo + admin metrics). */
+export function findById(id: string): CapabilityEntry | undefined {
+  return REGISTRY.find((e) => e.id === id);
 }

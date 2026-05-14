@@ -49,6 +49,10 @@ defineCapability({
   isWrite: false,
   irreversible: false,
   surfaceOn: ["global"],
+  examplePhrases: {
+    en: ["what can you do?", "/help", "show me the slash commands"],
+    fr: ["que peux-tu faire ?", "/aide"],
+  },
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "capability_list",
@@ -78,6 +82,9 @@ defineCapability({
   isWrite: false,
   irreversible: false,
   surfaceOn: ["global", "account_workspace"],
+  examplePhrases: {
+    en: ["who is Tasama?", "find the Aramex account", "/account aramex"],
+  },
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "account_card",
@@ -129,6 +136,13 @@ defineCapability({
     "associate",
   ],
   surfaceOn: ["engagement_dashboard"],
+  examplePhrases: {
+    en: [
+      "add a red risk: vendor missed milestone",
+      "log an amber issue on this engagement",
+      "/raid risk red — backup window slipping",
+    ],
+  },
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "raid_item",
@@ -213,6 +227,9 @@ defineCapability({
   irreversible: true,
   requiredRoles: ["founding_partner", "partner"],
   surfaceOn: ["account_workspace"],
+  examplePhrases: {
+    en: ["delete the Acme account", "/delete-account acme"],
+  },
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "account_deleted",
@@ -300,6 +317,9 @@ defineCapability({
   irreversible: true,
   requiredRoles: ["founding_partner", "partner", "senior_manager"],
   surfaceOn: ["engagement_dashboard"],
+  examplePhrases: {
+    en: ["email this deck to the client", "/send-deliverable to john@acme.com"],
+  },
   twoPhaseConfirm: true,
   outboundChannel: "email",
   resultCard: "email_sent",

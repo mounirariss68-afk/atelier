@@ -16,6 +16,7 @@
     "test:funnel": "tsx ./tests/funnel/funnel.test.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",
+    "test:cli-use-cases": "tsx ./tests/cli-use-cases/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
   },
   "dependencies": {

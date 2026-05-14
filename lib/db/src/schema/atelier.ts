@@ -2942,6 +2942,23 @@ export const atelierCliTurns = pgTable(
       .$type<unknown[]>()
       .notNull()
       .default([]),
+    // Task #335 — optional per-turn 👍/👎 feedback row.
+    //   thumb: 'up' | 'down'
+    //   category?: 'intent_mis' | 'wrong_record' | 'missing_field' |
+    //              'unsafe_write' | 'hallucinated_id' | 'other'
+    //   freeText?: string
+    //   recordedAt: ISO timestamp
+    feedback: jsonb("feedback").$type<{
+      thumb: "up" | "down";
+      category?: string;
+      freeText?: string;
+      recordedAt: string;
+    } | null>(),
+    // Task #335 — optional raw model-traffic capture for the
+    // founding-partner "replay this turn" mode. Only written when
+    // ATELIER_CLI_RECORDING_ENABLED=1; gated by founding_partner role
+    // on read.
+    recordingTrace: jsonb("recording_trace").$type<unknown>(),
     finishedAt: timestamp("finished_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
