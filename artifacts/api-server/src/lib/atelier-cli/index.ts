@@ -94,6 +94,12 @@ export interface RunTurnInput {
   clientTurnKey?: string | null;
   /** Two-phase confirm: when set, replays the saved pendingWrite. */
   confirmTurnId?: string | null;
+  /**
+   * Explicit async hand-off: skip the synchronous loop, dispatch the
+   * plan to the background runner and return `async_dispatched`. Caller
+   * receives a `job` notification when complete.
+   */
+  async?: boolean;
 }
 
 // =====================================================================
@@ -134,6 +140,188 @@ const PER_USER_DAILY_TURN_CAP = Number(
 const ASYNC_HANDOFF_STEP_THRESHOLD = Number(
   process.env.ATELIER_CLI_ASYNC_STEP_THRESHOLD ?? 10,
 );
+
+// Cheap-classifier (Haiku) model used for intent routing before the
+// Sonnet orchestration loop. Override via env; falls back to a
+// deterministic heuristic when MOCK_MODE is on or the upstream call
+// fails — the classification is advisory, never blocking.
+const HAIKU_CLASSIFIER_MODEL =
+  process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
+
+type IntentLabel =
+  | "reset"
+  | "read"
+  | "write"
+  | "ambiguous"
+  | "trivial"
+  | "other";
+
+function heuristicClassify(prompt: string): IntentLabel {
+  const p = prompt.toLowerCase().trim();
+  if (!p) return "trivial";
+  if (/^\/new\b/.test(p) || /\b(reset|start over|new session)\b/.test(p)) return "reset";
+  if (/\b(add|create|update|delete|remove|edit|log|file|submit|approve)\b/.test(p)) return "write";
+  if (/\b(list|show|find|search|who is|what is|view|fetch|get)\b/.test(p)) return "read";
+  if (/\b(or|either|maybe|which one|choose between)\b/.test(p)) return "ambiguous";
+  return "other";
+}
+
+/**
+ * Classify the user's prompt with the cheap Haiku model so the loop can
+ * route + budget appropriately. In MOCK_MODE or on any upstream failure
+ * we fall back to a deterministic keyword heuristic. The result is
+ * advisory — it is recorded in the audit payload and used to short-
+ * circuit obvious cases (e.g. "reset" → start a fresh session).
+ */
+async function classifyIntent(
+  prompt: string,
+): Promise<{ label: IntentLabel; model: string; tokensIn: number; tokensOut: number; costUsd: number }> {
+  const fallback = (): {
+    label: IntentLabel;
+    model: string;
+    tokensIn: number;
+    tokensOut: number;
+    costUsd: number;
+  } => ({
+    label: heuristicClassify(prompt),
+    model: MOCK_MODE ? "mock-haiku" : `${HAIKU_CLASSIFIER_MODEL} (fallback)`,
+    tokensIn: 0,
+    tokensOut: 0,
+    costUsd: 0,
+  });
+  if (MOCK_MODE) return fallback();
+  try {
+    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 5_000);
+    try {
+      const resp = await anthropic.messages.create(
+        {
+          model: HAIKU_CLASSIFIER_MODEL,
+          max_tokens: 16,
+          system:
+            "Classify the user prompt into one of: reset, read, write, ambiguous, trivial, other. Reply with just the label.",
+          messages: [{ role: "user", content: prompt }],
+        },
+        { signal: ac.signal },
+      );
+      const raw = resp.content
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("")
+        .toLowerCase()
+        .trim();
+      const label: IntentLabel = (
+        ["reset", "read", "write", "ambiguous", "trivial", "other"] as IntentLabel[]
+      ).find((l) => raw.startsWith(l)) ?? heuristicClassify(prompt);
+      const tokensIn = resp.usage.input_tokens;
+      const tokensOut = resp.usage.output_tokens;
+      const costUsd = (tokensIn * 1 + tokensOut * 5) / 1_000_000;
+      return { label, model: resp.model ?? HAIKU_CLASSIFIER_MODEL, tokensIn, tokensOut, costUsd };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return fallback();
+  }
+}
+
+/**
+ * Background runner for async-dispatched turns. Executes the deferred
+ * pending write idempotently, updates the job + turn rows, writes the
+ * canonical terminal `cli.turn` audit and a `cli.turn.notification`
+ * audit so the originating user/UI can pick the result up via the
+ * existing audit-event timeline.
+ */
+async function runAsyncJob(args: {
+  jobId: string;
+  turnId: string;
+  sessionId: string;
+  persona: CliPersona;
+  pending: { tool: string; input: Record<string, unknown> } | null;
+}): Promise<void> {
+  const { jobId, turnId, sessionId, persona, pending } = args;
+  const startedAt = new Date();
+  await db
+    .update(atelierCliJobs)
+    .set({ status: "running", startedAt, updatedAt: new Date() })
+    .where(eq(atelierCliJobs.id, jobId));
+
+  let ok = false;
+  let errorMessage: string | null = null;
+  let result: unknown = null;
+  if (pending) {
+    const tool = TOOL_REGISTRY[pending.tool];
+    if (tool && tool.isWrite) {
+      try {
+        const out = await tool.run(pending.input, { persona, turnId, sessionId, stepIdx: 0 });
+        ok = out.ok;
+        result = out.data ?? null;
+        errorMessage = out.ok ? null : (out.errorMessage ?? out.errorCode ?? null);
+      } catch (err) {
+        errorMessage = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      errorMessage = `tool ${pending.tool} not registered as a write`;
+    }
+  } else {
+    errorMessage = "no pending write captured for async dispatch";
+  }
+  const newStatus: CliTurnStatus = ok ? "success" : "error";
+  await db
+    .update(atelierCliJobs)
+    .set({
+      status: ok ? "success" : "error",
+      result,
+      error: errorMessage,
+      progress: { current: 1, total: 1 },
+      finishedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierCliJobs.id, jobId));
+  await db
+    .update(atelierCliTurns)
+    .set({
+      status: newStatus,
+      statusMessage: errorMessage ?? newStatus,
+      pendingWrite: null,
+      finishedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierCliTurns.id, turnId));
+  await db.insert(atelierAuditEvents).values([
+    {
+      id: rid("aud"),
+      entityType: "cli_turn",
+      entityId: turnId,
+      actorType: "system",
+      actorId: persona.id,
+      actorLabel: persona.name,
+      action: "cli.turn.notification",
+      payload: { jobId, sessionId, ok, errorMessage },
+      payloadSummary: `Async job ${ok ? "completed" : "failed"} (${pending?.tool ?? "n/a"})`,
+    },
+    {
+      id: rid("aud"),
+      entityType: "cli_turn",
+      entityId: turnId,
+      actorType: "system",
+      actorId: persona.id,
+      actorLabel: persona.name,
+      action: "cli.turn",
+      payload: {
+        sessionId,
+        status: newStatus,
+        terminal: true,
+        async: true,
+        jobId,
+        tool: pending?.tool ?? null,
+        ok,
+        errorMessage,
+      },
+      payloadSummary: `CLI turn ${newStatus} (async ${pending?.tool ?? "n/a"})`,
+    },
+  ]);
+}
 
 export class CliBudgetExceededError extends Error {
   spent: number;
@@ -701,11 +889,21 @@ async function ensureUserDailyQuota(userId: string): Promise<void> {
 // 5. Sessions
 // =====================================================================
 
+/**
+ * Inactivity-reset window: after this many ms of silence, the next call
+ * with the same sessionId rolls over to a brand-new session row. Default
+ * 30 minutes; override via `ATELIER_CLI_SESSION_INACTIVITY_MS`.
+ */
+const SESSION_INACTIVITY_MS = Number(
+  process.env.ATELIER_CLI_SESSION_INACTIVITY_MS ?? 30 * 60_000,
+);
+
 export async function getOrCreateSession(
   persona: CliPersona,
   sessionId: string | null | undefined,
+  opts?: { forceNew?: boolean },
 ): Promise<typeof atelierCliSessions.$inferSelect> {
-  if (sessionId) {
+  if (sessionId && !opts?.forceNew) {
     const [row] = await db
       .select()
       .from(atelierCliSessions)
@@ -718,9 +916,19 @@ export async function getOrCreateSession(
         ),
       )
       .limit(1);
-    if (row) return row;
+    if (row) {
+      const lastTouch = (row.lastTurnAt ?? row.updatedAt ?? row.createdAt) as Date | null;
+      const idleMs = lastTouch ? Date.now() - new Date(lastTouch).getTime() : 0;
+      if (idleMs <= SESSION_INACTIVITY_MS) return row;
+      // Inactivity rollover: soft-delete the stale session and fall
+      // through to mint a fresh one. Keeps audit history intact.
+      await db
+        .update(atelierCliSessions)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(atelierCliSessions.id, row.id));
+    }
   }
-  const id = sessionId ?? rid("clis");
+  const id = rid("clis");
   const [row] = await db
     .insert(atelierCliSessions)
     .values({
@@ -1027,9 +1235,16 @@ export async function runTurn(
       return result;
     }
 
+    // --- Cheap classifier (advisory) ------------------------------------
+    // Run before the expensive Sonnet loop so we can short-circuit
+    // obvious resets and budget appropriately. Result is recorded on
+    // the turn payload + audit but never blocks execution.
+    const classification = await classifyIntent(input.prompt);
+    const forceNew = classification.label === "reset";
+
     // --- Session + idempotency -----------------------------------------
     await ensureUserDailyQuota(persona.id);
-    const session = await getOrCreateSession(persona, input.sessionId ?? null);
+    const session = await getOrCreateSession(persona, input.sessionId ?? null, { forceNew });
     // Persist page-context snapshot the first time the session sees one.
     if (input.pageContext && !session.pageContextSnapshot) {
       await db
@@ -1129,7 +1344,7 @@ export async function runTurn(
       attachmentRefs: input.attachmentIds ?? [],
       pageContext: input.pageContext ?? null,
       dryRun: input.dryRun === true,
-      intent: input.intent ?? null,
+      intent: input.intent ?? classification.label,
       clientTurnKey: input.clientTurnKey ?? null,
       frames: [],
       toolCalls: [],
@@ -1428,11 +1643,17 @@ export async function runTurn(
       status = "read_only_no_op";
     }
 
-    // Async hand-off: a long write plan is dispatched to a background job
-    // row. The runner itself is Task E; here we only enqueue the job +
-    // mark the turn `async_dispatched`.
-    if (status === "awaiting_confirmation" && writeStepCount() > ASYNC_HANDOFF_STEP_THRESHOLD) {
+    // Async hand-off: long write plans (>threshold) OR explicit
+    // `async:true` are dispatched to a background job row + worker. The
+    // worker runs out-of-band, updates the job + turn, and writes a
+    // notification audit when complete.
+    const explicitAsync = input.async === true && writeStepCount() > 0;
+    if (
+      status === "awaiting_confirmation" &&
+      (writeStepCount() > ASYNC_HANDOFF_STEP_THRESHOLD || explicitAsync)
+    ) {
       const jobId = rid("clij");
+      const totalSteps = writeStepCount();
       await db
         .insert(atelierCliJobs)
         .values({
@@ -1445,16 +1666,28 @@ export async function runTurn(
           status: "queued",
           input: { plan: stepResults, pending: pendingWrite },
           stepResults,
-          progress: { current: 0, total: writeStepCount() },
+          progress: { current: 0, total: totalSteps },
           expiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
           idempotencyKey: `${turnId}:async_plan`,
         })
         .onConflictDoNothing({ target: atelierCliJobs.idempotencyKey });
       record({
         type: "async_dispatched",
-        data: { jobId, totalSteps: writeStepCount() },
+        data: { jobId, totalSteps, explicit: explicitAsync },
       });
       status = "async_dispatched";
+      // Kick the in-process background worker (fire-and-forget).
+      const dispatchPending = pendingWrite;
+      const dispatchSessionId = session.id;
+      setImmediate(() => {
+        void runAsyncJob({
+          jobId,
+          turnId,
+          sessionId: dispatchSessionId,
+          persona,
+          pending: dispatchPending,
+        }).catch(() => undefined);
+      });
       pendingWrite = null;
     }
     } catch (err) {
@@ -1537,8 +1770,14 @@ export async function runTurn(
         await chargeSession(session.id, costCents).catch(() => undefined);
       }
 
-      // Audit ALWAYS runs — success, error, or partial.
-      await db
+      // Single canonical `cli.turn` audit row per turn. We only write it
+      // here when this turn reaches a truly terminal state in the initial
+      // pass. For `awaiting_confirmation` and `async_dispatched` we defer
+      // — `confirmPendingWrite` / `cancelPendingWrite` / the async runner
+      // write the canonical row when those flows actually terminate.
+      const writeTerminalAudit =
+        status !== "awaiting_confirmation" && status !== "async_dispatched";
+      if (writeTerminalAudit) await db
         .insert(atelierAuditEvents)
         .values({
           id: rid("aud"),
@@ -1563,6 +1802,7 @@ export async function runTurn(
             dryRun: input.dryRun === true,
             attachmentCount: (input.attachmentIds ?? []).length,
             hasPageContext: !!pageCtx,
+            classifier: classification,
             error: runtimeError ?? undefined,
           },
           payloadSummary: `CLI turn ${status} (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})${input.intent ? ` · intent=${input.intent}` : ""}${input.dryRun ? " · dryRun" : ""}${runtimeError ? ` · err=${runtimeError.slice(0, 80)}` : ""}`,
@@ -1730,9 +1970,8 @@ export async function confirmPendingWrite(
       payload: { sessionId: turn.sessionId, tool: pending.tool, ok: result.ok },
       payloadSummary: `CLI confirm ${pending.tool} ${result.ok ? "ok" : "fail"}`,
     },
-    // Terminal `cli.turn` snapshot — required so audit consumers can scan a
-    // single action type for the final state of every turn (success / error
-    // / partial / cancelled / no-op).
+    // Canonical terminal `cli.turn` row — runTurn deferred this when it
+    // ended `awaiting_confirmation`, so we write the single row now.
     {
       id: rid("aud"),
       entityType: "cli_turn",
@@ -1791,7 +2030,8 @@ export async function cancelPendingWrite(
       payload: { sessionId: turn.sessionId },
       payloadSummary: "CLI confirm cancelled",
     },
-    // Terminal `cli.turn` snapshot for the cancelled outcome.
+    // Canonical terminal `cli.turn` row — runTurn deferred this when it
+    // ended `awaiting_confirmation`, so we write the single row now.
     {
       id: rid("aud"),
       entityType: "cli_turn",

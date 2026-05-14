@@ -69,16 +69,24 @@ router.post("/cli/turn", async (req, res) => {
     cancelInflight?: boolean;
     intent?: string | null;
     clientTurnKey?: string | null;
+    async?: boolean;
+    reset?: boolean;
   };
-  const prompt = (body.prompt ?? "").trim();
-  if (!prompt) {
+  const promptRaw = (body.prompt ?? "").trim();
+  if (!promptRaw) {
     res.status(400).json({ error: "prompt-required" });
     return;
   }
-  if (prompt.length > 4000) {
+  if (promptRaw.length > 4000) {
     res.status(400).json({ error: "prompt-too-long" });
     return;
   }
+  // `/new` (or explicit reset:true) starts a fresh session before the
+  // turn runs. Strip the slash command from the prompt sent to the model.
+  const isNewCmd = /^\/new\b/i.test(promptRaw);
+  const prompt = isNewCmd ? promptRaw.replace(/^\/new\b\s*/i, "").trim() || "(new session)" : promptRaw;
+  const reset = body.reset === true || isNewCmd;
+  const sessionId = reset ? null : (body.sessionId ?? null);
 
   openSse(res);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
@@ -92,7 +100,7 @@ router.post("/cli/turn", async (req, res) => {
   try {
     await runTurn(
       {
-        sessionId: body.sessionId ?? null,
+        sessionId,
         prompt,
         attachmentIds: body.attachmentIds ?? [],
         pageContext: body.pageContext ?? null,
@@ -100,6 +108,7 @@ router.post("/cli/turn", async (req, res) => {
         cancelInflight: body.cancelInflight === true,
         intent: body.intent ?? null,
         clientTurnKey: body.clientTurnKey ?? null,
+        async: body.async === true,
       },
       { persona, emit: (f) => (closed ? undefined : emit(f)) },
     );
