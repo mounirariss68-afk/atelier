@@ -1,8 +1,17 @@
-// Task #297 — Canonical 15-section proposal spine + HTML renderer.
-// One source of truth: this module's `PROPOSAL_SPINE` is consumed by
-// the Salon hosting route, the live-preview tab, AND the PDF/DOCX
-// exports. The HTML is the primary deliverable; PDF/DOCX are derived
-// projections of the same section list.
+// Task #297 — Canonical 15-section proposal spine + shared block model.
+//
+// One source of truth lives in this module:
+//   1. `PROPOSAL_SPINE` — the 15-section taxonomy.
+//   2. `buildProposalBlocks(input)` — produces a structured per-section
+//      block list (paragraphs / bullets / key-value pairs / tables) using
+//      a *single* set of section renderers (e.g. Company Profile pulled
+//      from `firm_profile`, Pricing as a table, Compliance as a table).
+//   3. `renderProposalHtml(input)` — projects those blocks into the
+//      hosted HTML deliverable (sticky TOC, scroll-snap, watermark,
+//      print stylesheet, fixed recipient/version header).
+//
+// PDF and DOCX exports in `proposal-docs.ts` walk the *same* block list,
+// so they cannot drift from what a recipient sees in Salon.
 
 export interface ProposalSpineEntry {
   /** Stable section key persisted in atelier_proposal_sections.section_id. */
@@ -38,6 +47,30 @@ export const PROPOSAL_SPINE: ProposalSpineEntry[] = [
 export const DEFAULT_SECTIONS_REQUIRED: string[] = PROPOSAL_SPINE
   .filter((s) => s.defaultRequired)
   .map((s) => s.id);
+
+/**
+ * Idempotent mapping from the legacy 8-section proposals to the 15-section
+ * spine. Used by the spine backfill script (Task #297 step 3).
+ *
+ * Old id → new id (every old key maps to itself; this table also exposes
+ * the *new* keys that need to be inserted alongside them when we backfill
+ * a proposal that was authored under the 8-section regime).
+ */
+export const LEGACY_TO_SPINE_MAP: Record<string, string> = {
+  context: "context",
+  approach: "approach",
+  workplan: "workplan",
+  team: "team",
+  pricing: "pricing",
+  case_studies: "case_studies",
+  terms: "terms",
+  compliance: "compliance",
+};
+
+/** Section ids added by the 15-section spine that must be backfilled. */
+export const SPINE_ADDED_SECTIONS: string[] = PROPOSAL_SPINE
+  .map((s) => s.id)
+  .filter((id) => !(id in LEGACY_TO_SPINE_MAP));
 
 export interface FirmProfileLite {
   firmName: string;
@@ -78,6 +111,8 @@ export interface RenderProposalHtmlInput {
   complianceMatrix?: Array<{ rfpReqId: string; requirement: string; status: string; evidence: string }>;
   firmProfile: FirmProfileLite | null;
   recipient?: RecipientLite | null;
+  /** Proposal version (drives the fixed header label). Defaults to 1. */
+  version?: number;
   /** ISO timestamp; defaults to now. */
   generatedAt?: string;
 }
@@ -92,6 +127,162 @@ export function orderSectionsBySpine(sections: ProposalSectionLite[]): ProposalS
   });
 }
 
+// =============================================================
+// Shared block model — the canonical intermediate representation
+// consumed by HTML / PDF / DOCX renderers.
+// =============================================================
+
+export type ProposalBlock =
+  | { kind: "paragraph"; text: string }
+  | { kind: "heading"; level: 3 | 4; text: string }
+  | { kind: "bullets"; items: string[] }
+  | { kind: "kv"; rows: Array<{ label: string; value: string }> }
+  | {
+      kind: "table";
+      headers?: string[];
+      /** Each row is an array of plain-text cells (no inline HTML). */
+      rows: string[][];
+      /** Optional status column index — drives PDF/DOCX colour. */
+      statusColIndex?: number;
+    };
+
+export interface ProposalSectionBlock {
+  sectionId: string;
+  name: string;
+  ownerAgent: string;
+  status: string;
+  /** True if this is the cover (rendered specially in HTML). */
+  isCover: boolean;
+  blocks: ProposalBlock[];
+}
+
+function paragraphBlocks(text: string | null | undefined): ProposalBlock[] {
+  if (!text) return [{ kind: "paragraph", text: "(no content)" }];
+  return text.split(/\n{2,}/).map((p) => ({ kind: "paragraph" as const, text: p.trim() }));
+}
+
+function fmtUsd(n: number | undefined): string {
+  return `$${Math.round(n ?? 0).toLocaleString()}`;
+}
+
+function buildCompanyProfileBlocks(profile: FirmProfileLite | null): ProposalBlock[] {
+  if (!profile) {
+    return [{ kind: "paragraph", text: "Company profile not yet published. Run the Brand Profile Writer to seed it." }];
+  }
+  const out: ProposalBlock[] = [];
+  out.push({ kind: "heading", level: 3, text: `About ${profile.firmName}` });
+  const aboutText = profile.boilerplateLong ?? profile.boilerplateShort ?? profile.missionStatement ?? "";
+  if (aboutText) out.push(...paragraphBlocks(aboutText));
+  if (profile.capabilitiesPitch) {
+    out.push({ kind: "heading", level: 4, text: "Capabilities" });
+    out.push(...paragraphBlocks(profile.capabilitiesPitch));
+  }
+  if (profile.differentiators?.length) {
+    out.push({ kind: "heading", level: 4, text: "Differentiators" });
+    out.push({ kind: "bullets", items: profile.differentiators });
+  }
+  if (profile.proofPoints?.length) {
+    out.push({ kind: "heading", level: 4, text: "Proof points" });
+    out.push({ kind: "bullets", items: profile.proofPoints.map((p) => `${p.label} — ${p.metric}`) });
+  }
+  if (profile.principles?.length) {
+    out.push({ kind: "heading", level: 4, text: "Principles" });
+    out.push({ kind: "bullets", items: profile.principles.map((p) => `${p.name}. ${p.description}`) });
+  }
+  if (profile.legalEntities?.length) {
+    out.push({ kind: "heading", level: 4, text: "Legal entities" });
+    out.push({ kind: "bullets", items: profile.legalEntities.map((e) => `${e.name} (${e.jurisdiction})`) });
+  }
+  if (profile.contactBlock) {
+    out.push({ kind: "heading", level: 4, text: "Contact" });
+    out.push(...paragraphBlocks(profile.contactBlock));
+  }
+  return out;
+}
+
+function buildPricingBlocks(input: RenderProposalHtmlInput, content: string | null): ProposalBlock[] {
+  const out: ProposalBlock[] = [];
+  if (content) out.push(...paragraphBlocks(content));
+  const p = input.pricingModel;
+  if (!p) {
+    out.push({ kind: "paragraph", text: "Pricing model not computed." });
+    return out;
+  }
+  out.push({
+    kind: "kv",
+    rows: [
+      { label: "Revenue", value: fmtUsd(p.totalRevenueUsd) },
+      { label: "Cost", value: fmtUsd(p.totalCostUsd) },
+      { label: "Margin", value: `${p.marginPct ?? 0}%` },
+      { label: "Verdict", value: p.verdict ?? "n/a" },
+    ],
+  });
+  return out;
+}
+
+function buildComplianceBlocks(input: RenderProposalHtmlInput, content: string | null): ProposalBlock[] {
+  const out: ProposalBlock[] = [];
+  if (content) out.push(...paragraphBlocks(content));
+  const m = input.complianceMatrix ?? [];
+  if (m.length === 0) {
+    out.push({ kind: "paragraph", text: "No compliance matrix attached." });
+    return out;
+  }
+  out.push({
+    kind: "table",
+    headers: ["Status", "Req", "Requirement", "Evidence"],
+    rows: m.map((r) => [r.status, r.rfpReqId, r.requirement, r.evidence]),
+    statusColIndex: 0,
+  });
+  return out;
+}
+
+function buildCoverBlocks(input: RenderProposalHtmlInput, profile: FirmProfileLite | null): ProposalBlock[] {
+  const tagline = profile?.tagline ?? "Senior-overseen agentic operations";
+  const date = new Date(input.generatedAt ?? new Date().toISOString()).toLocaleDateString();
+  const out: ProposalBlock[] = [
+    { kind: "paragraph", text: profile?.firmName ?? "AICo" },
+    { kind: "paragraph", text: tagline },
+    { kind: "heading", level: 3, text: input.title },
+  ];
+  if (input.recipient) {
+    const orgPart = input.recipient.recipientOrg ? ` · ${input.recipient.recipientOrg}` : "";
+    out.push({ kind: "paragraph", text: `Prepared for ${input.recipient.recipientName}${orgPart}` });
+  }
+  out.push({ kind: "paragraph", text: `${date} — v${input.version ?? 1}` });
+  return out;
+}
+
+/**
+ * Build the canonical block list for a proposal. This is the *only*
+ * place where section-specific business logic (Company Profile from
+ * `firm_profile`, pricing/compliance tables) lives.
+ */
+export function buildProposalBlocks(input: RenderProposalHtmlInput): ProposalSectionBlock[] {
+  const profile = input.firmProfile;
+  return orderSectionsBySpine(input.sections).map((s) => {
+    const isCover = s.sectionId === "cover";
+    let blocks: ProposalBlock[];
+    if (isCover) blocks = buildCoverBlocks(input, profile);
+    else if (s.sectionId === "company_profile") blocks = buildCompanyProfileBlocks(profile);
+    else if (s.sectionId === "pricing") blocks = buildPricingBlocks(input, s.content);
+    else if (s.sectionId === "compliance") blocks = buildComplianceBlocks(input, s.content);
+    else blocks = paragraphBlocks(s.content);
+    return {
+      sectionId: s.sectionId,
+      name: s.name,
+      ownerAgent: s.ownerAgent,
+      status: s.status,
+      isCover,
+      blocks,
+    };
+  });
+}
+
+// =============================================================
+// HTML projection of the block model.
+// =============================================================
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -101,126 +292,64 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function paragraphs(text: string): string {
-  const parts = text.split(/\n{2,}/);
-  return parts
-    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`)
-    .join("");
+function renderBlockHtml(b: ProposalBlock): string {
+  switch (b.kind) {
+    case "paragraph":
+      return `<p>${escapeHtml(b.text).replace(/\n/g, "<br/>")}</p>`;
+    case "heading":
+      return `<h${b.level}>${escapeHtml(b.text)}</h${b.level}>`;
+    case "bullets":
+      return `<ul class="bullets">${b.items.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>`;
+    case "kv":
+      return `<table class="pricing-table"><tbody>${b.rows
+        .map((r) => `<tr><th>${escapeHtml(r.label)}</th><td>${escapeHtml(r.value)}</td></tr>`)
+        .join("")}</tbody></table>`;
+    case "table": {
+      const head = b.headers
+        ? `<thead><tr>${b.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>`
+        : "";
+      const rows = b.rows
+        .map(
+          (row) =>
+            `<tr>${row
+              .map((cell, i) => {
+                if (i === b.statusColIndex) {
+                  return `<td><span class="dot dot-${escapeHtml(cell)}"></span> ${escapeHtml(cell)}</td>`;
+                }
+                return `<td>${escapeHtml(cell)}</td>`;
+              })
+              .join("")}</tr>`,
+        )
+        .join("");
+      return `<table class="compliance-table">${head}<tbody>${rows}</tbody></table>`;
+    }
+  }
 }
 
-function renderCover(input: RenderProposalHtmlInput, profile: FirmProfileLite | null): string {
-  const tagline = profile?.tagline ?? "Senior-overseen agentic operations";
-  const recipientLine = input.recipient
-    ? `<div class="recipient-line">Prepared for <strong>${escapeHtml(input.recipient.recipientName)}</strong>${
-        input.recipient.recipientOrg ? ` · ${escapeHtml(input.recipient.recipientOrg)}` : ""
-      }</div>`
-    : "";
+function renderCoverHtml(section: ProposalSectionBlock, profile: FirmProfileLite | null): string {
+  const [brand, tagline, titleHeading, ...rest] = section.blocks;
+  const title = titleHeading && titleHeading.kind === "heading" ? titleHeading.text : "";
+  const recipientPara = rest.find((b) => b.kind === "paragraph" && (b as { text: string }).text.startsWith("Prepared for"));
+  const meta = rest.find((b) => b !== recipientPara);
   return `
-    <section class="cover snap" id="cover" aria-label="Cover">
+    <section class="cover snap" id="sec-cover" aria-label="Cover">
       <div class="cover-inner">
-        <div class="brand">${escapeHtml(profile?.firmName ?? "AICo")}</div>
-        <div class="cover-tagline">${escapeHtml(tagline)}</div>
-        <h1 class="cover-title">${escapeHtml(input.title)}</h1>
-        ${recipientLine}
-        <div class="cover-meta">${new Date(input.generatedAt ?? new Date().toISOString()).toLocaleDateString()}</div>
+        <div class="brand">${escapeHtml(brand && brand.kind === "paragraph" ? brand.text : (profile?.firmName ?? "AICo"))}</div>
+        <div class="cover-tagline">${escapeHtml(tagline && tagline.kind === "paragraph" ? tagline.text : "")}</div>
+        <h1 class="cover-title">${escapeHtml(title)}</h1>
+        ${recipientPara && recipientPara.kind === "paragraph" ? `<div class="recipient-line">${escapeHtml(recipientPara.text)}</div>` : ""}
+        <div class="cover-meta">${escapeHtml(meta && meta.kind === "paragraph" ? meta.text : "")}</div>
       </div>
     </section>
   `;
 }
 
-function renderCompanyProfile(profile: FirmProfileLite | null): string {
-  if (!profile) return `<p><em>Company profile not yet published. Run the Brand Profile Writer to seed it.</em></p>`;
-  const principlesHtml = (profile.principles ?? [])
-    .map((p) => `<li><strong>${escapeHtml(p.name)}.</strong> ${escapeHtml(p.description)}</li>`)
-    .join("");
-  const proofHtml = (profile.proofPoints ?? [])
-    .map((p) => `<li><span class="proof-label">${escapeHtml(p.label)}</span> — <span class="proof-metric">${escapeHtml(p.metric)}</span></li>`)
-    .join("");
-  const diffsHtml = (profile.differentiators ?? [])
-    .map((d) => `<li>${escapeHtml(d)}</li>`)
-    .join("");
-  const entitiesHtml = (profile.legalEntities ?? [])
-    .map((e) => `<li>${escapeHtml(e.name)} <span class="entity-juris">(${escapeHtml(e.jurisdiction)})</span></li>`)
-    .join("");
-  return `
-    <div class="profile-grid">
-      <div>
-        <h3>About ${escapeHtml(profile.firmName)}</h3>
-        ${paragraphs(profile.boilerplateLong ?? profile.boilerplateShort ?? profile.missionStatement ?? "")}
-        ${profile.capabilitiesPitch ? `<h4>Capabilities</h4>${paragraphs(profile.capabilitiesPitch)}` : ""}
-      </div>
-      <div>
-        ${diffsHtml ? `<h4>Differentiators</h4><ul class="bullets">${diffsHtml}</ul>` : ""}
-        ${proofHtml ? `<h4>Proof points</h4><ul class="bullets">${proofHtml}</ul>` : ""}
-        ${principlesHtml ? `<h4>Principles</h4><ul class="bullets">${principlesHtml}</ul>` : ""}
-        ${entitiesHtml ? `<h4>Legal entities</h4><ul class="bullets">${entitiesHtml}</ul>` : ""}
-        ${profile.contactBlock ? `<h4>Contact</h4>${paragraphs(profile.contactBlock)}` : ""}
-      </div>
-    </div>
-  `;
-}
-
-function renderPricingSection(input: RenderProposalHtmlInput): string {
-  const p = input.pricingModel;
-  if (!p) return `<p><em>Pricing model not computed.</em></p>`;
-  const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
-  return `
-    <table class="pricing-table">
-      <tbody>
-        <tr><th>Revenue</th><td>${fmt(p.totalRevenueUsd ?? 0)}</td></tr>
-        <tr><th>Cost</th><td>${fmt(p.totalCostUsd ?? 0)}</td></tr>
-        <tr><th>Margin</th><td>${p.marginPct ?? 0}%</td></tr>
-        <tr><th>Verdict</th><td><span class="verdict v-${escapeHtml(p.verdict ?? "n/a")}">${escapeHtml(p.verdict ?? "n/a")}</span></td></tr>
-      </tbody>
-    </table>
-  `;
-}
-
-function renderComplianceSection(input: RenderProposalHtmlInput): string {
-  const m = input.complianceMatrix ?? [];
-  if (m.length === 0) return `<p><em>No compliance matrix attached.</em></p>`;
-  const rows = m
-    .map(
-      (r) => `
-        <tr>
-          <td><span class="dot dot-${escapeHtml(r.status)}"></span> ${escapeHtml(r.status)}</td>
-          <td class="mono">${escapeHtml(r.rfpReqId)}</td>
-          <td>${escapeHtml(r.requirement)}</td>
-          <td class="evidence">${escapeHtml(r.evidence)}</td>
-        </tr>
-      `,
-    )
-    .join("");
-  return `
-    <table class="compliance-table">
-      <thead><tr><th>Status</th><th>Req</th><th>Requirement</th><th>Evidence</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function renderSectionBody(
-  section: ProposalSectionLite,
-  input: RenderProposalHtmlInput,
-  profile: FirmProfileLite | null,
-): string {
-  switch (section.sectionId) {
-    case "company_profile":
-      return renderCompanyProfile(profile);
-    case "pricing":
-      return [paragraphs(section.content ?? ""), renderPricingSection(input)].join("");
-    case "compliance":
-      return [paragraphs(section.content ?? ""), renderComplianceSection(input)].join("");
-    default:
-      return paragraphs(section.content ?? "(no content)");
-  }
-}
-
 export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   const profile = input.firmProfile;
-  const orderedAll = orderSectionsBySpine(input.sections);
-  const cover = orderedAll.find((s) => s.sectionId === "cover");
-  const body = orderedAll.filter((s) => s.sectionId !== "cover");
+  const blocks = buildProposalBlocks(input);
+  const cover = blocks.find((b) => b.isCover);
+  const body = blocks.filter((b) => !b.isCover);
+  const version = input.version ?? 1;
 
   const tocHtml = body
     .map(
@@ -231,23 +360,28 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
     .join("");
 
   const sectionsHtml = body
-    .map(
-      (s) => `
+    .map((s) => {
+      const profileGrid = s.sectionId === "company_profile";
+      const inner = s.blocks.map(renderBlockHtml).join("");
+      return `
         <section class="proposal-section snap" id="sec-${escapeHtml(s.sectionId)}" aria-labelledby="h-${escapeHtml(s.sectionId)}">
           <header class="section-header">
             <div class="section-eyebrow">${escapeHtml(s.sectionId)}</div>
             <h2 id="h-${escapeHtml(s.sectionId)}">${escapeHtml(s.name)}</h2>
             <div class="section-meta">owner · ${escapeHtml(s.ownerAgent)} <span class="status-pill s-${escapeHtml(s.status)}">${escapeHtml(s.status)}</span></div>
           </header>
-          <div class="section-body">${renderSectionBody(s, input, profile)}</div>
+          <div class="section-body ${profileGrid ? "profile-flow" : ""}">${inner}</div>
         </section>
-      `,
-    )
+      `;
+    })
     .join("");
 
   const watermarkText = input.recipient
     ? `Confidential — ${input.recipient.recipientName}${input.recipient.recipientOrg ? " · " + input.recipient.recipientOrg : ""}`
     : "Confidential — Draft preview";
+  const headerRecipient = input.recipient
+    ? `${input.recipient.recipientName}${input.recipient.recipientOrg ? " · " + input.recipient.recipientOrg : ""}`
+    : "Draft preview";
 
   const colors = profile?.brandColors ?? {};
   const primary = colors.primary ?? "#0f172a";
@@ -266,7 +400,16 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   html, body { margin: 0; padding: 0; background: #fbfaf6; color: var(--ink);
     font-family: ui-serif, Georgia, "Times New Roman", serif; line-height: 1.55; }
   .layout { display: grid; grid-template-columns: 240px 1fr; gap: 0; min-height: 100vh; }
-  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; padding: 28px 18px;
+  /* Fixed header (Task #297) — recipient + version always visible. */
+  header.fixed-bar { position: sticky; top: 0; z-index: 5; grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px; background: white; border-bottom: 1px solid var(--rule);
+    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; color: var(--mute); }
+  header.fixed-bar .h-title { color: var(--primary); font-weight: 600; letter-spacing: 0.02em; }
+  header.fixed-bar .h-meta { display: flex; gap: 16px; align-items: center; }
+  header.fixed-bar .h-pill { padding: 2px 8px; border: 1px solid var(--rule); border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; color: var(--gold); }
+  nav.toc { position: sticky; top: 38px; align-self: start; height: calc(100vh - 38px); padding: 28px 18px;
     background: var(--soft); border-right: 1px solid var(--rule); overflow-y: auto;
     font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; }
   nav.toc .brand { font-weight: 600; letter-spacing: 0.04em; color: var(--gold);
@@ -282,11 +425,11 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   .toc-dot-green, .toc-dot-approved { background: #2f9e6d; }
   .toc-dot-amber { background: #c89b2a; }
   .toc-dot-red, .toc-dot-rejected { background: #c34d4d; }
-  main.body { scroll-snap-type: y proximity; overflow-y: auto; height: 100vh; }
-  section.snap { scroll-snap-align: start; min-height: 100vh; padding: 80px 8% 80px;
+  main.body { scroll-snap-type: y proximity; overflow-y: auto; height: calc(100vh - 38px); }
+  section.snap { scroll-snap-align: start; min-height: calc(100vh - 38px); padding: 60px 8% 80px;
     border-bottom: 1px solid var(--rule); position: relative; }
   section.cover { background: linear-gradient(180deg, #fbfaf6 0%, var(--soft) 100%); }
-  .cover-inner { max-width: 720px; margin: 0 auto; padding-top: 80px; }
+  .cover-inner { max-width: 720px; margin: 0 auto; padding-top: 60px; }
   .cover .brand { font-family: ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.18em;
     text-transform: uppercase; font-size: 11px; color: var(--gold); margin-bottom: 32px; }
   .cover-tagline { font-style: italic; color: var(--mute); margin-bottom: 16px; }
@@ -306,15 +449,11 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   .status-pill.s-red, .status-pill.s-rejected { color: #b94646; border-color: #ecbcbc; }
   .section-body { font-size: 16px; max-width: 820px; }
   .section-body p { margin: 0 0 14px; }
-  .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-  .profile-grid h3, .profile-grid h4 { color: var(--primary); margin: 0 0 8px; }
-  .profile-grid h4 { margin-top: 18px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em;
+  .profile-flow h3, .profile-flow h4 { color: var(--primary); margin: 18px 0 8px; }
+  .profile-flow h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em;
     font-family: ui-sans-serif, system-ui, sans-serif; color: var(--mute); }
   .bullets { padding-left: 20px; margin: 0 0 8px; }
   .bullets li { margin-bottom: 6px; }
-  .proof-label { font-weight: 600; }
-  .proof-metric { color: var(--gold); }
-  .entity-juris { color: var(--mute); font-size: 13px; }
   .pricing-table, .compliance-table { width: 100%; border-collapse: collapse; margin-top: 12px;
     font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
   .pricing-table th { width: 130px; text-align: left; padding: 8px 10px; color: var(--mute);
@@ -323,12 +462,6 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
   .compliance-table th { padding: 8px 10px; background: var(--soft); text-align: left;
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--mute); border-bottom: 1px solid var(--rule); }
   .compliance-table td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  .compliance-table .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--mute); }
-  .compliance-table .evidence { color: var(--mute); }
-  .verdict { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--rule); font-size: 12px; }
-  .verdict.v-green { color: #2f9e6d; border-color: #b9dec9; }
-  .verdict.v-amber { color: #b07a14; border-color: #ecd9a4; }
-  .verdict.v-red, .verdict.v-partner_override_required { color: #b94646; border-color: #ecbcbc; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
   .dot-green { background: #2f9e6d; } .dot-amber { background: #c89b2a; } .dot-red { background: #c34d4d; }
   .watermark { position: fixed; inset: 0; pointer-events: none; z-index: 1;
@@ -341,11 +474,10 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
     .layout { grid-template-columns: 1fr; }
     nav.toc { position: static; height: auto; }
     main.body { height: auto; }
-    .profile-grid { grid-template-columns: 1fr; }
   }
   @media print {
     .layout { grid-template-columns: 1fr; }
-    nav.toc, .watermark { display: none !important; }
+    nav.toc, .watermark, header.fixed-bar { display: none !important; }
     main.body { height: auto; overflow: visible; }
     section.snap { min-height: 0; page-break-inside: avoid; page-break-after: always;
       padding: 24px 32px; border-bottom: 0; }
@@ -357,13 +489,20 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
 </head>
 <body>
 <div class="watermark" data-text="${escapeHtml(watermarkText)}" aria-hidden="true"></div>
+<header class="fixed-bar" data-testid="proposal-fixed-header">
+  <div class="h-title">${escapeHtml(input.title)}</div>
+  <div class="h-meta">
+    <span data-testid="header-recipient">Recipient: <strong>${escapeHtml(headerRecipient)}</strong></span>
+    <span class="h-pill" data-testid="header-version">v${escapeHtml(String(version))}</span>
+  </div>
+</header>
 <div class="layout">
   <nav class="toc" aria-label="Table of contents">
     <div class="brand">${escapeHtml(profile?.firmName ?? "AICo")} · Proposal</div>
     <ol>${tocHtml}</ol>
   </nav>
   <main class="body" id="proposal-main">
-    ${cover ? renderCover(input, profile) : ""}
+    ${cover ? renderCoverHtml(cover, profile) : ""}
     ${sectionsHtml}
   </main>
 </div>

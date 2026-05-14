@@ -5,6 +5,9 @@
  * firm publishes. Drafts may stack; exactly one (orgId) row carries
  * status='published' at any time. Founding partners and HR roles publish.
  *
+ * All queries and mutations are scoped by `me.orgId`. Cross-tenant reads
+ * and writes are not possible.
+ *
  * Mounted under /api/atelier by routes/atelier/index.ts.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
@@ -38,6 +41,11 @@ function ensurePublisher(me: typeof atelierUsers.$inferSelect, res: Response): b
   return true;
 }
 
+/** Always combine the per-row deletedAt + the persona's orgId. */
+function orgScope(me: typeof atelierUsers.$inferSelect) {
+  return and(eq(atelierFirmProfile.orgId, me.orgId), isNull(atelierFirmProfile.deletedAt));
+}
+
 function toWire(row: typeof atelierFirmProfile.$inferSelect) {
   return {
     id: row.id,
@@ -64,13 +72,13 @@ router.get("/firm-profile", async (req, res) => {
   const [published] = await db
     .select()
     .from(atelierFirmProfile)
-    .where(and(eq(atelierFirmProfile.status, "published"), isNull(atelierFirmProfile.deletedAt)))
+    .where(and(eq(atelierFirmProfile.status, "published"), orgScope(me)))
     .orderBy(desc(atelierFirmProfile.publishedAt))
     .limit(1);
   const [latestDraft] = await db
     .select()
     .from(atelierFirmProfile)
-    .where(and(eq(atelierFirmProfile.status, "draft"), isNull(atelierFirmProfile.deletedAt)))
+    .where(and(eq(atelierFirmProfile.status, "draft"), orgScope(me)))
     .orderBy(desc(atelierFirmProfile.createdAt))
     .limit(1);
   res.json({
@@ -86,7 +94,7 @@ router.get("/firm-profile/versions", async (req, res) => {
   const rows = await db
     .select()
     .from(atelierFirmProfile)
-    .where(isNull(atelierFirmProfile.deletedAt))
+    .where(orgScope(me))
     .orderBy(desc(atelierFirmProfile.version));
   res.json({ versions: rows.map(toWire) });
 });
@@ -98,12 +106,11 @@ router.post("/firm-profile/run-writer", async (req, res) => {
   if (!me) return;
   const body = req.body as { firmName?: string; userBrief?: string | null };
   const firmName = (body.firmName ?? "AICo").trim() || "AICo";
-  // Seed the writer with the latest published version (if any) so it
-  // refines rather than starts blank.
+  // Seed the writer with this org's published version (if any).
   const [published] = await db
     .select({ payload: atelierFirmProfile.payload })
     .from(atelierFirmProfile)
-    .where(and(eq(atelierFirmProfile.status, "published"), isNull(atelierFirmProfile.deletedAt)))
+    .where(and(eq(atelierFirmProfile.status, "published"), orgScope(me)))
     .orderBy(desc(atelierFirmProfile.publishedAt))
     .limit(1);
 
@@ -115,14 +122,16 @@ router.post("/firm-profile/run-writer", async (req, res) => {
     actorLabel: me.name ?? me.id,
   });
 
-  // Persist as a fresh draft.
+  // Versions are scoped per org, so the next version is org-local.
   const [{ next }] = await db
     .select({ next: max(atelierFirmProfile.version) })
-    .from(atelierFirmProfile);
+    .from(atelierFirmProfile)
+    .where(orgScope(me));
   const nextVersion = (next ?? 0) + 1;
   const id = rid("frm");
   await db.insert(atelierFirmProfile).values({
     id,
+    orgId: me.orgId,
     version: nextVersion,
     status: "draft",
     payload: output,
@@ -138,7 +147,10 @@ router.post("/firm-profile/run-writer", async (req, res) => {
     payload: { runId, version: nextVersion, source: "brand_profile_writer" },
     summary: `Brand Profile Writer drafted Firm Profile v${nextVersion}`,
   });
-  const [row] = await db.select().from(atelierFirmProfile).where(eq(atelierFirmProfile.id, id));
+  const [row] = await db
+    .select()
+    .from(atelierFirmProfile)
+    .where(and(eq(atelierFirmProfile.id, id), orgScope(me)));
   res.status(201).json({ draft: toWire(row), runId });
 });
 
@@ -154,11 +166,13 @@ router.post("/firm-profile/draft", async (req, res) => {
   }
   const [{ next }] = await db
     .select({ next: max(atelierFirmProfile.version) })
-    .from(atelierFirmProfile);
+    .from(atelierFirmProfile)
+    .where(orgScope(me));
   const nextVersion = (next ?? 0) + 1;
   const id = rid("frm");
   await db.insert(atelierFirmProfile).values({
     id,
+    orgId: me.orgId,
     version: nextVersion,
     status: "draft",
     payload: body.payload as never,
@@ -173,7 +187,10 @@ router.post("/firm-profile/draft", async (req, res) => {
     payload: { version: nextVersion, source: "manual" },
     summary: `Manual Firm Profile draft v${nextVersion}`,
   });
-  const [row] = await db.select().from(atelierFirmProfile).where(eq(atelierFirmProfile.id, id));
+  const [row] = await db
+    .select()
+    .from(atelierFirmProfile)
+    .where(and(eq(atelierFirmProfile.id, id), orgScope(me)));
   res.status(201).json({ draft: toWire(row) });
 });
 
@@ -186,18 +203,22 @@ router.post("/firm-profile/:id/publish", async (req, res) => {
   const [target] = await db
     .select()
     .from(atelierFirmProfile)
-    .where(and(eq(atelierFirmProfile.id, req.params.id), isNull(atelierFirmProfile.deletedAt)));
+    .where(and(eq(atelierFirmProfile.id, req.params.id), orgScope(me)));
   if (!target) { res.status(404).json({ error: "not-found" }); return; }
   if (target.status === "published") {
     res.status(400).json({ error: "already-published" });
     return;
   }
-  // Atomically supersede the existing published row, publish this one.
+  // Atomically supersede this org's existing published row, publish this one.
   await db.transaction(async (tx) => {
     await tx
       .update(atelierFirmProfile)
       .set({ status: "superseded", supersededAt: new Date() })
-      .where(and(eq(atelierFirmProfile.status, "published"), isNull(atelierFirmProfile.deletedAt)));
+      .where(and(
+        eq(atelierFirmProfile.status, "published"),
+        eq(atelierFirmProfile.orgId, me.orgId),
+        isNull(atelierFirmProfile.deletedAt),
+      ));
     await tx
       .update(atelierFirmProfile)
       .set({
@@ -207,7 +228,7 @@ router.post("/firm-profile/:id/publish", async (req, res) => {
         publishedByName: me.name,
         updatedAt: new Date(),
       })
-      .where(eq(atelierFirmProfile.id, target.id));
+      .where(and(eq(atelierFirmProfile.id, target.id), eq(atelierFirmProfile.orgId, me.orgId)));
   });
   await audit({
     entityType: "firm_profile",
@@ -217,7 +238,10 @@ router.post("/firm-profile/:id/publish", async (req, res) => {
     payload: { version: target.version },
     summary: `Published Firm Profile v${target.version}`,
   });
-  const [row] = await db.select().from(atelierFirmProfile).where(eq(atelierFirmProfile.id, target.id));
+  const [row] = await db
+    .select()
+    .from(atelierFirmProfile)
+    .where(and(eq(atelierFirmProfile.id, target.id), orgScope(me)));
   res.json({ published: toWire(row) });
 });
 

@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:agents": "tsx ./tests/agents/run-fixtures.ts",
     "test:proposal-html": "tsx ./tests/proposal-html/run.ts",
+    "test:spine-backfill": "tsx ./tests/spine-backfill/run.ts",
+    "atelier:spine-backfill": "tsx ./src/scripts/atelier-spine-backfill.ts",
     "test:funnel": "tsx ./tests/funnel/funnel.test.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
   },

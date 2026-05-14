@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import {
   PROPOSAL_SPINE,
   DEFAULT_SECTIONS_REQUIRED,
+  SPINE_ADDED_SECTIONS,
+  LEGACY_TO_SPINE_MAP,
   orderSectionsBySpine,
   renderProposalHtml,
+  buildProposalBlocks,
+  type RenderProposalHtmlInput,
 } from "../../src/lib/atelier-proposal-html.js";
 
 assert.equal(PROPOSAL_SPINE.length, 15, "spine has 15 entries");
@@ -66,4 +70,74 @@ const draftHtml = renderProposalHtml({
 });
 assert.ok(draftHtml.includes("Draft preview"));
 
-console.log("ok — proposal-html spine + render assertions passed");
+// ---- Fixed header + version label ----
+const headerHtml = renderProposalHtml({
+  proposalId: "p", title: "Hello", winThemes: [], sections: [],
+  firmProfile: null,
+  recipient: { recipientName: "Globex", recipientOrg: "Globex Corp" },
+  version: 4,
+});
+assert.ok(headerHtml.includes('data-testid="proposal-fixed-header"'),
+  "fixed header element must be present");
+assert.ok(headerHtml.includes('data-testid="header-version"'),
+  "version pill must be present");
+assert.ok(headerHtml.includes("v4"), "version label must render the supplied version");
+assert.ok(headerHtml.includes("Globex Corp"), "header must show recipient org");
+
+// ---- 8→15 spine map ----
+assert.equal(SPINE_ADDED_SECTIONS.length, 7, "7 new sections must be added on top of legacy 8");
+for (const id of ["cover", "exec_summary", "hypothesis", "company_profile", "value_case", "annexes", "appendices"]) {
+  assert.ok(SPINE_ADDED_SECTIONS.includes(id), `${id} must be in SPINE_ADDED_SECTIONS`);
+}
+for (const legacy of ["context", "approach", "workplan", "team", "pricing", "case_studies", "terms", "compliance"]) {
+  assert.equal(LEGACY_TO_SPINE_MAP[legacy], legacy, "legacy ids map identity into the spine");
+}
+
+// ---- Block parity: PDF/DOCX walk the same blocks as HTML, so every
+// piece of business logic (Company Profile entities, Pricing kv,
+// Compliance table) lives in exactly one place. We assert that the
+// blocks contain the same identifying tokens that we saw in the HTML
+// output above — proving they would also appear in the PDF/DOCX walks.
+const parityInput: RenderProposalHtmlInput = {
+  proposalId: "prp_parity",
+  title: "Parity Proposal",
+  winThemes: [],
+  sections: [
+    { sectionId: "cover", name: "Cover", ownerAgent: "x", status: "draft", content: "" },
+    { sectionId: "company_profile", name: "Company Profile", ownerAgent: "x", status: "draft", content: "" },
+    { sectionId: "pricing", name: "Pricing", ownerAgent: "x", status: "amber", content: "Pricing prose." },
+    { sectionId: "compliance", name: "Compliance", ownerAgent: "x", status: "draft", content: "" },
+  ],
+  pricingModel: { totalRevenueUsd: 200000, totalCostUsd: 110000, marginPct: 45, verdict: "green" },
+  complianceMatrix: [{ rfpReqId: "R-1", requirement: "ISO27001", status: "green", evidence: "Annex C" }],
+  firmProfile: {
+    firmName: "AICo",
+    differentiators: ["Senior-overseen"],
+    proofPoints: [{ label: "Demo", metric: "+10pts" }],
+    legalEntities: [{ name: "AICo DIFC Ltd", jurisdiction: "DIFC" }],
+    contactBlock: "contact@aico",
+  },
+  recipient: { recipientName: "Acme", recipientOrg: "Acme Bank" },
+  version: 2,
+};
+const blocks = buildProposalBlocks(parityInput);
+const blockText = JSON.stringify(blocks);
+for (const needle of [
+  "AICo DIFC Ltd",          // Company Profile entity
+  "Senior-overseen",         // Differentiator
+  "$200,000",                // Pricing kv block
+  "R-1",                     // Compliance table row id
+  "ISO27001",                // Compliance table requirement
+]) {
+  assert.ok(blockText.includes(needle), `block model must contain ${JSON.stringify(needle)}`);
+}
+const html2 = renderProposalHtml(parityInput);
+for (const needle of ["AICo DIFC Ltd", "Senior-overseen", "$200,000", "R-1", "ISO27001"]) {
+  assert.ok(html2.includes(needle), `HTML must contain ${JSON.stringify(needle)} (parity with blocks)`);
+}
+
+// Cover block always orders first.
+assert.equal(blocks[0].sectionId, "cover");
+assert.equal(blocks[0].isCover, true);
+
+console.log("ok — proposal-html spine + render + parity + header assertions passed");

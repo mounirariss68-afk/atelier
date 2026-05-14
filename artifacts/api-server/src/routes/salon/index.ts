@@ -1132,6 +1132,10 @@ function recipientStillValid(r: typeof atelierProposalRecipients.$inferSelect): 
   return { ok: true };
 }
 
+// JSON endpoint is read-only and side-effect free — used by the Salon
+// chrome to validate the link before iframing the HTML view. Only the
+// HTML endpoint records an "open" event so a single recipient view
+// cannot inflate the open counter.
 router.get("/proposal/:proposalId/:token", async (req, res, next) => {
   try {
     const r = await loadRecipient(req.params.token);
@@ -1143,7 +1147,6 @@ router.get("/proposal/:proposalId/:token", async (req, res, next) => {
     if (!validity.ok) { res.status(410).json({ error: validity.reason }); return; }
     const data = await buildPublicProposal(r.proposalId, r);
     if (!data) { res.status(404).json({ error: "not-found" }); return; }
-    await recordOpen(r, req, "json");
     res.json(data);
   } catch (err) { next(err); }
 });
