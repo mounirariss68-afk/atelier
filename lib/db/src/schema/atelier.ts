@@ -2839,16 +2839,19 @@ export const atelierCliSessions = pgTable(
     orgId: ORG("org_id"),
     userId: text("user_id").notNull(),
     title: text("title"),
-    // Rolling summary of older turns (kept short so prompt stays small).
     rollingSummary: text("rolling_summary").notNull().default(""),
-    // Tail of recent turn ids included verbatim in the next prompt.
     recentTurnIds: jsonb("recent_turn_ids")
       .$type<string[]>()
       .notNull()
       .default([]),
-    // Per-session daily-USD spent today (rotated by createdAt date in code).
-    spentUsdToday: doublePrecision("spent_usd_today").notNull().default(0),
-    spentUsdDay: text("spent_usd_day"), // YYYY-MM-DD UTC; rotation key
+    // Snapshot of the page context (route, account, engagement, ids, etc.)
+    // that the CLI was opened in for this session. Used by the orchestrator
+    // to bias resolvers + present_choices defaults.
+    pageContextSnapshot: jsonb("page_context_snapshot")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    spentCentsToday: integer("spent_cents_today").notNull().default(0),
+    spentCentsDay: text("spent_cents_day"),
     turnCount: integer("turn_count").notNull().default(0),
     lastTurnAt: timestamp("last_turn_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -2873,29 +2876,45 @@ export const atelierCliTurns = pgTable(
     // error  | read_only_no_op | async_dispatched
     status: text("status").notNull().default("streaming"),
     statusMessage: text("status_message"),
-    userText: text("user_text").notNull(),
-    // Slash-command intent if the user used `/cmd ...` syntax — null for
-    // free-form prompts. The orchestrator may also auto-route a free-form
-    // prompt onto a known intent.
+    // The user's natural-language prompt for this turn.
+    prompt: text("prompt").notNull(),
+    // References to attachments uploaded with the prompt — opaque ids
+    // resolved by Task D's extraction pipeline.
+    attachmentRefs: jsonb("attachment_refs")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    // Page context captured at submit time (overrides session snapshot).
+    pageContext: jsonb("page_context")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    // Slash-command intent if the user used `/cmd ...` syntax.
     intent: text("intent"),
-    // The model's narration + tool-call trace for this turn (frames
-    // mirror the SSE stream).
+    // The model's proposed plan: ordered list of write steps with summaries
+    // + diffs. Set when status='awaiting_confirmation'; replayed by confirm.
+    planJson: jsonb("plan_json").$type<unknown>(),
+    // SSE frame trace for replay/debugging.
     frames: jsonb("frames").$type<unknown[]>().notNull().default([]),
-    // Tool-call audit trail (one entry per call: name, input, result, ms).
     toolCalls: jsonb("tool_calls").$type<unknown[]>().notNull().default([]),
-    // Pending mutation set when status='awaiting_confirmation' — the
-    // confirm endpoint replays this exactly. Cleared on confirm/cancel.
     pendingWrite: jsonb("pending_write").$type<unknown>(),
-    // Idempotency: callers may pass `clientTurnKey` to dedupe accidental
-    // resubmits (Cmd+Enter twice). UNIQUE per session.
+    // True if this turn was submitted with dryRun=true (plan only, no
+    // Confirm option offered).
+    dryRun: boolean("dry_run").notNull().default(false),
+    // Idempotency key for client retries (e.g. Cmd+Enter twice).
     clientTurnKey: text("client_turn_key"),
-    costUsd: doublePrecision("cost_usd").notNull().default(0),
+    // Cost tracked in integer cents to avoid float drift.
+    costCents: integer("cost_cents").notNull().default(0),
     tokensIn: integer("tokens_in").notNull().default(0),
     tokensOut: integer("tokens_out").notNull().default(0),
     model: text("model"),
-    durationMs: integer("duration_ms").notNull().default(0),
-    // Bookkeeping for partial-success: which step succeeded last.
+    latencyMs: integer("latency_ms").notNull().default(0),
     lastStepIdx: integer("last_step_idx").notNull().default(0),
+    // Per-step results for partial-success bookkeeping. Each entry:
+    // { stepIdx, tool, ok, errorCode?, replayed_idempotent? }.
+    stepResults: jsonb("step_results")
+      .$type<unknown[]>()
+      .notNull()
+      .default([]),
     finishedAt: timestamp("finished_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -2916,13 +2935,24 @@ export const atelierCliJobs = pgTable(
     turnId: text("turn_id").notNull(),
     sessionId: text("session_id").notNull(),
     userId: text("user_id").notNull(),
-    kind: text("kind").notNull(), // tool name being run async
-    status: text("status").notNull().default("queued"), // queued | running | success | error
+    kind: text("kind").notNull(),
+    // queued | running | success | error | cancelled
+    status: text("status").notNull().default("queued"),
     input: jsonb("input").$type<unknown>(),
     result: jsonb("result").$type<unknown>(),
     error: text("error"),
-    // Idempotency key: ${turnId}:${stepIdx} so a retried turn does not
-    // double-dispatch the same async tool.
+    // Async-runner progress: { current, total, message }.
+    progress: jsonb("progress")
+      .$type<{ current: number; total: number; message?: string } | null>()
+      .default(null),
+    // Per-step results when the job replays a multi-step plan.
+    stepResults: jsonb("step_results")
+      .$type<unknown[]>()
+      .notNull()
+      .default([]),
+    // After this timestamp the job is considered abandoned and may be
+    // garbage-collected by a sweeper.
+    expiry: timestamp("expiry"),
     idempotencyKey: text("idempotency_key").notNull(),
     startedAt: timestamp("started_at"),
     finishedAt: timestamp("finished_at"),

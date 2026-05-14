@@ -4,7 +4,9 @@
  * Endpoints (all under `/api/atelier`):
  *
  *   POST  /cli/turn                     SSE — runs one turn end-to-end.
- *                                       Body: { sessionId?, userText, intent?,
+ *                                       Body: { sessionId?, prompt,
+ *                                               attachmentIds?, pageContext?,
+ *                                               dryRun?, intent?,
  *                                               clientTurnKey? }
  *   POST  /cli/turn/:id/confirm         SSE — commits the awaiting_confirmation
  *                                       diff for a prior turn (two-phase write).
@@ -60,17 +62,21 @@ router.post("/cli/turn", async (req, res) => {
 
   const body = req.body as {
     sessionId?: string | null;
-    userText?: string;
+    prompt?: string;
+    attachmentIds?: string[];
+    pageContext?: Record<string, unknown> | null;
+    dryRun?: boolean;
+    cancelInflight?: boolean;
     intent?: string | null;
     clientTurnKey?: string | null;
   };
-  const userText = (body.userText ?? "").trim();
-  if (!userText) {
-    res.status(400).json({ error: "user-text-required" });
+  const prompt = (body.prompt ?? "").trim();
+  if (!prompt) {
+    res.status(400).json({ error: "prompt-required" });
     return;
   }
-  if (userText.length > 4000) {
-    res.status(400).json({ error: "user-text-too-long" });
+  if (prompt.length > 4000) {
+    res.status(400).json({ error: "prompt-too-long" });
     return;
   }
 
@@ -87,7 +93,11 @@ router.post("/cli/turn", async (req, res) => {
     await runTurn(
       {
         sessionId: body.sessionId ?? null,
-        userText,
+        prompt,
+        attachmentIds: body.attachmentIds ?? [],
+        pageContext: body.pageContext ?? null,
+        dryRun: body.dryRun === true,
+        cancelInflight: body.cancelInflight === true,
         intent: body.intent ?? null,
         clientTurnKey: body.clientTurnKey ?? null,
       },
@@ -164,7 +174,7 @@ router.get("/cli/sessions", async (req, res) => {
       title: s.title,
       turnCount: s.turnCount,
       lastTurnAt: s.lastTurnAt?.toISOString() ?? null,
-      spentUsdToday: s.spentUsdToday,
+      spentCentsToday: s.spentCentsToday,
     })),
   });
 });
@@ -198,18 +208,23 @@ router.get("/cli/sessions/:id", async (req, res) => {
       id: session.id,
       title: session.title,
       rollingSummary: session.rollingSummary,
-      spentUsdToday: session.spentUsdToday,
+      spentCentsToday: session.spentCentsToday,
       turnCount: session.turnCount,
     },
     turns: turns.map((t) => ({
       id: t.id,
       status: t.status,
-      userText: t.userText,
+      prompt: t.prompt,
       intent: t.intent,
       frames: t.frames,
       pendingWrite: t.pendingWrite,
-      costUsd: t.costUsd,
-      durationMs: t.durationMs,
+      planJson: t.planJson,
+      attachmentRefs: t.attachmentRefs,
+      pageContext: t.pageContext,
+      dryRun: t.dryRun,
+      costCents: t.costCents,
+      latencyMs: t.latencyMs,
+      stepResults: t.stepResults,
       createdAt: t.createdAt.toISOString(),
     })),
   });

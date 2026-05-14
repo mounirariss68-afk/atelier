@@ -50,6 +50,9 @@ export type CliFrameType =
   | "tool_result"
   | "needs_disambiguation"
   | "needs_confirmation"
+  | "proposed_plan"
+  | "budget_exceeded"
+  | "async_dispatched"
   | "progress"
   | "final"
   | "error";
@@ -78,7 +81,15 @@ export interface CliPersona {
 
 export interface RunTurnInput {
   sessionId?: string | null;
-  userText: string;
+  prompt: string;
+  /** Opaque attachment ids resolved by Task D's extraction pipeline. */
+  attachmentIds?: string[];
+  /** Page context captured at submit time (route, account, engagement, ids). */
+  pageContext?: Record<string, unknown> | null;
+  /** When true, stop at the proposed plan and never offer Confirm. */
+  dryRun?: boolean;
+  /** When true, cancel any in-flight turn for this user before queuing. */
+  cancelInflight?: boolean;
   intent?: string | null;
   clientTurnKey?: string | null;
   /** Two-phase confirm: when set, replays the saved pendingWrite. */
@@ -109,6 +120,21 @@ const SESSION_DAILY_BUDGET_USD = Number(
 );
 const MAX_TOOL_STEPS = Number(process.env.ATELIER_CLI_MAX_STEPS ?? 8);
 
+// Wall-clock budgets per turn. Soft = emit budget_exceeded + ask the user
+// (continue / hand off to async / cancel). Hard = abort.
+const SOFT_WALL_MS = Number(process.env.ATELIER_CLI_SOFT_WALL_MS ?? 60_000);
+const HARD_WALL_MS = Number(process.env.ATELIER_CLI_HARD_WALL_MS ?? 120_000);
+
+// Per-user concurrent turn cap (per-day quota lives in the session row).
+const PER_USER_DAILY_TURN_CAP = Number(
+  process.env.ATELIER_CLI_PER_USER_DAILY_TURNS ?? 500,
+);
+
+// A plan with more than this many write steps is auto-handed off async.
+const ASYNC_HANDOFF_STEP_THRESHOLD = Number(
+  process.env.ATELIER_CLI_ASYNC_STEP_THRESHOLD ?? 10,
+);
+
 export class CliBudgetExceededError extends Error {
   spent: number;
   limit: number;
@@ -126,6 +152,13 @@ export class CliConcurrencyError extends Error {
   constructor() {
     super("cli-turn-already-running-for-user");
     this.name = "CliConcurrencyError";
+  }
+}
+
+export class CliQuotaExceededError extends Error {
+  constructor(public used: number, public cap: number) {
+    super(`cli-per-user-daily-quota-exceeded: ${used}/${cap}`);
+    this.name = "CliQuotaExceededError";
   }
 }
 
@@ -196,7 +229,12 @@ const presentChoices: ToolDef = {
   },
   isWrite: false,
   async run(input) {
-    return { ok: true, data: { prompt: input.prompt, options: input.options } };
+    const options = (input.options ?? []) as Array<Record<string, unknown>>;
+    return {
+      ok: true,
+      data: { prompt: input.prompt, options },
+      disambiguation: { kind: "choice", options },
+    };
   },
 };
 
@@ -433,21 +471,70 @@ export const TOOL_REGISTRY: Record<string, ToolDef> = {
 // 4. Concurrency lock + budget
 // =====================================================================
 
-const inflight = new Map<string, number>(); // userId -> startedAt ms
+/**
+ * Per-user FIFO queue. The CLI must serialize turns per user (so a slow
+ * write does not race a follow-up edit), but we never want to outright
+ * reject — the spec calls for FIFO with an opt-in "cancel current and run
+ * instead" path.
+ *
+ *   inflight    : userId -> { startedAt, abort }   currently-running turn
+ *   waiters     : userId -> Array<resolver>        FIFO queue tail
+ */
+type InflightSlot = { startedAt: number; abort: () => void };
+const inflight = new Map<string, InflightSlot>();
+const waiters = new Map<string, Array<() => void>>();
+const STALE_INFLIGHT_MS = Math.max(HARD_WALL_MS + 30_000, 180_000);
 
-function acquireSlot(userId: string): void {
-  const now = Date.now();
-  const prev = inflight.get(userId);
-  // 60s stale lock release — if a turn crashed without releasing, don't
-  // wedge the user forever.
-  if (prev && now - prev < 60_000) {
-    throw new CliConcurrencyError();
+function takeSlotImmediate(userId: string, abort: () => void): void {
+  inflight.set(userId, { startedAt: Date.now(), abort });
+}
+
+async function enterQueue(
+  userId: string,
+  opts: { cancelInflight?: boolean; abort: () => void },
+): Promise<void> {
+  const cur = inflight.get(userId);
+  if (cur && Date.now() - cur.startedAt > STALE_INFLIGHT_MS) {
+    inflight.delete(userId);
   }
-  inflight.set(userId, now);
+  if (!inflight.get(userId)) {
+    takeSlotImmediate(userId, opts.abort);
+    return;
+  }
+  if (opts.cancelInflight) {
+    try {
+      cur?.abort?.();
+    } catch {
+      /* ignore */
+    }
+    // Wait briefly for the cancelled turn to release.
+    const deadline = Date.now() + 5_000;
+    while (inflight.get(userId) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    if (!inflight.get(userId)) {
+      takeSlotImmediate(userId, opts.abort);
+      return;
+    }
+  }
+  // FIFO wait.
+  await new Promise<void>((resolve) => {
+    const arr = waiters.get(userId) ?? [];
+    arr.push(resolve);
+    waiters.set(userId, arr);
+  });
+  takeSlotImmediate(userId, opts.abort);
 }
 
 function releaseSlot(userId: string): void {
   inflight.delete(userId);
+  const arr = waiters.get(userId);
+  if (arr && arr.length > 0) {
+    const next = arr.shift()!;
+    if (arr.length === 0) waiters.delete(userId);
+    else waiters.set(userId, arr);
+    next();
+  }
 }
 
 /**
@@ -468,7 +555,7 @@ async function runIdempotentJob(args: {
   kind: string;
   input: Record<string, unknown>;
   run: () => Promise<ToolResult>;
-}): Promise<ToolResult> {
+}): Promise<ToolResult & { replayedIdempotent?: boolean }> {
   // Try to atomically claim the slot.
   const claimed = await db
     .insert(atelierCliJobs)
@@ -497,13 +584,14 @@ async function runIdempotentJob(args: {
         .where(eq(atelierCliJobs.idempotencyKey, args.idemKey))
         .limit(1);
       if (existing && existing.status === "success") {
-        return { ok: true, data: existing.result as unknown };
+        return { ok: true, data: existing.result as unknown, replayedIdempotent: true };
       }
       if (existing && existing.status === "error") {
         return {
           ok: false,
           errorCode: "prior_attempt_failed",
           errorMessage: existing.error ?? "prior attempt failed",
+          replayedIdempotent: true,
         };
       }
       await new Promise((r) => setTimeout(r, 150));
@@ -540,51 +628,73 @@ async function runIdempotentJob(args: {
 }
 
 async function ensureSessionBudget(sessionId: string): Promise<{
-  spent: number;
-  limit: number;
+  spentCents: number;
+  limitCents: number;
 }> {
+  const limitCents = Math.round(SESSION_DAILY_BUDGET_USD * 100);
   const [row] = await db
     .select({
-      spent: atelierCliSessions.spentUsdToday,
-      day: atelierCliSessions.spentUsdDay,
+      spent: atelierCliSessions.spentCentsToday,
+      day: atelierCliSessions.spentCentsDay,
     })
     .from(atelierCliSessions)
     .where(eq(atelierCliSessions.id, sessionId))
     .limit(1);
-  if (!row) return { spent: 0, limit: SESSION_DAILY_BUDGET_USD };
+  if (!row) return { spentCents: 0, limitCents };
   const today = todayUtc();
   if (row.day !== today) {
-    // Rotate the daily counter lazily.
     await db
       .update(atelierCliSessions)
-      .set({ spentUsdToday: 0, spentUsdDay: today })
+      .set({ spentCentsToday: 0, spentCentsDay: today })
       .where(eq(atelierCliSessions.id, sessionId));
-    return { spent: 0, limit: SESSION_DAILY_BUDGET_USD };
+    return { spentCents: 0, limitCents };
   }
-  const spent = Number(row.spent) || 0;
-  if (spent >= SESSION_DAILY_BUDGET_USD)
-    throw new CliBudgetExceededError(spent, SESSION_DAILY_BUDGET_USD);
-  return { spent, limit: SESSION_DAILY_BUDGET_USD };
+  const spentCents = Number(row.spent) || 0;
+  if (spentCents >= limitCents)
+    throw new CliBudgetExceededError(spentCents / 100, limitCents / 100);
+  return { spentCents, limitCents };
 }
 
-async function chargeSession(sessionId: string, costUsd: number): Promise<void> {
-  if (!costUsd) return;
+async function chargeSession(sessionId: string, costCents: number): Promise<void> {
+  if (!costCents) return;
   const today = todayUtc();
   const [row] = await db
     .select({
-      spent: atelierCliSessions.spentUsdToday,
-      day: atelierCliSessions.spentUsdDay,
+      spent: atelierCliSessions.spentCentsToday,
+      day: atelierCliSessions.spentCentsDay,
     })
     .from(atelierCliSessions)
     .where(eq(atelierCliSessions.id, sessionId))
     .limit(1);
   if (!row) return;
   const sameDay = row.day === today;
-  const next = (sameDay ? Number(row.spent) || 0 : 0) + costUsd;
+  const next = (sameDay ? Number(row.spent) || 0 : 0) + costCents;
   await db
     .update(atelierCliSessions)
-    .set({ spentUsdToday: next, spentUsdDay: today, updatedAt: new Date() })
+    .set({ spentCentsToday: next, spentCentsDay: today, updatedAt: new Date() })
     .where(eq(atelierCliSessions.id, sessionId));
+}
+
+/**
+ * Per-user, per-day turn cap. Counts terminal turn rows for `userId` since
+ * UTC midnight; throws CliQuotaExceededError when the cap is reached. This
+ * is a coarse guardrail meant to catch runaway clients.
+ */
+async function ensureUserDailyQuota(userId: string): Promise<void> {
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  const rows = await db
+    .select({ id: atelierCliTurns.id })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.userId, userId),
+        gte(atelierCliTurns.createdAt, since),
+      ),
+    );
+  if (rows.length >= PER_USER_DAILY_TURN_CAP) {
+    throw new CliQuotaExceededError(rows.length, PER_USER_DAILY_TURN_CAP);
+  }
 }
 
 // =====================================================================
@@ -618,7 +728,7 @@ export async function getOrCreateSession(
       orgId: persona.orgId,
       userId: persona.id,
       createdByUserId: persona.id,
-      spentUsdDay: todayUtc(),
+      spentCentsDay: todayUtc(),
     })
     .returning();
   return row;
@@ -753,12 +863,28 @@ function mockModelStep(args: {
       tokensOut: 0,
     };
   }
-  // Find first user prompt text.
-  const userText = (() => {
-    for (const h of args.history) {
+  // Find the LAST user prompt text — the rolling-summary primer is also
+  // pushed as a user message so we must scan from the end.
+  const promptText = (() => {
+    for (let i = args.history.length - 1; i >= 0; i--) {
+      const h = args.history[i]!;
       if (h.role !== "user") continue;
-      if (typeof h.content === "string") return h.content;
+      if (typeof h.content === "string") {
+        const s = h.content;
+        // Skip our own primer prefixes — keep walking back to find the
+        // actual user prompt.
+        if (s.startsWith("[prior session summary]") || s.startsWith("[page context]") || s.startsWith("[attachments]")) {
+          continue;
+        }
+        return s;
+      }
       if (Array.isArray(h.content)) {
+        // Tool-result entries are arrays — skip them; we want the original
+        // text prompt.
+        const isToolResult = (h.content as Array<{ type?: string }>).some(
+          (b) => b?.type === "tool_result",
+        );
+        if (isToolResult) continue;
         const txt = (h.content as Array<{ type?: string; text?: string }>).find(
           (b) => b?.type === "text" && typeof b.text === "string",
         );
@@ -770,41 +896,41 @@ function mockModelStep(args: {
 
   let toolCall: ClaudeToolCall | null = null;
   let text = "On it.";
-  if (userText.includes("raid") && /(add|create|new|log)/.test(userText)) {
-    const mEng = userText.match(/eng[-_]?[a-z0-9_]+/i);
+  if (promptText.includes("raid") && /(add|create|new|log)/.test(promptText)) {
+    const mEng = promptText.match(/eng[-_]?[a-z0-9_]+/i);
     text = "I'll draft a RAID item for you to review.";
     toolCall = {
       id: rid("tu"),
       name: "add_raid_item",
       input: {
         engagementId: mEng ? mEng[0] : "eng_unknown",
-        kind: /assumption/.test(userText)
+        kind: /assumption/.test(promptText)
           ? "assumption"
-          : /issue/.test(userText)
+          : /issue/.test(promptText)
             ? "issue"
-            : /dependency/.test(userText)
+            : /dependency/.test(promptText)
               ? "dependency"
               : "risk",
-        severity: /\bred\b/.test(userText)
+        severity: /\bred\b/.test(promptText)
           ? "red"
-          : /\bgreen\b/.test(userText)
+          : /\bgreen\b/.test(promptText)
             ? "green"
             : "amber",
-        description: userText.slice(0, 200),
+        description: promptText.slice(0, 200),
       },
     };
-  } else if (userText.includes("raid")) {
+  } else if (promptText.includes("raid")) {
     text = "Pulling your open RAID items.";
     toolCall = { id: rid("tu"), name: "list_my_open_raid_items", input: { limit: 10 } };
-  } else if (/(find|who is|account)/.test(userText)) {
-    const m = userText.match(/(?:find|account|who is)\s+([a-z0-9 _-]+)/i);
+  } else if (/(find|who is|account)/.test(promptText)) {
+    const m = promptText.match(/(?:find|account|who is)\s+([a-z0-9 _-]+)/i);
     text = "Looking that account up.";
     toolCall = {
       id: rid("tu"),
       name: "resolve_account_by_name",
-      input: { query: (m?.[1] ?? userText).trim().slice(0, 60) },
+      input: { query: (m?.[1] ?? promptText).trim().slice(0, 60) },
     };
-  } else if (/(choose|pick|option)/.test(userText)) {
+  } else if (/(choose|pick|option)/.test(promptText)) {
     text = "Here are some options.";
     toolCall = {
       id: rid("tu"),
@@ -846,7 +972,13 @@ export async function runTurn(
 }> {
   const { persona, emit } = deps;
 
-  acquireSlot(persona.id);
+  let aborted = false;
+  await enterQueue(persona.id, {
+    cancelInflight: input.cancelInflight === true,
+    abort: () => {
+      aborted = true;
+    },
+  });
   try {
     // --- Confirm replay path -------------------------------------------
     if (input.confirmTurnId) {
@@ -855,7 +987,15 @@ export async function runTurn(
     }
 
     // --- Session + idempotency -----------------------------------------
+    await ensureUserDailyQuota(persona.id);
     const session = await getOrCreateSession(persona, input.sessionId ?? null);
+    // Persist page-context snapshot the first time the session sees one.
+    if (input.pageContext && !session.pageContextSnapshot) {
+      await db
+        .update(atelierCliSessions)
+        .set({ pageContextSnapshot: input.pageContext, updatedAt: new Date() })
+        .where(eq(atelierCliSessions.id, session.id));
+    }
     await ensureSessionBudget(session.id);
 
     // Idempotency: if clientTurnKey is reused on the same session AND the
@@ -869,6 +1009,7 @@ export async function runTurn(
       "cancelled",
       "read_only_no_op",
       "awaiting_confirmation",
+      "async_dispatched",
     ]);
     if (input.clientTurnKey) {
       const [prev] = await db
@@ -943,7 +1084,10 @@ export async function runTurn(
       sessionId: session.id,
       userId: persona.id,
       status: "streaming",
-      userText: input.userText,
+      prompt: input.prompt,
+      attachmentRefs: input.attachmentIds ?? [],
+      pageContext: input.pageContext ?? null,
+      dryRun: input.dryRun === true,
       intent: input.intent ?? null,
       clientTurnKey: input.clientTurnKey ?? null,
       frames: [],
@@ -964,7 +1108,23 @@ export async function runTurn(
         content: "(noted)",
       });
     }
-    history.push({ role: "user", content: input.userText });
+    // Page-context priming + attachment hint, then the actual prompt.
+    const pageCtx = input.pageContext ?? session.pageContextSnapshot ?? null;
+    if (pageCtx && Object.keys(pageCtx).length > 0) {
+      history.push({
+        role: "user",
+        content: `[page context]\n${JSON.stringify(pageCtx).slice(0, 1000)}`,
+      });
+      history.push({ role: "assistant", content: "(noted)" });
+    }
+    if ((input.attachmentIds ?? []).length > 0) {
+      history.push({
+        role: "user",
+        content: `[attachments] ${(input.attachmentIds ?? []).join(", ")}`,
+      });
+      history.push({ role: "assistant", content: "(noted)" });
+    }
+    history.push({ role: "user", content: input.prompt });
 
     let status: CliTurnStatus = "streaming";
     let totalCost = 0;
@@ -973,11 +1133,50 @@ export async function runTurn(
     let lastModel: string | undefined;
     let pendingWrite: { tool: string; input: Record<string, unknown> } | null = null;
     let runtimeError: string | null = null;
+    const stepResults: Array<Record<string, unknown>> = [];
+    const writeStepCount = (): number =>
+      toolCalls.filter((c) => TOOL_REGISTRY[String(c.tool)]?.isWrite).length;
 
     const tools = Object.values(TOOL_REGISTRY);
 
     try {
     for (let step = 0; step < MAX_TOOL_STEPS; step++) {
+      const elapsed = Date.now() - t0;
+      if (aborted) {
+        record({
+          type: "error",
+          data: { code: "cancelled", message: "turn cancelled by newer request" },
+        });
+        status = "cancelled";
+        break;
+      }
+      if (elapsed > HARD_WALL_MS) {
+        record({
+          type: "error",
+          data: {
+            code: "hard_wall_exceeded",
+            message: `turn exceeded hard wall (${HARD_WALL_MS}ms)`,
+          },
+        });
+        status = "partial";
+        break;
+      }
+      if (elapsed > SOFT_WALL_MS) {
+        record({
+          type: "budget_exceeded",
+          data: {
+            code: "soft_wall_exceeded",
+            elapsedMs: elapsed,
+            softMs: SOFT_WALL_MS,
+            hardMs: HARD_WALL_MS,
+            options: ["continue", "handoff_async", "cancel"],
+            message:
+              "this turn is taking longer than expected — continue, hand off to async, or cancel?",
+          },
+        });
+        status = "partial";
+        break;
+      }
       const claudeStep = await modelStep({
         history,
         tools,
@@ -1072,6 +1271,15 @@ export async function runTurn(
         errorCode: toolResult.errorCode,
         ms: Date.now() - t0,
       });
+      stepResults.push({
+        stepIdx: step,
+        tool: tc.name,
+        ok: toolResult.ok,
+        errorCode: toolResult.errorCode,
+        replayedIdempotent: Boolean(
+          (toolResult as { replayedIdempotent?: boolean }).replayedIdempotent,
+        ),
+      });
 
       record({
         type: "tool_result",
@@ -1094,6 +1302,27 @@ export async function runTurn(
         break;
       }
       if (toolResult.confirmation) {
+        // Always emit `proposed_plan` first so clients see the structured
+        // plan even before the confirm UI is shown.
+        record({
+          type: "proposed_plan",
+          data: {
+            steps: [
+              {
+                stepIdx: step,
+                tool: tc.name,
+                summary: toolResult.confirmation.summary,
+                diff: toolResult.confirmation.diff,
+              },
+            ],
+            dryRun: input.dryRun === true,
+          },
+        });
+        if (input.dryRun === true) {
+          // Dry-run: do not stash pendingWrite, do not offer Confirm.
+          status = "success";
+          break;
+        }
         record({
           type: "needs_confirmation",
           data: {
@@ -1140,6 +1369,36 @@ export async function runTurn(
     ) {
       status = "read_only_no_op";
     }
+
+    // Async hand-off: a long write plan is dispatched to a background job
+    // row. The runner itself is Task E; here we only enqueue the job +
+    // mark the turn `async_dispatched`.
+    if (status === "awaiting_confirmation" && writeStepCount() > ASYNC_HANDOFF_STEP_THRESHOLD) {
+      const jobId = rid("clij");
+      await db
+        .insert(atelierCliJobs)
+        .values({
+          id: jobId,
+          orgId: persona.orgId,
+          turnId,
+          sessionId: session.id,
+          userId: persona.id,
+          kind: "async_plan",
+          status: "queued",
+          input: { plan: stepResults, pending: pendingWrite },
+          stepResults,
+          progress: { current: 0, total: writeStepCount() },
+          expiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          idempotencyKey: `${turnId}:async_plan`,
+        })
+        .onConflictDoNothing({ target: atelierCliJobs.idempotencyKey });
+      record({
+        type: "async_dispatched",
+        data: { jobId, totalSteps: writeStepCount() },
+      });
+      status = "async_dispatched";
+      pendingWrite = null;
+    }
     } catch (err) {
       // Loop-time failure (model error, tool throw, etc). Surface as an
       // error frame and mark the turn `error`. Do NOT rethrow — we still
@@ -1152,7 +1411,11 @@ export async function runTurn(
       });
       status = "error";
     } finally {
-      const durationMs = Date.now() - t0;
+      const latencyMs = Date.now() - t0;
+      const costCents = Math.round(totalCost * 100);
+      // Build planJson from the proposed_plan frame (if any) for replay.
+      const planFrame = frames.find((f) => f.type === "proposed_plan");
+      const planJson = planFrame ? planFrame.data : null;
       if (!finalEmitted) {
         record({
           type: "final",
@@ -1160,10 +1423,10 @@ export async function runTurn(
             status,
             turnId,
             sessionId: session.id,
-            costUsd: Number(totalCost.toFixed(6)),
+            costCents,
             tokensIn: totalIn,
             tokensOut: totalOut,
-            durationMs,
+            latencyMs,
             error: runtimeError ?? undefined,
           },
         });
@@ -1178,11 +1441,13 @@ export async function runTurn(
           frames,
           toolCalls,
           pendingWrite,
-          costUsd: totalCost,
+          planJson,
+          stepResults,
+          costCents,
           tokensIn: totalIn,
           tokensOut: totalOut,
           model: lastModel,
-          durationMs,
+          latencyMs,
           lastStepIdx: toolCalls.length,
           finishedAt: new Date(),
           updatedAt: new Date(),
@@ -1190,19 +1455,28 @@ export async function runTurn(
         .where(eq(atelierCliTurns.id, turnId))
         .catch(() => undefined);
 
+      // Update session bookkeeping. Maintain a short rolling summary by
+      // appending a one-line trace per turn (capped at ~2KB).
+      const summaryLine = `[${new Date().toISOString().slice(11, 19)}] ${input.prompt.slice(0, 120)} → ${status}${toolCalls.length ? ` (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})` : ""}`;
+      const nextSummary = ((session.rollingSummary ?? "") + "\n" + summaryLine)
+        .split("\n")
+        .filter((l) => l.trim().length > 0)
+        .slice(-30)
+        .join("\n");
       await db
         .update(atelierCliSessions)
         .set({
           turnCount: (session.turnCount ?? 0) + 1,
           recentTurnIds: [...((session.recentTurnIds as string[]) ?? []), turnId].slice(-20),
+          rollingSummary: nextSummary.slice(0, 2000),
           lastTurnAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(atelierCliSessions.id, session.id))
         .catch(() => undefined);
 
-      if (totalCost > 0) {
-        await chargeSession(session.id, totalCost).catch(() => undefined);
+      if (costCents > 0) {
+        await chargeSession(session.id, costCents).catch(() => undefined);
       }
 
       // Audit ALWAYS runs — success, error, or partial.
@@ -1221,14 +1495,19 @@ export async function runTurn(
             intent: input.intent ?? null,
             status,
             toolCount: toolCalls.length,
-            costUsd: Number(totalCost.toFixed(6)),
+            writeStepCount: writeStepCount(),
+            costCents,
             tokensIn: totalIn,
             tokensOut: totalOut,
+            latencyMs,
             model: lastModel,
             mock: MOCK_MODE,
+            dryRun: input.dryRun === true,
+            attachmentCount: (input.attachmentIds ?? []).length,
+            hasPageContext: !!pageCtx,
             error: runtimeError ?? undefined,
           },
-          payloadSummary: `CLI turn ${status} (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})${input.intent ? ` · intent=${input.intent}` : ""}${runtimeError ? ` · err=${runtimeError.slice(0, 80)}` : ""}`,
+          payloadSummary: `CLI turn ${status} (${toolCalls.length} tool${toolCalls.length === 1 ? "" : "s"})${input.intent ? ` · intent=${input.intent}` : ""}${input.dryRun ? " · dryRun" : ""}${runtimeError ? ` · err=${runtimeError.slice(0, 80)}` : ""}`,
         })
         .catch(() => undefined);
     }
@@ -1351,12 +1630,29 @@ export async function confirmPendingWrite(
     },
     { type: "final" as const, data: { status: newStatus, confirmed: true } },
   ];
+  const priorStepResults = Array.isArray(turn.stepResults)
+    ? (turn.stepResults as Array<Record<string, unknown>>)
+    : [];
+  const mergedStepResults = [
+    ...priorStepResults,
+    {
+      stepIdx,
+      tool: pending.tool,
+      ok: result.ok,
+      errorCode: result.errorCode,
+      confirmed: true,
+      replayedIdempotent: Boolean(
+        (result as { replayedIdempotent?: boolean }).replayedIdempotent,
+      ),
+    },
+  ];
   await db
     .update(atelierCliTurns)
     .set({
       status: newStatus,
       statusMessage: newStatus,
       frames: newFrames,
+      stepResults: mergedStepResults,
       pendingWrite: null,
       lastStepIdx: stepIdx,
       finishedAt: new Date(),

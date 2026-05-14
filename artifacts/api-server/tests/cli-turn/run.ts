@@ -117,7 +117,7 @@ async function expectFinal(frames: ParsedFrame[]): Promise<ParsedFrame> {
 
 async function test1_readOnly(): Promise<string> {
   const { status, frames } = await postSse("/cli/turn", {
-    userText: "list my open raid items",
+    prompt: "list my open raid items",
   });
   assert.equal(status, 200, "sse 200");
   const final = await expectFinal(frames);
@@ -157,7 +157,7 @@ async function test2_writeTwoPhase(sessionId: string): Promise<void> {
   // First turn — should yield needs_confirmation.
   const draftRes = await postSse("/cli/turn", {
     sessionId,
-    userText: `add raid risk amber for ${ENG_ID}: throughput regression on the new pricing engine`,
+    prompt: `add raid risk amber for ${ENG_ID}: throughput regression on the new pricing engine`,
   });
   assert.equal(draftRes.status, 200);
   const draftFinal = await expectFinal(draftRes.frames);
@@ -209,7 +209,7 @@ async function test3_clientTurnKeyReplay(sessionId: string): Promise<void> {
   const key = `key_${Date.now().toString(36)}`;
   const a = await postSse("/cli/turn", {
     sessionId,
-    userText: "find account aico",
+    prompt: "find account aico",
     clientTurnKey: key,
   });
   const finalA = await expectFinal(a.frames);
@@ -218,7 +218,7 @@ async function test3_clientTurnKeyReplay(sessionId: string): Promise<void> {
 
   const b = await postSse("/cli/turn", {
     sessionId,
-    userText: "find account aico",
+    prompt: "find account aico",
     clientTurnKey: key,
   });
   const finalB = await expectFinal(b.frames);
@@ -235,10 +235,96 @@ async function test3_clientTurnKeyReplay(sessionId: string): Promise<void> {
   console.log("✓ test3: clientTurnKey is idempotent");
 }
 
+async function test5_disambiguation(sessionId: string): Promise<void> {
+  // The mock router maps "choose/pick/option" prompts onto the
+  // `present_choices` tool, which always returns a disambiguation payload.
+  const { status, frames } = await postSse("/cli/turn", {
+    sessionId,
+    prompt: "give me options to pick",
+  });
+  assert.equal(status, 200);
+  const final = await expectFinal(frames);
+  const turnId = String(final.data.turnId);
+  createdTurnIds.add(turnId);
+
+  const dis = frames.find((f) => f.event === "needs_disambiguation");
+  assert.ok(dis, "needs_disambiguation frame emitted");
+  const opts = dis!.data.options as Array<{ id: string; label: string }>;
+  assert.ok(Array.isArray(opts) && opts.length >= 2, "≥2 options offered");
+
+  const [row] = await db.select().from(atelierCliTurns).where(eq(atelierCliTurns.id, turnId));
+  assert.equal(row!.status, "partial", "disambiguation marks turn partial");
+  assert.equal(row!.pendingWrite, null, "no pending write on disambiguation");
+  console.log("✓ test5: disambiguation halts the turn with options");
+}
+
+async function test6_budgetExceeded(sessionId: string): Promise<void> {
+  // Submit a dryRun turn for a write — should NOT offer Confirm (no
+  // pendingWrite), should emit a `proposed_plan` frame.
+  const { status, frames } = await postSse("/cli/turn", {
+    sessionId,
+    prompt: `add raid risk amber for ${ENG_ID}: dry run plan only`,
+    dryRun: true,
+  });
+  assert.equal(status, 200);
+  const final = await expectFinal(frames);
+  const turnId = String(final.data.turnId);
+  createdTurnIds.add(turnId);
+
+  const plan = frames.find((f) => f.event === "proposed_plan");
+  assert.ok(plan, "proposed_plan frame emitted in dry-run");
+  assert.equal(plan!.data.dryRun, true, "plan flagged dryRun");
+
+  const conf = frames.find((f) => f.event === "needs_confirmation");
+  assert.equal(conf, undefined, "no needs_confirmation in dry-run");
+
+  const [row] = await db.select().from(atelierCliTurns).where(eq(atelierCliTurns.id, turnId));
+  assert.equal(row!.dryRun, true, "row marked dryRun");
+  assert.equal(row!.pendingWrite, null, "no pending write in dry-run");
+  assert.ok(row!.planJson, "planJson persisted");
+  assert.equal(row!.status, "success", "dry-run terminates success");
+
+  console.log("✓ test6: dry-run emits proposed_plan only, no confirm offered");
+}
+
+async function test7_budgetExceededWallClock(): Promise<void> {
+  // Real budget-exceeded path: spawn a child node process that imports the
+  // orchestrator with ATELIER_CLI_SOFT_WALL_MS=0 + HARD_WALL_MS=0 so the
+  // first wall-clock check fires immediately, captures the SSE frames into
+  // an in-memory writer, and reports the result. This exercises the
+  // budget_exceeded frame and the `partial` terminal status.
+  const { spawnSync } = await import("node:child_process");
+  const path = await import("node:path");
+  const script = path.resolve(import.meta.dirname, "budget-child.ts");
+  const result = spawnSync(
+    process.execPath,
+    ["--import", "tsx", script],
+    {
+      env: {
+        ...process.env,
+        ATELIER_CLI_SOFT_WALL_MS: "-1",
+        ATELIER_CLI_HARD_WALL_MS: "60000",
+        ATELIER_MOCK_AGENTS: "1",
+      },
+      encoding: "utf8",
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error(
+      `budget-child failed (exit ${result.status}):\nstdout=${result.stdout}\nstderr=${result.stderr}`,
+    );
+  }
+  const out = JSON.parse(result.stdout.trim().split("\n").pop()!);
+  createdTurnIds.add(out.turnId);
+  assert.equal(out.status, "partial", "budget-exceeded turn ends in partial");
+  assert.ok(out.budgetFrame, "budget_exceeded frame emitted");
+  console.log("✓ test7: wall-clock budget exceeded → partial + budget_exceeded frame");
+}
+
 async function test4_cancel(sessionId: string): Promise<void> {
   const draft = await postSse("/cli/turn", {
     sessionId,
-    userText: `add raid issue red for ${ENG_ID}: vendor lockout incoming`,
+    prompt: `add raid issue red for ${ENG_ID}: vendor lockout incoming`,
   });
   const final = await expectFinal(draft.frames);
   assert.equal(final.data.status, "awaiting_confirmation");
@@ -267,6 +353,9 @@ async function main(): Promise<void> {
     await test2_writeTwoPhase(sessionId);
     await test3_clientTurnKeyReplay(sessionId);
     await test4_cancel(sessionId);
+    await test5_disambiguation(sessionId);
+    await test6_budgetExceeded(sessionId);
+    await test7_budgetExceededWallClock();
     console.log("ALL CLI-TURN TESTS PASSED");
   } finally {
     await cleanup();

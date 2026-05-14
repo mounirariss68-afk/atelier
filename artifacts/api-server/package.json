@@ -14,6 +14,7 @@
     "test:recipient-share": "tsx ./tests/recipient-share/run.ts",
     "atelier:spine-backfill": "tsx ./src/scripts/atelier-spine-backfill.ts",
     "test:funnel": "tsx ./tests/funnel/funnel.test.ts",
+    "test:cli": "tsx ./tests/cli-turn/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
   },
   "dependencies": {
