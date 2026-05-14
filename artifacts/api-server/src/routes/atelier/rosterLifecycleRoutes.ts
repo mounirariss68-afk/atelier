@@ -473,6 +473,7 @@ function redactReference(raw: string | null | undefined): {
 // /roster/invitations
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/invitations", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -510,6 +511,7 @@ router.get("/roster/invitations", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/invitations", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -587,6 +589,7 @@ router.post("/roster/invitations", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/invitations/:id/resend", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -625,6 +628,7 @@ router.post("/roster/invitations/:id/resend", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/invitations/:id/revoke", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -670,6 +674,7 @@ router.post("/roster/invitations/:id/revoke", async (req, res, next) => {
 // Accept = materialise the person row + start onboarding sequence.
 // In production this would be triggered by the invitee clicking the email
 // link; here we expose it as a Partner/Ops action to drive demos forward.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/invitations/:id/accept", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -805,6 +810,7 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
 // /roster/onboarding
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/onboarding", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -872,6 +878,7 @@ router.get("/roster/onboarding", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/onboarding/:id/steps/:stepId/advance", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -994,6 +1001,7 @@ router.post("/roster/onboarding/:id/steps/:stepId/advance", async (req, res, nex
 // /roster/offboarding
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/offboarding", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1063,6 +1071,7 @@ router.get("/roster/offboarding", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/offboarding", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1106,6 +1115,7 @@ router.post("/roster/offboarding", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/offboarding/:id/steps/:stepId/advance", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1189,6 +1199,7 @@ router.post("/roster/offboarding/:id/steps/:stepId/advance", async (req, res, ne
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1383,6 +1394,7 @@ router.post("/roster/offboarding/:id/finalize", async (req, res, next) => {
 // /roster/compliance
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/compliance", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1454,6 +1466,7 @@ router.get("/roster/compliance", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/compliance", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1516,6 +1529,7 @@ router.post("/roster/compliance", async (req, res, next) => {
 // /roster/people/:id/conflicts (mutate)
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/people/:id/conflicts", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1567,6 +1581,7 @@ router.post("/roster/people/:id/conflicts", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/roster/people/:id/conflicts/:conflictId", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1621,6 +1636,7 @@ router.patch("/roster/people/:id/conflicts/:conflictId", async (req, res, next) 
 // then re-runs the Sentinel with `skipConflictGate=true`.
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/access/conflict-override", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1706,6 +1722,7 @@ router.post("/roster/access/conflict-override", async (req, res, next) => {
 // using a deterministic Pane A item id.
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/steward/run", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

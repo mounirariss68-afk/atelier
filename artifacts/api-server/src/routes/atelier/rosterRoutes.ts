@@ -632,6 +632,7 @@ export { runAccessSentinel };
 // Routes
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -652,6 +653,7 @@ router.get("/roster/people", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -667,6 +669,7 @@ router.get("/roster/people/:id", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/engagements", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -718,6 +721,7 @@ router.get("/roster/people/:id/engagements", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/access", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -767,6 +771,7 @@ router.get("/roster/people/:id/access", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/documents", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -859,6 +864,7 @@ function verifyDocToken(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/documents/:docId/download", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -929,6 +935,7 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/audit", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1001,6 +1008,7 @@ router.get("/roster/people/:id/audit", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/access-matrix", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1043,6 +1051,7 @@ router.get("/roster/access-matrix", async (req, res, next) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/access", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1101,6 +1110,7 @@ router.post("/roster/access", async (req, res, next) => {
 // Task #293 — read through atelier_conflict_disclosures_v inside withRls so
 // disclosure_text / nature / scope_impact / notes are masked at the DB
 // layer for non personnel-contract viewers (HR + leadership + self).
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/conflicts", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

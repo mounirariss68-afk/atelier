@@ -476,12 +476,14 @@ export async function patchCompliancePosture(
 const router: IRouter = Router();
 
 // --- Prompt library --------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/prompts", async (_req, res) => {
   const entries = listPromptEntries();
   res.json(AtelierListPromptsResponse.parse(entries));
 });
 
 // --- Knowledge Concierge --------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/concierge/search", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -536,6 +538,7 @@ router.post("/concierge/search", async (req, res) => {
 });
 
 // --- Admin settings (Partner-gated) ---------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/admin/settings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -546,6 +549,7 @@ router.get("/admin/settings", async (req, res) => {
   res.json(AtelierGetAdminSettingsResponse.parse(await getAdmin(me.orgId)));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/admin/settings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -572,6 +576,7 @@ router.post("/admin/settings", async (req, res) => {
 // Partner-gated. The Admin Compliance Posture card reads/writes via these
 // endpoints to persist the MFA + IP-allowlist toggles. Other indicators
 // are platform-level and read-only.
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/admin/compliance", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -582,6 +587,7 @@ router.get("/admin/compliance", async (req, res) => {
   res.json(await getCompliancePosture(me.orgId));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/admin/compliance", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -596,6 +602,7 @@ router.patch("/admin/compliance", async (req, res) => {
 // Task #243 — Founder TODOs (read-only static list, raw JSON).
 // Surfaces PRD §10 founder-only follow-ups so partners can see what is
 // outstanding pre-GA. Partner-gated to match the rest of /admin.
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/admin/founder-todos", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -624,6 +631,7 @@ router.get("/admin/founder-todos", async (req, res) => {
 });
 
 // --- Recent runs by agent -------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents/:agentId/runs", async (req, res) => {
   const me = await ensurePersona(req, res);
   if (!me) return;

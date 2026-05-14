@@ -60,6 +60,7 @@ function openSse(res: Response): void {
 
 const router: IRouter = Router();
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/cli/turn", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -134,6 +135,7 @@ router.post("/cli/turn", async (req, res) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/cli/turn/:id/confirm", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -167,6 +169,7 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/cli/turn/:id/cancel", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -181,6 +184,7 @@ router.post("/cli/turn/:id/cancel", async (req, res) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/sessions", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -212,6 +216,7 @@ router.get("/cli/sessions", async (req, res) => {
  * by the right-rail Activity tab to render per-turn `cli_turn` rows
  * with status icon and a deep-link to /cli?session=…&turn=…
  */
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/turns/recent", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -249,6 +254,7 @@ router.get("/cli/turns/recent", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/sessions/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -306,6 +312,7 @@ router.get("/cli/sessions/:id", async (req, res) => {
  * tool-binding time; this endpoint mirrors that filter so the client
  * never offers a slash that the server would reject.
  */
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/capabilities", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -357,6 +364,7 @@ router.get("/cli/capabilities", async (req, res) => {
  * pass can fan this out to the analytics warehouse without changing
  * the client contract.
  */
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/cli/events", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

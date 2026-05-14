@@ -79,6 +79,7 @@ function uploadWithErrorHandling(
   });
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/cli/attachments", uploadWithErrorHandling, async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -143,6 +144,7 @@ router.post("/cli/attachments", uploadWithErrorHandling, async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/attachments/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

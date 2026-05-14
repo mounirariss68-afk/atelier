@@ -197,6 +197,7 @@ async function summariseAccount(
 const router: IRouter = Router();
 
 // ---------- list ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -226,6 +227,7 @@ router.get("/accounts", async (req, res) => {
 // Task #292 — CRM account creation: partner-tier + senior_manager.
 const CREATE_ROLES = new Set(["founding_partner", "partner", "senior_manager"]);
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/accounts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -567,6 +569,7 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts/:accountId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -584,6 +587,7 @@ router.get("/accounts/:accountId", async (req, res) => {
 });
 
 // ---------- cartographer refresh ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -798,6 +802,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
 });
 
 // ---------- contacts (graph) ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts/:accountId/contacts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -815,6 +820,7 @@ router.get("/accounts/:accountId/contacts", async (req, res) => {
 });
 
 // ---------- whitespace ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts/:accountId/whitespace", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -857,6 +863,7 @@ function toWhitespaceWire(accountId: string, output: WhitespaceOutput) {
 }
 
 // ---------- qbr ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts/:accountId/qbr", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -891,6 +898,7 @@ function toQbrWire(accountId: string, o: QbrOutput) {
 }
 
 // ---------- profile-update decision ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -981,6 +989,7 @@ router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (re
 });
 
 // ---------- contact disposition ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/contacts/:contactId/disposition", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1053,6 +1062,7 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
 });
 
 // ---------- credentials ----------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/credentials", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1081,6 +1091,7 @@ router.get("/credentials", async (req, res) => {
   );
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/credentials", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1142,6 +1153,7 @@ router.post("/credentials", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.put("/credentials/:credentialId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1214,6 +1226,7 @@ router.put("/credentials/:credentialId", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.delete("/credentials/:credentialId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

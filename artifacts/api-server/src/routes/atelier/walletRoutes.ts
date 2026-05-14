@@ -219,6 +219,7 @@ function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atel
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/expenses", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -272,6 +273,7 @@ async function ensureEngagementAccess(
 // Evidence inspection endpoints used by the approvals UI to let
 // partners click through from a contractor / partner-firm proposal to
 // the underlying timesheet entry / firm-hours row that justifies it.
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/timesheet-entries/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -290,6 +292,7 @@ router.get("/wallet/timesheet-entries/:id", async (req, res) => {
   res.json({ entry: row });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/partner-firm-hours/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -308,6 +311,7 @@ router.get("/wallet/partner-firm-hours/:id", async (req, res) => {
   res.json({ firmHours: row });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/expenses/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -347,6 +351,7 @@ interface CreateExpenseBody {
   perDiemUsd?: number;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -499,6 +504,7 @@ async function runAuditOnExpense(
   return { expense: refreshed, runId };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/audit", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -542,6 +548,7 @@ interface SubmitBody {
   }>;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/submit", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -783,6 +790,7 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
   res.json({ expense: expenseToWire(final, me) });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -870,6 +878,7 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
   res.json({ expense: expenseToWire(final, me) });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -929,6 +938,7 @@ router.post("/wallet/expenses/:id/reject", async (req, res) => {
 // =============================================================
 // POLICY
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/policy", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -945,6 +955,7 @@ router.get("/wallet/policy", async (req, res) => {
   res.json({ rules: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/policy/seed-defaults", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -964,6 +975,7 @@ router.post("/wallet/policy/seed-defaults", async (req, res) => {
   res.json({ ok: true, count: DEFAULT_POLICIES.length });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/policy", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1001,6 +1013,7 @@ router.post("/wallet/policy", async (req, res) => {
   res.status(201).json({ id });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/wallet/policy/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1033,6 +1046,7 @@ router.patch("/wallet/policy/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.delete("/wallet/policy/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1058,6 +1072,7 @@ router.delete("/wallet/policy/:id", async (req, res) => {
 // =============================================================
 // CARDS
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/cards", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1092,6 +1107,7 @@ router.get("/wallet/cards", async (req, res) => {
 // =============================================================
 // VAT register
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/vat", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1172,6 +1188,7 @@ router.get("/wallet/vat", async (req, res) => {
 // =============================================================
 // FX seed (ops)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/fx/seed", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1184,6 +1201,7 @@ router.post("/wallet/fx/seed", async (req, res) => {
   res.json({ ok: true, written });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/fx", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1230,6 +1248,7 @@ export async function runWalletRetentionSweep(): Promise<{ redacted: number; sca
   return { redacted, scanned: candidates.length };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/retention/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1252,6 +1271,7 @@ router.post("/wallet/retention/run", async (req, res) => {
 // =============================================================
 // Task #260 — Client-billable expenses · /wallet/client-billable
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/client-billable/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1328,6 +1348,7 @@ router.get("/wallet/client-billable/:engagementId", async (req, res) => {
 // =============================================================
 // Task #260 — Payment Proposals · /wallet/approvals (Partner-only)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/approvals", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1405,6 +1426,7 @@ router.get("/wallet/approvals", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/approvals/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1425,6 +1447,7 @@ router.post("/wallet/approvals/run", async (req, res) => {
   res.json({ ok: true, summary });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1471,6 +1494,7 @@ router.post("/wallet/approvals/contractor/:id/approve", async (req, res) => {
   res.json({ ok: true });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1519,6 +1543,7 @@ router.post("/wallet/approvals/contractor/:id/reject", async (req, res) => {
   res.json({ ok: true });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1565,6 +1590,7 @@ router.post("/wallet/approvals/partner-firm/:id/approve", async (req, res) => {
   res.json({ ok: true });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1616,6 +1642,7 @@ router.post("/wallet/approvals/partner-firm/:id/reject", async (req, res) => {
 // =============================================================
 // Task #260 — Invoice-line drafts · /wallet/invoice-drafts/:eid
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1676,6 +1703,7 @@ router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
 // flow uses, but feeds it pre-computed expense checks so the result is
 // recorded as a normal sentinel run on the agent runs page.
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1722,6 +1750,7 @@ router.post("/wallet/expenses/:id/publish-sentinel", async (req, res) => {
   res.json({ ok: true, runId: sentinel.runId, sentinel: sentinel.output });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/invoice-drafts/:engagementId/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

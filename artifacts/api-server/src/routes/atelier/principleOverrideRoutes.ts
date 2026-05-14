@@ -42,6 +42,7 @@ function rid(prefix: string): string {
     .slice(2, 8)}`;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/admin/breakglass/read", async (req: Request, res: Response) => {
   const me = req.atelierPersona;
   if (!me) {
@@ -134,6 +135,7 @@ router.post("/admin/breakglass/read", async (req: Request, res: Response) => {
   }
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/admin/breakglass", async (req: Request, res: Response) => {
   const me = req.atelierPersona;
   if (!me) {

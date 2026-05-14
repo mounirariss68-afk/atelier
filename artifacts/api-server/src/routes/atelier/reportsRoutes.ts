@@ -143,11 +143,13 @@ const TEMPLATES: Array<{ id: TemplateId; name: string; abstract: string; columns
   },
 ];
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reports/templates", async (req, res) => {
   if (!ensurePersona(req, res)) return;
   res.json({ templates: TEMPLATES });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reports", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -177,6 +179,7 @@ router.get("/reports", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/reports", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -585,6 +588,7 @@ async function computeReport(
   }
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/reports/:id/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -620,6 +624,7 @@ router.post("/reports/:id/run", async (req, res) => {
   res.json({ report: updated, result });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reports/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -640,6 +645,7 @@ router.get("/reports/:id", async (req, res) => {
 // Unified export alias (PRD §5): /reports/:id/export?format=pdf|csv.
 // Delegates to the existing export.pdf / export.csv handlers via internal
 // URL rewrite so we keep one source of truth.
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reports/:id/export", (req, res, next) => {
   const fmt = String(req.query.format ?? "").toLowerCase();
   if (fmt !== "pdf" && fmt !== "csv") {
@@ -650,6 +656,7 @@ router.get("/reports/:id/export", (req, res, next) => {
   next("route");
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reports/:id/export.csv", async (req, res) => {
   if (!ensurePersona(req, res)) return;
   const [row] = await db
@@ -673,6 +680,7 @@ router.get("/reports/:id/export.csv", async (req, res) => {
   res.send(lines.join("\n"));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reports/:id/export.pdf", async (req, res) => {
   if (!ensurePersona(req, res)) return;
   const [row] = await db
@@ -713,6 +721,7 @@ router.get("/reports/:id/export.pdf", async (req, res) => {
   doc.end();
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/reports/:id/schedule", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

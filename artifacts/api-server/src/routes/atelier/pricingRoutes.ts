@@ -124,6 +124,7 @@ const router: IRouter = Router();
 // =============================================================
 // Rate cards
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/rate-cards", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -148,6 +149,7 @@ router.get("/rate-cards", async (req, res) => {
   );
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/rate-cards", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -185,6 +187,7 @@ router.post("/rate-cards", async (req, res) => {
   res.status(201).json(card);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/rate-cards/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -238,6 +241,7 @@ router.get("/rate-cards/:id", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/rate-cards/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -259,6 +263,7 @@ router.patch("/rate-cards/:id", async (req, res) => {
   res.json(updated);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/rate-cards/:id/rows", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -289,11 +294,13 @@ router.post("/rate-cards/:id/rows", async (req, res) => {
 // =============================================================
 // Margin policy
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/margin-policy", async (_req, res) => {
   const policy = await loadDefaultPolicy();
   res.json(policy);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/margin-policy", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -354,6 +361,7 @@ async function loadOrInitDealPricing(
   return created;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/pricing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -393,6 +401,7 @@ router.get("/opportunities/:oppId/pricing", async (req, res) => {
   res.json({ pricing: safePricing, policy, rateCardRows: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.put("/opportunities/:oppId/pricing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -486,6 +495,7 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
 });
 
 // What-if: pure compute, no persistence.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/pricing/whatif", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -511,6 +521,7 @@ router.post("/opportunities/:oppId/pricing/whatif", async (req, res) => {
 // spec-canonical aliases (`primary_pricing`, `talking_points_for_partner`)
 // so existing UI keeps working while spec-conformant integrations can read
 // the snake_case fields directly.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/pricing/strategist", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -558,6 +569,7 @@ router.post("/opportunities/:oppId/pricing/strategist", async (req, res) => {
 });
 
 // Single-Partner override
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/pricing/override", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -629,6 +641,7 @@ router.post("/opportunities/:oppId/pricing/override", async (req, res) => {
 });
 
 // Second-Partner countersign
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/pricing/countersign", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -693,6 +706,7 @@ router.post("/opportunities/:oppId/pricing/countersign", async (req, res) => {
 
 // Delete a single rate-card row (Partner-only, soft delete via real DELETE
 // since the table has no deletedAt — rows are inexpensive to recreate).
+// @cli-skip: pending Task #340 read-parity migration
 router.delete("/rate-cards/:id/rows/:rowId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -725,6 +739,7 @@ router.delete("/rate-cards/:id/rows/:rowId", async (req, res) => {
 
 // Archive (soft-delete) a rate card. Partner-only. Refuses if the card is
 // referenced by a non-deleted dealPricing row.
+// @cli-skip: pending Task #340 read-parity migration
 router.delete("/rate-cards/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

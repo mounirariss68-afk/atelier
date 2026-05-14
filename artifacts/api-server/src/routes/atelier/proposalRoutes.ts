@@ -132,6 +132,7 @@ const router: IRouter = Router();
 // PROCESSES + AGENT DESIGNS
 // =============================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/processes", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -145,6 +146,7 @@ router.get("/engagements/:engId/processes", async (req, res) => {
   res.json(rows);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/processes", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -243,6 +245,7 @@ router.post("/engagements/:engId/processes", async (req, res) => {
   res.status(201).json({ process: proc, designs: insertedDesigns, runId });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/agent-designs", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -258,6 +261,7 @@ router.get("/engagements/:engId/agent-designs", async (req, res) => {
 
 // Promote an approved engagement-scoped design to the Atelier registry.
 // Partner-only (per requirement: "Partner-gated promote to Atelier").
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -324,6 +328,7 @@ router.post("/engagements/:engId/agent-designs/:designId/promote", async (req, r
 
 // Aggregated run counts grouped by agent_id, scoped to org. Used by the
 // /agents tab to render usage counters next to runtime cards.
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents/usage-counts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -335,6 +340,7 @@ router.get("/agents/usage-counts", async (req, res) => {
   res.json(rows);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/agent-designs/:designId/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -368,6 +374,7 @@ router.post("/engagements/:engId/agent-designs/:designId/approve", async (req, r
 // PROTOTYPE FORGE (opportunity-scoped)
 // =============================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/prototypes", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -381,6 +388,7 @@ router.get("/opportunities/:oppId/prototypes", async (req, res) => {
   res.json(rows);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/prototype", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -465,6 +473,7 @@ router.post("/opportunities/:oppId/prototype", async (req, res) => {
 // PROPOSAL COMPOSER (opportunity-scoped)
 // =============================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/proposal", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -486,6 +495,7 @@ router.get("/opportunities/:oppId/proposal", async (req, res) => {
   res.json({ proposal, sections });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/proposal", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -667,6 +677,7 @@ router.post("/opportunities/:oppId/proposal", async (req, res) => {
 // PATCH content of a proposal section (lead/partner). Resets status
 // to "draft" so the section must be re-approved after edit. This is
 // the "Edit" half of the Approve/Edit/Reject pattern.
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/proposal-sections/:sectionId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -710,6 +721,7 @@ router.patch("/proposal-sections/:sectionId", async (req, res) => {
 // records the reason on the row's citations meta. The send gate already
 // rejects any non-approved section, so this prevents re-approval until
 // the lead edits + re-approves. Completes the Approve/Edit/Reject set.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposal-sections/:sectionId/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -754,6 +766,7 @@ router.post("/proposal-sections/:sectionId/reject", async (req, res) => {
   res.json(updated);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -807,6 +820,7 @@ router.post("/proposal-sections/:sectionId/approve", async (req, res) => {
 // ----------------------------------------------------------------------
 // Prototype Forge state machine: draft → lead_approved → live (partner).
 // ----------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/prototypes/:prototypeId/approve-brief", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -840,6 +854,7 @@ router.post("/prototypes/:prototypeId/approve-brief", async (req, res) => {
   res.json(updated);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/prototypes/:prototypeId/approve-prompt", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -884,6 +899,7 @@ router.post("/prototypes/:prototypeId/approve-prompt", async (req, res) => {
 // model. Persisted in proposal.pricingIntent so the send gate can
 // require it independently of section approvals.
 // ----------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -933,6 +949,7 @@ router.post("/proposals/:proposalId/approve-pricing", async (req, res) => {
 // Records rationale + approver + timestamp on pricingIntent. Send gate
 // accepts either a normal pricing approval OR a recorded override.
 // ----------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposals/:proposalId/override-pricing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -984,6 +1001,7 @@ router.post("/proposals/:proposalId/override-pricing", async (req, res) => {
 // PromptSheet checkpoint #1 — Section assignments confirmed (lead/partner).
 // Locks the per-section ownerAgent + sectionsRequired list before send.
 // ----------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposals/:proposalId/confirm-section-assignments", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1021,6 +1039,7 @@ router.post("/proposals/:proposalId/confirm-section-assignments", async (req, re
 // Distinct from approve-pricing: this is the partner's last-mile read
 // of the assembled proposal before the send.
 // ----------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposals/:proposalId/partner-final-read", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1059,6 +1078,7 @@ router.post("/proposals/:proposalId/partner-final-read", async (req, res) => {
 // then assembles a deterministic DOCX/PDF artifact and flips
 // proposal.status to "sent".
 // ----------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposals/:proposalId/send", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1220,6 +1240,7 @@ router.post("/proposals/:proposalId/send", async (req, res) => {
 // os.tmpdir()/atelier-artifacts and are name-prefixed with proposal-id, so
 // access control falls back on the unguessable id (the same posture used
 // for other generated artifacts in the workspace).
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/artifacts/:filename", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1342,6 +1363,7 @@ async function buildProposalRenderInput(
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/proposals/:proposalId/preview-html", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1359,6 +1381,7 @@ router.get("/proposals/:proposalId/preview-html", async (req, res) => {
   res.send(html);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/proposals/:proposalId/recipients", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1395,6 +1418,7 @@ router.get("/proposals/:proposalId/recipients", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposals/:proposalId/recipients", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1455,6 +1479,7 @@ router.post("/proposals/:proposalId/recipients", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/proposal-recipients/:recipientId/revoke", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

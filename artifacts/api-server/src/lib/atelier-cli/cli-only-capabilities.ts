@@ -1,18 +1,24 @@
 /**
- * Task #332 — Seed registrations for the capability catalog.
+ * CLI-only capabilities (no Express route counterpart).
  *
- * One representative entry per concern so the orchestrator (and the
- * downstream parity tests) exercise every code-path:
+ * Most catalog entries are now derived from code via Task #339's two
+ * helpers — `defineRouteCapability` colocates a capability with its
+ * route, and `registerAgentCapabilities` walks the agents registry.
+ * The entries in this file are the leftover slice that have no real
+ * HTTP route: they expose pure CLI verbs (help/palette listing, free
+ * text resolvers, soft mocks of high-blast-radius operations like
+ * outbound email send + irreversible deletes) so the orchestrator can
+ * exercise every code path before the read-parity task wires up the
+ * real routes.
+ *
+ * Each entry is registered with `source: "cli-only"` so the lint and
+ * coverage checks know not to expect a sibling route.
  *
  *   - read-only, board-observer-allowed:        meta.help
  *   - resolver-driven disambiguation:           account.lookup
- *   - write + two-phase confirm:                raid.add
+ *   - write + two-phase confirm:                raid.add_v2
  *   - irreversible + typed-name re-confirm:     account.delete
  *   - outbound-channel + per-day rate-limit:    deliverable.email_send
- *   - role-gated to founding_partner/partner:   firm.publish_profile
- *
- * Tasks #333-#335 layer additional entries against the same shape;
- * none of them touch orchestrator wiring.
  */
 
 import { and, eq, isNull } from "drizzle-orm";
@@ -140,8 +146,9 @@ defineCapability({
     "founding_partner",
     "partner",
     "senior_manager",
-    "manager",
-    "associate",
+    "consultant",
+    
+    
   ],
   surfaceOn: ["engagement_dashboard"],
   examplePhrases: {

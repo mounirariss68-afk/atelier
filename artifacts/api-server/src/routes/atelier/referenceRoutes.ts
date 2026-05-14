@@ -152,6 +152,7 @@ async function audit(
 }
 
 // READ — bootstrap (one fetch for the FE combobox).
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reference/bootstrap", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -170,6 +171,7 @@ router.get("/reference/bootstrap", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reference/countries", async (req, res) => {
   if (!ensurePersona(req, res)) return;
   const includeDeprecated = req.query.includeDeprecated === "true";
@@ -177,6 +179,7 @@ router.get("/reference/countries", async (req, res) => {
   res.json(includeDeprecated ? rows : rows.filter((r) => r.status === "active"));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reference/industries", async (req, res) => {
   if (!ensurePersona(req, res)) return;
   const includeDeprecated = req.query.includeDeprecated === "true";
@@ -184,6 +187,7 @@ router.get("/reference/industries", async (req, res) => {
   res.json(includeDeprecated ? rows : rows.filter((r) => r.status === "active"));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/reference/sub_industries", async (req, res) => {
   if (!ensurePersona(req, res)) return;
   const includeDeprecated = req.query.includeDeprecated === "true";
@@ -192,6 +196,7 @@ router.get("/reference/sub_industries", async (req, res) => {
 });
 
 // WRITE — countries
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/reference/countries/:isoAlpha2", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
@@ -237,6 +242,7 @@ router.patch("/reference/countries/:isoAlpha2", async (req, res) => {
 });
 
 // WRITE — industries
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/reference/industries", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
@@ -279,6 +285,7 @@ router.post("/reference/industries", async (req, res) => {
   res.json(created);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/reference/industries/:code", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
@@ -324,6 +331,7 @@ router.patch("/reference/industries/:code", async (req, res) => {
 });
 
 // WRITE — sub-industries
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/reference/sub_industries", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;
@@ -377,6 +385,7 @@ router.post("/reference/sub_industries", async (req, res) => {
   res.json(created);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/reference/sub_industries/:code", async (req, res) => {
   const me = requireAdmin(req, res);
   if (!me) return;

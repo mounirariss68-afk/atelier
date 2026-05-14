@@ -365,6 +365,7 @@ function detectSuspiciousFlags(entries: ReturnType<typeof entryWire>[], signals:
 // =====================================================================
 // GET /ledger/timesheets/current  → current week for the active persona
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/timesheets/current", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -416,6 +417,7 @@ async function maybeAutoDraft(
 // =====================================================================
 // GET /ledger/timesheets/:personId/:weekIso
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/timesheets/:personId/:weekIso", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -476,6 +478,7 @@ async function getWeekResponse(
 // =====================================================================
 // POST /ledger/timesheets/:weekId/draft   → run Time Steward
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/timesheets/:weekId/draft", async (req, res) => {
   const [week] = await db
     .select()
@@ -511,6 +514,7 @@ router.post("/ledger/timesheets/:weekId/draft", async (req, res) => {
 // =====================================================================
 // POST /ledger/timesheets/:weekId/entries   → upsert a manual entry
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/timesheets/:weekId/entries", async (req, res) => {
   const [week] = await db
     .select()
@@ -582,6 +586,7 @@ router.post("/ledger/timesheets/:weekId/entries", async (req, res) => {
 // status flips to "confirmed" and the confirming user is recorded). The
 // route is week-scoped to prevent cross-week confirmation.
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/timesheets/:weekId/entries/:entryId/confirm", async (req, res) => {
   const [week] = await db
     .select()
@@ -629,6 +634,7 @@ router.post("/ledger/timesheets/:weekId/entries/:entryId/confirm", async (req, r
   res.json({ ok: true });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.delete("/ledger/timesheets/entries/:entryId", async (req, res) => {
   const [entry] = await db
     .select()
@@ -663,6 +669,7 @@ router.delete("/ledger/timesheets/entries/:entryId", async (req, res) => {
 // =====================================================================
 // POST /ledger/timesheets/:weekId/submit
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/timesheets/:weekId/submit", async (req, res) => {
   const [week] = await db
     .select()
@@ -730,6 +737,7 @@ router.post("/ledger/timesheets/:weekId/submit", async (req, res) => {
 // Returns weeks WITH their entries and signals inline so the approvals UI
 // can show per-row evidence without an N+1 round-trip.
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/approvals", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -841,6 +849,7 @@ router.get("/ledger/approvals", async (req, res) => {
 // =====================================================================
 // POST /ledger/approvals/:weekId/approve   role: 'lead' | 'partner'
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -954,6 +963,7 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
 // =====================================================================
 // POST /ledger/approvals/:weekId/reject
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/approvals/:weekId/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -997,11 +1007,13 @@ router.post("/ledger/approvals/:weekId/reject", async (req, res) => {
 // AND /roster/people/:id/timesheet-summary  (canonical path per spec)
 // Rolling 4-week + YTD billable %, missing-week flags.
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/timesheet-summary", (req, res, next) => {
   // Delegate to the /ledger/-prefixed handler so both URLs share one impl.
   req.url = `/ledger/roster/people/${req.params.id}/timesheet-summary`;
   next("route");
 });
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/roster/people/:id/timesheet-summary", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1085,6 +1097,7 @@ const partnerFirmUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB ceiling for an HR CSV
 });
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single("file"), async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1161,6 +1174,7 @@ router.post("/ledger/partner-firm-hours/:engagementId", partnerFirmUpload.single
 // they are seconded to; leadership (partner/operations/engagement_lead)
 // sees the full picture.
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/engagement-economics/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1219,6 +1233,7 @@ router.get("/ledger/engagement-economics/:engagementId", async (req, res) => {
 // =====================================================================
 // GET /ledger/partner-firm-hours/:engagementId  → engagement-economics panel
 // =====================================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1258,6 +1273,7 @@ router.get("/ledger/partner-firm-hours/:engagementId", async (req, res) => {
 
 // Test-only manual nudge trigger (also useful for ops to fire a deadline
 // reminder out-of-band). Gated to partner/operations to avoid abuse.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/nudges/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1273,6 +1289,7 @@ router.post("/ledger/nudges/run", async (req, res) => {
 // Manual trigger for the daily Time Steward draft pass — partner-tier +
 // finance only. Lets QA and runbooks force the same backfill that runs
 // Mon 06:00 GST from startLedgerNudgeJob's 15-minute ticker.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/steward/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1321,6 +1338,7 @@ function defaultTargetPctFor(role: string | null | undefined, seniority: string 
 // Rolling 4 weeks + YTD + engagement mix + variance vs target.
 // ACL: self OR partner/operations/engagement_lead.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/utilization/person/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1420,6 +1438,7 @@ router.get("/ledger/utilization/person/:id", async (req, res) => {
 // burn-rate, weeks-of-runway.  :slug accepts either id or slug.
 // ACL: leadership OR engagement lead/partner owner of this engagement.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/utilization/engagement/:slug", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1585,6 +1604,7 @@ router.get("/ledger/utilization/engagement/:slug", async (req, res) => {
 // Partner-by-partner utilization, sector-by-sector margin realization,
 // firm realization rate, and a leakage report.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/utilization/firm", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1854,6 +1874,7 @@ router.get("/ledger/utilization/firm", async (req, res) => {
 // POST /ledger/utilization/narrative  → run Utilization Analyst.
 // Body: { view, targetId, period, numericBlock }
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/utilization/narrative", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -2038,6 +2059,7 @@ async function hydrateUtilizationNumericBlock(
 // POST /ledger/utilization/snapshot/run (Partner/Operations) — manual recompute.
 // POST /ledger/burn-sentinel/run        (Partner/Operations) — manual sweep.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/utilization/snapshot/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -2047,6 +2069,7 @@ router.post("/ledger/utilization/snapshot/run", async (req, res) => {
   res.json(out);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/ledger/burn-sentinel/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -2055,6 +2078,7 @@ router.post("/ledger/burn-sentinel/run", async (req, res) => {
   res.json(out);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ledger/burn-sentinel/engagement/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

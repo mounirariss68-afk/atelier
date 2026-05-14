@@ -46,10 +46,9 @@ import {
   findByToolName,
   CATALOG_SCHEMA_VERSION,
 } from "./capability-catalog.js";
-import "./capability-seed.js"; // side-effect: registers catalog entries
-import "./attachment-capabilities.js"; // Task #334 — attachment + rubric tools
-import "./undo.js"; // Task #335 — undo_last_action capability
-import "./parity-capabilities.js"; // Task #338 — UI parity write actions
+// Task #339 — single bootstrap entry point. Imports cli-only entries,
+// attachment+rubric capabilities, and walks the agent registry.
+import "./bootstrap-capabilities.js";
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
   shouldRequireTypedNameForAttachmentTurn,

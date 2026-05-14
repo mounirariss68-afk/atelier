@@ -212,6 +212,7 @@ async function loadApproverNames(
   return new Map(users.filter((u) => ids.includes(u.id)).map((u) => [u.id, u.name]));
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/charter/versions", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -226,6 +227,7 @@ router.get("/engagements/:engId/charter/versions", async (req, res) => {
   res.json(rows.map((r) => charterVersionWire(r, names)));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/charter/redraft", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -286,6 +288,7 @@ router.post("/engagements/:engId/charter/redraft", async (req, res) => {
   res.json(charterVersionWire(row, await loadApproverNames([row])));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/charter/versions/:versionId/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -411,6 +414,7 @@ router.post("/engagements/:engId/charter/versions/:versionId/approve", async (re
 // =============================================================
 // Hypothesis tree (read)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/hypothesis-tree", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -463,6 +467,7 @@ async function withOwner(rows: (typeof atelierRaidItems.$inferSelect)[]) {
   return rows.map((r) => raidWire(r, r.ownerId ? byId.get(r.ownerId) ?? null : null));
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/raid", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -479,6 +484,7 @@ router.get("/engagements/:engId/raid", async (req, res) => {
   res.json(await withOwner(rows));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/raid", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -515,6 +521,7 @@ router.post("/engagements/:engId/raid", async (req, res) => {
   res.status(201).json(raidWire(row, null));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/engagements/:engId/raid/:raidId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -594,6 +601,7 @@ function versionWire(v: typeof atelierDeliverableVersions.$inferSelect) {
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/deliverables", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -610,6 +618,7 @@ router.get("/engagements/:engId/deliverables", async (req, res) => {
   res.json(rows.map(deliverableWire));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/deliverables", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -673,6 +682,7 @@ async function buildDeliverableDetail(d: typeof atelierDeliverables.$inferSelect
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/deliverables/:delId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -705,6 +715,7 @@ router.get("/deliverables/:delId", async (req, res) => {
   res.json(await buildDeliverableDetail(row));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/deliverables/:delId/draft", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -779,6 +790,7 @@ router.post("/deliverables/:delId/draft", async (req, res) => {
   res.json(versionWire(row));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/deliverables/:delId/critique", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -846,6 +858,7 @@ router.post("/deliverables/:delId/critique", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/deliverables/:delId/send", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1016,6 +1029,7 @@ function artifactWire(a: typeof atelierArtifacts.$inferSelect) {
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/artifacts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1038,6 +1052,7 @@ router.get("/engagements/:engId/artifacts", async (req, res) => {
   res.json(rows.map(artifactWire));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/artifacts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1101,6 +1116,7 @@ router.post("/engagements/:engId/artifacts", async (req, res) => {
   res.status(201).json(artifactWire(row));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/artifacts/:artifactId/translate", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1141,6 +1157,7 @@ router.post("/artifacts/:artifactId/translate", async (req, res) => {
 // PATCHing plmStage='closed' fires the Access Sentinel which auto-revokes
 // every non-employee grant on this engagement and writes audit rows.
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/engagements/:engId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

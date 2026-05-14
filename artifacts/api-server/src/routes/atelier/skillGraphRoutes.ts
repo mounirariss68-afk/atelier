@@ -219,6 +219,7 @@ function skillToWire(s: typeof atelierSkills.$inferSelect): SkillWire {
 // Taxonomy
 // -----------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/skill-graph/skills", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -230,6 +231,7 @@ router.get("/roster/skill-graph/skills", async (req, res) => {
   res.json({ skills: rows.map(skillToWire) });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/skill-graph/skills", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -345,6 +347,7 @@ async function loadPersonSkills(
   }));
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/skills", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -371,6 +374,7 @@ router.get("/roster/people/:id/skills", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/people/:id/skills", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -564,9 +568,11 @@ async function setRowStatus(
   res.json({ skills });
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/people/:id/skills/row/:rowId/verify", (req, res) =>
   setRowStatus(req, res, "active", "verify"),
 );
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/people/:id/skills/row/:rowId/dismiss", (req, res) =>
   setRowStatus(req, res, "dismissed", "dismiss"),
 );
@@ -648,6 +654,7 @@ function rowScore(
   return (sourceWeight[source] + verifiedBump) * proficiency;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/skill-graph/search", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1273,6 +1280,7 @@ async function runSkillMapper(
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/skill-graph/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

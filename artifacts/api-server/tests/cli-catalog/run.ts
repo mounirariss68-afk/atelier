@@ -30,8 +30,13 @@ import {
   capabilitiesForPersona,
   listCapabilities,
   CATALOG_SCHEMA_VERSION,
+  hashSchema,
+  pinnedPromptDrift,
+  findByToolName,
 } from "../../src/lib/atelier-cli/capability-catalog.js";
-import "../../src/lib/atelier-cli/capability-seed.js";
+import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
+import { ATELIER_AGENTS } from "@workspace/agents";
+import { lintAtelierRoutes } from "../../src/scripts/atelier-lint-routes.js";
 import {
   wrapAttachment,
   attachmentMentionsDestructive,
@@ -110,7 +115,7 @@ async function main() {
   await test("catalog has at least 5 entries and stable schemaVersion", () => {
     const all = listCapabilities();
     assert.ok(all.length >= 5, `expected ≥5 catalog entries, got ${all.length}`);
-    assert.equal(CATALOG_SCHEMA_VERSION, 1);
+    assert.equal(CATALOG_SCHEMA_VERSION, 2);
     for (const c of all) {
       assert.equal(c.schemaVersion, CATALOG_SCHEMA_VERSION, `entry ${c.id} drifted schemaVersion`);
       assert.ok(c.toolName.match(/^[a-z][a-z0-9_]*$/), `entry ${c.id} bad toolName`);
@@ -188,6 +193,69 @@ async function main() {
       shouldRequireTypedNameForAttachmentTurn({ hasAttachments: false, prompt: "summarize this" }),
       false,
     );
+  });
+
+  console.log("\n[6] Task #339 — auto-registration coverage");
+  await test("every entry carries a stable schemaHash that matches its inputSchema", () => {
+    const all = listCapabilities();
+    for (const c of all) {
+      assert.ok(c.schemaHash && c.schemaHash.length >= 8, `entry ${c.id} missing schemaHash`);
+      assert.equal(
+        c.schemaHash,
+        hashSchema(c.inputSchema),
+        `entry ${c.id} schemaHash does not match its inputSchema`,
+      );
+    }
+  });
+  await test("pinnedPromptDrift returns a warning when the saved hash is stale", () => {
+    const cap = findByToolName("list_capabilities");
+    assert.ok(cap, "list_capabilities capability should exist");
+    if (!cap) return;
+    assert.equal(pinnedPromptDrift({ toolName: cap.toolName, schemaHash: cap.schemaHash }), null);
+    const drift = pinnedPromptDrift({ toolName: cap.toolName, schemaHash: "deadbeefdead" });
+    assert.ok(drift, "expected drift warning for stale hash");
+    assert.equal(drift?.currentHash, cap.schemaHash);
+    const noHash = pinnedPromptDrift({ toolName: cap.toolName, schemaHash: null });
+    assert.ok(noHash && /predates schema hashing/.test(noHash.warning));
+  });
+  await test("every registered agent has a corresponding capability", () => {
+    const all = listCapabilities();
+    const byId = new Map(all.map((c) => [c.id, c] as const));
+    const missing: string[] = [];
+    for (const agent of ATELIER_AGENTS) {
+      const id = `agent.${agent.id}`;
+      const c = byId.get(id);
+      if (!c) { missing.push(id); continue; }
+      assert.equal(c.source, "agent", `${id} should be source=agent`);
+      assert.equal(c.toolName, `run_${agent.id}`, `${id} toolName mismatch`);
+    }
+    assert.equal(
+      missing.length,
+      0,
+      `missing agent capabilities: ${missing.join(", ")} — call registerAgentCapabilities()`,
+    );
+  });
+  await test("every catalog entry tags its source (route/agent/cli-only)", () => {
+    for (const c of listCapabilities()) {
+      assert.ok(
+        c.source === "route" || c.source === "agent" || c.source === "cli-only",
+        `entry ${c.id} has invalid source ${c.source}`,
+      );
+    }
+  });
+  await test("atelier-lint-routes — every route file is wrapped or marked @cli-skip", () => {
+    const violations = lintAtelierRoutes();
+    if (violations.length > 0) {
+      // Print the first few so the failure message points to the fix.
+      const head = violations.slice(0, 5).map(
+        (v) => `  ${v.file}:${v.line} ${v.method.toUpperCase()} ${v.path}`,
+      ).join("\n");
+      assert.fail(
+        `${violations.length} route(s) missing capability metadata. ` +
+        `Wrap with defineRouteCapability(...) or add \`// @cli-skip: <reason>\`.\n${head}` +
+        (violations.length > 5 ? `\n  ... and ${violations.length - 5} more` : ""),
+      );
+    }
   });
 
   console.log(`\nResults: ${pass} passed, ${fail} failed`);

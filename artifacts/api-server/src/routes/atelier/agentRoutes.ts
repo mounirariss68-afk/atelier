@@ -143,6 +143,7 @@ const router: IRouter = Router();
 // =============================================================
 // Create opportunity (auto-runs Pursuit Scout)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -374,6 +375,7 @@ async function persistBriefAndFacts(
 // =============================================================
 // PATCH stage  (5C gate enforced for `pursue`)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/opportunities/:oppId/stage", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -431,6 +433,7 @@ router.patch("/opportunities/:oppId/stage", async (req, res) => {
 // =============================================================
 // 5C Qualifier  (GET + POST)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/qualifier", async (req, res) => {
   const opp = await loadOpp(req.params.oppId);
   if (!opp) {
@@ -450,6 +453,7 @@ router.get("/opportunities/:oppId/qualifier", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/qualifier", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -494,6 +498,7 @@ router.post("/opportunities/:oppId/qualifier", async (req, res) => {
 // =============================================================
 // Pursuit Scout — get brief / re-run
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/brief", async (req, res) => {
   const [row] = await db
     .select()
@@ -520,6 +525,7 @@ router.get("/opportunities/:oppId/brief", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/scout", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -578,6 +584,7 @@ router.post("/opportunities/:oppId/scout", async (req, res) => {
 // =============================================================
 // Research facts
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/research", async (req, res) => {
   const rows = await db
     .select()
@@ -604,6 +611,7 @@ router.get("/opportunities/:oppId/research", async (req, res) => {
   );
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/research/:factId/promote", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -665,6 +673,7 @@ router.post("/opportunities/:oppId/research/:factId/promote", async (req, res) =
 
 // Unsourced-claim risk acceptance — the partner explicitly takes ownership
 // of a red/unsourced fact and the action is logged in the audit trail.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/research/:factId/accept-risk", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -709,6 +718,7 @@ function povWire(p: typeof atelierPovs.$inferSelect) {
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/povs", async (req, res) => {
   const rows = await db
     .select()
@@ -718,6 +728,7 @@ router.get("/opportunities/:oppId/povs", async (req, res) => {
   res.json(rows.map(povWire));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/povs", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -782,6 +793,7 @@ router.post("/opportunities/:oppId/povs", async (req, res) => {
   res.status(201).json(povWire(pov));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/povs/:povId/draft", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -882,6 +894,7 @@ router.post("/povs/:povId/draft", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/povs/:povId/versions", async (req, res) => {
   const rows = await db
     .select()
@@ -926,6 +939,7 @@ function meetingWire(m: typeof atelierMeetings.$inferSelect, runId: string | nul
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/meetings", async (req, res) => {
   const rows = await db
     .select()
@@ -941,6 +955,7 @@ router.get("/opportunities/:oppId/meetings", async (req, res) => {
   res.json(rows.map((m) => meetingWire(m, null)));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/meetings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1016,6 +1031,7 @@ router.post("/opportunities/:oppId/meetings", async (req, res) => {
 // =============================================================
 // Engagement-side meetings (post-contract)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/engagements/:engId/meetings", async (req, res) => {
   const rows = await db
     .select()
@@ -1031,6 +1047,7 @@ router.get("/engagements/:engId/meetings", async (req, res) => {
   res.json(rows.map((m) => meetingWire(m, null)));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/engagements/:engId/meetings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1080,6 +1097,7 @@ router.post("/engagements/:engId/meetings", async (req, res) => {
 // =============================================================
 // Agent runs
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agent-runs/:runId", async (req, res) => {
   const [r] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, req.params.runId));
   if (!r) {
@@ -1106,6 +1124,7 @@ router.get("/agent-runs/:runId", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/agent-runs/:runId/decision", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1183,6 +1202,7 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
 // =============================================================
 // v2 — Sales-stage transitions (rationale + evidence + probability)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1494,6 +1514,7 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/stage-history", async (req, res) => {
   const opp = await loadOpp(req.params.oppId);
   if (!opp) {
@@ -1585,6 +1606,7 @@ async function computeForecast() {
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/pipeline/forecast", async (_req, res) => {
   const summary = await computeForecast();
   res.json(AtelierGetPipelineForecastResponse.parse(summary));
@@ -1605,13 +1627,16 @@ async function runForecasterHandler(req: Request, res: Response) {
   }
   res.json(AtelierGetPipelineForecastResponse.parse(summary));
 }
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/pipeline/forecast/run", runForecasterHandler);
 // Canonical agent-namespaced alias.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/agents/pipeline-forecaster/run", runForecasterHandler);
 
 // Pricing Strategist alias — issues a 307 so the original method/body are
 // preserved against /opportunities/:oppId/pricing/strategist. Avoids router
 // re-entry / middleware double-firing.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/agents/pricing-strategist/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

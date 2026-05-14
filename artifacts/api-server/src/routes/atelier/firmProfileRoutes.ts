@@ -66,6 +66,7 @@ function toWire(row: typeof atelierFirmProfile.$inferSelect) {
 
 // ---- list / latest ----
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/firm-profile", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -88,6 +89,7 @@ router.get("/firm-profile", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/firm-profile/versions", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -101,6 +103,7 @@ router.get("/firm-profile/versions", async (req, res) => {
 
 // ---- create draft from agent ----
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/firm-profile/run-writer", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -160,6 +163,7 @@ router.post("/firm-profile/run-writer", async (req, res) => {
 
 // ---- manual draft save (edits to a draft payload) ----
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/firm-profile/draft", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -203,6 +207,7 @@ router.post("/firm-profile/draft", async (req, res) => {
 
 // ---- publish ----
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/firm-profile/:id/publish", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

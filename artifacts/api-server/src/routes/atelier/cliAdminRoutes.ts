@@ -82,6 +82,7 @@ const router: IRouter = Router();
 // ---------------------------------------------------------------------
 // GET /cli/help — grouped catalog with example phrases.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/help", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -97,6 +98,7 @@ router.get("/cli/help", (req, res) => {
 // ---------------------------------------------------------------------
 // GET /cli/help/suggestions?surface=… — 3-5 chips for the composer.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/help/suggestions", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -118,6 +120,7 @@ router.get("/cli/help/suggestions", (req, res) => {
 // ---------------------------------------------------------------------
 // POST /cli/turns/:id/feedback — persist 👍/👎.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/cli/turns/:id/feedback", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -193,6 +196,7 @@ router.post("/cli/turns/:id/feedback", async (req, res) => {
 // ---------------------------------------------------------------------
 // GET /cli/turns/:id/recording — founding-partner replay payload.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/turns/:id/recording", async (req, res) => {
   const me = ensureFoundingPartner(req, res);
   if (!me) return;
@@ -246,6 +250,7 @@ router.get("/cli/turns/:id/recording", async (req, res) => {
 // ---------------------------------------------------------------------
 // GET /cli/admin/turns — observability listing.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/admin/turns", async (req, res) => {
   const me = ensureFoundingPartner(req, res);
   if (!me) return;
@@ -321,6 +326,7 @@ router.get("/cli/admin/turns", async (req, res) => {
 //
 // Filters: ?days=7  ?module=raid  ?since=ISO  ?until=ISO
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/admin/metrics", async (req, res) => {
   const me = ensureFoundingPartner(req, res);
   if (!me) return;
@@ -432,6 +438,7 @@ router.get("/cli/admin/metrics", async (req, res) => {
 // ---------------------------------------------------------------------
 // GET /cli/admin/digest/weekly — 7-day rollup ready for a mailer.
 // ---------------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/admin/digest/weekly", async (req, res) => {
   const me = ensureFoundingPartner(req, res);
   if (!me) return;

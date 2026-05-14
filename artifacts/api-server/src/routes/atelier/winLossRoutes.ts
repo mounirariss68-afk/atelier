@@ -60,6 +60,7 @@ async function loadDebrief(oppId: string) {
   return row ?? null;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/opportunities/:oppId/win-loss", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -67,6 +68,7 @@ router.get("/opportunities/:oppId/win-loss", async (req, res) => {
   res.json({ debrief });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/opportunities/:oppId/win-loss/seller", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -102,6 +104,7 @@ router.patch("/opportunities/:oppId/win-loss/seller", async (req, res) => {
   res.json({ debrief: updated });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/win-loss/transcript", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -139,6 +142,7 @@ router.post("/opportunities/:oppId/win-loss/transcript", async (req, res) => {
   res.json({ debrief: updated });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/win-loss/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -204,6 +208,7 @@ router.post("/opportunities/:oppId/win-loss/run", async (req, res) => {
   res.json({ debrief: updated, runId, output });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -345,6 +350,7 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
 // that are still not approved, and (a) escalate the partner Pane A item to
 // red/critical, (b) write an audit row noting that close-without-debrief
 // now requires partner override + rationale to remove the gate.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/win-loss/overdue/scan", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -397,6 +403,7 @@ router.post("/win-loss/overdue/scan", async (req, res) => {
 // Partner-override path (PRD §5.2): allow a partner to clear the
 // close-without-debrief gate with explicit rationale. Marks debrief as
 // `withdrawn` (closed without buyer view) and records who/why.
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/win-loss/override", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -453,6 +460,7 @@ router.post("/opportunities/:oppId/win-loss/override", async (req, res) => {
   res.json({ ok: true });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/win-loss/debriefs", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -490,6 +498,7 @@ router.get("/win-loss/debriefs", async (req, res) => {
   res.json({ items });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/win-themes", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -663,6 +672,7 @@ async function runThemeCuratorAndPersist(
   return { runId, output };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/win-themes/curate", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -681,6 +691,7 @@ const DEBRIEF_LIFECYCLE = new Set([
   "seller_done",
   "closed",
 ]);
+// @cli-skip: pending Task #340 read-parity migration
 router.patch("/opportunities/:oppId/win-loss/status", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

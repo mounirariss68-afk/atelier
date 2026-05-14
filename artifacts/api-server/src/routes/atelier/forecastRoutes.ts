@@ -41,6 +41,7 @@ function quarterKey(d: Date): string {
   return `${y} Q${q}`;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
