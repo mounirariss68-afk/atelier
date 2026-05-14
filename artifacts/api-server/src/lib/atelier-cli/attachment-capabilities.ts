@@ -27,6 +27,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
+  atelierEngagements,
   atelierOpportunities,
   atelierRaidItems,
   atelierExpenses,
@@ -199,11 +200,18 @@ defineCapability({
     const offeringAnchor =
       typeof input.offeringAnchor === "string" ? input.offeringAnchor : null;
 
-    // Validate account before doing the heavier extraction lookup.
+    // Org-scoped account validation. Cross-org account ids surface as
+    // not_found rather than forbidden so we don't leak existence.
     const [account] = await db
       .select()
       .from(atelierAccounts)
-      .where(and(eq(atelierAccounts.id, accountId), isNull(atelierAccounts.deletedAt)));
+      .where(
+        and(
+          eq(atelierAccounts.id, accountId),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      );
     if (!account) {
       return {
         ok: false,
@@ -346,6 +354,25 @@ defineCapability({
   async run(input, ctx) {
     const attachmentIds = (input.attachmentIds as string[]) ?? [];
     const engagementId = String(input.engagementId ?? "");
+    // Engagement ACL: must belong to the persona's org. Mirrors the
+    // pattern used by engagementRoutes (org-scoped + isNull deleted).
+    const [engagement] = await db
+      .select()
+      .from(atelierEngagements)
+      .where(
+        and(
+          eq(atelierEngagements.id, engagementId),
+          eq(atelierEngagements.orgId, ctx.persona.orgId),
+          isNull(atelierEngagements.deletedAt),
+        ),
+      );
+    if (!engagement) {
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: `engagement ${engagementId} not found`,
+      };
+    }
     const chunks = await loadAllChunks(attachmentIds, ctx.persona.orgId);
     if (chunks.length === 0) {
       return {
@@ -482,6 +509,28 @@ defineCapability({
     const attachmentIds = (input.attachmentIds as string[]) ?? [];
     const engagementId =
       typeof input.engagementId === "string" ? input.engagementId : null;
+    // Receipts can land "to wallet only" (no engagement) — but if an
+    // engagementId is supplied, validate it belongs to the persona's
+    // org before opening a confirm dialog.
+    if (engagementId) {
+      const [engagement] = await db
+        .select({ id: atelierEngagements.id })
+        .from(atelierEngagements)
+        .where(
+          and(
+            eq(atelierEngagements.id, engagementId),
+            eq(atelierEngagements.orgId, ctx.persona.orgId),
+            isNull(atelierEngagements.deletedAt),
+          ),
+        );
+      if (!engagement) {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `engagement ${engagementId} not found`,
+        };
+      }
+    }
     const drafts: Array<{
       attachmentId: string;
       merchant: string;

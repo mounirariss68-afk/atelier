@@ -1,35 +1,32 @@
 /**
  * Task #334 — Deterministic 6-dimension opportunity qualification rubric.
  *
- * The CLI's `ingest_rfp_to_opportunity` flow turns an extracted RFP
- * document into an opportunity row + a structured qualification score.
- * Scoring is a *pure function* of the extracted text (and any caller-
- * supplied context) so the same RFP always produces the same band —
- * no LLM call, no randomness — making the rubric auditable and
+ * Pure-function scorer for an extracted RFP. Same inputs → same band,
+ * always — no LLM call, no randomness — so the rubric is auditable and
  * reproducible across replays.
  *
- * Dimensions (each scored 0..5):
- *   fitToOffering    — overlap with our declared offering anchors
- *   buyerAccess      — named decision-makers / champion signals
- *   budgetSignal     — budget range, fee envelope, currency markers
- *   timeline         — concrete dates / submission deadlines
- *   competition      — incumbents, shortlist mentions, sole-source signals
- *   deliverability   — geography + language + capacity hints
+ * Dimensions (each 0..5; weights sum to 100):
+ *   strategicFit    25 — overlap with our offering anchors / target segments
+ *   clientQuality   15 — sector quality + named decision-makers / champions
+ *   dealEconomics   20 — budget mention, currency + amount, NTE, fee model
+ *   winProbability  10 — sole-source, incumbent dynamics, shortlist signals
+ *   deliverability  15 — geography + language + capacity hints
+ *   riskInverted    15 — *inverted* score: more risk markers ⇒ lower points
  *
- * Weights (sum = 100):
- *   fitToOffering 25 · buyerAccess 20 · budgetSignal 20
- *   timeline 10 · competition 10 · deliverability 15
- *
+ * Composite = Σ(score/5 × weight) → 0..100.
  * Bands: composite ≥70 → pursue · 40..69 → watch · <40 → decline.
+ *
+ * Each dimension's `chunkIds` cite the source chunks that fired the
+ * signal so reviewers can pivot from the band back to the RFP text.
  */
 
 export type RubricDimensionKey =
-  | "fitToOffering"
-  | "buyerAccess"
-  | "budgetSignal"
-  | "timeline"
-  | "competition"
-  | "deliverability";
+  | "strategicFit"
+  | "clientQuality"
+  | "dealEconomics"
+  | "winProbability"
+  | "deliverability"
+  | "riskInverted";
 
 export interface RubricDimension {
   key: RubricDimensionKey;
@@ -48,12 +45,12 @@ export interface RubricResult {
 }
 
 export const RUBRIC_WEIGHTS: Record<RubricDimensionKey, number> = {
-  fitToOffering: 25,
-  buyerAccess: 20,
-  budgetSignal: 20,
-  timeline: 10,
-  competition: 10,
+  strategicFit: 25,
+  clientQuality: 15,
+  dealEconomics: 20,
+  winProbability: 10,
   deliverability: 15,
+  riskInverted: 15,
 };
 
 export interface RubricChunk {
@@ -71,14 +68,17 @@ export interface RubricInput {
 
 interface DimSpec {
   key: RubricDimensionKey;
+  /** Standard signal patterns (positive contributors). */
   signals: Array<{ pattern: RegExp; weight: number; label: string }>;
+  /** When true, the raw score is `5 - clamp(raw,0,5)` (used for risk). */
+  inverted?: boolean;
   /** Bonus signals from caller-supplied context (not chunk-anchored). */
   contextBoost?: (input: RubricInput) => { weight: number; label: string } | null;
 }
 
 const SPECS: DimSpec[] = [
   {
-    key: "fitToOffering",
+    key: "strategicFit",
     signals: [
       { pattern: /\b(operating model|target operating model|TOM)\b/i, weight: 2, label: "TOM scope" },
       { pattern: /\b(transformation|reorganisation|restructur)\w*/i, weight: 1, label: "transformation work" },
@@ -97,16 +97,23 @@ const SPECS: DimSpec[] = [
     },
   },
   {
-    key: "buyerAccess",
+    key: "clientQuality",
     signals: [
       { pattern: /\b(CEO|COO|CFO|CIO|chief\s+\w+\s+officer)\b/i, weight: 2, label: "C-suite contact" },
       { pattern: /\b(steering committee|sponsor|champion)\b/i, weight: 1, label: "named sponsor" },
-      { pattern: /\b(point of contact|primary contact|please direct)\b/i, weight: 1, label: "explicit contact channel" },
-      { pattern: /\b(procurement|tender desk)\b/i, weight: 1, label: "procurement channel" },
+      { pattern: /\b(fortune\s*\d+|publicly\s+listed|sovereign|government)\b/i, weight: 2, label: "tier-1 client signal" },
+      { pattern: /\b(family office|holding|conglomerate)\b/i, weight: 1, label: "marquee account type" },
     ],
+    contextBoost: (input) => {
+      const sector = (input.accountSector ?? "").toLowerCase();
+      if (["financial services", "energy", "telecom", "government"].includes(sector)) {
+        return { weight: 1, label: `target sector: ${sector}` };
+      }
+      return null;
+    },
   },
   {
-    key: "budgetSignal",
+    key: "dealEconomics",
     signals: [
       { pattern: /\b(budget|fee envelope|ceiling)\b/i, weight: 2, label: "explicit budget mention" },
       { pattern: /\b(USD|SAR|AED|EUR|GBP)\s*[\d,]{4,}/i, weight: 2, label: "currency + amount" },
@@ -115,20 +122,11 @@ const SPECS: DimSpec[] = [
     ],
   },
   {
-    key: "timeline",
+    key: "winProbability",
     signals: [
-      { pattern: /\bsubmission deadline\b/i, weight: 2, label: "submission deadline" },
-      { pattern: /\b(start date|kickoff|kick-off|commence)\b/i, weight: 1, label: "named start" },
-      { pattern: /\b\d{1,2}\s*(weeks?|months?)\b/i, weight: 1, label: "duration" },
-      { pattern: /\b(Q[1-4]\s*20\d{2}|20\d{2}-\d{2}-\d{2})\b/i, weight: 2, label: "calendar anchor" },
-    ],
-  },
-  {
-    key: "competition",
-    signals: [
-      { pattern: /\b(incumbent|current vendor|prior consultant)\b/i, weight: 2, label: "incumbent named" },
+      { pattern: /\b(sole[-\s]?source|single source)\b/i, weight: 4, label: "sole-source" },
+      { pattern: /\b(incumbent|current vendor|prior consultant)\b/i, weight: 1, label: "incumbent named" },
       { pattern: /\b(shortlist|down-?selected|finalists?)\b/i, weight: 2, label: "shortlist signal" },
-      { pattern: /\b(sole[-\s]?source|single source)\b/i, weight: 3, label: "sole-source" },
       { pattern: /\b(\d+)\s+(firms?|vendors?|bidders?)\b/i, weight: -1, label: "many bidders mentioned" },
     ],
   },
@@ -148,6 +146,17 @@ const SPECS: DimSpec[] = [
       return null;
     },
   },
+  {
+    key: "riskInverted",
+    inverted: true,
+    signals: [
+      { pattern: /\b(litigation|sanctions?|compliance breach)\b/i, weight: 3, label: "compliance / litigation risk" },
+      { pattern: /\b(adverse media|investigation)\b/i, weight: 2, label: "adverse media flag" },
+      { pattern: /\b(unclear scope|ambiguous|tbd|to be determined)\b/i, weight: 1, label: "scope ambiguity" },
+      { pattern: /\b(very tight|aggressive timeline|impossible)\b/i, weight: 1, label: "timeline risk" },
+      { pattern: /\b(payment terms|late payer|past due)\b/i, weight: 1, label: "commercial risk" },
+    ],
+  },
 ];
 
 function scoreDimension(spec: DimSpec, input: RubricInput): RubricDimension {
@@ -160,7 +169,7 @@ function scoreDimension(spec: DimSpec, input: RubricInput): RubricDimension {
         raw += sig.weight;
         reasons.push(sig.label);
         chunkIds.add(c.chunkId);
-        break; // count each signal at most once
+        break; // each signal counts at most once
       }
     }
   }
@@ -169,12 +178,15 @@ function scoreDimension(spec: DimSpec, input: RubricInput): RubricDimension {
     raw += boost.weight;
     reasons.push(boost.label);
   }
-  // Clamp to 0..5; raw 0 → 0, raw ≥ 5 → 5, in between linear.
-  const score = Math.max(0, Math.min(5, raw));
-  const rationale =
-    reasons.length === 0
+  const clamped = Math.max(0, Math.min(5, raw));
+  const score = spec.inverted ? 5 - clamped : clamped;
+  const rationale = spec.inverted
+    ? reasons.length === 0
+      ? "no risk markers detected (max risk-inverted score)"
+      : `risk markers (deductive): ${reasons.slice(0, 4).join("; ")}`
+    : reasons.length === 0
       ? `no ${spec.key} signal in extracted text`
-      : `${reasons.slice(0, 4).join("; ")}`;
+      : reasons.slice(0, 4).join("; ");
   return {
     key: spec.key,
     score,
@@ -186,7 +198,6 @@ function scoreDimension(spec: DimSpec, input: RubricInput): RubricDimension {
 
 export function scoreRubric(input: RubricInput): RubricResult {
   const dimensions = SPECS.map((s) => scoreDimension(s, input));
-  // Composite is a weighted average over score/5 ⇒ 0..100.
   const composite = Math.round(
     dimensions.reduce((acc, d) => acc + (d.score / 5) * d.weight, 0),
   );

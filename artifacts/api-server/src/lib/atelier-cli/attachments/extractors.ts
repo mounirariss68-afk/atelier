@@ -64,6 +64,58 @@ function stripPrintable(buf: Buffer): string {
     .trim();
 }
 
+/**
+ * Intake-hardening guard. Returns a rejection reason when the upload
+ * looks dangerous (executable / macro-bearing / MIME-extension mismatch),
+ * otherwise null. This runs before extraction so we never even read
+ * dangerous payloads into the chunker.
+ *
+ * Rules:
+ *   - Disallow legacy macro-bearing office formats (.doc/.xls/.ppt) and
+ *     explicit macro-enabled variants (.docm/.xlsm/.pptm).
+ *   - Disallow executable / script extensions outright.
+ *   - Require the declared MIME and the filename extension to belong
+ *     to the same family (PDF↔.pdf, DOCX↔.docx, image/*↔.png/.jpg/...).
+ *     Mismatches are a classic content-type spoofing vector.
+ */
+const MACRO_OR_EXEC_EXT_RE =
+  /\.(docm|dotm|xlsm|xltm|xlsb|pptm|potm|doc|xls|ppt|exe|dll|bat|cmd|sh|ps1|js|vbs|jar|msi|app)$/i;
+
+const MIME_EXT_FAMILIES: Array<{ ext: RegExp; mimes: RegExp }> = [
+  { ext: /\.pdf$/i, mimes: /^application\/pdf$/i },
+  {
+    ext: /\.docx$/i,
+    mimes: /^application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$/i,
+  },
+  {
+    ext: /\.xlsx$/i,
+    mimes: /^application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet$/i,
+  },
+  {
+    ext: /\.pptx$/i,
+    mimes: /^application\/vnd\.openxmlformats-officedocument\.presentationml\.presentation$/i,
+  },
+  { ext: /\.csv$/i, mimes: /^(text\/csv|text\/plain|application\/vnd\.ms-excel)$/i },
+  { ext: /\.eml$/i, mimes: /^message\/rfc822$/i },
+  { ext: /\.(png|jpe?g|webp|gif|tiff?|bmp)$/i, mimes: /^image\//i },
+  { ext: /\.(txt|md|json)$/i, mimes: /^(text\/|application\/json)/i },
+];
+
+export function intakeRejection(args: {
+  fileName: string;
+  mime: string;
+}): string | null {
+  if (MACRO_OR_EXEC_EXT_RE.test(args.fileName)) {
+    return `executable-or-macro-extension:${args.fileName.split(".").pop()}`;
+  }
+  for (const fam of MIME_EXT_FAMILIES) {
+    if (fam.ext.test(args.fileName) && !fam.mimes.test(args.mime)) {
+      return `mime-extension-mismatch:${args.mime}≠${args.fileName}`;
+    }
+  }
+  return null;
+}
+
 function detectKind(fileName: string, mime: string): DocKind {
   const lower = fileName.toLowerCase();
   if (mime === "application/pdf" || lower.endsWith(".pdf")) return "pdf";
@@ -155,12 +207,29 @@ function splitCsvLine(line: string): string[] {
   return out.map((c) => c.trim());
 }
 
-function extractEml(buf: Buffer): ExtractedDoc {
-  const raw = buf.toString("utf8").slice(0, MAX_TEXT);
+/**
+ * .eml extractor — also returns base64-decoded nested attachments so
+ * the ingest pipeline can recursively re-ingest each part. The minimal
+ * MIME parser handles the common case: a multipart message with each
+ * part separated by `boundary=...` and per-part headers including
+ * Content-Type + Content-Disposition + Content-Transfer-Encoding.
+ */
+export interface NestedEmlPart {
+  fileName: string;
+  mime: string;
+  bytes: Buffer;
+}
+
+function parseEml(raw: string): {
+  headers: { from?: string; to?: string[]; subject?: string; date?: string };
+  body: string;
+  parts: NestedEmlPart[];
+} {
   const headerEnd = raw.search(/\r?\n\r?\n/);
   const headerBlock = headerEnd === -1 ? raw : raw.slice(0, headerEnd);
-  const body = headerEnd === -1 ? "" : raw.slice(headerEnd).trim();
+  const body = headerEnd === -1 ? "" : raw.slice(headerEnd).replace(/^\r?\n\r?\n/, "");
   const headers: { from?: string; to?: string[]; subject?: string; date?: string } = {};
+  let contentType = "";
   for (const line of headerBlock.split(/\r?\n/)) {
     const m = line.match(/^([A-Za-z-]+):\s*(.*)$/);
     if (!m) continue;
@@ -170,15 +239,73 @@ function extractEml(buf: Buffer): ExtractedDoc {
     else if (k === "to") headers.to = v.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
     else if (k === "subject") headers.subject = v;
     else if (k === "date") headers.date = v;
+    else if (k === "content-type") contentType = v;
   }
+  const parts: NestedEmlPart[] = [];
+  const boundaryMatch = contentType.match(/boundary=("?)([^";\s]+)\1/i);
+  if (boundaryMatch) {
+    const boundary = `--${boundaryMatch[2]}`;
+    const segments = body.split(boundary).slice(1, -1);
+    for (const seg of segments) {
+      const trimmed = seg.replace(/^\r?\n/, "");
+      const segHeaderEnd = trimmed.search(/\r?\n\r?\n/);
+      if (segHeaderEnd === -1) continue;
+      const segHeaderBlock = trimmed.slice(0, segHeaderEnd);
+      const segBody = trimmed.slice(segHeaderEnd).replace(/^\r?\n\r?\n/, "");
+      let partMime = "application/octet-stream";
+      let partName = "attachment";
+      let encoding = "7bit";
+      for (const line of segHeaderBlock.split(/\r?\n/)) {
+        const m = line.match(/^([A-Za-z-]+):\s*(.*)$/);
+        if (!m) continue;
+        const k = m[1].toLowerCase();
+        const v = m[2].trim();
+        if (k === "content-type") {
+          partMime = v.split(";")[0].trim();
+          const nm = v.match(/name=("?)([^";\s]+)\1/i);
+          if (nm) partName = nm[2];
+        } else if (k === "content-disposition") {
+          const nm = v.match(/filename=("?)([^";\s]+)\1/i);
+          if (nm) partName = nm[2];
+        } else if (k === "content-transfer-encoding") {
+          encoding = v.toLowerCase();
+        }
+      }
+      // Skip the inline text body; only recurse into named attachments.
+      if (partMime.startsWith("text/") && !/filename=/i.test(segHeaderBlock)) continue;
+      try {
+        const bytes =
+          encoding === "base64"
+            ? Buffer.from(segBody.replace(/\s+/g, ""), "base64")
+            : Buffer.from(segBody, "utf8");
+        if (bytes.byteLength > 0) {
+          parts.push({ fileName: partName, mime: partMime, bytes });
+        }
+      } catch {
+        // Malformed parts are skipped — they surface as warnings on the
+        // parent attachment audit, not as a hard ingest failure.
+      }
+    }
+  }
+  return { headers, body: body.slice(0, MAX_TEXT), parts };
+}
+
+function extractEml(buf: Buffer): ExtractedDoc {
+  const raw = buf.toString("utf8").slice(0, MAX_TEXT * 4);
+  const { headers, body, parts } = parseEml(raw);
   return {
     kind: "eml",
     normalizedText: body,
     tableSummary: null,
     slideTexts: null,
     emailHeaders: headers,
-    warnings: [],
+    warnings: parts.length > 0 ? [`nested-attachments:${parts.length}`] : [],
   };
+}
+
+/** Public helper used by the ingest pipeline to recurse on .eml parts. */
+export function extractEmlNestedParts(buf: Buffer): NestedEmlPart[] {
+  return parseEml(buf.toString("utf8").slice(0, MAX_TEXT * 4)).parts;
 }
 
 function extractImage(fileName: string, buf: Buffer): ExtractedDoc {

@@ -88,7 +88,12 @@ router.post("/cli/attachments", upload.array("files", MAX_FILES_PER_REQUEST), as
       }),
     ),
   );
+  // Primary contract: `attachmentIds[]` (the orchestrator's
+  // `runTurn({attachmentIds})` consumes this verbatim). The verbose
+  // `attachments[]` array carries per-file details for the composer's
+  // result chips and rejection messaging.
   res.json({
+    attachmentIds: results.filter((r) => r.ok).map((r) => r.attachmentId),
     attachments: results.map((r) =>
       r.ok
         ? {
@@ -101,6 +106,7 @@ router.post("/cli/attachments", upload.array("files", MAX_FILES_PER_REQUEST), as
             digest: r.digest,
             chunkCount: r.chunkCount,
             warnings: r.warnings,
+            nestedAttachmentIds: r.nestedAttachmentIds ?? [],
           }
         : { ok: false, attachmentId: r.attachmentId, reason: r.reason },
     ),

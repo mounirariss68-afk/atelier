@@ -353,7 +353,7 @@ async function main(): Promise<void> {
       userLabel: me.name,
       sessionId: null,
       turnId: null,
-      fileName: "bad.exe",
+      fileName: "bad.bin",
       mime: "application/x-msdownload",
       bytes: Buffer.from("MZ"),
     });
@@ -450,6 +450,86 @@ async function main(): Promise<void> {
     assert.equal(other, null);
   });
 
+  await test("ingest: rejects MIME-vs-extension mismatch", async () => {
+    const r = await ingestAttachment({
+      orgId: me.orgId,
+      userId: me.id,
+      userLabel: me.name,
+      sessionId: null,
+      turnId: null,
+      fileName: "spoof.pdf",
+      mime: "text/plain",
+      bytes: Buffer.from("not actually a pdf"),
+    });
+    assert.equal(r.ok, false);
+    if (!r.ok) {
+      assert.equal(r.reason, "mime-extension-mismatch");
+      created.attachmentIds.add(r.attachmentId);
+    }
+  });
+
+  await test("ingest: rejects macro / executable extensions", async () => {
+    const r = await ingestAttachment({
+      orgId: me.orgId,
+      userId: me.id,
+      userLabel: me.name,
+      sessionId: null,
+      turnId: null,
+      fileName: "payload.docm",
+      mime: "application/vnd.ms-word.document.macroEnabled.12",
+      bytes: Buffer.from("PKmacro"),
+    });
+    assert.equal(r.ok, false);
+    if (!r.ok) {
+      assert.equal(r.reason, "executable-or-macro");
+      created.attachmentIds.add(r.attachmentId);
+    }
+  });
+
+  await test("ingest: .eml with nested base64 attachment recurses", async () => {
+    const inner = "Inner attachment body — invoice line item.";
+    const innerB64 = Buffer.from(inner).toString("base64");
+    const eml = [
+      'From: a@example.com',
+      'To: b@example.com',
+      'Subject: With attachment',
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/mixed; boundary="bound1"',
+      '',
+      '--bound1',
+      'Content-Type: text/plain',
+      '',
+      'See attached.',
+      '--bound1',
+      'Content-Type: text/plain; name="invoice.txt"',
+      'Content-Disposition: attachment; filename="invoice.txt"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      innerB64,
+      '--bound1--',
+      '',
+    ].join("\r\n");
+    const r = await ingestAttachment({
+      orgId: me.orgId,
+      userId: me.id,
+      userLabel: me.name,
+      sessionId: null,
+      turnId: null,
+      fileName: "msg.eml",
+      mime: "message/rfc822",
+      bytes: Buffer.from(eml),
+    });
+    assert.ok(r.ok, "parent eml ingest should succeed");
+    if (!r.ok) return;
+    created.attachmentIds.add(r.attachmentId);
+    assert.ok(r.nestedAttachmentIds && r.nestedAttachmentIds.length === 1, "expected one nested part");
+    const childId = r.nestedAttachmentIds![0];
+    created.attachmentIds.add(childId);
+    const child = await loadAttachment(childId, me.orgId);
+    assert.ok(child, "child attachment must be queryable in same org");
+    assert.match(child!.extracted!.normalizedText, /Inner attachment body/);
+  });
+
   // 6. Rubric ------------------------------------------------------------
   await test("rubric: weights sum to 100", () => {
     const sum = Object.values(RUBRIC_WEIGHTS).reduce((a, b) => a + b, 0);
@@ -468,7 +548,11 @@ async function main(): Promise<void> {
     assert.ok(r.composite >= 70, `expected pursue, got ${r.composite}`);
     assert.equal(r.band, "pursue");
     // Each scored dimension cites at least one chunkId.
+    // Non-inverted dimensions citing a positive score must point at chunks;
+    // the inverted risk dimension defaults to 5 with no chunks when there
+    // are no risk markers, so it is exempt from the citation requirement.
     for (const d of r.dimensions) {
+      if (d.key === "riskInverted") continue;
       if (d.score > 0) assert.ok(d.chunkIds.length > 0, `${d.key} cited no chunks`);
     }
   });
@@ -478,7 +562,10 @@ async function main(): Promise<void> {
       attachmentIds: ["empty"],
       chunks: [{ chunkId: "empty#c000", text: "irrelevant filler text" }],
     });
-    assert.equal(r.composite, 0);
+    // Risk-inverted defaults to a perfect 5 in the absence of risk
+    // markers, contributing its full weight (15). Everything else is 0.
+    // The score must still land safely in the decline band (<40).
+    assert.equal(r.composite, RUBRIC_WEIGHTS.riskInverted);
     assert.equal(r.band, "decline");
   });
 

@@ -29,7 +29,13 @@ import { storeAttachmentBytes, loadAttachmentBytes } from "./storage.js";
 function createSha(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex");
 }
-import { extractAttachment, type ExtractedDoc, type DocKind } from "./extractors.js";
+import {
+  extractAttachment,
+  extractEmlNestedParts,
+  intakeRejection,
+  type ExtractedDoc,
+  type DocKind,
+} from "./extractors.js";
 import { chunkDocument, findChunkById, type DocChunk, type DocDigest } from "./chunking.js";
 import { detectIntent, topIntent, type DocIntent } from "./intent-detect.js";
 import { wrapAttachment } from "../prompt-guard.js";
@@ -78,6 +84,8 @@ export interface IngestResultOk {
   digest: DocDigest;
   chunkCount: number;
   warnings: string[];
+  /** Recursively-ingested .eml attachments (one entry per nested part). */
+  nestedAttachmentIds?: string[];
 }
 export interface IngestResultRejected {
   ok: false;
@@ -98,6 +106,19 @@ export async function ingestAttachment(
   if (args.bytes.byteLength > MAX_BYTES) {
     await persistRejection(args, id, `over-size-cap:${MAX_BYTES}`);
     return { ok: false, attachmentId: id, reason: "over-size-cap" };
+  }
+  // Intake hardening (Task #334 step #5): reject macro-bearing /
+  // executable extensions and MIME-vs-extension spoofing first so the
+  // user sees the most specific reason. The MIME whitelist is the
+  // catch-all behind it.
+  const hardening = intakeRejection({ fileName: args.fileName, mime: args.mime });
+  if (hardening) {
+    await persistRejection(args, id, hardening);
+    return {
+      ok: false,
+      attachmentId: id,
+      reason: hardening.startsWith("executable") ? "executable-or-macro" : "mime-extension-mismatch",
+    };
   }
   if (!isWhitelisted(args.mime)) {
     await persistRejection(args, id, `mime-not-allowed:${args.mime}`);
@@ -244,6 +265,44 @@ export async function ingestAttachment(
     },
   ]);
 
+  // .eml recursion — nested attachments are re-ingested under their
+  // own ids and pinned back through the audit payload so the timeline
+  // can show the parent message and every decoded part.
+  const nestedAttachmentIds: string[] = [];
+  if (extracted.kind === "eml") {
+    const parts = extractEmlNestedParts(args.bytes);
+    for (const part of parts) {
+      const child = await ingestAttachment({
+        orgId: args.orgId,
+        userId: args.userId,
+        userLabel: args.userLabel,
+        sessionId: args.sessionId ?? null,
+        turnId: args.turnId ?? null,
+        fileName: part.fileName,
+        mime: part.mime,
+        bytes: part.bytes,
+      });
+      nestedAttachmentIds.push(child.attachmentId);
+    }
+    if (nestedAttachmentIds.length > 0) {
+      await db.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "atelier_cli_attachment",
+        entityId: id,
+        actorType: "system",
+        actorId: "atelier-cli",
+        actorLabel: "Atelier CLI extractor",
+        action: "cli_attachment.extract",
+        payload: {
+          parentEml: id,
+          nestedAttachmentIds,
+          partCount: nestedAttachmentIds.length,
+        },
+        payloadSummary: `Recursively ingested ${nestedAttachmentIds.length} nested .eml part(s)`,
+      });
+    }
+  }
+
   return {
     ok: true,
     attachmentId: id,
@@ -254,6 +313,7 @@ export async function ingestAttachment(
     digest,
     chunkCount: chunks.length,
     warnings: extracted.warnings,
+    nestedAttachmentIds: nestedAttachmentIds.length > 0 ? nestedAttachmentIds : undefined,
   };
 }
 
