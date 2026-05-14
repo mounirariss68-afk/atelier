@@ -56,6 +56,12 @@ export const V3_AUDIT_ACTIONS = {
   // Compensation column policy lock --------------------------------------
   POLICY_READ_RESTRICTED: "policy.read.restricted",
 
+  // CLI attachments — Task #334 -----------------------------------------
+  CLI_ATTACHMENT_UPLOAD: "cli_attachment.upload",
+  CLI_ATTACHMENT_REJECT: "cli_attachment.reject",
+  CLI_ATTACHMENT_EXTRACT: "cli_attachment.extract",
+  CLI_OPPORTUNITY_QUALIFY_RUBRIC: "opportunity.qualify_rubric",
+
   // Principle override (breakglass) — Task #293 -------------------------
   PRINCIPLE_OVERRIDE_GRANTED: "principle_override.granted",
 

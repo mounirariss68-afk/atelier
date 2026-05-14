@@ -297,6 +297,31 @@ export const atelierOpportunities = pgTable(
       capacity?: string;
       contract?: string;
     }>(),
+    // Task #334 — deterministic 6-dimension qualification rubric.
+    // Set by `qualify_opportunity_rubric` and the `ingest_rfp_to_opportunity`
+    // CLI flow. Composite is 0..100; band is `pursue` (≥70) / `watch`
+    // (40–69) / `decline` (<40). Each dimension carries a 0..5 score, a
+    // 1-line rationale, and the chunkIds that anchored it.
+    qualificationRubric: jsonb("qualification_rubric").$type<{
+      composite: number;
+      band: "pursue" | "watch" | "decline";
+      dimensions: Array<{
+        key:
+          | "fitToOffering"
+          | "buyerAccess"
+          | "budgetSignal"
+          | "timeline"
+          | "competition"
+          | "deliverability";
+        score: number;
+        weight: number;
+        rationale: string;
+        chunkIds: string[];
+      }>;
+      attachmentIds: string[];
+      runId?: string;
+      generatedAt: string;
+    } | null>(),
     goNoGoDecision: jsonb("go_no_go_decision").$type<{
       decision: "go" | "no_go";
       decider: string;
@@ -2963,5 +2988,98 @@ export const atelierCliJobs = pgTable(
     index("idx_atelier_cli_jobs_turn").on(t.turnId),
     index("idx_atelier_cli_jobs_status").on(t.status),
     uniqueIndex("uq_atelier_cli_jobs_idem").on(t.idempotencyKey),
+  ],
+);
+
+// ============================================================
+// Task #334 — CLI attachments + extracted documents.
+//
+// `atelier_cli_attachments` is the durable record of a file dropped
+// into the CLI composer. The raw bytes live in an opaque blob store
+// (referenced as `enc:cli:<key>`) so the row itself never carries
+// sensitive content; it carries metadata (mime, size, sha) and the
+// final lifecycle status (`uploaded` | `extracted` | `rejected`).
+//
+// `atelier_extracted_documents` is the per-attachment normalisation
+// produced by the extractor pipeline (PDF/DOCX/XLSX/PPTX/.eml/IMG/TXT).
+// Always one row per attachment when extraction succeeds. `chunks`
+// is a stable list ({chunkId, charStart, charEnd, summary, text});
+// `digest` is the small per-doc TOC the model can ask for via the
+// `fetch_document_chunk` tool.
+// ============================================================
+export const atelierCliAttachments = pgTable(
+  "atelier_cli_attachments",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    userId: text("user_id").notNull(),
+    sessionId: text("session_id"),
+    turnId: text("turn_id"),
+    fileName: text("file_name").notNull(),
+    mime: text("mime").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    encryptedRef: text("encrypted_ref").notNull(), // `enc:cli:<key>`
+    // uploaded | extracted | rejected
+    status: text("status").notNull().default("uploaded"),
+    rejectionReason: text("rejection_reason"),
+    // Detected document intent (rfp | transcript | receipt_batch |
+    // brand_deck | spreadsheet | email | unknown). Hint only — the
+    // capability tools verify before acting.
+    intentHint: text("intent_hint"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_cli_attachments_user").on(t.userId),
+    index("idx_atelier_cli_attachments_session").on(t.sessionId),
+    index("idx_atelier_cli_attachments_turn").on(t.turnId),
+    index("idx_atelier_cli_attachments_status").on(t.status),
+  ],
+);
+
+export const atelierExtractedDocuments = pgTable(
+  "atelier_extracted_documents",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    attachmentId: text("attachment_id").notNull(),
+    // pdf | docx | xlsx | csv | pptx | image | eml | text | unknown
+    kind: text("kind").notNull(),
+    normalizedText: text("normalized_text").notNull().default(""),
+    // Per-type structured extraction (sparse — only the relevant key is
+    // populated for each kind).
+    tableSummary: jsonb("table_summary").$type<{
+      columns: string[];
+      rowCount: number;
+      sample: Array<Record<string, unknown>>;
+    } | null>(),
+    slideTexts: jsonb("slide_texts").$type<Array<{ index: number; text: string }> | null>(),
+    emailHeaders: jsonb("email_headers").$type<{
+      from?: string;
+      to?: string[];
+      subject?: string;
+      date?: string;
+    } | null>(),
+    chunks: jsonb("chunks")
+      .$type<Array<{
+        chunkId: string;
+        charStart: number;
+        charEnd: number;
+        summary: string;
+        text: string;
+      }>>()
+      .notNull()
+      .default([]),
+    digest: jsonb("digest").$type<{
+      toc: string;
+      chunkSummaries: Array<{ chunkId: string; summary: string }>;
+    }>(),
+    warnings: jsonb("warnings").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_extracted_attachment").on(t.attachmentId),
+    index("idx_atelier_extracted_kind").on(t.kind),
   ],
 );

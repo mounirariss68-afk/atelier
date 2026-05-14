@@ -47,6 +47,7 @@ import {
   CATALOG_SCHEMA_VERSION,
 } from "./capability-catalog.js";
 import "./capability-seed.js"; // side-effect: registers catalog entries
+import "./attachment-capabilities.js"; // Task #334 — attachment + rubric tools
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
   shouldRequireTypedNameForAttachmentTurn,
