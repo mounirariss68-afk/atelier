@@ -4860,3 +4860,777 @@ export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
   );
   return { runId: result.runId, proposal: result.output as ExpenseAuditorProposal };
 }
+
+// ============================================================
+// v5 — Task #355 — 15 new agents + 3 mode extensions
+// ============================================================
+//
+// Each function below is a thin runAgent() composition over the v5 prompt
+// of the same name. Output schemas in the registry are deliberately
+// `.passthrough()` (the prompt's JSON contract is the strict shape), so
+// these mocks return the minimum keys needed to keep the run row + UI
+// preview meaningful when ATELIER_MOCK_AGENTS=1 or Claude is unreachable.
+
+type V5GenericResult = { runId: string; output: Record<string, unknown>; costUsd: number };
+
+async function runV5GenericAgent(args: {
+  agentId: string;
+  promptId: AtelierAgentId;
+  promptVersion?: number;
+  promptMode?: string;
+  model: string;
+  input: Record<string, unknown>;
+  triggeredByUserId: string | null;
+  targetType: string;
+  targetId: string;
+  targetLabel: string;
+  actorLabel: string;
+  mock: () => Record<string, unknown>;
+}): Promise<V5GenericResult> {
+  const result = await runAgent(
+    {
+      agentId: args.agentId,
+      input: args.input,
+      triggeredByUserId: args.triggeredByUserId,
+      targetType: args.targetType,
+      targetId: args.targetId,
+      targetLabel: args.targetLabel,
+      actorLabel: args.actorLabel,
+    },
+    async (ctx) => {
+      const system = loadPrompt(args.promptId, args.promptVersion ?? 1, args.promptMode);
+      await ctx.progress(40, `Calling ${args.actorLabel}`);
+      const { value, costUsd, source, warning } = await callClaudeJson<Record<string, unknown>>(
+        args.model,
+        system,
+        JSON.stringify(args.input),
+        args.mock,
+      );
+      const conf =
+        (value.confidence as "green" | "amber" | "red" | undefined) ?? "amber";
+      return { output: value, costUsd, confidence: conf, source, warning };
+    },
+  );
+  return {
+    runId: result.runId,
+    output: result.output as Record<string, unknown>,
+    costUsd: result.costUsd,
+  };
+}
+
+// ---------- mocks (minimum-viable to satisfy v5Output passthrough) ----------
+
+function mockLinkedInComposer(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    partnerId: input.partnerId ?? "",
+    voiceProfileVersion: "1.0.0",
+    variants: [
+      {
+        length: input.targetLength ?? "medium",
+        body: "Mock LinkedIn post body — Partner voice profile not yet loaded in mock mode.",
+        hashtags: ["#strategy"],
+        wordCount: 14,
+        voiceMatchScore: 0.78,
+      },
+    ],
+    redactionsMade: [],
+    confidence: "amber",
+  };
+}
+
+function mockPressMonitor(input: Record<string, unknown>): Record<string, unknown> {
+  const now = new Date();
+  const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return {
+    windowStart: start.toISOString(),
+    windowEnd: now.toISOString(),
+    aicoMentions: [],
+    partnerMentions: [],
+    competitorThemes: [],
+    opportunities: [],
+    confidence: "amber",
+  };
+}
+
+function mockFieldNotesScheduler(input: Record<string, unknown>): Record<string, unknown> {
+  const issueMonth = (input.issueMonth as string) || new Date().toISOString().slice(0, 7);
+  return {
+    issueId: issueMonth,
+    subjectLine: `Field Notes — ${issueMonth}`,
+    preheader: "What we are seeing this month from the firm.",
+    sections: [
+      { id: "editors_note", artifactId: "", byline: "", summary: "" },
+      { id: "what_we_seeing", items: [] },
+      { id: "piece_worth", artifactId: "", teaser: "" },
+      { id: "field_log", items: [] },
+      { id: "hiring", roleIds: [] },
+    ],
+    scheduledSendAt: new Date().toISOString(),
+    confidence: "amber",
+  };
+}
+
+function mockAllianceChoreographer(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    opportunityId: input.opportunityId ?? "",
+    partnerFirmId: input.partnerFirmId ?? "",
+    leadParty: (input.leadParty as string) ?? "aico",
+    split: { aicoPct: 60, partnerPct: 40, rationale: "Default 60/40 with AICo lead." },
+    jointDeliveryPlan: [],
+    commsCadence: { weekly: "Thu 30m", monthly: "first Mon", exec: "quarterly" },
+    conflicts: [],
+    allianceLetterStatus: "draft",
+    confidence: "amber",
+  };
+}
+
+function mockCertificationTracker(_input: Record<string, unknown>): Record<string, unknown> {
+  const now = new Date();
+  return {
+    windowStart: now.toISOString(),
+    windowEnd: new Date(now.getTime() + 90 * 86400000).toISOString(),
+    lapsing: [],
+    lapsed: [],
+    partnerTierImpact: [],
+    examBookings: [],
+    confidence: "amber",
+  };
+}
+
+function mockInterviewDesigner(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    roleId: input.roleId ?? "",
+    candidateId: input.candidateId ?? "",
+    panel: [
+      {
+        stage: "screen",
+        interviewerId: "",
+        durationMin: 30,
+        focus: "Role fit + signal screen",
+        questions: [
+          { q: "Walk me through your most recent shipped project.", lookFor: "End-to-end ownership", anchors: { "1": "no ownership", "3": "shared", "5": "drove e2e" } },
+        ],
+      },
+    ],
+    takeHome: { prompt: "Build a small Atelier-style agent.", deliverable: "Repo + README", estHours: 4, rubric: [] },
+    scorecard: { criteria: [{ name: "Technical depth", weight: 0.4, anchors: { "1": "shallow", "3": "solid", "5": "exceptional" } }] },
+    confidence: "amber",
+  };
+}
+
+function mockReferenceCaller(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    candidateId: input.candidateId ?? "",
+    referenceId: input.referenceId ?? "",
+    roleId: input.roleId ?? "",
+    callMode: "live",
+    consentVerified: true,
+    summary: {
+      workingRelationship: "Worked together for two years.",
+      scope: "Mock — transcript not provided.",
+      strengths: ["Mock strength A", "Mock strength B"],
+      watchouts: ["Mock watchout"],
+      wouldRehire: "yes",
+      fitForRoleLevel: "at",
+    },
+    inconsistenciesWithResume: [],
+    verbatimQuotes: [],
+    confidence: "amber",
+  };
+}
+
+function mockOfferComposer(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    candidateId: input.candidateId ?? "",
+    roleId: input.roleId ?? "",
+    jurisdiction: "ksa",
+    letterMarkdown: "# Offer Letter\n\nMock content — comp band not loaded in mock mode.",
+    compNarrative: {
+      base: 0,
+      variable: { target: 0, triggers: "" },
+      equityOrCarry: { kind: "none", summary: "" },
+      benefits: [],
+      totalAtTarget: 0,
+      marketComparable: { p25: 0, p50: 0, p75: 0 },
+    },
+    expiresAt: new Date(Date.now() + 14 * 86400000).toISOString(),
+    confidence: "amber",
+  };
+}
+
+function mockComplianceSentinel(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    framework: (input.controlFramework as string) ?? "soc2_type2",
+    periodStart: input.periodStart ?? new Date(Date.now() - 90 * 86400000).toISOString(),
+    periodEnd: input.periodEnd ?? new Date().toISOString(),
+    controls: [
+      {
+        id: "CC6.1",
+        title: "Logical access",
+        status: "passing",
+        evidenceArtifactIds: ["evidence:mock"],
+        lastCollectedAt: new Date().toISOString(),
+        owner: "compliance@aico",
+        remediation: "",
+      },
+    ],
+    gaps: [],
+    evidencePackUrl: "",
+    confidence: "amber",
+  };
+}
+
+function mockIncidentResponder(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    incidentId: input.incidentId ?? "",
+    severity: input.severity ?? "sev3",
+    phase: "detect",
+    timeline: [
+      { at: new Date().toISOString(), actor: "ag_incident_responder", action: "intake", evidenceUrl: "" },
+    ],
+    containmentActions: [],
+    customerCommsDraft: { audience: "", subject: "", body: "", legalReviewedAt: "" },
+    rootCauseHypothesis: "",
+    postMortem: { fiveWhys: [], actionItems: [] },
+    confidence: "amber",
+  };
+}
+
+function mockDsarConcierge(input: Record<string, unknown>): Record<string, unknown> {
+  const intake = new Date();
+  return {
+    dsarId: input.dsarId ?? "",
+    jurisdiction: input.jurisdiction ?? "gdpr",
+    requestKind: input.requestKind ?? "access",
+    intakeAt: intake.toISOString(),
+    statutoryDueAt: new Date(intake.getTime() + 30 * 86400000).toISOString(),
+    phase: "intake",
+    discoveredArtifacts: [],
+    responseLetterMarkdown: "",
+    responsePacketUrl: "",
+    confidence: "amber",
+  };
+}
+
+function mockBackupAuditor(_input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    periodStart: new Date(Date.now() - 90 * 86400000).toISOString(),
+    periodEnd: new Date().toISOString(),
+    stores: [],
+    restoreDrill: {
+      performedAt: new Date().toISOString(),
+      sampledArtifactId: "mock",
+      restoredOk: true,
+      rtoMinutes: 30,
+      rpoMinutes: 5,
+      notes: "Mock drill — no real restore performed.",
+    },
+    alerts: [],
+    confidence: "amber",
+  };
+}
+
+function mockIpSteward(_input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    windowStart: new Date(Date.now() - 180 * 86400000).toISOString(),
+    windowEnd: new Date().toISOString(),
+    freshnessNags: [],
+    unlicensedAssets: [],
+    engagementUseWithoutGrant: [],
+    ownerSwapRequests: [],
+    confidence: "amber",
+  };
+}
+
+function mockOssComplianceSentinel(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    repoId: input.repoId ?? "",
+    scannedAt: new Date().toISOString(),
+    dependencies: [],
+    blockers: [],
+    exceptions: [],
+    confidence: "amber",
+  };
+}
+
+function mockDemoEnvironmentCurator(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    demoId: input.demoId ?? "",
+    url: "",
+    ownerId: "",
+    lastCheckedAt: new Date().toISOString(),
+    uptime30d: 0.99,
+    lastDeployAt: new Date().toISOString(),
+    screenshotUrl: "",
+    scriptDrift: [],
+    freshness: "fresh",
+    confidence: "amber",
+  };
+}
+
+// ---------- run<X> entrypoints ----------
+
+export interface V5RunCommonArgs {
+  triggeredByUserId: string | null;
+  actorLabel?: string;
+}
+
+export async function runLinkedInComposer(
+  input: { partnerId: string; sourceArtifactId: string; sourceArtifactKind: string; targetLength?: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_linkedin_composer",
+    promptId: "linkedin_composer",
+    model: "claude-sonnet-4-5",
+    input: {
+      partnerId: input.partnerId,
+      sourceArtifactId: input.sourceArtifactId,
+      sourceArtifactKind: input.sourceArtifactKind,
+      targetLength: input.targetLength,
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "partner",
+    targetId: input.partnerId,
+    targetLabel: `LinkedIn — ${input.partnerId}`,
+    actorLabel: input.actorLabel ?? "LinkedIn Composer",
+    mock: () => mockLinkedInComposer(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runPressMonitor(
+  input: { lookbackDays?: number; watchlistPartners?: string[]; watchlistCompetitors?: string[] } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_press_monitor",
+    promptId: "press_monitor",
+    model: "claude-sonnet-4-5",
+    input: {
+      lookbackDays: input.lookbackDays ?? 7,
+      watchlistPartners: input.watchlistPartners ?? [],
+      watchlistCompetitors: input.watchlistCompetitors ?? [],
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "atelier",
+    targetId: "press_watch",
+    targetLabel: "Press watch",
+    actorLabel: input.actorLabel ?? "Press Monitor",
+    mock: () => mockPressMonitor(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runFieldNotesScheduler(
+  input: { issueMonth: string; subscriberSegment?: string; candidateArtifactIds?: string[] } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_field_notes_scheduler",
+    promptId: "field_notes_scheduler",
+    model: "claude-haiku-4-5",
+    input: {
+      issueMonth: input.issueMonth,
+      subscriberSegment: input.subscriberSegment ?? "all",
+      candidateArtifactIds: input.candidateArtifactIds ?? [],
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "atelier",
+    targetId: `field_notes:${input.issueMonth}`,
+    targetLabel: `Field Notes ${input.issueMonth}`,
+    actorLabel: input.actorLabel ?? "Field Notes Scheduler",
+    mock: () => mockFieldNotesScheduler(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runAllianceChoreographer(
+  input: { opportunityId: string; partnerFirmId: string; leadParty?: "aico" | "partner"; proposedSplitPct?: number } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_alliance_choreographer",
+    promptId: "alliance_choreographer",
+    model: "claude-sonnet-4-5",
+    input: {
+      opportunityId: input.opportunityId,
+      partnerFirmId: input.partnerFirmId,
+      leadParty: input.leadParty,
+      proposedSplitPct: input.proposedSplitPct,
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "opportunity",
+    targetId: input.opportunityId,
+    targetLabel: `Alliance — ${input.opportunityId}`,
+    actorLabel: input.actorLabel ?? "Alliance Choreographer",
+    mock: () => mockAllianceChoreographer(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runCertificationTracker(
+  input: { lookbackDays?: number; lookaheadDays?: number; firmPartnerTiers?: unknown[] } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_certification_tracker",
+    promptId: "certification_tracker",
+    model: "claude-haiku-4-5",
+    input: {
+      lookbackDays: input.lookbackDays ?? 30,
+      lookaheadDays: input.lookaheadDays ?? 90,
+      firmPartnerTiers: input.firmPartnerTiers ?? [],
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "atelier",
+    targetId: "certifications",
+    targetLabel: "Firm certification posture",
+    actorLabel: input.actorLabel ?? "Certification Tracker",
+    mock: () => mockCertificationTracker(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runInterviewDesigner(
+  input: { roleId: string; roleLevel?: string; candidateId?: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_interview_designer",
+    promptId: "interview_designer",
+    model: "claude-sonnet-4-5",
+    input: {
+      roleId: input.roleId,
+      roleLevel: input.roleLevel ?? "ic",
+      candidateId: input.candidateId ?? "",
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "role",
+    targetId: input.roleId,
+    targetLabel: `Interview design — ${input.roleId}`,
+    actorLabel: input.actorLabel ?? "Interview Designer",
+    mock: () => mockInterviewDesigner(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runReferenceCaller(
+  input: { candidateId: string; referenceId: string; roleId: string; callTranscriptOrVideoId: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_reference_caller",
+    promptId: "reference_caller",
+    model: "claude-sonnet-4-5",
+    input: {
+      candidateId: input.candidateId,
+      referenceId: input.referenceId,
+      roleId: input.roleId,
+      callTranscriptOrVideoId: input.callTranscriptOrVideoId,
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "candidate",
+    targetId: input.candidateId,
+    targetLabel: `Reference — ${input.candidateId}`,
+    actorLabel: input.actorLabel ?? "Reference Caller",
+    mock: () => mockReferenceCaller(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runOfferComposer(
+  input: { candidateId: string; roleId: string; approvedCompBandId: string; startDate?: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_offer_composer",
+    promptId: "offer_composer",
+    model: "claude-sonnet-4-5",
+    input: {
+      candidateId: input.candidateId,
+      roleId: input.roleId,
+      approvedCompBandId: input.approvedCompBandId,
+      startDate: input.startDate,
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "candidate",
+    targetId: input.candidateId,
+    targetLabel: `Offer — ${input.candidateId}`,
+    actorLabel: input.actorLabel ?? "Offer Composer",
+    mock: () => mockOfferComposer(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runComplianceSentinel(
+  input: { controlFramework?: "soc2_type2" | "iso27001"; periodStart?: string; periodEnd?: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  const fw = input.controlFramework ?? "soc2_type2";
+  return runV5GenericAgent({
+    agentId: "ag_compliance_sentinel",
+    promptId: "compliance_sentinel",
+    model: "claude-sonnet-4-5",
+    input: {
+      controlFramework: fw,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "atelier",
+    targetId: `compliance:${fw}`,
+    targetLabel: `Compliance — ${fw}`,
+    actorLabel: input.actorLabel ?? "Compliance Sentinel",
+    mock: () => mockComplianceSentinel(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runIncidentResponder(
+  input: { incidentId: string; severity: "sev1" | "sev2" | "sev3" | "sev4"; triggerKind?: string; initialSignal?: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_incident_responder",
+    promptId: "incident_responder",
+    model: "claude-sonnet-4-5",
+    input: {
+      incidentId: input.incidentId,
+      severity: input.severity,
+      triggerKind: input.triggerKind ?? "manual",
+      initialSignal: input.initialSignal ?? "",
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "incident",
+    targetId: input.incidentId,
+    targetLabel: `Incident ${input.incidentId} (${input.severity})`,
+    actorLabel: input.actorLabel ?? "Incident Responder",
+    mock: () => mockIncidentResponder(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runDsarConcierge(
+  input: { dsarId: string; jurisdiction: "ksa_pdpl" | "uae_difc" | "gdpr" | "other"; subjectIdentifier: string; requestKind: "access" | "rectify" | "delete" | "portability" | "object" } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_dsar_concierge",
+    promptId: "dsar_concierge",
+    model: "claude-sonnet-4-5",
+    input: {
+      dsarId: input.dsarId,
+      jurisdiction: input.jurisdiction,
+      subjectIdentifier: input.subjectIdentifier,
+      requestKind: input.requestKind,
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "dsar",
+    targetId: input.dsarId,
+    targetLabel: `DSAR ${input.dsarId} (${input.jurisdiction})`,
+    actorLabel: input.actorLabel ?? "DSAR Concierge",
+    mock: () => mockDsarConcierge(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runBackupAuditor(
+  input: { periodStart?: string; periodEnd?: string; primaryStores?: unknown[] } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_backup_auditor",
+    promptId: "backup_auditor",
+    model: "claude-haiku-4-5",
+    input: {
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      primaryStores: input.primaryStores ?? [],
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "atelier",
+    targetId: "backups",
+    targetLabel: "Backup posture",
+    actorLabel: input.actorLabel ?? "Backup Auditor",
+    mock: () => mockBackupAuditor(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runIpSteward(
+  input: { lookbackDays?: number; assetKinds?: string[] } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_ip_steward",
+    promptId: "ip_steward",
+    model: "claude-haiku-4-5",
+    input: {
+      lookbackDays: input.lookbackDays ?? 180,
+      assetKinds: input.assetKinds ?? [],
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "atelier",
+    targetId: "ip_catalog",
+    targetLabel: "IP catalog",
+    actorLabel: input.actorLabel ?? "IP Steward",
+    mock: () => mockIpSteward(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runOssComplianceSentinel(
+  input: { repoId: string; manifestPaths?: string[] } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_oss_compliance_sentinel",
+    promptId: "oss_compliance_sentinel",
+    model: "claude-haiku-4-5",
+    input: {
+      repoId: input.repoId,
+      manifestPaths: input.manifestPaths ?? [],
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "repo",
+    targetId: input.repoId,
+    targetLabel: `OSS scan — ${input.repoId}`,
+    actorLabel: input.actorLabel ?? "OSS Compliance Sentinel",
+    mock: () => mockOssComplianceSentinel(input as unknown as Record<string, unknown>),
+  });
+}
+
+export async function runDemoEnvironmentCurator(
+  input: { demoId: string; canonicalScriptId?: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_demo_environment_curator",
+    promptId: "demo_environment_curator",
+    model: "claude-haiku-4-5",
+    input: {
+      demoId: input.demoId,
+      canonicalScriptId: input.canonicalScriptId ?? "",
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "demo",
+    targetId: input.demoId,
+    targetLabel: `Demo — ${input.demoId}`,
+    actorLabel: input.actorLabel ?? "Demo Environment Curator",
+    mock: () => mockDemoEnvironmentCurator(input as unknown as Record<string, unknown>),
+  });
+}
+
+// ---------- 3 mode extensions (Task #306) ----------
+//
+// These agents share their existing registry entry (POV Author, Account
+// Cartographer, Pursuit Scout) but load a parallel `v2_<mode>_mode.md`
+// prompt file. They are exposed via the generic dispatcher under the
+// SAME agentId by passing `_mode` in the request body.
+
+export async function runPovAuthorPressMode(
+  input: { opportunityId: string; audience: string; objective?: string; promotedFacts?: unknown[] } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_pov_author",
+    promptId: "pov_author",
+    promptVersion: 2,
+    promptMode: "press",
+    model: "claude-sonnet-4-5",
+    input: {
+      opportunityId: input.opportunityId,
+      audience: input.audience,
+      objective: input.objective ?? "",
+      promotedFacts: input.promotedFacts ?? [],
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "opportunity",
+    targetId: input.opportunityId,
+    targetLabel: `POV (press mode) — ${input.opportunityId}`,
+    actorLabel: input.actorLabel ?? "POV Author (press mode)",
+    mock: () => ({
+      title: "Mock press POV",
+      thesis: "Mock thesis suitable for a press byline.",
+      sections: [],
+      confidence: "amber",
+    }),
+  });
+}
+
+export async function runAccountCartographerPartnerMode(
+  input: { partnerFirmId: string } & Record<string, unknown> & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  // Strip transport/runtime fields out of the prompt payload so the
+  // model only sees business inputs.
+  const { triggeredByUserId: _t, actorLabel: _a, ...businessInput } = input;
+  return runV5GenericAgent({
+    agentId: "ag_account_cartographer",
+    promptId: "account_cartographer",
+    promptVersion: 2,
+    promptMode: "partner",
+    model: "claude-sonnet-4-5",
+    input: { ...businessInput, partnerFirmId: input.partnerFirmId },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "partner",
+    targetId: input.partnerFirmId,
+    targetLabel: `Cartographer (partner mode) — ${input.partnerFirmId}`,
+    actorLabel: input.actorLabel ?? "Account Cartographer (partner mode)",
+    mock: () => ({
+      partnerFirmId: input.partnerFirmId,
+      relationships: [],
+      jointPursuits: [],
+      confidence: "amber",
+    }),
+  });
+}
+
+export async function runPursuitScoutRecruitingMode(
+  input: { roleId: string; candidateId?: string; contextBlurb?: string } & V5RunCommonArgs,
+): Promise<V5GenericResult> {
+  return runV5GenericAgent({
+    agentId: "ag_pursuit_scout",
+    promptId: "pursuit_scout",
+    promptVersion: 2,
+    promptMode: "recruiting",
+    model: "claude-sonnet-4-5",
+    input: {
+      roleId: input.roleId,
+      candidateId: input.candidateId ?? "",
+      contextBlurb: input.contextBlurb ?? "",
+    },
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "role",
+    targetId: input.roleId,
+    targetLabel: `Recruiting Scout — ${input.roleId}`,
+    actorLabel: input.actorLabel ?? "Pursuit Scout (recruiting mode)",
+    mock: () => ({
+      roleId: input.roleId,
+      candidateBriefs: [],
+      facts: [],
+      confidence: "amber",
+    }),
+  });
+}
+
+// ---------- generic dispatcher map ----------
+//
+// Used by the POST /api/atelier/agents/:agentId/run route. Returns
+// undefined for agents not yet wired through this dispatcher (the route
+// returns 404 in that case).
+
+export type V5DispatcherFn = (
+  input: Record<string, unknown> & V5RunCommonArgs,
+) => Promise<V5GenericResult>;
+
+export const ATELIER_V5_DISPATCH: Record<string, V5DispatcherFn> = {
+  ag_linkedin_composer: (i) => runLinkedInComposer(i as never),
+  ag_press_monitor: (i) => runPressMonitor(i as never),
+  ag_field_notes_scheduler: (i) => runFieldNotesScheduler(i as never),
+  ag_alliance_choreographer: (i) => runAllianceChoreographer(i as never),
+  ag_certification_tracker: (i) => runCertificationTracker(i as never),
+  ag_interview_designer: (i) => runInterviewDesigner(i as never),
+  ag_reference_caller: (i) => runReferenceCaller(i as never),
+  ag_offer_composer: (i) => runOfferComposer(i as never),
+  ag_compliance_sentinel: (i) => runComplianceSentinel(i as never),
+  ag_incident_responder: (i) => runIncidentResponder(i as never),
+  ag_dsar_concierge: (i) => runDsarConcierge(i as never),
+  ag_backup_auditor: (i) => runBackupAuditor(i as never),
+  ag_ip_steward: (i) => runIpSteward(i as never),
+  ag_oss_compliance_sentinel: (i) => runOssComplianceSentinel(i as never),
+  ag_demo_environment_curator: (i) => runDemoEnvironmentCurator(i as never),
+};
+
+/**
+ * Mode-aware dispatcher. The generic /run route looks for a `_mode` field
+ * in the request body and routes the existing-agent + mode pair to the
+ * correct prompt variant. Returns undefined when the (agentId, mode)
+ * pair has no extension.
+ */
+export function dispatchV5ModeExtension(
+  agentId: string,
+  mode: string,
+): V5DispatcherFn | undefined {
+  if (agentId === "ag_pov_author" && mode === "press") {
+    return (i) => runPovAuthorPressMode(i as never);
+  }
+  if (agentId === "ag_account_cartographer" && mode === "partner") {
+    return (i) => runAccountCartographerPartnerMode(i as never);
+  }
+  if (agentId === "ag_pursuit_scout" && mode === "recruiting") {
+    return (i) => runPursuitScoutRecruitingMode(i as never);
+  }
+  return undefined;
+}

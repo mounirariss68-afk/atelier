@@ -62,10 +62,13 @@ import {
   runMeetingScribe,
   recordDecision,
   runPipelineForecaster,
+  ATELIER_V5_DISPATCH,
+  dispatchV5ModeExtension,
   type AgentFact,
   type PursuitScoutOutput,
   type PovOutline,
 } from "../../lib/atelier-agents/runner.js";
+import { getAgent } from "@workspace/agents";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -1649,6 +1652,94 @@ router.post("/agents/pricing-strategist/run", async (req, res) => {
     307,
     `/api/atelier/opportunities/${encodeURIComponent(oppId)}/pricing/strategist`,
   );
+});
+
+// =============================================================
+// v5 (Task #355) — generic agent dispatcher.
+//
+// Registered LAST so the more specific bespoke routes above
+// (pipeline-forecaster, pricing-strategist) take precedence over the
+// `:agentId` placeholder. AgentRun.tsx posts the agent's input fields
+// directly here; mode extensions (POV Author press, Account Cartographer
+// partner, Pursuit Scout recruiting) are selected via the `_mode` body
+// field and shadow the base agent prompt for that run.
+//
+// Validation note: when `_mode` is present we DO NOT validate against
+// the base agent's `inputSchema` because the mode prompt has its own
+// shape (e.g. recruiting mode wants `roleId`, while base Pursuit Scout
+// wants `accountName`). The mode-specific run wrapper enforces the
+// shape it needs and runAgent will validate the final input against the
+// registry schema with a warn-on-drift policy.
+// =============================================================
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/agents/:agentId/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const rawId = req.params.agentId;
+  const agentId = rawId.startsWith("ag_") ? rawId : `ag_${rawId}`;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const { _mode, ...rest } = body;
+  const mode = typeof _mode === "string" && _mode.length > 0 ? _mode : undefined;
+
+  // Mode extensions take precedence and bypass the base inputSchema
+  // (the base schema would not match the mode's input shape).
+  const modeFn = mode ? dispatchV5ModeExtension(agentId, mode) : undefined;
+  if (modeFn) {
+    try {
+      const result = await modeFn({
+        ...rest,
+        triggeredByUserId: me.id,
+      });
+      res.status(202).json({
+        runId: result.runId,
+        agentId,
+        mode,
+        costUsd: result.costUsd,
+        output: result.output,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: "agent-run-failed", message: msg });
+    }
+    return;
+  }
+
+  // No mode requested — require a registered agent and a base dispatcher.
+  const agent = getAgent(agentId);
+  if (!agent) {
+    res.status(404).json({ error: "agent-not-found", agentId });
+    return;
+  }
+  const baseFn = ATELIER_V5_DISPATCH[agentId];
+  if (!baseFn) {
+    res.status(400).json({
+      error: "agent-not-dispatchable-here",
+      hint: "This agent is not wired to the generic /run dispatcher; use its bespoke endpoint.",
+    });
+    return;
+  }
+  const parsed = agent.inputSchema.safeParse(rest);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-input", issues: parsed.error.issues });
+    return;
+  }
+  try {
+    const result = await baseFn({
+      ...(parsed.data as Record<string, unknown>),
+      triggeredByUserId: me.id,
+      actorLabel: agent.name,
+    });
+    res.status(202).json({
+      runId: result.runId,
+      agentId,
+      mode: null,
+      costUsd: result.costUsd,
+      output: result.output,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: "agent-run-failed", message: msg });
+  }
 });
 
 export default router;
