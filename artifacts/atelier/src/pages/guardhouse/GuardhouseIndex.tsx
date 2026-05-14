@@ -2,14 +2,14 @@ import { useRoute } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { ShieldCheck, FileSearch, AlertOctagon, Database, ScrollText, ClipboardList } from "lucide-react";
 import {
-  CONTROL_LIBRARY,
-  EVIDENCE_REGISTER,
-  PENTEST_REGISTER,
-  VENDOR_ASSESSMENTS,
-  INCIDENT_REGISTER,
-  DSAR_QUEUE,
-  BACKUP_RUNS,
-} from "@/data/guardhouse-seed";
+  useGuardhouseControls,
+  useGuardhouseEvidence,
+  useGuardhousePentests,
+  useGuardhouseVendors,
+  useGuardhouseIncidents,
+  useGuardhouseDsars,
+  useGuardhouseBackups,
+} from "@/lib/v5-hooks";
 
 const SUB_ROUTES = [
   { id: "controls", label: "Control Library" },
@@ -55,6 +55,7 @@ export default function GuardhouseIndex() {
 }
 
 function ControlsView() {
+  const CONTROL_LIBRARY = useGuardhouseControls();
   const passing = CONTROL_LIBRARY.filter(c => c.status === "passing").length;
   const gap = CONTROL_LIBRARY.filter(c => c.status === "gap").length;
   const stale = CONTROL_LIBRARY.filter(c => c.status === "stale").length;
@@ -86,6 +87,7 @@ function ControlsView() {
 }
 
 function EvidenceView() {
+  const EVIDENCE_REGISTER = useGuardhouseEvidence();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2"><FileSearch className="w-4 h-4" />Auto-collected artifacts tied to controls. Stale evidence (over 30 days) downgrades the control automatically.</p>
@@ -105,6 +107,7 @@ function EvidenceView() {
 }
 
 function PentestView() {
+  const PENTEST_REGISTER = useGuardhousePentests();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute">Pentest engagements + remediation tracker. Each finding has an owner and a SLA tied to severity.</p>
@@ -125,6 +128,7 @@ function PentestView() {
 }
 
 function VendorsView() {
+  const VENDOR_ASSESSMENTS = useGuardhouseVendors();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute">Inbound + outbound vendor security assessments. Each vendor has a renewal date and the contract owner.</p>
@@ -144,6 +148,7 @@ function VendorsView() {
 }
 
 function IncidentsView() {
+  const INCIDENT_REGISTER = useGuardhouseIncidents();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2"><AlertOctagon className="w-4 h-4" />Incident register with post-mortems. Incident Responder agent drives the playbook; chain-of-custody preserved on every action.</p>
@@ -165,6 +170,7 @@ function IncidentsView() {
 }
 
 function DsarView() {
+  const DSAR_QUEUE = useGuardhouseDsars();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2"><ScrollText className="w-4 h-4" />Data subject access requests under KSA PDPL / UAE DIFC / GDPR. Statutory clock is real — DSAR Concierge flags any request risking the response window.</p>
@@ -188,6 +194,7 @@ function DsarView() {
 }
 
 function BackupsView() {
+  const BACKUP_RUNS = useGuardhouseBackups();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2"><Database className="w-4 h-4" />Backup Auditor verifies completeness daily and runs a quarterly restore drill against a sampled artifact.</p>

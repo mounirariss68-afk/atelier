@@ -4,13 +4,13 @@ import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/com
 import { useRoute } from "wouter";
 import { Calendar, FileText, Users, Mic, Eye } from "lucide-react";
 import {
-  EDITORIAL_CALENDAR,
-  IN_FLIGHT_CONTENT,
-  PARTNER_POSTING_CADENCE,
-  NEWSLETTER_SUBSCRIBERS,
-  SPEAKING_OPPORTUNITIES,
-  PRESS_MENTIONS,
-} from "@/data/press-seed";
+  useEditorialCalendar,
+  useInFlightContent,
+  usePartnerCadence,
+  useNewsletter,
+  useSpeakingOpportunities,
+  usePressMentions,
+} from "@/lib/v5-hooks";
 
 const SUB_ROUTES = [
   { id: "calendar", label: "Editorial Calendar" },
@@ -61,6 +61,7 @@ export default function PressIndex() {
 }
 
 function CalendarView() {
+  const EDITORIAL_CALENDAR = useEditorialCalendar();
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-mute flex items-center gap-2">
@@ -96,6 +97,7 @@ function CalendarView() {
 }
 
 function InFlightView() {
+  const IN_FLIGHT_CONTENT = useInFlightContent();
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-mute flex items-center gap-2">
@@ -130,6 +132,7 @@ function InFlightView() {
 }
 
 function LinkedinView() {
+  const PARTNER_POSTING_CADENCE = usePartnerCadence();
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-mute flex items-center gap-2">
@@ -167,6 +170,12 @@ function LinkedinView() {
 }
 
 function NewsletterView() {
+  const NEWSLETTER_SUBSCRIBERS = useNewsletter();
+  if (!NEWSLETTER_SUBSCRIBERS) {
+    return (
+      <div className="text-sm text-text-faint">Loading newsletter…</div>
+    );
+  }
   const issue = NEWSLETTER_SUBSCRIBERS.currentIssue;
   return (
     <div className="space-y-4">
@@ -187,29 +196,32 @@ function NewsletterView() {
           <div className="text-xs text-text-mute mt-1">benchmark 2.4%</div>
         </Card>
       </div>
-      <Card className="p-4 space-y-3 border-l-4 border-l-gold">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs text-text-faint">Field Notes — issue assembling</div>
-            <div className="font-medium text-text">{issue.subjectLine}</div>
-          </div>
-          <MonoChip tone="amber">{issue.status}</MonoChip>
-        </div>
-        <div className="text-xs text-text-faint">scheduled send {issue.scheduledSendAt}</div>
-        <div className="space-y-1 text-sm">
-          {issue.sections.map((s) => (
-            <div key={s.id} className="flex justify-between">
-              <span className="text-text-mute">{s.label}</span>
-              <span className="text-text">{s.summary}</span>
+      {issue && (
+        <Card className="p-4 space-y-3 border-l-4 border-l-gold">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs text-text-faint">Field Notes — issue assembling</div>
+              <div className="font-medium text-text">{issue.subjectLine}</div>
             </div>
-          ))}
-        </div>
-      </Card>
+            <MonoChip tone="amber">{issue.status}</MonoChip>
+          </div>
+          <div className="text-xs text-text-faint">scheduled send {issue.scheduledSendAt}</div>
+          <div className="space-y-1 text-sm">
+            {issue.sections.map((s) => (
+              <div key={s.id} className="flex justify-between">
+                <span className="text-text-mute">{s.label}</span>
+                <span className="text-text">{s.summary}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
 
 function SpeakingView() {
+  const SPEAKING_OPPORTUNITIES = useSpeakingOpportunities();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2">
@@ -241,6 +253,7 @@ function SpeakingView() {
 }
 
 function MentionsView() {
+  const PRESS_MENTIONS = usePressMentions();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2">

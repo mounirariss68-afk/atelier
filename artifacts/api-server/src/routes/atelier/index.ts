@@ -67,6 +67,7 @@ import firmProfileRoutes from "./firmProfileRoutes";
 import cliRoutes from "./cliRoutes";
 import cliAttachmentRoutes from "./cliAttachmentRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
+import v5Routes from "./v5Routes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -102,6 +103,25 @@ router.use(attachRls);
 router.use((req, res, next) => {
   const me = req.atelierPersona;
   if (!me) return next();
+  // Task #354 (v5) — recruiter is restricted to /studio (their workspace),
+  // identity, and the personas list. Engagements + every other v5 surface
+  // are off-limits; see personaRoles.ts and v5Routes.ts for the same rule
+  // applied per-route as defense-in-depth.
+  if (me.role === "recruiter") {
+    const rp = req.path;
+    // Strictly: /studio (their workspace) + /me + /personas (persona
+    // switcher). /users is intentionally NOT allowed — recruiters do not
+    // need org-wide user enumeration; panelist/interviewer lookups belong
+    // inside /studio with a recruiter-safe shape.
+    if (rp === "/me" || rp.startsWith("/personas")) return next();
+    if (rp.startsWith("/studio/")) return next();
+    res.status(403).json({
+      error: "recruiter-scope",
+      message:
+        "Recruiter persona may only access /studio, /me, and /personas.",
+    });
+    return;
+  }
   if (me.role !== "contractor" && me.role !== "partner_firm_resource")
     return next();
   const p = req.path;
@@ -177,6 +197,9 @@ router.use(firmProfileRoutes);
 router.use(cliRoutes);
 router.use(cliAttachmentRoutes);
 router.use(cliAdminRoutes);
+// Task #354 — v5 firm-wide knowledge surfaces (Press / Alliances / Studio /
+// Guardhouse / IP catalog) backed by Postgres.
+router.use(v5Routes);
 
 function ensurePersona(
   req: Request,

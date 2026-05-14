@@ -2,11 +2,11 @@ import { useRoute, Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { Handshake, GitMerge, Award, AlertTriangle } from "lucide-react";
 import {
-  PARTNER_FIRMS,
-  JOINT_PIPELINE,
-  CERTIFICATIONS,
-  ALLIANCE_CONFLICTS,
-} from "@/data/alliances-seed";
+  useAlliancePartnerFirms,
+  useJointPipeline,
+  useCertifications,
+  useAllianceConflicts,
+} from "@/lib/v5-hooks";
 
 const SUB_ROUTES = [
   { id: "firms", label: "Partner Firms" },
@@ -48,6 +48,7 @@ export default function AlliancesIndex() {
 }
 
 function FirmsView() {
+  const PARTNER_FIRMS = useAlliancePartnerFirms();
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-mute flex items-center gap-2">
@@ -88,6 +89,7 @@ function FirmsView() {
 }
 
 function JointPipelineView() {
+  const JOINT_PIPELINE = useJointPipeline();
   const total = JOINT_PIPELINE.reduce((s, o) => s + o.acvUsdK, 0);
   const aicoShare = JOINT_PIPELINE.reduce((s, o) => s + (o.acvUsdK * o.aicoPct) / 100, 0);
   return (
@@ -131,6 +133,7 @@ function JointPipelineView() {
 }
 
 function CertificationsView() {
+  const CERTIFICATIONS = useCertifications();
   const lapsing = CERTIFICATIONS.filter((c) => c.status === "lapsing");
   const lapsed = CERTIFICATIONS.filter((c) => c.status === "lapsed");
   return (
@@ -175,6 +178,7 @@ function CertificationsView() {
 }
 
 function ConflictsView() {
+  const ALLIANCE_CONFLICTS = useAllianceConflicts();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2">

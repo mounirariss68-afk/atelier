@@ -7,11 +7,11 @@ import { useRoute } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { Code2, Package, MonitorPlay, FileText } from "lucide-react";
 import {
-  CODE_ASSETS,
-  OSS_DEPENDENCIES,
-  DEMO_ENVIRONMENTS,
-  IP_LICENSE_GRANTS,
-} from "@/data/ip-seed";
+  useCodeAssets,
+  useOssDependencies,
+  useDemoEnvironments,
+  useIpLicenseGrants,
+} from "@/lib/v5-hooks";
 
 const SUB_ROUTES = [
   { id: "code", label: "Code Assets" },
@@ -51,6 +51,7 @@ export default function IpCatalog() {
 }
 
 function CodeView() {
+  const CODE_ASSETS = useCodeAssets();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2"><Code2 className="w-4 h-4" />Every internal repo with license, owner, and the engagements it has been used in.</p>
@@ -72,6 +73,7 @@ function CodeView() {
 }
 
 function OssView() {
+  const OSS_DEPENDENCIES = useOssDependencies();
   const blocked = OSS_DEPENDENCIES.filter(d => d.compatibility === "block");
   return (
     <div className="space-y-3">
@@ -100,6 +102,7 @@ function OssView() {
 }
 
 function DemosView() {
+  const DEMO_ENVIRONMENTS = useDemoEnvironments();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2"><MonitorPlay className="w-4 h-4" />Live demo URLs with uptime, last-deploy, and drift from the canonical demo script. Maintained by Demo Environment Curator.</p>
@@ -124,6 +127,7 @@ function DemosView() {
 }
 
 function LicensingView() {
+  const IP_LICENSE_GRANTS = useIpLicenseGrants();
   return (
     <div className="space-y-2">
       <p className="text-sm text-text-mute flex items-center gap-2"><FileText className="w-4 h-4" />Every grant of AICo IP into a client engagement, scope-bounded and time-bounded.</p>
