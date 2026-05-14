@@ -49,6 +49,7 @@ import {
 import "./capability-seed.js"; // side-effect: registers catalog entries
 import "./attachment-capabilities.js"; // Task #334 — attachment + rubric tools
 import "./undo.js"; // Task #335 — undo_last_action capability
+import "./parity-capabilities.js"; // Task #338 — UI parity write actions
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
   shouldRequireTypedNameForAttachmentTurn,
@@ -1173,6 +1174,307 @@ async function modelStep(args: {
   }
 }
 
+// =====================================================================
+// Task #338 — Natural-language → catalog routing.
+//
+// `routePromptToCapability` is a pure heuristic that maps an unstructured
+// prompt to a capability + extracted input. Used by the mock model and
+// available to live mode as a pre-filter / fallback. Each branch picks
+// the first thing that matches and stops — keep cheap+deterministic.
+// =====================================================================
+
+export interface RoutedCapability {
+  toolName: string;
+  input: Record<string, unknown>;
+  /** Confidence: 'high' = strong keyword + entity, 'low' = best-effort. */
+  confidence: "high" | "low";
+}
+
+function captureAfter(text: string, ...keys: string[]): string | null {
+  for (const k of keys) {
+    const re = new RegExp(`${k}\\s+(?:for\\s+)?["']?([\\p{L}0-9 ._@'’\\-]{2,80})["']?`, "iu");
+    const m = text.match(re);
+    if (m && m[1]) return m[1].trim().replace(/[.?!]+$/, "");
+  }
+  return null;
+}
+
+function findEmail(text: string): string | null {
+  const m = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  return m ? m[0] : null;
+}
+
+function findIdLike(text: string, prefixes: string[]): string | null {
+  for (const p of prefixes) {
+    const m = text.match(new RegExp(`\\b${p}[-_][a-z0-9_]+\\b`, "i"));
+    if (m) return m[0];
+  }
+  return null;
+}
+
+function findMoney(text: string): { amount: number; currency: string } | null {
+  const m = text.match(/(\d+(?:\.\d+)?)\s*(usd|aed|sar|eur|gbp|mad|try|jpy|inr|cny)\b/i);
+  if (m) return { amount: Number(m[1]), currency: m[2]!.toUpperCase() };
+  const m2 = text.match(/\b(usd|aed|sar|eur|gbp|mad|try)\s*(\d+(?:\.\d+)?)/i);
+  if (m2) return { amount: Number(m2[2]), currency: m2[1]!.toUpperCase() };
+  return null;
+}
+
+export function routePromptToCapability(promptRaw: string): RoutedCapability | null {
+  const p = promptRaw.toLowerCase().trim();
+  if (!p) return null;
+
+  // ---- Account create ----------------------------------------------
+  if (/(add|create|new|register)\s+(a\s+)?(new\s+)?account\b/.test(p)) {
+    const name =
+      captureAfter(promptRaw, "account") ??
+      captureAfter(promptRaw, "for") ??
+      "";
+    const countryMatch = promptRaw.match(/\bin\s+(?:the\s+)?([A-Z][\p{L} ]{2,40})/u);
+    const sectorMatch = promptRaw.match(/\b(?:sector|industry)\s+([\p{L} &/-]{2,40})/iu);
+    return {
+      toolName: "account_create",
+      confidence: name ? "high" : "low",
+      input: {
+        name: name.replace(/^a\s+new\s+/i, "").replace(/\s+in\s+.*$/i, "").trim(),
+        country: countryMatch?.[1]?.trim() ?? "",
+        sector: sectorMatch?.[1]?.trim() ?? "",
+      },
+    };
+  }
+
+  // ---- Opportunity create ------------------------------------------
+  if (/(create|new|add)\s+(an?\s+)?(opp(ortunity)?|deal)\b/.test(p)) {
+    const accName = captureAfter(promptRaw, "for") ?? "";
+    const named = captureAfter(promptRaw, "opportunity", "opp") ?? "";
+    return {
+      toolName: "opportunity_create",
+      confidence: accName ? "high" : "low",
+      input: {
+        name: named || `Opportunity for ${accName || "—"}`,
+        accountQuery: accName,
+      },
+    };
+  }
+
+  // ---- Move stage ---------------------------------------------------
+  if (/(move|change|set|advance|mark)\b.*\b(to|as)\s+(suspect|prospect|pursue|convert|propose|runner|negoti\w*|contract|won|lost|withdrawn|no\s+decision)/i.test(promptRaw)) {
+    const oppId = findIdLike(promptRaw, ["opp"]);
+    const m = promptRaw.match(/\b(?:to|as)\s+([A-Za-z _-]+?)(?:\.|$|\s*on\s|\s*because)/i);
+    const stageWord = m?.[1]?.trim() ?? "";
+    return {
+      toolName: "opportunity_move_stage",
+      confidence: oppId && stageWord ? "high" : "low",
+      input: { opportunityId: oppId ?? "", toStage: stageWord },
+    };
+  }
+
+  // ---- Capture meeting ---------------------------------------------
+  if (/(log|capture|record|add)\s+(a\s+)?(discovery|workshop|kickoff|steering|meeting)/i.test(promptRaw)) {
+    const oppId = findIdLike(promptRaw, ["opp", "eng"]);
+    const parentType = oppId?.startsWith("eng") ? "engagement" : "opportunity";
+    const dateMatch = promptRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    return {
+      toolName: "opportunity_capture_meeting",
+      confidence: oppId ? "high" : "low",
+      input: {
+        parentType,
+        parentId: oppId ?? "",
+        title: promptRaw.slice(0, 80),
+        kind: /workshop/i.test(promptRaw) ? "workshop" : /kickoff/i.test(promptRaw) ? "kickoff" : /steering/i.test(promptRaw) ? "steering" : "discovery",
+        date: dateMatch?.[1] ?? "",
+      },
+    };
+  }
+
+  // ---- Draft POV ----------------------------------------------------
+  if (/(draft|start|new|create)\s+(a\s+)?(pov|point\s*of\s*view)/i.test(promptRaw)) {
+    const oppId = findIdLike(promptRaw, ["opp"]) ?? "";
+    const onMatch = promptRaw.match(/\bon\s+([\p{L}0-9 _-]{3,80})/iu);
+    return {
+      toolName: "opportunity_draft_pov",
+      confidence: oppId ? "high" : "low",
+      input: { opportunityId: oppId, title: onMatch?.[1]?.trim() ?? "POV draft" },
+    };
+  }
+
+  // ---- Update qualifier --------------------------------------------
+  if (/\b(qualify|qualifier|5c|five\s*c)\b/i.test(promptRaw)) {
+    const oppId = findIdLike(promptRaw, ["opp"]) ?? "";
+    return { toolName: "opportunity_update_qualifier", confidence: oppId ? "high" : "low", input: { opportunityId: oppId } };
+  }
+
+  // ---- Compose proposal --------------------------------------------
+  if (/(compose|build|draft|create)\s+(a\s+)?proposal\b/i.test(promptRaw)) {
+    const oppId = findIdLike(promptRaw, ["opp"]) ?? "";
+    const forMatch = promptRaw.match(/for\s+(?:the\s+)?([A-Z0-9][\p{L}0-9 _-]{1,40})/u);
+    return {
+      toolName: "proposal_compose",
+      confidence: oppId || forMatch ? "high" : "low",
+      input: { opportunityId: oppId, title: `Proposal for ${forMatch?.[1]?.trim() ?? "opportunity"}` },
+    };
+  }
+
+  // ---- Send proposal -----------------------------------------------
+  if (/\bsend\b.*\bproposal\b/i.test(promptRaw)) {
+    const proposalId = findIdLike(promptRaw, ["prop"]) ?? "";
+    const email = findEmail(promptRaw) ?? "";
+    return { toolName: "proposal_send", confidence: email ? "high" : "low", input: { proposalId, recipientEmail: email } };
+  }
+
+  // ---- Approve / reject / edit section -----------------------------
+  if (/\b(approve|sign\s*off)\b.*\bsection\b/i.test(promptRaw)) {
+    const sectionId = findIdLike(promptRaw, ["sec"]) ?? "";
+    return { toolName: "proposal_approve_section", confidence: sectionId ? "high" : "low", input: { sectionId } };
+  }
+  if (/\breject\b.*\bsection\b/i.test(promptRaw)) {
+    const sectionId = findIdLike(promptRaw, ["sec"]) ?? "";
+    const rationale = promptRaw.split(/section[^:]*:/i)[1]?.trim() ?? "needs rework";
+    return { toolName: "proposal_reject_section", confidence: sectionId ? "high" : "low", input: { sectionId, rationale } };
+  }
+  if (/\bedit\b.*\bsection\b/i.test(promptRaw)) {
+    const sectionId = findIdLike(promptRaw, ["sec"]) ?? "";
+    return { toolName: "proposal_edit_section", confidence: "low", input: { sectionId, content: promptRaw } };
+  }
+
+  // ---- Confirm assignments / partner final read / pricing ---------
+  if (/\bconfirm\b.*\b(assignments|section\s+assignments)\b/i.test(promptRaw)) {
+    const proposalId = findIdLike(promptRaw, ["prop"]) ?? "";
+    return { toolName: "proposal_confirm_assignments", confidence: proposalId ? "high" : "low", input: { proposalId } };
+  }
+  if (/\b(partner\s+)?final\s+read\b/i.test(promptRaw)) {
+    const proposalId = findIdLike(promptRaw, ["prop"]) ?? "";
+    return { toolName: "proposal_final_read", confidence: proposalId ? "high" : "low", input: { proposalId } };
+  }
+  if (/\b(approve|sign\s*off)\b.*\bpricing\b/i.test(promptRaw)) {
+    const proposalId = findIdLike(promptRaw, ["prop"]) ?? "";
+    return { toolName: "proposal_approve_pricing", confidence: proposalId ? "high" : "low", input: { proposalId } };
+  }
+  if (/\boverride\b.*\bpricing\b/i.test(promptRaw)) {
+    const proposalId = findIdLike(promptRaw, ["prop"]) ?? "";
+    const rationale = promptRaw.split(/pricing[^:]*:/i)[1]?.trim() ?? "strategic override";
+    return { toolName: "proposal_override_pricing", confidence: proposalId ? "high" : "low", input: { proposalId, rationale } };
+  }
+
+  // ---- Charter -----------------------------------------------------
+  if (/\bredraft\b.*\bcharter\b/i.test(promptRaw) || /\b(re-?do)\b.*\bcharter\b/i.test(promptRaw)) {
+    const engId = findIdLike(promptRaw, ["eng"]) ?? "";
+    return { toolName: "engagement_redraft_charter", confidence: engId ? "high" : "low", input: { engagementId: engId } };
+  }
+  if (/\bapprove\b.*\bcharter\b/i.test(promptRaw)) {
+    const engId = findIdLike(promptRaw, ["eng"]) ?? "";
+    const versionId = findIdLike(promptRaw, ["chart", "v"]) ?? "";
+    const role = /partner/i.test(promptRaw) ? "partner" : "lead";
+    return { toolName: "engagement_approve_charter", confidence: engId ? "high" : "low", input: { engagementId: engId, versionId, role } };
+  }
+
+  // ---- RAID close --------------------------------------------------
+  if (/\bclose\b.*\braid\b/i.test(promptRaw) || /\bclose\s+(item|risk|issue|raid)\s+/i.test(promptRaw)) {
+    const raidId = findIdLike(promptRaw, ["raid", "r"]) ?? "";
+    return { toolName: "raid_close", confidence: raidId ? "high" : "low", input: { raidId } };
+  }
+
+  // ---- Deliverable -------------------------------------------------
+  if (/(create|new|add)\s+(a\s+)?(deliverable|decision\s*memo|diagnostic|final\s*readout)/i.test(promptRaw)) {
+    const engId = findIdLike(promptRaw, ["eng"]) ?? "";
+    const typeMap: Array<[RegExp, string]> = [
+      [/decision\s*memo/i, "decision_memo"],
+      [/diagnostic/i, "diagnostic"],
+      [/final\s*readout/i, "final_readout"],
+      [/design/i, "design"],
+      [/build/i, "build"],
+      [/adoption/i, "adoption"],
+    ];
+    let type = "diagnostic";
+    for (const [re, t] of typeMap) if (re.test(promptRaw)) { type = t; break; }
+    const dueMatch = promptRaw.match(/due\s+(\d{4}-\d{2}-\d{2}|tomorrow|today|next\s+week)/i);
+    return {
+      toolName: "engagement_create_deliverable",
+      confidence: engId ? "high" : "low",
+      input: { engagementId: engId, type, name: type.replace(/_/g, " "), dueDate: dueMatch?.[1] ?? "" },
+    };
+  }
+
+  // ---- Timesheet approve / reject ----------------------------------
+  if (/(approve|sign\s*off)\b.*\btimesheet\b/i.test(promptRaw)) {
+    const weekId = findIdLike(promptRaw, ["ts", "tsweek", "week"]) ?? "";
+    const role = /partner/i.test(promptRaw) ? "partner" : "lead";
+    return { toolName: "ledger_approve_timesheet", confidence: "low", input: { weekId, role } };
+  }
+  if (/\breject\b.*\btimesheet\b/i.test(promptRaw)) {
+    const weekId = findIdLike(promptRaw, ["ts", "tsweek", "week"]) ?? "";
+    const reason = promptRaw.split(/timesheet[^:]*:/i)[1]?.trim() ?? "needs rework";
+    return { toolName: "ledger_reject_timesheet", confidence: "low", input: { weekId, reason } };
+  }
+
+  // ---- Wallet expense ----------------------------------------------
+  if (
+    /\b(expense|client\s*lunch|taxi|hotel|per\s*diem|mileage)\b/i.test(promptRaw) &&
+    /\b(add|log|new|create|enter|record|capture)\b/i.test(promptRaw)
+  ) {
+    const money = findMoney(promptRaw);
+    const dateMatch = promptRaw.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    const merchMatch = promptRaw.match(/\bat\s+([A-Z][\p{L}0-9 &.'-]{1,40})/u);
+    const categoryMap: Record<string, string> = { lunch: "meals", taxi: "ground_transport", hotel: "lodging", "per diem": "per_diem" };
+    let category = "other";
+    for (const [k, v] of Object.entries(categoryMap)) if (promptRaw.toLowerCase().includes(k)) { category = v; break; }
+    return {
+      toolName: "wallet_create_expense",
+      confidence: money ? "high" : "low",
+      input: {
+        amount: money?.amount ?? 0,
+        currency: money?.currency ?? "USD",
+        merchant: merchMatch?.[1]?.trim() ?? "",
+        expenseDate: dateMatch?.[1] ?? "",
+        category,
+        description: promptRaw.slice(0, 160),
+      },
+    };
+  }
+
+  // ---- Cartographer / profile-update / disposition ----------------
+  if (/(refresh|re-?run)\b.*\b(cartographer|carto)\b/i.test(promptRaw)) {
+    const accId = findIdLike(promptRaw, ["acct", "acc"]) ?? "";
+    const accQuery = captureAfter(promptRaw, "for", "on") ?? "";
+    return { toolName: "account_refresh_cartographer", confidence: accId || accQuery ? "high" : "low", input: { accountId: accId, accountQuery: accQuery } };
+  }
+  if (/(approve|reject)\b.*\bprofile\s*update\b/i.test(promptRaw)) {
+    const accId = findIdLike(promptRaw, ["acct", "acc"]) ?? "";
+    const upId = findIdLike(promptRaw, ["ppu", "pu"]) ?? "";
+    const decision = /approve/i.test(promptRaw) ? "approve" : "reject";
+    return { toolName: "account_profile_update_decision", confidence: accId && upId ? "high" : "low", input: { accountId: accId, updateId: upId, decision } };
+  }
+  if (/(mark|set)\b.*\b(as\s+)?(champion|supporter|skeptic|blocker|neutral)\b/i.test(promptRaw) || /\bdisposition\b/i.test(promptRaw)) {
+    const contactId = findIdLike(promptRaw, ["ctc", "contact"]) ?? "";
+    const dispMatch = promptRaw.toLowerCase().match(/\b(champion|supporter|skeptic|blocker|neutral|unknown)\b/);
+    return { toolName: "contact_update_disposition", confidence: contactId && dispMatch ? "high" : "low", input: { contactId, disposition: dispMatch?.[1] ?? "" } };
+  }
+
+  return null;
+}
+
+/**
+ * Task #338 — context-aware no-tool fallback. Replaces the static
+ * three-item menu with a message that names the closest catalog entry
+ * (if any) or explicitly says the action isn't available from the
+ * assistant yet and points to the UI surface that does it.
+ */
+export function noToolFallbackMessage(promptText: string): string {
+  const routed = routePromptToCapability(promptText);
+  if (routed) {
+    return `I can do that with \`${routed.toolName}\` — ${routed.confidence === "low" ? "I need a bit more detail (try naming the entity by id) to be sure." : "type your request again with confirm and I'll prepare the change."}`;
+  }
+  // Surface-pointing fallbacks
+  const p = promptText.toLowerCase();
+  if (/admin|billing|invoice|payment/.test(p))
+    return "I can't run admin/billing actions from the assistant yet — please use the Billing tab.";
+  if (/dashboard|kpi|chart|forecast/.test(p))
+    return "I can't compose dashboard widgets from the assistant — open the Forecast tab to view those metrics.";
+  if (/upload|import|csv/.test(p))
+    return "Bulk uploads aren't available from the assistant yet — use the relevant import screen in the UI.";
+  return "I can search accounts, list your open RAID items, draft a RAID, create accounts/opportunities, move stages, compose & send proposals, approve charters and timesheets, close RAID items, and log expenses. Tell me which one you mean — naming the entity (e.g. `opp_dewa`, `eng_acme`) helps a lot.";
+}
+
 /**
  * Deterministic mock so tests + dev work without Claude. Decisions are
  * keyword-based on the most recent user text:
@@ -1260,6 +1562,22 @@ function mockModelStep(args: {
       };
     }
   }
+  // Task #338 — try the parity router next so natural-language prompts
+  // for new write capabilities (account.create, opportunity.move_stage,
+  // proposal.send, etc.) reach the catalog without slash syntax.
+  if (!toolCall) {
+    const routed = routePromptToCapability(promptText);
+    if (routed) {
+      return {
+        text: `I'll prepare a ${routed.toolName.replace(/_/g, " ")} for you to confirm.`,
+        toolCall: { id: rid("tu"), name: routed.toolName, input: routed.input },
+        stop: "tool_use",
+        costUsd: 0,
+        tokensIn: 0,
+        tokensOut: 0,
+      };
+    }
+  }
   if (!toolCall && promptText.includes("raid") && /(add|create|new|log)/.test(promptText)) {
     const mEng = promptText.match(/eng[-_]?[a-z0-9_]+/i);
     text = "I'll draft a RAID item for you to review.";
@@ -1308,8 +1626,10 @@ function mockModelStep(args: {
       },
     };
   } else {
-    text =
-      "I can search accounts, list your open RAID items, or draft a new RAID. Tell me what you need.";
+    // Task #338 — context-aware fallback. If we can name a near-miss
+    // catalog entry, point at it; otherwise explicitly say the action
+    // is not available from the assistant yet and name the UI surface.
+    text = noToolFallbackMessage(promptText);
   }
   return {
     text,

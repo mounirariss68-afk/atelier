@@ -1,0 +1,31 @@
+{
+  "_doc": "Task #338 — UI write route ↔ CLI catalog parity matrix. The coverage test scans this list and asserts every entry's `catalogId` is registered in the catalog (or its `allowReason` is non-empty). When you add a new write route to a UI surface, add a matching catalog entry AND add a row here so the gap can't silently re-open.",
+  "schemaVersion": 1,
+  "rows": [
+    { "method": "POST", "path": "/accounts", "catalogId": "account.create" },
+    { "method": "POST", "path": "/accounts/:accountId/cartographer/refresh", "catalogId": "account.refresh_cartographer" },
+    { "method": "POST", "path": "/accounts/:accountId/profile-updates/:updateId/decision", "catalogId": "account.profile_update_decision" },
+    { "method": "POST", "path": "/contacts/:contactId/disposition", "catalogId": "contact.update_disposition" },
+    { "method": "POST", "path": "/opportunities", "catalogId": "opportunity.create" },
+    { "method": "POST", "path": "/opportunities/:oppId/stage", "catalogId": "opportunity.move_stage" },
+    { "method": "POST", "path": "/opportunities/:oppId/qualifier", "catalogId": "opportunity.update_qualifier" },
+    { "method": "POST", "path": "/opportunities/:oppId/pov", "catalogId": "opportunity.draft_pov" },
+    { "method": "POST", "path": "/opportunities/:oppId/proposal", "catalogId": "proposal.compose" },
+    { "method": "POST", "path": "/meetings", "catalogId": "opportunity.capture_meeting" },
+    { "method": "POST", "path": "/proposal-sections/:sectionId/approve", "catalogId": "proposal.approve_section" },
+    { "method": "PATCH", "path": "/proposal-sections/:sectionId", "catalogId": "proposal.edit_section" },
+    { "method": "POST", "path": "/proposal-sections/:sectionId/reject", "catalogId": "proposal.reject_section" },
+    { "method": "POST", "path": "/proposals/:proposalId/confirm-section-assignments", "catalogId": "proposal.confirm_assignments" },
+    { "method": "POST", "path": "/proposals/:proposalId/partner-final-read", "catalogId": "proposal.final_read" },
+    { "method": "POST", "path": "/proposals/:proposalId/approve-pricing", "catalogId": "proposal.approve_pricing" },
+    { "method": "POST", "path": "/proposals/:proposalId/override-pricing", "catalogId": "proposal.override_pricing" },
+    { "method": "POST", "path": "/proposals/:proposalId/send", "catalogId": "proposal.send" },
+    { "method": "POST", "path": "/engagements/:engId/charter/redraft", "catalogId": "engagement.redraft_charter" },
+    { "method": "POST", "path": "/engagements/:engId/charter/:versionId/approve", "catalogId": "engagement.approve_charter" },
+    { "method": "POST", "path": "/raid-items/:raidId/close", "catalogId": "raid.close" },
+    { "method": "POST", "path": "/engagements/:engId/deliverables", "catalogId": "engagement.create_deliverable" },
+    { "method": "POST", "path": "/timesheet-weeks/:weekId/approve", "catalogId": "ledger.approve_timesheet" },
+    { "method": "POST", "path": "/timesheet-weeks/:weekId/reject", "catalogId": "ledger.reject_timesheet" },
+    { "method": "POST", "path": "/wallet/expenses", "catalogId": "wallet.create_expense" }
+  ]
+}

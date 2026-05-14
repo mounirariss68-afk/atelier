@@ -316,3 +316,66 @@ export function resolveActivityCode(input: string): string | null {
 }
 
 export const _internal = { ACTIVITY_CODES, ACTIVITY_SYNONYMS, CURRENCY_TOKENS };
+
+// ---------------------------------------------------------------------
+// Task #338 — Stage + charter-approval-role resolvers.
+// Pure (no DB). Used by opportunity.move_stage and engagement.approve_charter.
+// ---------------------------------------------------------------------
+
+/**
+ * Map free-text into the v2 sales-stage vocabulary. Covers EN/FR/AR
+ * synonyms for the 5 canonical + 3 terminal stages so phrases like
+ * "move Acme to pursue" or "marquer comme gagné" resolve cleanly.
+ */
+const SALES_STAGES = [
+  "suspect",
+  "prospect",
+  "convert",
+  "runner",
+  "contract",
+  "lost",
+  "no_decision",
+  "withdrawn",
+] as const;
+export type SalesStage = (typeof SALES_STAGES)[number];
+
+const STAGE_SYNONYMS: Record<string, SalesStage> = {
+  // EN canonical + UI labels
+  suspect: "suspect", shape: "suspect", lead: "suspect",
+  prospect: "prospect", pursue: "prospect", pursuing: "prospect", qualified: "prospect",
+  convert: "convert", propose: "convert", proposal: "convert", proposing: "convert",
+  runner: "runner", negotiation: "runner", negotiating: "runner", "in flight": "runner",
+  contract: "contract", won: "contract", closed: "contract", "closed won": "contract", signed: "contract",
+  lost: "lost", "closed lost": "lost",
+  "no decision": "no_decision", no_decision: "no_decision", "no go": "no_decision",
+  withdrawn: "withdrawn", withdraw: "withdrawn", cancelled: "withdrawn", canceled: "withdrawn",
+  // FR
+  suspect_fr: "suspect", piste: "suspect",
+  poursuite: "prospect", "à poursuivre": "prospect",
+  proposition: "convert", proposer: "convert",
+  négociation: "runner", negociation: "runner",
+  gagné: "contract", gagne: "contract", remporté: "contract",
+  perdu: "lost",
+  retiré: "withdrawn", retire: "withdrawn", annulé: "withdrawn",
+  // AR (light coverage)
+  "فاز": "contract", "خسر": "lost", "متابعة": "prospect", "اقتراح": "convert",
+};
+
+export function resolveSalesStage(input: string): SalesStage | null {
+  const s = input.trim().toLowerCase();
+  if (!s) return null;
+  if ((SALES_STAGES as readonly string[]).includes(s)) return s as SalesStage;
+  return STAGE_SYNONYMS[s] ?? null;
+}
+
+/** Charter approval role — either lead or partner. */
+export type CharterApprovalRole = "lead" | "partner";
+
+export function resolveCharterApprovalRole(input: string): CharterApprovalRole | null {
+  const s = input.trim().toLowerCase();
+  if (!s) return null;
+  if (/(partner|founding|associé|associe|شريك)/.test(s)) return "partner";
+  if (/(lead|engagement\s*lead|senior\s*manager|sm|chef|قائد)/.test(s)) return "lead";
+  return null;
+}
+
