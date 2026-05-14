@@ -1114,8 +1114,12 @@ async function recordOpen(
     })
     .where(eq(atelierProposalRecipients.id, recipient.id));
   // Mirror an internal audit row so AICo sees every recipient open.
+  // Task #297 — stamp orgId from the recipient row so opens are
+  // attributed to the correct tenant (the ORG default is "aico", which
+  // would silently mis-route audit events for other firms).
   await db.insert(atelierAuditEvents).values({
     id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    orgId: recipient.orgId,
     entityType: "proposal",
     entityId: recipient.proposalId,
     actorType: "external",

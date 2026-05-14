@@ -131,11 +131,12 @@ try {
   assert.equal(afterHtml.openCount, 1, "HTML GET increments openCount to 1");
 
   const audits = await db
-    .select({ action: atelierAuditEvents.action })
+    .select({ action: atelierAuditEvents.action, orgId: atelierAuditEvents.orgId })
     .from(atelierAuditEvents)
     .where(eq(atelierAuditEvents.entityId, PROPOSAL_ID));
   const opens = audits.filter((a) => a.action === "proposal.recipient.opened");
   assert.equal(opens.length, 1, "exactly one open audit per HTML view");
+  assert.equal(opens[0].orgId, ORG_ID, "open audit row is attributed to the recipient/proposal org");
 
   console.log("ok — recipient share-link auth + audit behavior is correct");
 } catch (err) {
