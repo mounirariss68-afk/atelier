@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 
 interface CorporateCard {
   id: string;
@@ -25,7 +25,13 @@ export default function WalletCards() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <PageHero><div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div><h1 className="text-3xl font-display tracking-tight">Corporate cards</h1><p className="text-text-mute mt-2 max-w-2xl">Card-feed lines auto-flow into expense drafts; reconciled at submit.</p></PageHero>
+      <PageHero>
+        <SectionHead
+          eyebrow="Firm · Wallet · Cards"
+          headline="Corporate cards"
+          lede="Card-feed lines auto-flow into expense drafts; reconciled at submit."
+        />
+      </PageHero>
       <TabNav>
         <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
         <TabNavLink href="/wallet/expenses/new" active={false}>+ New expense</TabNavLink>

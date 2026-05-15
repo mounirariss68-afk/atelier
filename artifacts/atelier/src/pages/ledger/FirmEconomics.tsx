@@ -70,7 +70,7 @@ export default function FirmEconomics() {
       <PageHero>
         <div className="flex items-start justify-between gap-4">
           <SectionHead
-            eyebrow={<MonoChip tone="gold">Ledger · Firm economics</MonoChip>}
+            eyebrow="Firm · Ledger · Firm economics"
             headline="Firm utilization, realization, and leakage"
             lede={data ? `Rolling ${data.period.weeks} weeks. Realization rate ${pct(data.realizationRatePct)} (${data.fullRateInvoicedHours.toFixed(0)} of ${data.fullRateAvailableHours.toFixed(0)} full-rate hours).` : "Loading…"}
           />

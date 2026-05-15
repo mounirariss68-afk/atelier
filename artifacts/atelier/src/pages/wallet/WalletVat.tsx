@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 
 interface Bucket { country: string; treatment: string; usdNet: number; usdVat: number; usdGross: number; count: number }
 interface Row {
@@ -28,7 +28,13 @@ export default function WalletVat() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <PageHero><div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div><h1 className="text-3xl font-display tracking-tight">VAT register</h1><p className="text-text-mute mt-2 max-w-2xl">KSA 15% · UAE 5% · everything else exported. Audit-ready CSV one click away.</p></PageHero>
+      <PageHero>
+        <SectionHead
+          eyebrow="Firm · Wallet · VAT"
+          headline="VAT register"
+          lede="KSA 15% · UAE 5% · everything else exported. Audit-ready CSV one click away."
+        />
+      </PageHero>
       <TabNav>
         <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
         <TabNavLink href="/wallet/policy" active={false}>Policy</TabNavLink>

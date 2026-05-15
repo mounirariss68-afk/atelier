@@ -29,7 +29,7 @@ export default function GuardhouseIndex() {
     <div className="animate-in fade-in">
       <PageHero>
         <SectionHead
-          eyebrow="The Guardhouse"
+          eyebrow="Firm · Guardhouse"
           headline="SOC2-ready posture, statutory DSAR clock, vendor & incident register"
           lede="Control library mapped to SOC2 Type II + ISO 27001 with Compliance Sentinel auto-collecting evidence. Incident Responder runs the playbook end-to-end; DSAR Concierge drives the response within KSA PDPL / UAE DIFC windows; Backup Auditor verifies restorability quarterly. Owned by the Compliance Officer persona."
         />

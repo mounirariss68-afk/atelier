@@ -1,5 +1,6 @@
 import * as React from "react";
-import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { Card, MonoChip } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { usePeopleApprovals, type PeopleApprovalRow } from "./peopleSeed";
 
@@ -80,18 +81,17 @@ export default function PeopleApprovals() {
 
   return (
     <PeopleShell module="approvals">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Approvals</MonoChip>}
-          headline="People approvals inbox"
-          lede="Promotions, comp changes, hire offers, exits, leaves, policy exceptions and timesheet approvals — one inbox."
-        />
-        <div className="mt-2 flex items-center gap-2 text-xs text-text-mute">
-          <MonoChip tone={pendingCount > 0 ? "gold" : "default"}>{pendingCount} pending</MonoChip>
-          <MonoChip>{merged.length} total</MonoChip>
-          {tsErr && <span className="text-text-faint">timesheet feed unavailable</span>}
-        </div>
-      </PageHero>
+      <LensPageHeader
+        headline="People approvals inbox"
+        lede="Promotions, comp changes, hire offers, exits, leaves, policy exceptions and timesheet approvals — one inbox."
+        actions={
+          <div className="flex items-center gap-2 text-xs text-text-mute">
+            <MonoChip tone={pendingCount > 0 ? "gold" : "default"}>{pendingCount} pending</MonoChip>
+            <MonoChip>{merged.length} total</MonoChip>
+            {tsErr && <span className="text-text-faint">timesheet feed unavailable</span>}
+          </div>
+        }
+      />
       <div className="container-atelier py-6">
         <Card className="p-4">
           <table className="w-full text-sm">

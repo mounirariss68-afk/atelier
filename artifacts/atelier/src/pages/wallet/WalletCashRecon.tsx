@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink, PillButton } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink, PillButton } from "@/components/ui/primitives";
 
 interface ReconRow {
   id: string;
@@ -41,9 +41,11 @@ export default function WalletCashRecon() {
   return (
     <div className="min-h-screen bg-bg text-text" data-testid="page-wallet-cash-recon">
       <PageHero>
-        <div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div>
-        <h1 className="text-3xl font-display tracking-tight">Bank reconciliation</h1>
-        <p className="text-text-mute mt-2 max-w-2xl">Open and finalise bank reconciliation periods. Finalising locks the period for cash & bank entries.</p>
+        <SectionHead
+          eyebrow="Firm · Wallet · Bank reconciliation"
+          headline="Bank reconciliation"
+          lede="Open and finalise bank reconciliation periods. Finalising locks the period for cash & bank entries."
+        />
       </PageHero>
       <TabNav>
         <TabNavLink href="/wallet/cash" active={false}>Cash</TabNavLink>

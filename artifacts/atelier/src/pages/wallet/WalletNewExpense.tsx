@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useLocation } from "wouter";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 
 const FIXTURE_KEYS = [
   "riyadh_taxi_01",
@@ -210,7 +210,13 @@ export default function WalletNewExpense() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <PageHero><div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div><h1 className="text-3xl font-display tracking-tight">New expense</h1><p className="text-text-mute mt-2 max-w-2xl">Pick a capture path. The Auditor classifies, checks policy, and proposes VAT + billability.</p></PageHero>
+      <PageHero>
+        <SectionHead
+          eyebrow="Firm · Wallet · New expense"
+          headline="New expense"
+          lede="Pick a capture path. The Auditor classifies, checks policy, and proposes VAT + billability."
+        />
+      </PageHero>
       <TabNav>
         <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
         <TabNavLink href="/wallet/expenses/new" active>+ New expense</TabNavLink>

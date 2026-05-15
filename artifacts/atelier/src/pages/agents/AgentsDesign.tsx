@@ -12,8 +12,6 @@ import { Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, GitFork, Check, X as XIcon } from "lucide-react";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
   Eyebrow,
@@ -45,22 +43,18 @@ export default function AgentsDesign() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <Eyebrow>Manage · Agents · Design</Eyebrow>
-        <SectionHead
-          headline="Design — agent specs"
-          lede="Intent, prompt scaffolds, tools, guardrails and persona binding. Each spec is reviewed and approved before it earns a Build version."
-          className="mt-3"
-        />
-        <div className="mt-6">
+      <LensPageHeader
+        headline="Design — agent specs"
+        lede="Intent, prompt scaffolds, tools, guardrails and persona binding. Each spec is reviewed and approved before it earns a Build version."
+        actions={
           <Link href="/atelier/ip">
             <PillButton variant="primary" data-testid="button-fork-from-library">
               <GitFork className="w-3.5 h-3.5 mr-1.5 inline" />
               Fork from Atelier library
             </PillButton>
           </Link>
-        </div>
-      </PageHero>
+        }
+      />
 
       <div className="container-atelier py-10 space-y-4">
         {specs.length === 0 && (

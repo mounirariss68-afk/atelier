@@ -29,7 +29,7 @@ export default function PressIndex() {
     <div className="animate-in fade-in">
       <PageHero>
         <SectionHead
-          eyebrow="The Press"
+          eyebrow="Firm · Press"
           headline="Thought leadership at firm cadence"
           lede="Editorial calendar, in-flight pieces, Partner posting voice, the Field Notes newsletter, speaking opportunities, and the press-mention register — all tied back to Synthesis-Critic-cleared Atelier artifacts so nothing public ships uncited."
         />

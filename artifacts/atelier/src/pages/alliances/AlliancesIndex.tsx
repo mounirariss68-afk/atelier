@@ -23,7 +23,7 @@ export default function AlliancesIndex() {
     <div className="animate-in fade-in">
       <PageHero>
         <SectionHead
-          eyebrow="Alliances"
+          eyebrow="Manage · Partners · Alliances"
           headline="Partner-firm leverage, named per opportunity"
           lede="Joint pipeline parallel to the client pipeline, with split economics named on every deal. Account Cartographer (Partner mode) backfills relationship strength; Alliance Choreographer drives the joint pursuit; Certification Tracker keeps the platform partner tiers defended."
         />

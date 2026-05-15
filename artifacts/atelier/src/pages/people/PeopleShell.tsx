@@ -14,25 +14,30 @@
 import * as React from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { STAGES, CROSS_MODULES, type StageId } from "./peopleLifecycle";
+import { STAGES, type StageId } from "./peopleLifecycle";
 import { useStageStats } from "./peopleSeed";
 import { useCanSeeRewardAndSuccession } from "./peoplePerms";
 
 interface PeopleShellProps {
   /** Active lifecycle stage, if any. */
   stage?: StageId;
-  /** Active cross-module id (e.g. "people", "time", "approvals"). */
+  /**
+   * Active cross-module id. Retained for backward-compat with existing
+   * call sites (PeopleApprovals/PeopleOrg/etc.) — but no longer drives
+   * any in-shell rendering. The shell-level `LensSectionTabs` strip
+   * already exposes the cross-cutting modules; rendering a second rail
+   * here was visual noise (Task #401).
+   */
   module?: string;
   children: React.ReactNode;
 }
 
-export function PeopleShell({ stage, module, children }: PeopleShellProps) {
+export function PeopleShell({ stage, module: _module, children }: PeopleShellProps) {
   const [loc] = useLocation();
 
   return (
     <div className="animate-in fade-in" data-testid="people-shell">
       <LifecycleRibbon activeStage={stage} pathname={loc} />
-      <CrossModuleRail activeModule={module} pathname={loc} />
       {children}
     </div>
   );
@@ -95,37 +100,3 @@ function LifecycleRibbon({ activeStage, pathname }: { activeStage?: StageId; pat
   );
 }
 
-function CrossModuleRail({ activeModule, pathname }: { activeModule?: string; pathname: string }) {
-  return (
-    <div className="border-b border-border-soft bg-bg/60">
-      <div className="container-atelier py-2">
-        <div className="flex items-center gap-1 overflow-x-auto">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-text-faint shrink-0 mr-2">
-            Modules
-          </span>
-          {CROSS_MODULES.map((m) => {
-            const isActive =
-              activeModule === m.id ||
-              pathname === m.href ||
-              pathname.startsWith(m.href + "/");
-            return (
-              <Link
-                key={m.id}
-                href={m.href}
-                data-testid={`people-module-${m.id}`}
-                className={cn(
-                  "shrink-0 px-2 py-1 rounded text-[11px] font-mono transition-colors",
-                  isActive
-                    ? "text-gold"
-                    : "text-text-faint hover:text-text",
-                )}
-              >
-                {m.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}

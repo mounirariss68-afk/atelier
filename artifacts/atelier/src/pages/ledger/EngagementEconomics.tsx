@@ -231,7 +231,7 @@ export default function EngagementEconomics() {
       <PageHero>
         <div className="flex items-start justify-between gap-4">
           <SectionHead
-            eyebrow={<MonoChip tone="gold">Ledger · Engagement economics</MonoChip>}
+            eyebrow="Firm · Ledger · Engagement economics"
             headline={data?.engagementName ?? util?.engagementName ?? engagementId}
             lede="Planned vs actual hours, realized margin, burn-rate, runway, and partner-firm passthrough cost. Upload a CSV (resource_name, partner_firm_id, week_iso, hours, cost_amount, cost_currency) to record this week's hours."
           />

@@ -137,13 +137,11 @@ export default function FinanceHome() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <Eyebrow>Manage · Finance</Eyebrow>
-        <h1 className="headline mt-3">Finance</h1>
-        <p className="lede mt-3 max-w-2xl">
-          The CFO / Controller surface — entities, ledgers, FP&amp;A, close, comply.
-          Eight sections shaped around the standard finance operating model: record-to-report,
-          order-to-cash, procure-to-pay, plan, comply.
-        </p>
+        <SectionHead
+          eyebrow="Manage · Finance · Overview"
+          headline="Finance"
+          lede="The CFO / Controller surface — entities, ledgers, FP&A, close, comply. Eight sections shaped around the standard finance operating model: record-to-report, order-to-cash, procure-to-pay, plan, comply."
+        />
         <div className="mt-6 flex flex-wrap gap-3 text-xs font-mono text-text-mute">
           <MonoChip>{counts.entities} entit{counts.entities === 1 ? "y" : "ies"}</MonoChip>
           <MonoChip>{counts.licCount} licence(s)</MonoChip>
@@ -177,7 +175,7 @@ export default function FinanceHome() {
 
         <div className="space-y-6">
           <section>
-            <SectionHead title="Next action for you" />
+            <SectionHead headline="Next action for you" />
             <div className="space-y-2 mt-3" data-testid="finance-next-actions">
               {nextActions.length === 0 && (
                 <Card className="p-4 text-sm text-text-mute">Nothing imminent. The board pack is due at the next period close.</Card>

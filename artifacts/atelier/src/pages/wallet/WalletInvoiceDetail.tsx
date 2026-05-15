@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useRoute, Link } from "wouter";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 
 interface Line { id: string; ord: number; description: string; qty: number; unitPrice: number; amount: number; sourceKind: string; sourceRef: string | null }
 interface Submission { id: string; channel: string; status: string; clearanceUuid: string | null; qrCodePayload: string | null; clearedAt: string | null; rejectedReason: string | null }
@@ -57,11 +57,18 @@ export default function WalletInvoiceDetail() {
   return (
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
-        <div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET / INVOICE</div>
-        <h1 className="text-3xl font-display tracking-tight">{inv.invoiceNumber ?? "(draft)"}</h1>
-        <p className="text-text-mute mt-2 max-w-2xl">
-          {inv.jurisdiction} · <MonoChip tone={inv.status === "paid" ? "green" : inv.status === "void" ? "red" : "gold"}>{inv.status}</MonoChip>
-        </p>
+        <SectionHead
+          eyebrow={inv.invoiceNumber ?? "(draft)"}
+          headline={inv.invoiceNumber ?? "(draft)"}
+          lede={
+            <span>
+              {inv.jurisdiction} ·{" "}
+              <MonoChip tone={inv.status === "paid" ? "green" : inv.status === "void" ? "red" : "gold"}>
+                {inv.status}
+              </MonoChip>
+            </span>
+          }
+        />
       </PageHero>
       <TabNav>
         <TabNavLink href="/wallet/invoices" active={false}>← All invoices</TabNavLink>

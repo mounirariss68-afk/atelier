@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { useOrgUnits, useRoleDefinitions } from "./peopleSeed";
 
@@ -14,13 +15,10 @@ export default function PeopleOrg() {
 
   return (
     <PeopleShell module="org">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Org & roles</MonoChip>}
-          headline="The org chart and the role library"
-          lede="Where the firm decides what shape it wants to be: practices, reporting lines, role definitions and the bands they map to."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="The org chart and the role library"
+        lede="Where the firm decides what shape it wants to be: practices, reporting lines, role definitions and the bands they map to."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

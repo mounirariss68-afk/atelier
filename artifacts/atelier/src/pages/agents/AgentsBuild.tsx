@@ -9,13 +9,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
   Eyebrow,
   PillButton,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { useAtelierGetMe } from "@workspace/api-client-react";
 import { useAgentVersions, type AgentVersion } from "@/lib/agents-lens-seed";
@@ -47,14 +46,10 @@ export default function AgentsBuild() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <Eyebrow>Manage · Agents · Build</Eyebrow>
-        <SectionHead
-          headline="Build — versions and change log"
-          lede="Semantic versions per agent, with prompt diffs and tool wiring. Candidates flow to Evaluate; shipped versions land in Deploy."
-          className="mt-3"
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Build — versions and change log"
+        lede="Semantic versions per agent, with prompt diffs and tool wiring. Candidates flow to Evaluate; shipped versions land in Deploy."
+      />
 
       <div className="container-atelier py-10 space-y-10">
         {Object.entries(byAgent).map(([agent, vers]) => (

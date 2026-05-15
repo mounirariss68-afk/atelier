@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 
 interface AgedRow {
   invoice: { id: string; invoiceNumber: string | null; jurisdiction: string; billTo: { name?: string }; currency: string; total: number; amountPaid: number };
@@ -55,11 +55,11 @@ export default function WalletCollections() {
   return (
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
-        <div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div>
-        <h1 className="text-3xl font-display tracking-tight">Collections</h1>
-        <p className="text-text-mute mt-2 max-w-2xl">
-          The dunning ladder runs per jurisdiction. Each step needs a real human nudge, and (after step one) a partner approver.
-        </p>
+        <SectionHead
+          eyebrow="Firm · Wallet · Collections"
+          headline="Collections"
+          lede="The dunning ladder runs per jurisdiction. Each step needs a real human nudge, and (after step one) a partner approver."
+        />
       </PageHero>
       <TabNav>
         <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>

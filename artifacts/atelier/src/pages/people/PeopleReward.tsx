@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { useCompBands, useCompReview, useRecognition } from "./peopleSeed";
 import { useCanSeeRewardAndSuccession } from "./peoplePerms";
@@ -23,13 +24,11 @@ export default function PeopleReward() {
   if (!allowed) {
     return (
       <PeopleShell stage="reward">
-        <PageHero>
-          <SectionHead
-            eyebrow={<MonoChip tone="amber">Restricted</MonoChip>}
-            headline="Reward is Partner/Admin only"
-            lede="Compensation bands, comp-review pipelines and total-rewards detail are visible to Partner and People-Ops Admin personas only. Recognition flows visible to your role live on the home stream."
-          />
-        </PageHero>
+        <LensPageHeader
+          eyebrow="Manage · People · Reward · Restricted"
+          headline="Reward is Partner/Admin only"
+          lede="Compensation bands, comp-review pipelines and total-rewards detail are visible to Partner and People-Ops Admin personas only. Recognition flows visible to your role live on the home stream."
+        />
         <div className="container-atelier py-6">
           <Card className="p-6 text-sm text-text-mute" data-testid="people-reward-restricted">
             Ask your People Ops partner if you need a specific comp record reviewed.
@@ -41,13 +40,10 @@ export default function PeopleReward() {
 
   return (
     <PeopleShell stage="reward">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Reward</MonoChip>}
-          headline="Comp bands, comp review, total rewards, recognition"
-          lede="Compensation policy applied: who's in band, who's drifting, and where carry/bonus and recognition land in the cycle."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Comp bands, comp review, total rewards, recognition"
+        lede="Compensation policy applied: who's in band, who's drifting, and where carry/bonus and recognition land in the cycle."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

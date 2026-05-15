@@ -1,5 +1,6 @@
 import { useRoute, Link } from "wouter";
-import { PageHero, SectionHead, MonoChip, TabNav, TabNavLink, Card } from "@/components/ui/primitives";
+import { TabNav, TabNavLink, Card, MonoChip } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import RosterInvitations from "@/pages/roster/RosterInvitations";
 import RosterOnboarding from "@/pages/roster/RosterOnboarding";
@@ -18,13 +19,10 @@ export default function PeopleOnboard() {
 
   return (
     <PeopleShell stage="onboard">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Onboard</MonoChip>}
-          headline="Pre-boarding through day-one + first-week"
-          lede="From accepted offer through equipment, day-1 plan, attestations and the first 90-day milestones."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Pre-boarding through day-one + first-week"
+        lede="From accepted offer through equipment, day-1 plan, attestations and the first 90-day milestones."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

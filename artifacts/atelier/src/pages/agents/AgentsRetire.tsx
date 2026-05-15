@@ -9,13 +9,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
   Eyebrow,
   PillButton,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { useAtelierGetMe } from "@workspace/api-client-react";
 import { useRetirements, type RetirementRow } from "@/lib/agents-lens-seed";
@@ -42,14 +41,10 @@ export default function AgentsRetire() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <Eyebrow>Manage · Agents · Retire</Eyebrow>
-        <SectionHead
-          headline="Retire — deprecation schedule"
-          lede="Every retired agent ships with a replacement mapping and a migration deadline. Archived agents stay queryable in the audit trail."
-          className="mt-3"
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Retire — deprecation schedule"
+        lede="Every retired agent ships with a replacement mapping and a migration deadline. Archived agents stay queryable in the audit trail."
+      />
 
       <div className="container-atelier py-10">
         <Card className="p-0 overflow-hidden">

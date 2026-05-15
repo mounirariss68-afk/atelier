@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { Card, MonoChip } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { STAGES, CROSS_MODULES } from "./peopleLifecycle";
 import { useStageStats } from "./peopleSeed";
@@ -8,13 +9,10 @@ export default function PeopleHome() {
   const stats = useStageStats();
   return (
     <PeopleShell>
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">People Studio</MonoChip>}
-          headline="The full people lifecycle, in one workspace"
-          lede="Attract, hire, onboard, develop, perform, reward, retain and offboard — with cross-cutting access to the people directory, org, access matrix, skill graph, time, compliance and approvals."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="The full people lifecycle, in one workspace"
+        lede="Attract, hire, onboard, develop, perform, reward, retain and offboard — with cross-cutting access to the people directory, org, access matrix, skill graph, time, compliance and approvals."
+      />
 
       <div className="container-atelier py-8 space-y-10">
         <section className="space-y-4">

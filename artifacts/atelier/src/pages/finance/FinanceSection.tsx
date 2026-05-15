@@ -146,9 +146,11 @@ export default function FinanceSection({ sectionId }: { sectionId: string }) {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <Eyebrow>{def.eyebrow}</Eyebrow>
-        <h1 className="headline mt-3">{def.headline}</h1>
-        <p className="lede mt-3 max-w-3xl">{def.lede}</p>
+        <SectionHead
+          eyebrow={def.eyebrow.startsWith("Manage · Finance") ? def.eyebrow : `Manage · Finance · ${def.eyebrow.replace(/^Finance\s*·\s*/, "")}`}
+          headline={def.headline}
+          lede={def.lede}
+        />
       </PageHero>
       <div className="container-atelier py-10 space-y-4">
         <SectionHead headline="In this section" />

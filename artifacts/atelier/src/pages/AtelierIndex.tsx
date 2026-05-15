@@ -565,6 +565,7 @@ export default function AtelierIndex() {
     <div className="animate-in fade-in">
       <PageHero>
         <SectionHead
+          eyebrow="Firm · Atelier"
           headline="Knowledge Atelier"
           lede="The firm's compounded IP and reusable assets."
         />

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 
 interface Expense {
   id: string;
@@ -71,7 +71,13 @@ export default function WalletExpenses() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <PageHero><div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div><h1 className="text-3xl font-display tracking-tight">Expenses</h1><p className="text-text-mute mt-2 max-w-2xl">Every expense policy-checked, VAT-handled, traceable to the client.</p></PageHero>
+      <PageHero>
+        <SectionHead
+          eyebrow="Firm · Wallet · Expenses"
+          headline="Expenses"
+          lede="Every expense policy-checked, VAT-handled, traceable to the client."
+        />
+      </PageHero>
       <TabNav>
         <TabNavLink href="/wallet" active>Expenses</TabNavLink>
         <TabNavLink href="/wallet/invoices" active={false}>Invoices</TabNavLink>

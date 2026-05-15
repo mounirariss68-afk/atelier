@@ -17,13 +17,10 @@
  */
 import { useRoute, Link } from "wouter";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
-  TabNav,
-  TabNavLink,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import {
   Handshake,
   GitMerge,
@@ -80,25 +77,15 @@ export default function PartnersIndex() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <SectionHead
-          eyebrow="Partners"
-          headline="Alliance lifecycle — from ecosystem map to framework renewal"
-          lede="Partner management has its own lifecycle that mirrors but is distinct from the client commercial loop. Identify ecosystems, qualify partners, co-sell into joint pipeline, co-deliver shared engagements, govern the relationship, and renew the framework."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Alliance lifecycle — from ecosystem map to framework renewal"
+        lede="Partner management has its own lifecycle that mirrors but is distinct from the client commercial loop. Identify ecosystems, qualify partners, co-sell into joint pipeline, co-deliver shared engagements, govern the relationship, and renew the framework."
+      />
+      {/* The shell-level LensSectionTabs already renders the Overview/Identify/
+          Qualify/Co-sell/Co-deliver/Govern/Renew strip — see lens.ts. We
+          intentionally do NOT re-render it here (Task #401). */}
       <div className="container-atelier py-6">
-        <TabNav>
-          <TabNavLink href="/partners" active={section === "overview"}>
-            Overview
-          </TabNavLink>
-          {STAGES.map((s) => (
-            <TabNavLink key={s.id} href={s.href} active={section === s.id}>
-              {s.label}
-            </TabNavLink>
-          ))}
-        </TabNav>
-        <div className="mt-8">
+        <div className="mt-2">
           {section === "overview" && <LifecycleRibbon />}
           {section === "identify" && <IdentifyView />}
           {section === "qualify" && <QualifyView />}

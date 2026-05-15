@@ -6,13 +6,12 @@
 import * as React from "react";
 import { Play } from "lucide-react";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
   Eyebrow,
   HeroStat,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import {
   useEvalSuites,
   useRunEvalSuite,
@@ -41,19 +40,17 @@ export default function AgentsEvaluate() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <Eyebrow>Manage · Agents · Evaluate</Eyebrow>
-        <SectionHead
-          headline="Evaluate — eval suites and scorecards"
-          lede="Regression, red-team and A/B suites graded against golden datasets. Failing cases feed the Improve loop."
-          className="mt-3"
-        />
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <LensPageHeader
+        headline="Evaluate — eval suites and scorecards"
+        lede="Regression, red-team and A/B suites graded against golden datasets. Failing cases feed the Improve loop."
+      />
+      <div className="container-atelier pt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <HeroStat size="md" value={suites.length} caption={<span>Active suites</span>} />
           <HeroStat size="md" value={totalCases} caption={<span>Cases under coverage</span>} />
           <HeroStat size="md" value={`${avgPass}%`} caption={<span>Average pass rate</span>} />
         </div>
-      </PageHero>
+      </div>
 
       <div className="container-atelier py-10 space-y-3">
         {suites.map((s) => {

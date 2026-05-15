@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
-import { PageHero, SectionHead, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import {
   RolesView, CandidatesView, InterviewsView, ReferencesView, OffersView,
@@ -20,13 +21,10 @@ export default function PeopleHire() {
 
   return (
     <PeopleShell stage="hire">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Hire</MonoChip>}
-          headline="Talent funnel · sourced → offered, structured"
-          lede="Candidate CRM in the same shape as the client CRM. Pursuit Scout sources; Interview Designer drafts the panel + scorecard; Reference Caller produces structured summaries; Offer Composer drafts the letter."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Talent funnel · sourced → offered, structured"
+        lede="Candidate CRM in the same shape as the client CRM. Pursuit Scout sources; Interview Designer drafts the panel + scorecard; Reference Caller produces structured summaries; Offer Composer drafts the letter."
+      />
       <div className="container-atelier py-6">
         <TabNav>
           {SUBS.map((s) => (

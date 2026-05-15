@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { useEngagementSurveys, useFlightRisk, useInternalMobility, useStayInterviews } from "./peopleSeed";
 
@@ -16,13 +17,10 @@ export default function PeopleRetain() {
 
   return (
     <PeopleShell stage="retain">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Retain</MonoChip>}
-          headline="Engagement, flight risk, internal mobility, stay interviews"
-          lede="The data and the conversations that keep the people the firm wants to keep."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Engagement, flight risk, internal mobility, stay interviews"
+        lede="The data and the conversations that keep the people the firm wants to keep."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

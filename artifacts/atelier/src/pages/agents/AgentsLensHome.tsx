@@ -18,13 +18,11 @@ import {
 } from "lucide-react";
 import { useAtelierListAgents } from "@workspace/api-client-react";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
-  Eyebrow,
   HeroStat,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import {
   useAgentSpecs,
   useAgentVersions,
@@ -118,14 +116,10 @@ export default function AgentsLensHome() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <Eyebrow>Manage · Agents</Eyebrow>
-        <SectionHead
-          headline="Agents — lifecycle workspace"
-          lede="Agents are first-class entities the firm operates and improves over time. The lens runs them through the canonical Design → Retire loop adapted from MLOps and LLMOps practice."
-          className="mt-3"
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Agents — lifecycle workspace"
+        lede="Agents are first-class entities the firm operates and improves over time. The lens runs them through the canonical Design → Retire loop adapted from MLOps and LLMOps practice."
+      />
 
       <div className="container-atelier py-10 space-y-10">
         <div

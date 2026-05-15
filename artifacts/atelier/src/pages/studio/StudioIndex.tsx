@@ -27,7 +27,7 @@ export default function StudioIndex() {
     <div className="animate-in fade-in">
       <PageHero>
         <SectionHead
-          eyebrow="The Studio"
+          eyebrow="Manage · People · Hire"
           headline="Talent funnel · sourced → offered, structured"
           lede="Candidate CRM in the same shape as the client CRM. Pursuit Scout (Recruiting mode) sources; Interview Designer drafts the panel + scorecard; Reference Caller produces structured summaries; Offer Composer drafts the letter. The Recruiter persona owns the workspace; client engagements stay invisible to it."
         />

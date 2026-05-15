@@ -14,12 +14,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { ArrowUpRight } from "lucide-react";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
   Eyebrow,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import {
   useAgentIncidents,
   type IncidentRow,
@@ -102,14 +101,10 @@ export default function AgentsImprove() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <Eyebrow>Manage · Agents · Improve</Eyebrow>
-        <SectionHead
-          headline="Improve — incidents and the eval-expansion loop"
-          lede="Failures cluster into recurring themes; each cluster owns the prompt or tool change that closes it, and the eval case that locks the fix."
-          className="mt-3"
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Improve — incidents and the eval-expansion loop"
+        lede="Failures cluster into recurring themes; each cluster owns the prompt or tool change that closes it, and the eval case that locks the fix."
+      />
 
       <div className="container-atelier py-10 space-y-8">
         {Object.entries(byCluster).map(([cluster, items]) => (

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PageHero, Card, TabNav, TabNavLink, PillButton, MonoChip } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, TabNav, TabNavLink, PillButton, MonoChip } from "@/components/ui/primitives";
 
 interface ForecastWeek {
   weekIndex: number;
@@ -51,12 +51,12 @@ export default function WalletTreasury() {
   return (
     <div className="min-h-screen bg-bg text-text" data-testid="page-wallet-treasury">
       <PageHero>
-        <div className="flex items-end justify-between">
-          <div>
-            <div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div>
-            <h1 className="text-3xl font-display tracking-tight">Treasury — 13-week cash forecast</h1>
-            <p className="text-text-mute mt-2 max-w-2xl">Direct-method forecast across 13 rolling weeks. Cash-gap weeks flagged red.</p>
-          </div>
+        <div className="flex items-end justify-between gap-4">
+          <SectionHead
+            eyebrow="Firm · Wallet · Treasury"
+            headline="Treasury — 13-week cash forecast"
+            lede="Direct-method forecast across 13 rolling weeks. Cash-gap weeks flagged red."
+          />
           <PillButton variant="primary" disabled={busy} data-testid="btn-recompute" onClick={recompute}>
             {busy ? "Computing…" : "Recompute snapshot"}
           </PillButton>

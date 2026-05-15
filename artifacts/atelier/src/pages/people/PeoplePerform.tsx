@@ -1,5 +1,6 @@
 import { useRoute, Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import {
   useGoals, useCheckIns, useReviews, useCalibrationCohorts, useSuccession,
@@ -22,13 +23,10 @@ export default function PeoplePerform() {
 
   return (
     <PeopleShell stage="perform">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Perform</MonoChip>}
-          headline="Goals, check-ins, reviews, calibration, succession"
-          lede="The performance loop end-to-end — from goals set at the start of the cycle to calibrated ratings and succession depth at the end."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Goals, check-ins, reviews, calibration, succession"
+        lede="The performance loop end-to-end — from goals set at the start of the cycle to calibrated ratings and succession depth at the end."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

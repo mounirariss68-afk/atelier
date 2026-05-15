@@ -101,7 +101,7 @@ export default function Codex() {
     <div className="animate-in fade-in">
       <PageHero>
         <SectionHead
-          eyebrow="Codex"
+          eyebrow="Firm · Codex"
           headline="Contract Lifecycle Management"
           lede="Counterparties, clause library, and the chain of instruments that bind every engagement."
         />

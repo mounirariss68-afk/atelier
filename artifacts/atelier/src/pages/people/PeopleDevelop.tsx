@@ -1,5 +1,6 @@
 import { useRoute, Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import {
   useLearningCatalogue, useMyLearning, useCertifications, useMentoringPairs, useSkillGaps,
@@ -19,13 +20,10 @@ export default function PeopleDevelop() {
 
   return (
     <PeopleShell stage="develop">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Develop</MonoChip>}
-          headline="Learning, certifications, mentoring, skill gaps"
-          lede="Where the firm grows the people it has. Skill-gap views read directly from the Skill Graph."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Learning, certifications, mentoring, skill gaps"
+        lede="Where the firm grows the people it has. Skill-gap views read directly from the Skill Graph."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

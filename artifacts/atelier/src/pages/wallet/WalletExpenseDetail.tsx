@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useRoute, useLocation } from "wouter";
-import { PageHero, Card, MonoChip } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 
 interface Finding {
   ruleId: string;
@@ -107,13 +107,16 @@ export default function WalletExpenseDetail() {
   return (
     <div className="space-y-6 p-6">
       <PageHero>
-        <div className="flex items-baseline gap-3">
-          <h1 className="font-serif text-3xl">{expense?.merchant ?? "Expense"}</h1>
-          <MonoChip>{expense?.id}</MonoChip>
-        </div>
-        <p className="mt-2 text-sm text-stone-600">
-          {expense?.expenseDate} · {expense?.captureSource} · {expense?.category}
-        </p>
+        <SectionHead
+          eyebrow={expense?.merchant ?? "Expense"}
+          headline={expense?.merchant ?? "Expense"}
+          lede={
+            <span>
+              {expense?.expenseDate} · {expense?.captureSource} · {expense?.category}{" "}
+              <MonoChip>{expense?.id}</MonoChip>
+            </span>
+          }
+        />
       </PageHero>
 
       {error ? (

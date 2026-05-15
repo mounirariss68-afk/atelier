@@ -1,5 +1,6 @@
 import { useRoute } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import RosterOffboarding from "@/pages/roster/RosterOffboarding";
 
@@ -16,13 +17,10 @@ export default function PeopleOffboard() {
 
   return (
     <PeopleShell stage="offboard">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Offboard</MonoChip>}
-          headline="Resignation through final access revocation"
-          lede="The closing chapter — knowledge transfer, access revocation, exit conversation, alumni status."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Resignation through final access revocation"
+        lede="The closing chapter — knowledge transfer, access revocation, exit conversation, alumni status."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

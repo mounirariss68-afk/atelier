@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 
 interface Invoice {
   id: string;
@@ -68,11 +68,11 @@ export default function WalletInvoices() {
   return (
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
-        <div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div>
-        <h1 className="text-3xl font-display tracking-tight">Invoices</h1>
-        <p className="text-text-mute mt-2 max-w-2xl">
-          Issue, clear with the tax authority, and chase. Numbers are gap-free per jurisdiction.
-        </p>
+        <SectionHead
+          eyebrow="Firm · Wallet · Invoices"
+          headline="Invoices"
+          lede="Issue, clear with the tax authority, and chase. Numbers are gap-free per jurisdiction."
+        />
       </PageHero>
       <TabNav>
         <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>

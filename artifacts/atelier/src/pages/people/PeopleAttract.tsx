@@ -1,5 +1,6 @@
 import { useRoute, Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { ReferralsView } from "@/pages/studio/StudioIndex";
 
@@ -16,13 +17,10 @@ export default function PeopleAttract() {
 
   return (
     <PeopleShell stage="attract">
-      <PageHero>
-        <SectionHead
-          eyebrow={<MonoChip tone="gold">Attract</MonoChip>}
-          headline="Workforce plan, employer brand, sourcing, referrals"
-          lede="The top of the funnel: where the firm decides what it needs, makes itself known, and surfaces candidates the recruiting workspace can act on."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Workforce plan, employer brand, sourcing, referrals"
+        lede="The top of the funnel: where the firm decides what it needs, makes itself known, and surfaces candidates the recruiting workspace can act on."
+      />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {SUBS.map((s) => (

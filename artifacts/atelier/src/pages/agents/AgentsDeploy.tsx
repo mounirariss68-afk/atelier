@@ -5,12 +5,11 @@
  * traffic %, and persona/tenant binding.
  */
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
   Eyebrow,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { useDeployments, type DeploymentRow } from "@/lib/agents-lens-seed";
 
 const ENV_TONE: Record<DeploymentRow["environment"], "default" | "gold" | "green"> = {
@@ -25,14 +24,10 @@ export default function AgentsDeploy() {
   const deployments = useDeployments();
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <Eyebrow>Manage · Agents · Deploy</Eyebrow>
-        <SectionHead
-          headline="Deploy — environments and rollout"
-          lede="Promote candidate versions through dev → staging → prod with shadow, canary and full rollouts. Each deployment binds an agent to a persona scope."
-          className="mt-3"
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Deploy — environments and rollout"
+        lede="Promote candidate versions through dev → staging → prod with shadow, canary and full rollouts. Each deployment binds an agent to a persona scope."
+      />
 
       <div className="container-atelier py-10 space-y-8">
         {ENV_ORDER.map((env) => {
