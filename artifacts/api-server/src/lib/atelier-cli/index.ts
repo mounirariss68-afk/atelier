@@ -185,6 +185,11 @@ type IntentLabel =
   | "reset"
   | "read"
   | "write"
+  // Task #406 — distinct label for stage-transition verbs so the
+  // Chat Orchestrator can short-circuit straight to evaluate_gate +
+  // propose_write without reasoning through a generic write loop.
+  // Advisory only (per the existing comment) — never blocking.
+  | "transition"
   | "ambiguous"
   | "trivial"
   | "other";
@@ -193,7 +198,16 @@ function heuristicClassify(prompt: string): IntentLabel {
   const p = prompt.toLowerCase().trim();
   if (!p) return "trivial";
   if (/^\/new\b/.test(p) || /\b(reset|start over|new session)\b/.test(p)) return "reset";
-  if (/\b(add|create|update|delete|remove|edit|log|file|submit|approve)\b/.test(p)) return "write";
+  // Task #406 — transition-flavoured verbs. Checked BEFORE the generic
+  // write match so "move opp to runner" routes to `transition` instead
+  // of the broader `write` bucket.
+  if (
+    /\b(move|advance|promote|transition|push (it )?(to|into)|mark (as )?(lost|no[- ]?decision|withdrawn|won)|close (as|won|lost))\b/.test(
+      p,
+    )
+  )
+    return "transition";
+  if (/\b(add|create|update|delete|remove|edit|log|file|submit|approve|link)\b/.test(p)) return "write";
   if (/\b(list|show|find|search|who is|what is|view|fetch|get)\b/.test(p)) return "read";
   if (/\b(or|either|maybe|which one|choose between)\b/.test(p)) return "ambiguous";
   return "other";
@@ -233,7 +247,10 @@ async function classifyIntent(
           model: HAIKU_CLASSIFIER_MODEL,
           max_tokens: 16,
           system:
-            "Classify the user prompt into one of: reset, read, write, ambiguous, trivial, other. Reply with just the label.",
+            // Task #406 — `transition` is the orchestrator's stage-move bucket
+            // (move/advance/promote a deal across the pipeline). Listed
+            // ahead of `write` so the model picks the more specific label.
+            "Classify the user prompt into one of: reset, read, write, transition, ambiguous, trivial, other. Use 'transition' when the user wants to move/advance/promote/close a sales opportunity to a new stage. Reply with just the label.",
           messages: [{ role: "user", content: prompt }],
         },
         { signal: ac.signal },
@@ -244,7 +261,7 @@ async function classifyIntent(
         .toLowerCase()
         .trim();
       const label: IntentLabel = (
-        ["reset", "read", "write", "ambiguous", "trivial", "other"] as IntentLabel[]
+        ["reset", "read", "write", "transition", "ambiguous", "trivial", "other"] as IntentLabel[]
       ).find((l) => raw.startsWith(l)) ?? heuristicClassify(prompt);
       const tokensIn = resp.usage.input_tokens;
       const tokensOut = resp.usage.output_tokens;
@@ -1096,6 +1113,26 @@ const SYSTEM_PROMPT = [
   "6. DISAMBIGUATION: when a tool returns disambiguation options, STOP and let the user",
   "   pick — do not guess.",
   "Wrap up with a one-line `final` narration that summarises what happened.",
+  "",
+  // Task #406 — Chat Orchestrator policy. When the user's prompt is a
+  // create | update | link | transition verb, follow this loop:
+  //   1) resolve_entity (fuzzy → id; STOP on disambiguation)
+  //   2) prefill_from_specialist (advisory; once per turn, before create)
+  //   3) evaluate_gate (transitions ONLY; never auto-set partnerOverride)
+  //   4) propose_write (two-phase confirm; commit returns dispatch hint)
+  // The orchestrator NEVER writes directly — propose_write hands off to
+  // the existing entity route on commit.
+  "ORCHESTRATOR POLICY (create | update | link | transition):",
+  "- For any verb that mentions an entity by fuzzy name, call `resolve_entity` FIRST.",
+  "  If it returns disambiguation options, STOP and let the user pick.",
+  "- Before a `create`, call `prefill_from_specialist` once to surface advisory defaults.",
+  "  Treat the prefill as a starting point — never as a final commit.",
+  "- For ANY stage transition, call `evaluate_gate` BEFORE `propose_write`. If a gate is",
+  "  unmet, ask the user for the missing evidence. NEVER set `partnerOverride: true` on",
+  "  the user's behalf — partner override is a deliberate human action.",
+  "- Wrap every mutation in `propose_write` with a clear one-line summary so the user",
+  "  reviews the diff and clicks Commit. Do not call entity write routes directly.",
+  "- Terminal-stage transitions (lost / no_decision / withdrawn) ALWAYS need a `reasonCode`.",
 ].join("\n");
 
 interface ClaudeToolCall {

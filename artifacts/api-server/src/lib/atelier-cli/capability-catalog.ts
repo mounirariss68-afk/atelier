@@ -146,7 +146,10 @@ export type ResultCard =
   | "cash_receipt_card"
   | "bank_recon_card"
   | "cash_forecast_strip"
-  | "renewal_card";
+  | "renewal_card"
+  // Task #406 — Chat Orchestrator coordinator cards.
+  | "gate_report"
+  | "entity_resolution";
 
 export type SurfaceContext =
   | "engagement_dashboard"

@@ -40,6 +40,11 @@ import "./l2c-wave3-capabilities.js";
 // stripped at the catalog gate (`RESTRICTED_DENIED_MODULES`); board
 // observer is allow-listed only onto `cash_forecast_13w`.
 import "./l2c-wave4-capabilities.js";
+// Task #406 — Chat Orchestrator coordinator tools (resolve_entity,
+// prefill_from_specialist, evaluate_gate, propose_write). These are
+// catalog-only verbs; the orchestration logic IS the existing runTurn
+// loop driven by the system prompt at prompts/chat_orchestrator/v1.md.
+import "./orchestrator-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;
