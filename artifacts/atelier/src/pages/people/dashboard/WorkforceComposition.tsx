@@ -14,10 +14,24 @@ const SENIORITY_PALETTE = [
   "var(--warn)",
 ];
 
+const GENDER_PALETTE: Record<string, string> = {
+  Female: "var(--gold)",
+  Male: "var(--gold-deep)",
+  "Non-binary": "var(--success)",
+  Unspecified: "var(--text-mute)",
+};
+
 function prettySeniority(s: string): string {
   return s
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function prettyGender(g: string): string {
+  const k = g.trim().toLowerCase();
+  if (!k || k === "unspecified") return "Unspecified";
+  if (k === "non_binary" || k === "non-binary") return "Non-binary";
+  return k.charAt(0).toUpperCase() + k.slice(1);
 }
 
 export function WorkforceComposition() {
@@ -63,6 +77,26 @@ export function WorkforceComposition() {
   }, [rosterPeople]);
 
   const seniorityTotal = senioritySegments.reduce((s, x) => s + x.value, 0);
+
+  const genderSegments: DonutSegment[] = React.useMemo(() => {
+    if (!rosterPeople) return [];
+    const counts = new Map<string, number>();
+    rosterPeople.forEach((p) => {
+      const label = prettyGender(p.gender ?? "unspecified");
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value], i) => ({
+        label,
+        value,
+        color:
+          GENDER_PALETTE[label] ??
+          SENIORITY_PALETTE[i % SENIORITY_PALETTE.length],
+      }));
+  }, [rosterPeople]);
+
+  const genderTotal = genderSegments.reduce((s, x) => s + x.value, 0);
 
   const tenureRows: BarRowDatum[] = React.useMemo(() => {
     if (!rosterPeople) return [];
@@ -162,13 +196,24 @@ export function WorkforceComposition() {
             <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-3">
               Gender / diversity mix
             </div>
-            <div className="text-xs text-text-faint leading-relaxed">
-              Gender, ethnicity and other DEI attributes are not yet captured
-              on the roster directory. Add{" "}
-              <span className="font-mono text-text-mute">gender</span> /{" "}
-              <span className="font-mono text-text-mute">ethnicity</span>{" "}
-              fields to enable this panel — handled the same way as tenure
-              and attrition history.
+            {rosterPeople === null ? (
+              <div className="text-xs text-text-faint">Loading roster…</div>
+            ) : genderSegments.length === 0 ? (
+              <div className="text-xs text-text-faint">
+                No gender data on the roster directory.
+              </div>
+            ) : (
+              <Donut
+                segments={genderSegments}
+                centerLabel={genderTotal}
+                centerCaption="people"
+              />
+            )}
+            <div className="mt-3 font-mono text-[9px] uppercase tracking-widest text-text-faint">
+              from roster directory · live
+            </div>
+            <div className="mt-1 text-[10px] text-text-faint leading-relaxed">
+              Ethnicity is not yet captured on the roster.
             </div>
           </Card>
         </Link>

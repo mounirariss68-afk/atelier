@@ -9,6 +9,9 @@ export interface RosterDirectoryRow {
   status: string;
   /** ISO date the person started — used for tenure-band aggregation. */
   startDate: string | null;
+  /** Self-identified gender from the roster (PersonWire). May be
+   *  "unspecified" when not captured. */
+  gender: string | null;
 }
 
 interface State {
