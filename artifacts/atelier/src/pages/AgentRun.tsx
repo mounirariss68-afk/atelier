@@ -38,7 +38,10 @@ const TABS = [
  * Bespoke views are opt-in via `uiComponent` (see standard §8).
  */
 export default function AgentRun() {
-  const [, params] = useRoute("/agents/runs/:runId");
+  // Task #370 — runs re-mount under /agents/monitor/runs/:runId; the
+  // legacy `/agents/runs/:runId` path redirects to here, but the route
+  // pattern below now matches the lens URL.
+  const [, params] = useRoute("/agents/monitor/runs/:runId");
   const runId = params?.runId ?? "";
   const [activeTab, setActiveTab] = React.useState<(typeof TABS)[number]["id"]>("io");
 
@@ -60,11 +63,11 @@ export default function AgentRun() {
     <div className="animate-in fade-in">
       <PageHero>
         <Link
-          href="/agents"
+          href="/agents/monitor"
           className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors"
           data-testid="link-back-agents"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to agents
+          <ArrowLeft className="w-4 h-4" /> Back to monitor
         </Link>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">

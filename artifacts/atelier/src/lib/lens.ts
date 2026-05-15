@@ -75,8 +75,13 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘3",
     shortcutKey: "3",
     sections: [
-      { id: "overview", label: "Overview", href: "/agents" },
-      { id: "library", label: "Library", href: "/agents/library" },
+      { id: "design", label: "Design", href: "/agents/design" },
+      { id: "build", label: "Build", href: "/agents/build" },
+      { id: "evaluate", label: "Evaluate", href: "/agents/evaluate" },
+      { id: "deploy", label: "Deploy", href: "/agents/deploy" },
+      { id: "monitor", label: "Monitor", href: "/agents/monitor" },
+      { id: "improve", label: "Improve", href: "/agents/improve" },
+      { id: "retire", label: "Retire", href: "/agents/retire" },
     ],
   },
   {

@@ -68,15 +68,25 @@ import CodexContract from "@/pages/CodexContract";
 // Task #368 — Manage shell lens placeholders. The Clients/People/Partners
 // lens contents ship in their own follow-up tasks; until then these render
 // a "Lens coming soon" page so the picker, deep links and persistence still
-// resolve. /agents and /finance keep their existing pages as their lens
-// homes (no change to current behaviour).
+// resolve. /finance keeps its existing pages as its lens home.
 import {
   ClientsLensHome,
   PeopleLensHome,
   PartnersLensHome,
-  AgentsLensHome,
   FinanceLensHome,
 } from "@/pages/lens/LensPlaceholder";
+// Task #370 — Agents lens (Design → Retire). The lens home replaces
+// the bare /agents catalogue with a lifecycle ribbon; the catalogue
+// itself re-mounts under /agents/monitor and runs under
+// /agents/monitor/runs/:id. Profile becomes the spec view at
+// /agents/design/:id. Old URLs redirect.
+import AgentsLensHome from "@/pages/agents/AgentsLensHome";
+import AgentsDesign from "@/pages/agents/AgentsDesign";
+import AgentsBuild from "@/pages/agents/AgentsBuild";
+import AgentsEvaluate from "@/pages/agents/AgentsEvaluate";
+import AgentsDeploy from "@/pages/agents/AgentsDeploy";
+import AgentsImprove from "@/pages/agents/AgentsImprove";
+import AgentsRetire from "@/pages/agents/AgentsRetire";
 
 const queryClient = new QueryClient();
 
@@ -184,12 +194,45 @@ function Router() {
         <Route path="/wallet/ar" component={WalletAr} />
         <Route path="/wallet/collections" component={WalletCollections} />
         <Route path="/accounts/:accountId" component={Account} />
-        {/* Task #368 — `/agents` becomes the Agents lens shell-phase
-            placeholder; the legacy library lives at `/agents/library`
-            and nested detail/run routes stay unchanged. */}
-        <Route path="/agents/library" component={Agents} />
-        <Route path="/agents/runs/:runId" component={AgentRun} />
-        <Route path="/agents/:agentId" component={AgentProfile} />
+        {/* Task #370 — Agents lens (Design → Retire). New stage routes
+            live under `/agents/<stage>`; the catalogue re-mounts at
+            `/agents/monitor` and run-detail at `/agents/monitor/runs/:id`.
+            Old `/agents/library`, `/agents/runs/:id` and `/agents/:id`
+            paths redirect to the new structure so deep-links keep
+            resolving. */}
+        <Route path="/agents/design" component={AgentsDesign} />
+        <Route path="/agents/build" component={AgentsBuild} />
+        <Route path="/agents/evaluate" component={AgentsEvaluate} />
+        <Route path="/agents/deploy" component={AgentsDeploy} />
+        <Route path="/agents/improve" component={AgentsImprove} />
+        <Route path="/agents/retire" component={AgentsRetire} />
+        <Route path="/agents/monitor" component={Agents} />
+        <Route path="/agents/monitor/runs/:runId" component={AgentRun} />
+        <Route path="/agents/design/:agentId" component={AgentProfile} />
+        {/* Redirects from the pre-lens URLs. */}
+        <Route path="/agents/library">
+          {() => {
+            window.history.replaceState(null, "", "/agents/monitor");
+            window.location.replace("/agents/monitor");
+            return null;
+          }}
+        </Route>
+        <Route path="/agents/runs/:runId">
+          {(params) => {
+            const target = `/agents/monitor/runs/${params.runId}`;
+            window.history.replaceState(null, "", target);
+            window.location.replace(target);
+            return null;
+          }}
+        </Route>
+        <Route path="/agents/:agentId">
+          {(params) => {
+            const target = `/agents/design/${params.agentId}`;
+            window.history.replaceState(null, "", target);
+            window.location.replace(target);
+            return null;
+          }}
+        </Route>
         <Route path="/settings" component={Settings} />
         <Route path="/admin" component={Admin} />
         {/* Task #290 — Reference-data admin (countries, industries, sub-industries). */}

@@ -9,7 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Cpu, Shield, Wrench, UserCheck, FileText, Activity } from "lucide-react";
 
 export default function AgentProfile() {
-  const [, params] = useRoute("/agents/:agentId");
+  // Task #370 — profile re-mounts under /agents/design/:agentId; the
+  // legacy `/agents/:agentId` path redirects here. The route pattern
+  // tracks the new lens URL.
+  const [, params] = useRoute("/agents/design/:agentId");
   const agentId = params?.agentId || "";
 
   const { data: agents, isLoading, isError } = useAtelierListAgents();
@@ -28,7 +31,7 @@ export default function AgentProfile() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/agents">Back to Registry</BackLink>
+        <BackLink href="/agents/design">Back to Design</BackLink>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <SectionHead

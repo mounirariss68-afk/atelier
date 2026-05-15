@@ -30,7 +30,7 @@ export default function Agents() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {groupAgents.map(agent => (
-                  <Link key={agent.id} href={`/agents/${agent.id}`}>
+                  <Link key={agent.id} href={`/agents/design/${agent.id}`}>
                     <Card hover className="p-5 h-full flex flex-col justify-between group">
                       <div className="space-y-3">
                         <div className="flex justify-between items-start gap-2">
