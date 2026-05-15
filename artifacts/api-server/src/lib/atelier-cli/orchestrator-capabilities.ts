@@ -697,6 +697,12 @@ defineCapability({
       | "expense";
     const toStage = String(input.toStage ?? "");
     const proposed = (input.proposed ?? {}) as Record<string, unknown>;
+    // Role-aware override: only partner-grade personas may exercise
+    // partnerOverride on a gate. Surfacing this in the gate row so
+    // the LLM (and the user) doesn't see an "Override" affordance
+    // they cannot actually invoke.
+    const canOverride =
+      ctx.persona.role === "partner" || ctx.persona.role === "founding_partner";
 
     // ----- Non-opportunity adapters (table-driven). The opportunity
     // path stays as the canonical implementation that consumes
@@ -760,7 +766,7 @@ defineCapability({
           reason: validNext
             ? undefined
             : `Engagements in '${currentStage}' may transition only to: ${(allowed[currentStage] ?? []).join(", ") || "none"}.`,
-          overrideAvailable: true,
+          overrideAvailable: canOverride,
         });
       } else if (kind === "deliverable") {
         // Partner Authority Lock: critic readiness must be GREEN to
@@ -797,7 +803,7 @@ defineCapability({
               row.criticReadiness === "green"
                 ? undefined
                 : `Critic readiness is '${row.criticReadiness ?? "unknown"}'. Resolve criticisms or record a partner override with rationale.`,
-            overrideAvailable: true,
+            overrideAvailable: canOverride,
           });
           rows.push({
             id: "partner_authority_lock",
@@ -806,7 +812,7 @@ defineCapability({
             reason: row.partnerApprovedAt
               ? undefined
               : "A partner must approve before publish (or override with logged rationale).",
-            overrideAvailable: true,
+            overrideAvailable: canOverride,
           });
         } else {
           rows.push({
@@ -848,7 +854,7 @@ defineCapability({
               row.policyStatus === "green"
                 ? undefined
                 : `Policy status is '${row.policyStatus}'. Resolve flags or record an override.`,
-            overrideAvailable: true,
+            overrideAvailable: canOverride,
           });
           rows.push({
             id: "expense_must_be_submitted",
@@ -1009,7 +1015,7 @@ defineCapability({
         reason: isThisGate
           ? "5C must be filled (client, competition, capability, capacity, contract) and Go/No-go decided."
           : undefined,
-        overrideAvailable: true,
+        overrideAvailable: canOverride,
       });
     }
     if (isConvertToRunner) {
@@ -1020,7 +1026,7 @@ defineCapability({
         met: !isThisGate,
         missing: isThisGate ? err?.missing ?? [] : [],
         reason: isThisGate ? err?.reason : undefined,
-        overrideAvailable: true,
+        overrideAvailable: canOverride,
       });
     }
     if (isRunnerToContract) {
@@ -1030,7 +1036,7 @@ defineCapability({
         label: "Signed instrument attached as artifact",
         met: !isThisGate,
         reason: isThisGate ? err?.reason : undefined,
-        overrideAvailable: true,
+        overrideAvailable: canOverride,
       });
     }
     if (isTerminal) {
