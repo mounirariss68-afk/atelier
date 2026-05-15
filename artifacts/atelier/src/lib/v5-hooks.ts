@@ -710,3 +710,244 @@ export const useIpLicenseGrants = listHook<IpLicenseGrantRow>(
   "ip-grants",
   "/ip/license-grants",
 );
+
+// ============================================================
+// Finance — Payables (Task #418, P2P hardening)
+// ============================================================
+export interface BankChangeRequestWire {
+  id: string;
+  fieldChanged: "iban" | "swift" | "bank" | "accountHolder";
+  oldValue: string;
+  newValue: string;
+  requestedBy: string;
+  requestedAt: string;
+  reason: string;
+  oobConfirmation: {
+    method: "phone_callback" | "in_person" | "verified_email";
+    contactName: string;
+    contactNumber: string | null;
+    confirmedAt: string | null;
+    confirmedBy: string | null;
+  };
+  status: "pending_oob" | "pending_checker" | "approved" | "rejected";
+  approvedBy: string | null;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+}
+export interface VendorRow2 {
+  id: string;
+  legalName: string;
+  shortName: string;
+  category: string;
+  isSubcontractor: boolean;
+  jurisdiction: string;
+  country: string;
+  registeredEntityId: string;
+  taxIds: { vat: string | null; corporate: string | null; whtRegistered: boolean };
+  defaultWhtPct: number;
+  paymentTermsDays: number;
+  beneficialOwners: Array<{ id: string; name: string; pctOwnership: number; nationality: string; isPep: boolean }>;
+  sanctions: { lastCheckedAt: string; result: "clear" | "match_review" | "blocked"; list: string; notes: string | null };
+  bankAccounts: Array<{
+    id: string;
+    bank: string;
+    iban: string;
+    swift: string;
+    currency: string;
+    accountHolder: string;
+    primary: boolean;
+    pendingChange?: BankChangeRequestWire | null;
+  }>;
+  primaryContact: { name: string; email: string; phone: string };
+  payAgainstEntityIds: string[];
+  status: "active" | "on_hold" | "blocked";
+  onboardedAt: string;
+  notes: string;
+}
+export const usePayablesVendors = listHook<VendorRow2>("pay-vendors", "/finance/payables/vendors");
+
+export interface PoRow {
+  id: string;
+  number: string;
+  vendorId: string;
+  buyerEntityId: string;
+  currency: string;
+  totalUsd: number;
+  status: "draft" | "approved" | "open" | "partially_received" | "received" | "closed" | "cancelled";
+  createdBy: string;
+  createdAt: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  engagementId: string | null;
+  engagementName: string | null;
+  description: string;
+  lines: Array<{ id: string; description: string; quantity: number; uom: string; unitPriceUsd: number; receivedQuantity: number; invoicedQuantity: number }>;
+  goodsReceipts: Array<{ id: string; receivedAt: string; receivedBy: string; lines: Array<{ poLineId: string; quantity: number }>; notes: string | null }>;
+  invoiceIds: string[];
+  expectedReceiptDate: string;
+}
+export const usePayablesPos = listHook<PoRow>("pay-pos", "/finance/payables/po");
+
+export interface VendorInvoiceRow {
+  id: string;
+  number: string;
+  vendorId: string;
+  buyerEntityId: string;
+  poId: string | null;
+  currency: string;
+  amount: number;
+  amountUsd: number;
+  whtPct: number;
+  whtAmountUsd: number;
+  netPayableUsd: number;
+  invoiceDate: string;
+  dueDate: string;
+  receivedAt: string;
+  status: "received" | "matched" | "exception" | "approved_for_payment" | "scheduled" | "paid" | "rejected" | "on_hold_pwp";
+  match: {
+    outcome: "match" | "qty_mismatch" | "price_mismatch" | "no_grn" | "no_po" | "tolerance_override";
+    poDeltaPct: number;
+    grnDeltaPct: number;
+    notes: string | null;
+    overrideBy: string | null;
+    overrideReason: string | null;
+  };
+  approvalAgeDays: number;
+  subcontractorLinkId: string | null;
+  description: string;
+}
+export const usePayablesInvoices = listHook<VendorInvoiceRow>("pay-invoices", "/finance/payables/invoices");
+
+export interface PaymentRunRow {
+  id: string;
+  number: string;
+  scheduledFor: string;
+  status: "draft" | "pending_checker" | "pending_signatories" | "approved" | "exported" | "paid" | "rejected";
+  createdBy: string;
+  createdAt: string;
+  makerName: string;
+  checkerName: string | null;
+  checkedAt: string | null;
+  requiredSignatures: Array<{ signatoryId: string; signatoryName: string; authorityLevel: "A" | "B" | "C"; signedAt: string | null }>;
+  batches: Array<{ id: string; entityId: string; bankAccountId: string; currency: string; invoiceIds: string[]; totalUsd: number; count: number }>;
+  totalUsd: number;
+  invoiceCount: number;
+  bankFile: { filename: string; format: string; lines: number; previewBytes: string } | null;
+  notes: string;
+}
+export const usePayablesRuns = listHook<PaymentRunRow>("pay-runs", "/finance/payables/payment-runs");
+
+export interface WhtCertRow {
+  id: string;
+  jurisdiction: "SA" | "AE" | "GB" | "IN";
+  vendorId: string;
+  vendorName: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  paymentRunId: string | null;
+  paidAt: string | null;
+  grossUsd: number;
+  whtPct: number;
+  whtUsd: number;
+  certificateNumber: string | null;
+  status: "pending" | "issued" | "sent_to_vendor" | "acknowledged";
+  issuedAt: string | null;
+  sentAt: string | null;
+  acknowledgedAt: string | null;
+  remittancePeriod: string;
+  remittanceDueAt: string;
+}
+export interface WhtRemittanceRow {
+  jurisdiction: string;
+  period: string;
+  dueAt: string;
+  whtUsd: number;
+  certCount: number;
+}
+export function useWhtRegister(): { items: WhtCertRow[]; remittance: WhtRemittanceRow[] } {
+  const q = useQuery<{ items: WhtCertRow[]; remittance: WhtRemittanceRow[] }>({
+    queryKey: ["atelier-v5", "pay-wht"],
+    queryFn: () => get<{ items: WhtCertRow[]; remittance: WhtRemittanceRow[] }>("/finance/payables/wht"),
+    staleTime: 30_000,
+  });
+  return q.data ?? { items: [], remittance: [] };
+}
+
+export interface SubcontractorLinkRow {
+  id: string;
+  vendorId: string;
+  engagementId: string;
+  engagementName: string;
+  milestoneId: string;
+  milestoneLabel: string;
+  scope: string;
+  ratePerDayUsd: number;
+  payWhenPaidArInvoiceId: string;
+  arReceiptStatus: "open" | "received" | "partial";
+  arReceivedAt: string | null;
+}
+export function useSubcontractors(): { vendors: VendorRow2[]; links: SubcontractorLinkRow[] } {
+  const q = useQuery<{ vendors: VendorRow2[]; links: SubcontractorLinkRow[] }>({
+    queryKey: ["atelier-v5", "pay-subs"],
+    queryFn: () => get<{ vendors: VendorRow2[]; links: SubcontractorLinkRow[] }>("/finance/payables/subcontractors"),
+    staleTime: 30_000,
+  });
+  return q.data ?? { vendors: [], links: [] };
+}
+
+export interface ExpectedDisbursementRow {
+  invoiceId: string;
+  invoiceNumber: string;
+  vendorName: string;
+  amountUsd: number;
+  dueDate: string;
+  status: VendorInvoiceRow["status"];
+  paymentRunNumber: string | null;
+}
+export const useExpectedDisbursements = listHook<ExpectedDisbursementRow>(
+  "pay-disb",
+  "/finance/payables/dashboard/expected-disbursements?n=5",
+);
+
+export interface StalledApprovalRow {
+  id: string;
+  kind: "vendor_invoice_stalled" | "po_mismatch";
+  invoiceId: string;
+  invoiceNumber: string;
+  vendorName: string;
+  amountUsd: number;
+  ageDays: number;
+  detail: string;
+}
+export const useStalledApprovals = listHook<StalledApprovalRow>(
+  "pay-stalled",
+  "/finance/payables/dashboard/stalled-approvals?days=5",
+);
+
+export interface AuditEntryRow {
+  id: string;
+  at: string;
+  actor: string;
+  kind: string;
+  subjectKind: string;
+  subjectId: string;
+  detail: string;
+}
+export const usePayablesAudit = listHook<AuditEntryRow>("pay-audit", "/finance/payables/audit?limit=50");
+
+export async function postJson<T = unknown>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+  if (!res.ok) {
+    const msg = (parsed as { error?: string; detail?: string } | null)?.detail ?? (parsed as { error?: string } | null)?.error ?? `${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return parsed as T;
+}

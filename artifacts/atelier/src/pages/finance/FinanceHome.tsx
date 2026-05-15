@@ -11,7 +11,12 @@
 import * as React from "react";
 import { Link } from "wouter";
 import { PageHero, SectionHead, Card, Eyebrow, MonoChip } from "@/components/ui/primitives";
-import { useFinanceEntities, type FinanceEntityRow } from "@/lib/v5-hooks";
+import {
+  useFinanceEntities,
+  useExpectedDisbursements,
+  useStalledApprovals,
+  type FinanceEntityRow,
+} from "@/lib/v5-hooks";
 import { ArrowRight } from "lucide-react";
 
 interface SectionTile {
@@ -122,6 +127,8 @@ function toneClasses(t: NextAction["tone"]): string {
 
 export default function FinanceHome() {
   const entities = useFinanceEntities();
+  const disbursements = useExpectedDisbursements();
+  const stalled = useStalledApprovals();
   const nextActions = React.useMemo(() => buildNextActions(entities), [entities]);
 
   const counts = React.useMemo(() => {
@@ -174,6 +181,57 @@ export default function FinanceHome() {
         </div>
 
         <div className="space-y-6">
+          <section data-testid="finance-top-disbursements">
+            <SectionHead headline="Top-5 expected disbursements" />
+            <Card className="mt-3 p-3">
+              {disbursements.length === 0 ? (
+                <p className="text-sm text-text-mute">Nothing scheduled. The next payment run is empty.</p>
+              ) : (
+                <ul className="divide-y divide-border-soft">
+                  {disbursements.map((d) => (
+                    <li key={d.invoiceId} className="py-2 first:pt-0 last:pb-0">
+                      <Link href="/finance/payables/payment-runs">
+                        <div className="flex items-baseline justify-between gap-2 cursor-pointer hover:text-gold transition-colors">
+                          <div className="min-w-0">
+                            <div className="text-sm text-text font-medium truncate">{d.vendorName}</div>
+                            <div className="text-[10px] font-mono text-text-faint uppercase tracking-widest">
+                              {d.invoiceNumber} · due {d.dueDate}
+                              {d.paymentRunNumber && ` · ${d.paymentRunNumber}`}
+                            </div>
+                          </div>
+                          <span className="font-mono text-sm shrink-0">${d.amountUsd.toLocaleString()}</span>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </section>
+          {stalled.length > 0 && (
+            <section data-testid="finance-stalled-approvals">
+              <SectionHead headline={`Stalled approvals (${stalled.length})`} />
+              <Card className="mt-3 p-3 border-amber-500/40 bg-amber-500/5">
+                <ul className="divide-y divide-border-soft">
+                  {stalled.slice(0, 6).map((s) => (
+                    <li key={s.id} className="py-2 first:pt-0 last:pb-0">
+                      <Link href="/finance/payables/po">
+                        <div className="flex items-baseline justify-between gap-2 cursor-pointer hover:text-gold transition-colors">
+                          <div className="min-w-0">
+                            <div className="text-sm text-text font-medium truncate">{s.vendorName} · {s.invoiceNumber}</div>
+                            <div className="text-[10px] font-mono text-text-faint uppercase tracking-widest">
+                              {s.kind === "po_mismatch" ? "match exception" : `stalled ${s.ageDays}d`} · {s.detail}
+                            </div>
+                          </div>
+                          <span className="font-mono text-sm shrink-0">${s.amountUsd.toLocaleString()}</span>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </section>
+          )}
           <section>
             <SectionHead headline="Next action for you" />
             <div className="space-y-2 mt-3" data-testid="finance-next-actions">

@@ -69,11 +69,16 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
     lede:
       "Vendors, PO / non-PO invoices and 3-way match, employee expenses (policy, VAT recovery, approvals, cards), VAT / WHT, payment runs and treasury.",
     subPages: [
+      { label: "Vendors", href: "/finance/payables/vendors", blurb: "Vendor master with KYC, beneficial ownership, sanctions screen, bank-detail change controls.", status: "live" },
+      { label: "Purchase orders", href: "/finance/payables/po", blurb: "POs, GRNs, 3-way match against invoices.", status: "live" },
+      { label: "Payment runs", href: "/finance/payables/payment-runs", blurb: "Maker-checker + dual-signatory payment runs with bank-file output.", status: "live" },
+      { label: "WHT register", href: "/finance/payables/wht", blurb: "Withholding-tax certificate tracking and per-jurisdiction remittance.", status: "live" },
+      { label: "Subcontractors", href: "/finance/payables/subcontractors", blurb: "Pay-when-paid links between subcontractor invoices and client AR receipts.", status: "live" },
       { label: "Expenses", href: "/wallet/expenses", blurb: "Submitted, approved, and paid expense reports.", status: "live" },
       { label: "Expense policy", href: "/wallet/policy", blurb: "Per-diem caps, receipt thresholds, VAT recovery rules.", status: "live" },
       { label: "Approvals queue", href: "/wallet/approvals", blurb: "Manager / partner expense approvals.", status: "live" },
       { label: "Corporate cards", href: "/wallet/cards", blurb: "Card register, statements, dispute tracker.", status: "live" },
-      { label: "VAT / WHT", href: "/wallet/vat", blurb: "Input VAT recovery and withholding tax registers.", status: "live" },
+      { label: "VAT / WHT (legacy)", href: "/wallet/vat", blurb: "Input VAT recovery and legacy WHT view.", status: "live" },
       { label: "Treasury", href: "/wallet/treasury", blurb: "Cash position, FX exposure, payment runs.", status: "live" },
     ],
   },

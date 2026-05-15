@@ -79,6 +79,14 @@ import {
 import FinanceHome from "@/pages/finance/FinanceHome";
 import FinanceEntities from "@/pages/finance/FinanceEntities";
 import FinanceSection from "@/pages/finance/FinanceSection";
+// Task #418 — Finance Payables (P2P) hardening sub-pages.
+import {
+  FinancePayablesVendors,
+  FinancePayablesPo,
+  FinancePayablesPaymentRuns,
+  FinancePayablesWht,
+  FinancePayablesSubcontractors,
+} from "@/pages/finance/FinancePayables";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
 // the bare /agents catalogue with a lifecycle ribbon; the catalogue
 // itself re-mounts under /agents/monitor and runs under
@@ -505,6 +513,11 @@ function Router() {
         <Route path="/finance/ledger">{() => <FinanceSection sectionId="ledger" />}</Route>
         <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
         <Route path="/finance/payables">{() => <FinanceSection sectionId="payables" />}</Route>
+        <Route path="/finance/payables/vendors" component={FinancePayablesVendors} />
+        <Route path="/finance/payables/po" component={FinancePayablesPo} />
+        <Route path="/finance/payables/payment-runs" component={FinancePayablesPaymentRuns} />
+        <Route path="/finance/payables/wht" component={FinancePayablesWht} />
+        <Route path="/finance/payables/subcontractors" component={FinancePayablesSubcontractors} />
         <Route path="/finance/close">{() => <FinanceSection sectionId="close" />}</Route>
         <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>
         <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
