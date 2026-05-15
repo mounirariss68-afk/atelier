@@ -20,7 +20,7 @@ import {
   useAtelierGetMe,
   getAtelierListAuditQueryKey,
 } from "@workspace/api-client-react";
-import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { Card, MonoChip, PillButton, CopyLinkButton } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Send, Check, X as XIcon, Archive } from "lucide-react";
 
@@ -110,10 +110,11 @@ export function DeliverableAcceptancesSection({ engId }: { engId: string }) {
 
   return (
     <Card
-      className="p-5 space-y-4"
+      id="deliverable-acceptances"
+      className="p-5 space-y-4 scroll-mt-24"
       data-testid="deliverable-acceptances-section"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="text-xs font-mono uppercase tracking-wide text-text-mute">
             Deliverable acceptances
@@ -123,14 +124,26 @@ export function DeliverableAcceptancesSection({ engId }: { engId: string }) {
             milestone-gated
           </div>
         </div>
-        <PillButton
-          variant="primary"
-          onClick={() => setShowForm((s) => !s)}
-          data-testid="btn-draft-acceptance"
-        >
-          <Plus className="w-3.5 h-3.5 mr-1.5" />
-          {showForm ? "Cancel" : "Draft acceptance"}
-        </PillButton>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Task #388 — deep-link to the Acceptances panel inside the
+              Deliverables tab (anchor `#deliverable-acceptances`). */}
+          <CopyLinkButton
+            path={`/clients/engagements/${engId}/deliverables`}
+            hash="deliverable-acceptances"
+            label="Copy section link"
+            toastTitle="Section link copied"
+            toastDescription="Shareable link to the Deliverable Acceptances section is on your clipboard."
+            data-testid="btn-copy-link-deliverable-acceptances"
+          />
+          <PillButton
+            variant="primary"
+            onClick={() => setShowForm((s) => !s)}
+            data-testid="btn-draft-acceptance"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1.5" />
+            {showForm ? "Cancel" : "Draft acceptance"}
+          </PillButton>
+        </div>
       </div>
 
       {showForm && (

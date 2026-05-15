@@ -22,7 +22,7 @@ import {
   useAtelierGetMe,
   getAtelierListAuditQueryKey,
 } from "@workspace/api-client-react";
-import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { Card, MonoChip, PillButton, CopyLinkButton } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
@@ -124,8 +124,12 @@ export function ChangeOrdersSection({ engId }: { engId: string }) {
   const items = list.data?.changeOrders ?? [];
 
   return (
-    <Card className="p-5 space-y-4" data-testid="change-orders-section">
-      <div className="flex items-center justify-between">
+    <Card
+      id="change-orders"
+      className="p-5 space-y-4 scroll-mt-24"
+      data-testid="change-orders-section"
+    >
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="text-xs font-mono uppercase tracking-wide text-text-mute">
             Change orders
@@ -134,16 +138,28 @@ export function ChangeOrdersSection({ engId }: { engId: string }) {
             {items.length} on this engagement
           </div>
         </div>
-        {canWrite && (
-          <PillButton
-            variant="primary"
-            onClick={() => setShowForm((s) => !s)}
-            data-testid="btn-propose-change-order"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            {showForm ? "Cancel" : "Propose change order"}
-          </PillButton>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Task #388 — deep-link to the Change Orders panel inside the
+              Charter tab (anchor `#change-orders`). */}
+          <CopyLinkButton
+            path={`/clients/engagements/${engId}/charter`}
+            hash="change-orders"
+            label="Copy section link"
+            toastTitle="Section link copied"
+            toastDescription="Shareable link to the Change Orders section is on your clipboard."
+            data-testid="btn-copy-link-change-orders"
+          />
+          {canWrite && (
+            <PillButton
+              variant="primary"
+              onClick={() => setShowForm((s) => !s)}
+              data-testid="btn-propose-change-order"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              {showForm ? "Cancel" : "Propose change order"}
+            </PillButton>
+          )}
+        </div>
       </div>
 
       {showForm && (

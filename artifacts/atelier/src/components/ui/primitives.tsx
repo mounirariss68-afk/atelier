@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { ArrowLeft, AlertTriangle, X } from "lucide-react";
+import { ArrowLeft, AlertTriangle, X, Link2, Check } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PlmStage, AgentActivityItemConfidence } from "@workspace/api-client-react";
 
@@ -66,6 +67,115 @@ export const PillButton = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAt
   <button ref={ref} className={cn("pill-btn", variant === "primary" ? "pill-btn-primary" : "pill-btn-ghost", className)} {...props} />
 ));
 PillButton.displayName = "PillButton";
+
+/* ============================================================
+   CopyLinkButton — copies a deep-link URL to the clipboard with
+   a toast confirmation. Use `path` for an app-relative URL (a
+   leading slash is added if missing) or `url` for a full URL.
+   Optional `hash` appends a fragment anchor.
+   ============================================================ */
+
+export const CopyLinkButton = ({
+  path,
+  url,
+  hash,
+  label = "Copy link",
+  toastTitle = "Link copied",
+  toastDescription,
+  variant = "ghost",
+  className,
+  iconOnly,
+  "data-testid": testId,
+  ...rest
+}: {
+  path?: string;
+  url?: string;
+  hash?: string;
+  label?: string;
+  toastTitle?: string;
+  toastDescription?: string;
+  variant?: "primary" | "ghost";
+  className?: string;
+  iconOnly?: boolean;
+  "data-testid"?: string;
+} & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "className" | "children">) => {
+  const { toast } = useToast();
+  const [copied, setCopied] = React.useState(false);
+
+  const buildUrl = React.useCallback(() => {
+    let href: string;
+    if (url) {
+      href = url;
+    } else {
+      const p = path ?? (typeof window !== "undefined" ? window.location.pathname : "/");
+      const normalized = p.startsWith("/") ? p : `/${p}`;
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      href = `${origin}${normalized}`;
+    }
+    if (hash) {
+      const h = hash.startsWith("#") ? hash : `#${hash}`;
+      href = `${href}${h}`;
+    }
+    return href;
+  }, [url, path, hash]);
+
+  async function copy() {
+    const href = buildUrl();
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(href);
+      } else if (typeof document !== "undefined") {
+        const ta = document.createElement("textarea");
+        ta.value = href;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "absolute";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+      toast({
+        title: toastTitle,
+        description: toastDescription ?? href,
+      });
+    } catch (e) {
+      toast({
+        title: "Copy failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className={cn(
+        "pill-btn",
+        variant === "primary" ? "pill-btn-primary" : "pill-btn-ghost",
+        className,
+      )}
+      title={label}
+      aria-label={label}
+      data-testid={testId ?? "btn-copy-link"}
+      {...rest}
+    >
+      {copied ? (
+        <Check className="w-3.5 h-3.5" />
+      ) : (
+        <Link2 className="w-3.5 h-3.5" />
+      )}
+      {!iconOnly && (
+        <span className="ml-1.5">{copied ? "Copied" : label}</span>
+      )}
+    </button>
+  );
+};
+CopyLinkButton.displayName = "CopyLinkButton";
 
 export const PlmPill = ({ stage, className }: { stage: PlmStage, className?: string }) => {
   return (

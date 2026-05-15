@@ -10,6 +10,7 @@ import {
   TabNav,
   TabNavItem,
   OwnershipPanel,
+  CopyLinkButton,
 } from "@/components/ui/primitives";
 import { useRoute, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -112,18 +113,31 @@ export default function Engagement() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-8">
-        <TabNav>
-          {TABS.map(tab => (
-            <TabNavItem
-              key={tab.id}
-              active={activeTab === tab.id}
-              onClick={() => selectTab(tab.id)}
-              data-testid={`tab-${tab.id}`}
-            >
-              {tab.label}
-            </TabNavItem>
-          ))}
-        </TabNav>
+        <div className="flex items-end justify-between gap-3 flex-wrap">
+          <TabNav className="flex-1 min-w-0">
+            {TABS.map(tab => (
+              <TabNavItem
+                key={tab.id}
+                active={activeTab === tab.id}
+                onClick={() => selectTab(tab.id)}
+                data-testid={`tab-${tab.id}`}
+              >
+                {tab.label}
+              </TabNavItem>
+            ))}
+          </TabNav>
+          {/* Task #388 — copy a deep-link to the active workspace tab so it
+              can be pasted into email/chat. The path matches the canonical
+              `/clients/engagements/:id/:tab` URL the router resolves. */}
+          <CopyLinkButton
+            path={`/clients/engagements/${eng.id}/${activeTab}`}
+            label="Copy tab link"
+            toastTitle="Tab link copied"
+            toastDescription={`Shareable link to the ${TABS.find(t => t.id === activeTab)?.label ?? activeTab} tab is on your clipboard.`}
+            data-testid={`btn-copy-link-tab-${activeTab}`}
+            className="shrink-0"
+          />
+        </div>
 
         <div className="py-4">
           {activeTab === 'charter' && <CharterTab engId={eng.id} />}
