@@ -26,6 +26,9 @@ interface Person {
   employmentType?: string | null;
   homeOffice?: string | null;
   notes?: string | null;
+  // Task #412 — self-identified demographics, optional.
+  gender?: string | null;
+  nationality?: string | null;
 }
 
 const TABS = [
@@ -115,7 +118,7 @@ export default function RosterPerson() {
 
       <div className="mt-6">
         {activeTab === "profile" && (
-          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} />
+          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} onUpdated={setPerson} />
         )}
         {activeTab === "access" && <AccessTab personId={personId} />}
         {activeTab === "engagements" && <EngagementsTab personId={personId} />}
@@ -144,9 +147,11 @@ export default function RosterPerson() {
 function ProfileTab({
   person,
   viewerCanSeeComp,
+  onUpdated,
 }: {
   person: Person;
   viewerCanSeeComp: boolean;
+  onUpdated: (p: Person) => void;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -157,6 +162,7 @@ function ProfileTab({
         <Field label="Email" value={person.email} />
         <Field label="Role" value={person.role} />
         <Field label="Country" value={person.country} />
+        <DemographicsEditor person={person} onUpdated={onUpdated} />
         <Field label="Status" value={person.status} />
         <Field label="Start" value={person.startDate} />
         <Field label="End" value={person.endDate} />
@@ -220,6 +226,130 @@ function ProfileTab({
           </p>
         </Card>
       )}
+    </div>
+  );
+}
+
+/**
+ * Task #412 — HR/Partner-only inline editor for the demographic columns
+ * surfaced by the People Lens Composition dashboard. Renders as plain
+ * Field rows for everyone else; a 403 from the PATCH endpoint flips the
+ * row back to read-only with a hint.
+ */
+function DemographicsEditor({
+  person,
+  onUpdated,
+}: {
+  person: Person;
+  onUpdated: (p: Person) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [gender, setGender] = React.useState(person.gender ?? "unspecified");
+  const [nationality, setNationality] = React.useState(person.nationality ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setGender(person.gender ?? "unspecified");
+    setNationality(person.nationality ?? "");
+  }, [person.id, person.gender, person.nationality]);
+
+  if (!editing) {
+    return (
+      <>
+        <Field label="Nationality" value={person.nationality} />
+        <Field
+          label="Gender (self-identified)"
+          value={
+            person.gender && person.gender !== "unspecified"
+              ? person.gender.replace("_", "-")
+              : null
+          }
+        />
+        <button
+          onClick={() => { setError(null); setEditing(true); }}
+          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-gold"
+          data-testid="demographics-edit"
+        >
+          Edit demographics
+        </button>
+      </>
+    );
+  }
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(
+        `/api/atelier/roster/people/${person.id}/demographics`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            gender,
+            nationality: nationality.trim() ? nationality.trim().toUpperCase() : null,
+          }),
+        },
+      );
+      if (r.status === 403) { setError("HR / Partner only."); setEditing(false); return; }
+      if (!r.ok) { setError(`Save failed (${r.status}).`); return; }
+      const d = await r.json();
+      if (d.person) onUpdated(d.person as Person);
+      setEditing(false);
+    } catch {
+      setError("Network error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border border-border-soft rounded p-2" data-testid="demographics-editor">
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-text-mute">Nationality (ISO α-2)</span>
+        <input
+          value={nationality}
+          onChange={(e) => setNationality(e.target.value.toUpperCase())}
+          maxLength={2}
+          placeholder="EG"
+          className="bg-bg-elevate border border-border-soft rounded px-2 py-0.5 text-text font-mono text-xs w-16 text-center"
+          data-testid="demographics-nationality"
+        />
+      </label>
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-text-mute">Gender (self-identified)</span>
+        <select
+          value={gender}
+          onChange={(e) => setGender(e.target.value)}
+          className="bg-bg-elevate border border-border-soft rounded px-2 py-0.5 text-text text-xs"
+          data-testid="demographics-gender"
+        >
+          <option value="unspecified">unspecified</option>
+          <option value="female">female</option>
+          <option value="male">male</option>
+          <option value="non_binary">non-binary</option>
+        </select>
+      </label>
+      <div className="flex items-center justify-end gap-2">
+        {error && <span className="text-warn text-[10px] mr-auto">{error}</span>}
+        <button
+          onClick={() => setEditing(false)}
+          disabled={saving}
+          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-text px-2 py-0.5"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="text-[10px] font-mono uppercase tracking-widest bg-gold text-bg px-2 py-0.5 rounded disabled:opacity-50"
+          data-testid="demographics-save"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }

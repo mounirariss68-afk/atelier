@@ -28,6 +28,22 @@ export default function PeoplePerform() {
         lede="The performance loop end-to-end — from goals set at the start of the cycle to calibrated ratings and succession depth at the end."
       />
       <div className="container-atelier py-6 space-y-6">
+        <Card className="p-4 flex flex-wrap items-center gap-3" data-testid="perform-composition-entry">
+          <div className="flex-1 min-w-[260px]">
+            <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint">Composition</div>
+            <div className="text-text mt-0.5">Team composition — who do we have?</div>
+            <p className="text-xs text-text-mute mt-1">
+              Demographics, languages, hard- and soft-skills, performance mix and tenure across the firm.
+            </p>
+          </div>
+          <Link
+            href="/people/composition"
+            className="px-3 py-1.5 rounded font-mono text-[10px] uppercase tracking-widest bg-gold text-bg hover:opacity-90"
+            data-testid="link-composition"
+          >
+            Open dashboard →
+          </Link>
+        </Card>
         <TabNav>
           {SUBS.map((s) => (
             <TabNavLink key={s.id} href={`/people/perform/${s.id}`} active={section === s.id}>

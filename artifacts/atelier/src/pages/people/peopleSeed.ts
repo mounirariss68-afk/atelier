@@ -419,6 +419,222 @@ export function useStageStats(): Record<string, StageStat> {
   }, [goals, reviews, calibration, compReview, flightRisk, myLearning, certifications]);
 }
 
+// ============================================================
+// Team Composition (Task #412)
+//
+// Seeded "snapshot" of the firm's people with the demographic, language,
+// hard-skill and soft-skill fields the People Lens Composition dashboard
+// needs to render meaningfully on day one. The Drizzle schema (Task #412)
+// adds `gender` and `nationality` columns to the three roster tables;
+// real HR data is filled in operationally over time. Until then, this
+// seed surfaces a representative slice (~70% coverage on each sensitive
+// field) so each panel renders content while still being honest about
+// data coverage via the bottom data-coverage strip.
+// ============================================================
+
+export type CompositionGender = "female" | "male" | "non_binary" | "unspecified";
+export type LangProficiency = "basic" | "working" | "fluent" | "native";
+export type WorkerKind = "employee" | "contractor" | "partner_firm_resource";
+export type SeniorityLevel =
+  | "Analyst"
+  | "Consultant"
+  | "Senior Consultant"
+  | "Manager"
+  | "Senior Manager"
+  | "Principal"
+  | "Partner";
+
+export interface CompositionPerson {
+  id: string;
+  fullName: string;
+  workerType: WorkerKind;
+  seniority: SeniorityLevel;
+  businessUnit: string;
+  location: string;            // City — country shorthand
+  country: string;             // ISO-3166 alpha-2
+  /** ISO-3166 alpha-2 nationality code, or `null` if not yet captured. */
+  nationality: string | null;
+  gender: CompositionGender;
+  startDate: string;           // ISO date — used for tenure bands.
+  managerId: string | null;    // For span-of-control.
+  /** Atelier skill-graph language slugs with proficiency. */
+  languages: { slug: string; label: string; proficiency: LangProficiency }[];
+  /** Hard skills (tech / function / industry / tool) with proficiency 1–5. */
+  hardSkills: { slug: string; label: string; proficiency: number }[];
+  /** Soft skills (atelier_skills.kind = 'soft') the person is tagged with. */
+  softSkills: string[];
+  /** Manager rating from useReviews (null when not yet rated). */
+  performanceRating: "exceeds" | "meets" | "developing" | null;
+  /** Succession-readiness band, used as 9-box potential proxy. */
+  potential: "ready_now" | "ready_1y" | "ready_2_3y" | "not_yet";
+}
+
+export const COMPOSITION_SOFT_SKILLS = [
+  "Collaboration",
+  "Leadership",
+  "Communication",
+  "Ownership",
+  "Mentorship",
+  "Conflict resolution",
+  "Client presence",
+  "Critical thinking",
+] as const;
+
+const _SEED: CompositionPerson[] = [
+  // Pricing practice
+  { id: "p-001", fullName: "Hala K.",   workerType: "employee", seniority: "Partner",          businessUnit: "Pricing",        location: "Dubai · AE",     country: "AE", nationality: "EG", gender: "female",       startDate: "2017-04-01", managerId: null,
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }, { slug: "fr", label: "French", proficiency: "working" }],
+    hardSkills: [{ slug: "pricing", label: "Pricing strategy", proficiency: 5 }, { slug: "fpa", label: "FP&A modelling", proficiency: 4 }, { slug: "client-presence", label: "Client presence", proficiency: 5 }],
+    softSkills: ["Leadership", "Client presence", "Mentorship"],
+    performanceRating: "exceeds", potential: "ready_now" },
+  { id: "p-002", fullName: "Aliya N.",  workerType: "employee", seniority: "Senior Consultant", businessUnit: "Pricing",        location: "Dubai · AE",     country: "AE", nationality: "AE", gender: "female",       startDate: "2022-09-12", managerId: "p-001",
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "pricing", label: "Pricing strategy", proficiency: 4 }, { slug: "ai-tooling", label: "Generative AI tooling", proficiency: 4 }, { slug: "aws", label: "AWS architecture", proficiency: 4 }],
+    softSkills: ["Ownership", "Collaboration", "Communication"],
+    performanceRating: "exceeds", potential: "ready_now" },
+  { id: "p-003", fullName: "Marcus L.", workerType: "employee", seniority: "Senior Manager",   businessUnit: "Pricing",        location: "Riyadh · SA",    country: "SA", nationality: "GB", gender: "male",         startDate: "2019-01-15", managerId: "p-001",
+    languages: [{ slug: "en", label: "English", proficiency: "native" }, { slug: "ar", label: "Arabic", proficiency: "working" }],
+    hardSkills: [{ slug: "fpa", label: "FP&A modelling", proficiency: 5 }, { slug: "biz-dev", label: "Business development", proficiency: 4 }, { slug: "pricing", label: "Pricing strategy", proficiency: 4 }],
+    softSkills: ["Leadership", "Mentorship", "Client presence"],
+    performanceRating: "meets", potential: "ready_1y" },
+  { id: "p-004", fullName: "Layla Z.",  workerType: "employee", seniority: "Consultant",        businessUnit: "Pricing",        location: "Dubai · AE",     country: "AE", nationality: "JO", gender: "female",       startDate: "2024-03-04", managerId: "p-002",
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "pricing", label: "Pricing strategy", proficiency: 3 }, { slug: "modelling", label: "Quantitative modelling", proficiency: 3 }],
+    softSkills: ["Collaboration", "Critical thinking"],
+    performanceRating: "meets", potential: "ready_2_3y" },
+  { id: "p-005", fullName: "Omar B.",   workerType: "employee", seniority: "Analyst",           businessUnit: "Pricing",        location: "Cairo · EG",     country: "EG", nationality: "EG", gender: "male",         startDate: "2025-08-18", managerId: "p-002",
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "working" }],
+    hardSkills: [{ slug: "modelling", label: "Quantitative modelling", proficiency: 2 }, { slug: "excel", label: "Advanced Excel", proficiency: 4 }],
+    softSkills: ["Ownership"],
+    performanceRating: null, potential: "not_yet" },
+
+  // Research practice
+  { id: "p-006", fullName: "Sara P.",   workerType: "employee", seniority: "Partner",           businessUnit: "Research",       location: "Dubai · AE",     country: "AE", nationality: "IN", gender: "female",       startDate: "2018-06-01", managerId: null,
+    languages: [{ slug: "en", label: "English", proficiency: "native" }, { slug: "hi", label: "Hindi", proficiency: "native" }],
+    hardSkills: [{ slug: "research", label: "Primary research", proficiency: 5 }, { slug: "writing", label: "Long-form writing", proficiency: 5 }],
+    softSkills: ["Leadership", "Communication", "Critical thinking"],
+    performanceRating: "exceeds", potential: "ready_now" },
+  { id: "p-007", fullName: "Tomás R.",  workerType: "employee", seniority: "Consultant",        businessUnit: "Research",       location: "Lisbon · PT",    country: "PT", nationality: "PT", gender: "male",         startDate: "2023-02-20", managerId: "p-006",
+    languages: [{ slug: "pt", label: "Portuguese", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }, { slug: "es", label: "Spanish", proficiency: "fluent" }],
+    hardSkills: [{ slug: "research", label: "Primary research", proficiency: 4 }, { slug: "writing", label: "Long-form writing", proficiency: 4 }, { slug: "cfa", label: "CFA / capital markets", proficiency: 4 }],
+    softSkills: ["Critical thinking", "Communication"],
+    performanceRating: "meets", potential: "ready_1y" },
+  { id: "p-008", fullName: "Priya S.",  workerType: "employee", seniority: "Consultant",        businessUnit: "Research",       location: "Bengaluru · IN", country: "IN", nationality: "IN", gender: "female",       startDate: "2023-07-01", managerId: "p-006",
+    languages: [{ slug: "en", label: "English", proficiency: "fluent" }, { slug: "hi", label: "Hindi", proficiency: "native" }, { slug: "ta", label: "Tamil", proficiency: "fluent" }],
+    hardSkills: [{ slug: "data-eng", label: "Data engineering", proficiency: 4 }, { slug: "gcp", label: "GCP architecture", proficiency: 3 }, { slug: "ai-tooling", label: "Generative AI tooling", proficiency: 3 }],
+    softSkills: ["Ownership", "Collaboration"],
+    performanceRating: null, potential: "ready_2_3y" },
+  { id: "p-009", fullName: "Noor F.",   workerType: "employee", seniority: "Analyst",           businessUnit: "Research",       location: "Dubai · AE",     country: "AE", nationality: null,  gender: "unspecified",  startDate: "2026-01-12", managerId: "p-006",
+    languages: [{ slug: "en", label: "English", proficiency: "fluent" }, { slug: "ar", label: "Arabic", proficiency: "fluent" }],
+    hardSkills: [{ slug: "research", label: "Primary research", proficiency: 2 }],
+    softSkills: ["Collaboration"],
+    performanceRating: null, potential: "not_yet" },
+
+  // Platform & AI
+  { id: "p-010", fullName: "Karim S.",  workerType: "employee", seniority: "Partner",           businessUnit: "Platform & AI",  location: "Dubai · AE",     country: "AE", nationality: "LB", gender: "male",         startDate: "2017-04-01", managerId: null,
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }, { slug: "fr", label: "French", proficiency: "fluent" }],
+    hardSkills: [{ slug: "ai-tooling", label: "Generative AI tooling", proficiency: 5 }, { slug: "platform", label: "Platform engineering", proficiency: 5 }],
+    softSkills: ["Leadership", "Mentorship", "Communication"],
+    performanceRating: "exceeds", potential: "ready_now" },
+  { id: "p-011", fullName: "Yara H.",   workerType: "employee", seniority: "Senior Manager",    businessUnit: "Operations",     location: "Dubai · AE",     country: "AE", nationality: "AE", gender: "female",       startDate: "2020-11-09", managerId: null,
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "ops", label: "Operations management", proficiency: 5 }, { slug: "talent", label: "Talent ops", proficiency: 4 }],
+    softSkills: ["Leadership", "Ownership", "Conflict resolution"],
+    performanceRating: "exceeds", potential: "ready_1y" },
+  { id: "p-012", fullName: "Daniel C.", workerType: "employee", seniority: "Senior Consultant", businessUnit: "Platform & AI",  location: "Madrid · ES",    country: "ES", nationality: "ES", gender: "male",         startDate: "2021-10-04", managerId: "p-010",
+    languages: [{ slug: "es", label: "Spanish", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "platform", label: "Platform engineering", proficiency: 4 }, { slug: "aws", label: "AWS architecture", proficiency: 4 }, { slug: "ai-tooling", label: "Generative AI tooling", proficiency: 4 }],
+    softSkills: ["Collaboration", "Mentorship"],
+    performanceRating: "meets", potential: "ready_1y" },
+  { id: "p-013", fullName: "Mei T.",    workerType: "employee", seniority: "Consultant",        businessUnit: "Platform & AI",  location: "Singapore · SG", country: "SG", nationality: "SG", gender: "female",       startDate: "2024-09-02", managerId: "p-012",
+    languages: [{ slug: "en", label: "English", proficiency: "fluent" }, { slug: "zh", label: "Mandarin", proficiency: "native" }, { slug: "ms", label: "Malay", proficiency: "working" }],
+    hardSkills: [{ slug: "data-eng", label: "Data engineering", proficiency: 4 }, { slug: "gcp", label: "GCP architecture", proficiency: 4 }],
+    softSkills: ["Ownership", "Critical thinking"],
+    performanceRating: "meets", potential: "ready_2_3y" },
+  { id: "p-014", fullName: "Jonas E.",  workerType: "employee", seniority: "Consultant",        businessUnit: "Platform & AI",  location: "Berlin · DE",    country: "DE", nationality: "DE", gender: "non_binary",   startDate: "2024-04-15", managerId: "p-012",
+    languages: [{ slug: "de", label: "German", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "platform", label: "Platform engineering", proficiency: 3 }, { slug: "ai-tooling", label: "Generative AI tooling", proficiency: 3 }],
+    softSkills: ["Collaboration", "Communication"],
+    performanceRating: "meets", potential: "ready_2_3y" },
+
+  // Public sector / GCC bench
+  { id: "p-015", fullName: "Faisal A.", workerType: "employee", seniority: "Manager",           businessUnit: "Pricing",        location: "Riyadh · SA",    country: "SA", nationality: "SA", gender: "male",         startDate: "2021-05-20", managerId: "p-003",
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "public-sector", label: "Public-sector procurement", proficiency: 5 }, { slug: "pricing", label: "Pricing strategy", proficiency: 4 }],
+    softSkills: ["Client presence", "Communication"],
+    performanceRating: "exceeds", potential: "ready_1y" },
+  { id: "p-016", fullName: "Reem D.",   workerType: "employee", seniority: "Senior Consultant", businessUnit: "Pricing",        location: "Doha · QA",      country: "QA", nationality: null,  gender: "female",       startDate: "2022-03-10", managerId: "p-003",
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "pricing", label: "Pricing strategy", proficiency: 4 }, { slug: "client-presence", label: "Client presence", proficiency: 4 }],
+    softSkills: ["Collaboration", "Client presence"],
+    performanceRating: "meets", potential: "ready_1y" },
+  { id: "p-017", fullName: "Idris M.",  workerType: "employee", seniority: "Consultant",        businessUnit: "Operations",     location: "Lagos · NG",     country: "NG", nationality: "NG", gender: "male",         startDate: "2023-11-01", managerId: "p-011",
+    languages: [{ slug: "en", label: "English", proficiency: "native" }, { slug: "yo", label: "Yoruba", proficiency: "native" }],
+    hardSkills: [{ slug: "ops", label: "Operations management", proficiency: 3 }, { slug: "talent", label: "Talent ops", proficiency: 3 }],
+    softSkills: ["Ownership", "Communication"],
+    performanceRating: "meets", potential: "ready_2_3y" },
+  { id: "p-018", fullName: "Anna K.",   workerType: "employee", seniority: "Consultant",        businessUnit: "Operations",     location: "Warsaw · PL",    country: "PL", nationality: "PL", gender: "female",       startDate: "2024-06-17", managerId: "p-011",
+    languages: [{ slug: "pl", label: "Polish", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }, { slug: "de", label: "German", proficiency: "working" }],
+    hardSkills: [{ slug: "ops", label: "Operations management", proficiency: 3 }],
+    softSkills: ["Collaboration"],
+    performanceRating: null, potential: "not_yet" },
+
+  // Contractors + partner-firm
+  { id: "p-019", fullName: "Vikram J.", workerType: "contractor",  seniority: "Senior Consultant", businessUnit: "Platform & AI",  location: "Bengaluru · IN", country: "IN", nationality: "IN", gender: "male",         startDate: "2025-02-10", managerId: "p-010",
+    languages: [{ slug: "en", label: "English", proficiency: "fluent" }, { slug: "hi", label: "Hindi", proficiency: "native" }],
+    hardSkills: [{ slug: "ai-tooling", label: "Generative AI tooling", proficiency: 5 }, { slug: "data-eng", label: "Data engineering", proficiency: 4 }],
+    softSkills: ["Collaboration"],
+    performanceRating: "meets", potential: "ready_1y" },
+  { id: "p-020", fullName: "Élise V.",  workerType: "contractor",  seniority: "Consultant",        businessUnit: "Research",       location: "Paris · FR",     country: "FR", nationality: "FR", gender: "female",       startDate: "2025-09-01", managerId: "p-006",
+    languages: [{ slug: "fr", label: "French", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "research", label: "Primary research", proficiency: 3 }, { slug: "writing", label: "Long-form writing", proficiency: 4 }],
+    softSkills: ["Critical thinking"],
+    performanceRating: null, potential: "not_yet" },
+  { id: "p-021", fullName: "Hiroshi N.", workerType: "partner_firm_resource", seniority: "Manager", businessUnit: "Platform & AI", location: "Tokyo · JP",     country: "JP", nationality: "JP", gender: "male",         startDate: "2025-11-03", managerId: "p-010",
+    languages: [{ slug: "ja", label: "Japanese", proficiency: "native" }, { slug: "en", label: "English", proficiency: "working" }],
+    hardSkills: [{ slug: "platform", label: "Platform engineering", proficiency: 4 }],
+    softSkills: ["Mentorship"],
+    performanceRating: null, potential: "not_yet" },
+  { id: "p-022", fullName: "Carolina F.", workerType: "partner_firm_resource", seniority: "Senior Consultant", businessUnit: "Pricing", location: "São Paulo · BR", country: "BR", nationality: "BR", gender: "female",       startDate: "2025-12-12", managerId: "p-003",
+    languages: [{ slug: "pt", label: "Portuguese", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }, { slug: "es", label: "Spanish", proficiency: "fluent" }],
+    hardSkills: [{ slug: "pricing", label: "Pricing strategy", proficiency: 4 }],
+    softSkills: ["Client presence"],
+    performanceRating: null, potential: "not_yet" },
+
+  // A few rows with missing demographic data on purpose (data-coverage strip).
+  { id: "p-023", fullName: "Rasha M.",  workerType: "employee", seniority: "Senior Consultant", businessUnit: "Pricing",        location: "Amman · JO",     country: "JO", nationality: "JO", gender: "female",       startDate: "2022-08-22", managerId: "p-001",
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "pricing", label: "Pricing strategy", proficiency: 4 }],
+    softSkills: ["Communication", "Mentorship"],
+    performanceRating: "meets", potential: "ready_1y" },
+  { id: "p-024", fullName: "Ben O.",    workerType: "employee", seniority: "Consultant",        businessUnit: "Research",       location: "London · GB",    country: "GB", nationality: "GB", gender: "male",         startDate: "2024-01-08", managerId: "p-006",
+    languages: [{ slug: "en", label: "English", proficiency: "native" }],
+    hardSkills: [{ slug: "research", label: "Primary research", proficiency: 3 }, { slug: "writing", label: "Long-form writing", proficiency: 4 }],
+    softSkills: ["Critical thinking"],
+    performanceRating: "meets", potential: "ready_2_3y" },
+  { id: "p-025", fullName: "Esra T.",   workerType: "employee", seniority: "Manager",           businessUnit: "Operations",     location: "Istanbul · TR", country: "TR", nationality: "TR", gender: "female",       startDate: "2021-09-01", managerId: "p-011",
+    languages: [{ slug: "tr", label: "Turkish", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }, { slug: "ar", label: "Arabic", proficiency: "working" }],
+    hardSkills: [{ slug: "ops", label: "Operations management", proficiency: 4 }, { slug: "talent", label: "Talent ops", proficiency: 4 }],
+    softSkills: ["Leadership", "Conflict resolution"],
+    performanceRating: "exceeds", potential: "ready_1y" },
+  { id: "p-026", fullName: "Khalid R.", workerType: "employee", seniority: "Analyst",           businessUnit: "Pricing",        location: "Riyadh · SA",    country: "SA", nationality: null,  gender: "male",         startDate: "2025-05-19", managerId: "p-015",
+    languages: [{ slug: "ar", label: "Arabic", proficiency: "native" }, { slug: "en", label: "English", proficiency: "fluent" }],
+    hardSkills: [{ slug: "modelling", label: "Quantitative modelling", proficiency: 2 }],
+    softSkills: ["Ownership"],
+    performanceRating: null, potential: "not_yet" },
+  { id: "p-027", fullName: "Sofia A.",  workerType: "employee", seniority: "Consultant",        businessUnit: "Platform & AI",  location: "Dubai · AE",     country: "AE", nationality: null,  gender: "unspecified",  startDate: "2024-10-21", managerId: "p-010",
+    languages: [{ slug: "en", label: "English", proficiency: "fluent" }, { slug: "es", label: "Spanish", proficiency: "fluent" }],
+    hardSkills: [{ slug: "ai-tooling", label: "Generative AI tooling", proficiency: 3 }],
+    softSkills: ["Collaboration"],
+    performanceRating: "meets", potential: "ready_2_3y" },
+];
+
+export const useCompositionPeople = staticList<CompositionPerson>(_SEED);
+
+/** Snapshot timestamp for the dashboard "as of" stamp. Module-scope so the
+ *  whole page sees the same value within a session. */
+export const COMPOSITION_AS_OF = new Date().toISOString().slice(0, 10);
+
 export const usePeopleApprovals = staticList<PeopleApprovalRow>([
   { id: "pa-001", kind: "promotion",     subject: "Aliya N. → Senior Consultant", requester: "Hala K.",  approver: "Karim S.", submittedOn: "2026-05-10", status: "pending",  amount: null },
   { id: "pa-002", kind: "comp-change",   subject: "Marcus L. — band-mid merit",   requester: "Hala K.",  approver: "Sara P.",  submittedOn: "2026-05-09", status: "pending",  amount: "+7.5% base" },

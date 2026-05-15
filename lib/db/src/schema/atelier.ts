@@ -1664,6 +1664,11 @@ export const atelierEmployees = pgTable(
     countryCode: text("country_code"),
     payrollCountryCode: text("payroll_country_code"),
     employmentType: text("employment_type").notNull().default("FTE"), // FTE | fixed_term | intern
+    // Task #412 — self-identified demographics for the People Lens
+    // Team Composition dashboard. Optional, defaulting to `unspecified` /
+    // null so we never imply coverage we don't actually have.
+    gender: text("gender").notNull().default("unspecified"), // female | male | non_binary | unspecified
+    nationality: text("nationality"), // ISO-3166 alpha-2 country code, nullable
     employmentStatus: text("employment_status").notNull().default("active"), // active | notice | on_leave | terminated (PRD §2.1)
     employingEntity: text("employing_entity"), // DIFC | ADGM | KSA | Other (PRD §2.1)
     startDate: text("start_date"), // ISO date
@@ -1701,6 +1706,9 @@ export const atelierContractors = pgTable(
     country: text("country"),
     // Task #291 — FK code (atelier_countries.iso_alpha_2); legacy `country` retained.
     countryCode: text("country_code"),
+    // Task #412 — self-identified demographics, optional.
+    gender: text("gender").notNull().default("unspecified"),
+    nationality: text("nationality"),
     vendorEntity: text("vendor_entity"),
     masterAgreementRef: text("master_agreement_ref"),
     contractType: text("contract_type"), // T&M | fixed_fee | retainer (PRD §2.1)
@@ -1786,6 +1794,9 @@ export const atelierPartnerFirmResources = pgTable(
     country: text("country"),
     // Task #291 — FK ISO alpha-2 code; legacy `country` retained.
     countryCode: text("country_code"),
+    // Task #412 — self-identified demographics, optional.
+    gender: text("gender").notNull().default("unspecified"),
+    nationality: text("nationality"),
     secondedToEngagementIds: jsonb("seconded_to_engagement_ids")
       .$type<string[]>()
       .notNull()

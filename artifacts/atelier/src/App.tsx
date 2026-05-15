@@ -125,6 +125,7 @@ import PeoplePeople from "@/pages/people/PeoplePeople";
 import PeoplePerson from "@/pages/people/PeoplePerson";
 import PeopleAccess from "@/pages/people/PeopleAccess";
 import PeopleSkills from "@/pages/people/PeopleSkills";
+import PeopleComposition from "@/pages/people/PeopleComposition";
 import PeopleCompliance from "@/pages/people/PeopleCompliance";
 import PeopleTime from "@/pages/people/PeopleTime";
 
@@ -479,6 +480,7 @@ function Router() {
         <Route path="/people/people/:id/:tab" component={PeoplePerson} />
         <Route path="/people/access" component={PeopleAccess} />
         <Route path="/people/skills" component={PeopleSkills} />
+        <Route path="/people/composition" component={PeopleComposition} />
         <Route path="/people/compliance" component={PeopleCompliance} />
         <Route path="/people/time" component={PeopleTime} />
         <Route path="/people/time/:personId/:weekIso" component={PeopleTime} />

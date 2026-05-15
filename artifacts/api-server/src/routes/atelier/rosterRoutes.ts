@@ -56,6 +56,9 @@ interface PersonWire {
   status: string;
   startDate: string | null;
   endDate: string | null;
+  // Task #412 — self-identified demographics for People Lens Team Composition.
+  gender: string;
+  nationality: string | null;
   partnerFirmId?: string | null;
   partnerFirmName?: string | null;
   vendorEntity?: string | null;
@@ -79,7 +82,7 @@ interface PersonWire {
 }
 
 // Task #292 — Compensation visibility now spans leadership + finance + HR.
-import { canViewCompensation, canViewPersonnelContract } from "./personaRoles.js";
+import { canViewCompensation, canViewPersonnelContract, isHr, isPartner, isFoundingPartner } from "./personaRoles.js";
 import { withRls } from "./rls.js";
 
 function canSeeComp(role: string | undefined | null): boolean {
@@ -111,6 +114,13 @@ interface ListOpts {
   workerType?: WorkerType | "all";
   q?: string;
   status?: string;
+  // Task #412 — cohort filters surfaced from the People Lens Composition
+  // dashboard's deep-links and directory chip strip. All optional and
+  // case-insensitive where it makes sense.
+  nationality?: string;          // ISO-3166 alpha-2
+  gender?: string;               // female | male | non_binary | unspecified
+  country?: string;              // current location ISO alpha-2
+  seniority?: string;            // exact match against `seniority`
   includeComp: boolean;
 }
 
@@ -119,6 +129,26 @@ async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
   const q = opts.q?.trim().toLowerCase() ?? "";
   const matches = (s: string | null | undefined) =>
     !q || (s ?? "").toLowerCase().includes(q);
+  const nationality = opts.nationality?.trim().toUpperCase();
+  const gender = opts.gender?.trim().toLowerCase();
+  const country = opts.country?.trim().toUpperCase();
+  const seniority = opts.seniority?.trim().toLowerCase();
+
+  /** Shared cohort post-filter applied after the workerType-specific
+   *  free-text/status checks. Centralised so behaviour is identical for
+   *  employees / contractors / partner-firm resources. */
+  const matchesCohort = (
+    r: { nationality?: string | null; gender?: string | null; countryCode?: string | null; country?: string | null; seniority?: string | null },
+  ): boolean => {
+    if (nationality && (r.nationality ?? "").toUpperCase() !== nationality) return false;
+    if (gender && (r.gender ?? "unspecified").toLowerCase() !== gender) return false;
+    if (country) {
+      const c = (r.countryCode ?? r.country ?? "").toUpperCase();
+      if (c !== country) return false;
+    }
+    if (seniority && (r.seniority ?? "").toLowerCase() !== seniority) return false;
+    return true;
+  };
 
   const out: PersonWire[] = [];
 
@@ -136,6 +166,7 @@ async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
       )
         continue;
       if (opts.status && r.status !== opts.status) continue;
+      if (!matchesCohort(r)) continue;
       out.push(employeeToWire(r, opts.includeComp));
     }
   }
@@ -153,6 +184,9 @@ async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
       )
         continue;
       if (opts.status && r.status !== opts.status) continue;
+      // Contractors don't carry a `seniority` column, so a seniority filter
+      // implicitly excludes them — desirable behaviour for cohort views.
+      if (!matchesCohort({ ...r, seniority: null })) continue;
       out.push(contractorToWire(r, opts.includeComp));
     }
   }
@@ -178,6 +212,7 @@ async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
       )
         continue;
       if (opts.status && r.status !== opts.status) continue;
+      if (!matchesCohort(r)) continue;
       out.push(partnerResourceToWire(r, firmName, opts.includeComp));
     }
   }
@@ -206,6 +241,8 @@ function employeeToWire(
     homeOffice: r.homeOffice,
     avatarUrl: r.avatarUrl,
     notes: r.notes,
+    gender: r.gender ?? "unspecified",
+    nationality: r.nationality ?? null,
   };
   if (includeComp) {
     base.iban = r.iban;
@@ -238,6 +275,8 @@ function contractorToWire(
     endDate: r.endDate,
     vendorEntity: r.vendorEntity,
     notes: r.notes,
+    gender: r.gender ?? "unspecified",
+    nationality: r.nationality ?? null,
   };
   if (includeComp) {
     base.dayRateAmount = r.dayRateAmount;
@@ -268,6 +307,8 @@ function partnerResourceToWire(
     partnerFirmId: r.partnerFirmId,
     partnerFirmName: firmName,
     notes: r.notes,
+    gender: r.gender ?? "unspecified",
+    nationality: r.nationality ?? null,
   };
   if (includeComp) {
     base.dayRateAmount = r.dayRateAmount;
@@ -641,13 +682,87 @@ router.get("/roster/people", async (req, res, next) => {
     const q = typeof req.query.q === "string" ? req.query.q : undefined;
     const status =
       typeof req.query.status === "string" ? req.query.status : undefined;
+    // Task #412 — cohort query params from the People Lens Composition
+    // dashboard's deep-links and the directory's chip strip.
+    const str = (k: string): string | undefined =>
+      typeof req.query[k] === "string" ? (req.query[k] as string) : undefined;
     const list = await listPersons({
       workerType: wt,
       q,
       status,
+      nationality: str("nationality"),
+      gender: str("gender"),
+      country: str("country"),
+      seniority: str("seniority"),
       includeComp: canSeeComp(me.role),
     });
     res.json({ people: list, viewerCanSeeComp: canSeeComp(me.role) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #412 — HR-only demographics edit. Gender + nationality are the
+// two columns added to the roster tables in this task; the dashboard
+// surfaces coverage % so HR can chase data quality from one place.
+// Wire-format: { gender?: "female"|"male"|"non_binary"|"unspecified",
+//                nationality?: string|null  // ISO-3166 alpha-2 or null }
+const ALLOWED_GENDERS = new Set(["female", "male", "non_binary", "unspecified"]);
+router.patch("/roster/people/:id/demographics", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+      res.status(403).json({ error: "demographics-edit-restricted" });
+      return;
+    }
+    const person = await getPerson(req.params.id, true);
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const body = req.body as { gender?: string; nationality?: string | null };
+    const update: { gender?: string; nationality?: string | null } = {};
+    if (typeof body.gender === "string") {
+      if (!ALLOWED_GENDERS.has(body.gender)) {
+        res.status(422).json({ error: "invalid-gender" });
+        return;
+      }
+      update.gender = body.gender;
+    }
+    if (body.nationality === null || typeof body.nationality === "string") {
+      const n = body.nationality;
+      if (typeof n === "string" && n !== "" && !/^[A-Za-z]{2}$/.test(n)) {
+        res.status(422).json({ error: "invalid-nationality-iso2" });
+        return;
+      }
+      update.nationality = n ? n.toUpperCase() : null;
+    }
+    if (Object.keys(update).length === 0) {
+      res.status(400).json({ error: "no-updatable-fields" });
+      return;
+    }
+    if (person.workerType === "employee") {
+      await db.update(atelierEmployees).set(update).where(eq(atelierEmployees.id, person.id));
+    } else if (person.workerType === "contractor") {
+      await db.update(atelierContractors).set(update).where(eq(atelierContractors.id, person.id));
+    } else {
+      await db.update(atelierPartnerFirmResources).set(update).where(eq(atelierPartnerFirmResources.id, person.id));
+    }
+    assertAuditAction("roster.person.updated");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "person",
+      entityId: person.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.fullName ?? me.id,
+      action: "roster.person.updated",
+      payload: { workerType: person.workerType, change: "demographics", ...update },
+      payloadSummary: `${me.fullName ?? me.id} updated demographics for ${person.fullName}`,
+    });
+    const updated = await getPerson(person.id, canSeeComp(me.role));
+    res.json({ person: updated });
   } catch (err) {
     next(err);
   }

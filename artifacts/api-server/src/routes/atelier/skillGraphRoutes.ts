@@ -249,7 +249,10 @@ router.post("/roster/skill-graph/skills", async (req, res) => {
   const slug = (body.slug ?? "").trim().toLowerCase();
   const name = (body.name ?? "").trim();
   const kind = (body.kind ?? "").trim();
-  const validKinds = new Set(["tech", "industry", "function", "language", "tool"]);
+  // Task #412 — `soft` kind added so the Team Composition dashboard can
+  // cleanly split hard skills (tech / function / tool / industry) from
+  // soft skills (collaboration, leadership, communication, ownership, …).
+  const validKinds = new Set(["tech", "industry", "function", "language", "tool", "soft"]);
   if (!slug || !name || !validKinds.has(kind)) {
     res.status(400).json({ error: "invalid-skill-payload" });
     return;

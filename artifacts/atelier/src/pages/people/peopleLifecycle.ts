@@ -49,6 +49,7 @@ export const CROSS_MODULES: readonly CrossModuleDef[] = [
   { id: "org",        label: "Org & roles",      href: "/people/org" },
   { id: "access",     label: "Access matrix",    href: "/people/access" },
   { id: "skills",     label: "Skill graph",      href: "/people/skills" },
+  { id: "composition", label: "Team composition", href: "/people/composition" },
   { id: "time",       label: "Time",             href: "/people/time" },
   { id: "compliance", label: "Compliance",       href: "/people/compliance" },
   { id: "approvals",  label: "Approvals",        href: "/people/approvals" },
