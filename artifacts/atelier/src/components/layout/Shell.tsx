@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, MessageSquare, Bell, FileText, ExternalLink, X as XIcon, Sparkles } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, X as XIcon, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfidenceChip } from "../ui/primitives";
 import { ManagePicker, LensSectionTabs } from "@/components/layout/ManagePicker";
@@ -139,9 +139,7 @@ export function TopNav() {
               </span>
             ) : null}
           </Link>
-          <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
-          {/* Contextual lens-section tabs slot — Logo · Home · Manage ·
-              *here* · CLI · Bell · Avatar. Renders the active lens's
+          {/* Contextual lens-section tabs slot. Renders the active lens's
               default sections; each lens task replaces these with its own
               lifecycle-shaped tabs. Hidden on Home so the universal
               landing page stays uncluttered. */}
@@ -151,7 +149,7 @@ export function TopNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-4">
-          <CliTrigger />
+          <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
           <button className="text-text-mute hover:text-text transition-colors">
             <Bell className="w-4 h-4" />
           </button>
@@ -531,42 +529,6 @@ export function RightRail() {
         {!collapsed && tab === "reports" && <ReportsRailPanel />}
       </div>
     </aside>
-  );
-}
-
-// Task #342 — top-nav launcher restyled as an obvious chat affordance:
-// chat-bubble icon + visible "Ask Atelier" label + ⌘K badge. Same click
-// handler + shortcut, clearer signal. Also the focus-restore target
-// when Esc closes the panel.
-function CliTrigger() {
-  const cli = React.useContext(CliContext);
-  // Read the persisted CLI locale so the visible label matches the
-  // bar's chrome language without needing a global i18n provider.
-  const locale: CliLocale =
-    typeof window !== "undefined"
-      ? ((window.localStorage.getItem("atelier-cli-locale") as CliLocale) ?? "en")
-      : "en";
-  const setRef = (el: HTMLButtonElement | null) => {
-    cli.triggerRef.current = el;
-  };
-  return (
-    <button
-      ref={setRef}
-      type="button"
-      onClick={() => cli.openCli({ source: "header" })}
-      className="inline-flex items-center gap-2 text-text-mute hover:text-gold transition-colors px-2.5 py-1.5 rounded border border-border hover:border-gold/40 bg-bg-elevate/40 hover:bg-bg-elevate-2"
-      title={`${cliS("askAtelier", locale)} (⌘K)`}
-      aria-label={cliS("askAtelier", locale)}
-      data-testid="cli-trigger"
-    >
-      <MessageSquare className="w-4 h-4 text-gold/80" aria-hidden />
-      <span className="hidden sm:inline text-xs font-medium">
-        {cliS("askAtelier", locale)}
-      </span>
-      <span className="hidden md:inline text-[10px] font-mono uppercase tracking-wider text-text-faint border border-border-soft rounded px-1 py-px">
-        ⌘K
-      </span>
-    </button>
   );
 }
 

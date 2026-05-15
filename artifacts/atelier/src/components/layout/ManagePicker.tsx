@@ -15,7 +15,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LENSES, type LensId, getLens } from "@/lib/lens";
@@ -102,30 +101,21 @@ export function ManagePicker({ userId, role }: ManagePickerProps) {
         <button
           type="button"
           data-testid="manage-picker-trigger"
-          aria-label={`Manage lens — current: ${activeLens.label}`}
+          aria-label={`Lens — current: ${activeLens.label}`}
           className={cn(
             "group inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elevate/40 px-2.5 py-1 text-sm font-medium",
             "hover:border-gold/50 hover:text-text transition-colors outline-none focus-visible:border-gold",
           )}
         >
-          <span className="text-text-faint font-mono text-[10px] uppercase tracking-widest">
-            Manage
-          </span>
-          <span className="relative inline-flex flex-col items-center text-text">
-            {activeLens.label}
-            <span className="absolute -bottom-[3px] left-0 right-0 h-px bg-gold/80" aria-hidden />
-          </span>
+          <span className="text-text">{activeLens.label}</span>
           <ChevronDown className="w-3.5 h-3.5 text-text-mute group-hover:text-text transition-colors" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        align="start"
+        align="end"
         sideOffset={6}
-        className="w-72 bg-bg-elevate border-border text-text"
+        className="w-44 bg-bg-elevate border-border text-text"
       >
-        <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
-          Switch entity lens
-        </DropdownMenuLabel>
         {LENSES.map((l) => {
           const isActive = l.id === active;
           return (
@@ -138,25 +128,17 @@ export function ManagePicker({ userId, role }: ManagePickerProps) {
                 setOpen(false);
               }}
               className={cn(
-                "flex flex-col items-start gap-0.5 py-2 cursor-pointer",
+                "flex items-center justify-between gap-3 py-1.5 cursor-pointer",
                 "focus:bg-bg-elevate-2 focus:text-text",
                 isActive && "bg-bg-elevate-2",
               )}
             >
-              <div className="flex w-full items-center justify-between gap-3">
-                <span
-                  className={cn(
-                    "text-sm font-semibold",
-                    isActive ? "text-gold" : "text-text",
-                  )}
-                >
-                  {l.label}
-                </span>
-                <span className="font-mono text-[10px] uppercase tracking-widest text-text-faint">
-                  {l.shortcut}
-                </span>
-              </div>
-              <span className="text-xs text-text-mute leading-snug">{l.description}</span>
+              <span className={cn("text-sm", isActive ? "text-gold" : "text-text")}>
+                {l.label}
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-text-faint">
+                {l.shortcut}
+              </span>
             </DropdownMenuItem>
           );
         })}
