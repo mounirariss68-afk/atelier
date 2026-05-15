@@ -35,6 +35,11 @@ import "./codex-capabilities.js";
 // revrec_compute_schedule).
 import "./revrec-capabilities.js";
 import "./l2c-wave3-capabilities.js";
+// L2C Wave 4 (Task #363) — cash application, bank reconciliation,
+// 13-week cash forecast, renewals & NRR. Restricted personas are
+// stripped at the catalog gate (`RESTRICTED_DENIED_MODULES`); board
+// observer is allow-listed only onto `cash_forecast_13w`.
+import "./l2c-wave4-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

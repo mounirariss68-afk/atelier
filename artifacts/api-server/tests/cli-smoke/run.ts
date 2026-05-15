@@ -77,6 +77,15 @@ const SMOKES: Smoke[] = [
   // Task #362 — L2C Wave 3 (invoicing, AR aging, dunning).
   { prompt: "Show AR aging", expectTool: "wallet_ar_aging" },
   { prompt: "Where is the cash sitting?", expectTool: "wallet_ar_aging" },
+  // Task #363 — L2C Wave 4 (cash, bank, treasury, renewals).
+  { prompt: "Show the 13-week cash forecast", expectTool: "cash_forecast_13w" },
+  { prompt: "Run the cash forecaster", expectTool: "cash_forecast_13w" },
+  { prompt: "Apply cash to invoice", expectTool: "cash_apply" },
+  { prompt: "Match this cash receipt", expectTool: "cash_match" },
+  { prompt: "Import the bank statement", expectTool: "bank_import" },
+  { prompt: "Finalise the bank reconciliation", expectTool: "bank_recon_finalise" },
+  { prompt: "Open a renewal for this account", expectTool: "renewal_open" },
+  { prompt: "List open renewals", expectTool: "renewal_list" },
 ];
 
 let pass = 0;

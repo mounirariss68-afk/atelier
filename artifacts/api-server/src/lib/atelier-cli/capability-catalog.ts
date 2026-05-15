@@ -71,7 +71,14 @@ export type CapabilityModule =
   | "revrec"
   | "wip"
   | "margin"
-  | "leakage";
+  | "leakage"
+  // L2C Wave 4 (Task #363) — cash application, bank reconciliation,
+  // 13-week cash forecast, renewals & NRR. board_observer is allow-listed
+  // onto `cash_forecast_13w` only via BOARD_OBSERVER_ROLLUP_ALLOWLIST.
+  | "cash"
+  | "bank"
+  | "treasury"
+  | "renewal";
 
 /**
  * Outbound side-effect channel a capability fires when it commits.
@@ -134,7 +141,12 @@ export type ResultCard =
   | "deliverable_acceptance_card"
   | "invoice_card"
   | "ar_aging_grid"
-  | "dunning_card";
+  | "dunning_card"
+  // L2C Wave 4 (Task #363) — cash, bank reconciliation, forecast, renewals
+  | "cash_receipt_card"
+  | "bank_recon_card"
+  | "cash_forecast_strip"
+  | "renewal_card";
 
 export type SurfaceContext =
   | "engagement_dashboard"
@@ -370,6 +382,11 @@ const RESTRICTED_DENIED_MODULES: ReadonlySet<CapabilityModule> = new Set([
   "wip",
   "margin",
   "leakage",
+  // L2C Wave 4 — restricted personas never see cash, bank, treasury, renewal.
+  "cash",
+  "bank",
+  "treasury",
+  "renewal",
 ]);
 
 /**

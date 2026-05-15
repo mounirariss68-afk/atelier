@@ -73,6 +73,9 @@ import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
 import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
 import revrecRoutes from "./revrecRoutes";
+import bankRoutes from "./bankRoutes";
+import cashRoutes from "./cashRoutes";
+import renewalRoutes from "./renewalRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -195,6 +198,9 @@ router.use(ledgerRoutes);
 // Task #259 — v3 Wallet: Expenses + Auditor + Policy + FX + VAT.
 router.use(walletRoutes);
 router.use(invoiceRoutes);
+router.use("/wallet/bank", bankRoutes);
+router.use("/wallet/cash", cashRoutes);
+router.use("/crm/renewals", renewalRoutes);
 // Task #290 — Reference-data lookups (countries / industries / sub-industries).
 router.use(referenceRoutes);
 router.use(principleOverrideRoutes);

@@ -1436,6 +1436,77 @@ export const BenchPlanner = stub("ag_bench_planner", "Bench Planner", "Personal"
 export const BrandTranslator = stub("ag_brand_translator", "Brand Translator", "Quality", "Cross-cutting", "Rewrites drafts into AICo brand voice across EN/AR/TR.");
 export const Storyboarder = stub("ag_storyboarder", "Storyboarder", "Front of House", "Shape", "Turns narratives into slide-ready storyboards.");
 
+// L2C Wave 4 (Task #363) — cash application + 13-week cash forecaster.
+// Both have real runners (rule-based fallback + Claude path). Registered
+// status because UI surfaces ship in the same wave but the registry is
+// the catalog source of truth.
+export const CashApplicationMatcher = defineAgent({
+  id: "ag_cash_application_matcher",
+  name: "Cash Application Matcher",
+  group: "Wallet",
+  stage: "Deliver",
+  purpose: "Proposes which open invoice(s) a bank receipt should clear, with rationale.",
+  model: "claude-haiku-4-5",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/cash-application-matcher.v1.md",
+  inputSchema: z.object({
+    receiptId: z.string(),
+    openInvoiceCount: z.number(),
+  }),
+  outputSchema: z.object({
+    recommended: z.enum(["apply_full", "apply_split", "apply_overpayment", "manual_review"]),
+    candidates: z.array(z.object({
+      invoiceId: z.string(),
+      invoiceNumber: z.string().nullable(),
+      appliedAmount: z.number(),
+      confidence: z.number(),
+      rationale: z.string(),
+    })),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: ["Append-only writes; reversals are paired rows.", "Never auto-applies without human confirmation."],
+  humanCheckpoints: [{ id: "cp_finance", label: "Finance confirms apply", decider: "engagement_lead", blocking: true }],
+  evals: [],
+});
+
+export const CashFlowForecaster = defineAgent({
+  id: "ag_cash_flow_forecaster",
+  name: "Cash Flow Forecaster",
+  group: "Atelier",
+  stage: "Deliver",
+  purpose: "Produces a 13-week direct-method cash forecast snapshot with confidence bands and cash-gap weeks.",
+  model: "claude-sonnet-4-6",
+  starred: true,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/cash-flow-forecaster.v1.md",
+  inputSchema: z.object({ asOf: z.string(), currency: z.string() }),
+  outputSchema: z.object({
+    snapshotId: z.string(),
+    asOf: z.string(),
+    currency: z.string(),
+    openingBalance: z.number(),
+    weeks: z.array(z.object({
+      weekIndex: z.number(),
+      weekStart: z.string(),
+      expectedIn: z.number(),
+      expectedOut: z.number(),
+      openingBalance: z.number(),
+      closingBalance: z.number(),
+      confidenceLow: z.number(),
+      confidenceHigh: z.number(),
+      isCashGap: z.boolean(),
+    })),
+    cashGapWeeks: z.array(z.number()),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: ["Rule-based fallback always available.", "Cash-gap weeks must be flagged red."],
+  humanCheckpoints: [],
+  evals: [],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -1489,6 +1560,9 @@ export const ATELIER_AGENTS: Agent[] = [
   BenchPlanner,
   BrandTranslator,
   Storyboarder,
+  // L2C Wave 4 (Task #363)
+  CashApplicationMatcher,
+  CashFlowForecaster,
 ];
 
 export const AGENT_BY_ID: Record<string, Agent> = Object.fromEntries(

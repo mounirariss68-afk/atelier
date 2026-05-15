@@ -51,6 +51,9 @@ import WalletInvoices from "@/pages/wallet/WalletInvoices";
 import WalletInvoiceDetail from "@/pages/wallet/WalletInvoiceDetail";
 import WalletAr from "@/pages/wallet/WalletAr";
 import WalletCollections from "@/pages/wallet/WalletCollections";
+import WalletCash from "@/pages/wallet/WalletCash";
+import WalletCashRecon from "@/pages/wallet/WalletCashRecon";
+import WalletTreasury from "@/pages/wallet/WalletTreasury";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 // v5 — Scale & Trust
 import PressIndex from "@/pages/press/PressIndex";
@@ -298,6 +301,9 @@ function Router() {
         <Route path="/wallet/invoices" component={WalletInvoices} />
         <Route path="/wallet/invoices/:id" component={WalletInvoiceDetail} />
         <Route path="/wallet/ar" component={WalletAr} />
+        <Route path="/wallet/cash" component={WalletCash} />
+        <Route path="/wallet/cash/recon" component={WalletCashRecon} />
+        <Route path="/wallet/treasury" component={WalletTreasury} />
         <Route path="/wallet/collections" component={WalletCollections} />
         <Route path="/accounts/:accountId" component={Account} />
         {/* Task #370 — Agents lens (Design → Retire). New stage routes

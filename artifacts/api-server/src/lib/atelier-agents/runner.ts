@@ -6606,3 +6606,251 @@ export async function runRenewalWatchdog(
     throw err;
   }
 }
+
+// =============================================================
+// Task #363 (L2C Wave 4) — Cash Application Matcher (rule-based)
+// =============================================================
+
+export interface CashApplicationMatcherInput {
+  receipt: {
+    id: string;
+    totalAmount: number;
+    currency: string;
+    counterpartyNameRaw: string | null;
+    referenceRaw: string | null;
+    postedDate: string;
+  };
+  openInvoices: Array<{
+    id: string;
+    invoiceNumber: string | null;
+    billToName: string | null;
+    currency: string;
+    total: number;
+    amountPaid: number;
+    dueDate: string | null;
+  }>;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}
+
+export interface CashApplicationMatcherOutput {
+  recommended: "apply_full" | "apply_split" | "apply_overpayment" | "manual_review";
+  candidates: Array<{
+    invoiceId: string;
+    invoiceNumber: string | null;
+    appliedAmount: number;
+    confidence: number;
+    rationale: string;
+  }>;
+  rationaleSummary: string;
+}
+
+function nameSimilarity(a: string | null | undefined, b: string | null | undefined): number {
+  if (!a || !b) return 0;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const A = norm(a), B = norm(b);
+  if (!A || !B) return 0;
+  if (A === B) return 1;
+  if (A.includes(B) || B.includes(A)) return 0.85;
+  // Token overlap (Jaccard).
+  const ta = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
+  const tb = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+  const inter = [...ta].filter((t) => tb.has(t)).length;
+  const uni = new Set([...ta, ...tb]).size;
+  return uni === 0 ? 0 : inter / uni;
+}
+
+function ruleBasedCashMatch(input: CashApplicationMatcherInput): CashApplicationMatcherOutput {
+  const r = input.receipt;
+  const candidates: CashApplicationMatcherOutput["candidates"] = [];
+  for (const inv of input.openInvoices) {
+    if (inv.currency !== r.currency) continue;
+    const outstanding = Math.round((inv.total - inv.amountPaid) * 100) / 100;
+    if (outstanding <= 0) continue;
+    const sim = nameSimilarity(r.counterpartyNameRaw, inv.billToName);
+    const refMatch = !!(inv.invoiceNumber && r.referenceRaw &&
+      r.referenceRaw.toLowerCase().includes(inv.invoiceNumber.toLowerCase()));
+    const amtClose = Math.abs(outstanding - r.totalAmount) <= 1;
+    let confidence = 0.1;
+    let rationale = "weak match";
+    if (refMatch) { confidence = 0.95; rationale = `Reference contains ${inv.invoiceNumber}`; }
+    else if (sim >= 0.7 && amtClose) { confidence = 0.85; rationale = `Counterparty + amount match outstanding`; }
+    else if (sim >= 0.7) { confidence = 0.55; rationale = `Counterparty match; amount differs`; }
+    else if (amtClose) { confidence = 0.4; rationale = `Exact outstanding match; no name match`; }
+    if (confidence > 0.1) {
+      candidates.push({
+        invoiceId: inv.id, invoiceNumber: inv.invoiceNumber,
+        appliedAmount: Math.min(outstanding, r.totalAmount), confidence, rationale,
+      });
+    }
+  }
+  candidates.sort((a, b) => b.confidence - a.confidence);
+  const top = candidates[0];
+  let recommended: CashApplicationMatcherOutput["recommended"] = "manual_review";
+  let summary = "No high-confidence match; manual review.";
+  if (top && top.confidence >= 0.85) {
+    if (Math.abs(top.appliedAmount - r.totalAmount) <= 1) { recommended = "apply_full"; summary = `Apply full ${r.totalAmount} to ${top.invoiceNumber ?? top.invoiceId}.`; }
+    else if (top.appliedAmount < r.totalAmount) { recommended = "apply_overpayment"; summary = `Apply ${top.appliedAmount} to ${top.invoiceNumber ?? top.invoiceId}; remainder is overpayment.`; }
+    else { recommended = "apply_split"; summary = `Split across top candidates.`; }
+  } else if (candidates.length >= 2) {
+    recommended = "apply_split";
+    summary = `Split across ${Math.min(3, candidates.length)} candidates.`;
+  }
+  return { recommended, candidates: candidates.slice(0, 5), rationaleSummary: summary };
+}
+
+export async function runCashApplicationMatcher(
+  input: CashApplicationMatcherInput,
+): Promise<{ runId: string; output: CashApplicationMatcherOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_cash_application_matcher",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "cash_receipt",
+    targetId: input.receipt.id,
+    targetLabel: `Receipt ${input.receipt.currency} ${input.receipt.totalAmount}`,
+    inputs: { receiptId: input.receipt.id, openInvoiceCount: input.openInvoices.length },
+    actorLabel: input.actorLabel,
+  });
+  try {
+    const { value, costUsd, source, warning } = await callClaudeJson<CashApplicationMatcherOutput>(
+      "claude-haiku-4-5",
+      "You are the Cash Application Matcher. Return a ranked list of invoice candidates for the receipt.",
+      JSON.stringify(input),
+      () => ruleBasedCashMatch(input),
+    );
+    const conf: "green" | "amber" | "red" =
+      value.candidates[0]?.confidence >= 0.85 ? "green" :
+      value.candidates[0]?.confidence >= 0.5 ? "amber" : "red";
+    await completeRun({
+      runId, output: value as unknown, confidence: conf, costUsd,
+      durationMs: Date.now() - t0, sourcesCount: value.candidates.length,
+      actorLabel: input.actorLabel, targetType: "cash_receipt",
+      targetId: input.receipt.id, targetLabel: `Receipt ${input.receipt.id}`,
+      source, warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: input.actorLabel, targetType: "cash_receipt", targetId: input.receipt.id });
+    throw err;
+  }
+}
+
+// =============================================================
+// Task #363 (L2C Wave 4) — Cash Flow Forecaster (rule-based)
+// =============================================================
+
+export interface CashFlowForecasterInput {
+  asOf: string;
+  currency: string;
+  openingBalance: number;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}
+
+export interface CashFlowForecasterWeek {
+  weekIndex: number;
+  weekStart: string;
+  expectedIn: number;
+  expectedOut: number;
+  openingBalance: number;
+  closingBalance: number;
+  confidenceLow: number;
+  confidenceHigh: number;
+  isCashGap: boolean;
+}
+
+export interface CashFlowForecasterOutput {
+  snapshotId: string;
+  asOf: string;
+  currency: string;
+  openingBalance: number;
+  weeks: CashFlowForecasterWeek[];
+  cashGapWeeks: number[];
+  rationaleSummary: string;
+}
+
+function isoMondayOnOrAfter(d: Date): Date {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dow = x.getUTCDay(); // 0=Sun
+  const offset = dow === 1 ? 0 : (dow === 0 ? 1 : 8 - dow);
+  x.setUTCDate(x.getUTCDate() + offset);
+  return x;
+}
+
+async function ruleBasedForecast(
+  input: CashFlowForecasterInput,
+  rows: Array<{ outstanding: number; dueDate: string | null }>,
+): Promise<CashFlowForecasterOutput> {
+  const start = isoMondayOnOrAfter(new Date(input.asOf));
+  const weeks: CashFlowForecasterWeek[] = [];
+  let opening = input.openingBalance;
+  for (let i = 0; i < 13; i++) {
+    const wkStart = new Date(start.getTime() + i * 7 * 86400_000);
+    const wkEnd = new Date(wkStart.getTime() + 7 * 86400_000);
+    const expectedIn = rows
+      .filter((r) => r.dueDate && new Date(r.dueDate).getTime() >= wkStart.getTime() && new Date(r.dueDate).getTime() < wkEnd.getTime())
+      .reduce((s, r) => s + r.outstanding, 0);
+    // Synthetic recurring outflow (payroll-like) every 2nd week (mock).
+    const expectedOut = (i % 2 === 0) ? Math.round(input.openingBalance * 0.05 * 100) / 100 : 0;
+    const closing = Math.round((opening + expectedIn - expectedOut) * 100) / 100;
+    weeks.push({
+      weekIndex: i, weekStart: wkStart.toISOString().slice(0, 10),
+      expectedIn: Math.round(expectedIn * 100) / 100, expectedOut,
+      openingBalance: Math.round(opening * 100) / 100, closingBalance: closing,
+      confidenceLow: Math.round(closing * 0.85 * 100) / 100,
+      confidenceHigh: Math.round(closing * 1.15 * 100) / 100,
+      isCashGap: closing < 0,
+    });
+    opening = closing;
+  }
+  const snapshotId = `snap_${Date.now().toString(36)}`;
+  return {
+    snapshotId, asOf: input.asOf, currency: input.currency,
+    openingBalance: input.openingBalance, weeks,
+    cashGapWeeks: weeks.filter((w) => w.isCashGap).map((w) => w.weekIndex),
+    rationaleSummary: `13-week direct-method forecast from ${weeks[0].weekStart} based on ${rows.length} open AR rows.`,
+  };
+}
+
+export async function runCashFlowForecaster(
+  input: CashFlowForecasterInput,
+): Promise<{ runId: string; output: CashFlowForecasterOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_cash_flow_forecaster",
+    triggeredByUserId: input.triggeredByUserId,
+    targetType: "cash_forecast",
+    targetId: "_firm_",
+    targetLabel: "13-week cash forecast",
+    inputs: { asOf: input.asOf, currency: input.currency },
+    actorLabel: input.actorLabel,
+  });
+  try {
+    // Pull open AR rows for the rule-based fallback path.
+    const { db: dbRef, atelierInvoice: invTbl } = await import("@workspace/db");
+    const { isNull: isN } = await import("drizzle-orm");
+    const rows = (await dbRef.select().from(invTbl).where(isN(invTbl.deletedAt)))
+      .filter((i) => i.total - i.amountPaid > 0.01)
+      .map((i) => ({ outstanding: i.total - i.amountPaid, dueDate: i.dueDate }));
+    const fallback = await ruleBasedForecast(input, rows);
+    const { value, costUsd, source, warning } = await callClaudeJson<CashFlowForecasterOutput>(
+      "claude-sonnet-4-6",
+      "You are the Cash Flow Forecaster. Produce a 13-week direct-method forecast.",
+      JSON.stringify({ ...input, openInvoices: rows }),
+      () => fallback,
+    );
+    const conf: "green" | "amber" | "red" =
+      value.cashGapWeeks.length === 0 ? "green" : value.cashGapWeeks.some((w) => w < 4) ? "red" : "amber";
+    await completeRun({
+      runId, output: value as unknown, confidence: conf, costUsd,
+      durationMs: Date.now() - t0, sourcesCount: value.weeks.length,
+      actorLabel: input.actorLabel, targetType: "cash_forecast", targetId: "_firm_",
+      targetLabel: "13-week cash forecast", source, warning,
+    });
+    return { runId, output: value, costUsd };
+  } catch (err) {
+    await failRun(runId, err, { actorLabel: input.actorLabel, targetType: "cash_forecast", targetId: "_firm_" });
+    throw err;
+  }
+}

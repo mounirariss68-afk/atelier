@@ -703,6 +703,7 @@ export default function Home() {
 
           {/* Workspace shelf — replaces the Ledger / Roster / Finance top-nav entries. */}
           {me?.role && <WorkspaceShelf role={me.role} />}
+          {me?.role && <RenewalShelf role={me.role} />}
         </div>
 
         {/* PANE B & C Column */}
@@ -792,6 +793,65 @@ export default function Home() {
 
         </div>
       </div>
+    </div>
+  );
+}
+
+interface HomeRenewalRow {
+  id: string;
+  accountId: string | null;
+  status: string;
+  riskTier: string;
+  currentArrUsd: number;
+  proposedArrUsd: number;
+  nrrDeltaPct: number;
+  renewalDueAt: string | null;
+}
+
+const RENEWAL_SHELF_ROLES = new Set([
+  "founding_partner", "partner", "senior_manager", "finance", "board_observer",
+]);
+
+function RenewalShelf({ role }: { role: string }) {
+  const [rows, setRows] = React.useState<HomeRenewalRow[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
+  React.useEffect(() => {
+    if (!RENEWAL_SHELF_ROLES.has(role)) { setLoaded(true); return; }
+    void fetch("/api/atelier/crm/renewals?status=open", { credentials: "include" })
+      .then((r) => r.json())
+      .then((j) => setRows(j?.data?.rows ?? []))
+      .finally(() => setLoaded(true));
+  }, [role]);
+  if (!RENEWAL_SHELF_ROLES.has(role)) return null;
+  if (!loaded) return null;
+  if (rows.length === 0) return null;
+  const top = rows.slice(0, 4);
+  const totalArr = rows.reduce((s, r) => s + r.currentArrUsd, 0);
+  const totalProposed = rows.reduce((s, r) => s + r.proposedArrUsd, 0);
+  const nrr = totalArr > 0 ? Math.round(((totalProposed - totalArr) / totalArr) * 1000) / 10 : 0;
+  return (
+    <div className="mt-6" data-testid="home-renewal-shelf">
+      <div className="flex items-baseline justify-between mb-2">
+        <SectionLabel>Renewals · NRR</SectionLabel>
+        <Link href="/crm" className="text-[11px] font-mono text-text-faint hover:text-gold">All renewals →</Link>
+      </div>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-baseline justify-between">
+          <div className="text-2xl font-light">{rows.length} <span className="text-xs font-mono text-text-faint">open</span></div>
+          <div className={`text-sm font-mono ${nrr >= 0 ? "text-success" : "text-danger"}`}>NRR Δ {nrr >= 0 ? "+" : ""}{nrr}%</div>
+        </div>
+        <ul className="divide-y divide-border-soft">
+          {top.map((r) => (
+            <li key={r.id} className="py-1.5 flex items-center justify-between text-xs font-mono">
+              <span className="truncate">
+                <MonoChip tone={r.riskTier === "red" ? "red" : r.riskTier === "amber" ? "amber" : "green"}>{r.riskTier}</MonoChip>
+                <span className="ml-2 text-text">{r.accountId ?? r.id}</span>
+              </span>
+              <span className="text-text-mute">${r.currentArrUsd.toFixed(0)} → ${r.proposedArrUsd.toFixed(0)} {r.renewalDueAt ?? ""}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </div>
   );
 }

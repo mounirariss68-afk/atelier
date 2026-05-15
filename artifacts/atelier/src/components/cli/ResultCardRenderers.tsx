@@ -204,9 +204,160 @@ function ShapeBody({
       return <ArAgingGrid data={data} locale={locale} />;
     case "dunning_card":
       return <DunningCard data={data} locale={locale} />;
+    case "cash_receipt_card":
+      return <CashReceiptCard data={data} locale={locale} />;
+    case "bank_recon_card":
+      return <BankReconCard data={data} locale={locale} />;
+    case "cash_forecast_strip":
+      return <CashForecastStrip data={data} locale={locale} />;
+    case "renewal_card":
+      return <RenewalCard data={data} locale={locale} />;
     default:
       return <FallbackJson data={data} />;
   }
+}
+
+/* ─────────────────── Task #363 — L2C Wave 4 cards ─────────────────── */
+
+function CashReceiptCard({ data, locale: _locale }: { data: Json; locale: CliLocale }) {
+  const r = asObj(data.receipt ?? data);
+  const apps = asArr(data.applicationIds);
+  const recommended = asStr(data.recommended);
+  const candidates = asArr(data.candidates);
+  const total = asNum(r.totalAmount) ?? 0;
+  const applied = asNum(r.appliedAmount) ?? 0;
+  return (
+    <div className="space-y-2" data-testid="cli-cash-receipt-card">
+      <div className="flex items-baseline justify-between">
+        <div className="font-mono text-sm">{asStr(r.id) || "(receipt)"}</div>
+        <div className="font-display text-lg">${fmtNum(total)}</div>
+      </div>
+      <div className="text-[11px] font-mono text-text-mute">
+        applied {fmtNum(applied)} · remaining {fmtNum(total - applied)}
+        {apps.length > 0 && ` · ${apps.length} application${apps.length === 1 ? "" : "s"}`}
+      </div>
+      {recommended && (
+        <div className="text-[11px] font-mono">
+          <span className="uppercase text-text-faint">recommended</span>{" "}
+          <span className="text-gold">{recommended}</span>
+        </div>
+      )}
+      {candidates.length > 0 && (
+        <ul className="space-y-1">
+          {candidates.slice(0, 5).map((c, i) => {
+            const co = asObj(c);
+            return (
+              <li key={i} className="flex items-center justify-between text-[11px] font-mono">
+                <span className="truncate">{asStr(co.invoiceNumber) || asStr(co.invoiceId)} — {asStr(co.rationale)}</span>
+                <span className="ml-2 text-text-mute">{fmtNum(asNum(co.appliedAmount) ?? 0)} ({((asNum(co.confidence) ?? 0) * 100).toFixed(0)}%)</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function BankReconCard({ data, locale: _locale }: { data: Json; locale: CliLocale }) {
+  const id = asStr(data.id);
+  const status = asStr(data.status);
+  const variance = asNum(data.variance) ?? 0;
+  const receipts = asNum(data.computedReceipts) ?? 0;
+  const payments = asNum(data.computedPayments) ?? 0;
+  return (
+    <div className="space-y-1.5" data-testid="cli-bank-recon-card">
+      <div className="flex items-baseline justify-between">
+        <div className="font-mono text-sm">{id || "(recon)"}</div>
+        <span className={cn("text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border",
+          status === "finalised" ? "bg-success/15 text-success border-success/30" : "bg-warning/15 text-warning border-warning/30")}>
+          {status || "open"}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5 text-[11px] font-mono">
+        <div className="bg-bg-deep border border-border-soft rounded p-1.5">
+          <div className="text-text-faint uppercase">receipts</div>
+          <div>${fmtNum(receipts)}</div>
+        </div>
+        <div className="bg-bg-deep border border-border-soft rounded p-1.5">
+          <div className="text-text-faint uppercase">payments</div>
+          <div>${fmtNum(payments)}</div>
+        </div>
+        <div className={cn("bg-bg-deep border rounded p-1.5", Math.abs(variance) > 0.01 ? "border-danger/30" : "border-border-soft")}>
+          <div className="text-text-faint uppercase">variance</div>
+          <div className={cn(Math.abs(variance) > 0.01 ? "text-danger" : "text-success")}>${fmtNum(variance)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CashForecastStrip({ data, locale }: { data: Json; locale: CliLocale }) {
+  const weeks = asArr(data.weeks) as Json[];
+  const gaps = asArr(data.cashGapWeeks);
+  if (weeks.length === 0) {
+    return <div className="text-xs text-text-mute italic">{locale === "ar" ? "لا توجد لقطة" : "No snapshot."}</div>;
+  }
+  const max = Math.max(1, ...weeks.map((w) => Math.abs(asNum(w.closingBalance) ?? 0)));
+  return (
+    <div data-testid="cli-cash-forecast-strip" className="space-y-2">
+      <div className="grid grid-cols-13 gap-0.5" style={{ gridTemplateColumns: "repeat(13, minmax(0, 1fr))" }}>
+        {weeks.map((w, i) => {
+          const close = asNum(w.closingBalance) ?? 0;
+          const gap = !!w.isCashGap;
+          const h = Math.max(4, Math.round((Math.abs(close) / max) * 40));
+          return (
+            <div key={i} className="flex flex-col items-center">
+              <div className="text-[9px] font-mono text-text-faint">w{asNum(w.weekIndex) ?? i}</div>
+              <div className={cn("w-full rounded", gap ? "bg-danger" : close >= 0 ? "bg-gold" : "bg-warning")} style={{ height: `${h}px` }} title={`${asStr(w.weekStart)}: ${close}`} />
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[11px] font-mono text-text-mute">
+        13 weeks · {gaps.length} gap{gaps.length === 1 ? "" : "s"}
+        {gaps.length > 0 && <span className="text-danger ml-2">cash-gap weeks: {gaps.join(", ")}</span>}
+      </div>
+    </div>
+  );
+}
+
+function RenewalCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const r = asObj(data.renewal ?? data);
+  const cur = asNum(r.currentArrUsd) ?? 0;
+  const proposed = asNum(r.proposedArrUsd) ?? 0;
+  const nrr = asNum(r.nrrDeltaPct) ?? 0;
+  const risk = asStr(r.riskTier) || "green";
+  const status = asStr(r.status) || "open";
+  return (
+    <div className="space-y-2" data-testid="cli-renewal-card">
+      <div className="flex items-baseline justify-between">
+        <div className="font-mono text-sm">{asStr(r.id)}</div>
+        <span className={cn("text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border",
+          risk === "red" ? "bg-danger/15 text-danger border-danger/30" :
+          risk === "amber" ? "bg-warning/15 text-warning border-warning/30" :
+          "bg-success/15 text-success border-success/30")}>{risk}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5 text-[11px] font-mono">
+        <div className="bg-bg-deep border border-border-soft rounded p-1.5">
+          <div className="text-text-faint uppercase">current ARR</div>
+          <div>${fmtNum(cur)}</div>
+        </div>
+        <div className="bg-bg-deep border border-border-soft rounded p-1.5">
+          <div className="text-text-faint uppercase">proposed</div>
+          <div>${fmtNum(proposed)}</div>
+        </div>
+        <div className={cn("bg-bg-deep border rounded p-1.5", nrr < 0 ? "border-danger/30" : "border-border-soft")}>
+          <div className="text-text-faint uppercase">NRR Δ</div>
+          <div className={cn(nrr >= 0 ? "text-success" : "text-danger")}>{nrr >= 0 ? "+" : ""}{nrr}%</div>
+        </div>
+      </div>
+      <div className="text-[11px] font-mono text-text-mute">
+        {locale === "ar" ? "حالة" : "status"}: {status}
+        {r.renewalDueAt && <span className="ml-2">due {asStr(r.renewalDueAt)}</span>}
+      </div>
+    </div>
+  );
 }
 
 /* ─────────────────────── change_order_card ─────────────────────── */

@@ -1726,8 +1726,58 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "codex_dpa_review", confidence: dpaId ? "high" : "low", input: { dpaId } };
   }
 
+  // =====================================================================
+  // L2C Wave 4 (Task #363) — cash application, bank reconciliation,
+  // 13-week forecast, renewal motion. These branches must precede the
+  // broader Renewal Watchdog branch below ("renewals?" catches
+  // "renewal_open" / "renewal_list" otherwise).
+  // =====================================================================
+
+  // Bank statement import — "Import the bank statement".
+  if (/\bimport\b.*\bbank\s+statement\b/i.test(promptRaw) || /\bbank\s+statement\b.*\bimport\b/i.test(promptRaw)) {
+    const acctId = findIdLike(promptRaw, ["bank", "ba"]) ?? "";
+    return { toolName: "bank_import", confidence: acctId ? "high" : "low", input: { bankAccountId: acctId, format: "csv", payload: "" } };
+  }
+
+  // Bank reconciliation finalise — "Finalise the bank reconciliation".
+  if (/\b(finalis|finaliz)e\b.*\bbank\s+(reconciliation|recon)\b/i.test(promptRaw) || /\bbank\s+(reconciliation|recon)\b.*\b(finalis|finaliz)e\b/i.test(promptRaw)) {
+    const acctId = findIdLike(promptRaw, ["bank", "ba"]) ?? "";
+    const period = promptRaw.match(/\b(\d{4}-\d{2})\b/)?.[1] ?? "";
+    return { toolName: "bank_recon_finalise", confidence: acctId ? "high" : "low", input: { bankAccountId: acctId, period } };
+  }
+
+  // Cash application — match (suggest) — must precede apply.
+  if (/\bmatch\b.*\bcash\s+receipt\b/i.test(promptRaw) || /\bcash\s+receipt\b.*\bmatch\b/i.test(promptRaw)) {
+    const rcptId = findIdLike(promptRaw, ["rcpt", "receipt"]) ?? "";
+    return { toolName: "cash_match", confidence: rcptId ? "high" : "low", input: { receiptId: rcptId } };
+  }
+
+  // Cash application — apply.
+  if (/\bapply\s+cash\b/i.test(promptRaw) || (/\bcash\b.*\bapply\b/i.test(promptRaw) && /\binvoice\b/i.test(promptRaw))) {
+    const rcptId = findIdLike(promptRaw, ["rcpt", "receipt"]) ?? "";
+    const invId = findIdLike(promptRaw, ["inv", "invoice"]) ?? "";
+    return { toolName: "cash_apply", confidence: rcptId && invId ? "high" : "low", input: { receiptId: rcptId, invoiceId: invId } };
+  }
+
+  // 13-week cash forecast.
+  if (/\b13[-\s]?week\b.*\b(cash\s+forecast|forecast)\b/i.test(promptRaw) || /\bcash\s+forecast(?:er)?\b/i.test(promptRaw) || /\brun\s+the\s+cash\s+forecaster\b/i.test(promptRaw)) {
+    return { toolName: "cash_forecast_13w", confidence: "high", input: {} };
+  }
+
+  // Renewal — list (read).
+  if (/\b(list|show)\s+(?:the\s+)?(open|active)?\s*renewals?\b/i.test(promptRaw)) {
+    return { toolName: "renewal_list", confidence: "high", input: { status: /\bopen\b/i.test(promptRaw) ? "open" : "" } };
+  }
+
+  // Renewal — open (write).
+  if (/\bopen\s+(?:a\s+)?renewal\b/i.test(promptRaw) || /\bcreate\s+(?:a\s+)?renewal\b/i.test(promptRaw)) {
+    const acctId = findIdLike(promptRaw, ["acct", "acc"]) ?? "";
+    const ctId = findIdLike(promptRaw, ["ct", "contract"]) ?? "";
+    return { toolName: "renewal_open", confidence: acctId || ctId ? "high" : "low", input: { accountId: acctId, contractId: ctId } };
+  }
+
   // Renewal Watchdog — "Show contracts expiring …" / "Run renewal watchdog".
-  if (/(contracts?\s+expiring|expiring\s+contracts?|renewal\s+watchdog|expiry|renewals?)\b/i.test(promptRaw) && !/\bredline\b/i.test(promptRaw)) {
+  if (/(contracts?\s+expiring|expiring\s+contracts?|renewal\s+watchdog|expiry)\b/i.test(promptRaw) && !/\bredline\b/i.test(promptRaw)) {
     const days = promptRaw.match(/\b(\d{1,3})\s*(?:days?|d)\b/i);
     return {
       toolName: "codex_renewal_watchdog_run",

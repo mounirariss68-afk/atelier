@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useAtelierListAccounts, useAtelierGetMe } from "@workspace/api-client-react";
+import { TabNav, TabNavLink } from "@/components/ui/primitives";
 import {
   PageHero,
   SectionHead,
@@ -33,6 +34,7 @@ export default function Crm() {
   const { data: accounts, isLoading } = useAtelierListAccounts();
   const { data: me } = useAtelierGetMe();
   const canCreate = !!me && CREATE_ROLES.has(me.role);
+  const [view, setView] = useState<"accounts" | "renewals">("accounts");
   const [tier, setTier] = useState<string>("");
   const [sector, setSector] = useState<string>("");
   const [q, setQ] = useState("");
@@ -64,6 +66,23 @@ export default function Crm() {
     0,
   );
   const tierA = (accounts ?? []).filter((a) => a.tier === "A").length;
+
+  if (view === "renewals") {
+    return (
+      <div className="animate-in fade-in" data-testid="page-crm-renewals">
+        <PageHero>
+          <SectionHead headline="Renewals & NRR" lede="Open renewal motions, risk tier, and net-revenue-retention delta." />
+        </PageHero>
+        <TabNav>
+          <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("accounts"); }}>Accounts</TabNavLink>
+          <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Renewals</TabNavLink>
+        </TabNav>
+        <div className="container-atelier py-10">
+          <RenewalsTab />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in">
@@ -103,6 +122,10 @@ export default function Crm() {
           </div>
         </div>
       </PageHero>
+      <TabNav>
+        <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Accounts</TabNavLink>
+        <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("renewals"); }}>Renewals</TabNavLink>
+      </TabNav>
 
       <div className="container-atelier py-10 space-y-6">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
@@ -205,6 +228,102 @@ export default function Crm() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface RenewalRow {
+  id: string;
+  accountId: string | null;
+  status: string;
+  riskTier: string;
+  currentArrUsd: number;
+  proposedArrUsd: number;
+  nrrDeltaPct: number;
+  renewalDueAt: string | null;
+}
+
+function RenewalsTab() {
+  const [rows, setRows] = useState<RenewalRow[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    const r = await fetch("/api/atelier/crm/renewals?status=open", { credentials: "include" });
+    const j = await r.json();
+    setRows(j?.data?.rows ?? []);
+  };
+  useEffect(() => { void load(); }, []);
+
+  const autoOpen = async () => {
+    setBusy(true);
+    try {
+      await fetch("/api/atelier/crm/renewals/auto-open", {
+        method: "POST", credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ horizonDays: 90 }),
+      });
+      await load();
+    } finally { setBusy(false); }
+  };
+
+  const totalArr = rows.reduce((s, r) => s + r.currentArrUsd, 0);
+  const totalProposed = rows.reduce((s, r) => s + r.proposedArrUsd, 0);
+  const nrr = totalArr > 0 ? Math.round(((totalProposed - totalArr) / totalArr) * 1000) / 10 : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between">
+        <div className="grid grid-cols-3 gap-3 flex-1 mr-4">
+          <Card className="p-3">
+            <div className="text-[11px] font-mono uppercase text-text-faint">Open renewals</div>
+            <div className="text-2xl font-light">{rows.length}</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-[11px] font-mono uppercase text-text-faint">Current ARR</div>
+            <div className="text-2xl font-light">${totalArr.toFixed(0)}</div>
+          </Card>
+          <Card className="p-3 border-gold/40">
+            <div className="text-[11px] font-mono uppercase text-text-faint">NRR Δ</div>
+            <div className={`text-2xl font-light ${nrr >= 0 ? "text-success" : "text-danger"}`}>{nrr >= 0 ? "+" : ""}{nrr}%</div>
+          </Card>
+        </div>
+        <PillButton variant="ghost" disabled={busy} data-testid="btn-renewal-auto-open" onClick={autoOpen}>
+          {busy ? "Sweeping…" : "Auto-open T-90"}
+        </PillButton>
+      </div>
+      <Card className="overflow-hidden">
+        <table className="w-full text-sm" data-testid="renewals-rows">
+          <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+            <tr>
+              <th className="text-left px-3 py-2">Renewal</th>
+              <th className="text-left px-3 py-2">Account</th>
+              <th className="text-right px-3 py-2">Current ARR</th>
+              <th className="text-right px-3 py-2">Proposed</th>
+              <th className="text-right px-3 py-2">NRR Δ</th>
+              <th className="text-left px-3 py-2">Risk</th>
+              <th className="text-left px-3 py-2">Due</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-text-mute">No open renewals. Click <span className="font-mono">Auto-open T-90</span>.</td></tr>
+            )}
+            {rows.map((r) => (
+              <tr key={r.id} className="border-t border-border-soft">
+                <td className="px-3 py-2 font-mono text-xs">{r.id}</td>
+                <td className="px-3 py-2 font-mono text-xs">{r.accountId ?? "—"}</td>
+                <td className="px-3 py-2 text-right font-mono">${r.currentArrUsd.toFixed(0)}</td>
+                <td className="px-3 py-2 text-right font-mono">${r.proposedArrUsd.toFixed(0)}</td>
+                <td className={`px-3 py-2 text-right font-mono ${r.nrrDeltaPct >= 0 ? "text-success" : "text-danger"}`}>
+                  {r.nrrDeltaPct >= 0 ? "+" : ""}{r.nrrDeltaPct}%
+                </td>
+                <td className="px-3 py-2"><MonoChip tone={r.riskTier === "red" ? "red" : r.riskTier === "amber" ? "amber" : "green"}>{r.riskTier}</MonoChip></td>
+                <td className="px-3 py-2 font-mono text-xs">{r.renewalDueAt ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }
