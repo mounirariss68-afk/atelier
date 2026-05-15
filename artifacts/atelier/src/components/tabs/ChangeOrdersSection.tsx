@@ -51,6 +51,12 @@ interface ChangeOrder {
     | "withdrawn"
     | "posted";
   valueDeltaUsd: number | null;
+  // Task #455 — first-class scope/effort deltas. Server returns null
+  // when the persona isn't allowed to see them (mirrors valueDeltaUsd).
+  labourHoursDelta: number | null;
+  labourCostDeltaUsd: number | null;
+  expensesDeltaUsd: number | null;
+  subsDeltaUsd: number | null;
   proposedByUserId: string;
   partnerApproverUserId: string | null;
   clientSignerName: string | null;
@@ -165,6 +171,7 @@ export function ChangeOrdersSection({ engId }: { engId: string }) {
       {showForm && (
         <ProposeForm
           engId={engId}
+          showFinanceFields={isLeadership || isFinance}
           onDone={() => {
             setShowForm(false);
             invalidate();
@@ -199,9 +206,11 @@ export function ChangeOrdersSection({ engId }: { engId: string }) {
 
 function ProposeForm({
   engId,
+  showFinanceFields,
   onDone,
 }: {
   engId: string;
+  showFinanceFields: boolean;
   onDone: () => void;
 }) {
   const { toast } = useToast();
@@ -209,6 +218,11 @@ function ProposeForm({
   const [summary, setSummary] = React.useState("");
   const [rationale, setRationale] = React.useState("");
   const [delta, setDelta] = React.useState("0");
+  // Task #455 — first-class scope/effort deltas, finance/leadership only.
+  const [hoursDelta, setHoursDelta] = React.useState("0");
+  const [labourCostDelta, setLabourCostDelta] = React.useState("0");
+  const [expensesDelta, setExpensesDelta] = React.useState("0");
+  const [subsDelta, setSubsDelta] = React.useState("0");
 
   const create = useMutation({
     mutationFn: async () => {
@@ -222,6 +236,14 @@ function ProposeForm({
           summary: summary.trim(),
           rationaleText: rationale.trim(),
           valueDeltaUsd: Number(delta) || 0,
+          ...(showFinanceFields
+            ? {
+                labourHoursDelta: Number(hoursDelta) || 0,
+                labourCostDeltaUsd: Number(labourCostDelta) || 0,
+                expensesDeltaUsd: Number(expensesDelta) || 0,
+                subsDeltaUsd: Number(subsDelta) || 0,
+              }
+            : {}),
         }),
       });
       if (!r.ok) {
@@ -291,6 +313,70 @@ function ProposeForm({
           data-testid="input-co-rationale"
         />
       </div>
+      {showFinanceFields && (
+        <div
+          className="rounded-md border border-border-soft bg-bg-elevate p-3 space-y-3"
+          data-testid="co-effort-deltas"
+        >
+          <div className="text-[10px] font-mono uppercase tracking-wider text-text-mute">
+            Scope &amp; effort deltas
+            <span className="ml-2 text-text-faint normal-case">
+              (finance / leadership) — used to re-baseline the engagement
+              budget on post
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono uppercase text-text-mute">
+                Δ Labour hours
+              </label>
+              <input
+                type="number"
+                value={hoursDelta}
+                onChange={(e) => setHoursDelta(e.target.value)}
+                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                data-testid="input-co-labour-hours-delta"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono uppercase text-text-mute">
+                Δ Labour cost USD
+              </label>
+              <input
+                type="number"
+                value={labourCostDelta}
+                onChange={(e) => setLabourCostDelta(e.target.value)}
+                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                data-testid="input-co-labour-cost-delta"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono uppercase text-text-mute">
+                Δ Expenses USD
+              </label>
+              <input
+                type="number"
+                value={expensesDelta}
+                onChange={(e) => setExpensesDelta(e.target.value)}
+                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                data-testid="input-co-expenses-delta"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono uppercase text-text-mute">
+                Δ Subs USD
+              </label>
+              <input
+                type="number"
+                value={subsDelta}
+                onChange={(e) => setSubsDelta(e.target.value)}
+                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                data-testid="input-co-subs-delta"
+              />
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex justify-end">
         <PillButton
           variant="primary"
@@ -396,6 +482,7 @@ function ChangeOrderRow({
           {co.rationaleText}
         </p>
       )}
+      <EffortDeltasInline co={co} />
       {co.clientSignerEmail && (
         <div className="text-[11px] font-mono text-text-faint">
           dispatched → {co.clientSignerName} ({co.clientSignerEmail})
@@ -522,6 +609,50 @@ function ChangeOrderRow({
         />
       )}
     </li>
+  );
+}
+
+/**
+ * Task #455 — small inline strip showing the first-class scope/effort
+ * deltas for a change order. Hidden when the persona can't see them
+ * (server returns null) or when nothing has been entered.
+ */
+function EffortDeltasInline({ co }: { co: ChangeOrder }) {
+  const hours = co.labourHoursDelta;
+  const labour = co.labourCostDeltaUsd;
+  const exp = co.expensesDeltaUsd;
+  const subs = co.subsDeltaUsd;
+  if (hours == null && labour == null && exp == null && subs == null) {
+    return null;
+  }
+  const visible: Array<{ key: string; label: string; value: string; tone: string }> = [];
+  const toneFor = (n: number) =>
+    n > 0 ? "text-success" : n < 0 ? "text-danger" : "text-text-faint";
+  const fmtUsd = (n: number) =>
+    `${n > 0 ? "+" : n < 0 ? "−" : ""}$${Math.abs(Math.round(n)).toLocaleString()}`;
+  const fmtHrs = (n: number) =>
+    `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(Math.round(n)).toLocaleString()}h`;
+  if (hours != null && hours !== 0)
+    visible.push({ key: "hours", label: "labour", value: fmtHrs(hours), tone: toneFor(hours) });
+  if (labour != null && labour !== 0)
+    visible.push({ key: "labour", label: "labour $", value: fmtUsd(labour), tone: toneFor(labour) });
+  if (exp != null && exp !== 0)
+    visible.push({ key: "exp", label: "expenses", value: fmtUsd(exp), tone: toneFor(exp) });
+  if (subs != null && subs !== 0)
+    visible.push({ key: "subs", label: "subs", value: fmtUsd(subs), tone: toneFor(subs) });
+  if (visible.length === 0) return null;
+  return (
+    <div
+      className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-mono"
+      data-testid={`co-effort-deltas-${co.id}`}
+    >
+      {visible.map((v) => (
+        <span key={v.key} className="inline-flex items-center gap-1">
+          <span className="text-text-faint uppercase tracking-wider">Δ {v.label}</span>
+          <span className={v.tone}>{v.value}</span>
+        </span>
+      ))}
+    </div>
   );
 }
 

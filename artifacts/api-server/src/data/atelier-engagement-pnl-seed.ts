@@ -98,6 +98,13 @@ export interface ChangeOrder {
     | "withdrawn"
     | "posted";
   valueDeltaUsd: number | null;
+  // Task #455 — first-class scope/effort deltas. Null when the
+  // requesting persona isn't allowed to see them (mirrors the
+  // valueDeltaUsd masking).
+  labourHoursDelta: number | null;
+  labourCostDeltaUsd: number | null;
+  expensesDeltaUsd: number | null;
+  subsDeltaUsd: number | null;
 }
 
 export interface AuditEntry {
@@ -403,6 +410,14 @@ function coFromRow(r: CoRow): ChangeOrder {
     engagementId: r.engagementId,
     status: r.status as ChangeOrder["status"],
     valueDeltaUsd: r.valueUsd,
+    // Task #455 — the engagement-pnl CO table doesn't carry the
+    // scope/effort deltas (those live on `atelier_change_order`); the
+    // EAC engine only needs them via `applyPostedChangeOrder`. Mask
+    // them as null so the projection still satisfies the interface.
+    labourHoursDelta: null,
+    labourCostDeltaUsd: null,
+    expensesDeltaUsd: null,
+    subsDeltaUsd: null,
   };
 }
 function auditFromRow(r: AuditRow): AuditEntry {
@@ -531,14 +546,15 @@ async function insertAudit(
 
 /**
  * Re-baseline an engagement when its change order transitions to `posted`.
- * Adds the value delta to contract value and marks the budget as
- * re-baselined now. Cost/hour impact is not modeled on
- * `atelier_change_order` so BAC is unchanged here — the EAC engine will
- * pick up the new contract value via forecast margin recompute.
+ * Adds the value delta to contract value and the labour-hour / labour-cost /
+ * expenses / subs deltas (Task #455) to the matching budget lines so the
+ * EAC engine forecasts labour cost automatically. BAC is recomputed as
+ * labour + expenses + subs.
  *
  * Pushes an audit entry so the per-engagement P&L audit trail captures
- * the rebase. Returns `null` if the engagement is unknown to the in-memory
- * P&L store, OR if this CO has already been applied (idempotent no-op).
+ * the rebase. Returns `engagement_unknown` if the engagement is unknown
+ * to the in-memory P&L store, OR `already_applied` if this CO has
+ * already been folded in (idempotent no-op).
  */
 export type ApplyPostedChangeOrderResult =
   | { status: "applied"; budget: EngagementBudget }
@@ -549,6 +565,10 @@ export async function applyPostedChangeOrder(args: {
   engagementId: string;
   changeOrderId: string;
   valueDeltaUsd: number;
+  labourHoursDelta?: number;
+  labourCostDeltaUsd?: number;
+  expensesDeltaUsd?: number;
+  subsDeltaUsd?: number;
   actorUserId: string | null;
   /**
    * When true, marks the baseline timestamp with the original posted-at
@@ -566,14 +586,31 @@ export async function applyPostedChangeOrder(args: {
     const budget = await getBudget(args.engagementId);
     if (!budget) return { status: "engagement_unknown" };
 
-    const delta = Number.isFinite(args.valueDeltaUsd) ? args.valueDeltaUsd : 0;
-    const newContractValue = budget.contractValueUsd + delta;
+    const num = (n: number | undefined): number =>
+      typeof n === "number" && Number.isFinite(n) ? n : 0;
+    const valueDelta = num(args.valueDeltaUsd);
+    const hoursDelta = num(args.labourHoursDelta);
+    const labourCostDelta = num(args.labourCostDeltaUsd);
+    const expensesDelta = num(args.expensesDeltaUsd);
+    const subsDelta = num(args.subsDeltaUsd);
+
+    const newContractValue = budget.contractValueUsd + valueDelta;
+    const newLabourHours = budget.budgetLabourHours + hoursDelta;
+    const newLabourCost = budget.budgetLabourCostUsd + labourCostDelta;
+    const newExpenses = budget.budgetExpensesUsd + expensesDelta;
+    const newSubs = budget.budgetSubsUsd + subsDelta;
+    const newBac = newLabourCost + newExpenses + newSubs;
     const baselinedAt = args.baselinedAtIso ?? nowIso();
 
     await tx
       .update(atelierEngagementBudget)
       .set({
         contractValueUsd: newContractValue,
+        budgetLabourHours: newLabourHours,
+        budgetLabourCostUsd: newLabourCost,
+        budgetExpensesUsd: newExpenses,
+        budgetSubsUsd: newSubs,
+        budgetAtCompletionUsd: newBac,
         baselinedAt,
         updatedAt: new Date(),
       })
@@ -581,20 +618,39 @@ export async function applyPostedChangeOrder(args: {
 
     APPLIED_POSTED_COS.add(args.changeOrderId);
 
+    const fmtUsd = (n: number) =>
+      `${n >= 0 ? "+" : ""}$${Math.round(n).toLocaleString()}`;
+    const fmtHrs = (n: number) =>
+      `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString()}h`;
+    const detailParts = [
+      `contract value ${fmtUsd(valueDelta)}`,
+      `labour ${fmtHrs(hoursDelta)} / ${fmtUsd(labourCostDelta)}`,
+      `expenses ${fmtUsd(expensesDelta)}`,
+      `subs ${fmtUsd(subsDelta)}`,
+    ];
     await insertAudit(
       {
         engagementId: args.engagementId,
         at: baselinedAt,
         actorUserId: args.actorUserId,
         action: "change_order.posted",
-        detail: `${args.changeOrderId} posted — engagement re-baselined: contract value ${delta >= 0 ? "+" : ""}$${Math.round(delta).toLocaleString()}.`,
+        detail: `${args.changeOrderId} posted — engagement re-baselined: ${detailParts.join("; ")}.`,
       },
       tx,
     );
 
     return {
       status: "applied",
-      budget: { ...budget, contractValueUsd: newContractValue, baselinedAt },
+      budget: {
+        ...budget,
+        contractValueUsd: newContractValue,
+        budgetLabourHours: newLabourHours,
+        budgetLabourCostUsd: newLabourCost,
+        budgetExpensesUsd: newExpenses,
+        budgetSubsUsd: newSubs,
+        budgetAtCompletionUsd: newBac,
+        baselinedAt,
+      },
     };
   });
 }

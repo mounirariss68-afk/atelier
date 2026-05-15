@@ -483,6 +483,11 @@ const CHANGE_ORDERS: ChangeOrderRow[] = [
     rationaleText:
       "Δ hours +720 · Δ cost impact +$100,800. Approved & posted; engagement re-baselined.",
     valueDeltaUsd: 180_000,
+    // Task #455 — encoded from the rationale text above.
+    labourHoursDelta: 720,
+    labourCostDeltaUsd: 100_800,
+    expensesDeltaUsd: 0,
+    subsDeltaUsd: 0,
     status: "posted",
     proposedByUserId: "p_layla_haddad",
     partnerApproverUserId: "p_mounir_ariss",
@@ -505,6 +510,14 @@ const CHANGE_ORDERS: ChangeOrderRow[] = [
     rationaleText:
       "Δ hours +240 · Δ cost impact +$50,400. Partner-approved; awaiting dispatch to client.",
     valueDeltaUsd: 60_000,
+    // Task #455 — encoded from the rationale text. The 240h × $140
+    // blended cost rate accounts for $33,600 of labour cost; the
+    // remaining $16,800 is the partner-firm subs bridge called out in
+    // the summary.
+    labourHoursDelta: 240,
+    labourCostDeltaUsd: 33_600,
+    expensesDeltaUsd: 0,
+    subsDeltaUsd: 16_800,
     status: "partner_approved",
     proposedByUserId: "p_layla_haddad",
     partnerApproverUserId: "p_mounir_ariss",
@@ -524,6 +537,11 @@ const CHANGE_ORDERS: ChangeOrderRow[] = [
     rationaleText:
       "Δ hours +240 · Δ cost impact +$33,600. Partner-approved; awaiting dispatch.",
     valueDeltaUsd: 72_000,
+    // Task #455 — encoded from the rationale text (240h × $140 = $33,600).
+    labourHoursDelta: 240,
+    labourCostDeltaUsd: 33_600,
+    expensesDeltaUsd: 0,
+    subsDeltaUsd: 0,
     status: "partner_approved",
     proposedByUserId: "p_layla_haddad",
     partnerApproverUserId: "p_mounir_ariss",
@@ -542,6 +560,11 @@ const CHANGE_ORDERS: ChangeOrderRow[] = [
     rationaleText:
       "Δ hours -150 · Δ cost impact -$21,000. Posted; engagement re-baselined down.",
     valueDeltaUsd: -45_000,
+    // Task #455 — encoded from the rationale text (-150h × $140 = -$21,000).
+    labourHoursDelta: -150,
+    labourCostDeltaUsd: -21_000,
+    expensesDeltaUsd: 0,
+    subsDeltaUsd: 0,
     status: "posted",
     proposedByUserId: "p_omar_najjar",
     partnerApproverUserId: "p_mounir_ariss",
@@ -570,6 +593,22 @@ export async function ensureAtelierL2cSeed(): Promise<void> {
     await upsertById(atelierDpa, DPAS);
     await upsertById(atelierDeliverableAcceptance, DELIVERABLE_ACCEPTANCES);
     await upsertById(atelierChangeOrder, CHANGE_ORDERS);
+    // Task #455 — backfill the 4 demo CO rows with the new scope/effort
+    // delta columns. `upsertById` is insert-only, so existing
+    // environments (whose rows pre-date the 0038 migration's column
+    // defaults of 0) need an explicit update to converge to the same
+    // baseline as a fresh seed. Idempotent: safe to re-run on every boot.
+    for (const co of CHANGE_ORDERS) {
+      await db
+        .update(atelierChangeOrder)
+        .set({
+          labourHoursDelta: Number(co.labourHoursDelta ?? 0),
+          labourCostDeltaUsd: Number(co.labourCostDeltaUsd ?? 0),
+          expensesDeltaUsd: Number(co.expensesDeltaUsd ?? 0),
+          subsDeltaUsd: Number(co.subsDeltaUsd ?? 0),
+        })
+        .where(eq(atelierChangeOrder.id, co.id));
+    }
     // Task #431 — boot-time reconciliation. Engagement P&L baselines
     // live in-memory (see `atelier-engagement-pnl-seed.ts`). Any CO row
     // that's already in the `posted` terminal state must have its delta
@@ -597,6 +636,10 @@ export async function ensureAtelierL2cSeed(): Promise<void> {
         engagementId: co.engagementId,
         changeOrderId: co.id,
         valueDeltaUsd: Number(co.valueDeltaUsd ?? 0),
+        labourHoursDelta: Number(co.labourHoursDelta ?? 0),
+        labourCostDeltaUsd: Number(co.labourCostDeltaUsd ?? 0),
+        expensesDeltaUsd: Number(co.expensesDeltaUsd ?? 0),
+        subsDeltaUsd: Number(co.subsDeltaUsd ?? 0),
         actorUserId: co.partnerApproverUserId ?? co.proposedByUserId ?? null,
         baselinedAtIso: co.postedAt ? co.postedAt.toISOString() : undefined,
       });

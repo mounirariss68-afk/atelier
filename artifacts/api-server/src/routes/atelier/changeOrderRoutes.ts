@@ -73,14 +73,36 @@ function canSeeValueDelta(role: string | null | undefined): boolean {
 
 type ChangeOrderRow = typeof atelierChangeOrder.$inferSelect;
 
+type MaskedChangeOrder = Omit<
+  ChangeOrderRow,
+  | "valueDeltaUsd"
+  | "labourHoursDelta"
+  | "labourCostDeltaUsd"
+  | "expensesDeltaUsd"
+  | "subsDeltaUsd"
+> & {
+  valueDeltaUsd: number | null;
+  labourHoursDelta: number | null;
+  labourCostDeltaUsd: number | null;
+  expensesDeltaUsd: number | null;
+  subsDeltaUsd: number | null;
+};
+
 function maskValueDelta(
   row: ChangeOrderRow,
   role: string | null | undefined,
-): ChangeOrderRow & { valueDeltaUsd: number | null } {
+): MaskedChangeOrder {
   if (canSeeValueDelta(role)) {
-    return row as ChangeOrderRow & { valueDeltaUsd: number | null };
+    return row as unknown as MaskedChangeOrder;
   }
-  return { ...row, valueDeltaUsd: null as unknown as number };
+  return {
+    ...row,
+    valueDeltaUsd: null,
+    labourHoursDelta: null,
+    labourCostDeltaUsd: null,
+    expensesDeltaUsd: null,
+    subsDeltaUsd: null,
+  };
 }
 
 const KIND = z.enum(["scope", "rate", "term", "team"]);
@@ -157,6 +179,12 @@ const ProposeBody = z.object({
   oldValueJson: z.unknown().nullable().optional(),
   newValueJson: z.unknown().nullable().optional(),
   valueDeltaUsd: z.number().default(0),
+  // Task #455 — first-class scope/effort deltas (gated to leadership /
+  // finance on read; anyone with write may set on draft).
+  labourHoursDelta: z.number().default(0),
+  labourCostDeltaUsd: z.number().default(0),
+  expensesDeltaUsd: z.number().default(0),
+  subsDeltaUsd: z.number().default(0),
   linkedRaidId: z.string().nullable().optional(),
 });
 
@@ -186,6 +214,10 @@ router.post("/change-orders", async (req: Request, res: Response) => {
         oldValueJson: (parsed.data.oldValueJson ?? null) as never,
         newValueJson: (parsed.data.newValueJson ?? null) as never,
         valueDeltaUsd: parsed.data.valueDeltaUsd,
+        labourHoursDelta: parsed.data.labourHoursDelta,
+        labourCostDeltaUsd: parsed.data.labourCostDeltaUsd,
+        expensesDeltaUsd: parsed.data.expensesDeltaUsd,
+        subsDeltaUsd: parsed.data.subsDeltaUsd,
         status: "draft",
         proposedByUserId: me.id,
         linkedRaidId: parsed.data.linkedRaidId ?? null,
@@ -217,6 +249,10 @@ const PatchBody = z.object({
   oldValueJson: z.unknown().nullable().optional(),
   newValueJson: z.unknown().nullable().optional(),
   valueDeltaUsd: z.number().optional(),
+  labourHoursDelta: z.number().optional(),
+  labourCostDeltaUsd: z.number().optional(),
+  expensesDeltaUsd: z.number().optional(),
+  subsDeltaUsd: z.number().optional(),
 });
 
 router.patch("/change-orders/:id", async (req: Request, res: Response) => {
@@ -256,6 +292,14 @@ router.patch("/change-orders/:id", async (req: Request, res: Response) => {
       patch.newValueJson = parsed.data.newValueJson as never;
     if (parsed.data.valueDeltaUsd !== undefined)
       patch.valueDeltaUsd = parsed.data.valueDeltaUsd;
+    if (parsed.data.labourHoursDelta !== undefined)
+      patch.labourHoursDelta = parsed.data.labourHoursDelta;
+    if (parsed.data.labourCostDeltaUsd !== undefined)
+      patch.labourCostDeltaUsd = parsed.data.labourCostDeltaUsd;
+    if (parsed.data.expensesDeltaUsd !== undefined)
+      patch.expensesDeltaUsd = parsed.data.expensesDeltaUsd;
+    if (parsed.data.subsDeltaUsd !== undefined)
+      patch.subsDeltaUsd = parsed.data.subsDeltaUsd;
     const [updated] = await tx
       .update(atelierChangeOrder)
       .set(patch)
@@ -577,6 +621,10 @@ router.post(
           engagementId: r.engagementId,
           changeOrderId: r.id,
           valueDeltaUsd: Number(r.valueDeltaUsd ?? 0),
+          labourHoursDelta: Number(r.labourHoursDelta ?? 0),
+          labourCostDeltaUsd: Number(r.labourCostDeltaUsd ?? 0),
+          expensesDeltaUsd: Number(r.expensesDeltaUsd ?? 0),
+          subsDeltaUsd: Number(r.subsDeltaUsd ?? 0),
           actorUserId: req.atelierPersona?.id ?? null,
         });
         if (result.status === "engagement_unknown") {

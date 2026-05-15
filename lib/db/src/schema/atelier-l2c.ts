@@ -314,6 +314,14 @@ export const atelierChangeOrder = pgTable(
     oldValueJson: jsonb("old_value_json").default(null),
     newValueJson: jsonb("new_value_json").default(null),
     valueDeltaUsd: doublePrecision("value_delta_usd").notNull().default(0),
+    // Task #455 — first-class scope/effort deltas so Finance + delivery
+    // can query/aggregate change-order impact without parsing rationale
+    // text. `applyPostedChangeOrder` rebaselines the matching budget
+    // lines (labour hours, labour cost, expenses, subs) when posted.
+    labourHoursDelta: doublePrecision("labour_hours_delta").notNull().default(0),
+    labourCostDeltaUsd: doublePrecision("labour_cost_delta_usd").notNull().default(0),
+    expensesDeltaUsd: doublePrecision("expenses_delta_usd").notNull().default(0),
+    subsDeltaUsd: doublePrecision("subs_delta_usd").notNull().default(0),
     status: text("status").notNull().default("draft"),
     proposedByUserId: text("proposed_by_user_id"),
     partnerApproverUserId: text("partner_approver_user_id"),
