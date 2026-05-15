@@ -25,7 +25,8 @@ import {
   type Opportunity,
   type SalesStage,
 } from "@workspace/api-client-react";
-import { PageHero, SectionHead, Card, Eyebrow, MonoChip } from "@/components/ui/primitives";
+import { Card, Eyebrow, MonoChip } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { ArrowRight } from "lucide-react";
 import { CLIENT_SECTIONS } from "@/lib/client-lifecycle";
 import { deriveDealType, DEAL_TYPE_LABEL, type DealType } from "@/lib/opportunity-deal-type";
@@ -247,13 +248,10 @@ export default function ClientsHome() {
 
   return (
     <div className="animate-in fade-in" data-testid="clients-overview">
-      <PageHero>
-        <SectionHead
-          eyebrow="Manage · Clients · Overview"
-          headline="Pipeline dashboard"
-          lede={`Open pipeline, weighted value, expected closures and projected FY${fiscalYear} revenue at a glance.`}
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Pipeline dashboard"
+        lede={`Open pipeline, weighted value, expected closures and projected FY${fiscalYear} revenue at a glance.`}
+      />
 
       <div className="container-atelier py-10 space-y-10">
         {/* KPI row */}

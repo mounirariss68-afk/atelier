@@ -10,7 +10,8 @@ import {
   type Opportunity,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { SectionHead, PageHero, Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -402,77 +403,76 @@ export default function Pipeline() {
 
   return (
     <div className="flex flex-col h-full min-h-[calc(100vh-3.5rem)]">
-      <PageHero>
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-4">
-            <SectionHead
-              headline="Opportunity Pipeline"
-              lede="5-band sales funnel — Suspect → Prospect → Convert → Runner → Contract. Runner cards age Amber at 21d, Red at 45d so procurement-stuck deals stand out. Click Move on a card to log a stage transition with rationale + evidence."
-            />
-            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-              <CreateOpportunityDialog
-                trigger={
-                  <PillButton variant="primary">
-                    <span className="inline-flex items-center gap-1"><Plus className="w-3 h-3" /> New opportunity</span>
-                  </PillButton>
-                }
-              />
-              {/* Win Themes Library lives here (not in the top nav) because it
-                  is the post-mortem of an opportunity. Won/Lost transitions
-                  open the per-opportunity debrief; this link surfaces the
-                  cross-deal library for trend analysis. */}
-              <Link href="/win-loss">
-                <PillButton variant="ghost">
-                  <span className="inline-flex items-center gap-1.5">Win Themes Library</span>
+      <LensPageHeader
+        headline="Opportunity Pipeline"
+        lede="5-band sales funnel — Suspect → Prospect → Convert → Runner → Contract. Runner cards age Amber at 21d, Red at 45d so procurement-stuck deals stand out. Click Move on a card to log a stage transition with rationale + evidence."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <CreateOpportunityDialog
+              trigger={
+                <PillButton variant="primary">
+                  <span className="inline-flex items-center gap-1"><Plus className="w-3 h-3" /> New opportunity</span>
                 </PillButton>
-              </Link>
-              <PillButton variant="ghost" onClick={refreshForecast} disabled={runForecaster.isPending}>
-                <span className="inline-flex items-center gap-1.5">
-                  <RefreshCw className={`w-3 h-3 ${runForecaster.isPending ? "animate-spin" : ""}`} />
-                  Refresh forecast
-                </span>
+              }
+            />
+            {/* Win Themes Library lives here (not in the top nav) because it
+                is the post-mortem of an opportunity. Won/Lost transitions
+                open the per-opportunity debrief; this link surfaces the
+                cross-deal library for trend analysis. */}
+            <Link href="/win-loss">
+              <PillButton variant="ghost">
+                <span className="inline-flex items-center gap-1.5">Win Themes Library</span>
               </PillButton>
-              {/* Task #271 — segmented Pipeline | Forecast control. Replaces
-                  the standalone /forecast top-nav entry. */}
-              <div className="flex items-center bg-bg-elevate p-1 rounded-full border border-border text-xs font-mono">
+            </Link>
+            <PillButton variant="ghost" onClick={refreshForecast} disabled={runForecaster.isPending}>
+              <span className="inline-flex items-center gap-1.5">
+                <RefreshCw className={`w-3 h-3 ${runForecaster.isPending ? "animate-spin" : ""}`} />
+                Refresh forecast
+              </span>
+            </PillButton>
+            {/* Task #271 — segmented Pipeline | Forecast control. Replaces
+                the standalone /forecast top-nav entry. */}
+            <div className="flex items-center bg-bg-elevate p-1 rounded-full border border-border text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => setMode("pipeline")}
+                className={`px-3 py-1 rounded-full transition-colors ${mode === "pipeline" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
+                data-testid="tab-mode-pipeline"
+              >
+                Pipeline
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("forecast")}
+                className={`px-3 py-1 rounded-full transition-colors ${mode === "forecast" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
+                data-testid="tab-mode-forecast"
+              >
+                Forecast
+              </button>
+            </div>
+            {mode === "pipeline" && (
+              <div className="flex items-center gap-2 bg-bg-elevate p-1 rounded-full border border-border">
                 <button
-                  type="button"
-                  onClick={() => setMode("pipeline")}
-                  className={`px-3 py-1 rounded-full transition-colors ${mode === "pipeline" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-                  data-testid="tab-mode-pipeline"
+                  onClick={() => setView("kanban")}
+                  className={`p-2 rounded-full transition-colors ${view === "kanban" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
                 >
-                  Pipeline
+                  <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button
-                  type="button"
-                  onClick={() => setMode("forecast")}
-                  className={`px-3 py-1 rounded-full transition-colors ${mode === "forecast" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-                  data-testid="tab-mode-forecast"
+                  onClick={() => setView("table")}
+                  className={`p-2 rounded-full transition-colors ${view === "table" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
                 >
-                  Forecast
+                  <ListIcon className="w-4 h-4" />
                 </button>
               </div>
-              {mode === "pipeline" && (
-                <div className="flex items-center gap-2 bg-bg-elevate p-1 rounded-full border border-border">
-                  <button
-                    onClick={() => setView("kanban")}
-                    className={`p-2 rounded-full transition-colors ${view === "kanban" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-                  >
-                    <LayoutGrid className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setView("table")}
-                    className={`p-2 rounded-full transition-colors ${view === "table" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-                  >
-                    <ListIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
+        }
+      />
 
-          {/* Filters — pipeline mode only; forecast mode has its own group-by toggle. */}
-          {mode === "pipeline" && (
+      <div className="container-atelier pt-6 space-y-6">
+        {/* Filters — pipeline mode only; forecast mode has its own group-by toggle. */}
+        {mode === "pipeline" && (
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
             <span>Filter</span>
             <select
@@ -506,33 +506,32 @@ export default function Pipeline() {
             )}
             <span className="ml-auto text-text-mute">{filteredOpps.length} of {opps?.length ?? 0}</span>
           </div>
-          )}
+        )}
 
-          {/* Forecast summary strip — pipeline mode only. */}
-          {mode === "pipeline" && forecast && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Card className="p-4">
-                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">In-flight deals</div>
-                <div className="text-2xl font-light text-text mt-1">{forecast.totalCount}</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Pipeline value</div>
-                <div className="text-2xl font-light text-text mt-1">{fmtUsd(forecast.totalDealSumUsd)}</div>
-              </Card>
-              <Card className="p-4 border-gold/40">
-                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Weighted pipeline</div>
-                <div className="text-2xl font-light text-gold mt-1">{fmtUsd(forecast.weightedPipelineUsd)}</div>
-              </Card>
-              <Card className={`p-4 ${forecast.stalledCount > 0 ? "border-danger/40" : ""}`}>
-                <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Stalled (&gt;{STALLED_THRESHOLD_DAYS}d)</div>
-                <div className={`text-2xl font-light mt-1 ${forecast.stalledCount > 0 ? "text-danger" : "text-text"}`}>
-                  {forecast.stalledCount}
-                </div>
-              </Card>
-            </div>
-          )}
-        </div>
-      </PageHero>
+        {/* Forecast summary strip — pipeline mode only. */}
+        {mode === "pipeline" && forecast && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="p-4">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">In-flight deals</div>
+              <div className="text-2xl font-light text-text mt-1">{forecast.totalCount}</div>
+            </Card>
+            <Card className="p-4">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Pipeline value</div>
+              <div className="text-2xl font-light text-text mt-1">{fmtUsd(forecast.totalDealSumUsd)}</div>
+            </Card>
+            <Card className="p-4 border-gold/40">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Weighted pipeline</div>
+              <div className="text-2xl font-light text-gold mt-1">{fmtUsd(forecast.weightedPipelineUsd)}</div>
+            </Card>
+            <Card className={`p-4 ${forecast.stalledCount > 0 ? "border-danger/40" : ""}`}>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Stalled (&gt;{STALLED_THRESHOLD_DAYS}d)</div>
+              <div className={`text-2xl font-light mt-1 ${forecast.stalledCount > 0 ? "text-danger" : "text-text"}`}>
+                {forecast.stalledCount}
+              </div>
+            </Card>
+          </div>
+        )}
+      </div>
 
       <div className={`py-10 space-y-8 flex-1 flex flex-col ${mode === "pipeline" && view === "kanban" ? "px-[clamp(16px,3vw,32px)] min-w-0" : "container-atelier"}`}>
         {mode === "forecast" ? (

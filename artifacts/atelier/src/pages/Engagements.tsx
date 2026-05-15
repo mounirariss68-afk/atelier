@@ -1,5 +1,6 @@
 import { useAtelierListEngagements } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, PlmPill, MonoChip } from "@/components/ui/primitives";
+import { Card, PlmPill, MonoChip } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Clock, CheckCircle } from "lucide-react";
@@ -18,12 +19,10 @@ export default function Engagements() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <SectionHead 
-          headline="Active Engagements"
-          lede="Ongoing delivery and compounding IP."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Active Engagements"
+        lede="Ongoing delivery and compounding IP."
+      />
 
       <div className="container-atelier py-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {engagements.map((eng) => (

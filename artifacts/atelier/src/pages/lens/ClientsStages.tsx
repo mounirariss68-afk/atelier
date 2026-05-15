@@ -26,7 +26,8 @@
 
 import { Link } from "wouter";
 import { ArrowRight, ExternalLink } from "lucide-react";
-import { Card, MonoChip, PageHero, SectionHead, Eyebrow } from "@/components/ui/primitives";
+import { Card, MonoChip, Eyebrow } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import Crm from "@/pages/Crm";
 import Pipeline from "@/pages/Pipeline";
 import Engagements from "@/pages/Engagements";
@@ -89,13 +90,10 @@ export function ClientsEngagementDeliverable() {
 export function ClientsBilling() {
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <SectionHead
-          eyebrow="Manage · Clients · Billing"
-          headline="Engagement economics"
-          lede="The commercial view of in-flight engagements — margin, WIP, billable. The full bill-and-collect workflow lives in the Finance lens."
-        />
-      </PageHero>
+      <LensPageHeader
+        headline="Engagement economics"
+        lede="The commercial view of in-flight engagements — margin, WIP, billable. The full bill-and-collect workflow lives in the Finance lens."
+      />
       <div className="container-atelier py-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-5 space-y-3">
           <Eyebrow>Engagement economics</Eyebrow>

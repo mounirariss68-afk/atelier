@@ -3,12 +3,11 @@ import { Link } from "wouter";
 import { useAtelierListAccounts, useAtelierGetMe } from "@workspace/api-client-react";
 import { TabNav, TabNavLink } from "@/components/ui/primitives";
 import {
-  PageHero,
-  SectionHead,
   Card,
   MonoChip,
   PillButton,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Globe, Plus } from "lucide-react";
 import { CreateAccountDialog } from "@/components/CreateAccountDialog";
@@ -70,9 +69,7 @@ export default function Crm() {
   if (view === "renewals") {
     return (
       <div className="animate-in fade-in" data-testid="page-crm-renewals">
-        <PageHero>
-          <SectionHead headline="Renewals & NRR" lede="Open renewal motions, risk tier, and net-revenue-retention delta." />
-        </PageHero>
+        <LensPageHeader headline="Renewals & NRR" lede="Open renewal motions, risk tier, and net-revenue-retention delta." />
         <TabNav>
           <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("accounts"); }}>Accounts</TabNavLink>
           <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Renewals</TabNavLink>
@@ -86,42 +83,37 @@ export default function Crm() {
 
   return (
     <div className="animate-in fade-in">
-      <PageHero>
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <SectionHead
-              headline="Accounts"
-              lede="The firm's living roster of client relationships — Profile, Decision-Makers, Pursuits, Engagements, Whitespace, QBR — one per account."
+      <LensPageHeader
+        headline="Accounts"
+        lede="The firm's living roster of client relationships — Profile, Decision-Makers, Pursuits, Engagements, Whitespace, QBR — one per account."
+        actions={
+          canCreate ? (
+            <CreateAccountDialog
+              trigger={
+                <PillButton variant="primary" data-testid="button-new-account">
+                  <span className="inline-flex items-center gap-1"><Plus className="w-3 h-3" /> New account</span>
+                </PillButton>
+              }
             />
-            {canCreate && (
-              <div className="flex items-center gap-3 shrink-0">
-                <CreateAccountDialog
-                  trigger={
-                    <PillButton variant="primary" data-testid="button-new-account">
-                      <span className="inline-flex items-center gap-1"><Plus className="w-3 h-3" /> New account</span>
-                    </PillButton>
-                  }
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <Card className="p-4">
-              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Accounts</div>
-              <div className="text-2xl font-light text-text mt-1">{accounts?.length ?? 0}</div>
-            </Card>
-            <Card className="p-4 border-gold/40">
-              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Tier A · Marquee</div>
-              <div className="text-2xl font-light text-gold mt-1">{tierA}</div>
-            </Card>
-            <Card className="p-4">
-              <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Open opps · Active engs</div>
-              <div className="text-2xl font-light text-text mt-1">{totalOpps}/{totalEngs}</div>
-            </Card>
-          </div>
+          ) : null
+        }
+      />
+      <div className="container-atelier pt-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Card className="p-4">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Accounts</div>
+            <div className="text-2xl font-light text-text mt-1">{accounts?.length ?? 0}</div>
+          </Card>
+          <Card className="p-4 border-gold/40">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Tier A · Marquee</div>
+            <div className="text-2xl font-light text-gold mt-1">{tierA}</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">Open opps · Active engs</div>
+            <div className="text-2xl font-light text-text mt-1">{totalOpps}/{totalEngs}</div>
+          </Card>
         </div>
-      </PageHero>
+      </div>
       <TabNav>
         <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Accounts</TabNavLink>
         <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("renewals"); }}>Renewals</TabNavLink>

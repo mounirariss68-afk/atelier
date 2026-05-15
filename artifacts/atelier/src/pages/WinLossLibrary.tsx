@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { Card, PageHero, SectionHead, MonoChip } from "@/components/ui/primitives";
+import { Card, SectionHead, MonoChip } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 
@@ -49,37 +50,38 @@ export default function WinLossLibrary() {
   }, []);
 
   return (
-    <div className="p-6 md:p-10 space-y-6 max-w-6xl">
-      <PageHero
-        eyebrow="WIN/LOSS · REFERENCE"
-        title="Win Themes"
-        subtitle="Curated patterns from approved Win/Loss debriefs — what AICo wins on, and where we lose."
+    <div className="space-y-6">
+      <LensPageHeader
+        headline="Win Themes"
+        lede="Curated patterns from approved Win/Loss debriefs — what AICo wins on, and where we lose."
       />
 
-      <div className="flex gap-2 text-sm font-mono">
-        <Link
-          href={intakeHref}
-          className="px-3 py-1 rounded bg-bg-elevate text-text-mute hover:text-text"
-        >
-          ← Debriefs intake
-        </Link>
-        <span className="px-3 py-1 rounded bg-gold text-bg">Themes</span>
-      </div>
+      <div className="container-atelier py-6 space-y-6">
+        <div className="flex gap-2 text-sm font-mono">
+          <Link
+            href={intakeHref}
+            className="px-3 py-1 rounded bg-bg-elevate text-text-mute hover:text-text"
+          >
+            ← Debriefs intake
+          </Link>
+          <span className="px-3 py-1 rounded bg-gold text-bg">Themes</span>
+        </div>
 
-      {!themes ? (
-        <Skeleton className="h-32 bg-bg-elevate" />
-      ) : (
-        <ThemesView
-          themes={themes}
-          q={q}
-          setQ={setQ}
-          polarity={polarity}
-          setPolarity={setPolarity}
-          openId={openId}
-          setOpenId={setOpenId}
-          intakeHref={intakeHref}
-        />
-      )}
+        {!themes ? (
+          <Skeleton className="h-32 bg-bg-elevate" />
+        ) : (
+          <ThemesView
+            themes={themes}
+            q={q}
+            setQ={setQ}
+            polarity={polarity}
+            setPolarity={setPolarity}
+            openId={openId}
+            setOpenId={setOpenId}
+            intakeHref={intakeHref}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -153,7 +155,7 @@ function ThemesView({
           </button>
         ))}
       </div>
-      <SectionHead title={`${filtered.length} ${polarity === "all" ? "" : polarity + " "}themes`} />
+      <SectionHead headline={`${filtered.length} ${polarity === "all" ? "" : polarity + " "}themes`} />
       <div className="grid gap-3">
         {filtered.map((t) => {
           const open = openId === t.id;
