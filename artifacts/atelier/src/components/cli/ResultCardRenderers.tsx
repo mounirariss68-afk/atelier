@@ -198,6 +198,12 @@ function ShapeBody({
       return <ChangeOrderCard data={data} locale={locale} />;
     case "deliverable_acceptance_card":
       return <DeliverableAcceptanceCard data={data} locale={locale} />;
+    case "invoice_card":
+      return <InvoiceCard data={data} locale={locale} />;
+    case "ar_aging_grid":
+      return <ArAgingGrid data={data} locale={locale} />;
+    case "dunning_card":
+      return <DunningCard data={data} locale={locale} />;
     default:
       return <FallbackJson data={data} />;
   }
@@ -289,6 +295,46 @@ function ChangeOrderCard({ data, locale }: { data: Json; locale: CliLocale }) {
             {locale === "ar" ? "دليل القبول" : "Evidence"}
             <ExternalLink className="w-3 h-3" />
           </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────── Task #362 — L2C Wave 3 cards ─────────────────── */
+
+function InvoiceCard({ data, locale: _locale }: { data: Json; locale: CliLocale }) {
+  const inv = asObj(data.invoice ?? data);
+  const lines = asArr(data.lines);
+  const subs = asArr(data.submissions);
+  const number = asStr(inv.invoiceNumber) || "(draft)";
+  const status = asStr(inv.status) || "draft";
+  const total = asNum(inv.total) ?? 0;
+  const subtotal = asNum(inv.subtotal) ?? 0;
+  const vat = asNum(inv.vatAmount) ?? 0;
+  const currency = asStr(inv.currency) || "USD";
+  const billTo = asObj(inv.billTo);
+  return (
+    <div className="space-y-2" data-testid="cli-invoice-card">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <div className="font-mono text-sm">{number}</div>
+          <div className="text-xs text-text-mute">{asStr(billTo.name) || "—"} · {asStr(inv.jurisdiction)}</div>
+        </div>
+        <div className="text-right">
+          <div className="font-display text-lg">{currency} {fmtNum(total)}</div>
+          <div className="text-[10px] font-mono uppercase text-text-faint">{status}</div>
+        </div>
+      </div>
+      <div className="text-[11px] font-mono text-text-mute">
+        subtotal {fmtNum(subtotal)} · vat {fmtNum(vat)} · {lines.length} lines
+      </div>
+      {subs.length > 0 && (
+        <div className="text-[11px] font-mono text-text-mute">
+          {subs.map((s, i) => {
+            const so = asObj(s);
+            return <span key={i} className="mr-2">{asStr(so.channel).toUpperCase()}:{asStr(so.status)}</span>;
+          })}
         </div>
       )}
     </div>
@@ -397,6 +443,49 @@ function DeliverableAcceptanceCard({ data, locale }: { data: Json; locale: CliLo
           </a>
         </div>
       )}
+    </div>
+  );
+}
+
+function ArAgingGrid({ data, locale: _locale }: { data: Json; locale: CliLocale }) {
+  const buckets = asArr(data.buckets);
+  const total = asNum(data.totalOutstandingUsd) ?? 0;
+  const count = asNum(data.invoiceCount) ?? 0;
+  return (
+    <div className="space-y-2" data-testid="cli-ar-aging-grid">
+      <div className="grid grid-cols-5 gap-1.5">
+        {buckets.map((b, i) => {
+          const o = asObj(b);
+          const label = asStr(o.bucket).replace(/^d/, "").replace("_", "–").replace("plus", "+");
+          const v = asNum(o.totalUsd) ?? 0;
+          return (
+            <div key={i} className="bg-bg-deep border border-border-soft rounded p-1.5">
+              <div className="text-[10px] font-mono uppercase text-text-faint">{label}</div>
+              <div className="text-sm font-mono">${fmtNum(v)}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[11px] font-mono text-text-mute">
+        ${fmtNum(total)} outstanding · {count} invoices
+      </div>
+    </div>
+  );
+}
+
+function DunningCard({ data, locale: _locale }: { data: Json; locale: CliLocale }) {
+  const ev = asObj(data.event);
+  const inv = asObj(data.invoice);
+  const promises = asArr(data.promises);
+  return (
+    <div className="space-y-1.5" data-testid="cli-dunning-card">
+      <div className="font-mono text-sm">
+        {asStr(inv.invoiceNumber) || "(draft)"} · step {(asNum(ev.stepIndex) ?? 0) + 1} <span className="text-text-mute">({asStr(ev.template) || "—"})</span>
+      </div>
+      <div className="text-[11px] font-mono text-text-mute">
+        outstanding {asStr(inv.currency)} {fmtNum((asNum(inv.total) ?? 0) - (asNum(inv.amountPaid) ?? 0))}
+        {promises.length > 0 && ` · ${promises.length} promise${promises.length === 1 ? "" : "s"}`}
+      </div>
     </div>
   );
 }

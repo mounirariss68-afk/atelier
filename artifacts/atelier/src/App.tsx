@@ -52,6 +52,10 @@ import WalletClientBillable from "@/pages/wallet/WalletClientBillable";
 import WalletRevrec from "@/pages/wallet/WalletRevrec";
 import WalletWip from "@/pages/wallet/WalletWip";
 import WalletMargin from "@/pages/wallet/WalletMargin";
+import WalletInvoices from "@/pages/wallet/WalletInvoices";
+import WalletInvoiceDetail from "@/pages/wallet/WalletInvoiceDetail";
+import WalletAr from "@/pages/wallet/WalletAr";
+import WalletCollections from "@/pages/wallet/WalletCollections";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 // v5 — Scale & Trust
 import PressIndex from "@/pages/press/PressIndex";
@@ -174,6 +178,11 @@ function Router() {
         <Route path="/wallet/revrec" component={WalletRevrec} />
         <Route path="/wallet/wip" component={WalletWip} />
         <Route path="/wallet/margin" component={WalletMargin} />
+        {/* Task #362 — L2C Wave 3: Invoicing, AR aging, Collections. */}
+        <Route path="/wallet/invoices" component={WalletInvoices} />
+        <Route path="/wallet/invoices/:id" component={WalletInvoiceDetail} />
+        <Route path="/wallet/ar" component={WalletAr} />
+        <Route path="/wallet/collections" component={WalletCollections} />
         <Route path="/accounts/:accountId" component={Account} />
         {/* Task #368 — `/agents` becomes the Agents lens shell-phase
             placeholder; the legacy library lives at `/agents/library`

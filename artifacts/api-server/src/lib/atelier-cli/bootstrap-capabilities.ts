@@ -34,6 +34,7 @@ import "./codex-capabilities.js";
 // `BOARD_OBSERVER_ROLLUP_ALLOWLIST` (wip_report, leakage_report,
 // revrec_compute_schedule).
 import "./revrec-capabilities.js";
+import "./l2c-wave3-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

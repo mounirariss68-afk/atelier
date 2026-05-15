@@ -3102,3 +3102,172 @@ export const atelierExtractedDocuments = pgTable(
     index("idx_atelier_extracted_kind").on(t.kind),
   ],
 );
+
+// ============================================================
+// Task #362 — L2C Wave 3: Invoicing, e-invoicing, AR aging, Collections.
+//
+// Waves 1 (#360 contracts) and 2 (#361 revenue milestones / WIP) are NOT
+// shipped in this build, so the schema falls back to free-text bill_to
+// JSONB and time+expense-only line composition. No FKs to the missing
+// upstream tables. See lib/db/drizzle/0033_atelier_l2c_invoicing.sql.
+// ============================================================
+export const atelierInvoiceSequence = pgTable(
+  "atelier_invoice_sequence",
+  {
+    jurisdiction: text("jurisdiction").notNull(),
+    orgId: ORG("org_id"),
+    // Sequences are partitioned per (org, jurisdiction, calendar year)
+    // so invoice numbers reset annually as required by L2C §C.1.
+    yearPart: integer("year_part").notNull(),
+    prefix: text("prefix").notNull(),
+    lastSeq: integer("last_seq").notNull().default(0),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("uq_atelier_invoice_sequence_pk").on(t.orgId, t.jurisdiction, t.yearPart)],
+);
+
+export const atelierInvoice = pgTable(
+  "atelier_invoice",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id"),
+    accountId: text("account_id"),
+    jurisdiction: text("jurisdiction").notNull(),
+    invoiceNumber: text("invoice_number"),
+    currency: text("currency").notNull().default("USD"),
+    status: text("status").notNull().default("draft"),
+    billTo: jsonb("bill_to")
+      .$type<{
+        name?: string;
+        address?: string;
+        vatId?: string;
+        country?: string;
+        contactEmail?: string;
+      }>()
+      .notNull()
+      .default({}),
+    subtotal: doublePrecision("subtotal").notNull().default(0),
+    vatAmount: doublePrecision("vat_amount").notNull().default(0),
+    vatRatePct: doublePrecision("vat_rate_pct").notNull().default(0),
+    total: doublePrecision("total").notNull().default(0),
+    amountPaid: doublePrecision("amount_paid").notNull().default(0),
+    notes: text("notes"),
+    dueDate: text("due_date"),
+    issuedAt: timestamp("issued_at"),
+    paidAt: timestamp("paid_at"),
+    voidedAt: timestamp("voided_at"),
+    voidedReason: text("voided_reason"),
+    pdfRef: text("pdf_ref"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_invoice_eng").on(t.engagementId),
+    index("idx_atelier_invoice_acct").on(t.accountId),
+    index("idx_atelier_invoice_status").on(t.status),
+  ],
+);
+
+export const atelierInvoiceLine = pgTable(
+  "atelier_invoice_line",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    invoiceId: text("invoice_id").notNull(),
+    ord: integer("ord").notNull().default(0),
+    description: text("description").notNull(),
+    qty: doublePrecision("qty").notNull().default(1),
+    unitPrice: doublePrecision("unit_price").notNull().default(0),
+    amount: doublePrecision("amount").notNull().default(0),
+    sourceKind: text("source_kind").notNull(),
+    sourceRef: text("source_ref"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("idx_atelier_invoice_line_invoice").on(t.invoiceId)],
+);
+
+export const atelierEinvoiceSubmission = pgTable(
+  "atelier_einvoice_submission",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    invoiceId: text("invoice_id").notNull(),
+    channel: text("channel").notNull(),
+    status: text("status").notNull().default("pending"),
+    submissionPayloadRef: text("submission_payload_ref"),
+    responsePayloadRef: text("response_payload_ref"),
+    clearanceUuid: text("clearance_uuid"),
+    qrCodePayload: text("qr_code_payload"),
+    submittedAt: timestamp("submitted_at"),
+    clearedAt: timestamp("cleared_at"),
+    rejectedAt: timestamp("rejected_at"),
+    rejectedReason: text("rejected_reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_einvoice_invoice").on(t.invoiceId),
+    index("idx_atelier_einvoice_status").on(t.status),
+  ],
+);
+
+export const atelierDunningLadder = pgTable("atelier_dunning_ladder", {
+  id: text("id").primaryKey(),
+  orgId: ORG("org_id"),
+  name: text("name").notNull(),
+  jurisdiction: text("jurisdiction").notNull(),
+  steps: jsonb("steps")
+    .$type<
+      Array<{
+        offsetDays: number;
+        channel: "email";
+        template: string;
+        requireApproval: boolean;
+      }>
+    >()
+    .notNull()
+    .default([]),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+export const atelierDunningEvent = pgTable(
+  "atelier_dunning_event",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    invoiceId: text("invoice_id").notNull(),
+    ladderId: text("ladder_id"),
+    stepIndex: integer("step_index").notNull().default(0),
+    channel: text("channel").notNull(),
+    template: text("template"),
+    messageRef: text("message_ref"),
+    sentBy: text("sent_by"),
+    sentAt: timestamp("sent_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("idx_atelier_dunning_event_invoice").on(t.invoiceId)],
+);
+
+export const atelierPromiseToPay = pgTable(
+  "atelier_promise_to_pay",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    invoiceId: text("invoice_id").notNull(),
+    promisedAmount: doublePrecision("promised_amount").notNull(),
+    promisedDate: text("promised_date").notNull(),
+    contactName: text("contact_name"),
+    status: text("status").notNull().default("open"),
+    recordedBy: text("recorded_by"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("idx_atelier_p2p_invoice").on(t.invoiceId)],
+);

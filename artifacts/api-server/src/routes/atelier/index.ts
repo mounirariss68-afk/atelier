@@ -61,6 +61,7 @@ import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
 import ledgerRoutes from "./ledgerRoutes";
 import walletRoutes from "./walletRoutes";
+import invoiceRoutes from "./invoiceRoutes";
 import referenceRoutes from "./referenceRoutes";
 import principleOverrideRoutes from "./principleOverrideRoutes";
 import firmProfileRoutes from "./firmProfileRoutes";
@@ -193,6 +194,7 @@ router.use(skillGraphRoutes);
 router.use(ledgerRoutes);
 // Task #259 — v3 Wallet: Expenses + Auditor + Policy + FX + VAT.
 router.use(walletRoutes);
+router.use(invoiceRoutes);
 // Task #290 — Reference-data lookups (countries / industries / sub-industries).
 router.use(referenceRoutes);
 router.use(principleOverrideRoutes);

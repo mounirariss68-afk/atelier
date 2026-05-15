@@ -65,6 +65,20 @@ export const V3_AUDIT_ACTIONS = {
   // Principle override (breakglass) — Task #293 -------------------------
   PRINCIPLE_OVERRIDE_GRANTED: "principle_override.granted",
 
+  // L2C Wave 3 — Task #362 (invoicing, e-invoicing, AR, collections) ----
+  INVOICE_DRAFTED: "wallet.invoice.drafted",
+  INVOICE_LINE_ADDED: "wallet.invoice.line_added",
+  INVOICE_ISSUED: "wallet.invoice.issued",
+  INVOICE_VOIDED: "wallet.invoice.voided",
+  INVOICE_PAYMENT_RECORDED: "wallet.invoice.payment_recorded",
+  EINVOICE_SUBMITTED: "einvoice.submitted",
+  EINVOICE_CLEARED: "einvoice.cleared",
+  EINVOICE_REJECTED: "einvoice.rejected",
+  DUNNING_NOTICE_SENT: "dunning.notice.sent",
+  DUNNING_PROMISE_RECORDED: "dunning.promise.recorded",
+  DUNNING_PROMISE_KEPT: "dunning.promise.kept",
+  DUNNING_PROMISE_BROKEN: "dunning.promise.broken",
+
   // Atelier CLI — Task #331 --------------------------------------------
   CLI_TURN: "cli.turn",
   CLI_TURN_CONFIRMED: "cli.turn.confirmed",

@@ -74,6 +74,9 @@ export default function WalletExpenses() {
       <PageHero><div className="text-[11px] font-mono uppercase tracking-widest text-gold mb-2">WALLET</div><h1 className="text-3xl font-display tracking-tight">Expenses</h1><p className="text-text-mute mt-2 max-w-2xl">Every expense policy-checked, VAT-handled, traceable to the client.</p></PageHero>
       <TabNav>
         <TabNavLink href="/wallet" active>Expenses</TabNavLink>
+        <TabNavLink href="/wallet/invoices" active={false}>Invoices</TabNavLink>
+        <TabNavLink href="/wallet/ar" active={false}>AR aging</TabNavLink>
+        <TabNavLink href="/wallet/collections" active={false}>Collections</TabNavLink>
         <TabNavLink href="/wallet/expenses/new" active={false}>+ New expense</TabNavLink>
         <TabNavLink href="/wallet/cards" active={false}>Cards</TabNavLink>
         {isLeader && <TabNavLink href="/wallet/policy" active={false}>Policy</TabNavLink>}

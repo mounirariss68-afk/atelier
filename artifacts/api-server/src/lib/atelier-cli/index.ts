@@ -1623,6 +1623,11 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     return { toolName: "approval_queue", confidence: "high", input: {} };
   }
 
+  // Task #362 — AR aging (read).
+  if (/\b(ar\s+aging|aging\s+report|accounts?\s+receivable|outstanding\s+invoices?|where\s+is\s+the\s+cash|cash\s+sitting)\b/i.test(promptRaw)) {
+    return { toolName: "wallet_ar_aging", confidence: "high", input: {} };
+  }
+
   // Roster compliance due.
   if (/\b(certifications?|compliance|visas?|iqamas?)\b.*\b(expir\w+|renew\w+|due)\b/i.test(promptRaw) || /\bexpir\w+\b.*\b(certification|visa|iqama|compliance)\b/i.test(promptRaw)) {
     const days = promptRaw.match(/\b(\d{1,3})\s+days?\b/i);

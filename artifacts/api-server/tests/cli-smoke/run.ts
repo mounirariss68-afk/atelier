@@ -74,6 +74,9 @@ const SMOKES: Smoke[] = [
   { prompt: "Draft an acceptance attestation for the DEWA Phase 1 final report", expectTool: "deliverable_acceptance_create" },
   { prompt: "Send the DEWA Phase 1 acceptance to procurement@dewa.gov.ae for signing", expectTool: "deliverable_acceptance_submit" },
   { prompt: "Record the signed acceptance evidence URL on dlacc_xyz", expectTool: "deliverable_acceptance_record_signed" },
+  // Task #362 — L2C Wave 3 (invoicing, AR aging, dunning).
+  { prompt: "Show AR aging", expectTool: "wallet_ar_aging" },
+  { prompt: "Where is the cash sitting?", expectTool: "wallet_ar_aging" },
 ];
 
 let pass = 0;

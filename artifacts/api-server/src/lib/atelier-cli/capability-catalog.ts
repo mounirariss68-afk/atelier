@@ -131,7 +131,10 @@ export type ResultCard =
   | "redline_card"
   | "dpa_card"
   | "change_order_card"
-  | "deliverable_acceptance_card";
+  | "deliverable_acceptance_card"
+  | "invoice_card"
+  | "ar_aging_grid"
+  | "dunning_card";
 
 export type SurfaceContext =
   | "engagement_dashboard"
@@ -407,6 +410,11 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
       // module-deny gate so the rollup capabilities can live in the
       // (otherwise denied) revrec / wip / leakage modules.
       if (BOARD_OBSERVER_ROLLUP_ALLOWLIST.has(e.id)) return true;
+      // Task #362 — board_observer is allowed on the AR aging rollup
+      // capability (rollup-only access; per-invoice rows are stripped
+      // server-side). Detail capabilities in the wallet module remain
+      // denied via `denyBoardObserver` in the capability handler.
+      if (e.id === "wallet.ar.aging") return true;
       // Board observer also denied L2C surfaces (no contract / change-
       // order / acceptance visibility) until the boardroom realm ships.
       if (RESTRICTED_DENIED_MODULES.has(e.module)) return false;
