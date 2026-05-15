@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { ensureAtelierV5Seed } from "./lib/atelier-seed-v5";
+import { ensureAtelierAgentsLensSeed } from "./lib/atelier-seed-agents-lens";
 import { ensureAtelierL2cSeed } from "./lib/atelier-seed-l2c";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 
@@ -34,6 +35,9 @@ app.listen(port, (err) => {
   // Task #354 — Press / Alliances / Studio / Guardhouse / IP catalog
   // demo data (idempotent). Migrates the former TS seed files to Postgres.
   void ensureAtelierV5Seed();
+  // Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
+  // Retire) demo data (idempotent). Migrates the former TS seed file to Postgres.
+  void ensureAtelierAgentsLensSeed();
   // Task #360 — Wave-1 L2C demo seed: counterparties, clauses, contracts,
   // DPA, and signed deliverable acceptance bound to existing engagements.
   // Fail-fast on bootstrap so partial-state startup is visible in logs.

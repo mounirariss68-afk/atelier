@@ -69,6 +69,7 @@ import cliRoutes from "./cliRoutes";
 import cliAttachmentRoutes from "./cliAttachmentRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
+import agentsLensRoutes from "./agentsLensRoutes";
 import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
 import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
@@ -212,6 +213,9 @@ router.use(cliAdminRoutes);
 // Task #354 — v5 firm-wide knowledge surfaces (Press / Alliances / Studio /
 // Guardhouse / IP catalog) backed by Postgres.
 router.use(v5Routes);
+// Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
+// Retire) backed by Postgres; replaces the client-side seed module.
+router.use(agentsLensRoutes);
 // Task #360 — L2C Wave 1: Codex (CLM) — counterparty registry + clause
 // library (Step 2). Contract record + state machine land in Step 3 in the
 // same file. Change orders, deliverable acceptance, e-sign / DPA flows
