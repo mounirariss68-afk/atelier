@@ -420,6 +420,69 @@ export function useStageStats(): Record<string, StageStat> {
 }
 
 // ============================================================
+// Headcount & attrition history (Task #421)
+//
+// Twelve months of monthly snapshots so the People Lens dashboard can
+// compute real "vs prior period" deltas and render an honest rolling-12mo
+// attrition trend. The series is internally consistent: each month's
+// `active` equals the prior month's active + joiners − leavers, and the
+// final month's `active` (38) matches the firm headcount in `useOrgUnits`.
+// Voluntary / regrettable leavers are subsets of total leavers.
+// ============================================================
+
+export interface HeadcountSnapshot {
+  /** Month-end snapshot key, ISO YYYY-MM. Sorted ascending. */
+  month: string;
+  /** Headcount at month-end. */
+  active: number;
+  joiners: number;
+  leavers: number;
+  /** Subset of leavers who left voluntarily (resignations). */
+  voluntaryLeavers: number;
+  /** Subset of voluntaryLeavers we actively wanted to retain. */
+  regrettableLeavers: number;
+}
+
+const _HEADCOUNT_HISTORY: HeadcountSnapshot[] = [
+  { month: "2025-06", active: 33, joiners: 2, leavers: 1, voluntaryLeavers: 1, regrettableLeavers: 0 },
+  { month: "2025-07", active: 34, joiners: 1, leavers: 0, voluntaryLeavers: 0, regrettableLeavers: 0 },
+  { month: "2025-08", active: 35, joiners: 2, leavers: 1, voluntaryLeavers: 1, regrettableLeavers: 1 },
+  { month: "2025-09", active: 36, joiners: 2, leavers: 1, voluntaryLeavers: 0, regrettableLeavers: 0 },
+  { month: "2025-10", active: 37, joiners: 1, leavers: 0, voluntaryLeavers: 0, regrettableLeavers: 0 },
+  { month: "2025-11", active: 36, joiners: 1, leavers: 2, voluntaryLeavers: 2, regrettableLeavers: 1 },
+  { month: "2025-12", active: 36, joiners: 1, leavers: 1, voluntaryLeavers: 1, regrettableLeavers: 1 },
+  { month: "2026-01", active: 37, joiners: 2, leavers: 1, voluntaryLeavers: 1, regrettableLeavers: 0 },
+  { month: "2026-02", active: 37, joiners: 1, leavers: 1, voluntaryLeavers: 1, regrettableLeavers: 1 },
+  { month: "2026-03", active: 38, joiners: 2, leavers: 1, voluntaryLeavers: 0, regrettableLeavers: 0 },
+  { month: "2026-04", active: 39, joiners: 2, leavers: 1, voluntaryLeavers: 1, regrettableLeavers: 1 },
+  { month: "2026-05", active: 38, joiners: 1, leavers: 2, voluntaryLeavers: 2, regrettableLeavers: 1 },
+];
+
+export const useHeadcountHistory = staticList<HeadcountSnapshot>(_HEADCOUNT_HISTORY);
+/**
+ * Same underlying series, exposed under a name that makes its intent
+ * (rolling attrition trend) explicit at the call site.
+ */
+export const useAttritionHistory = staticList<HeadcountSnapshot>(_HEADCOUNT_HISTORY);
+
+/**
+ * Quarterly firm-wide eNPS history so the dashboard can show a real
+ * delta vs the prior survey instead of a synthesised cohort spark.
+ * The latest entry matches `useEngagementSurveys` ("Firm-wide", 42).
+ */
+export interface EnpsSnapshot {
+  capturedOn: string;
+  enpsScore: number;
+  participants: number;
+}
+export const useEnpsHistory = staticList<EnpsSnapshot>([
+  { capturedOn: "2025-07-31", enpsScore: 31, participants: 34 },
+  { capturedOn: "2025-10-31", enpsScore: 36, participants: 36 },
+  { capturedOn: "2026-01-31", enpsScore: 38, participants: 37 },
+  { capturedOn: "2026-04-30", enpsScore: 42, participants: 38 },
+]);
+
+// ============================================================
 // Team Composition (Task #412)
 //
 // Seeded "snapshot" of the firm's people with the demographic, language,

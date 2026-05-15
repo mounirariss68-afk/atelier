@@ -48,6 +48,123 @@ export function Sparkline({
   );
 }
 
+export interface LineSeries {
+  label: string;
+  values: number[];
+  /** CSS color string (defaults vary by index). */
+  color?: string;
+}
+
+/**
+ * Multi-series line chart for short time-series. All series must share
+ * the same x-axis (i.e. same length and ordered identically). The y-axis
+ * is shared across series and auto-scales from 0 to the global max.
+ */
+export function LineChart({
+  series,
+  labels,
+  width = 560,
+  height = 140,
+  className,
+}: {
+  series: LineSeries[];
+  /** Optional x-axis tick labels, same length as each series. */
+  labels?: string[];
+  width?: number;
+  height?: number;
+  className?: string;
+}) {
+  if (series.length === 0 || series[0].values.length === 0) return null;
+  const padL = 4;
+  const padR = 4;
+  const padT = 6;
+  const padB = labels ? 16 : 4;
+  const innerW = width - padL - padR;
+  const innerH = height - padT - padB;
+  const n = series[0].values.length;
+  const allValues = series.flatMap((s) => s.values);
+  const max = Math.max(1, ...allValues);
+  const stepX = n > 1 ? innerW / (n - 1) : innerW;
+  const defaultColors = ["var(--gold)", "var(--danger)", "var(--success)", "var(--warn)"];
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+      height={height}
+      className={cn("overflow-visible", className)}
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      {/* baseline grid */}
+      <line
+        x1={padL}
+        x2={padL + innerW}
+        y1={padT + innerH}
+        y2={padT + innerH}
+        stroke="var(--bg-deep)"
+        strokeWidth={1}
+      />
+      <line
+        x1={padL}
+        x2={padL + innerW}
+        y1={padT + innerH / 2}
+        y2={padT + innerH / 2}
+        stroke="var(--bg-deep)"
+        strokeWidth={1}
+        strokeDasharray="2 3"
+      />
+      {series.map((s, si) => {
+        const color = s.color ?? defaultColors[si % defaultColors.length];
+        const points = s.values
+          .map((v, i) => {
+            const x = padL + i * stepX;
+            const y = padT + innerH - (v / max) * innerH;
+            return `${x.toFixed(1)},${y.toFixed(1)}`;
+          })
+          .join(" ");
+        return (
+          <g key={s.label}>
+            <polyline
+              fill="none"
+              stroke={color}
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              points={points}
+            />
+            {s.values.map((v, i) => {
+              const x = padL + i * stepX;
+              const y = padT + innerH - (v / max) * innerH;
+              return (
+                <circle key={i} cx={x} cy={y} r={1.6} fill={color} />
+              );
+            })}
+          </g>
+        );
+      })}
+      {labels &&
+        labels.map((lbl, i) => {
+          if (n > 6 && i % 2 !== 0 && i !== n - 1) return null;
+          const x = padL + i * stepX;
+          return (
+            <text
+              key={i}
+              x={x}
+              y={height - 3}
+              textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}
+              fontSize={9}
+              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              fill="var(--text-faint)"
+            >
+              {lbl}
+            </text>
+          );
+        })}
+    </svg>
+  );
+}
+
 export interface BarRowDatum {
   label: string;
   value: number;

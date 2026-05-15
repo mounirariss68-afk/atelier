@@ -13,6 +13,8 @@ import {
   useLearningCatalogue,
   useCertifications,
   useCompReview,
+  useHeadcountHistory,
+  useEnpsHistory,
 } from "../peopleSeed";
 
 interface Kpi {
@@ -25,17 +27,18 @@ interface Kpi {
   tone?: "default" | "gold" | "amber" | "red" | "green";
   chip?: string;
   /**
-   * Real, seed-derived distributional spark — values across cohorts /
-   * units / rows (NOT a fabricated time series). When omitted the
-   * underlying seed has no comparable cross-section to draw.
+   * Spark values. Either a real monthly time-series (preferred — see
+   * `sparkCaption`), or a cross-sectional shape across cohorts / units
+   * when no time-series is available.
    */
   spark?: number[];
-  /**
-   * Honest sub-caption describing what the spark represents
-   * (e.g. "by cohort", "by unit"). The dashboard avoids "vs prior period"
-   * deltas because the People seed currently has no time-series.
-   */
+  /** Honest sub-caption describing what the spark represents. */
   sparkCaption?: string;
+}
+
+function formatSignedDelta(n: number, suffix = ""): string {
+  if (n === 0) return `±0${suffix}`;
+  return `${n > 0 ? "+" : ""}${n}${suffix}`;
 }
 
 export function KpiStrip() {
@@ -49,9 +52,10 @@ export function KpiStrip() {
   const catalogue = useLearningCatalogue();
   const certs = useCertifications();
   const compReview = useCompReview();
+  const headcountHistory = useHeadcountHistory();
+  const enpsHistory = useEnpsHistory();
 
   const firm = orgUnits.find((o) => o.parentId === null);
-  const headcount = firm?.headcount ?? orgUnits.reduce((s, o) => (o.parentId ? s + o.headcount : s), 0);
   // Open requisitions: prefer the firm aggregate row when it carries
   // openRoles; otherwise sum only the leaf (child) units to avoid
   // double-counting the root + children.
@@ -59,10 +63,40 @@ export function KpiStrip() {
     firm && firm.openRoles > 0
       ? firm.openRoles
       : orgUnits.filter((o) => o.parentId !== null).reduce((s, o) => s + o.openRoles, 0);
+
+  // ---- Headcount: real monthly time-series + Δ vs prior month / quarter. ----
+  const headcountSeries = headcountHistory.map((h) => h.active);
+  const latestHeadcount = headcountSeries[headcountSeries.length - 1] ?? 0;
+  const priorMonthHeadcount = headcountSeries[headcountSeries.length - 2] ?? latestHeadcount;
+  const priorQuarterHeadcount = headcountSeries[headcountSeries.length - 4] ?? latestHeadcount;
+  const headcountDeltaMo = latestHeadcount - priorMonthHeadcount;
+  const headcountDeltaQtr = latestHeadcount - priorQuarterHeadcount;
+
+  // ---- Voluntary / regrettable attrition rolling windows. ----
+  // Annualized rate = sum(voluntary leavers in window) / avg active * (12 / window).
+  function annualizedAttritionPct(window: number, end = headcountHistory.length): number {
+    const slice = headcountHistory.slice(Math.max(0, end - window), end);
+    if (slice.length === 0) return 0;
+    const leavers = slice.reduce((s, m) => s + m.voluntaryLeavers, 0);
+    const avgActive = slice.reduce((s, m) => s + m.active, 0) / slice.length;
+    if (avgActive === 0) return 0;
+    return (leavers / avgActive) * (12 / slice.length) * 100;
+  }
+  const volAttritionTtmPct = annualizedAttritionPct(12);
+  const volAttritionPriorTtmPct = annualizedAttritionPct(12, headcountHistory.length - 3);
+  const volAttritionDeltaPct = volAttritionTtmPct - volAttritionPriorTtmPct;
+  const volLeaversByMonth = headcountHistory.map((h) => h.voluntaryLeavers);
+
   const firmEnps = engagement.find((e) => e.cohort === "Firm-wide")?.enpsScore ?? engagement[0]?.enpsScore ?? 0;
   const flightHigh = flightRisk.filter((r) => r.riskScore >= 0.5).length;
   const mobilityActive = mobility.filter((m) => m.status !== "moved").length;
-  const mobilityRatePct = headcount ? Math.round((mobility.length / headcount) * 100) : 0;
+  const mobilityRatePct = latestHeadcount ? Math.round((mobility.length / latestHeadcount) * 100) : 0;
+
+  // ---- eNPS: real quarterly history + Δ vs prior survey. ----
+  const enpsSeries = enpsHistory.map((e) => e.enpsScore);
+  const enpsLatest = enpsSeries[enpsSeries.length - 1] ?? firmEnps;
+  const enpsPrior = enpsSeries[enpsSeries.length - 2] ?? enpsLatest;
+  const enpsDelta = enpsLatest - enpsPrior;
 
   // Performance distribution health: % rated meets-or-better in calibration.
   const calibTotals = calibration.reduce(
@@ -86,7 +120,7 @@ export function KpiStrip() {
     const hrs = courseHoursById.get(r.courseTitle) ?? 0;
     return s + hrs * (r.progressPct / 100);
   }, 0);
-  const learningPerFte = headcount ? (totalLearningHours / headcount).toFixed(1) : "0.0";
+  const learningPerFte = latestHeadcount ? (totalLearningHours / latestHeadcount).toFixed(1) : "0.0";
 
   // Comp watch — count reviews that move people to/through bands or sit "below".
   const belowBand = compReview.filter((r) => r.bandPosition === "below").length;
@@ -99,10 +133,8 @@ export function KpiStrip() {
   // Reviews open
   const reviewsOpen = reviews.filter((r) => r.status === "open" || r.status === "self-done").length;
 
-  // ---- Real, seed-derived distributional sparks (NOT time series). ----
-  const unitHeadcounts = orgUnits.filter((o) => o.parentId !== null).map((o) => o.headcount);
+  // ---- Cross-sectional sparks for tiles without a real time-series. ----
   const unitOpenReqs = orgUnits.filter((o) => o.parentId !== null).map((o) => o.openRoles);
-  const cohortEnps = engagement.map((e) => e.enpsScore);
   const flightScores = flightRisk.map((r) => Math.round(r.riskScore * 100));
   const calibMeetsByCohort = calibration.map((c) =>
     c.population ? Math.round(((c.proposedExceeds + c.proposedMeets) / c.population) * 100) : 0,
@@ -113,22 +145,22 @@ export function KpiStrip() {
     m.status === "moved" ? 100 : m.status === "approved" ? 75 : m.status === "in-conversation" ? 50 : 25,
   );
 
-  const enpsRange =
-    cohortEnps.length > 1
-      ? `cohorts ${Math.min(...cohortEnps)}–${Math.max(...cohortEnps)}`
-      : undefined;
+  const headcountChip = `${formatSignedDelta(headcountDeltaMo)} mo · ${formatSignedDelta(headcountDeltaQtr)} qtr`;
+  const enpsChip = `${formatSignedDelta(enpsDelta)} pts vs prior`;
+  const volChipDelta = volAttritionDeltaPct >= 0 ? "+" : "";
+  const volAttritionChip = `${volChipDelta}${volAttritionDeltaPct.toFixed(1)} pp TTM`;
 
   const kpis: Kpi[] = [
     {
       id: "headcount",
       eyebrow: "Headcount",
-      value: String(headcount),
-      caption: "active people, firm-wide",
+      value: String(latestHeadcount),
+      caption: `active firm-wide · prior mo ${priorMonthHeadcount} · prior qtr ${priorQuarterHeadcount}`,
       href: "/people/people",
-      tone: "gold",
-      chip: `${orgUnits.filter((o) => o.parentId !== null).length} units`,
-      spark: unitHeadcounts,
-      sparkCaption: "by unit",
+      tone: headcountDeltaMo >= 0 ? "green" : "amber",
+      chip: headcountChip,
+      spark: headcountSeries,
+      sparkCaption: "monthly · last 12mo",
     },
     {
       id: "open-reqs",
@@ -140,6 +172,22 @@ export function KpiStrip() {
       chip: "live",
       spark: unitOpenReqs,
       sparkCaption: "by unit",
+    },
+    {
+      id: "voluntary-attrition",
+      eyebrow: "Voluntary attrition",
+      value: `${volAttritionTtmPct.toFixed(1)}%`,
+      caption: `annualized · TTM · prior 9mo ${volAttritionPriorTtmPct.toFixed(1)}%`,
+      href: "/people/retain",
+      tone:
+        volAttritionDeltaPct > 1
+          ? "red"
+          : volAttritionDeltaPct < -1
+            ? "green"
+            : "amber",
+      chip: volAttritionChip,
+      spark: volLeaversByMonth,
+      sparkCaption: "voluntary leavers · monthly",
     },
     {
       id: "flight-risk",
@@ -155,13 +203,13 @@ export function KpiStrip() {
     {
       id: "enps",
       eyebrow: "Engagement (eNPS)",
-      value: String(firmEnps),
-      caption: `firm-wide · ${engagement[0]?.capturedOn ?? "latest"}${enpsRange ? ` · ${enpsRange}` : ""}`,
+      value: String(enpsLatest),
+      caption: `firm-wide · ${enpsHistory[enpsHistory.length - 1]?.capturedOn ?? "latest"}`,
       href: "/people/retain/engagement",
-      tone: firmEnps >= 40 ? "green" : firmEnps >= 20 ? "gold" : "amber",
-      chip: "pulse",
-      spark: cohortEnps,
-      sparkCaption: "by cohort",
+      tone: enpsLatest >= 40 ? "green" : enpsLatest >= 20 ? "gold" : "amber",
+      chip: enpsChip,
+      spark: enpsSeries,
+      sparkCaption: "quarterly · last 4 surveys",
     },
     {
       id: "mobility",
@@ -219,10 +267,10 @@ export function KpiStrip() {
           className="font-mono text-[10px] uppercase tracking-widest text-text-faint"
           data-testid="kpi-strip-baseline-note"
         >
-          No prior-period baseline available · sparks are cross-sectional shapes
+          Headcount · attrition · eNPS show real Δ vs prior period · others are cross-sectional
         </span>
       </div>
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4 2xl:grid-cols-8">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 2xl:grid-cols-9">
         {kpis.map((k) => (
           <Link key={k.id} href={k.href} data-testid={`kpi-${k.id}`}>
             <Card hover className="p-3 cursor-pointer h-full flex flex-col justify-between min-h-[112px]">

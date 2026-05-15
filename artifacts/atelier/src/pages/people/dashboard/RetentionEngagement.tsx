@@ -1,12 +1,29 @@
 import { Link } from "wouter";
 import { Card, MonoChip } from "@/components/ui/primitives";
-import { BarRows, type BarRowDatum } from "./charts";
-import { useFlightRisk, useEngagementSurveys, useStayInterviews } from "../peopleSeed";
+import { BarRows, LineChart, type BarRowDatum } from "./charts";
+import {
+  useFlightRisk,
+  useEngagementSurveys,
+  useStayInterviews,
+  useAttritionHistory,
+} from "../peopleSeed";
+
+const MONTH_TICK_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+function shortMonth(iso: string): string {
+  const [, mm] = iso.split("-");
+  const idx = Number(mm) - 1;
+  return MONTH_TICK_LABELS[idx] ?? iso;
+}
 
 export function RetentionEngagement() {
   const flightRisk = useFlightRisk();
   const engagement = useEngagementSurveys();
   const stay = useStayInterviews();
+  const attritionHistory = useAttritionHistory();
 
   const watchlist = flightRisk
     .slice()
@@ -115,15 +132,83 @@ export function RetentionEngagement() {
 
       <Link href="/people/retain" data-testid="retention-attrition">
         <Card hover className="p-4 cursor-pointer">
-          <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-2">
-            Attrition trend · rolling 12 months
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint">
+              Attrition trend · rolling 12 months
+            </div>
+            <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-text-faint">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-2 h-0.5" style={{ background: "var(--gold)" }} />
+                Voluntary
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-2 h-0.5" style={{ background: "var(--danger)" }} />
+                Regrettable
+              </span>
+            </div>
           </div>
-          <div className="text-xs text-text-faint leading-relaxed">
-            Voluntary and regrettable attrition trends require a monthly
-            joiners / leavers history that isn't yet in the People seed. Add a
-            headcount-history hook to enable this chart — until then we
-            deliberately don't render a fabricated curve.
-          </div>
+          {attritionHistory.length === 0 ? (
+            <div className="text-xs text-text-faint">No attrition history available.</div>
+          ) : (
+            <>
+              <LineChart
+                width={720}
+                height={140}
+                labels={attritionHistory.map((m) => shortMonth(m.month))}
+                series={[
+                  {
+                    label: "Voluntary",
+                    values: attritionHistory.map((m) => m.voluntaryLeavers),
+                    color: "var(--gold)",
+                  },
+                  {
+                    label: "Regrettable",
+                    values: attritionHistory.map((m) => m.regrettableLeavers),
+                    color: "var(--danger)",
+                  },
+                ]}
+              />
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] text-text-mute">
+                <div>
+                  <div className="font-mono text-[9px] uppercase tracking-widest text-text-faint">
+                    Voluntary · TTM
+                  </div>
+                  <div className="text-text">
+                    {attritionHistory.reduce((s, m) => s + m.voluntaryLeavers, 0)} leavers
+                  </div>
+                </div>
+                <div>
+                  <div className="font-mono text-[9px] uppercase tracking-widest text-text-faint">
+                    Regrettable · TTM
+                  </div>
+                  <div className="text-text">
+                    {attritionHistory.reduce((s, m) => s + m.regrettableLeavers, 0)} leavers
+                  </div>
+                </div>
+                <div>
+                  <div className="font-mono text-[9px] uppercase tracking-widest text-text-faint">
+                    Joiners · TTM
+                  </div>
+                  <div className="text-text">
+                    {attritionHistory.reduce((s, m) => s + m.joiners, 0)} hires
+                  </div>
+                </div>
+                <div>
+                  <div className="font-mono text-[9px] uppercase tracking-widest text-text-faint">
+                    Net headcount Δ
+                  </div>
+                  <div className="text-text">
+                    {(() => {
+                      const first = attritionHistory[0];
+                      const last = attritionHistory[attritionHistory.length - 1];
+                      const d = last.active - (first.active - first.joiners + first.leavers);
+                      return `${d >= 0 ? "+" : ""}${d} vs ${attritionHistory[0].month}`;
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </Card>
       </Link>
     </section>
