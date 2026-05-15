@@ -115,7 +115,34 @@ function parseFrame(block: string): CliFrame | null {
   return { type: event, data, receivedAt: Date.now() };
 }
 
-function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
+/**
+ * Task #500 — Stream-consumer navigation gate, exported for unit
+ * testing. Fires `onNavigate` exactly once per unique destination per
+ * turn, and skips entirely when the stream is no longer active so a
+ * stale turn cannot yank the user around after a newer submit().
+ */
+export function tryFireNavigation(args: {
+  prevNavPath: string | null;
+  navigateTo: { path: string; when: "on_propose" | "on_commit" } | null | undefined;
+  isActive: () => boolean;
+  onNavigate?: (path: string, when: "on_propose" | "on_commit") => void;
+}): { navigatedTo: string | null; fired: boolean } {
+  const { prevNavPath, navigateTo, isActive, onNavigate } = args;
+  if (!isActive() || !navigateTo) {
+    return { navigatedTo: prevNavPath, fired: false };
+  }
+  if (navigateTo.path === prevNavPath) {
+    return { navigatedTo: prevNavPath, fired: false };
+  }
+  try {
+    onNavigate?.(navigateTo.path, navigateTo.when);
+  } catch {
+    /* swallow — navigation must never break the stream */
+  }
+  return { navigatedTo: navigateTo.path, fired: true };
+}
+
+export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
   switch (frame.type) {
     case "narration": {
       const text = String((frame.data as { text?: string }).text ?? "");
@@ -469,17 +496,14 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
             // callback exactly once per unique destination per turn.
             // Skipped when the stream is no longer active so a stale
             // turn can't yank the user around after a newer submit.
-            if (
-              isActive() &&
-              live.navigateTo &&
-              live.navigateTo.path !== prevNavPath
-            ) {
-              try {
-                onNavigate?.(live.navigateTo.path, live.navigateTo.when);
-              } catch {
-                /* swallow — navigation must never break the stream */
-              }
-              live = { ...live, navigatedTo: live.navigateTo.path };
+            const navResult = tryFireNavigation({
+              prevNavPath,
+              navigateTo: live.navigateTo,
+              isActive,
+              onNavigate,
+            });
+            if (navResult.fired) {
+              live = { ...live, navigatedTo: navResult.navigatedTo };
             }
             if (!isActive()) continue;
             setCurrent(live);

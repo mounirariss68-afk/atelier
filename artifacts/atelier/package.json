@@ -8,7 +8,8 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:reference-data": "tsx src/lib/reference-data.test.ts"
+    "test:reference-data": "tsx src/lib/reference-data.test.ts",
+    "test:cli-reducer": "tsx src/components/cli/useCli.test.ts"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

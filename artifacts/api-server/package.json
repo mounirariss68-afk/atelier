@@ -19,6 +19,7 @@
     "test:cli-use-cases": "tsx ./tests/cli-use-cases/run.ts",
     "test:cli-parity": "tsx ./tests/cli-parity/run.ts",
     "test:cli-smoke": "tsx ./tests/cli-smoke/run.ts",
+    "test:cli-navigation": "tsx ./tests/cli-navigation/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
   },
   "dependencies": {

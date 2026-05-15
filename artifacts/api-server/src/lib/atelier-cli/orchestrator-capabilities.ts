@@ -61,6 +61,7 @@ import {
   runAccountCartographer,
   runPursuitScout,
 } from "../atelier-agents/runner.js";
+import { resolveNavPath } from "./orchestrator-nav-path.js";
 
 const FUZZY_LIMIT = 5;
 
@@ -147,103 +148,14 @@ const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
 
 // ---------------------------------------------------------------------
 // Task #495 — UI navigation map. `ROUTE_HINTS` above describe HTTP
-// dispatch routes for the confirm card; this map computes the actual
-// in-app SPA path the chat UI should jump to so the user lands on
-// the relevant screen automatically (proposal-time → context page,
-// commit-time → result page).
-//
-// The resolver consumes the (verb, kind, targetId, payload) on the
-// proposal phase and additionally `resultData` on the commit phase
-// (where the new entity's id lives in `result.id`). Returns null when
-// no meaningful destination is known — the caller treats that as
-// "do not navigate", preserving today's behavior for pure Q&A,
-// disambiguation, and refusals.
+// dispatch routes for the confirm card; the actual in-app SPA path the
+// chat UI auto-navigates to lives in `./orchestrator-nav-path.ts` (so
+// it can be unit-tested in isolation, see Task #500). The resolver
+// consumes (verb, kind, targetId, payload) at proposal time and adds
+// `resultData` at commit time. Returns null when no meaningful
+// destination is known — pure Q&A, disambiguation, and refusals do not
+// auto-navigate.
 // ---------------------------------------------------------------------
-function resolveNavPath(args: {
-  verb: WriteVerb;
-  kind: WriteKind;
-  targetId: string | null;
-  payload: Record<string, unknown>;
-  resultData?: unknown;
-}): string | null {
-  const { verb, kind, targetId, payload, resultData } = args;
-  const dataObj =
-    resultData && typeof resultData === "object"
-      ? (resultData as Record<string, unknown>)
-      : {};
-  const pickStr = (key: string): string | null => {
-    const fromResult = dataObj[key];
-    if (typeof fromResult === "string" && fromResult) return fromResult;
-    const fromPayload = payload[key];
-    if (typeof fromPayload === "string" && fromPayload) return fromPayload;
-    return null;
-  };
-  const resultId = typeof dataObj.id === "string" ? dataObj.id : null;
-  const id = resultId ?? targetId ?? null;
-  const engagementId = pickStr("engagementId");
-  const opportunityId = pickStr("opportunityId");
-  const accountId = pickStr("accountId");
-  switch (kind) {
-    case "account":
-      if (id) return `/accounts/${id}`;
-      return null;
-    case "opportunity":
-      if (id) return `/opportunities/${id}`;
-      return null;
-    case "contact":
-      // No standalone contact page; land on the parent account if known.
-      if (accountId) return `/accounts/${accountId}`;
-      return null;
-    case "engagement":
-      if (id) return `/clients/deliver/engagements/${id}`;
-      return null;
-    case "deliverable": {
-      const deliverableId = id;
-      if (engagementId && deliverableId)
-        return `/clients/deliver/engagements/${engagementId}/deliverables/${deliverableId}`;
-      if (engagementId) return `/clients/deliver/engagements/${engagementId}`;
-      return null;
-    }
-    case "expense":
-      if (id) return `/wallet/expenses/${id}`;
-      if (verb === "create") return "/wallet/expenses/new";
-      return null;
-    case "invoice":
-      if (id) return `/wallet/invoices/${id}`;
-      if (verb === "create") return "/wallet/invoices";
-      return null;
-    case "contract":
-      if (id) return `/codex/contracts/${id}`;
-      return "/codex";
-    case "agent_design":
-      if (id) return `/agents/design/${id}`;
-      return null;
-    case "timesheet_entry": {
-      // Write payloads in this codebase use `weekId` (the timesheet
-      // week row id), while the route param is named `:weekIso`. The
-      // PeopleTime page accepts either form, so pass through whichever
-      // key we have. For update flows we may only know the entry's
-      // targetId — fall back to the generic week list in that case.
-      const personId = pickStr("personId");
-      const weekKey = pickStr("weekIso") ?? pickStr("weekId");
-      if (personId && weekKey) return `/people/time/${personId}/${weekKey}`;
-      return "/people/time";
-    }
-    case "raid_item":
-    case "proposal":
-    case "pov":
-    case "change_order":
-      // These live inside an opportunity / engagement workspace.
-      if (engagementId) return `/clients/deliver/engagements/${engagementId}`;
-      if (opportunityId) return `/opportunities/${opportunityId}`;
-      return null;
-    case "win_loss_debrief":
-      if (opportunityId) return `/opportunities/${opportunityId}/win-loss`;
-      return null;
-    default:
-      return null;
-  }
-}
 
 // ---------------------------------------------------------------------
 // 1. resolve_entity
