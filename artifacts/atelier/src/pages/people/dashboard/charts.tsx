@@ -318,6 +318,8 @@ export interface FunnelStep {
   href?: string;
   /** "next action" sentence to surface inline. */
   next?: string;
+  /** Optional lucide icon component to render alongside the label. */
+  icon?: React.ComponentType<{ className?: string }>;
 }
 
 export function Funnel({
@@ -342,7 +344,8 @@ export function Funnel({
             data-funnel-step={s.id}
           >
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint">
+              <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint inline-flex items-center gap-1.5">
+                {s.icon && <s.icon className="w-3 h-3" />}
                 {s.label}
               </div>
               <div className="mt-1 text-xl font-light text-gold leading-none">{s.value}</div>
