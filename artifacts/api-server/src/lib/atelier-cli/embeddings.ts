@@ -29,6 +29,19 @@ function openaiKey(): string {
   return key;
 }
 
+/**
+ * Resolve the OpenAI base URL. When the Replit AI-Integrations proxy is
+ * configured, route through it (the AI_INTEGRATIONS_OPENAI_API_KEY only
+ * works against the proxy, not api.openai.com — using it directly returns
+ * 401 "Incorrect API key provided"). Otherwise fall back to the public
+ * OpenAI host so a real OPENAI_API_KEY still works.
+ */
+function openaiBaseUrl(): string {
+  const proxy = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+  if (proxy) return proxy.replace(/\/+$/, "");
+  return "https://api.openai.com/v1";
+}
+
 /** Provider id surfaced in the embedding rows. Stable for cache invalidation. */
 export function currentProvider(): string {
   return `openai:${OPENAI_MODEL}`;
@@ -55,7 +68,7 @@ async function embedOpenAI(text: string, key: string): Promise<EmbeddingResult> 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), 10_000);
   try {
-    const resp = await fetch("https://api.openai.com/v1/embeddings", {
+    const resp = await fetch(`${openaiBaseUrl()}/embeddings`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
