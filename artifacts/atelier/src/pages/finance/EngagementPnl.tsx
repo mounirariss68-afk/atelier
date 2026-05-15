@@ -99,6 +99,21 @@ interface PnlResp {
   }>;
 }
 
+interface AuditEntry {
+  id: string;
+  engagementId: string;
+  at: string;
+  actorUserId: string | null;
+  actorName: string;
+  action: string;
+  detail: string;
+}
+
+interface AuditResp {
+  engagementId: string;
+  items: AuditEntry[];
+}
+
 const fmtUsd = (n: number) =>
   `${n < 0 ? "-" : ""}$${Math.abs(Math.round(n)).toLocaleString()}`;
 const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -136,8 +151,25 @@ export default function EngagementPnl(): JSX.Element {
     enabled: !!engagementId,
   });
 
+  const auditQ = useQuery<AuditResp>({
+    queryKey: ["finance", "engagement-pnl", engagementId, "audit"],
+    queryFn: async () => {
+      const r = await fetch(
+        `${API_BASE}/finance/engagement-pnl/${engagementId}/audit`,
+        {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        },
+      );
+      if (!r.ok) throw new Error(`audit_${r.status}`);
+      return (await r.json()) as AuditResp;
+    },
+    enabled: !!engagementId,
+  });
+
   const invalidate = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: ["finance", "engagement-pnl", engagementId] });
+    qc.invalidateQueries({ queryKey: ["finance", "engagement-pnl", engagementId, "audit"] });
     qc.invalidateQueries({ queryKey: ["finance", "engagement-pnl", "register"] });
     qc.invalidateQueries({ queryKey: ["finance", "engagement-pnl", "summary"] });
   }, [qc, engagementId]);
@@ -359,28 +391,49 @@ export default function EngagementPnl(): JSX.Element {
         <ChangeOrdersSection engId={data.engagementId} />
       </div>
 
-      {/* Audit */}
-      <Card className="mt-6 p-6">
+      {/* Audit timeline — change-order workflow + ETC overrides + re-baselines.
+          Sourced from a dedicated /audit endpoint with actor names resolved. */}
+      <Card className="mt-6 p-6" data-testid="card-audit-timeline">
         <SectionHead
           eyebrow="Audit"
           headline={
             <span className="inline-flex items-center gap-2">
               <History className="w-5 h-5 text-gold" />
-              Re-baselines & ETC updates
+              Change-order timeline
             </span>
           }
+          lede="Every re-baseline, ETC override and change-order state change for this engagement, newest first."
         />
-        <div className="mt-4 space-y-2">
-          {data.audit.length === 0 && (
+        <div className="mt-4">
+          {auditQ.isLoading && (
+            <div className="font-mono text-sm text-text-mute">Loading timeline…</div>
+          )}
+          {auditQ.isError && (
+            <div className="font-mono text-sm text-danger">Failed to load audit timeline.</div>
+          )}
+          {auditQ.data && auditQ.data.items.length === 0 && (
             <div className="font-mono text-sm text-text-mute">No audit entries yet.</div>
           )}
-          {data.audit.map((a) => (
-            <div key={a.id} className="flex flex-wrap items-baseline gap-3 border-l-2 border-gold/40 pl-3 py-1">
-              <span className="font-mono text-[11px] text-text-faint">{a.at.slice(0, 16).replace("T", " ")}</span>
-              <MonoChip>{a.action}</MonoChip>
-              <span className="text-sm text-text">{a.detail}</span>
-            </div>
-          ))}
+          {auditQ.data && auditQ.data.items.length > 0 && (
+            <ol className="space-y-3" data-testid="list-audit-timeline">
+              {auditQ.data.items.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-l-2 border-gold/40 pl-3 py-1"
+                  data-testid={`audit-row-${a.id}`}
+                >
+                  <span className="font-mono text-[11px] text-text-faint whitespace-nowrap">
+                    {a.at.slice(0, 16).replace("T", " ")}
+                  </span>
+                  <MonoChip>{a.action}</MonoChip>
+                  <span className="text-sm text-text flex-1 min-w-[12rem]">{a.detail}</span>
+                  <span className="font-mono text-[11px] text-text-faint whitespace-nowrap">
+                    by {a.actorName}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </Card>
     </div>

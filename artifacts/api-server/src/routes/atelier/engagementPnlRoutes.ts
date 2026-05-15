@@ -330,6 +330,34 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
 });
 
 // ---------------------------------------------------------------
+// Per-engagement change-order audit timeline
+// GET /finance/engagement-pnl/:engagementId/audit
+// Returns audit rows newest-first with actor display names resolved.
+// Read-gate matches the per-engagement P&L (recruiter denied).
+// ---------------------------------------------------------------
+router.get("/finance/engagement-pnl/:engagementId/audit", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const id = req.params.engagementId;
+  const limitRaw = Number(req.query.limit);
+  const limit =
+    Number.isFinite(limitRaw) && limitRaw > 0 && limitRaw <= 500
+      ? Math.floor(limitRaw)
+      : 100;
+  const audit = await listAudit(id, limit);
+  // listAudit already orders by atIso desc, but be defensive in case
+  // callers ever reuse this with a different source.
+  const items = audit
+    .slice()
+    .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+    .map((a) => ({
+      ...a,
+      actorName: personName(a.actorUserId),
+    }));
+  res.json({ engagementId: id, items });
+});
+
+// ---------------------------------------------------------------
 // ETC override
 // ---------------------------------------------------------------
 router.post("/finance/engagement-pnl/:engagementId/etc", async (req, res) => {
