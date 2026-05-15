@@ -11,7 +11,7 @@
  * Mirrors the upsertById pattern in atelier-seed-v5.ts. Safe to call on
  * every cold start — every insert is gated on existence.
  */
-import { sql, inArray, type InferInsertModel } from "drizzle-orm";
+import { sql, inArray, eq, and, isNull, type InferInsertModel } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import {
   db,
@@ -24,8 +24,10 @@ import {
   atelierContractParty,
   atelierDpa,
   atelierDeliverableAcceptance,
+  atelierChangeOrder,
 } from "@workspace/db";
 import { logger } from "./logger.js";
+import { applyPostedChangeOrder } from "../data/atelier-engagement-pnl-seed.js";
 
 type WithIdColumn = PgTable & { id: PgColumn };
 
@@ -129,6 +131,9 @@ type ContractPartyRow = InferInsertModel<typeof atelierContractParty> & {
 };
 type DpaRow = InferInsertModel<typeof atelierDpa> & { id: string };
 type AcceptanceRow = InferInsertModel<typeof atelierDeliverableAcceptance> & {
+  id: string;
+};
+type ChangeOrderRow = InferInsertModel<typeof atelierChangeOrder> & {
   id: string;
 };
 
@@ -454,6 +459,103 @@ const DELIVERABLE_ACCEPTANCES: AcceptanceRow[] = [
   },
 ];
 
+// ============================================================
+// CHANGE ORDERS — Task #431
+// Migrate the Wave-2 in-memory seed into the real
+// `atelier_change_order` table so the engagement-pnl pages can read
+// from the workflow-of-record.
+//
+// Status mapping from the old mock workflow:
+//   approved  → posted              (terminal, re-baselined)
+//   submitted → partner_approved    (awaiting dispatch — closest open
+//                                    state in the real machine)
+//   draft     → draft
+//   rejected  → client_rejected
+// ============================================================
+const CHANGE_ORDERS: ChangeOrderRow[] = [
+  {
+    id: "co_tasama_001",
+    engagementId: "eng_tasama_bpo_phase1",
+    parentContractId: null,
+    kind: "scope",
+    summary:
+      "Add Arabic-language conversational coverage for top-3 services (out-of-scope in original SOW).",
+    rationaleText:
+      "Δ hours +720 · Δ cost impact +$100,800. Approved & posted; engagement re-baselined.",
+    valueDeltaUsd: 180_000,
+    status: "posted",
+    proposedByUserId: "p_layla_haddad",
+    partnerApproverUserId: "p_mounir_ariss",
+    partnerApprovedAt: new Date("2026-04-12T10:00:00Z"),
+    clientProposedAt: new Date("2026-04-12T11:00:00Z"),
+    clientResolvedAt: new Date("2026-04-15T14:00:00Z"),
+    clientSignerName: "Faisal Al-Otaibi",
+    clientSignerEmail: "f.alotaibi@tasama.sa",
+    evidenceUrl: "https://docusign.example.com/envelope/co-tasama-001",
+    postedAt: new Date("2026-04-17T09:00:00Z"),
+    createdAt: new Date("2026-04-05T08:00:00Z"),
+  },
+  {
+    id: "co_tasama_002",
+    engagementId: "eng_tasama_bpo_phase1",
+    parentContractId: null,
+    kind: "term",
+    summary:
+      "Extend rollout cadence by two weeks to absorb client's holiday freeze; partner-firm subs to bridge.",
+    rationaleText:
+      "Δ hours +240 · Δ cost impact +$50,400. Partner-approved; awaiting dispatch to client.",
+    valueDeltaUsd: 60_000,
+    status: "partner_approved",
+    proposedByUserId: "p_layla_haddad",
+    partnerApproverUserId: "p_mounir_ariss",
+    partnerApprovedAt: new Date("2026-05-11T16:00:00Z"),
+    clientSignerName: "",
+    clientSignerEmail: "",
+    evidenceUrl: "",
+    createdAt: new Date("2026-05-09T08:00:00Z"),
+  },
+  {
+    id: "co_nhc_001",
+    engagementId: "eng_nhc_ar_pilot",
+    parentContractId: null,
+    kind: "scope",
+    summary:
+      "Add CRM hand-off integration discovered during week-2 walkthrough; client agreed in steering.",
+    rationaleText:
+      "Δ hours +240 · Δ cost impact +$33,600. Partner-approved; awaiting dispatch.",
+    valueDeltaUsd: 72_000,
+    status: "partner_approved",
+    proposedByUserId: "p_layla_haddad",
+    partnerApproverUserId: "p_mounir_ariss",
+    partnerApprovedAt: new Date("2026-05-13T09:00:00Z"),
+    clientSignerName: "",
+    clientSignerEmail: "",
+    evidenceUrl: "",
+    createdAt: new Date("2026-05-12T08:00:00Z"),
+  },
+  {
+    id: "co_dge_001",
+    engagementId: "eng_dge_effortless_v1",
+    parentContractId: null,
+    kind: "scope",
+    summary: "Carve-out of compliance dashboard scope; client deferred to phase 2.",
+    rationaleText:
+      "Δ hours -150 · Δ cost impact -$21,000. Posted; engagement re-baselined down.",
+    valueDeltaUsd: -45_000,
+    status: "posted",
+    proposedByUserId: "p_omar_najjar",
+    partnerApproverUserId: "p_mounir_ariss",
+    partnerApprovedAt: new Date("2026-01-18T10:00:00Z"),
+    clientProposedAt: new Date("2026-01-18T11:00:00Z"),
+    clientResolvedAt: new Date("2026-01-20T15:00:00Z"),
+    clientSignerName: "Dr. Mariam Al-Mansouri",
+    clientSignerEmail: "m.almansouri@dge.gov.ae",
+    evidenceUrl: "https://docusign.example.com/envelope/co-dge-001",
+    postedAt: new Date("2026-01-21T09:00:00Z"),
+    createdAt: new Date("2026-01-15T08:00:00Z"),
+  },
+];
+
 let l2cSeedPromise: Promise<void> | null = null;
 
 export async function ensureAtelierL2cSeed(): Promise<void> {
@@ -467,12 +569,53 @@ export async function ensureAtelierL2cSeed(): Promise<void> {
     await upsertById(atelierContractParty, CONTRACT_PARTIES);
     await upsertById(atelierDpa, DPAS);
     await upsertById(atelierDeliverableAcceptance, DELIVERABLE_ACCEPTANCES);
+    await upsertById(atelierChangeOrder, CHANGE_ORDERS);
+    // Task #431 — boot-time reconciliation. Engagement P&L baselines
+    // live in-memory (see `atelier-engagement-pnl-seed.ts`). Any CO row
+    // that's already in the `posted` terminal state must have its delta
+    // folded into the baseline at startup so EAC / VAC / contract value
+    // are consistent with the workflow-of-record.
+    //
+    // We scan the *entire* `atelier_change_order` table — not just the
+    // hardcoded seed array — so non-seed posted COs (e.g. ones created
+    // by Finance through the UI in a previous boot) are also picked up.
+    // `applyPostedChangeOrder` is idempotent via its `APPLIED_POSTED_COS`
+    // guard, so re-running this on every boot is safe.
+    const postedRows = await db
+      .select()
+      .from(atelierChangeOrder)
+      .where(
+        and(
+          eq(atelierChangeOrder.status, "posted"),
+          isNull(atelierChangeOrder.deletedAt),
+        ),
+      );
+    let reconciled = 0;
+    let unknownEng = 0;
+    for (const co of postedRows) {
+      const result = applyPostedChangeOrder({
+        engagementId: co.engagementId,
+        changeOrderId: co.id,
+        valueDeltaUsd: Number(co.valueDeltaUsd ?? 0),
+        actorUserId: co.partnerApproverUserId ?? co.proposedByUserId ?? null,
+        baselinedAtIso: co.postedAt ? co.postedAt.toISOString() : undefined,
+      });
+      if (result.status === "applied") reconciled += 1;
+      else if (result.status === "engagement_unknown") unknownEng += 1;
+    }
+    if (unknownEng > 0) {
+      logger.warn(
+        { module: "atelier-seed-l2c", unknownEng },
+        "Posted change orders reference engagement IDs with no in-memory P&L baseline; their deltas were not reconciled.",
+      );
+    }
     logger.info(
       { module: "atelier-seed-l2c" },
       "Wave-1 L2C demo seed verified " +
         `(${COUNTERPARTIES.length} counterparties, ${CLAUSES.length} clauses, ` +
         `${CONTRACTS.length} contracts, ${CONTRACT_PARTIES.length} parties, ` +
-        `${DPAS.length} DPA, ${DELIVERABLE_ACCEPTANCES.length} acceptance).`,
+        `${DPAS.length} DPA, ${DELIVERABLE_ACCEPTANCES.length} acceptance, ` +
+        `${CHANGE_ORDERS.length} change orders, ${reconciled} posted-CO baselines reconciled).`,
     );
   })().catch((err) => {
     l2cSeedPromise = null; // allow retry on next call

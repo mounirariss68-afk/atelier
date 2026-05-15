@@ -1,12 +1,14 @@
 /**
  * EngagementPnl — per-engagement P&L, EAC engine, change-order register
- * and audit trail (Task #414, Wave 2).
+ * and audit trail (Task #414, Wave 2; Task #431).
  *
  * Surfaces:
  *   - Header: contract value, BAC, EAC, VAC, forecast vs planned margin
  *   - Cost waterfall: labour cost / expenses / subs vs budget vs incurred
  *   - EAC engine: ETC method (manual override or extrapolation), rationale
- *   - Change-order register with submit / approve / reject actions
+ *   - Change orders register: backed by `atelier_change_order` via
+ *     `<ChangeOrdersSection/>`. Posting through that workflow re-baselines
+ *     the engagement budget on the server.
  *   - Audit trail of every re-baseline / ETC update
  *
  * Persona-gated writes mirror the server: founding_partner / partner /
@@ -14,35 +16,17 @@
  * finance can approve.
  */
 import * as React from "react";
-import { Link, useParams } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useParams } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtelierGetMe } from "@workspace/api-client-react";
 import { PageHero, SectionHead, Card, MonoChip, PillButton, BackLink } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Send, Check, X, Calculator, History } from "lucide-react";
+import { Calculator, History } from "lucide-react";
+import { ChangeOrdersSection } from "@/components/tabs/ChangeOrdersSection";
 
 const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
 
 type Rag = "green" | "amber" | "red";
-type CoStatus = "draft" | "submitted" | "approved" | "rejected";
-
-interface ChangeOrder {
-  id: string;
-  engagementId: string;
-  number: string;
-  description: string;
-  valueUsd: number;
-  hoursImpact: number;
-  costImpactUsd: number;
-  status: CoStatus;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  raisedByUserId: string;
-  approvedByUserId: string | null;
-  rejectionReason: string | null;
-  createdAt: string;
-}
 
 interface EacResult {
   contractValueUsd: number;
@@ -106,7 +90,6 @@ interface PnlResp {
     engagementLeadId: string;
     engagementLeadName: string;
   };
-  changeOrders: ChangeOrder[];
   audit: Array<{
     id: string;
     at: string;
@@ -128,17 +111,9 @@ const RAG_TONE: Record<Rag, "green" | "amber" | "red"> = {
   red: "red",
 };
 
-const CO_TONE: Record<CoStatus, "default" | "gold" | "amber" | "green" | "red"> = {
-  draft: "default",
-  submitted: "amber",
-  approved: "green",
-  rejected: "red",
-};
-
 export default function EngagementPnl(): JSX.Element {
   const { engagementId } = useParams<{ engagementId: string }>();
   const qc = useQueryClient();
-  const { toast } = useToast();
   const { data: me } = useAtelierGetMe();
 
   const role = me?.role ?? "";
@@ -147,7 +122,6 @@ export default function EngagementPnl(): JSX.Element {
     role === "partner" ||
     role === "finance" ||
     role === "senior_manager";
-  const canApprove = role === "founding_partner" || role === "partner" || role === "finance";
 
   const q = useQuery<PnlResp>({
     queryKey: ["finance", "engagement-pnl", engagementId],
@@ -162,56 +136,29 @@ export default function EngagementPnl(): JSX.Element {
     enabled: !!engagementId,
   });
 
-  const invalidate = () => {
+  const invalidate = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: ["finance", "engagement-pnl", engagementId] });
     qc.invalidateQueries({ queryKey: ["finance", "engagement-pnl", "register"] });
     qc.invalidateQueries({ queryKey: ["finance", "engagement-pnl", "summary"] });
-  };
+  }, [qc, engagementId]);
 
-  const post = async (path: string, body?: unknown): Promise<unknown> => {
-    const r = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+  // When the change-orders panel mutates state (most importantly: a
+  // Finance user posts a CO, which re-baselines the budget on the
+  // server), refresh the P&L payload so the new contract value / EAC /
+  // VAC tiles update.
+  React.useEffect(() => {
+    const unsub = qc.getQueryCache().subscribe((event) => {
+      if (event.type === "updated" && event.action.type === "invalidate") {
+        const key = event.query.queryKey;
+        if (Array.isArray(key) && key[0] === "change-orders" && key[1] === engagementId) {
+          invalidate();
+        }
+      }
     });
-    if (!r.ok) {
-      const j = (await r.json().catch(() => ({}))) as { error?: string };
-      throw new Error(j.error ?? `http_${r.status}`);
-    }
-    return r.json();
-  };
+    return () => unsub();
+  }, [qc, engagementId, invalidate]);
 
-  const [showCoForm, setShowCoForm] = React.useState(false);
   const [showEtcForm, setShowEtcForm] = React.useState(false);
-
-  const submitMut = useMutation({
-    mutationFn: (id: string) => post(`/finance/engagement-pnl/change-orders/${id}/submit`),
-    onSuccess: () => {
-      toast({ title: "Change order submitted" });
-      invalidate();
-    },
-    onError: (e: Error) => toast({ title: "Submit failed", description: e.message, variant: "destructive" }),
-  });
-
-  const approveMut = useMutation({
-    mutationFn: (id: string) => post(`/finance/engagement-pnl/change-orders/${id}/approve`),
-    onSuccess: () => {
-      toast({ title: "Change order approved", description: "Engagement re-baselined." });
-      invalidate();
-    },
-    onError: (e: Error) => toast({ title: "Approve failed", description: e.message, variant: "destructive" }),
-  });
-
-  const rejectMut = useMutation({
-    mutationFn: (args: { id: string; reason: string }) =>
-      post(`/finance/engagement-pnl/change-orders/${args.id}/reject`, { reason: args.reason }),
-    onSuccess: () => {
-      toast({ title: "Change order rejected" });
-      invalidate();
-    },
-    onError: (e: Error) => toast({ title: "Reject failed", description: e.message, variant: "destructive" }),
-  });
 
   if (q.isLoading) {
     return (
@@ -240,7 +187,7 @@ export default function EngagementPnl(): JSX.Element {
         <SectionHead
           eyebrow={`Finance · Plan · ${data.budget.sector}`}
           headline={data.engagementName}
-          lede={`P&L · EAC engine · change orders. As of ${data.cost.asOf}. Baseline last set ${data.budget.baselinedAt}.`}
+          lede={`P&L · EAC engine · change orders. As of ${data.cost.asOf}. Baseline last set ${data.budget.baselinedAt.slice(0, 10)}.`}
         />
       </PageHero>
 
@@ -406,92 +353,11 @@ export default function EngagementPnl(): JSX.Element {
         )}
       </Card>
 
-      {/* Change orders */}
-      <Card className="mt-6 p-6">
-        <div className="flex items-center justify-between">
-          <SectionHead eyebrow="Change orders" headline="Register & re-baselining" />
-          {canWrite && (
-            <PillButton
-              onClick={() => setShowCoForm((v) => !v)}
-              variant={showCoForm ? "ghost" : "primary"}
-              data-testid="button-toggle-co-form"
-            >
-              {showCoForm ? "Cancel" : (<><Plus className="w-4 h-4 mr-1" /> New change order</>)}
-            </PillButton>
-          )}
-        </div>
-
-        {showCoForm && canWrite && (
-          <ChangeOrderForm
-            engagementId={data.engagementId}
-            onClose={() => setShowCoForm(false)}
-            onDone={invalidate}
-          />
-        )}
-
-        <div className="mt-4 space-y-3">
-          {data.changeOrders.length === 0 && (
-            <div className="font-mono text-sm text-text-mute">No change orders yet.</div>
-          )}
-          {data.changeOrders.map((co) => (
-            <Card key={co.id} className="p-4" data-testid={`co-row-${co.id}`}>
-              <div className="flex flex-wrap items-center gap-3">
-                <MonoChip>{co.number}</MonoChip>
-                <MonoChip tone={CO_TONE[co.status]}>{co.status.replace("_", " ")}</MonoChip>
-                <span className="font-mono text-xs text-text-faint">
-                  Δ value {co.valueUsd >= 0 ? "+" : ""}{fmtUsd(co.valueUsd)} · Δ hours {co.hoursImpact >= 0 ? "+" : ""}{co.hoursImpact} · Δ cost {co.costImpactUsd >= 0 ? "+" : ""}{fmtUsd(co.costImpactUsd)}
-                </span>
-                <div className="ml-auto flex gap-1.5">
-                  {co.status === "draft" && canWrite && (
-                    <button
-                      onClick={() => submitMut.mutate(co.id)}
-                      disabled={submitMut.isPending}
-                      className="inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/10 hover:bg-gold/20 text-gold text-xs font-mono px-2.5 py-1.5 disabled:opacity-50"
-                      data-testid={`button-submit-${co.id}`}
-                    >
-                      <Send className="w-3 h-3" /> Submit
-                    </button>
-                  )}
-                  {co.status === "submitted" && canApprove && (
-                    <>
-                      <button
-                        onClick={() => approveMut.mutate(co.id)}
-                        disabled={approveMut.isPending}
-                        className="inline-flex items-center gap-1 rounded border border-green-500/40 bg-green-500/10 hover:bg-green-500/20 text-green-400 text-xs font-mono px-2.5 py-1.5 disabled:opacity-50"
-                        data-testid={`button-approve-${co.id}`}
-                      >
-                        <Check className="w-3 h-3" /> Approve & re-baseline
-                      </button>
-                      <button
-                        onClick={() => {
-                          const reason = window.prompt("Rejection reason");
-                          if (reason && reason.trim()) {
-                            rejectMut.mutate({ id: co.id, reason: reason.trim() });
-                          }
-                        }}
-                        disabled={rejectMut.isPending}
-                        className="inline-flex items-center gap-1 rounded border border-border hover:border-danger/50 hover:text-danger text-text-mute text-xs font-mono px-2.5 py-1.5"
-                        data-testid={`button-reject-${co.id}`}
-                      >
-                        <X className="w-3 h-3" /> Reject
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="mt-2 text-sm text-text">{co.description}</div>
-              {co.rejectionReason && (
-                <div className="mt-1 text-xs text-danger">Rejected: {co.rejectionReason}</div>
-              )}
-              <div className="mt-1 text-[11px] font-mono text-text-faint">
-                Created {co.createdAt.slice(0, 10)}
-                {co.submittedAt ? ` · submitted ${co.submittedAt.slice(0, 10)}` : ""}
-                {co.approvedAt ? ` · approved ${co.approvedAt.slice(0, 10)}` : ""}
-              </div>
-            </Card>
-          ))}
-        </div>
-      </Card>
+      {/* Change orders — backed by atelier_change_order workflow.
+          Finance "Post" re-baselines the engagement budget server-side. */}
+      <div className="mt-6">
+        <ChangeOrdersSection engId={data.engagementId} />
+      </div>
 
       {/* Audit */}
       <Card className="mt-6 p-6">
@@ -684,106 +550,6 @@ function EtcForm({
         <PillButton variant="ghost" onClick={onClose}>Cancel</PillButton>
         <PillButton onClick={submit} disabled={busy} data-testid="button-save-etc">
           Save & re-forecast
-        </PillButton>
-      </div>
-    </div>
-  );
-}
-
-function ChangeOrderForm({
-  engagementId,
-  onClose,
-  onDone,
-}: {
-  engagementId: string;
-  onClose: () => void;
-  onDone: () => void;
-}): JSX.Element {
-  const [description, setDescription] = React.useState("");
-  const [valueUsd, setValueUsd] = React.useState("0");
-  const [hoursImpact, setHoursImpact] = React.useState("0");
-  const [costImpactUsd, setCostImpactUsd] = React.useState("0");
-  const [busy, setBusy] = React.useState(false);
-  const { toast } = useToast();
-
-  const submit = async () => {
-    if (!description.trim()) {
-      toast({ title: "Description required", variant: "destructive" });
-      return;
-    }
-    setBusy(true);
-    try {
-      const r = await fetch(`${API_BASE}/finance/engagement-pnl/${engagementId}/change-orders`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: description.trim(),
-          valueUsd: Number(valueUsd || 0),
-          hoursImpact: Number(hoursImpact || 0),
-          costImpactUsd: Number(costImpactUsd || 0),
-        }),
-      });
-      if (!r.ok) throw new Error(`http_${r.status}`);
-      toast({ title: "Change order drafted" });
-      onDone();
-      onClose();
-    } catch (e) {
-      toast({ title: "Create failed", variant: "destructive", description: String(e) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="mt-4 rounded border border-border-soft bg-bg-elevate/40 p-4 space-y-3">
-      <div>
-        <label className="font-mono text-[11px] uppercase tracking-wider text-text-faint">Description</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={2}
-          className="mt-1 w-full rounded border border-border bg-bg p-2 text-sm text-text"
-          placeholder="What's changing in scope, timeline or team?"
-          data-testid="textarea-co-description"
-        />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="font-mono text-[11px] uppercase tracking-wider text-text-faint">Δ contract value (USD)</label>
-          <input
-            type="number"
-            value={valueUsd}
-            onChange={(e) => setValueUsd(e.target.value)}
-            className="mt-1 w-full rounded border border-border bg-bg p-2 text-sm font-mono text-text"
-            data-testid="input-co-value"
-          />
-        </div>
-        <div>
-          <label className="font-mono text-[11px] uppercase tracking-wider text-text-faint">Δ labour hours</label>
-          <input
-            type="number"
-            value={hoursImpact}
-            onChange={(e) => setHoursImpact(e.target.value)}
-            className="mt-1 w-full rounded border border-border bg-bg p-2 text-sm font-mono text-text"
-            data-testid="input-co-hours"
-          />
-        </div>
-        <div>
-          <label className="font-mono text-[11px] uppercase tracking-wider text-text-faint">Δ cost impact (USD)</label>
-          <input
-            type="number"
-            value={costImpactUsd}
-            onChange={(e) => setCostImpactUsd(e.target.value)}
-            className="mt-1 w-full rounded border border-border bg-bg p-2 text-sm font-mono text-text"
-            data-testid="input-co-cost"
-          />
-        </div>
-      </div>
-      <div className="flex gap-2 justify-end">
-        <PillButton variant="ghost" onClick={onClose}>Cancel</PillButton>
-        <PillButton onClick={submit} disabled={busy} data-testid="button-save-co">
-          Draft change order
         </PillButton>
       </div>
     </div>

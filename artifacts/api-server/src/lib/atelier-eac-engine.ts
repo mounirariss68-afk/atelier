@@ -148,10 +148,16 @@ export function summariseChangeOrders(cos: ChangeOrder[]): {
   let approved = 0;
   let approvedValueUsd = 0;
   for (const c of cos) {
-    if (c.status === "submitted" || c.status === "draft") open += 1;
-    if (c.status === "approved") {
+    if (
+      c.status === "draft" ||
+      c.status === "partner_approved" ||
+      c.status === "client_proposed"
+    ) {
+      open += 1;
+    }
+    if (c.status === "posted") {
       approved += 1;
-      approvedValueUsd += c.valueUsd;
+      approvedValueUsd += c.valueDeltaUsd ?? 0;
     }
   }
   return { open, approved, approvedValueUsd };

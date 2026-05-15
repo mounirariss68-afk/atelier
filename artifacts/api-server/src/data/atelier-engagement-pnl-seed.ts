@@ -1,16 +1,21 @@
 /**
- * Atelier — Engagement P&L, EAC and Change-Order seed (Task #414, Wave 2).
+ * Atelier — Engagement P&L, EAC and ETC seed (Task #414, Wave 2; Task #431).
  *
  * Demo-only data describing per-engagement budgets, costs incurred to date,
- * estimate-to-complete (ETC), and a small change-order register. The state
- * is held in-memory on the server (per the task: "mock workflow is fine")
- * so the page can demonstrate re-baselining on change-order approval and
- * RAG behaviour end-to-end without touching the GL or the contracts table.
+ * and estimate-to-complete (ETC). The state is held in-memory on the
+ * server so the page can demonstrate re-baselining and RAG behaviour
+ * end-to-end without touching the GL.
  *
  * Cost figures are at *cost rate* (not bill rate) — labour is loaded at
- * USD/hour cost, not the rack rate the client pays. That distinction is
- * what makes the P&L a useful surface for the CFO instead of a mirror of
- * recognised revenue.
+ * USD/hour cost, not the rack rate the client pays.
+ *
+ * Change orders used to live in this in-memory store too (Wave-2 mock
+ * workflow). As of Task #431 they are owned by the real
+ * `atelier_change_order` table + `changeOrderRoutes.ts` state machine
+ * (draft → partner_approved → client_proposed → client_accepted/rejected
+ * → posted). The only leftover hook here is `applyPostedChangeOrder`,
+ * which the server calls when a CO transitions to `posted` so the
+ * engagement budget gets re-baselined and the EAC engine recomputes.
  */
 
 export interface EngagementBudget {
@@ -65,24 +70,23 @@ export interface EngagementEtc {
   updatedByUserId: string | null;
 }
 
-export type ChangeOrderStatus = "draft" | "submitted" | "approved" | "rejected";
-
+/**
+ * Lightweight projection of `atelier_change_order` used by the EAC
+ * engine's `summariseChangeOrders` and the engagement-pnl payloads.
+ * Only the fields the EAC + register UI need.
+ */
 export interface ChangeOrder {
   id: string;
   engagementId: string;
-  number: string;
-  description: string;
-  valueUsd: number; // delta to contract value
-  hoursImpact: number; // delta to budget labour hours
-  costImpactUsd: number; // delta to BAC
-  status: ChangeOrderStatus;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  raisedByUserId: string;
-  approvedByUserId: string | null;
-  rejectionReason: string | null;
-  createdAt: string;
+  status:
+    | "draft"
+    | "partner_approved"
+    | "client_proposed"
+    | "client_accepted"
+    | "client_rejected"
+    | "withdrawn"
+    | "posted";
+  valueDeltaUsd: number | null;
 }
 
 export interface AuditEntry {
@@ -158,17 +162,11 @@ const BUDGETS: EngagementBudget[] = [
 ];
 
 // ----- COSTS-TO-DATE -------------------------------------------------
-// Tuned so that:
-//   - tasama (amber) — over plan on hours; ETC will push EAC ~5–8% over BAC
-//   - dge (green) — closed/compounded, on-plan
-//   - aldrees (green) — closed/compounded, on-plan
-//   - nhc (red) — early-stage but already burning fast; ETC drives EAC
-//     ~18% over BAC and forecast margin slips well below planned 44%
 const COSTS: EngagementCostToDate[] = [
   {
     engagementId: "eng_tasama_bpo_phase1",
     asOf: today,
-    labourHoursToDate: 5_280, // 55% of plan
+    labourHoursToDate: 5_280,
     labourCostToDateUsd: 792_000,
     expensesToDateUsd: 61_000,
     subsToDateUsd: 144_000,
@@ -207,7 +205,7 @@ const COSTS: EngagementCostToDate[] = [
   {
     engagementId: "eng_nhc_ar_pilot",
     asOf: today,
-    labourHoursToDate: 720, // 40% of plan
+    labourHoursToDate: 720,
     labourCostToDateUsd: 122_400,
     expensesToDateUsd: 9_600,
     subsToDateUsd: 18_000,
@@ -215,7 +213,7 @@ const COSTS: EngagementCostToDate[] = [
     revenueRecognisedToDateUsd: 162_000,
     invoicedToDateUsd: 108_000,
     cashCollectedToDateUsd: 54_000,
-    pctComplete: 0.30, // burning cost faster than %complete would suggest
+    pctComplete: 0.30,
   },
 ];
 
@@ -257,118 +255,10 @@ const ETCS: EngagementEtc[] = [
   },
 ];
 
-// ----- CHANGE ORDERS (initial state) ---------------------------------
-const CHANGE_ORDERS: ChangeOrder[] = [
-  {
-    id: "co_tasama_001",
-    engagementId: "eng_tasama_bpo_phase1",
-    number: "CO-001",
-    description:
-      "Add Arabic-language conversational coverage for top-3 services (out-of-scope in original SOW).",
-    valueUsd: 180_000,
-    hoursImpact: 720,
-    costImpactUsd: 100_800,
-    status: "approved",
-    submittedAt: daysAgo(35),
-    approvedAt: daysAgo(28),
-    rejectedAt: null,
-    raisedByUserId: "p_layla_haddad",
-    approvedByUserId: "p_mounir_ariss",
-    rejectionReason: null,
-    createdAt: daysAgo(40),
-  },
-  {
-    id: "co_tasama_002",
-    engagementId: "eng_tasama_bpo_phase1",
-    number: "CO-002",
-    description:
-      "Extend rollout cadence by two weeks to absorb client's holiday freeze; partner-firm subs to bridge.",
-    valueUsd: 60_000,
-    hoursImpact: 240,
-    costImpactUsd: 50_400,
-    status: "submitted",
-    submittedAt: daysAgo(4),
-    approvedAt: null,
-    rejectedAt: null,
-    raisedByUserId: "p_layla_haddad",
-    approvedByUserId: null,
-    rejectionReason: null,
-    createdAt: daysAgo(6),
-  },
-  {
-    id: "co_nhc_001",
-    engagementId: "eng_nhc_ar_pilot",
-    number: "CO-001",
-    description:
-      "Add CRM hand-off integration discovered during week-2 walkthrough; client agreed in steering.",
-    valueUsd: 72_000,
-    hoursImpact: 240,
-    costImpactUsd: 33_600,
-    status: "submitted",
-    submittedAt: daysAgo(2),
-    approvedAt: null,
-    rejectedAt: null,
-    raisedByUserId: "p_layla_haddad",
-    approvedByUserId: null,
-    rejectionReason: null,
-    createdAt: daysAgo(3),
-  },
-  {
-    id: "co_dge_001",
-    engagementId: "eng_dge_effortless_v1",
-    number: "CO-001",
-    description: "Carve-out of compliance dashboard scope; client deferred to phase 2.",
-    valueUsd: -45_000,
-    hoursImpact: -150,
-    costImpactUsd: -21_000,
-    status: "approved",
-    submittedAt: daysAgo(120),
-    approvedAt: daysAgo(115),
-    rejectedAt: null,
-    raisedByUserId: "p_omar_najjar",
-    approvedByUserId: "p_mounir_ariss",
-    rejectionReason: null,
-    createdAt: daysAgo(125),
-  },
-];
-
-// ----- AUDIT TRAIL (initial state, derived) --------------------------
+// ----- AUDIT TRAIL (initial state) -----------------------------------
 const AUDIT: AuditEntry[] = [];
 function pushAudit(entry: AuditEntry): void {
   AUDIT.unshift(entry);
-}
-
-// Seed a couple of audit rows from the pre-approved change orders so the
-// trail isn't empty on first load.
-for (const co of CHANGE_ORDERS) {
-  pushAudit({
-    id: `aud_${co.id}_created`,
-    engagementId: co.engagementId,
-    at: co.createdAt,
-    actorUserId: co.raisedByUserId,
-    action: "change_order.created",
-    detail: `${co.number} drafted: ${co.description}`,
-  });
-  if (co.submittedAt) {
-    pushAudit({
-      id: `aud_${co.id}_submitted`,
-      engagementId: co.engagementId,
-      at: co.submittedAt,
-      actorUserId: co.raisedByUserId,
-      action: "change_order.submitted",
-      detail: `${co.number} submitted for approval (value ${co.valueUsd >= 0 ? "+" : ""}$${co.valueUsd.toLocaleString()}).`,
-    });
-  }
-  if (co.status === "approved" && co.approvedAt) {
-    pushAudit({
-      id: `aud_${co.id}_approved`,
-      engagementId: co.engagementId,
-      at: co.approvedAt,
-      actorUserId: co.approvedByUserId,
-      action: "change_order.approved",
-      detail: `${co.number} approved — engagement re-baselined.`,
-    });
-  }
 }
 
 // ============================================================
@@ -392,21 +282,13 @@ export function listEtcs(): EngagementEtc[] {
 export function getEtc(engagementId: string): EngagementEtc | null {
   return ETCS.find((e) => e.engagementId === engagementId) ?? null;
 }
-export function listChangeOrders(engagementId?: string): ChangeOrder[] {
-  return engagementId
-    ? CHANGE_ORDERS.filter((c) => c.engagementId === engagementId)
-    : CHANGE_ORDERS.slice();
-}
-export function getChangeOrder(id: string): ChangeOrder | null {
-  return CHANGE_ORDERS.find((c) => c.id === id) ?? null;
-}
 export function listAudit(engagementId?: string, limit = 100): AuditEntry[] {
   const rows = engagementId ? AUDIT.filter((a) => a.engagementId === engagementId) : AUDIT;
   return rows.slice(0, limit);
 }
 
 // ============================================================
-// Mutations (mock workflow — in-memory only)
+// Mutations (in-memory only)
 // ============================================================
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -415,113 +297,64 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function createChangeOrder(input: {
-  engagementId: string;
-  description: string;
-  valueUsd: number;
-  hoursImpact: number;
-  costImpactUsd: number;
-  raisedByUserId: string;
-}): ChangeOrder {
-  const eng = input.engagementId;
-  const existing = listChangeOrders(eng).length;
-  const co: ChangeOrder = {
-    id: rid("co"),
-    engagementId: eng,
-    number: `CO-${String(existing + 1).padStart(3, "0")}`,
-    description: input.description,
-    valueUsd: input.valueUsd,
-    hoursImpact: input.hoursImpact,
-    costImpactUsd: input.costImpactUsd,
-    status: "draft",
-    submittedAt: null,
-    approvedAt: null,
-    rejectedAt: null,
-    raisedByUserId: input.raisedByUserId,
-    approvedByUserId: null,
-    rejectionReason: null,
-    createdAt: nowIso(),
-  };
-  CHANGE_ORDERS.push(co);
-  pushAudit({
-    id: rid("aud"),
-    engagementId: eng,
-    at: co.createdAt,
-    actorUserId: input.raisedByUserId,
-    action: "change_order.created",
-    detail: `${co.number} drafted: ${co.description}`,
-  });
-  return co;
-}
-
-export function submitChangeOrder(id: string, actorUserId: string): ChangeOrder | null {
-  const co = getChangeOrder(id);
-  if (!co || co.status !== "draft") return null;
-  co.status = "submitted";
-  co.submittedAt = nowIso();
-  pushAudit({
-    id: rid("aud"),
-    engagementId: co.engagementId,
-    at: co.submittedAt,
-    actorUserId,
-    action: "change_order.submitted",
-    detail: `${co.number} submitted for approval.`,
-  });
-  return co;
-}
+/**
+ * Idempotency guard for `applyPostedChangeOrder`. Tracks the set of
+ * change-order IDs whose deltas have already been folded into the
+ * in-memory baseline. Prevents double-counting when:
+ *   - the seed reconciliation pass replays already-posted demo COs at
+ *     boot, AND
+ *   - the runtime workflow posts a brand-new CO from the UI
+ * Both call paths converge on this function, and both are safe.
+ */
+const APPLIED_POSTED_COS = new Set<string>();
 
 /**
- * Approve a change order. Re-baselines the engagement: contract value,
- * budget labour hours, BAC. Records the audit trail entry.
+ * Re-baseline an engagement when its change order transitions to `posted`.
+ * Adds the value delta to contract value and marks the budget as
+ * re-baselined now. Cost/hour impact is not modeled on
+ * `atelier_change_order` so BAC is unchanged here — the EAC engine will
+ * pick up the new contract value via forecast margin recompute.
+ *
+ * Pushes an audit entry so the per-engagement P&L audit trail captures
+ * the rebase. Returns `null` if the engagement is unknown to the in-memory
+ * P&L store, OR if this CO has already been applied (idempotent no-op).
  */
-export function approveChangeOrder(
-  id: string,
-  actorUserId: string,
-): { changeOrder: ChangeOrder; budget: EngagementBudget } | null {
-  const co = getChangeOrder(id);
-  if (!co || co.status !== "submitted") return null;
-  const budget = getBudget(co.engagementId);
-  if (!budget) return null;
-  co.status = "approved";
-  co.approvedAt = nowIso();
-  co.approvedByUserId = actorUserId;
-  // Re-baseline. Cost impact lands on labour cost; BAC is recomputed.
-  budget.contractValueUsd += co.valueUsd;
-  budget.budgetLabourHours += co.hoursImpact;
-  budget.budgetLabourCostUsd += co.costImpactUsd;
-  budget.budgetAtCompletionUsd =
-    budget.budgetLabourCostUsd + budget.budgetExpensesUsd + budget.budgetSubsUsd;
-  budget.baselinedAt = co.approvedAt;
-  pushAudit({
-    id: rid("aud"),
-    engagementId: co.engagementId,
-    at: co.approvedAt,
-    actorUserId,
-    action: "change_order.approved",
-    detail: `${co.number} approved — engagement re-baselined: contract value ${co.valueUsd >= 0 ? "+" : ""}$${co.valueUsd.toLocaleString()}, BAC ${co.costImpactUsd >= 0 ? "+" : ""}$${co.costImpactUsd.toLocaleString()}.`,
-  });
-  return { changeOrder: co, budget };
-}
+export type ApplyPostedChangeOrderResult =
+  | { status: "applied"; budget: EngagementBudget }
+  | { status: "already_applied" }
+  | { status: "engagement_unknown" };
 
-export function rejectChangeOrder(
-  id: string,
-  actorUserId: string,
-  reason: string,
-): ChangeOrder | null {
-  const co = getChangeOrder(id);
-  if (!co || co.status !== "submitted") return null;
-  co.status = "rejected";
-  co.rejectedAt = nowIso();
-  co.rejectionReason = reason;
+export function applyPostedChangeOrder(args: {
+  engagementId: string;
+  changeOrderId: string;
+  valueDeltaUsd: number;
+  actorUserId: string | null;
+  /**
+   * When true, marks the baseline timestamp with the original posted-at
+   * date (passed via `baselinedAtIso`) instead of "now" — used by the
+   * boot-time reconciliation pass so the seeded demo doesn't show every
+   * engagement as "re-baselined just now".
+   */
+  baselinedAtIso?: string;
+}): ApplyPostedChangeOrderResult {
+  if (APPLIED_POSTED_COS.has(args.changeOrderId)) {
+    return { status: "already_applied" };
+  }
+  const budget = getBudget(args.engagementId);
+  if (!budget) return { status: "engagement_unknown" };
+  const delta = Number.isFinite(args.valueDeltaUsd) ? args.valueDeltaUsd : 0;
+  budget.contractValueUsd += delta;
+  budget.baselinedAt = args.baselinedAtIso ?? nowIso();
+  APPLIED_POSTED_COS.add(args.changeOrderId);
   pushAudit({
     id: rid("aud"),
-    engagementId: co.engagementId,
-    at: co.rejectedAt,
-    actorUserId,
-    action: "change_order.rejected",
-    detail: `${co.number} rejected — ${reason}`,
+    engagementId: args.engagementId,
+    at: budget.baselinedAt,
+    actorUserId: args.actorUserId,
+    action: "change_order.posted",
+    detail: `${args.changeOrderId} posted — engagement re-baselined: contract value ${delta >= 0 ? "+" : ""}$${Math.round(delta).toLocaleString()}.`,
   });
-  return co;
+  return { status: "applied", budget };
 }
 
 export function setEtc(input: {

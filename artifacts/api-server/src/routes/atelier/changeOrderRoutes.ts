@@ -45,6 +45,7 @@ import {
   isRestrictedPersona,
   isBoardObserver,
 } from "./personaRoles";
+import { applyPostedChangeOrder } from "../../data/atelier-engagement-pnl-seed.js";
 
 const router: IRouter = Router();
 
@@ -305,6 +306,7 @@ async function transitionChangeOrder(
     extraPatch?: Partial<typeof atelierChangeOrder.$inferInsert>;
     auditAction: string;
     auditSummary: (row: ChangeOrderRow) => string;
+    afterCommit?: (row: ChangeOrderRow) => void | Promise<void>;
   },
 ) {
   const me = ensurePersona(req, res);
@@ -387,7 +389,45 @@ async function transitionChangeOrder(
     payload: { newStatus: args.target },
     payloadSummary: args.auditSummary(result.row),
   });
-  res.json({ changeOrder: maskValueDelta(result.row, me.role) });
+  // Side-effect contract:
+  //   The state-machine transition is the source of truth and has
+  //   already been committed at this point — we cannot roll it back if
+  //   `afterCommit` throws. We catch the error to keep the workflow
+  //   step itself successful, but surface a `sideEffectError` flag in
+  //   the response and write an audit entry, so the client and the
+  //   audit trail can both see that re-baselining (or any other
+  //   downstream effect) failed and needs operator attention.
+  let sideEffectError: string | null = null;
+  if (args.afterCommit) {
+    try {
+      await args.afterCommit(result.row);
+    } catch (err) {
+      sideEffectError =
+        err instanceof Error ? err.message : String(err);
+      // eslint-disable-next-line no-console
+      console.error("change-order afterCommit failed", {
+        changeOrderId: args.id,
+        target: args.target,
+        error: sideEffectError,
+      });
+      await db.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "change_order",
+        entityId: args.id,
+        actorType: "system",
+        actorId: "system",
+        actorLabel: "system",
+        action: "change_order_side_effect_failed",
+        payload: { newStatus: args.target, error: sideEffectError },
+        payloadSummary:
+          `Side effect after ${args.target} transition failed: ${sideEffectError}.`,
+      });
+    }
+  }
+  res.json({
+    changeOrder: maskValueDelta(result.row, me.role),
+    ...(sideEffectError ? { sideEffectError } : {}),
+  });
 }
 
 // ---------------------------------------------------------------
@@ -527,6 +567,24 @@ router.post(
       auditAction: "change_order_posted",
       auditSummary: (r) =>
         `${req.atelierPersona?.name ?? "?"} posted change order ${r.id} (Finance commit).`,
+      // Task #431 — re-baseline the engagement budget so EAC / VAC / forecast
+      // margin pick up the new contract value on next read. Throw on
+      // unexpected outcomes (e.g. unknown engagementId) so the
+      // surrounding `afterCommit` machinery surfaces a `sideEffectError`
+      // and writes a system audit entry.
+      afterCommit: (r) => {
+        const result = applyPostedChangeOrder({
+          engagementId: r.engagementId,
+          changeOrderId: r.id,
+          valueDeltaUsd: Number(r.valueDeltaUsd ?? 0),
+          actorUserId: req.atelierPersona?.id ?? null,
+        });
+        if (result.status === "engagement_unknown") {
+          throw new Error(
+            `Cannot rebaseline: engagement ${r.engagementId} has no in-memory P&L baseline.`,
+          );
+        }
+      },
     });
   },
 );

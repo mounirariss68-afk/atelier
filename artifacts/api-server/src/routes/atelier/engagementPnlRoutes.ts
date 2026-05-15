@@ -1,13 +1,20 @@
 /**
  * Atelier — Engagement P&L, EAC and Change-Order register routes
- * (Task #414, Wave 2).
+ * (Task #414, Wave 2; Task #431).
  *
  * Read endpoints expose the per-engagement P&L (budget vs incurred vs
  * forecast-to-complete), the firm-level Engagement Health register, and
  * the dashboard tile aggregates (EAC variance, projects-at-risk count,
- * open change orders). Write endpoints implement a mock change-order
- * workflow (submit / approve / reject) and a manual ETC override; both
- * re-baseline the in-memory seed and append an audit-trail entry.
+ * open change orders).
+ *
+ * Change orders are sourced from the real `atelier_change_order` table
+ * + `changeOrderRoutes.ts` workflow (draft → partner_approved →
+ * client_proposed → client_accepted/rejected → posted). Posting a CO
+ * triggers `applyPostedChangeOrder` in the seed module, which
+ * re-baselines the engagement budget so EAC/VAC/forecast-margin pick
+ * up the new contract value on next read.
+ *
+ * The only write endpoint left here is the manual ETC override.
  *
  * Persona gate: leadership/finance/senior_manager have full access; other
  * non-restricted personas can read but not write. Recruiter is denied
@@ -15,24 +22,20 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, isNull, inArray } from "drizzle-orm";
-import { db, atelierEngagements } from "@workspace/db";
+import { eq, and, isNull, inArray, desc } from "drizzle-orm";
+import { db, atelierEngagements, atelierChangeOrder } from "@workspace/db";
+import { withRls } from "./rls";
+import { isLeadership, isFinance } from "./personaRoles";
 import {
-  approveChangeOrder,
-  createChangeOrder,
   getBudget,
-  getChangeOrder,
   getCost,
   getEtc,
   listAudit,
   listBudgets,
-  listChangeOrders,
   listCosts,
   listEtcs,
   personName,
-  rejectChangeOrder,
   setEtc,
-  submitChangeOrder,
   type ChangeOrder,
   type EngagementBudget,
 } from "../../data/atelier-engagement-pnl-seed.js";
@@ -66,6 +69,10 @@ function canWrite(role: string | null | undefined): boolean {
   );
 }
 
+function canSeeValueDelta(role: string | null | undefined): boolean {
+  return isLeadership(role) || isFinance(role);
+}
+
 async function loadEngagementNames(ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
   const rows = await db
@@ -73,6 +80,68 @@ async function loadEngagementNames(ids: string[]): Promise<Map<string, string>> 
     .from(atelierEngagements)
     .where(and(inArray(atelierEngagements.id, ids), isNull(atelierEngagements.deletedAt)));
   return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+type ChangeOrderRow = typeof atelierChangeOrder.$inferSelect;
+
+/**
+ * Project a DB row down to the slim shape the EAC engine + per-engagement
+ * payload need. value_delta_usd is masked to null for personas that
+ * aren't allowed to see it (mirrors `changeOrderRoutes` masking).
+ */
+function projectChangeOrder(
+  row: ChangeOrderRow,
+  role: string | null | undefined,
+): ChangeOrder & {
+  kind: string;
+  summary: string;
+  rationaleText: string;
+  proposedByUserId: string | null;
+  partnerApproverUserId: string | null;
+  clientSignerName: string | null;
+  clientSignerEmail: string | null;
+  clientProposedAt: string | null;
+  clientResolvedAt: string | null;
+  postedAt: string | null;
+  evidenceUrl: string | null;
+  createdAt: string;
+} {
+  return {
+    id: row.id,
+    engagementId: row.engagementId,
+    status: row.status as ChangeOrder["status"],
+    valueDeltaUsd: canSeeValueDelta(role) ? Number(row.valueDeltaUsd ?? 0) : null,
+    kind: row.kind,
+    summary: row.summary,
+    rationaleText: row.rationaleText,
+    proposedByUserId: row.proposedByUserId,
+    partnerApproverUserId: row.partnerApproverUserId,
+    clientSignerName: row.clientSignerName ?? null,
+    clientSignerEmail: row.clientSignerEmail ?? null,
+    clientProposedAt: row.clientProposedAt ? row.clientProposedAt.toISOString() : null,
+    clientResolvedAt: row.clientResolvedAt ? row.clientResolvedAt.toISOString() : null,
+    postedAt: row.postedAt ? row.postedAt.toISOString() : null,
+    evidenceUrl: row.evidenceUrl ?? null,
+    createdAt: row.createdAt ? row.createdAt.toISOString() : "",
+  };
+}
+
+async function loadChangeOrders(
+  req: Request,
+  engagementIds?: string[],
+): Promise<ChangeOrderRow[]> {
+  return withRls(req, async (tx) => {
+    const conds = [isNull(atelierChangeOrder.deletedAt)];
+    if (engagementIds && engagementIds.length > 0) {
+      conds.push(inArray(atelierChangeOrder.engagementId, engagementIds));
+    }
+    return tx
+      .select()
+      .from(atelierChangeOrder)
+      .where(and(...conds))
+      .orderBy(desc(atelierChangeOrder.createdAt))
+      .limit(500);
+  });
 }
 
 function buildHealthRow(
@@ -122,14 +191,24 @@ router.get("/finance/engagement-pnl", async (req, res) => {
   if (!me) return;
   const budgets = listBudgets();
   const ids = budgets.map((b) => b.engagementId);
-  const names = await loadEngagementNames(ids);
+  const [names, allCoRows] = await Promise.all([
+    loadEngagementNames(ids),
+    loadChangeOrders(req, ids),
+  ]);
+  const cosByEng = new Map<string, ChangeOrder[]>();
+  for (const row of allCoRows) {
+    const slim = projectChangeOrder(row, me.role);
+    const arr = cosByEng.get(row.engagementId) ?? [];
+    arr.push(slim);
+    cosByEng.set(row.engagementId, arr);
+  }
   const rows: EngagementHealthRow[] = [];
   for (const b of budgets) {
     const row = buildHealthRow(
       b,
       getCost(b.engagementId),
       getEtc(b.engagementId),
-      listChangeOrders(b.engagementId),
+      cosByEng.get(b.engagementId) ?? [],
       names.get(b.engagementId) ?? b.engagementId,
     );
     if (row) rows.push(row);
@@ -153,7 +232,7 @@ router.get("/finance/engagement-pnl/summary", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const budgets = listBudgets();
-  const allChangeOrders = listChangeOrders();
+  const allCoRows = await loadChangeOrders(req);
   let projectsAtRisk = 0;
   let totalVacUsd = 0;
   let weightedForecastMarginNum = 0;
@@ -168,8 +247,11 @@ router.get("/finance/engagement-pnl/summary", async (req, res) => {
     weightedForecastMarginNum += eac.forecastFinalMarginPct * eac.contractValueUsd;
     weightedForecastMarginDen += eac.contractValueUsd;
   }
-  const openChangeOrders = allChangeOrders.filter(
-    (c) => c.status === "draft" || c.status === "submitted",
+  const openChangeOrders = allCoRows.filter(
+    (c) =>
+      c.status === "draft" ||
+      c.status === "partner_approved" ||
+      c.status === "client_proposed",
   ).length;
   res.json({
     summary: {
@@ -200,7 +282,10 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
     res.status(404).json({ error: "engagement-pnl-not-found" });
     return;
   }
-  const names = await loadEngagementNames([id]);
+  const [names, coRows] = await Promise.all([
+    loadEngagementNames([id]),
+    loadChangeOrders(req, [id]),
+  ]);
   const eac = computeEac({ budget, cost, etc: etcRow });
   const wip = cost.revenueRecognisedToDateUsd - cost.invoicedToDateUsd;
   const ar = cost.invoicedToDateUsd - cost.cashCollectedToDateUsd;
@@ -228,124 +313,9 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
       engagementLeadId: budget.engagementLeadId,
       engagementLeadName: personName(budget.engagementLeadId),
     },
-    changeOrders: listChangeOrders(id),
+    changeOrders: coRows.map((r) => projectChangeOrder(r, me.role)),
     audit: listAudit(id, 50),
   });
-});
-
-// ---------------------------------------------------------------
-// Change-order CRUD-ish (mock workflow)
-// ---------------------------------------------------------------
-router.post("/finance/engagement-pnl/:engagementId/change-orders", (req, res) => {
-  const me = ensurePersona(req, res);
-  if (!me) return;
-  if (!canWrite(me.role)) {
-    res.status(403).json({ error: "change-order-write-denied" });
-    return;
-  }
-  const id = req.params.engagementId;
-  if (!getBudget(id)) {
-    res.status(404).json({ error: "engagement-not-found" });
-    return;
-  }
-  const body = req.body ?? {};
-  const description = String(body.description ?? "").trim();
-  if (!description) {
-    res.status(400).json({ error: "description-required" });
-    return;
-  }
-  const valueUsd = Number(body.valueUsd ?? 0);
-  const hoursImpact = Number(body.hoursImpact ?? 0);
-  const costImpactUsd = Number(body.costImpactUsd ?? 0);
-  if (![valueUsd, hoursImpact, costImpactUsd].every((n) => Number.isFinite(n))) {
-    res.status(400).json({ error: "numeric-fields-must-be-finite" });
-    return;
-  }
-  const co = createChangeOrder({
-    engagementId: id,
-    description,
-    valueUsd,
-    hoursImpact,
-    costImpactUsd,
-    raisedByUserId: me.id,
-  });
-  res.status(201).json({ changeOrder: co });
-});
-
-router.post(
-  "/finance/engagement-pnl/change-orders/:id/submit",
-  (req, res) => {
-    const me = ensurePersona(req, res);
-    if (!me) return;
-    if (!canWrite(me.role)) {
-      res.status(403).json({ error: "change-order-write-denied" });
-      return;
-    }
-    const co = submitChangeOrder(req.params.id, me.id);
-    if (!co) {
-      res.status(409).json({ error: "invalid-state-transition" });
-      return;
-    }
-    res.json({ changeOrder: co });
-  },
-);
-
-router.post(
-  "/finance/engagement-pnl/change-orders/:id/approve",
-  (req, res) => {
-    const me = ensurePersona(req, res);
-    if (!me) return;
-    if (me.role !== "founding_partner" && me.role !== "partner" && me.role !== "finance") {
-      res.status(403).json({ error: "approval-requires-leadership-or-finance" });
-      return;
-    }
-    const result = approveChangeOrder(req.params.id, me.id);
-    if (!result) {
-      res.status(409).json({ error: "invalid-state-transition" });
-      return;
-    }
-    const cost = getCost(result.changeOrder.engagementId);
-    const etcRow = getEtc(result.changeOrder.engagementId);
-    const eac =
-      cost && etcRow
-        ? computeEac({ budget: result.budget, cost, etc: etcRow })
-        : null;
-    res.json({ changeOrder: result.changeOrder, budget: result.budget, eac });
-  },
-);
-
-router.post(
-  "/finance/engagement-pnl/change-orders/:id/reject",
-  (req, res) => {
-    const me = ensurePersona(req, res);
-    if (!me) return;
-    if (me.role !== "founding_partner" && me.role !== "partner" && me.role !== "finance") {
-      res.status(403).json({ error: "rejection-requires-leadership-or-finance" });
-      return;
-    }
-    const reason = String(req.body?.reason ?? "").trim();
-    if (!reason) {
-      res.status(400).json({ error: "reason-required" });
-      return;
-    }
-    const co = rejectChangeOrder(req.params.id, me.id, reason);
-    if (!co) {
-      res.status(409).json({ error: "invalid-state-transition" });
-      return;
-    }
-    res.json({ changeOrder: co });
-  },
-);
-
-router.get("/finance/engagement-pnl/change-orders/:id", (req, res) => {
-  const me = ensurePersona(req, res);
-  if (!me) return;
-  const co = getChangeOrder(req.params.id);
-  if (!co) {
-    res.status(404).json({ error: "not-found" });
-    return;
-  }
-  res.json({ changeOrder: co });
 });
 
 // ---------------------------------------------------------------
