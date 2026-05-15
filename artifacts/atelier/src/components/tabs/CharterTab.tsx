@@ -15,6 +15,7 @@ import { Card, PillButton, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { HypothesisTree, type HypothesisTreeShape } from "@/components/HypothesisTree";
+import { ChangeOrdersSection } from "@/components/tabs/ChangeOrdersSection";
 import { Wand2, Check, AlertTriangle } from "lucide-react";
 
 export function CharterTab({ engId }: { engId: string }) {
@@ -195,6 +196,9 @@ export function CharterTab({ engId }: { engId: string }) {
                 }
               />
             </Card>
+
+            {/* L2C Wave 1 (Task #360) — change orders against this engagement. */}
+            <ChangeOrdersSection engId={engId} />
           </>
         ) : (
           <Card className="p-12 text-center border-dashed bg-bg-deep">

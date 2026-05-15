@@ -10,6 +10,7 @@ import { Link } from "wouter";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { DeliverableAcceptancesSection } from "@/components/tabs/DeliverableAcceptancesSection";
 import { Plus, FileText } from "lucide-react";
 
 export function DeliverablesTab({ engId }: { engId: string }) {
@@ -126,6 +127,9 @@ export function DeliverablesTab({ engId }: { engId: string }) {
           </Link>
         ))}
       </div>
+
+      {/* L2C Wave 1 (Task #360) — milestone-gated client acceptance attestations. */}
+      <DeliverableAcceptancesSection engId={engId} />
     </div>
   );
 }

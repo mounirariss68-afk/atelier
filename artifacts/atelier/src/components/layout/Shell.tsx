@@ -84,6 +84,7 @@ export function TopNav() {
     { href: "/crm", label: "Accounts" },
     { href: "/opportunities", label: "Opportunities" },
     { href: "/engagements", label: "Engagements" },
+    { href: "/codex", label: "Codex" },
     { href: "/alliances", label: "Alliances" },
     { href: "/press", label: "Press" },
     { href: "/studio", label: "Studio" },

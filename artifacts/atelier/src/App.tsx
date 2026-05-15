@@ -56,6 +56,8 @@ import AlliancesIndex from "@/pages/alliances/AlliancesIndex";
 import StudioIndex from "@/pages/studio/StudioIndex";
 import GuardhouseIndex from "@/pages/guardhouse/GuardhouseIndex";
 import IpCatalog from "@/pages/atelier/IpCatalog";
+import Codex from "@/pages/Codex";
+import CodexContract from "@/pages/CodexContract";
 
 const queryClient = new QueryClient();
 
@@ -98,6 +100,10 @@ function Router() {
         <Route path="/engagements" component={Engagements} />
         <Route path="/engagements/:engId" component={Engagement} />
         <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
+        {/* L2C Wave 1 (Task #360) — Codex (CLM) workspace. */}
+        <Route path="/codex/contracts/:id" component={CodexContract} />
+        <Route path="/codex/:section" component={Codex} />
+        <Route path="/codex" component={Codex} />
         <Route path="/atelier/firm-profile" component={FirmProfile} />
         {/* v5 — IP catalog extends /atelier/assets with code, OSS, demos, licensing. */}
         <Route path="/atelier/ip" component={IpCatalog} />

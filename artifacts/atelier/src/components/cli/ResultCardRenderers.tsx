@@ -194,9 +194,211 @@ function ShapeBody({
       return <EntityCard data={data} locale={locale} />;
     case "audit_timeline":
       return <AuditTimeline data={data} locale={locale} />;
+    case "change_order_card":
+      return <ChangeOrderCard data={data} locale={locale} />;
+    case "deliverable_acceptance_card":
+      return <DeliverableAcceptanceCard data={data} locale={locale} />;
     default:
       return <FallbackJson data={data} />;
   }
+}
+
+/* ─────────────────────── change_order_card ─────────────────────── */
+
+const CO_STATUS_TONE: Record<string, string> = {
+  draft: "bg-bg-elevate-2 text-text-mute",
+  partner_approved: "bg-gold/15 text-gold border-gold/30",
+  client_proposed: "bg-warning/15 text-warning border-warning/30",
+  client_accepted: "bg-success/15 text-success border-success/30",
+  posted: "bg-success/20 text-success border-success/40",
+  client_rejected: "bg-danger/15 text-danger border-danger/30",
+  withdrawn: "bg-bg-elevate-2 text-text-faint",
+};
+
+function ChangeOrderCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const co = asObj(data.changeOrder ?? data);
+  const id = asStr(co.id);
+  const status = asStr(co.status);
+  const kind = asStr(co.kind);
+  const summary = asStr(co.summary);
+  const valueDelta = asNum(co.valueDeltaUsd);
+  const engagementId = asStr(co.engagementId);
+  const evidenceUrl = asStr(co.evidenceUrl);
+  return (
+    <div data-testid="change-order-card" className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold leading-snug">{summary || "—"}</div>
+          <div className="text-[11px] font-mono text-text-faint mt-0.5 truncate">
+            {id} · {kind}
+          </div>
+        </div>
+        <span
+          className={cn(
+            "text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border",
+            CO_STATUS_TONE[status] ?? "bg-bg-elevate-2 text-text-mute",
+          )}
+        >
+          {status || "?"}
+        </span>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+        {valueDelta != null && (
+          <>
+            <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
+              {locale === "ar" ? "Δ القيمة" : "Value Δ"}
+            </dt>
+            <dd
+              className={cn(
+                valueDelta > 0
+                  ? "text-success"
+                  : valueDelta < 0
+                    ? "text-danger"
+                    : "text-text",
+              )}
+            >
+              {valueDelta > 0 ? "+" : ""}
+              {fmtUsd(valueDelta)}
+            </dd>
+          </>
+        )}
+        {engagementId && (
+          <>
+            <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
+              {locale === "ar" ? "الارتباط" : "Engagement"}
+            </dt>
+            <dd className="text-text font-mono text-[11px] truncate" title={engagementId}>
+              <a
+                href={`/engagements/${engagementId}`}
+                className="hover:text-gold inline-flex items-center gap-1"
+              >
+                {engagementId} <ExternalLink className="w-3 h-3" />
+              </a>
+            </dd>
+          </>
+        )}
+      </dl>
+      {evidenceUrl && (
+        <div className="text-[11px] text-text-mute truncate">
+          <a
+            href={evidenceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-gold hover:underline inline-flex items-center gap-1"
+          >
+            {locale === "ar" ? "دليل القبول" : "Evidence"}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────── deliverable_acceptance_card ──────────────────── */
+
+const DA_STATUS_TONE: Record<string, string> = {
+  pending: "bg-bg-elevate-2 text-text-mute",
+  submitted_to_client: "bg-warning/15 text-warning border-warning/30",
+  client_signed: "bg-success/20 text-success border-success/40",
+  client_rejected: "bg-danger/15 text-danger border-danger/30",
+  withdrawn: "bg-bg-elevate-2 text-text-faint",
+};
+
+function DeliverableAcceptanceCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const a = asObj(data.acceptance ?? data);
+  const id = asStr(a.id);
+  const status = asStr(a.status);
+  const title = asStr(a.title);
+  const attestation = asStr(a.attestationText);
+  const signerName = asStr(a.clientSignerName);
+  const signerEmail = asStr(a.clientSignerEmail);
+  const signedAt = asStr(a.signedAt);
+  const evidenceUrl = asStr(a.evidenceUrl);
+  const milestoneId = asStr(a.milestoneId);
+  const engagementId = asStr(a.engagementId);
+  return (
+    <div data-testid="deliverable-acceptance-card" className="space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold leading-snug">{title || "—"}</div>
+          <div className="text-[11px] font-mono text-text-faint mt-0.5 truncate">
+            {id}
+          </div>
+        </div>
+        <span
+          className={cn(
+            "text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border",
+            DA_STATUS_TONE[status] ?? "bg-bg-elevate-2 text-text-mute",
+          )}
+        >
+          {status || "?"}
+        </span>
+      </div>
+      {attestation && (
+        <p className="text-[12px] text-text leading-snug line-clamp-3 italic">
+          “{attestation}”
+        </p>
+      )}
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
+        {signerName && (
+          <>
+            <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
+              {locale === "ar" ? "الموقّع" : "Signer"}
+            </dt>
+            <dd className="text-text truncate" title={signerEmail}>
+              {signerName}
+            </dd>
+          </>
+        )}
+        {signedAt && (
+          <>
+            <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
+              {locale === "ar" ? "وُقّع في" : "Signed"}
+            </dt>
+            <dd className="text-text font-mono text-[11px]">
+              {new Date(signedAt).toLocaleDateString()}
+            </dd>
+          </>
+        )}
+        {milestoneId && (
+          <>
+            <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
+              {locale === "ar" ? "المعلم" : "Milestone"}
+            </dt>
+            <dd className="text-text font-mono text-[11px] truncate" title={milestoneId}>
+              {milestoneId}
+            </dd>
+          </>
+        )}
+        {engagementId && (
+          <>
+            <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
+              {locale === "ar" ? "الارتباط" : "Engagement"}
+            </dt>
+            <dd className="text-text font-mono text-[11px] truncate">
+              <a href={`/engagements/${engagementId}`} className="hover:text-gold">
+                {engagementId}
+              </a>
+            </dd>
+          </>
+        )}
+      </dl>
+      {evidenceUrl && (
+        <div className="text-[11px] text-text-mute truncate">
+          <a
+            href={evidenceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-gold hover:underline inline-flex items-center gap-1"
+          >
+            {locale === "ar" ? "دليل التوقيع" : "Signed evidence"}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─────────────────────────── kpi_strip ─────────────────────────── */
