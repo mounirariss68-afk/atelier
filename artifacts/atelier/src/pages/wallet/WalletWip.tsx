@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Card, MonoChip, PageHero } from "@/components/ui/primitives";
+import { Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +53,11 @@ export default function WalletWip() {
 
   return (
     <PageHero>
+      <SectionHead
+        eyebrow="Firm · Wallet"
+        headline="Work-in-progress"
+        lede="Unbilled WIP, recognised vs invoiced revenue, and per-engagement WIP snapshots."
+      />
       <SubSectionTabs
         tabs={[
         { id: "expenses", label: "Expenses", href: "/wallet" },

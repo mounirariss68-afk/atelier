@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Card, MonoChip, PageHero } from "@/components/ui/primitives";
+import { Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -142,6 +142,11 @@ export default function WalletRevrec() {
 
   return (
     <PageHero>
+      <SectionHead
+        eyebrow="Firm · Wallet"
+        headline="Revenue recognition"
+        lede="Schedules, period postings, and lock state for ASC 606 / IFRS 15 revenue recognition."
+      />
       <SubSectionTabs
         tabs={[
         { id: "expenses", label: "Expenses", href: "/wallet" },

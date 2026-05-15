@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Card, MonoChip, PageHero } from "@/components/ui/primitives";
+import { Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +73,11 @@ export default function WalletMargin() {
 
   return (
     <PageHero>
+      <SectionHead
+        eyebrow="Firm · Wallet"
+        headline="Margin & leakage"
+        lede="Firm-wide margin snapshots and leakage trail — where realised value drops below contracted scope."
+      />
       <SubSectionTabs
         tabs={[
         { id: "expenses", label: "Expenses", href: "/wallet" },

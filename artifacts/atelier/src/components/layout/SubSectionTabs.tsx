@@ -29,8 +29,18 @@ export interface SubSectionTabsProps {
   "data-testid"?: string;
 }
 
-function defaultActive(href: string, pathname: string): boolean {
-  return pathname === href || pathname.startsWith(href + "/");
+function defaultActive(href: string, pathname: string, allHrefs: readonly string[]): boolean {
+  // Exact match always wins.
+  if (pathname === href) return true;
+  // Prefix match — but only if no longer/more-specific sibling href is
+  // also a prefix. Without this guard a tab like `/wallet` would activate
+  // on every `/wallet/*` route alongside the actual child tab.
+  if (!pathname.startsWith(href + "/")) return false;
+  const moreSpecific = allHrefs.some(
+    (h) => h !== href && h.startsWith(href + "/") &&
+      (pathname === h || pathname.startsWith(h + "/")),
+  );
+  return !moreSpecific;
 }
 
 export function SubSectionTabs({
@@ -41,6 +51,7 @@ export function SubSectionTabs({
   const [loc] = useLocation();
   const visible = tabs.filter((t) => !t.hidden);
   if (visible.length === 0) return null;
+  const hrefs = visible.map((t) => t.href);
   return (
     <nav
       aria-label="Sub-section navigation"
@@ -51,7 +62,7 @@ export function SubSectionTabs({
       data-testid={testId ?? "subsection-tabs"}
     >
       {visible.map((t) => {
-        const active = (t.isActive ?? ((p) => defaultActive(t.href, p)))(loc);
+        const active = (t.isActive ?? ((p) => defaultActive(t.href, p, hrefs)))(loc);
         return (
           <Link
             key={t.id}
