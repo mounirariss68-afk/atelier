@@ -188,11 +188,11 @@ const PAYLOAD_TRANSLATORS: Record<string, Partial<Record<DispatchVerb, Translato
       for (const [k, v] of Object.entries(payload)) {
         if (allowed.has(k) && v != null && v !== "") out[k] = v;
       }
-      // Coerce a "D" tier coming from the chat draft (Cartographer
-      // outputs A|B|C only — D is reserved for disqualified targets
-      // and shouldn't be auto-set here, but if it ever leaks through
-      // we drop to "C" rather than fail validation).
-      if (out.tier && !["A", "B", "C", "D"].includes(String(out.tier))) {
+      // Cartographer outputs A|B|C only — "D" is reserved for
+      // disqualified targets and should never be auto-set by the
+      // researcher. Drop anything outside A|B|C to "C" rather than
+      // fail account_create's tier enum validation.
+      if (out.tier && !["A", "B", "C"].includes(String(out.tier))) {
         out.tier = "C";
       }
       return out;

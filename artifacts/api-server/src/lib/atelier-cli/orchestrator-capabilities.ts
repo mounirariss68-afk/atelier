@@ -456,7 +456,7 @@ defineCapability({
           sourceSignals,
           decisionMakers,
         };
-        const required = ["name", "country", "sector"];
+        const required = ["sector", "country"];
         const missingRequiredFields = required.filter((k) => {
           const v = draft[k];
           return v == null || (typeof v === "string" && v.trim() === "");
