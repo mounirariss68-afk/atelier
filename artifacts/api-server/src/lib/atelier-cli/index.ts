@@ -838,7 +838,15 @@ export function findToolByName(
   persona?: CliPersona,
 ): ToolDef | undefined {
   if (persona) {
-    return getToolsForPersona(persona).find((t) => t.name === name);
+    const fromSurface = getToolsForPersona(persona).find((t) => t.name === name);
+    if (fromSurface) return fromSurface;
+    // Task #484 — fall through to the catalog when the persona-filtered
+    // chat surface misses. `getToolsForPersona` strips legacy
+    // chat-write tools (account_create, opportunity_create, …) so they
+    // never reach the model's tool list, but the propose_write commit
+    // dispatcher still needs to RUN those tools in-process. Resolving
+    // them via the catalog here preserves chat-surface filtering AND
+    // dispatch resolution simultaneously.
   }
   const cat = findByToolName(name);
   if (cat) {
@@ -2133,8 +2141,12 @@ async function mockModelStep(args: {
     };
   }
   // Find the LAST user prompt text — the rolling-summary primer is also
-  // pushed as a user message so we must scan from the end.
-  const promptText = (() => {
+  // pushed as a user message so we must scan from the end. Task #484 —
+  // we need BOTH the original-cased prompt (entity-hint extraction +
+  // country regex rely on capitalisation) and the lowercased version
+  // (slash-command match was historically case-insensitive via
+  // lowercase, so we keep that behaviour).
+  const promptRawCase = (() => {
     for (let i = args.history.length - 1; i >= 0; i--) {
       const h = args.history[i]!;
       if (h.role !== "user") continue;
@@ -2161,7 +2173,8 @@ async function mockModelStep(args: {
       }
     }
     return "";
-  })().toLowerCase();
+  })();
+  const promptText = promptRawCase.toLowerCase();
 
   // Task #484 — replaced BOTH regex chains (the parity router AND the
   // inline (find|who is|account) / (choose|pick|option) / RAID
@@ -2203,8 +2216,11 @@ async function mockModelStep(args: {
   // Typed-intent classification. We use the deterministic path
   // directly (mock mode skips the network call anyway) so the mock
   // stays synchronous-ish and never waits on integration env.
+  // Task #484 — pass the ORIGINAL-cased prompt: extractEntityHints
+  // relies on capitalised noun phrases, and lowercasing strips
+  // "Ministry of Energy" down to nothing.
   const { deterministicClassify } = await import("./intent-router.js");
-  const intent = deterministicClassify(promptText);
+  const intent = deterministicClassify(promptRawCase);
 
   const isWriteVerb =
     intent.verb === "create" ||
@@ -2217,15 +2233,15 @@ async function mockModelStep(args: {
     // Build a structured payload from the typed-Intent hints. The
     // first hint is the most-likely entity name (already deduped by
     // extractEntityHints). For account writes we additionally lift a
-    // trailing "in <Country>" out of the prompt so the confirm card
-    // pre-fills both fields. The preamble is already stripped at
-    // ingress, so the country regex can no longer first-match
-    // "in English".
-    const entityName = intent.entityHints[0] ?? "";
+    // trailing "in <Country>" out of the original-cased prompt so the
+    // confirm card pre-fills both fields. The preamble is already
+    // stripped at ingress, so the country regex can no longer
+    // first-match "in English".
+    const entityName = intent.hints[0] ?? "";
     const payload: Record<string, unknown> = {};
     if (entityName) payload.name = entityName;
     if (intent.kind === "account") {
-      const cm = promptText.match(/\bin\s+(?:the\s+)?([A-Z][\p{L}]{1,40}|[A-Z]{2,5})\b/u);
+      const cm = promptRawCase.match(/\bin\s+(?:the\s+)?([A-Z][\p{L}]{1,40}|[A-Z]{2,5})\b/u);
       if (cm?.[1]) payload.country = cm[1];
     }
     const verbPhrase = `${intent.verb} ${intent.kind.replace(/_/g, " ")}`;
@@ -2251,13 +2267,13 @@ async function mockModelStep(args: {
     };
   }
 
-  if (intent.verb === "read" && intent.entityHints.length > 0) {
+  if (intent.verb === "read" && intent.hints.length > 0) {
     return {
       text: "Looking that up.",
       toolCall: {
         id: rid("tu"),
         name: "resolve_account_by_name",
-        input: { query: intent.entityHints[0]!.slice(0, 60) },
+        input: { query: intent.hints[0]!.slice(0, 60) },
       },
       stop: "tool_use",
       costUsd: 0,
@@ -2267,7 +2283,7 @@ async function mockModelStep(args: {
   }
 
   // No-tool fallback — unchanged narrative.
-  text = noToolFallbackMessage(promptText);
+  text = noToolFallbackMessage(promptRawCase);
   return {
     text,
     toolCall,
