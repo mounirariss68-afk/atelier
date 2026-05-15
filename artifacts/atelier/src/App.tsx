@@ -59,7 +59,7 @@ import WalletCollections from "@/pages/wallet/WalletCollections";
 import { SalonRoot } from "@/pages/salon/SalonRoutes";
 // v5 — Scale & Trust
 import PressIndex from "@/pages/press/PressIndex";
-import AlliancesIndex from "@/pages/alliances/AlliancesIndex";
+import PartnersIndex from "@/pages/partners/PartnersIndex";
 import StudioIndex from "@/pages/studio/StudioIndex";
 import GuardhouseIndex from "@/pages/guardhouse/GuardhouseIndex";
 import IpCatalog from "@/pages/atelier/IpCatalog";
@@ -72,7 +72,6 @@ import CodexContract from "@/pages/CodexContract";
 import {
   ClientsLensHome,
   PeopleLensHome,
-  PartnersLensHome,
   FinanceLensHome,
 } from "@/pages/lens/LensPlaceholder";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
@@ -142,8 +141,31 @@ function Router() {
         {/* v5 — The Press, Alliances, The Studio, The Guardhouse. */}
         <Route path="/press" component={PressIndex} />
         <Route path="/press/:section" component={PressIndex} />
-        <Route path="/alliances" component={AlliancesIndex} />
-        <Route path="/alliances/:section" component={AlliancesIndex} />
+        {/* Task #371 — Alliances re-homed under Partners lens. Permanent
+            redirects from /alliances and /alliances/:section into the
+            matching lifecycle stage so deep-links from dossiers / audit
+            logs / notification emails keep resolving. */}
+        <Route path="/alliances">
+          {() => {
+            window.history.replaceState(null, "", "/partners/identify");
+            window.location.replace("/partners/identify");
+            return null;
+          }}
+        </Route>
+        <Route path="/alliances/:section">
+          {(p) => {
+            const map: Record<string, string> = {
+              firms: "/partners/identify",
+              "joint-pipeline": "/partners/co-sell",
+              certifications: "/partners/govern",
+              conflicts: "/partners/govern",
+            };
+            const target = map[p.section] ?? "/partners";
+            window.history.replaceState(null, "", target);
+            window.location.replace(target);
+            return null;
+          }}
+        </Route>
         <Route path="/studio" component={StudioIndex} />
         <Route path="/studio/:section" component={StudioIndex} />
         <Route path="/guardhouse" component={GuardhouseIndex} />
@@ -255,8 +277,11 @@ function Router() {
         <Route path="/clients/:rest*" component={ClientsLensHome} />
         <Route path="/people" component={PeopleLensHome} />
         <Route path="/people/:rest*" component={PeopleLensHome} />
-        <Route path="/partners" component={PartnersLensHome} />
-        <Route path="/partners/:rest*" component={PartnersLensHome} />
+        {/* Task #371 — Partners lens (alliance lifecycle). The index +
+            stage views all live in PartnersIndex, which keys off the
+            :section param. */}
+        <Route path="/partners" component={PartnersIndex} />
+        <Route path="/partners/:section" component={PartnersIndex} />
         <Route path="/agents" component={AgentsLensHome} />
         <Route path="/finance" component={FinanceLensHome} />
         <Route component={NotFound} />

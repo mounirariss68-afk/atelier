@@ -208,6 +208,173 @@ export const useAllianceConflicts = listHook<AllianceConflictRow>(
 );
 
 // ============================================================
+// Partners lens — lifecycle scaffolds (Task #371)
+// ============================================================
+export interface PartnerTargetRow {
+  id: string;
+  name: string;
+  ecosystem: string;
+  country: string;
+  rationale: string;
+  priority: string;
+  stage: string;
+  lastContact: string | null;
+}
+export const usePartnerTargets = listHook<PartnerTargetRow>(
+  "partners-targets",
+  "/partners/target-partners",
+);
+
+export interface PartnerCapabilityRow {
+  id: string;
+  partnerFirm: string;
+  capabilities: Record<string, number>;
+  ndaStatus: string;
+  mutualEvalStatus: string;
+  lastReviewed: string;
+}
+export const usePartnerCapabilities = listHook<PartnerCapabilityRow>(
+  "partners-capabilities",
+  "/partners/capability-matrix",
+);
+
+export interface PartnerMdfRow {
+  id: string;
+  partnerFirm: string;
+  program: string;
+  periodEnds: string;
+  allocatedUsdK: number;
+  spentUsdK: number;
+  status: string;
+  focus: string;
+}
+export const usePartnerMdf = listHook<PartnerMdfRow>(
+  "partners-mdf",
+  "/partners/mdf",
+);
+
+export interface PartnerJointMarketingRow {
+  id: string;
+  title: string;
+  kind: string;
+  partnerFirm: string;
+  date: string;
+  status: string;
+  expectedAttendees: number;
+  leadOwner: string;
+}
+export const usePartnerJointMarketing = listHook<PartnerJointMarketingRow>(
+  "partners-joint-marketing",
+  "/partners/joint-marketing",
+);
+
+export interface PartnerSubcontractRow {
+  id: string;
+  engagement: string;
+  partnerFirm: string;
+  scope: string;
+  sowStatus: string;
+  rateCardLockedAt: string | null;
+  monthlyBurnUsdK: number;
+  acceptanceGate: string;
+}
+export const usePartnerSubcontracts = listHook<PartnerSubcontractRow>(
+  "partners-subcontracts",
+  "/partners/sub-contracts",
+);
+
+export interface PartnerFrameworkRow {
+  id: string;
+  partnerFirm: string;
+  agreementKind: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+  governingLaw: string;
+  exclusivities: string[];
+  status: string;
+}
+export const usePartnerFrameworks = listHook<PartnerFrameworkRow>(
+  "partners-frameworks",
+  "/partners/framework-agreements",
+);
+
+export interface PartnerQbrRow {
+  id: string;
+  partnerFirm: string;
+  periodLabel: string;
+  scheduledFor: string;
+  status: string;
+  attendees: string[];
+  decisions: string[];
+  artefactsUrl: string | null;
+}
+export const usePartnerQbrs = listHook<PartnerQbrRow>(
+  "partners-qbrs",
+  "/partners/qbrs",
+);
+
+export interface PartnerScorecardRow {
+  id: string;
+  partnerFirm: string;
+  periodLabel: string;
+  revenueUsdK: number;
+  satisfaction: number;
+  complianceFlags: number;
+  jointWinRate: number;
+  deliveryQuality: number;
+  trend: string;
+}
+export const usePartnerScorecards = listHook<PartnerScorecardRow>(
+  "partners-scorecards",
+  "/partners/scorecards",
+);
+
+export interface PartnerRenewalRow {
+  id: string;
+  partnerFirm: string;
+  agreementKind: string;
+  expiresAt: string;
+  daysUntil: number;
+  stage: string;
+  owner: string;
+  recommendation: string;
+  risk: string;
+}
+export const usePartnerRenewals = listHook<PartnerRenewalRow>(
+  "partners-renewals",
+  "/partners/renewals",
+);
+
+export interface PartnerTierChangeRow {
+  id: string;
+  partnerFirm: string;
+  platform: string;
+  fromTier: string;
+  toTier: string;
+  effectiveAt: string;
+  driver: string;
+  action: string;
+}
+export const usePartnerTierChanges = listHook<PartnerTierChangeRow>(
+  "partners-tier-changes",
+  "/partners/tier-changes",
+);
+
+export interface PartnerOffboardingRow {
+  id: string;
+  partnerFirm: string;
+  reason: string;
+  initiatedAt: string;
+  phase: string;
+  openObligationsUsdK: number;
+  dataReturnDue: string;
+}
+export const usePartnerOffboardings = listHook<PartnerOffboardingRow>(
+  "partners-offboardings",
+  "/partners/offboardings",
+);
+
+// ============================================================
 // Studio
 // ============================================================
 export interface OpenRoleRow {

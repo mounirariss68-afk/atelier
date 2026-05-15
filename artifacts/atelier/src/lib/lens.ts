@@ -92,8 +92,12 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘4",
     shortcutKey: "4",
     sections: [
-      { id: "overview", label: "Overview", href: "/partners" },
-      { id: "alliances", label: "Alliances", href: "/alliances" },
+      { id: "identify", label: "Identify", href: "/partners/identify" },
+      { id: "qualify", label: "Qualify", href: "/partners/qualify" },
+      { id: "co-sell", label: "Co-sell", href: "/partners/co-sell" },
+      { id: "co-deliver", label: "Co-deliver", href: "/partners/co-deliver" },
+      { id: "govern", label: "Govern", href: "/partners/govern" },
+      { id: "renew", label: "Renew", href: "/partners/renew" },
     ],
   },
   {
