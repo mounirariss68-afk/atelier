@@ -272,12 +272,11 @@ export function MetricTile(props: MetricTileProps) {
       data-testid={testId}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint flex items-center gap-1.5">
+        <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint flex items-start gap-1.5 min-w-0 flex-1">
           <RagDot tone={rag} />
-          <span className="truncate">{label}</span>
+          <span className="break-words leading-tight">{label}</span>
         </div>
-        <div className="flex items-center gap-1">
-          {wave && <MonoChip className="shrink-0">Wave {wave.wave}</MonoChip>}
+        <div className="flex items-center gap-1 shrink-0">
           {info && !isPlaceholder && (
             <button
               type="button"
@@ -293,11 +292,14 @@ export function MetricTile(props: MetricTileProps) {
         </div>
       </div>
 
-      <div className="flex items-baseline gap-1.5 flex-wrap">
-        <div className={cn("font-light leading-none tracking-tight", isPlaceholder ? "text-text-faint text-2xl" : "text-text text-2xl")}>
-          {isPlaceholder ? "—" : value}
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className={cn("font-light leading-none tracking-tight truncate", isPlaceholder ? "text-text-faint text-2xl" : "text-text text-2xl")}>
+            {isPlaceholder ? "—" : value}
+          </div>
+          {wave && <MonoChip className="shrink-0">Wave {wave.wave}</MonoChip>}
         </div>
-        {unit && !isPlaceholder && <div className="text-xs font-mono text-text-mute">{unit}</div>}
+        {unit && !isPlaceholder && <div className="text-[11px] font-mono text-text-mute leading-tight break-words">{unit}</div>}
       </div>
 
       <div className="text-[10px] font-mono text-text-mute flex flex-wrap gap-x-2 gap-y-0.5">
