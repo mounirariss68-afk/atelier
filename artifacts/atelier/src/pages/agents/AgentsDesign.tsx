@@ -1,12 +1,16 @@
 /**
- * Agents lens — Design stage (Task #370).
+ * Agents lens — Design stage (Tasks #370 read, #381 write).
  *
  * Lists agent specs awaiting Build, with intent / tools / guardrails
  * and a fork-from-library entry into Atelier (the firm IP catalogue).
+ * Employee personas can approve or request changes on a spec; the
+ * action POSTs to /api/atelier/agents-lens/specs/:id/review and
+ * invalidates the lens query so the new reviewLog row appears.
  */
 import * as React from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, GitFork, Check, MessageSquareWarning } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowUpRight, GitFork, Check, X as XIcon } from "lucide-react";
 import {
   PageHero,
   SectionHead,
@@ -15,11 +19,9 @@ import {
   Eyebrow,
   PillButton,
 } from "@/components/ui/primitives";
-import {
-  useAgentSpecs,
-  useDesignSpecActions,
-  type AgentSpec,
-} from "@/lib/agents-lens-seed";
+import { useToast } from "@/hooks/use-toast";
+import { useAtelierGetMe } from "@workspace/api-client-react";
+import { useAgentSpecs, type AgentSpec } from "@/lib/agents-lens-seed";
 
 const STATUS_TONE: Record<AgentSpec["status"], "default" | "gold" | "green"> = {
   drafting: "default",
@@ -27,9 +29,20 @@ const STATUS_TONE: Record<AgentSpec["status"], "default" | "gold" | "green"> = {
   approved: "green",
 };
 
+const EMPLOYEE_ROLES = new Set([
+  "founding_partner",
+  "partner",
+  "finance",
+  "hr",
+  "senior_manager",
+  "consultant",
+]);
+
 export default function AgentsDesign() {
   const specs = useAgentSpecs();
-  const actions = useDesignSpecActions();
+  const { data: me } = useAtelierGetMe();
+  const canWrite = !!me?.role && EMPLOYEE_ROLES.has(me.role);
+
   return (
     <div className="animate-in fade-in">
       <PageHero>
@@ -126,9 +139,12 @@ export default function AgentsDesign() {
               </div>
             </div>
 
-            <SpecActions spec={spec} actions={actions} />
-
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center gap-3">
+              {canWrite && spec.status !== "approved" ? (
+                <SpecReviewActions specId={spec.id} />
+              ) : (
+                <span />
+              )}
               <Link
                 href={`/agents/design/${spec.forkedFrom ?? spec.id}`}
                 className="inline-flex items-center gap-1 text-xs font-mono text-gold hover:underline"
@@ -144,62 +160,85 @@ export default function AgentsDesign() {
   );
 }
 
-function SpecActions({
-  spec,
-  actions,
-}: {
-  spec: AgentSpec;
-  actions: ReturnType<typeof useDesignSpecActions>;
-}) {
+function SpecReviewActions({ specId }: { specId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const [note, setNote] = React.useState("");
-  const [pending, setPending] = React.useState<"approve" | "request_changes" | null>(null);
-  const isApproved = spec.status === "approved";
+  const [showNote, setShowNote] = React.useState(false);
 
-  const submit = (kind: "approve" | "request_changes") => {
-    setPending(kind);
-    const actor = "You · Reviewer";
-    if (kind === "approve") actions.approve(spec.id, actor, note.trim());
-    else actions.requestChanges(spec.id, actor, note.trim());
-    setNote("");
-    setTimeout(() => setPending(null), 350);
-  };
+  const review = useMutation({
+    mutationFn: async (decision: "approve" | "request_changes") => {
+      const r = await fetch(
+        `${import.meta.env.BASE_URL}api/atelier/agents-lens/specs/${specId}/review`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision, note: note.trim() }),
+        },
+      );
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `review_${r.status}`);
+      }
+      return (await r.json()) as { id: string; status: string };
+    },
+    onSuccess: (_data, decision) => {
+      qc.invalidateQueries({ queryKey: ["atelier-agents-lens"] });
+      setNote("");
+      setShowNote(false);
+      toast({
+        title: "Spec review",
+        description:
+          decision === "approve" ? "Spec approved." : "Changes requested.",
+      });
+    },
+    onError: (e: Error) =>
+      toast({
+        title: "Review failed",
+        description: e.message,
+        variant: "destructive",
+      }),
+  });
 
   return (
-    <div
-      className="border-t border-border-soft pt-3 flex flex-col sm:flex-row sm:items-center gap-3"
-      data-testid={`spec-actions-${spec.id}`}
-    >
-      <input
-        type="text"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Reviewer note (optional)…"
-        className="flex-1 bg-bg-deep border border-border-soft rounded px-3 py-2 text-xs text-text"
-        data-testid={`input-spec-note-${spec.id}`}
-      />
-      <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      {showNote && (
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Optional note for the log…"
+          className="bg-bg-elevate border border-border rounded-md px-2 py-1 text-xs text-text font-mono w-64"
+          data-testid={`input-spec-review-note-${specId}`}
+        />
+      )}
+      {!showNote && (
         <button
-          type="button"
-          disabled={isApproved || pending !== null}
-          onClick={() => submit("request_changes")}
-          data-testid={`button-spec-request-changes-${spec.id}`}
-          className="inline-flex items-center gap-1.5 bg-bg-elevate text-text px-3 py-1.5 rounded text-xs font-medium border border-border-soft hover:bg-bg-elevate/80 disabled:opacity-50 transition-colors"
+          onClick={() => setShowNote(true)}
+          className="text-[11px] font-mono text-text-faint hover:text-text underline"
+          data-testid={`btn-spec-add-note-${specId}`}
         >
-          <MessageSquareWarning className="w-3.5 h-3.5" /> Request changes
+          add note
         </button>
-        <button
-          type="button"
-          disabled={isApproved || pending !== null}
-          onClick={() => submit("approve")}
-          data-testid={`button-spec-approve-${spec.id}`}
-          className="inline-flex items-center gap-1.5 bg-success text-bg-deep px-3 py-1.5 rounded text-xs font-medium hover:bg-success/90 disabled:opacity-50 transition-colors"
-        >
-          <Check className="w-3.5 h-3.5" /> Approve
-        </button>
-        {isApproved && (
-          <span className="text-xs text-text-faint italic">Approved — ready for Build.</span>
-        )}
-      </div>
+      )}
+      <PillButton
+        variant="primary"
+        onClick={() => review.mutate("approve")}
+        disabled={review.isPending}
+        data-testid={`btn-spec-approve-${specId}`}
+      >
+        <Check className="w-3.5 h-3.5 mr-1 inline" />
+        Approve
+      </PillButton>
+      <PillButton
+        variant="ghost"
+        onClick={() => review.mutate("request_changes")}
+        disabled={review.isPending}
+        data-testid={`btn-spec-request-changes-${specId}`}
+      >
+        <XIcon className="w-3.5 h-3.5 mr-1 inline" />
+        Request changes
+      </PillButton>
     </div>
   );
 }

@@ -1,14 +1,24 @@
 /**
- * Atelier — Agents lens read routes (Task #373).
+ * Atelier — Agents lens routes (Tasks #373 read, #381 write).
  *
- * Replaces the client-side seed in `artifacts/atelier/src/lib/agents-lens-seed.ts`
- * with Postgres-backed reads, mirroring the v5 Press / Studio / Guardhouse
- * pattern in `v5Routes.ts`. Routes are firm-wide reads scoped by the active
- * persona's `orgId`; the recruiter persona is denied here (consistent with
- * its /studio-only allowlist enforced in routes/atelier/index.ts).
+ * Read routes replace the client-side seed in
+ * `artifacts/atelier/src/lib/agents-lens-seed.ts` with Postgres-backed
+ * reads, mirroring the v5 Press / Studio / Guardhouse pattern in
+ * `v5Routes.ts`. Routes are firm-wide reads scoped by the active
+ * persona's `orgId`; the recruiter persona is denied here (consistent
+ * with its /studio-only allowlist enforced in routes/atelier/index.ts).
  *
- * Bootstrap data lives in `lib/atelier-seed-agents-lens.ts` and is loaded
- * idempotently on cold start from `index.ts`.
+ * Write routes (Task #381) drive the agent lifecycle from the lens UI:
+ *   - approve / request-changes on a spec  (Design)
+ *   - promote a version draft → candidate → shipped  (Build)
+ *   - advance a retirement scheduled → deprecated → archived  (Retire)
+ * Each write inserts an `atelier_audit_events` row, mirroring the v5
+ * write pattern in `engagementRoutes.audit(...)`. Persona gating: only
+ * employee personas may write; non-employees (contractor, PFR, board
+ * observer, recruiter, compliance officer) receive 403.
+ *
+ * Bootstrap data lives in `lib/atelier-seed-agents-lens.ts` and is
+ * loaded idempotently on cold start from `index.ts`.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -23,6 +33,7 @@ import {
   atelierAgentIncidents,
   atelierAgentRetirements,
   atelierAgentRuns,
+  atelierAuditEvents,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -49,6 +60,33 @@ function denyRecruiterOutsideStudio(me: Me, res: Response): boolean {
   return false;
 }
 
+/**
+ * Write gate for Agents lens lifecycle actions.
+ * Only the six employee personas may move specs / versions / retirements
+ * through their state machines. Non-employees (contractor, partner-firm
+ * resource, board observer, recruiter, compliance officer) get 403.
+ * Compliance officer is read-only by design (see personaRoles.ts).
+ */
+const EMPLOYEE_WRITE_ROLES = new Set<string>([
+  "founding_partner",
+  "partner",
+  "finance",
+  "hr",
+  "senior_manager",
+  "consultant",
+]);
+function denyNonEmployeeWrite(me: Me, res: Response): boolean {
+  if (!EMPLOYEE_WRITE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "non-employee-persona",
+      message:
+        "Only employee personas may modify agent lifecycle state.",
+    });
+    return true;
+  }
+  return false;
+}
+
 function orgScope(
   me: Me,
   table: { orgId: AnyPgColumn; deletedAt: AnyPgColumn },
@@ -56,6 +94,34 @@ function orgScope(
   return and(eq(table.orgId, me.orgId), isNull(table.deletedAt));
 }
 
+function rid(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function audit(args: {
+  entityType: string;
+  entityId: string;
+  actor: Me;
+  action: string;
+  payload: Record<string, unknown>;
+  summary: string;
+}): Promise<unknown> {
+  return db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: args.entityType,
+    entityId: args.entityId,
+    actorType: "human",
+    actorId: args.actor.id,
+    actorLabel: args.actor.name,
+    action: args.action,
+    payload: args.payload,
+    payloadSummary: args.summary,
+  });
+}
+
+// ============================================================
+// READS
+// ============================================================
 router.get("/agents-lens/specs", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -190,6 +256,215 @@ router.get("/agents-lens/retirements", async (req, res) => {
     .from(atelierAgentRetirements)
     .where(orgScope(me, atelierAgentRetirements));
   res.json({ items: rows });
+});
+
+// ============================================================
+// WRITES — Design: approve / request-changes on a spec
+// ============================================================
+router.post("/agents-lens/specs/:id/review", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (denyRecruiterOutsideStudio(me, res)) return;
+  if (denyNonEmployeeWrite(me, res)) return;
+
+  const decisionRaw = (req.body?.decision ?? "") as string;
+  if (decisionRaw !== "approve" && decisionRaw !== "request_changes") {
+    res
+      .status(400)
+      .json({ error: "invalid-decision", message: "decision must be 'approve' or 'request_changes'." });
+    return;
+  }
+  const note = typeof req.body?.note === "string" ? req.body.note : "";
+
+  const [spec] = await db
+    .select()
+    .from(atelierAgentSpecs)
+    .where(
+      and(
+        eq(atelierAgentSpecs.id, req.params.id),
+        eq(atelierAgentSpecs.orgId, me.orgId),
+        isNull(atelierAgentSpecs.deletedAt),
+      ),
+    );
+  if (!spec) {
+    res.status(404).json({ error: "spec-not-found" });
+    return;
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const newStatus =
+    decisionRaw === "approve" ? "approved" : "drafting";
+  const nextLog = [
+    ...(spec.reviewLog ?? []),
+    {
+      actor: me.name,
+      decision: decisionRaw,
+      at: nowIso.slice(0, 10),
+      note,
+    },
+  ];
+
+  await db
+    .update(atelierAgentSpecs)
+    .set({
+      status: newStatus,
+      reviewLog: nextLog,
+      updatedAt: nowIso,
+    })
+    .where(eq(atelierAgentSpecs.id, spec.id));
+
+  await audit({
+    entityType: "atelier_agent_spec",
+    entityId: spec.id,
+    actor: me,
+    action: `agents_lens.spec.${decisionRaw}`,
+    payload: {
+      specId: spec.id,
+      previousStatus: spec.status,
+      newStatus,
+      note,
+    },
+    summary: `${me.name} ${decisionRaw === "approve" ? "approved" : "requested changes on"} spec ${spec.name}`,
+  });
+
+  res.json({ ok: true, id: spec.id, status: newStatus });
+});
+
+// ============================================================
+// WRITES — Build: promote a version draft → candidate → shipped
+// ============================================================
+router.post("/agents-lens/versions/:id/promote", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (denyRecruiterOutsideStudio(me, res)) return;
+  if (denyNonEmployeeWrite(me, res)) return;
+
+  const target = (req.body?.target ?? "") as string;
+  if (target !== "candidate" && target !== "shipped") {
+    res.status(400).json({
+      error: "invalid-target",
+      message: "target must be 'candidate' or 'shipped'.",
+    });
+    return;
+  }
+
+  const [version] = await db
+    .select()
+    .from(atelierAgentVersions)
+    .where(
+      and(
+        eq(atelierAgentVersions.id, req.params.id),
+        eq(atelierAgentVersions.orgId, me.orgId),
+        isNull(atelierAgentVersions.deletedAt),
+      ),
+    );
+  if (!version) {
+    res.status(404).json({ error: "version-not-found" });
+    return;
+  }
+
+  // Linear promotion: draft → candidate → shipped.
+  const validTransition =
+    (version.status === "draft" && target === "candidate") ||
+    (version.status === "candidate" && target === "shipped");
+  if (!validTransition) {
+    res.status(409).json({
+      error: "invalid-transition",
+      message: `Cannot promote ${version.status} → ${target}.`,
+      currentStatus: version.status,
+    });
+    return;
+  }
+
+  await db
+    .update(atelierAgentVersions)
+    .set({ status: target, updatedAt: new Date() })
+    .where(eq(atelierAgentVersions.id, version.id));
+
+  await audit({
+    entityType: "atelier_agent_version",
+    entityId: version.id,
+    actor: me,
+    action: `agents_lens.version.promote.${target}`,
+    payload: {
+      versionId: version.id,
+      agentId: version.agentId,
+      version: version.version,
+      previousStatus: version.status,
+      newStatus: target,
+    },
+    summary: `${me.name} promoted ${version.agentName} v${version.version} ${version.status} → ${target}`,
+  });
+
+  res.json({ ok: true, id: version.id, status: target });
+});
+
+// ============================================================
+// WRITES — Retire: advance scheduled → deprecated → archived
+// ============================================================
+router.post("/agents-lens/retirements/:id/advance", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (denyRecruiterOutsideStudio(me, res)) return;
+  if (denyNonEmployeeWrite(me, res)) return;
+
+  const target = (req.body?.target ?? "") as string;
+  if (target !== "deprecated" && target !== "archived") {
+    res.status(400).json({
+      error: "invalid-target",
+      message: "target must be 'deprecated' or 'archived'.",
+    });
+    return;
+  }
+
+  const [row] = await db
+    .select()
+    .from(atelierAgentRetirements)
+    .where(
+      and(
+        eq(atelierAgentRetirements.id, req.params.id),
+        eq(atelierAgentRetirements.orgId, me.orgId),
+        isNull(atelierAgentRetirements.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "retirement-not-found" });
+    return;
+  }
+
+  const validTransition =
+    (row.status === "scheduled" && target === "deprecated") ||
+    (row.status === "deprecated" && target === "archived");
+  if (!validTransition) {
+    res.status(409).json({
+      error: "invalid-transition",
+      message: `Cannot advance ${row.status} → ${target}.`,
+      currentStatus: row.status,
+    });
+    return;
+  }
+
+  await db
+    .update(atelierAgentRetirements)
+    .set({ status: target, updatedAt: new Date() })
+    .where(eq(atelierAgentRetirements.id, row.id));
+
+  await audit({
+    entityType: "atelier_agent_retirement",
+    entityId: row.id,
+    actor: me,
+    action: `agents_lens.retirement.advance.${target}`,
+    payload: {
+      retirementId: row.id,
+      agentId: row.agentId,
+      previousStatus: row.status,
+      newStatus: target,
+    },
+    summary: `${me.name} advanced retirement of ${row.agentName} ${row.status} → ${target}`,
+  });
+
+  res.json({ ok: true, id: row.id, status: target });
 });
 
 export default router;
