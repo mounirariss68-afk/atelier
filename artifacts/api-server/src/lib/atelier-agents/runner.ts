@@ -12,8 +12,8 @@
  * Each `run<X>` call:
  *   1. Inserts an `atelier_agent_runs` row in `running` state.
  *   2. Logs an `agent.start` audit event.
- *   3. Calls Claude (or, when `false` is on / the integration env vars
- *      are missing, throws — no fallback is returned).
+ *   3. Calls Claude (and, when integration env vars are missing,
+ *      throws — no fallback is returned).
  *   4. Persists `output` + `steps` + `toolCalls` + `cost` and flips the
  *      run to `complete` (or `error`).
  *   5. Logs an `agent.complete` audit event with payload summary.
@@ -3609,6 +3609,61 @@ export interface V5RunCommonArgs {
   actorLabel?: string;
 }
 
+export interface V5GenericResult {
+  runId: string;
+  output: unknown;
+  costUsd: number;
+}
+
+/**
+ * Generic v5 agent dispatcher — wraps `runAgent` lifecycle around a
+ * single live `callClaudeJson` invocation. Used by the v5 mode-extension
+ * entrypoints (press, partner, recruiting, etc.) that all share the
+ * same shape: load a registered prompt, send the input as JSON, return
+ * whatever the model produces. There is no fallback path — if Claude
+ * fails the run is marked failed and the error propagates.
+ */
+async function runV5GenericAgent(args: {
+  agentId: AtelierAgentId | string;
+  promptId: string;
+  promptVersion?: number;
+  promptMode?: string;
+  model: string;
+  input: Record<string, unknown>;
+  triggeredByUserId: string | null;
+  targetType: string;
+  targetId: string;
+  targetLabel: string;
+  actorLabel?: string;
+}): Promise<V5GenericResult> {
+  const result = await runAgent(
+    {
+      agentId: args.agentId as AtelierAgentId,
+      input: args.input,
+      triggeredByUserId: args.triggeredByUserId,
+      targetType: args.targetType,
+      targetId: args.targetId,
+      targetLabel: args.targetLabel,
+      actorLabel: args.actorLabel,
+    },
+    async (_ctx) => {
+      const promptBody = loadPrompt(args.promptId as AtelierAgentId);
+      const userPrompt = JSON.stringify({
+        ...(args.promptVersion ? { _promptVersion: args.promptVersion } : {}),
+        ...(args.promptMode ? { _promptMode: args.promptMode } : {}),
+        ...args.input,
+      });
+      const { value, costUsd } = await callClaudeJson<unknown>(
+        args.model,
+        promptBody,
+        userPrompt,
+      );
+      return { output: value, costUsd, confidence: "amber" as const };
+    },
+  );
+  return { runId: result.runId, output: result.output, costUsd: result.costUsd };
+}
+
 export async function runLinkedInComposer(
   input: { partnerId: string; sourceArtifactId: string; sourceArtifactKind: string; targetLength?: string } & V5RunCommonArgs,
 ): Promise<V5GenericResult> {
@@ -3940,12 +3995,6 @@ export async function runPovAuthorPressMode(
     targetId: input.opportunityId,
     targetLabel: `POV (press mode) — ${input.opportunityId}`,
     actorLabel: input.actorLabel ?? "POV Author (press mode)",
-    mock: () => ({
-      title: "Mock press POV",
-      thesis: "Mock thesis suitable for a press byline.",
-      sections: [],
-      confidence: "amber",
-    }),
   });
 }
 
@@ -3967,12 +4016,6 @@ export async function runAccountCartographerPartnerMode(
     targetId: input.partnerFirmId,
     targetLabel: `Cartographer (partner mode) — ${input.partnerFirmId}`,
     actorLabel: input.actorLabel ?? "Account Cartographer (partner mode)",
-    mock: () => ({
-      partnerFirmId: input.partnerFirmId,
-      relationships: [],
-      jointPursuits: [],
-      confidence: "amber",
-    }),
   });
 }
 
@@ -3995,12 +4038,6 @@ export async function runPursuitScoutRecruitingMode(
     targetId: input.roleId,
     targetLabel: `Recruiting Scout — ${input.roleId}`,
     actorLabel: input.actorLabel ?? "Pursuit Scout (recruiting mode)",
-    mock: () => ({
-      roleId: input.roleId,
-      candidateBriefs: [],
-      facts: [],
-      confidence: "amber",
-    }),
   });
 }
 
