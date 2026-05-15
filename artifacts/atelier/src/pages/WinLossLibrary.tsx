@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Link, useRoute } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import { Card, PageHero, SectionHead, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -38,9 +38,21 @@ interface DebriefRow {
  * with aggregate counts and a per-theme drill-down (modal-style expand)
  * that shows the contributing debriefs and the ready-to-paste positioning line.
  */
-export default function WinLossLibrary() {
+export default function WinLossLibrary({
+  defaultView,
+}: { defaultView?: "themes" | "debriefs" } = {}) {
   const [matchDebriefs] = useRoute("/win-loss/debriefs");
-  const view: "themes" | "debriefs" = matchDebriefs ? "debriefs" : "themes";
+  const [location] = useLocation();
+  // Lens-aware tab hrefs: when mounted under /clients/* the tabs swap
+  // between /clients/win (debriefs) and /clients/reference (themes) so
+  // navigation stays in the Clients lens IA. The legacy /win-loss[/debriefs]
+  // mounts keep their own pair of hrefs.
+  const inClientsLens = location.startsWith("/clients/");
+  const themesHref = inClientsLens ? "/clients/reference" : "/win-loss";
+  const debriefsHref = inClientsLens ? "/clients/win" : "/win-loss/debriefs";
+  const view: "themes" | "debriefs" = matchDebriefs
+    ? "debriefs"
+    : (defaultView ?? "themes");
 
   return (
     <div className="p-6 md:p-10 space-y-6 max-w-6xl">
@@ -55,24 +67,28 @@ export default function WinLossLibrary() {
       />
       <div className="flex gap-2 text-sm font-mono">
         <Link
-          href="/win-loss"
+          href={themesHref}
           className={`px-3 py-1 rounded ${view === "themes" ? "bg-gold text-bg" : "bg-bg-elevate text-text-mute hover:text-text"}`}
         >
           Themes
         </Link>
         <Link
-          href="/win-loss/debriefs"
+          href={debriefsHref}
           className={`px-3 py-1 rounded ${view === "debriefs" ? "bg-gold text-bg" : "bg-bg-elevate text-text-mute hover:text-text"}`}
         >
           Debriefs
         </Link>
       </div>
-      {view === "themes" ? <ThemesView /> : <DebriefsView />}
+      {view === "themes" ? (
+        <ThemesView debriefsHref={debriefsHref} />
+      ) : (
+        <DebriefsView />
+      )}
     </div>
   );
 }
 
-function ThemesView() {
+function ThemesView({ debriefsHref }: { debriefsHref: string }) {
   const [themes, setThemes] = React.useState<WinTheme[] | null>(null);
   const [q, setQ] = React.useState("");
   const [polarity, setPolarity] = React.useState<"all" | "win" | "loss">("all");
@@ -178,7 +194,7 @@ function ThemesView() {
                     Contributing debriefs: {t.contributingDebriefIds.length}
                     {t.contributingDebriefIds.length > 0 && (
                       <Link
-                        href="/win-loss/debriefs"
+                        href={debriefsHref}
                         className="ml-2 text-gold underline"
                       >
                         Browse all →
