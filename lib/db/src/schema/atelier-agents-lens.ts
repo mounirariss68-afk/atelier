@@ -159,6 +159,14 @@ export const atelierAgentIncidents = pgTable(
     cluster: text("cluster").notNull().default(""),
     rootCause: text("root_cause"),
     proposedChange: text("proposed_change").notNull().default(""),
+    // Task #382 — close the Improve loop by linking incidents to real
+    // agent run telemetry. `evidenceRunIds` holds the
+    // atelier_agent_runs.id values whose failures triggered this incident;
+    // `fixVersionId` references atelier_agent_versions.id of the candidate
+    // build that resolves it (referential integrity is enforced at the
+    // application layer to match other Atelier text-PK FKs).
+    evidenceRunIds: jsonb("evidence_run_ids").$type<string[]>().notNull().default([]),
+    fixVersionId: text("fix_version_id"),
     ...COMMON,
   },
   (t) => [

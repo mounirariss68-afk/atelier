@@ -282,6 +282,10 @@ const INCIDENTS = [
     cluster: "Hallucinated competitor names",
     rootCause: "Prompt did not require CRM.competitors gating prior to draft.",
     proposedChange: "Land ag_pursuit_scout 2.3.0 (already in eval).",
+    // Task #382 — link incident to the failing pursuit_scout runs that
+    // triggered the cluster, plus the candidate version that fixes it.
+    evidenceRunIds: ["run_pursuit_tahakom", "run_pursuit_nhc"],
+    fixVersionId: "ver_pursuit_2_3_0",
   },
   {
     id: "inc_concierge_2026_05_06",
@@ -294,6 +298,8 @@ const INCIDENTS = [
     cluster: "Sector-tag relevance",
     rootCause: null,
     proposedChange: "Add sector-tag boost — see ag_knowledge_concierge 1.4.0 draft.",
+    evidenceRunIds: [],
+    fixVersionId: "ver_concierge_1_4_0",
   },
   {
     id: "inc_pricing_2026_04_19",
@@ -306,6 +312,8 @@ const INCIDENTS = [
     cluster: "Margin-policy compliance",
     rootCause: "Stale margin policy cache — race against finance update.",
     proposedChange: "Shipped — ag_pricing_assistant 3.0.1, fail-closed on missing policy.",
+    evidenceRunIds: [],
+    fixVersionId: "ver_pricing_3_0_1",
   },
 ];
 

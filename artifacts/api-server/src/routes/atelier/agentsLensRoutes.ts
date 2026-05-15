@@ -11,7 +11,7 @@
  * idempotently on cold start from `index.ts`.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   db,
@@ -22,6 +22,7 @@ import {
   atelierAgentDeployments,
   atelierAgentIncidents,
   atelierAgentRetirements,
+  atelierAgentRuns,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -108,6 +109,76 @@ router.get("/agents-lens/incidents", async (req, res) => {
     .from(atelierAgentIncidents)
     .where(orgScope(me, atelierAgentIncidents));
   res.json({ items: rows });
+});
+
+// Task #382 — incident detail with linked run telemetry and candidate
+// fix version. Closes the Improve loop: the Improve page can render the
+// failing transcripts that triggered each incident and link the proposed
+// fix back to the candidate version in Build.
+router.get("/agents-lens/incidents/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (denyRecruiterOutsideStudio(me, res)) return;
+  const [incident] = await db
+    .select()
+    .from(atelierAgentIncidents)
+    .where(
+      and(
+        eq(atelierAgentIncidents.id, req.params.id),
+        eq(atelierAgentIncidents.orgId, me.orgId),
+        isNull(atelierAgentIncidents.deletedAt),
+      ),
+    );
+  if (!incident) {
+    res.status(404).json({ error: "incident-not-found" });
+    return;
+  }
+  const evidenceIds = (incident.evidenceRunIds ?? []) as string[];
+  const evidenceRuns = evidenceIds.length
+    ? await db
+        .select()
+        .from(atelierAgentRuns)
+        .where(
+          and(
+            inArray(atelierAgentRuns.id, evidenceIds),
+            eq(atelierAgentRuns.orgId, me.orgId),
+            isNull(atelierAgentRuns.deletedAt),
+          ),
+        )
+    : [];
+  let fixVersion = null;
+  if (incident.fixVersionId) {
+    const [v] = await db
+      .select()
+      .from(atelierAgentVersions)
+      .where(
+        and(
+          eq(atelierAgentVersions.id, incident.fixVersionId),
+          eq(atelierAgentVersions.orgId, me.orgId),
+          isNull(atelierAgentVersions.deletedAt),
+        ),
+      );
+    fixVersion = v ?? null;
+  }
+  res.json({
+    incident,
+    evidenceRuns: evidenceRuns.map((r) => ({
+      id: r.id,
+      agentId: r.agentId,
+      status: r.status,
+      statusMessage: r.statusMessage,
+      confidence: r.confidence,
+      targetType: r.targetType,
+      targetId: r.targetId,
+      targetLabel: r.targetLabel,
+      progressPct: r.progressPct,
+      sourcesCount: r.sourcesCount,
+      costUsd: r.costUsd,
+      durationMs: r.durationMs,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    fixVersion,
+  });
 });
 
 router.get("/agents-lens/retirements", async (req, res) => {
