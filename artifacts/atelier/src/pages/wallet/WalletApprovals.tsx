@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Card, MonoChip, PageHero, PillButton, SectionHead, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 interface ContractorPayment {
   id: string;
@@ -143,11 +144,13 @@ export default function WalletApprovals() {
           lede="Weekly contractor and partner-firm payment proposals composed by the Payment Proposer agent. Partner sign-off required for amounts over $250 and for all partner-firm invoices."
         />
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
-        <TabNavLink href="/wallet/approvals" active>Approvals</TabNavLink>
-        <TabNavLink href="/wallet/cards" active={false}>Cards</TabNavLink>
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "expenses", label: "Expenses", href: "/wallet" },
+        { id: "approvals", label: "Approvals", href: "/wallet/approvals" },
+        { id: "cards", label: "Cards", href: "/wallet/cards" },
+      ]}
+      />
 
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         <div className="flex flex-wrap items-center gap-3 text-xs font-mono">

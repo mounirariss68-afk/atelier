@@ -1,5 +1,6 @@
 import * as React from "react";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink, PillButton } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 interface ReconRow {
   id: string;
@@ -47,12 +48,14 @@ export default function WalletCashRecon() {
           lede="Open and finalise bank reconciliation periods. Finalising locks the period for cash & bank entries."
         />
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet/cash" active={false}>Cash</TabNavLink>
-        <TabNavLink href="/wallet/cash/recon" active>Bank reconciliation</TabNavLink>
-        <TabNavLink href="/wallet/treasury" active={false}>Treasury</TabNavLink>
-        <TabNavLink href="/wallet/ar" active={false}>AR aging</TabNavLink>
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "cash", label: "Cash", href: "/wallet/cash" },
+        { id: "cash-recon", label: "Bank reconciliation", href: "/wallet/cash/recon" },
+        { id: "treasury", label: "Treasury", href: "/wallet/treasury" },
+        { id: "ar", label: "AR aging", href: "/wallet/ar" },
+      ]}
+      />
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         <Card className="overflow-hidden">
           <table className="w-full text-sm" data-testid="recon-rows">

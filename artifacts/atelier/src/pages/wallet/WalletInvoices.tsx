@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 interface Invoice {
   id: string;
@@ -74,12 +75,14 @@ export default function WalletInvoices() {
           lede="Issue, clear with the tax authority, and chase. Numbers are gap-free per jurisdiction."
         />
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
-        <TabNavLink href="/wallet/invoices" active>Invoices</TabNavLink>
-        <TabNavLink href="/wallet/ar" active={false}>AR aging</TabNavLink>
-        <TabNavLink href="/wallet/collections" active={false}>Collections</TabNavLink>
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "expenses", label: "Expenses", href: "/wallet" },
+        { id: "invoices", label: "Invoices", href: "/wallet/invoices" },
+        { id: "ar", label: "AR aging", href: "/wallet/ar" },
+        { id: "collections", label: "Collections", href: "/wallet/collections" },
+      ]}
+      />
 
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         <div className="flex items-center gap-3 text-xs font-mono">

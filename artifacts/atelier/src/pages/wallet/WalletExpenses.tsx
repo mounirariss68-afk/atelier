@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 interface Expense {
   id: string;
@@ -78,16 +79,18 @@ export default function WalletExpenses() {
           lede="Every expense policy-checked, VAT-handled, traceable to the client."
         />
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet" active>Expenses</TabNavLink>
-        <TabNavLink href="/wallet/invoices" active={false}>Invoices</TabNavLink>
-        <TabNavLink href="/wallet/ar" active={false}>AR aging</TabNavLink>
-        <TabNavLink href="/wallet/collections" active={false}>Collections</TabNavLink>
-        <TabNavLink href="/wallet/expenses/new" active={false}>+ New expense</TabNavLink>
-        <TabNavLink href="/wallet/cards" active={false}>Cards</TabNavLink>
-        {isLeader && <TabNavLink href="/wallet/policy" active={false}>Policy</TabNavLink>}
-        {isLeader && <TabNavLink href="/wallet/vat" active={false}>VAT register</TabNavLink>}
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "expenses", label: "Expenses", href: "/wallet" },
+        { id: "invoices", label: "Invoices", href: "/wallet/invoices" },
+        { id: "ar", label: "AR aging", href: "/wallet/ar" },
+        { id: "collections", label: "Collections", href: "/wallet/collections" },
+        { id: "expenses-new", label: "+ New expense", href: "/wallet/expenses/new" },
+        { id: "cards", label: "Cards", href: "/wallet/cards" },
+        { id: "policy", label: "Policy", href: "/wallet/policy", hidden: !isLeader },
+        { id: "vat", label: "VAT register", href: "/wallet/vat", hidden: !isLeader },
+      ]}
+      />
 
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         <div className="flex flex-wrap items-center gap-3 text-xs font-mono">

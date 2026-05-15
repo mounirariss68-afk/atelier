@@ -1,5 +1,6 @@
 import * as React from "react";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 interface Bucket { country: string; treatment: string; usdNet: number; usdVat: number; usdGross: number; count: number }
 interface Row {
@@ -35,11 +36,13 @@ export default function WalletVat() {
           lede="KSA 15% · UAE 5% · everything else exported. Audit-ready CSV one click away."
         />
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
-        <TabNavLink href="/wallet/policy" active={false}>Policy</TabNavLink>
-        <TabNavLink href="/wallet/vat" active>VAT register</TabNavLink>
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "expenses", label: "Expenses", href: "/wallet" },
+        { id: "policy", label: "Policy", href: "/wallet/policy" },
+        { id: "vat", label: "VAT register", href: "/wallet/vat" },
+      ]}
+      />
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-6">
         {loading && <div className="text-text-mute">Loading…</div>}
         {err && <p className="text-red-400 font-mono text-xs">Error {err} — leadership only.</p>}

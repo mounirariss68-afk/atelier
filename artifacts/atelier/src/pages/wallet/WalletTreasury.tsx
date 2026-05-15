@@ -1,5 +1,6 @@
 import * as React from "react";
-import { PageHero, SectionHead, Card, TabNav, TabNavLink, PillButton, MonoChip } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, PillButton, MonoChip } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 interface ForecastWeek {
   weekIndex: number;
@@ -62,12 +63,14 @@ export default function WalletTreasury() {
           </PillButton>
         </div>
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet/cash" active={false}>Cash</TabNavLink>
-        <TabNavLink href="/wallet/cash/recon" active={false}>Bank reconciliation</TabNavLink>
-        <TabNavLink href="/wallet/treasury" active>Treasury</TabNavLink>
-        <TabNavLink href="/wallet/ar" active={false}>AR aging</TabNavLink>
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "cash", label: "Cash", href: "/wallet/cash" },
+        { id: "cash-recon", label: "Bank reconciliation", href: "/wallet/cash/recon" },
+        { id: "treasury", label: "Treasury", href: "/wallet/treasury" },
+        { id: "ar", label: "AR aging", href: "/wallet/ar" },
+      ]}
+      />
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         {!data || data.weeks.length === 0 ? (
           <Card className="p-6 text-text-mute">No forecast snapshot yet. Click <span className="font-mono">Recompute snapshot</span>.</Card>

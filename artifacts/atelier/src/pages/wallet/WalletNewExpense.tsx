@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useLocation } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 const FIXTURE_KEYS = [
   "riyadh_taxi_01",
@@ -217,11 +218,13 @@ export default function WalletNewExpense() {
           lede="Pick a capture path. The Auditor classifies, checks policy, and proposes VAT + billability."
         />
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
-        <TabNavLink href="/wallet/expenses/new" active>+ New expense</TabNavLink>
-        <TabNavLink href="/wallet/cards" active={false}>Cards</TabNavLink>
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "expenses", label: "Expenses", href: "/wallet" },
+        { id: "expenses-new", label: "+ New expense", href: "/wallet/expenses/new" },
+        { id: "cards", label: "Cards", href: "/wallet/cards" },
+      ]}
+      />
 
       <div className="px-6 py-6 max-w-3xl mx-auto space-y-6">
         <Card className="p-5 space-y-4">

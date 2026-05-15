@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Card, MonoChip, PageHero, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip, PageHero } from "@/components/ui/primitives";
+import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -141,12 +142,14 @@ export default function WalletRevrec() {
 
   return (
     <PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet" active={false}>Expenses</TabNavLink>
-        <TabNavLink href="/wallet/revrec" active>Rev-rec</TabNavLink>
-        <TabNavLink href="/wallet/wip" active={false}>WIP</TabNavLink>
-        <TabNavLink href="/wallet/margin" active={false}>Margin & leakage</TabNavLink>
-      </TabNav>
+      <SubSectionTabs
+        tabs={[
+        { id: "expenses", label: "Expenses", href: "/wallet" },
+        { id: "revrec", label: "Rev-rec", href: "/wallet/revrec" },
+        { id: "wip", label: "WIP", href: "/wallet/wip" },
+        { id: "margin", label: "Margin & leakage", href: "/wallet/margin" },
+      ]}
+      />
 
       <div className="flex items-end gap-3 mt-6">
         <div>
