@@ -2232,18 +2232,92 @@ async function mockModelStep(args: {
   if (isWriteVerb && intent.kind !== "unknown") {
     // Build a structured payload from the typed-Intent hints. The
     // first hint is the most-likely entity name (already deduped by
-    // extractEntityHints). For account writes we additionally lift a
-    // trailing "in <Country>" out of the original-cased prompt so the
-    // confirm card pre-fills both fields. The preamble is already
-    // stripped at ingress, so the country regex can no longer
-    // first-match "in English".
-    const entityName = intent.hints[0] ?? "";
+    // extractEntityHints). The preamble is already stripped at ingress,
+    // so the country regex can no longer first-match "in English".
+    //
+    // Task #484 follow-up — extractEntityHints requires capitalised
+    // noun phrases, so all-lowercase prompts ("create new account:
+    // ministry of energy in uae") yield zero hints. Layer on
+    // shape-based extraction that runs case-insensitively and
+    // title-cases the recovered name so the confirm card is populated
+    // either way.
+    let entityName = intent.hints[0] ?? "";
+    let countryHint: string | undefined;
+    const titleCase = (s: string) =>
+      s.replace(/\s+/g, " ").trim().replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+
+    if (intent.kind === "account") {
+      // Two-step parser: locate the account-shape "tail" carrying the
+      // name+country, then split " in <country>" off it. Handling these
+      // as one regex keeps biting back (lazy quantifiers never enter
+      // optional trim groups), so we do it explicitly.
+      const stripped = promptRawCase
+        .replace(
+          /^\s*(?:please\s+)?(?:create|add|register|open|spin\s+up|set\s+up|new)\b\s*/i,
+          "",
+        )
+        .trim();
+
+      let tail: string | undefined;
+      // Form A: "[a|new] account: <rest>" — colon/dash delimiter.
+      let m = stripped.match(/^(?:a\s+)?(?:new\s+)?account\s*[:\-–—]\s*(.+)$/i);
+      if (m) tail = m[1];
+      // Form B: "[a|new] account [for] <rest>" — preposition-only delimiter.
+      if (!tail) {
+        m = stripped.match(/^(?:a\s+)?(?:new\s+)?account\s+(?:for\s+)?(.+)$/i);
+        if (m) tail = m[1];
+      }
+      // Form C: "<rest> account" — trailing keyword form.
+      if (!tail) {
+        m = stripped.match(/^(.+?)\s+account\s*$/i);
+        if (m) tail = m[1];
+      }
+
+      if (tail) {
+        // A leading "new " modifier sometimes survives Form C ("create
+        // new ministry of energy in uae account" → tail = "new ministry…").
+        tail = tail.replace(/^new\s+/i, "").trim();
+        // Split off a trailing " in <country>" — accept multi-word
+        // country names ("United Arab Emirates") via repeated tokens.
+        const cm = tail.match(
+          /^(.+?)\s+in\s+(?:the\s+)?([\p{L}]+(?:\s+[\p{L}]+){0,3})\s*$/iu,
+        );
+        if (cm) {
+          if (!entityName) entityName = titleCase(cm[1]);
+          const c = cm[2];
+          countryHint = c.length <= 4 ? c.toUpperCase() : titleCase(c);
+        } else if (!entityName && !/^in\s+/i.test(tail)) {
+          // Tail starting with "in …" is a country phrase, not a name —
+          // leave entityName empty so the confirm card doesn't pre-fill
+          // a bogus value like "In Uae".
+          entityName = titleCase(tail);
+        }
+      }
+
+      // If we still have no country, fall back to the original regex
+      // (handles "create account in UAE" with no name at all).
+      if (!countryHint) {
+        const cap = promptRawCase.match(
+          /\bin\s+(?:the\s+)?([A-Z][\p{L}]{1,40}|[A-Z]{2,5})\b/u,
+        );
+        const ci = promptRawCase.match(
+          /\bin\s+(?:the\s+)?([\p{L}]{2,40})(?=\s+account\b|\s*$|[,.!?])/iu,
+        );
+        const raw = cap?.[1] ?? ci?.[1];
+        if (raw) countryHint = raw.length <= 4 ? raw.toUpperCase() : titleCase(raw);
+      }
+    } else if (!entityName) {
+      // Generic kinds (opportunity, raid_item, …): grab a "<kind>: <name>"
+      // tail or fall back to the post-verb phrase.
+      const kindWord = intent.kind.replace(/_/g, " ");
+      const kre = new RegExp(`\\b${kindWord}\\s*[:\\-–—]\\s*(.+?)\\s*$`, "i");
+      const m = promptRawCase.match(kre);
+      if (m?.[1]) entityName = titleCase(m[1]);
+    }
+
     const payload: Record<string, unknown> = {};
     if (entityName) payload.name = entityName;
-    if (intent.kind === "account") {
-      const cm = promptRawCase.match(/\bin\s+(?:the\s+)?([A-Z][\p{L}]{1,40}|[A-Z]{2,5})\b/u);
-      if (cm?.[1]) payload.country = cm[1];
-    }
+    if (countryHint) payload.country = countryHint;
     const verbPhrase = `${intent.verb} ${intent.kind.replace(/_/g, " ")}`;
     const summary = entityName
       ? `${verbPhrase}: ${entityName}`
