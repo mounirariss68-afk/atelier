@@ -457,6 +457,25 @@ const DELIVERABLE_ACCEPTANCES: AcceptanceRow[] = [
     signedAt: new Date("2026-04-18T13:22:00Z"),
     evidenceUrl: "https://docusign.example.com/envelope/dlacc-dge-phase1-2026",
   },
+  // Task #442 — Tasama Phase-1 acceptance ready for the Billing Steward
+  // demo. Status `client_signed` with no linked invoice (notes don't
+  // reference it), so the Steward picks it up on first run.
+  {
+    id: "dlacc_tasama_phase1_milestone3",
+    engagementId: "eng_tasama_bpo_phase1",
+    deliverableId: null,
+    milestoneId: null,
+    title: "Tasama BPO — Milestone 3 acceptance pack (Arabic NLU coverage)",
+    attestationText:
+      "Tasama confirms receipt and acceptance of Milestone 3 deliverables: Arabic conversational coverage for top-3 services, intent-routing accuracy report (≥92% on hold-out set), and runbook handover to ops.",
+    status: "client_signed",
+    submittedAt: new Date("2026-05-08T07:30:00Z"),
+    clientSignerName: "Faisal Al-Otaibi",
+    clientSignerEmail: "f.alotaibi@tasama.sa",
+    clientSignerTitle: "VP — Customer Operations",
+    signedAt: new Date("2026-05-12T11:05:00Z"),
+    evidenceUrl: "https://docusign.example.com/envelope/dlacc-tasama-m3-2026",
+  },
 ];
 
 // ============================================================

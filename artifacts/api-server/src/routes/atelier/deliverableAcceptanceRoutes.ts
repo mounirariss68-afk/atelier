@@ -29,8 +29,12 @@ import {
   db,
   atelierDeliverableAcceptance,
   atelierAuditEvents,
+  atelierEngagements,
+  atelierPaneAItems,
+  atelierNotifications,
 } from "@workspace/db";
 import { withRls } from "./rls";
+import { autoDraftOnClientSign } from "./engagementFinancialsRoutes";
 import {
   isLeadership,
   isFinance,
@@ -358,6 +362,97 @@ router.post(
       auditSummary: (r) =>
         `${req.atelierPersona?.name ?? "?"} recorded client-signed evidence for acceptance "${r.title}". Wave-2 milestone gate now satisfied.`,
     });
+    // Task #442 — Billing Steward hook. On a *successful* client-sign
+    // transition, drop a Pane-A item + notification on the engagement
+    // lead so they know a bill can be drafted. The actual draft
+    // happens when the lead runs the steward from the Financials tab.
+    //
+    // Safety:
+    //   - Skip if the transition itself failed (res.statusCode != 200).
+    //   - Read acceptance + engagement under withRls so the hook can
+    //     never act on cross-tenant rows.
+    //   - Org-scope all writes to me.orgId.
+    if (res.statusCode === 200 && req.atelierPersona) {
+      const me = req.atelierPersona;
+      try {
+        const id = String(req.params.id);
+        const acc = await withRls(req, async (tx) => {
+          const rows = await tx
+            .select()
+            .from(atelierDeliverableAcceptance)
+            .where(eq(atelierDeliverableAcceptance.id, id))
+            .limit(1);
+          return rows[0] ?? null;
+        });
+        if (acc && acc.status === "client_signed") {
+          const eng = await withRls(req, async (tx) => {
+            const rows = await tx
+              .select()
+              .from(atelierEngagements)
+              .where(eq(atelierEngagements.id, acc.engagementId))
+              .limit(1);
+            return rows[0] ?? null;
+          });
+          // Belt-and-braces: the engagement org must match the caller
+          // org. RLS already enforces it, but an explicit check
+          // documents the invariant for future maintainers.
+          if (eng && eng.orgId === me.orgId) {
+            // Task #442 — auto-draft a bill (gated by billing model
+            // inside the helper). On t&m engagements this no-ops and
+            // we still surface a Pane-A item so the lead can run the
+            // Composer manually.
+            const drafted = await autoDraftOnClientSign({
+              actor: { id: me.id, orgId: me.orgId, name: me.name, role: me.role },
+              acceptanceId: acc.id,
+            });
+            const titleSuffix =
+              drafted.length > 0
+                ? "bill auto-drafted, awaiting Lead approval"
+                : "ready to bill";
+            const summary =
+              drafted.length > 0
+                ? `Client signed — Billing Steward drafted a $${drafted[0].total.toLocaleString()} bill awaiting your approval in Financials.`
+                : `Client signed — Financials tab will run the Composer for T&M lines.`;
+            await db
+              .insert(atelierPaneAItems)
+              .values({
+                id: `panea_steward_ready_${acc.id}`,
+                userId: eng.engagementLeadId,
+                title: `Billing Steward · "${acc.title}" ${titleSuffix}`,
+                summary,
+                priority: "medium",
+                hrefKind: "engagement_economics",
+                hrefTargetId: eng.id,
+                dueLabel: "Today",
+                sortKey: 65,
+              })
+              .onConflictDoNothing({ target: atelierPaneAItems.id });
+            await db
+              .insert(atelierNotifications)
+              .values({
+                id: `notif_steward_${acc.id}`,
+                userId: eng.engagementLeadId,
+                kind:
+                  drafted.length > 0
+                    ? "bill_lead_approval_required"
+                    : "billing_steward_ready",
+                payload: { engagementId: eng.id, acceptanceId: acc.id, drafted },
+                subject:
+                  drafted.length > 0
+                    ? `Bill awaiting your approval · ${eng.name}`
+                    : `Bill ready to draft · ${eng.name}`,
+                body: summary,
+                refType: "engagement",
+                refId: eng.id,
+                status: "queued",
+              })
+              .onConflictDoNothing({ target: atelierNotifications.id });
+          }
+        }
+      } catch {
+        // Steward hook is non-blocking; failures must not break sign-off.
+      }
+    }
   },
 );
 

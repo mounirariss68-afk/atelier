@@ -60,6 +60,15 @@ const TONE: Record<
   withdrawn: "default",
 };
 
+const BILL_LABEL: Record<string, string> = {
+  pending_lead_approval: "draft → lead approval",
+  pending_finance_approval: "lead approved → finance",
+  draft: "finance approved (draft)",
+  issued: "issued",
+  paid: "paid",
+  void: "void",
+};
+
 const RESTRICTED = new Set([
   "contractor",
   "partner_firm_resource",
@@ -86,8 +95,43 @@ export function DeliverableAcceptancesSection({ engId }: { engId: string }) {
     enabled: !!engId,
   });
 
+  // Task #442 — Surface per-deliverable bill state. The financials
+  // endpoint exposes invoice notes containing `dlacc_*` references; we
+  // map each acceptance id → the latest bill state so the row can show
+  // "Bill drafted" → "Lead approved" → "Finance approved" → "Issued".
+  const fin = useQuery({
+    queryKey: ["engagement-financials-acc", engId],
+    queryFn: async () => {
+      const r = await fetch(
+        `${API}/finance/engagement-financials/${engId}`,
+        { credentials: "include" },
+      );
+      if (!r.ok) return { invoices: [] as Array<{ id: string; status: string; notes: string | null; invoiceNumber: string | null }> };
+      const d = (await r.json()) as { invoices: Array<{ id: string; status: string; notes: string | null; invoiceNumber: string | null }> };
+      return d;
+    },
+    enabled: !!engId,
+  });
+  const billByAcc = React.useMemo(() => {
+    // Invoices arrive desc(createdAt) — newest first. We must keep the
+    // newest entry per acceptance so superseded older bills don't
+    // overwrite the current state shown on the row.
+    const map = new Map<string, { invoiceId: string; status: string; invoiceNumber: string | null }>();
+    for (const inv of fin.data?.invoices ?? []) {
+      const refs = (inv.notes ?? "").match(/dlacc_[a-z0-9_]+/gi) ?? [];
+      for (const r of refs) {
+        if (!map.has(r)) {
+          map.set(r, { invoiceId: inv.id, status: inv.status, invoiceNumber: inv.invoiceNumber });
+        }
+      }
+    }
+    return map;
+  }, [fin.data]);
+
   function invalidate() {
     qc.invalidateQueries({ queryKey: ["deliverable-acceptances", engId] });
+    qc.invalidateQueries({ queryKey: ["engagement-financials-acc", engId] });
+    qc.invalidateQueries({ queryKey: ["engagement-financials", engId] });
     qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
   }
 
@@ -171,6 +215,7 @@ export function DeliverableAcceptancesSection({ engId }: { engId: string }) {
               isFinance={isFinance}
               meId={me?.id ?? ""}
               onChange={invalidate}
+              bill={billByAcc.get(a.id) ?? null}
             />
           ))}
         </ul>
@@ -280,12 +325,14 @@ function AcceptanceRow({
   isFinance,
   meId,
   onChange,
+  bill,
 }: {
   acc: Acceptance;
   isLeadership: boolean;
   isFinance: boolean;
   meId: string;
   onChange: () => void;
+  bill: { invoiceId: string; status: string; invoiceNumber: string | null } | null;
 }) {
   const { toast } = useToast();
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -343,7 +390,19 @@ function AcceptanceRow({
             {acc.id} · milestone {acc.milestoneId}
           </div>
         </div>
-        <MonoChip tone={TONE[acc.status]}>{acc.status}</MonoChip>
+        <div className="flex flex-col items-end gap-1">
+          <MonoChip tone={TONE[acc.status]}>{acc.status}</MonoChip>
+          {bill && (
+            <a
+              href={`/clients/deliver/engagements/${acc.engagementId}/financials#bill-${bill.invoiceId}`}
+              className="text-[11px] font-mono text-accent hover:underline"
+              data-testid={`acc-bill-link-${acc.id}`}
+              title={`Bill ${bill.invoiceNumber ?? bill.invoiceId} — ${bill.status.replace(/_/g, " ")}`}
+            >
+              bill: {BILL_LABEL[bill.status] ?? bill.status.replace(/_/g, " ")}
+            </a>
+          )}
+        </div>
       </div>
       {acc.attestationText && (
         <p className="text-[12px] text-text leading-snug italic line-clamp-3">

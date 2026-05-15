@@ -86,6 +86,9 @@ import renewalRoutes from "./renewalRoutes";
 // register and firm Engagement Health register. In-memory seed mock
 // workflow for the demo; re-baselines on change-order approval.
 import engagementPnlRoutes from "./engagementPnlRoutes";
+// Task #442 — per-engagement Financials tab (header strip, billing
+// schedule, collections, P&L, Action Center, Billing Steward agent).
+import engagementFinancialsRoutes from "./engagementFinancialsRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -266,6 +269,7 @@ router.use(revrecRoutes);
 
 // Task #414 — Wave 2 engagement P&L / EAC / change-order register.
 router.use(engagementPnlRoutes);
+router.use(engagementFinancialsRoutes);
 
 function ensurePersona(
   req: Request,

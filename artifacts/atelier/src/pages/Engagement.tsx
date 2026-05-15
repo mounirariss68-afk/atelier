@@ -21,12 +21,14 @@ import { DeliverablesTab } from "@/components/tabs/DeliverablesTab";
 import { ArtifactsTab } from "@/components/tabs/ArtifactsTab";
 import { AgentsTab } from "@/components/tabs/AgentsTab";
 import { ProcessesTab } from "@/components/tabs/ProcessesTab";
+import { FinancialsTab } from "@/components/tabs/FinancialsTab";
 import { Code } from "lucide-react";
 
 const TABS = [
   { id: 'charter', label: 'Charter' },
   { id: 'workplan', label: 'Workplan' },
   { id: 'deliverables', label: 'Deliverables' },
+  { id: 'financials', label: 'Financials' },
   { id: 'agents', label: 'Agents' },
   { id: 'processes', label: 'Processes' },
   { id: 'meetings', label: 'Meetings' },
@@ -143,6 +145,7 @@ export default function Engagement() {
           {activeTab === 'charter' && <CharterTab engId={eng.id} />}
           {activeTab === 'workplan' && <WorkplanTab engId={eng.id} />}
           {activeTab === 'deliverables' && <DeliverablesTab engId={eng.id} />}
+          {activeTab === 'financials' && <FinancialsTab engId={eng.id} />}
           {activeTab === 'artifacts' && <ArtifactsTab engId={eng.id} />}
           {activeTab === 'agents' && <AgentsTab engId={eng.id} />}
           {activeTab === 'audit' && <AuditTab entityType="engagement" entityId={eng.id} />}

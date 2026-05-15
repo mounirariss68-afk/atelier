@@ -342,7 +342,18 @@ function Router() {
         </Route>
         {/* Internal route still mounted for back-compat with any direct callers. */}
         <Route path="/ledger/approvals/_legacy" component={LedgerApprovals} />
-        <Route path="/ledger/engagement-economics/:engagementId" component={EngagementEconomics} />
+        {/* Task #442 — legacy EngagementEconomics page redirects to the
+            new Financials tab on the engagement workspace. The page is
+            still mounted under /finance/reports/engagement-economics/:id
+            for the partner-firm passthrough roll-up + Utilisation
+            Analyst commentary deep-dive. */}
+        <Route path="/ledger/engagement-economics/:engagementId">
+          {(params) => (
+            <Redirect
+              to={`/clients/deliver/engagements/${params.engagementId}/financials`}
+            />
+          )}
+        </Route>
         <Route path="/ledger/utilization" component={Utilization} />
         <Route path="/ledger/utilization/:personId" component={Utilization} />
         <Route path="/ledger/firm-economics" component={FirmEconomics} />
