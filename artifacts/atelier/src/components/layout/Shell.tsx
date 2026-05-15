@@ -16,8 +16,9 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, X as XIcon, Sparkles } from "lucide-react";
+import { ChevronRight, ChevronLeft, Activity, Bell, FileText, ExternalLink, X as XIcon, Sparkles, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/lib/theme";
 import { ConfidenceChip } from "../ui/primitives";
 import { ManagePicker, LensSectionTabs } from "@/components/layout/ManagePicker";
 import {
@@ -36,6 +37,29 @@ import type { CliLocale } from "@/components/cli/types";
 import { emitCliOpened } from "@/components/cli/telemetry";
 import { derivePageContext } from "@/components/cli/pageContext";
 import { useToast } from "@/hooks/use-toast";
+
+/**
+ * Task #497 — light/dark mode toggle. Sits in the right-side utility
+ * cluster of the TopNav next to the notification bell. Inherits the
+ * same icon-button styling so it matches visually.
+ */
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+  const label = isDark ? "Switch to light mode" : "Switch to dark mode";
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      aria-label={label}
+      title={label}
+      data-testid="theme-toggle"
+      className="text-text-mute hover:text-text transition-colors"
+    >
+      {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
+  );
+}
 
 export function TopNav() {
   const [location] = useLocation();
@@ -112,7 +136,7 @@ export function TopNav() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60">
+    <header className="atelier-topnav sticky top-0 z-40 w-full border-b border-border bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60">
       <div className="flex h-14 items-center px-4 md:px-6 gap-6">
         <Link href="/" className="flex items-center gap-2">
           <span className="font-mono text-xs font-bold tracking-widest text-text uppercase">
@@ -148,6 +172,7 @@ export function TopNav() {
 
         <div className="ml-auto flex items-center gap-4">
           <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
+          <ThemeToggle />
           <button className="text-text-mute hover:text-text transition-colors">
             <Bell className="w-4 h-4" />
           </button>
