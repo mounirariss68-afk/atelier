@@ -1,0 +1,270 @@
+/**
+ * Task #411 — Single typed intent router.
+ *
+ * Replaces the three uncoordinated layers Task #406 left in place:
+ *   - the regex `heuristicClassify`
+ *   - the advisory Haiku label
+ *   - the SYSTEM_PROMPT orchestrator policy block (kept for the model
+ *     loop, but it is no longer the source of truth for intent)
+ *
+ * The router emits ONE typed `Intent` per turn. The Intent drives:
+ *   - capability retrieval (verb + kind + entity hints → embedding query)
+ *   - tier selection (read → Haiku, write/transition → Sonnet)
+ *   - orchestration policy (only `transition` triggers evaluate_gate)
+ *
+ * Implementation: one Haiku 4.5 call with a tightly-shaped JSON
+ * response, fenced through a deterministic regex+keyword extractor as
+ * fallback. Result is advisory in spirit but binding for tier + tool
+ * filter — the loop never lets a "read" intent surface a write tool.
+ */
+
+const HAIKU_MODEL = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
+
+export type IntentVerb =
+  | "read"
+  | "create"
+  | "update"
+  | "link"
+  | "transition"
+  | "delete"
+  | "reset"
+  | "trivial"
+  | "other";
+
+export type IntentTier = "haiku" | "sonnet";
+
+export type IntentKind =
+  | "account"
+  | "opportunity"
+  | "contact"
+  | "engagement"
+  | "partner_link"
+  | "deliverable"
+  | "expense"
+  | "meeting"
+  | "raid_item"
+  | "proposal"
+  | "pov"
+  | "change_order"
+  | "timesheet_entry"
+  | "invoice"
+  | "contract"
+  | "rate_card"
+  | "renewal"
+  | "partner_firm"
+  | "win_theme"
+  | "win_loss_debrief"
+  | "brief"
+  | "agent_design"
+  | "unknown";
+
+export interface Intent {
+  /** Top-level verb. Drives the orchestrator branch. */
+  verb: IntentVerb;
+  /** Primary entity kind under discussion ("unknown" when ambiguous). */
+  kind: IntentKind;
+  /** Free-text fragments that reference real entities (passed to resolve_entity). */
+  entityHints: string[];
+  /** Surface the request originated from (page-context.surface or "global"). */
+  surface: string;
+  /** Routing tier. Always tracks verb except for explicit overrides. */
+  tier: IntentTier;
+  /** 0..1 — the upstream classifier's self-reported confidence. */
+  confidence: number;
+  /** Human-readable label kept for audit + the existing classification field. */
+  label: string;
+  /** Cost telemetry. */
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
+
+const KIND_KEYWORDS: Array<[IntentKind, RegExp]> = [
+  ["account", /\b(account|client|customer|firm|company|organization)\b/i],
+  ["opportunity", /\b(opp|opportunity|deal|pipeline|pursuit)\b/i],
+  ["contact", /\b(contact|stakeholder|champion|buyer|person)\b/i],
+  ["engagement", /\b(engagement|project|delivery|workstream)\b/i],
+  ["meeting", /\b(meeting|workshop|discovery|kickoff|steering)\b/i],
+  ["raid_item", /\b(raid|risk|assumption|issue|dependency)\b/i],
+  ["proposal", /\b(proposal|sow)\b/i],
+  ["pov", /\b(pov|proof of value|proof-of-value)\b/i],
+  ["change_order", /\b(change order|co|cr)\b/i],
+  ["timesheet_entry", /\b(timesheet|hours|time entry)\b/i],
+  ["invoice", /\b(invoice|bill|receivable)\b/i],
+  ["contract", /\b(contract|agreement|msa|nda)\b/i],
+  ["rate_card", /\b(rate card|pricing card)\b/i],
+  ["renewal", /\b(renewal|nrr)\b/i],
+  ["partner_firm", /\b(partner firm|alliance|reseller|subcontractor firm)\b/i],
+  ["win_theme", /\b(win theme)\b/i],
+  ["win_loss_debrief", /\b(win\/loss|debrief|post-mortem)\b/i],
+  ["brief", /\b(executive brief|brief)\b/i],
+  ["agent_design", /\b(agent design|new agent)\b/i],
+  ["deliverable", /\b(deliverable|memo|readout|report)\b/i],
+  ["expense", /\b(expense|receipt)\b/i],
+  ["partner_link", /\b(partner link|partner connection)\b/i],
+];
+
+const VERB_KEYWORDS: Array<[IntentVerb, RegExp]> = [
+  ["reset", /^\/new\b|\b(reset|start over|new session)\b/i],
+  ["transition", /\b(move|advance|promote|transition|push (it )?(to|into)|mark (as )?(lost|no[- ]?decision|withdrawn|won)|close (as|won|lost))\b/i],
+  ["delete", /\b(delete|remove|drop|archive)\b/i],
+  ["create", /\b(add|create|new|draft|file|log|issue|open|register)\b/i],
+  ["update", /\b(update|edit|change|set|rename|amend)\b/i],
+  ["link", /\b(link|attach|associate|connect)\b/i],
+  ["read", /\b(list|show|find|search|who is|what is|view|fetch|get|recap|summarise|summarize)\b/i],
+];
+
+/** Extract candidate entity hints — quoted strings and capitalised noun phrases. */
+function extractEntityHints(prompt: string): string[] {
+  const hints: string[] = [];
+  const quoted = prompt.match(/"([^"]{2,80})"|'([^']{2,80})'/g);
+  if (quoted) {
+    for (const q of quoted) hints.push(q.replace(/^["']|["']$/g, ""));
+  }
+  // Capitalised multi-word phrases (Ministry of Energy, Acme Advisory).
+  const caps = prompt.match(/\b([A-Z][a-z]+(?:\s+(?:of|the|de|al|and)?\s*[A-Z][a-z]+){0,4})\b/g);
+  if (caps) for (const c of caps) hints.push(c);
+  // Explicit ids (acct_, opp_, eng_, ...).
+  const ids = prompt.match(/\b[a-z]{2,8}_[a-z0-9_]{4,}\b/gi);
+  if (ids) for (const id of ids) hints.push(id);
+  return Array.from(new Set(hints.map((h) => h.trim()))).slice(0, 5);
+}
+
+export function deterministicClassify(prompt: string): {
+  verb: IntentVerb;
+  kind: IntentKind;
+  hints: string[];
+} {
+  const p = (prompt ?? "").trim();
+  if (!p) return { verb: "trivial", kind: "unknown", hints: [] };
+  let verb: IntentVerb = "other";
+  for (const [v, re] of VERB_KEYWORDS) {
+    if (re.test(p)) {
+      verb = v;
+      break;
+    }
+  }
+  let kind: IntentKind = "unknown";
+  for (const [k, re] of KIND_KEYWORDS) {
+    if (re.test(p)) {
+      kind = k;
+      break;
+    }
+  }
+  return { verb, kind, hints: extractEntityHints(p) };
+}
+
+function tierForVerb(verb: IntentVerb): IntentTier {
+  // Reads + trivial + reset → Haiku; everything that mutates → Sonnet.
+  if (verb === "read" || verb === "trivial" || verb === "reset" || verb === "other") return "haiku";
+  return "sonnet";
+}
+
+function labelForVerb(verb: IntentVerb): string {
+  if (verb === "create" || verb === "update" || verb === "link" || verb === "delete") return "write";
+  if (verb === "transition") return "transition";
+  if (verb === "read") return "read";
+  if (verb === "reset") return "reset";
+  if (verb === "trivial") return "trivial";
+  return "other";
+}
+
+const ROUTER_SYSTEM = [
+  "You are an intent router for a CRM/PSA chat orchestrator.",
+  'Reply with ONE JSON object on a single line, with no prose, exactly matching:',
+  '{"verb":"read|create|update|link|transition|delete|reset|trivial|other",',
+  ' "kind":"account|opportunity|contact|engagement|partner_link|deliverable|expense|meeting|raid_item|proposal|pov|change_order|timesheet_entry|invoice|contract|rate_card|renewal|partner_firm|win_theme|win_loss_debrief|brief|agent_design|unknown",',
+  ' "entityHints":["..."],',
+  ' "confidence":0.0}',
+  "Use `transition` ONLY for moving an opportunity across pipeline stages.",
+  "Use `unknown` for `kind` when no entity is named or clearly implied.",
+  "Keep entityHints to fuzzy fragments the user typed (e.g. names, ids).",
+].join("\n");
+
+const MOCK_MODE = process.env.ATELIER_CLI_MOCK === "1";
+
+export async function classifyIntentTyped(
+  prompt: string,
+  surface: string = "global",
+): Promise<Intent> {
+  const det = deterministicClassify(prompt);
+  const fallback = (model: string, costUsd = 0, tokensIn = 0, tokensOut = 0): Intent => ({
+    verb: det.verb,
+    kind: det.kind,
+    entityHints: det.hints,
+    surface,
+    tier: tierForVerb(det.verb),
+    confidence: 0.4,
+    label: labelForVerb(det.verb),
+    model,
+    tokensIn,
+    tokensOut,
+    costUsd,
+  });
+  if (MOCK_MODE) return fallback("mock-haiku");
+  try {
+    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 5_000);
+    try {
+      const resp = await anthropic.messages.create(
+        {
+          model: HAIKU_MODEL,
+          max_tokens: 200,
+          system: ROUTER_SYSTEM,
+          messages: [{ role: "user", content: prompt }],
+        },
+        { signal: ac.signal },
+      );
+      const raw = resp.content
+        .map((b) => (b.type === "text" ? b.text : ""))
+        .join("")
+        .trim();
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (!m) return fallback(resp.model ?? HAIKU_MODEL, (resp.usage.input_tokens + resp.usage.output_tokens * 5) / 1_000_000, resp.usage.input_tokens, resp.usage.output_tokens);
+      const parsed = JSON.parse(m[0]) as Partial<{
+        verb: IntentVerb;
+        kind: IntentKind;
+        entityHints: string[];
+        confidence: number;
+      }>;
+      const verb = (parsed.verb ?? det.verb) as IntentVerb;
+      const kind = (parsed.kind ?? det.kind) as IntentKind;
+      const hints = Array.isArray(parsed.entityHints) && parsed.entityHints.length > 0
+        ? parsed.entityHints.map(String).slice(0, 5)
+        : det.hints;
+      const tokensIn = resp.usage.input_tokens;
+      const tokensOut = resp.usage.output_tokens;
+      const costUsd = (tokensIn * 1 + tokensOut * 5) / 1_000_000;
+      return {
+        verb,
+        kind,
+        entityHints: hints,
+        surface,
+        tier: tierForVerb(verb),
+        confidence: typeof parsed.confidence === "number" ? Math.max(0, Math.min(1, parsed.confidence)) : 0.7,
+        label: labelForVerb(verb),
+        model: resp.model ?? HAIKU_MODEL,
+        tokensIn,
+        tokensOut,
+        costUsd,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return fallback(`${HAIKU_MODEL} (fallback)`);
+  }
+}
+
+/** Compact textual representation of an Intent for embedding queries. */
+export function intentToQueryString(intent: Intent, prompt: string): string {
+  const parts = [
+    intent.verb !== "other" ? intent.verb : "",
+    intent.kind !== "unknown" ? intent.kind : "",
+    intent.entityHints.join(" "),
+    prompt,
+  ].filter(Boolean);
+  return parts.join(" ").slice(0, 500);
+}

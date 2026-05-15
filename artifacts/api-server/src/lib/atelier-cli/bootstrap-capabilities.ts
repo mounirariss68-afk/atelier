@@ -45,6 +45,12 @@ import "./l2c-wave4-capabilities.js";
 // catalog-only verbs; the orchestration logic IS the existing runTurn
 // loop driven by the system prompt at prompts/chat_orchestrator/v1.md.
 import "./orchestrator-capabilities.js";
+// Task #411 — coverage expansion: 15 new chat-owned write entities
+// (meeting / raid_item / timesheet_entry / invoice / rate_card /
+//  partner_firm / win_theme / win_loss_debrief / brief / agent_design /
+//  renewal). Each entry is a thin wrapper consumed by the propose_write
+// dispatcher in `write-dispatch.ts`.
+import "./coverage-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

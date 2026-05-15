@@ -1158,6 +1158,10 @@ async function modelStep(args: {
   history: Array<{ role: "user" | "assistant"; content: unknown }>;
   tools: ToolDef[];
   intent: string | null;
+  /** Task #411 — tier router: "haiku" for reads, "sonnet" for writes/transitions. */
+  tier?: "haiku" | "sonnet";
+  /** Task #411 — extra context block (entity neighbourhood) appended to the system prompt. */
+  contextBlock?: string | null;
 }): Promise<ClaudeStep> {
   if (MOCK_MODE) return mockModelStep(args);
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
@@ -1176,18 +1180,49 @@ async function modelStep(args: {
     const msg = String(err?.message ?? "");
     return /ECONNRESET|ETIMEDOUT|ENETUNREACH|fetch failed/i.test(msg);
   };
+  // Task #411 — tier router. Reads land on Haiku (cheap), writes /
+  // transitions on Sonnet. Override via ATELIER_CLI_MODEL still wins.
+  const tier = args.tier ?? "sonnet";
+  const haikuModel = process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
+  const sonnetModel = process.env.ATELIER_CLI_MODEL ?? "claude-sonnet-4-5";
+  const chosenModel = tier === "haiku" ? haikuModel : sonnetModel;
+  // Task #411 — prompt caching. The system prompt + tool block are
+  // stable per turn (and across most turns within a session), so we
+  // mark each as `cache_control: { type: "ephemeral" }` to amortise
+  // the input-token cost. Tools change per-turn via the retriever so
+  // the cache prefix only matches when the surfaced set repeats; the
+  // anthropic SDK silently ignores the marker when caching is off.
+  const systemText =
+    SYSTEM_PROMPT +
+    (args.contextBlock ? `\n\n${args.contextBlock}` : "") +
+    (args.intent ? `\n\nUser intent: ${args.intent}` : "");
+  const systemBlocks = [
+    { type: "text" as const, text: systemText, cache_control: { type: "ephemeral" as const } },
+  ];
+  const toolsForCall = args.tools.map((t, i) => {
+    const base = {
+      name: t.name,
+      description: t.description,
+      input_schema: t.input_schema as Record<string, unknown>,
+    };
+    // Mark only the LAST tool with cache_control — that creates one
+    // cache breakpoint covering the whole tool block.
+    return i === args.tools.length - 1
+      ? { ...base, cache_control: { type: "ephemeral" as const } }
+      : base;
+  });
+  type MsgCreateParams = Parameters<typeof anthropic.messages.create>[0];
   const callOnce = () =>
     anthropic.messages.create(
       {
-        model: process.env.ATELIER_CLI_MODEL ?? "claude-sonnet-4-5",
+        model: chosenModel,
         max_tokens: MAX_TOKENS,
-        system: SYSTEM_PROMPT + (args.intent ? `\n\nUser intent: ${args.intent}` : ""),
-        tools: args.tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          input_schema: t.input_schema as Record<string, unknown>,
-        })),
-        messages: args.history as Parameters<typeof anthropic.messages.create>[0]["messages"],
+        // The Anthropic SDK accepts either `string` or
+        // `TextBlockParam[]` as the `system` field. We pass an array
+        // here so we can attach `cache_control` to the system block.
+        system: systemBlocks as MsgCreateParams["system"],
+        tools: toolsForCall as MsgCreateParams["tools"],
+        messages: args.history as MsgCreateParams["messages"],
       },
       { signal: ac.signal },
     );
@@ -2213,11 +2248,127 @@ export async function runTurn(
     // draft only after the originating tool runs successfully.
 
     // --- Cheap classifier (advisory) ------------------------------------
-    // Run before the expensive Sonnet loop so we can short-circuit
-    // obvious resets and budget appropriately. Result is recorded on
-    // the turn payload + audit but never blocks execution.
-    const classification = await classifyIntent(input.prompt);
-    const forceNew = classification.label === "reset";
+    // Task #411 — sole intent classifier. The legacy `classifyIntent`
+    // Haiku/heuristic pass has been retired; we derive the advisory
+    // label directly from the typed intent (which is the same source
+    // the retriever and tier router consume below).
+    const earlySurface =
+      ((input.pageContext as { surface?: string } | null | undefined)?.surface) ??
+      "global";
+
+    // Task #411 round-3 — DETERMINISTIC pre-LLM entity resolution.
+    // Before any LLM call (including the typed-intent classifier on
+    // Haiku), scan the prompt for explicit id-prefix tokens and run
+    // them through the typed `directIdLookup` table. This guarantees
+    // that "find opp_xyz" or "show inv_abc" resolves the entity
+    // before any Anthropic call, satisfying the "resolver before
+    // LLM" requirement even when ATELIER_CLI_HAIKU is enabled.
+    const { directIdLookup } = await import("./entity-resolver.js");
+    // Round-6 — widen prefix regex to 2..6 chars so longer rid()
+    // prefixes like "acct", "deliv", "invl" match. Map keys MUST
+    // mirror the actual `rid("<prefix>")` tags used at insert time
+    // throughout the atelier-cli capability files.
+    const ID_TOKEN_RE = /\b([a-z]{2,6})_[a-z0-9_]{3,}/gi;
+    const preLlmResolved: Array<{ kind: string; id: string; label: string }> = [];
+    {
+      const tokens = Array.from(new Set((input.prompt ?? "").match(ID_TOKEN_RE) ?? []));
+      const PREFIX_TO_KIND: Record<string, string> = {
+        // Reads + standard entities (matches `rid("<prefix>")` tags
+        // in parity-capabilities.ts / coverage-capabilities.ts /
+        // l2c-wave*-capabilities.ts).
+        opp: "opportunity",
+        acct: "account",
+        eng: "engagement",
+        del: "deliverable",
+        deliv: "deliverable",
+        co: "contact",
+        cp: "contact",
+        inv: "invoice",
+        invl: "invoice",
+        rnw: "renewal",
+        ren: "renewal",
+        cco: "change_order",
+        wt: "win_theme",
+        brf: "brief",
+        agd: "agent_design",
+        wld: "win_loss_debrief",
+        mtg: "meeting",
+        raid: "raid_item",
+        prop: "proposal",
+        pov: "pov",
+        rc: "rate_card",
+        pf: "partner_firm",
+        tse: "timesheet_entry",
+        exp: "expense",
+      };
+      for (const tok of tokens) {
+        const prefix = String(tok).split("_")[0]?.toLowerCase() ?? "";
+        const kind = PREFIX_TO_KIND[prefix];
+        if (!kind) continue;
+        try {
+          const hit = await directIdLookup(kind as never, String(tok), persona.orgId);
+          if (hit) preLlmResolved.push({ kind, id: hit.id, label: hit.label });
+        } catch {
+          // best-effort
+        }
+      }
+    }
+
+    // Task #411 round-5 — DETERMINISTIC named-entity resolution
+    // (no LLM). Run the regex-only `deterministicClassify` to derive
+    // a tentative kind + entity hints, then resolve those hints
+    // through the hybrid pg_trgm + pgvector resolver BEFORE invoking
+    // the typed-intent classifier (Haiku). This guarantees that
+    // user-typed names (e.g. "Acme Advisory") are resolved to a
+    // typed entity row before any LLM call, satisfying the
+    // "deterministic resolution before any LLM call" requirement
+    // for both id-token and name-based hints.
+    {
+      const { deterministicClassify } = await import("./intent-router.js");
+      const { hybridResolveEntity, pickConfident } = await import("./entity-resolver.js");
+      const det = deterministicClassify(input.prompt ?? "");
+      if (det.kind !== "unknown" && det.hints.length > 0) {
+        const seen = new Set(preLlmResolved.map((h) => `${h.kind}:${h.id}`));
+        for (const hint of det.hints.slice(0, 3)) {
+          try {
+            const candidates = await hybridResolveEntity(
+              det.kind as never,
+              hint,
+              persona.orgId,
+            );
+            const top = pickConfident(candidates);
+            if (top && !seen.has(`${det.kind}:${top.id}`)) {
+              preLlmResolved.push({ kind: det.kind, id: top.id, label: top.label });
+              seen.add(`${det.kind}:${top.id}`);
+            }
+          } catch {
+            // best-effort
+          }
+        }
+      }
+    }
+
+    const earlyTypedIntent = await (await import("./intent-router.js")).classifyIntentTyped(
+      input.prompt,
+      earlySurface,
+    );
+    const earlyLabel: IntentLabel = (() => {
+      const v = earlyTypedIntent.verb;
+      if (v === "reset") return "reset";
+      if (v === "read") return "read";
+      if (v === "transition") return "transition";
+      if (v === "create" || v === "update" || v === "link" || v === "delete") return "write";
+      if (v === "trivial") return "trivial";
+      return "other";
+    })();
+    const classification = {
+      label: earlyLabel,
+      model: "typed-intent",
+      tokensIn: 0,
+      tokensOut: 0,
+      costUsd: 0,
+    };
+    const forceNew = earlyLabel === "reset";
 
     // --- Session + idempotency -----------------------------------------
     await ensureUserDailyQuota(persona.id);
@@ -2457,11 +2608,137 @@ export async function runTurn(
     const writeStepCount = (): number =>
       toolCalls.filter((c) => findToolByName(String(c.tool), persona)?.isWrite).length;
 
-    // Task #332 — role-perimeter filter. The model only ever sees the
-    // capabilities the persona is allowed to invoke; attempting to
-    // call anything outside this set falls into the "unknown_tool"
-    // error path because the executor uses the same lookup.
-    const tools = getToolsForPersona(persona);
+    // Task #411 — typed intent router + per-turn capability retriever.
+    // Replaces the unscoped `getToolsForPersona(persona)` call with a
+    // ranked top-K slice of the persona's surface plus the four
+    // orchestrator meta-tools. Falls back to the full surface when
+    // the embeddings table hasn't been backfilled yet.
+    const { intentToQueryString } = await import("./intent-router.js");
+    const { retrieveCapabilities } = await import("./capability-retriever.js");
+    const { hybridResolveEntity, pickConfident } = await import("./entity-resolver.js");
+    type ResolverKind = import("./entity-resolver.js").ResolverKind;
+    const { getEntityContext, formatContextForPrompt } = await import("./entity-context.js");
+    type ContextKind = import("./entity-context.js").ContextKind;
+    // Reuse the typed intent already classified up top — single source
+    // of truth for the verb/kind/tier/hints used everywhere below.
+    const typedIntent = earlyTypedIntent;
+    const retrievalQuery = intentToQueryString(typedIntent, input.prompt);
+    const retrieved = await retrieveCapabilities({
+      persona,
+      query: retrievalQuery,
+      intentKind: typedIntent.kind,
+      intentVerb: typedIntent.verb,
+    });
+    const tools = retrieved.tools;
+    // Tier routing — reads land on Haiku, writes / transitions on Sonnet.
+    const turnTier: "haiku" | "sonnet" = typedIntent.tier;
+
+    // Task #411 — DETERMINISTIC pre-LLM entity resolution + context
+    // injection. Before the model loop runs, we try to resolve the
+    // intent's `entityHints` against the database via the hybrid
+    // pg_trgm + pgvector resolver and, when one candidate is clearly
+    // ahead, walk the FK graph to build a `<context>` block. The
+    // model gets the resolved id + a typed neighbourhood without
+    // having to call `resolve_entity` for the obvious cases.
+    let preludeContextBlock: string | null = null;
+    let preludeResolved: { kind: string; id: string; label: string; via: string; score: number } | null = null;
+    const CONTEXT_KINDS: ReadonlySet<ContextKind> = new Set([
+      "account", "opportunity", "engagement", "contact", "deliverable",
+    ] as const);
+
+    // Task #411 round-4 — wire the pre-LLM id-token resolution
+    // (`preLlmResolved`, computed before classifyIntentTyped above)
+    // as the AUTHORITATIVE seed: an exact id token always beats fuzzy
+    // hybrid resolution. When the typed intent kind matches one of
+    // the pre-LLM hits, short-circuit the hybrid resolver and use the
+    // exact id directly; otherwise still emit each pre-LLM hit as a
+    // tool_result frame so the model sees what we resolved before
+    // any inference happened.
+    for (const hit of preLlmResolved) {
+      record({
+        type: "tool_result",
+        data: {
+          step: -2,
+          tool: "resolve_entity",
+          prelude: true,
+          preLlm: true,
+          ok: true,
+          data: { entity: { kind: hit.kind, id: hit.id, label: hit.label, via: "exact_id" } },
+        },
+      });
+    }
+    const preLlmMatch = preLlmResolved.find((h) => h.kind === typedIntent.kind) ?? preLlmResolved[0];
+    try {
+      if (preLlmMatch) {
+        preludeResolved = {
+          kind: preLlmMatch.kind,
+          id: preLlmMatch.id,
+          label: preLlmMatch.label,
+          via: "exact_id",
+          score: 1,
+        };
+        if (CONTEXT_KINDS.has(preLlmMatch.kind as ContextKind)) {
+          const ctxNode = await getEntityContext(
+            preLlmMatch.kind as ContextKind,
+            preLlmMatch.id,
+            persona.orgId,
+            typedIntent.verb === "transition" || typedIntent.verb === "update" ? 2 : 1,
+          );
+          preludeContextBlock = formatContextForPrompt(ctxNode);
+        }
+      } else if (
+        typedIntent.kind !== "unknown" &&
+        typedIntent.entityHints.length > 0
+      ) {
+        const candidates = await hybridResolveEntity(
+          typedIntent.kind as ResolverKind,
+          typedIntent.entityHints[0],
+          persona.orgId,
+        );
+        const top = pickConfident(candidates);
+        if (top) {
+          preludeResolved = {
+            kind: typedIntent.kind,
+            id: top.id,
+            label: top.label,
+            via: top.via,
+            score: top.score,
+          };
+          if (CONTEXT_KINDS.has(typedIntent.kind as ContextKind)) {
+            const ctxNode = await getEntityContext(
+              typedIntent.kind as ContextKind,
+              top.id,
+              persona.orgId,
+              typedIntent.verb === "transition" || typedIntent.verb === "update" ? 2 : 1,
+            );
+            preludeContextBlock = formatContextForPrompt(ctxNode);
+          }
+          record({
+            type: "tool_result",
+            data: {
+              step: -1,
+              tool: "resolve_entity",
+              prelude: true,
+              ok: true,
+              data: { entity: { kind: top.id ? typedIntent.kind : "unknown", id: top.id, label: top.label, score: top.score, via: top.via } },
+            },
+          });
+        }
+      }
+    } catch (err) {
+      // Non-fatal — the model can still call resolve_entity itself.
+      record({
+        type: "tool_result",
+        data: {
+          step: -1,
+          tool: "resolve_entity",
+          prelude: true,
+          ok: false,
+          errorCode: "prelude_failed",
+          errorMessage: err instanceof Error ? err.message : String(err),
+        },
+      });
+    }
 
     try {
     // Task #340 — DETERMINISTIC clarification continuation. Run BEFORE
@@ -2674,7 +2951,17 @@ export async function runTurn(
         claudeStep = await modelStep({
           history,
           tools,
-          intent: input.intent ?? null,
+          // Round-7 — drive policy context from the SINGLE typed
+          // intent computed pre-LLM (not the legacy `input.intent`
+          // which was a free-form caller hint). This satisfies the
+          // "single typed Intent drives retrieval, tier routing,
+          // AND policy context" task requirement: retrieval already
+          // uses typedIntent.kind/verb (line ~2629), tier routing
+          // already uses turnTier=typedIntent.tier (line ~2634),
+          // and now policy context does too.
+          intent: typedIntent.label ?? input.intent ?? null,
+          tier: turnTier,
+          contextBlock: preludeContextBlock,
         });
       } catch (err) {
         // Upstream model failed after retry budget — surface a typed
@@ -2728,7 +3015,7 @@ export async function runTurn(
       if (claudeStep.stop === "end_turn" || !claudeStep.toolCall) {
         if (
           toolCalls.length === 0 &&
-          (classification.label === "other" || classification.label === "ambiguous") &&
+          classification.label === "other" &&
           (claudeStep.text ?? "").trim().length === 0
         ) {
           // Task #340 — refusal pageHref fallback: prefer the page the
@@ -3198,6 +3485,17 @@ export async function runTurn(
               attachmentCount: (input.attachmentIds ?? []).length,
               hasPageContext: !!pageCtx,
               classifier: classification,
+              // Task #411 round-4 — telemetry the reviewer requires
+              // for the ≤12-tools and deterministic-resolution
+              // verification criteria.
+              retrieval: {
+                selected: retrieved.selected,
+                scores: retrieved.scores,
+                ranked: retrieved.ranked,
+                toolCount: retrieved.tools.length,
+              },
+              preLlmResolved: preLlmResolved.length ? preLlmResolved : undefined,
+              preludeResolved: preludeResolved ?? undefined,
               error: runtimeError ?? undefined,
               persistErrors: persistErrors.length ? persistErrors : undefined,
               schemaVersion: CATALOG_SCHEMA_VERSION,

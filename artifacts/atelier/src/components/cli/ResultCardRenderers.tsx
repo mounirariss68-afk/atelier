@@ -93,15 +93,29 @@ export function ToolResultCardList({
   toolResults,
   capabilities,
   locale,
+  onPickDisambig,
+  onRunSlash,
 }: {
   toolResults: NonNullable<import("./types").CliTurn["toolResults"]>;
   capabilities: CliCapability[];
   locale: CliLocale;
+  /** Task #411 — entity_resolution click-to-pick handler. */
+  onPickDisambig?: (id: string, label: string) => void;
+  /** Task #411 round-6 — gate_report partner-override slash dispatcher. */
+  onRunSlash?: (cmd: string) => void;
 }) {
   return (
     <div className="space-y-2.5" data-testid="cli-tool-results">
       {toolResults.map((tr, i) => {
         const cap = capabilities.find((c) => c.toolName === tr.tool) ?? null;
+        // Task #411 — orchestrator coordinator tools (resolve_entity,
+        // evaluate_gate) emit shape-tagged payloads via the data
+        // envelope itself. Prefer the per-result shape hint over the
+        // capability default so a single tool can carry both flavours.
+        const dataShape = (tr.data && typeof tr.data === "object"
+          ? (tr.data as Record<string, unknown>).shape
+          : null) as string | null;
+        const shape = dataShape ?? cap?.resultCard ?? null;
         return (
           <ToolResultCard
             key={`${tr.tool}-${i}`}
@@ -109,9 +123,11 @@ export function ToolResultCardList({
             ok={tr.ok}
             data={tr.data}
             errorMessage={tr.errorMessage}
-            shape={cap?.resultCard ?? null}
+            shape={shape}
             description={cap?.description ?? null}
             locale={locale}
+            onPickDisambig={onPickDisambig}
+            onRunSlash={onRunSlash}
           />
         );
       })}
@@ -127,6 +143,8 @@ function ToolResultCard({
   shape,
   description,
   locale,
+  onPickDisambig,
+  onRunSlash,
 }: {
   tool: string;
   ok: boolean;
@@ -135,6 +153,8 @@ function ToolResultCard({
   shape: string | null;
   description: string | null;
   locale: CliLocale;
+  onPickDisambig?: (id: string, label: string) => void;
+  onRunSlash?: (cmd: string) => void;
 }) {
   const titleLabel = description ? description.split(".")[0] : humanLabel(tool);
   return (
@@ -167,7 +187,7 @@ function ToolResultCard({
             {errorMessage ?? (locale === "ar" ? "فشلت الأداة" : "tool failed")}
           </div>
         ) : (
-          <ShapeBody shape={shape} data={asObj(data)} locale={locale} />
+          <ShapeBody shape={shape} data={asObj(data)} locale={locale} onPickDisambig={onPickDisambig} onRunSlash={onRunSlash} />
         )}
       </div>
     </div>
@@ -178,12 +198,21 @@ function ShapeBody({
   shape,
   data,
   locale,
+  onPickDisambig,
+  onRunSlash,
 }: {
   shape: string | null;
   data: Json;
   locale: CliLocale;
+  onPickDisambig?: (id: string, label: string) => void;
+  onRunSlash?: (cmd: string) => void;
 }) {
   switch (shape) {
+    // Task #411 — orchestrator policy renderers.
+    case "gate_report":
+      return <GateReport data={data} locale={locale} onRunSlash={onRunSlash} />;
+    case "entity_resolution":
+      return <EntityResolution data={data} locale={locale} onPickDisambig={onPickDisambig} />;
     case "kpi_strip":
       return <KpiStrip data={data} locale={locale} />;
     case "ranked_list":
@@ -1180,6 +1209,174 @@ function AuditTimeline({ data, locale }: { data: Json; locale: CliLocale }) {
         );
       })}
     </ol>
+  );
+}
+
+/* ─────────────────────────── gate_report (Task #411) ─────────────────────────── */
+
+function GateReport({
+  data,
+  locale,
+  onRunSlash,
+}: {
+  data: Json;
+  locale: CliLocale;
+  onRunSlash?: (cmd: string) => void;
+}) {
+  const ar = locale === "ar";
+  const fromStage = asStr((data as Json).fromStage);
+  const toStage = asStr((data as Json).toStage);
+  const passed = (data as Json).passed === true;
+  const blockers = asArr((data as Json).blockers).map(asStr).filter(Boolean);
+  const evidence = asArr((data as Json).evidence) as Json[];
+  const partnerOverrideAvailable = (data as Json).partnerOverrideAvailable === true;
+  const opportunityId = asStr((data as Json).opportunityId) || asStr((data as Json).id);
+
+  // Round-6 — RED/AMBER/GREEN triage. RED = blocked by hard
+  // blockers; AMBER = passed but partner override required
+  // (deliberate human gate); GREEN = passed cleanly. Drives both
+  // the dot color and the status pill copy.
+  const status: "red" | "amber" | "green" = passed
+    ? partnerOverrideAvailable
+      ? "amber"
+      : "green"
+    : "red";
+  const statusCopy = ar
+    ? { red: "محظور", amber: "بانتظار التجاوز", green: "ناجح" }
+    : { red: "blocked", amber: "override required", green: "passed" };
+  const dotClass = status === "green" ? "bg-success" : status === "amber" ? "bg-warning" : "bg-danger";
+  const pillClass =
+    status === "green"
+      ? "bg-success/10 text-success"
+      : status === "amber"
+        ? "bg-warning/10 text-warning"
+        : "bg-danger/10 text-danger";
+
+  return (
+    <div className="space-y-2" data-testid="cli-gate-report" data-status={status}>
+      <div className="flex items-center gap-2">
+        <span className={cn("inline-block h-2 w-2 rounded-full", dotClass)} aria-hidden />
+        <div className="text-xs font-medium">
+          {ar ? "تقرير البوابة" : "Gate report"}: {fromStage || "—"} → {toStage || "—"}
+        </div>
+        <span className={cn("text-[11px] px-1.5 py-0.5 rounded", pillClass)}>
+          {statusCopy[status]}
+        </span>
+      </div>
+      {blockers.length > 0 && (
+        <ul className="text-[12px] list-disc ms-4 space-y-0.5 text-text">
+          {blockers.map((b, i) => (
+            <li key={i}>{b}</li>
+          ))}
+        </ul>
+      )}
+      {evidence.length > 0 && (
+        <details className="text-[11px] text-text-mute">
+          <summary className="cursor-pointer">{ar ? "الأدلة" : "Evidence"} ({evidence.length})</summary>
+          <ul className="mt-1 space-y-0.5">
+            {evidence.slice(0, 8).map((e, i) => (
+              <li key={i} className="font-mono">
+                {asStr(e.label) || asStr(e.code)}: {asStr(e.value)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {partnerOverrideAvailable && (
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            data-testid="cli-gate-report-override"
+            onClick={() => {
+              if (!onRunSlash) return;
+              const arg = opportunityId ? ` ${opportunityId}` : "";
+              const cmd = (ar ? "/تجاوز_شريك" : "/partner_override") + arg + (toStage ? ` ${toStage}` : "");
+              onRunSlash(cmd);
+            }}
+            disabled={!onRunSlash}
+            className={cn(
+              "text-[11px] px-2 py-0.5 rounded border",
+              "border-warning/40 text-warning hover:bg-warning/10",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+            )}
+          >
+            {ar ? "تجاوز الشريك" : "Partner override"}
+          </button>
+          <span className="text-[11px] text-text-mute">
+            {ar
+              ? "عمل بشري متعمد للشركاء فقط."
+              : "Partner-only deliberate action."}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────── entity_resolution (Task #411) ─────────────────────────── */
+
+function EntityResolution({
+  data,
+  locale,
+  onPickDisambig,
+}: {
+  data: Json;
+  locale: CliLocale;
+  onPickDisambig?: (id: string, label: string) => void;
+}) {
+  const ar = locale === "ar";
+  // Three shapes possible:
+  //  - { entity: { id, label, kind, secondary? } }
+  //  - { options: [ { id, label, secondary? } ], prompt? }
+  //  - { kind, query, none: true }
+  const entity = (data as Json).entity as Json | undefined;
+  const options = asArr((data as Json).options) as Json[];
+  const promptText = asStr((data as Json).prompt);
+  if (entity && entity.id) {
+    return (
+      <div className="text-xs" data-testid="cli-entity-resolution">
+        <span className="text-text-mute">{ar ? "تم الحلّ:" : "Resolved:"} </span>
+        <span className="font-medium">{String(asStr(entity.label) || asStr(entity.id))}</span>
+        {entity.secondary != null && (
+          <span className="text-text-mute"> · {String(asStr(entity.secondary))}</span>
+        )}
+        <span className="ms-2 font-mono text-text-mute">{String(asStr(entity.id))}</span>
+      </div>
+    );
+  }
+  if (options.length > 0) {
+    return (
+      <div className="space-y-1.5" data-testid="cli-entity-resolution-options">
+        {promptText && <div className="text-xs text-text-mute">{promptText}</div>}
+        <ul className="space-y-1">
+          {options.map((o, i) => {
+            const id = asStr(o.id);
+            const label = asStr(o.label) || id;
+            return (
+              <li key={`${id}-${i}`}>
+                <button
+                  type="button"
+                  onClick={() => onPickDisambig?.(id, label)}
+                  className="w-full text-start text-xs px-2 py-1.5 rounded border border-border-soft hover:bg-bg-deep hover:border-border-strong transition"
+                  data-testid={`cli-entity-option-${i}`}
+                >
+                  <div className="font-medium">{String(label)}</div>
+                  {o.secondary != null && (
+                    <div className="text-[11px] text-text-mute">{String(asStr(o.secondary))}</div>
+                  )}
+                  <div className="text-[10px] font-mono text-text-mute mt-0.5">{String(id)}</div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+  return (
+    <div className="text-xs text-text-mute" data-testid="cli-entity-resolution-none">
+      {ar ? "لم يتم العثور على تطابق." : "No match found."}
+    </div>
   );
 }
 

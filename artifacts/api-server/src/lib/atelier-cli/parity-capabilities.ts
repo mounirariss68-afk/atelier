@@ -150,6 +150,14 @@ defineCapability({
     }
     const name = String(input.name ?? "").trim();
     if (!name) return denyInvalid("name is required");
+    // Task #411 — strict-input guard. Reject obvious placeholder names
+    // ("new", "test", em-dashes, blanks) and anything shorter than 3
+    // chars before they slip into the accounts table. The orchestrator
+    // can collect a real name via clarification on the next turn.
+    const ACCOUNT_NAME_STOP_WORDS = new Set(["new", "test", "—", "-", "n/a", "tbd"]);
+    if (name.length < 3) return denyInvalid("name must be at least 3 characters");
+    if (ACCOUNT_NAME_STOP_WORDS.has(name.toLowerCase()))
+      return denyInvalid(`"${name}" is too generic — please supply the actual account name`);
     const country = String(input.country ?? "").trim();
     const sector = String(input.sector ?? "").trim();
     if (input.confirm !== true) {

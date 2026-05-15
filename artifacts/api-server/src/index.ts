@@ -6,6 +6,7 @@ import { ensureAtelierV5Seed } from "./lib/atelier-seed-v5";
 import { ensureAtelierAgentsLensSeed } from "./lib/atelier-seed-agents-lens";
 import { ensureAtelierL2cSeed } from "./lib/atelier-seed-l2c";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
+import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
 
 const rawPort = process.env["PORT"];
 
@@ -50,4 +51,12 @@ app.listen(port, (err) => {
   // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
   // (writes audit_event rows; idempotent per (week, kind)).
   startLedgerNudgeJob();
+  // Task #411 — install pg_trgm + pgvector (when available) and the
+  // GIN trgm indexes the hybrid resolver hits. Idempotent.
+  void applyAtelierCliRagSql().catch((err) => {
+    logger.warn(
+      { err },
+      "Atelier Chat RAG SQL bootstrap failed — chat will degrade to brute-force resolution",
+    );
+  });
 });

@@ -9,3 +9,4 @@ export * from "./atelier-l2c";
 export * from "./atelier-l2c-revrec";
 export * from "./atelier-l2c-cash";
 export * from "./atelier-cash-overrides";
+export * from "./atelier-cli-rag";

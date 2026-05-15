@@ -51,6 +51,7 @@ import {
   atelierExpenses,
 } from "@workspace/db";
 import { defineCapability, CATALOG_SCHEMA_VERSION } from "./capability-catalog.js";
+import { hybridResolveEntity, type ResolverKind } from "./entity-resolver.js";
 import {
   validateStageTransition,
   type StageGateInput,
@@ -72,7 +73,25 @@ type ResolvableKind =
   | "expense";
 
 type WriteVerb = "create" | "update" | "link" | "transition";
-type WriteKind = ResolvableKind | "partner_link";
+type WriteKind =
+  | ResolvableKind
+  | "partner_link"
+  // Task #411 — 15 new chat-owned write entities.
+  | "meeting"
+  | "raid_item"
+  | "proposal"
+  | "pov"
+  | "change_order"
+  | "timesheet_entry"
+  | "invoice"
+  | "contract"
+  | "rate_card"
+  | "renewal"
+  | "partner_firm"
+  | "win_theme"
+  | "win_loss_debrief"
+  | "brief"
+  | "agent_design";
 
 const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
   account: {
@@ -106,6 +125,24 @@ const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
     create: "POST /atelier/expenses",
     update: "PATCH /atelier/expenses/:id",
   },
+  // — Task #411 coverage expansion. Routes here are advisory hints
+  // for the confirm card; the actual commit dispatches in-process via
+  // `dispatchTarget(verb, kind)` → `findToolByName(...).run({...payload, confirm:true})`.
+  meeting: { create: "POST /atelier/meetings", update: "PATCH /atelier/meetings/:id" },
+  raid_item: { create: "POST /atelier/raid", update: "PATCH /atelier/raid/:id" },
+  proposal: { create: "POST /atelier/proposals", update: "PATCH /atelier/proposals/:id" },
+  pov: { create: "POST /atelier/povs", update: "PATCH /atelier/povs/:id" },
+  change_order: { create: "POST /atelier/change-orders", update: "PATCH /atelier/change-orders/:id" },
+  timesheet_entry: { create: "POST /atelier/timesheets", update: "PATCH /atelier/timesheets/:id" },
+  invoice: { create: "POST /atelier/invoices", update: "PATCH /atelier/invoices/:id" },
+  contract: { create: "POST /atelier/contracts", update: "PATCH /atelier/contracts/:id" },
+  rate_card: { create: "POST /atelier/rate-cards", update: "PATCH /atelier/rate-cards/:id" },
+  renewal: { create: "POST /atelier/renewals", update: "PATCH /atelier/renewals/:id" },
+  partner_firm: { create: "POST /atelier/partner-firms", update: "PATCH /atelier/partner-firms/:id" },
+  win_theme: { create: "POST /atelier/win-themes", update: "PATCH /atelier/win-themes/:id" },
+  win_loss_debrief: { create: "POST /atelier/winloss", update: "PATCH /atelier/winloss/:id" },
+  brief: { create: "POST /atelier/briefs", update: "PATCH /atelier/briefs/:id" },
+  agent_design: { create: "POST /atelier/agent-designs", update: "PATCH /atelier/agent-designs/:id" },
 };
 
 // ---------------------------------------------------------------------
@@ -128,7 +165,29 @@ defineCapability({
     properties: {
       kind: {
         type: "string",
-        enum: ["account", "opportunity", "engagement", "contact", "deliverable", "expense"],
+        enum: [
+          "account",
+          "opportunity",
+          "engagement",
+          "contact",
+          "deliverable",
+          "expense",
+          "meeting",
+          "raid_item",
+          "proposal",
+          "pov",
+          "change_order",
+          "timesheet_entry",
+          "invoice",
+          "contract",
+          "rate_card",
+          "renewal",
+          "partner_firm",
+          "win_theme",
+          "win_loss_debrief",
+          "brief",
+          "agent_design",
+        ],
       },
       query: { type: "string", description: "Fuzzy name or id fragment." },
       scopeAccountId: { type: "string" },
@@ -146,7 +205,7 @@ defineCapability({
   source: "cli-only",
   async run(input, ctx) {
     const orgId = ctx.persona.orgId;
-    const kind = String(input.kind ?? "") as ResolvableKind;
+    const kind = String(input.kind ?? "") as ResolverKind;
     const query = String(input.query ?? "").trim();
     const scopeAccountId = typeof input.scopeAccountId === "string" ? input.scopeAccountId : null;
     const scopeEngagementId =
@@ -158,132 +217,15 @@ defineCapability({
         errorMessage: "resolve_entity requires a non-empty query string.",
       };
     }
-    const like = `%${query.replace(/[%_]/g, "")}%`;
-
-    let rows: Array<{ id: string; label: string; secondary?: string }> = [];
-
-    if (kind === "account") {
-      const r = await db
-        .select({
-          id: atelierAccounts.id,
-          name: atelierAccounts.name,
-          brandName: atelierAccounts.brandName,
-          country: atelierAccounts.country,
-        })
-        .from(atelierAccounts)
-        .where(
-          and(
-            eq(atelierAccounts.orgId, orgId),
-            isNull(atelierAccounts.deletedAt),
-            or(
-              ilike(atelierAccounts.name, like),
-              ilike(atelierAccounts.brandName, like),
-              eq(atelierAccounts.id, query),
-            ),
-          ),
-        )
-        .limit(FUZZY_LIMIT);
-      rows = r.map((a) => ({
-        id: a.id,
-        label: a.brandName ?? a.name,
-        secondary: a.country ?? undefined,
-      }));
-    } else if (kind === "opportunity") {
-      const conds = [
-        eq(atelierOpportunities.orgId, orgId),
-        isNull(atelierOpportunities.deletedAt),
-        or(ilike(atelierOpportunities.name, like), eq(atelierOpportunities.id, query)),
-      ];
-      if (scopeAccountId) conds.push(eq(atelierOpportunities.accountId, scopeAccountId));
-      const r = await db
-        .select({
-          id: atelierOpportunities.id,
-          name: atelierOpportunities.name,
-          accountId: atelierOpportunities.accountId,
-          salesStage: atelierOpportunities.salesStage,
-        })
-        .from(atelierOpportunities)
-        .where(and(...conds))
-        .limit(FUZZY_LIMIT);
-      rows = r.map((o) => ({
-        id: o.id,
-        label: o.name,
-        secondary: `stage: ${o.salesStage}`,
-      }));
-    } else if (kind === "engagement") {
-      const r = await db
-        .select({
-          id: atelierEngagements.id,
-          name: atelierEngagements.name,
-          accountId: atelierEngagements.accountId,
-        })
-        .from(atelierEngagements)
-        .where(
-          and(
-            eq(atelierEngagements.orgId, orgId),
-            isNull(atelierEngagements.deletedAt),
-            or(ilike(atelierEngagements.name, like), eq(atelierEngagements.id, query)),
-          ),
-        )
-        .limit(FUZZY_LIMIT);
-      rows = r.map((e) => ({ id: e.id, label: e.name }));
-    } else if (kind === "contact") {
-      const conds = [
-        eq(atelierContacts.orgId, orgId),
-        isNull(atelierContacts.deletedAt),
-        or(ilike(atelierContacts.fullName, like), eq(atelierContacts.id, query)),
-      ];
-      if (scopeAccountId) conds.push(eq(atelierContacts.accountId, scopeAccountId));
-      const r = await db
-        .select({
-          id: atelierContacts.id,
-          fullName: atelierContacts.fullName,
-          title: atelierContacts.title,
-          accountId: atelierContacts.accountId,
-        })
-        .from(atelierContacts)
-        .where(and(...conds))
-        .limit(FUZZY_LIMIT);
-      rows = r.map((c) => ({
-        id: c.id,
-        label: c.fullName,
-        secondary: c.title ?? undefined,
-      }));
-    } else if (kind === "deliverable") {
-      const conds = [
-        eq(atelierDeliverables.orgId, orgId),
-        isNull(atelierDeliverables.deletedAt),
-        or(ilike(atelierDeliverables.name, like), eq(atelierDeliverables.id, query)),
-      ];
-      if (scopeEngagementId)
-        conds.push(eq(atelierDeliverables.engagementId, scopeEngagementId));
-      const r = await db
-        .select({
-          id: atelierDeliverables.id,
-          name: atelierDeliverables.name,
-          engagementId: atelierDeliverables.engagementId,
-        })
-        .from(atelierDeliverables)
-        .where(and(...conds))
-        .limit(FUZZY_LIMIT);
-      rows = r.map((d) => ({ id: d.id, label: d.name }));
-    } else if (kind === "expense") {
-      // Expenses don't have a name column — accept id-prefix lookup only.
-      const r = await db
-        .select({ id: atelierExpenses.id })
-        .from(atelierExpenses)
-        .where(
-          and(
-            eq(atelierExpenses.orgId, orgId),
-            isNull(atelierExpenses.deletedAt),
-            eq(atelierExpenses.id, query),
-          ),
-        )
-        .limit(FUZZY_LIMIT);
-      rows = r.map((e) => ({ id: e.id, label: e.id }));
-    }
-
-    if (rows.length === 0) {
+    // Hybrid pg_trgm + pgvector resolver — single source of truth for
+    // every chat-owned kind. Returns up to 5 candidates ordered by
+    // score; this capability emits a disambiguation envelope when
+    // there is more than one.
+    const candidates = await hybridResolveEntity(kind, query, orgId, {
+      accountId: scopeAccountId,
+      engagementId: scopeEngagementId,
+    });
+    if (candidates.length === 0) {
       return {
         ok: false,
         errorCode: "not_found",
@@ -297,26 +239,39 @@ defineCapability({
         },
       };
     }
-
-    if (rows.length === 1) {
+    if (candidates.length === 1) {
+      const c = candidates[0];
       return {
         ok: true,
         data: {
-          entity: { kind, id: rows[0].id, label: rows[0].label, secondary: rows[0].secondary },
+          entity: { kind, id: c.id, label: c.label, secondary: c.secondary, score: c.score, via: c.via },
         },
       };
     }
-
+    const options = candidates.map((c) => ({
+      id: c.id,
+      label: c.label,
+      secondary: c.secondary ?? `${c.via} ${c.score.toFixed(2)}`,
+      hint: c.secondary ?? `${c.via} ${c.score.toFixed(2)}`,
+    }));
     return {
       ok: true,
-      data: { kind, candidateCount: rows.length },
-      disambiguation: {
+      // Task #411 — flat top-level `options` so the EntityResolution
+      // renderer can pick it up directly (no nested envelope).
+      data: {
         kind,
-        options: rows.map((r) => ({ id: r.id, label: r.label, hint: r.secondary ?? "" })),
+        candidateCount: candidates.length,
+        options,
+        prompt: `Multiple ${kind}s match "${query}". Pick one.`,
       },
+      disambiguation: { kind, options },
     };
   },
 });
+
+// — legacy ILIKE branch kept here as a private helper, still callable
+// from internal callers that haven't migrated to the hybrid resolver.
+// (Not registered as a capability; not exported.)
 
 // ---------------------------------------------------------------------
 // 2. prefill_from_specialist
@@ -884,19 +839,31 @@ defineCapability({
       }
 
       const allMet = rows.every((r) => r.met);
+      const blockers = rows
+        .filter((r) => !r.met)
+        .map((r) => r.reason || (Array.isArray(r.missing) ? r.missing.join(", ") : "") || r.label);
+      const evidence = rows.map((r) => ({
+        code: r.id,
+        label: r.label,
+        value: r.met ? "met" : (r.reason || "missing"),
+      }));
       return {
         ok: true,
         data: {
-          gateReport: {
-            kind,
-            targetId,
-            entityName,
-            fromStage: currentStage,
-            toStage,
-            partnerOverride,
-            allMet,
-            gates: rows,
-          },
+          // Task #411 — flat top-level shape consumed directly by the
+          // GateReport renderer (no nested wrapper).
+          kind,
+          targetId,
+          entityName,
+          fromStage: currentStage,
+          toStage,
+          partnerOverride,
+          partnerOverrideAvailable: partnerOverride === true,
+          passed: allMet,
+          allMet,
+          blockers,
+          evidence,
+          gates: rows,
         },
       };
     }
@@ -1061,25 +1028,38 @@ defineCapability({
     }
 
     const allMet = rows.every((r) => r.met);
+    const blockers = rows
+      .filter((r) => !r.met)
+      .map((r) => r.reason || (Array.isArray(r.missing) ? r.missing.join(", ") : "") || r.label);
+    const evidence = rows.map((r) => ({
+      code: r.id,
+      label: r.label,
+      value: r.met ? "met" : (r.reason || "missing"),
+    }));
+    const partnerOverrideAvailable = rows.some((r) => r.overrideAvailable === true);
 
     return {
       ok: true,
       data: {
-        gateReport: {
-          opportunityId: opp.id,
-          opportunityName: opp.name,
-          fromStage,
-          toStage,
-          partnerOverride,
-          allMet,
-          gates: rows,
-          // Surface what we loaded vs. what was proposed so the LLM
-          // can mention it ("using the persisted 5C plus your new
-          // verbal-commit date").
-          evidenceSource: {
-            qualify5cFromOpportunity: !proposed.qualify5c && !!opp.qualify5c,
-            goNoGoFromOpportunity: !proposed.goNoGoDecision && !!opp.goNoGoDecision,
-          },
+        // Task #411 — flat top-level shape consumed directly by the
+        // GateReport renderer (no nested wrapper).
+        kind: "opportunity",
+        targetId: opp.id,
+        opportunityId: opp.id,
+        opportunityName: opp.name,
+        entityName: opp.name,
+        fromStage,
+        toStage,
+        partnerOverride,
+        partnerOverrideAvailable,
+        passed: allMet,
+        allMet,
+        blockers,
+        evidence,
+        gates: rows,
+        evidenceSource: {
+          qualify5cFromOpportunity: !proposed.qualify5c && !!opp.qualify5c,
+          goNoGoFromOpportunity: !proposed.goNoGoDecision && !!opp.goNoGoDecision,
         },
       },
     };
@@ -1118,6 +1098,22 @@ defineCapability({
           "partner_link",
           "deliverable",
           "expense",
+          // Task #411 — 15 new chat-owned write entities.
+          "meeting",
+          "raid_item",
+          "proposal",
+          "pov",
+          "change_order",
+          "timesheet_entry",
+          "invoice",
+          "contract",
+          "rate_card",
+          "renewal",
+          "partner_firm",
+          "win_theme",
+          "win_loss_debrief",
+          "brief",
+          "agent_design",
         ],
       },
       targetId: { type: "string", description: "Existing entity id for update/link/transition." },
@@ -1145,7 +1141,7 @@ defineCapability({
   irreversible: false,
   surfaceOn: ["global"],
   source: "cli-only",
-  async run(input) {
+  async run(input, ctx) {
     const verb = String(input.verb ?? "") as WriteVerb;
     const kind = String(input.kind ?? "") as WriteKind;
     const targetId = typeof input.targetId === "string" ? input.targetId : null;
@@ -1155,11 +1151,15 @@ defineCapability({
         ? input.summary.trim()
         : `${verb} ${kind}${targetId ? ` ${targetId}` : ""}`;
     const route = ROUTE_HINTS[kind]?.[verb] ?? `(no route registered for ${verb} ${kind})`;
+    // Task #411 — resolve in-process dispatch target now so the
+    // preview card can warn when there is no registered backing tool.
+    const { dispatchTarget, translateDispatchPayload } = await import("./write-dispatch.js");
+    const dispatchToolName = dispatchTarget(verb as DispatchVerb, kind);
 
     if (input.confirm !== true) {
       return {
         ok: true,
-        data: { stage: "preview", verb, kind, targetId, payload, route },
+        data: { stage: "preview", verb, kind, targetId, payload, route, dispatchTool: dispatchToolName ?? null },
         confirmation: {
           summary,
           diff: {
@@ -1168,7 +1168,10 @@ defineCapability({
             targetId,
             payload,
             route,
-            note: "On commit, the client posts to the route above with the payload — the orchestrator never writes directly.",
+            dispatchTool: dispatchToolName ?? null,
+            note: dispatchToolName
+              ? `On commit, the orchestrator runs ${dispatchToolName} in-process with the payload.`
+              : "On commit, the client posts to the route above with the payload — no in-process dispatch is registered for this (verb, kind).",
           },
           pending: {
             tool: "propose_write",
@@ -1178,21 +1181,76 @@ defineCapability({
       };
     }
 
-    // Commit phase — return a dispatch hint. The client picks up the
-    // payload + route from the tool_result and executes the existing
-    // typed mutation via the standard React Query hook (which already
-    // handles auth, optimistic updates, and audit).
+    // Task #411 — commit phase. Look up the typed write capability for
+    // (verb, kind) and run it in-process via the same executor the
+    // sync turn loop uses, so audit / RLS / writeStepCount stay
+    // consistent. When no dispatch is registered, fall back to the
+    // legacy "client should POST/PATCH the route" hint.
+    if (dispatchToolName) {
+      // Lazy import to avoid circular module load (index.ts imports
+      // bootstrap-capabilities.js which imports this file).
+      const { findToolByName } = await import("./index.js");
+      const tool = findToolByName(dispatchToolName, ctx.persona);
+      if (!tool) {
+        return {
+          ok: false,
+          errorCode: "dispatch_unregistered",
+          errorMessage: `propose_write commit dispatch target "${dispatchToolName}" is not registered for the current persona.`,
+        };
+      }
+      const seed: Record<string, unknown> = { ...payload };
+      if (targetId && !("id" in seed)) seed.id = targetId;
+      const translated = translateDispatchPayload(verb as DispatchVerb, kind, seed, targetId);
+      const targetPayload: Record<string, unknown> = { ...translated, confirm: true };
+      const out = await tool.run(targetPayload, ctx);
+      // Task #411 — mirror the resulting row into atelier_entity_embeddings
+      // so the hybrid resolver finds it on subsequent turns. Best-
+      // effort; failures here never block the write.
+      if (out.ok && out.data && typeof out.data === "object") {
+        const data = out.data as { id?: string; kind?: string };
+        const newId = typeof data.id === "string" ? data.id : targetId ?? undefined;
+        if (newId) {
+          const { mirrorEntityEmbedding } = await import("./entity-resolver.js");
+          const label =
+            (typeof payload.name === "string" && payload.name) ||
+            (typeof payload.summary === "string" && payload.summary) ||
+            `${kind} ${newId}`;
+          void mirrorEntityEmbedding(ctx.persona.orgId, kind, newId, label, summary);
+        }
+      }
+      return {
+        ok: out.ok,
+        data: out.ok
+          ? { stage: "committed", verb, kind, dispatchTool: dispatchToolName, result: out.data ?? null }
+          : { stage: "failed", verb, kind, dispatchTool: dispatchToolName, errorCode: out.errorCode, errorMessage: out.errorMessage },
+        errorCode: out.ok ? undefined : out.errorCode ?? "dispatch_failed",
+        errorMessage: out.ok ? undefined : out.errorMessage ?? `dispatch ${dispatchToolName} failed`,
+      };
+    }
+
+    // Task #411 — no in-process dispatcher mapping exists for this
+    // (verb, kind). Reviewer round-3 requires a hard failure here
+    // (the previous "dispatched" no-op silently dropped writes the
+    // user expected to commit). Surface a structured error so the
+    // confirm card can show the user a real problem.
     return {
-      ok: true,
+      ok: false,
+      errorCode: "unsupported_dispatch",
+      errorMessage:
+        `propose_write commit cannot apply ${verb} ${kind} in-process — no dispatch mapping is registered. ` +
+        `Use the typed route (${route}) directly, or extend write-dispatch.ts to cover this combination.`,
       data: {
-        stage: "dispatched",
+        stage: "failed",
         verb,
         kind,
         targetId,
         payload,
         route,
-        note: "Client should POST/PATCH the payload to the route to apply this change via the existing entity handler.",
       },
     };
   },
 });
+
+// Task #411 — local alias for the dispatch verb type (kept here so the
+// import line above stays small).
+type DispatchVerb = "create" | "update" | "link" | "transition";

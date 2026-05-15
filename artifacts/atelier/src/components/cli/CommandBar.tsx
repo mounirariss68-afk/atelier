@@ -1441,6 +1441,8 @@ function TurnBody({
             toolResults={turn.toolResults}
             capabilities={capabilities}
             locale={locale}
+            onPickDisambig={onPickDisambig}
+            onRunSlash={(cmd) => onPickSuggestion(cmd)}
           />
         )}
 
