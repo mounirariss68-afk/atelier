@@ -1,7 +1,9 @@
 import { useAtelierGetMe, useAtelierGetAdminSettings } from "@workspace/api-client-react";
 import { SectionHead, PageHero, Card, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Cpu, Plug, Gauge, Bell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Cpu, Plug, Gauge, Bell, Sparkles } from "lucide-react";
+import { useAutoNavEnabled } from "@/components/cli/autoNav";
 
 const MODEL_DEFAULTS = [
   { task: "Diagnostic memo", model: "claude-sonnet-4-6", note: "Long-form synthesis" },
@@ -20,6 +22,7 @@ const MCP_PLACEHOLDERS = [
 export default function Settings() {
   const { data: me, isLoading } = useAtelierGetMe();
   const { data: admin } = useAtelierGetAdminSettings();
+  const [autoNavEnabled, setAutoNavEnabled] = useAutoNavEnabled();
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (!me) return null;
@@ -35,6 +38,33 @@ export default function Settings() {
       </PageHero>
 
       <div className="container-atelier py-10 max-w-3xl space-y-6">
+        <Card className="p-6 space-y-4">
+          <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
+            <Sparkles className="w-4 h-4" /> Assistant
+          </h3>
+          <div className="flex items-start justify-between gap-6">
+            <div className="space-y-1">
+              <label
+                htmlFor="cli-autonav-toggle"
+                className="text-sm text-text font-medium cursor-pointer"
+              >
+                Auto-navigate when the assistant moves you
+              </label>
+              <p className="text-xs text-text-mute">
+                When the chat proposes or commits a change, jump to the relevant
+                screen automatically. A toast shows where you went, with a
+                "Stay here" button to undo the jump.
+              </p>
+            </div>
+            <Switch
+              id="cli-autonav-toggle"
+              checked={autoNavEnabled}
+              onCheckedChange={setAutoNavEnabled}
+              data-testid="switch-cli-autonav"
+            />
+          </div>
+        </Card>
+
         <Card className="p-6 space-y-4">
           <h3 className="font-mono text-sm tracking-widest uppercase text-text-mute flex items-center gap-2">
             <Gauge className="w-4 h-4" /> Token Budget

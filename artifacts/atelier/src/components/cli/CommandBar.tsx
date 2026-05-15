@@ -47,6 +47,9 @@ import {
 import { cn } from "@/lib/utils";
 import { useCli } from "./useCli";
 import { CliContext } from "./cli-context";
+import { useAutoNavEnabled } from "./autoNav";
+import { toast as showToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { s, sFmt, localeInstruction } from "./locale";
 import { derivePageContext, suggestionsFor, homeSuggestionsFor } from "./pageContext";
 import { useAtelierGetMe } from "@workspace/api-client-react";
@@ -88,19 +91,73 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
   });
   const dir = locale === "ar" ? "rtl" : "ltr";
 
+  // Task #498 — auto-navigation preference. Defaults to enabled; when
+  // the user opts out from Settings, the chat keeps its result card on
+  // screen but does not change the underlying route.
+  const [autoNavEnabled] = useAutoNavEnabled();
+  const localeRef = React.useRef(locale);
+  React.useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
+  // Title hint for the toast — derived from the active turn so the
+  // toast can read "Jumped to <opportunity name>" instead of just the
+  // raw path. Refs are read lazily inside handleCliNavigate so the
+  // callback identity stays stable across renders.
+  const navLabelRef = React.useRef<string | null>(null);
+
   // Task #495 — let the chat agent auto-navigate to the relevant
   // screen when it proposes or commits a write. CommandBar is
   // mounted in the Shell above the route Switch, so navigation
   // does not unmount the chat panel and the active stream stays
   // alive across page changes.
+  //
+  // Task #498 — also surface a non-blocking toast with a "Stay here"
+  // affordance that restores the previous route, and respect the
+  // user's auto-nav preference.
   const handleCliNavigate = React.useCallback(
     (path: string) => {
       if (typeof path !== "string" || !path.startsWith("/")) return;
+      if (!autoNavEnabled) return;
+      const prev =
+        typeof window !== "undefined"
+          ? window.location.pathname + window.location.search + window.location.hash
+          : null;
+      // No-op if we're already on the destination — avoids a redundant
+      // history entry and a confusing "Stay here" that goes nowhere.
+      if (prev && prev === path) return;
       setLocation(path);
+      const lc = localeRef.current;
+      const label = (navLabelRef.current ?? path).slice(0, 80);
+      try {
+        showToast({
+          title: sFmt("autoNavToastTitle", lc, { label }),
+          description: s("autoNavToastDescription", lc),
+          action: prev ? (
+            <ToastAction
+              altText={s("autoNavStayHere", lc)}
+              onClick={() => setLocation(prev)}
+              data-testid="cli-autonav-stay-here"
+            >
+              {s("autoNavStayHere", lc)}
+            </ToastAction>
+          ) : undefined,
+        });
+      } catch {
+        /* swallow — UI feedback must never break the stream */
+      }
     },
-    [setLocation],
+    [setLocation, autoNavEnabled],
   );
   const cli = useCli({ locale, onNavigate: handleCliNavigate });
+  // Keep the toast label ref in sync with the active turn so the
+  // user sees a meaningful "Jumped to <X>" instead of a path.
+  React.useEffect(() => {
+    const c = cli.current;
+    navLabelRef.current =
+      c?.result?.title ??
+      c?.pending?.summary ??
+      (c?.prompt ? c.prompt.slice(0, 60) : null);
+  }, [cli.current]);
   const pageCtx = React.useMemo(() => derivePageContext(location), [location]);
   const cliCtx = React.useContext(CliContext);
   // Register the bar's turn-injector with the context so deep-link

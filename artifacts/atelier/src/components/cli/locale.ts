@@ -132,6 +132,16 @@ export const STRINGS = {
   refusalRequested: { en: "Request logged. Thanks.", ar: "تم تسجيل الطلب. شكرًا." },
   recapTitle: { en: "Catching you up", ar: "تذكير سريع" },
   recapDormantHours: { en: "Dormant {h}h", ar: "غير نشط {h} س" },
+  // Task #498 — auto-nav toast strings.
+  autoNavToastTitle: {
+    en: "Jumped to {label}",
+    ar: "انتقلت إلى {label}",
+  },
+  autoNavToastDescription: {
+    en: "The assistant moved you here based on your last request.",
+    ar: "نقلك المساعد إلى هنا بناءً على طلبك الأخير.",
+  },
+  autoNavStayHere: { en: "Stay here", ar: "ابقَ هنا" },
 } satisfies Record<string, Bilingual>;
 
 export function s(key: keyof typeof STRINGS, locale: CliLocale): string {
