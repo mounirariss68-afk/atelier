@@ -1,8 +1,21 @@
 import * as React from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { Link } from "wouter";
 import { Card, PageHero, SectionHead, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+
+/**
+ * Win/Loss reference — curated themes library.
+ *
+ * Mounted at `/clients/reference` (Clients lens, Reference stage).
+ * The companion intake workbench (debriefs in flight) lives at
+ * `/clients/win` and is rendered by `WinLossIntake`.
+ *
+ * This surface is the synthesized output: searchable, polarity-
+ * filterable themes with aggregate counts and a per-theme drill-down
+ * that exposes the ready-to-paste positioning line and contributing
+ * debrief count, plus a deep link back to the intake workbench.
+ */
 
 interface WinTheme {
   id: string;
@@ -17,91 +30,79 @@ interface WinTheme {
   contributingDebriefIds: string[];
   lastSeenAt: string | null;
 }
-interface DebriefRow {
-  id: string;
-  opportunityId: string;
-  opportunityName: string;
-  outcome: string;
-  status: string;
-  hiddenCompetitor: string | null;
-  themeCount: number;
-  dueAt: string | null;
-  approvedAt: string | null;
-  createdAt: string;
-}
 
-/**
- * /win-loss          → theme library (default surface; PRD §5.2 — themes-first)
- * /win-loss/debriefs → debrief library (drill-down to per-opp workspace)
- *
- * Theme library is searchable + filterable by polarity / offering / sector
- * with aggregate counts and a per-theme drill-down (modal-style expand)
- * that shows the contributing debriefs and the ready-to-paste positioning line.
- */
-export default function WinLossLibrary({
-  defaultView,
-}: { defaultView?: "themes" | "debriefs" } = {}) {
-  const [matchDebriefs] = useRoute("/win-loss/debriefs");
-  const [location] = useLocation();
-  // Lens-aware tab hrefs: when mounted under /clients/* the themes tab
-  // stays inside the lens (`/clients/references`); debriefs intake is
-  // an opportunity-stage activity, so it deep-links into the standalone
-  // `/win-loss/debriefs` mount rather than synthesising a section that
-  // no longer exists in the flat IA. The legacy `/win-loss[/debriefs]`
-  // mounts keep their own pair of hrefs.
-  const inClientsLens = location.startsWith("/clients/");
-  const themesHref = inClientsLens ? "/clients/references" : "/win-loss";
-  const debriefsHref = "/win-loss/debriefs";
-  const view: "themes" | "debriefs" = matchDebriefs
-    ? "debriefs"
-    : (defaultView ?? "themes");
-
-  return (
-    <div className="p-6 md:p-10 space-y-6 max-w-6xl">
-      <PageHero
-        eyebrow="WIN/LOSS · LIBRARY"
-        title={view === "themes" ? "Win Themes" : "All debriefs"}
-        subtitle={
-          view === "themes"
-            ? "Curated patterns from approved Win/Loss debriefs — what AICo wins on, and where we lose."
-            : "Closed-deal Win/Loss debriefs across the firm."
-        }
-      />
-      <div className="flex gap-2 text-sm font-mono">
-        <Link
-          href={themesHref}
-          className={`px-3 py-1 rounded ${view === "themes" ? "bg-gold text-bg" : "bg-bg-elevate text-text-mute hover:text-text"}`}
-        >
-          Themes
-        </Link>
-        <Link
-          href={debriefsHref}
-          className={`px-3 py-1 rounded ${view === "debriefs" ? "bg-gold text-bg" : "bg-bg-elevate text-text-mute hover:text-text"}`}
-        >
-          Debriefs
-        </Link>
-      </div>
-      {view === "themes" ? (
-        <ThemesView debriefsHref={debriefsHref} />
-      ) : (
-        <DebriefsView />
-      )}
-    </div>
-  );
-}
-
-function ThemesView({ debriefsHref }: { debriefsHref: string }) {
+export default function WinLossLibrary() {
+  // Intake workbench is reachable via the standalone `/win-loss`
+  // route in the flat-IA Clients lens — there's no `/clients/win`
+  // section, so cross-links target `/win-loss` directly.
+  const intakeHref = "/win-loss";
   const [themes, setThemes] = React.useState<WinTheme[] | null>(null);
   const [q, setQ] = React.useState("");
   const [polarity, setPolarity] = React.useState<"all" | "win" | "loss">("all");
   const [openId, setOpenId] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     fetch("/api/atelier/win-themes", { credentials: "include" })
       .then((r) => r.json())
       .then((d) => setThemes(d.themes ?? []))
       .catch(() => setThemes([]));
   }, []);
-  if (!themes) return <Skeleton className="h-32 bg-bg-elevate" />;
+
+  return (
+    <div className="p-6 md:p-10 space-y-6 max-w-6xl">
+      <PageHero
+        eyebrow="WIN/LOSS · REFERENCE"
+        title="Win Themes"
+        subtitle="Curated patterns from approved Win/Loss debriefs — what AICo wins on, and where we lose."
+      />
+
+      <div className="flex gap-2 text-sm font-mono">
+        <Link
+          href={intakeHref}
+          className="px-3 py-1 rounded bg-bg-elevate text-text-mute hover:text-text"
+        >
+          ← Debriefs intake
+        </Link>
+        <span className="px-3 py-1 rounded bg-gold text-bg">Themes</span>
+      </div>
+
+      {!themes ? (
+        <Skeleton className="h-32 bg-bg-elevate" />
+      ) : (
+        <ThemesView
+          themes={themes}
+          q={q}
+          setQ={setQ}
+          polarity={polarity}
+          setPolarity={setPolarity}
+          openId={openId}
+          setOpenId={setOpenId}
+          intakeHref={intakeHref}
+        />
+      )}
+    </div>
+  );
+}
+
+function ThemesView({
+  themes,
+  q,
+  setQ,
+  polarity,
+  setPolarity,
+  openId,
+  setOpenId,
+  intakeHref,
+}: {
+  themes: WinTheme[];
+  q: string;
+  setQ: (v: string) => void;
+  polarity: "all" | "win" | "loss";
+  setPolarity: (v: "all" | "win" | "loss") => void;
+  openId: string | null;
+  setOpenId: (v: string | null) => void;
+  intakeHref: string;
+}) {
   const filtered = themes.filter((t) => {
     if (polarity !== "all" && t.polarity !== polarity) return false;
     if (!q.trim()) return true;
@@ -196,10 +197,10 @@ function ThemesView({ debriefsHref }: { debriefsHref: string }) {
                     Contributing debriefs: {t.contributingDebriefIds.length}
                     {t.contributingDebriefIds.length > 0 && (
                       <Link
-                        href={debriefsHref}
+                        href={intakeHref}
                         className="ml-2 text-gold underline"
                       >
-                        Browse all →
+                        Open intake →
                       </Link>
                     )}
                   </div>
@@ -210,54 +211,6 @@ function ThemesView({ debriefsHref }: { debriefsHref: string }) {
         })}
         {filtered.length === 0 && (
           <Card className="p-6 text-text-mute">No themes match.</Card>
-        )}
-      </div>
-    </>
-  );
-}
-
-function DebriefsView() {
-  const [items, setItems] = React.useState<DebriefRow[] | null>(null);
-  React.useEffect(() => {
-    fetch("/api/atelier/win-loss/debriefs", { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setItems(d.items ?? []))
-      .catch(() => setItems([]));
-  }, []);
-  if (!items) return <Skeleton className="h-32 bg-bg-elevate" />;
-  return (
-    <>
-      <SectionHead title={`${items.length} debriefs`} />
-      <div className="grid gap-3">
-        {items.map((it) => (
-          <Card key={it.id} className="p-4 hover:border-gold/50 transition-colors">
-            <Link
-              href={`/opportunities/${it.opportunityId}/win-loss`}
-              className="flex flex-wrap gap-3 items-center justify-between"
-            >
-              <div className="space-y-1">
-                <div className="font-medium text-text">{it.opportunityName}</div>
-                <div className="flex gap-2 items-center text-xs">
-                  <MonoChip>{it.outcome}</MonoChip>
-                  <MonoChip>{it.status}</MonoChip>
-                  {it.hiddenCompetitor && <MonoChip>vs {it.hiddenCompetitor}</MonoChip>}
-                  <span className="text-text-faint">{it.themeCount} themes</span>
-                </div>
-              </div>
-              <div className="text-xs text-text-mute font-mono">
-                {it.approvedAt
-                  ? `Approved ${new Date(it.approvedAt).toLocaleDateString()}`
-                  : it.dueAt
-                  ? `Due ${new Date(it.dueAt).toLocaleDateString()}`
-                  : new Date(it.createdAt).toLocaleDateString()}
-              </div>
-            </Link>
-          </Card>
-        ))}
-        {items.length === 0 && (
-          <Card className="p-6 text-text-mute">
-            No debriefs yet. They appear automatically when opps close.
-          </Card>
         )}
       </div>
     </>

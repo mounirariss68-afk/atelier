@@ -8,6 +8,12 @@
  *   /clients/billing        → Billing summary + Finance handoff
  *   /clients/references     → WinLossLibrary (themes & reference accounts)
  *
+ * Task #376 split Win/Loss into a themes-only reference library
+ * (mounted here as `ClientsReferences`) and a separate debriefs
+ * intake workbench (`WinLossIntake`). The flat IA does not expose a
+ * dedicated Win section, so the intake surface is reachable via the
+ * standalone `/win-loss` route mounted in `App.tsx`.
+ *
  * Each wrapper composes the existing surface (no functional rebuild) so
  * the lens shell can re-home commercial-loop work without forking pages.
  *

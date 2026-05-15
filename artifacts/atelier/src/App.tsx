@@ -26,7 +26,7 @@ import Account from "@/pages/Account";
 import Deliverable from "@/pages/Deliverable";
 import AgentRun from "@/pages/AgentRun";
 import WinLoss from "@/pages/WinLoss";
-import WinLossLibrary from "@/pages/WinLossLibrary";
+import WinLossIntake from "@/pages/WinLossIntake";
 import Reports from "@/pages/Reports";
 // Task #364 — RosterPeople/RosterPerson/RosterAccessMatrix/RosterInvitations/
 // RosterOnboarding/RosterOffboarding/RosterCompliance/RosterSkillGraph and
@@ -158,11 +158,14 @@ function Router() {
         <Route path="/pipeline/:oppId" component={Opportunity} />
         <Route path="/opportunities/:oppId/win-loss" component={WinLoss} />
         <Route path="/opportunities/:oppId" component={Opportunity} />
-        {/* `/win-loss-library` → references (themes); `/win-loss` debrief
-            intake stays available standalone for deep-links. */}
+        {/* Task #376 split into the flat-IA Clients lens: themes-only
+            reference library lives under `/clients/references`; the
+            debrief intake workbench (WinLossIntake) keeps a standalone
+            `/win-loss` URL for dossier / report deep-links since the
+            flat IA doesn't expose a dedicated Win stage. */}
         <Route path="/win-loss-library">{() => <Redirect to="/clients/references" />}</Route>
-        <Route path="/win-loss/debriefs">{() => <WinLossLibrary />}</Route>
-        <Route path="/win-loss">{() => <WinLossLibrary defaultView="debriefs" />}</Route>
+        <Route path="/win-loss/debriefs">{() => <WinLossIntake />}</Route>
+        <Route path="/win-loss">{() => <WinLossIntake />}</Route>
         {/* Task #271 — Forecast folded into Opportunities → Forecast tab.
             Preserve any ?by=… group-by selection so dossier/report
             deep-links land on the same view they used to. */}
