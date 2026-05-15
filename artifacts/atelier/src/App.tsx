@@ -99,6 +99,9 @@ import FinancePlanBacklog from "@/pages/finance/FinancePlanBacklog";
 import EngagementHealth from "@/pages/finance/EngagementHealth";
 import EngagementPnl from "@/pages/finance/EngagementPnl";
 import FinanceClose from "@/pages/finance/FinanceClose";
+// Task #440 — Plan: renewals + scenarios pages.
+import FinancePlanRenewals from "@/pages/finance/FinancePlanRenewals";
+import FinancePlanScenarios from "@/pages/finance/FinancePlanScenarios";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
 // the bare /agents catalogue with a lifecycle ribbon; the catalogue
 // itself re-mounts under /agents/monitor and runs under
@@ -533,6 +536,8 @@ function Router() {
         <Route path="/finance/close" component={FinanceClose} />
         <Route path="/finance/plan/cash-13w" component={FinancePlanCash13w} />
         <Route path="/finance/plan/backlog" component={FinancePlanBacklog} />
+        <Route path="/finance/plan/renewals" component={FinancePlanRenewals} />
+        <Route path="/finance/plan/scenarios" component={FinancePlanScenarios} />
         <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>
         <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
         {/* Task #419 — Comply registers (controls + SoD, statutory, TP, insurance).

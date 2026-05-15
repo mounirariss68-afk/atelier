@@ -105,8 +105,8 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       { label: "Long-range forecast", href: "/finance/plan/long-range", blurb: "Pipeline weighted forecast roll-ups (by partner / offering / sector / quarter).", status: "live" },
       { label: "13-week cash forecast", href: "/finance/plan/cash-13w", blurb: "Direct-method receipts and disbursements over the next 13 weeks with min-cash and covenant overlays.", status: "live" },
       { label: "Backlog & pipeline coverage", href: "/finance/plan/backlog", blurb: "Signed backlog plus probability-weighted pipeline against the next two quarters of revenue plan.", status: "live" },
-      { label: "Renewals", href: "/finance/plan", blurb: "Subscription / framework renewal calendar.", status: "coming_soon" },
-      { label: "Scenarios", href: "/finance/plan", blurb: "What-if vs base case (utilisation, rate, FX).", status: "coming_soon" },
+      { label: "Renewals", href: "/finance/plan/renewals", blurb: "Subscription / framework renewal calendar with owner, value and lead-time.", status: "live" },
+      { label: "Scenarios", href: "/finance/plan/scenarios", blurb: "What-if vs base case (utilisation, rate, FX) on cash and coverage.", status: "live" },
     ],
   },
   reports: {

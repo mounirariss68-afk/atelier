@@ -349,6 +349,104 @@ export interface CashAuditRow {
   target: string;
   payload: Record<string, unknown>;
 }
+export type RenewalKind = "subscription" | "framework" | "vendor" | "license";
+export type RenewalStatus = "on_track" | "at_risk" | "in_negotiation" | "overdue";
+export interface RenewalRow {
+  id: string;
+  kind: RenewalKind;
+  counterparty: string;
+  description: string;
+  ownerName: string;
+  ownerRole: string;
+  entityId: string;
+  currency: string;
+  annualValueLocal: number;
+  annualValueUsd: number;
+  annualValuePresentation: number;
+  renewsOn: string;
+  noticePeriodDays: number;
+  status: RenewalStatus;
+  autoRenew: boolean;
+  notes?: string;
+  daysUntilRenewal: number;
+  noticeWindowOpensInDays: number;
+  inNoticeWindow: boolean;
+  riskScore: number;
+}
+export interface RenewalsResp {
+  asOf: string;
+  presentationCurrency: string;
+  entityFilter: string | null;
+  totals: {
+    countNext13w: number;
+    valueNext13wPresentation: number;
+    countNext26w: number;
+    valueNext26wPresentation: number;
+    atRiskCount: number;
+    atRiskValuePresentation: number;
+  };
+  byKind: { kind: RenewalKind; count: number; valuePresentation: number }[];
+  byOwner: { owner: string; count: number; valuePresentation: number }[];
+  items: RenewalRow[];
+}
+export function useRenewals(presentation: string, entity: string | null) {
+  return useQuery<RenewalsResp>({
+    queryKey: ["atelier-v5", "renewals", presentation, entity ?? "consolidated"],
+    queryFn: () => planGet<RenewalsResp>(
+      `/finance/plan/renewals?currency=${presentation}${entity ? `&entity=${entity}` : ""}`,
+    ),
+    staleTime: 30_000,
+  });
+}
+
+export interface ScenarioAssumptions {
+  utilisationDelta: number;
+  rateDelta: number;
+  fxShock: number;
+}
+export interface ScenarioSnapshot {
+  openingBalance: number;
+  minCashLine: number;
+  covenantLine: number | null;
+  closingWeek12: number;
+  minWeeklyClosing: number;
+  minCashBreaches: number;
+  covenantBreaches: number;
+  totalIn: number;
+  totalOut: number;
+  coverageRatio: number;
+  backlogPlusWeightedUsd: number;
+  next2qPlanUsd: number;
+}
+export interface ScenarioResp {
+  asOf: string;
+  presentationCurrency: string;
+  entityFilter: string | null;
+  assumptions: ScenarioAssumptions;
+  base: ScenarioSnapshot;
+  scenario: ScenarioSnapshot;
+  weeks: {
+    weekIndex: number;
+    weekStart: string;
+    baseClosing: number;
+    scenarioClosing: number;
+    delta: number;
+    scenarioBelowMinCash: boolean;
+    scenarioBelowCovenant: boolean;
+  }[];
+  notes: string[];
+}
+export function useScenario(presentation: string, entity: string | null, a: ScenarioAssumptions) {
+  return useQuery<ScenarioResp>({
+    queryKey: ["atelier-v5", "scenarios", presentation, entity ?? "consolidated", a.utilisationDelta, a.rateDelta, a.fxShock],
+    queryFn: () => planGet<ScenarioResp>(
+      `/finance/plan/scenarios?currency=${presentation}${entity ? `&entity=${entity}` : ""}` +
+      `&utilisationDelta=${a.utilisationDelta}&rateDelta=${a.rateDelta}&fxShock=${a.fxShock}`,
+    ),
+    staleTime: 5_000,
+  });
+}
+
 export function useCash13wAudit() {
   const q = useQuery<{ items: CashAuditRow[] }>({
     queryKey: ["atelier-v5", "cash13w-audit"],
