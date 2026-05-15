@@ -65,6 +65,11 @@ import GuardhouseIndex from "@/pages/guardhouse/GuardhouseIndex";
 import IpCatalog from "@/pages/atelier/IpCatalog";
 import Codex from "@/pages/Codex";
 import CodexContract from "@/pages/CodexContract";
+import CodexCounterparty from "@/pages/CodexCounterparty";
+import CodexClause from "@/pages/CodexClause";
+import CodexDpa from "@/pages/CodexDpa";
+import CodexDpas from "@/pages/CodexDpas";
+import CodexRenewals from "@/pages/CodexRenewals";
 // Task #368 — Manage shell lens placeholders. The Clients lens content ships
 // in its own follow-up task; until then it renders a "Lens coming soon" page
 // so the picker, deep links and persistence still resolve. The People lens
@@ -243,8 +248,17 @@ function Router() {
         <Route path="/engagements/:engId">
           {(p) => <Redirect to={`/clients/deliver/engagements/${p.engId}`} />}
         </Route>
-        {/* L2C Wave 1 (Task #360) — Codex (CLM) workspace. */}
+        {/* L2C Wave 1 (Task #360) — Codex (CLM) workspace.
+            Task #512 — counterparty / clause / DPA detail pages and a
+            renewals view, so chat capabilities can land users on the
+            specific entity instead of the generic /codex hub. More
+            specific routes must precede /codex/:section. */}
         <Route path="/codex/contracts/:id" component={CodexContract} />
+        <Route path="/codex/counterparties/:id" component={CodexCounterparty} />
+        <Route path="/codex/clauses/:id" component={CodexClause} />
+        <Route path="/codex/dpas/:id" component={CodexDpa} />
+        <Route path="/codex/dpas" component={CodexDpas} />
+        <Route path="/codex/renewals" component={CodexRenewals} />
         <Route path="/codex/:section" component={Codex} />
         <Route path="/codex" component={Codex} />
         <Route path="/atelier/firm-profile" component={FirmProfile} />

@@ -1297,6 +1297,61 @@ router.post("/codex/contracts/:id/countersign", async (req, res) => {
   });
 });
 
+// ===============================================================
+// DPA (Data Processing Addendum) — read-only endpoints used by the
+// SPA detail page (Task #512). Writes still flow through the agent
+// runner (`codex.dpa_review`) and engagement-scoped DPA flows.
+// ===============================================================
+
+router.get("/codex/dpas", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!canReadCodex(me.role)) {
+    res.status(403).json({ error: "codex-read-not-allowed-for-persona" });
+    return;
+  }
+  const status = typeof req.query.status === "string" ? req.query.status : null;
+  const counterpartyId =
+    typeof req.query.counterpartyId === "string"
+      ? req.query.counterpartyId
+      : null;
+  const rows = await withRls(req, async (tx) => {
+    const conditions = [isNull(atelierDpa.deletedAt)];
+    if (status) conditions.push(eq(atelierDpa.status, status));
+    if (counterpartyId)
+      conditions.push(eq(atelierDpa.counterpartyId, counterpartyId));
+    return tx
+      .select()
+      .from(atelierDpa)
+      .where(and(...conditions))
+      .orderBy(desc(atelierDpa.updatedAt));
+  });
+  res.json({ items: rows });
+});
+
+router.get("/codex/dpas/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!canReadCodex(me.role)) {
+    res.status(403).json({ error: "codex-read-not-allowed-for-persona" });
+    return;
+  }
+  const row = await withRls(req, async (tx) => {
+    const [r] = await tx
+      .select()
+      .from(atelierDpa)
+      .where(
+        and(eq(atelierDpa.id, req.params.id), isNull(atelierDpa.deletedAt)),
+      );
+    return r ?? null;
+  });
+  if (!row) {
+    res.status(404).json({ error: "dpa-not-found" });
+    return;
+  }
+  res.json(row);
+});
+
 // ---------------------------------------------------------------
 // Renewal Watchdog — daemon endpoint
 // ---------------------------------------------------------------

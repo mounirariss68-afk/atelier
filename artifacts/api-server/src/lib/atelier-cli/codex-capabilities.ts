@@ -194,9 +194,8 @@ defineCapability({
       payload: { kind: input.kind, jurisdiction: input.jurisdiction },
       summary: `${ctx.persona.name} created counterparty "${input.displayName}" (${input.kind}, ${String(input.jurisdiction).toUpperCase()}).`,
     });
-    // Task #509 — counterparty list lives under the Codex hub; no
-    // dedicated detail route exists yet, so land on /codex.
-    return { ok: true, data: { counterparty: row, navigateTo: { path: "/codex", when: "on_commit" as const } } };
+    // Task #512 — land on the new counterparty detail page.
+    return withNav({ ok: true, data: { counterparty: row } }, `/codex/counterparties/${id}`);
   },
 });
 
@@ -254,8 +253,8 @@ defineCapability({
       payload: { family: existing.family, version: existing.version },
       summary: `${ctx.persona.name} published clause "${existing.title}" (v${existing.version}).`,
     });
-    // Task #509 — clause publication lands on the Codex hub.
-    return { ok: true, data: { clause: row, navigateTo: { path: "/codex", when: "on_commit" as const } } };
+    // Task #512 — land on the clause detail page.
+    return withNav({ ok: true, data: { clause: row } }, `/codex/clauses/${clauseId}`);
   },
 });
 
@@ -444,9 +443,8 @@ defineCapability({
       payload: {},
       summary: `${ctx.persona.name} requested DPA Sentinel review on dpa ${dpaId}.`,
     });
-    // Task #509 — DPA reviews land on the Codex hub (no dedicated DPA
-    // detail route exists yet).
-    return withNav(result, "/codex");
+    // Task #512 — land on the DPA detail page.
+    return withNav(result, `/codex/dpas/${dpaId}`);
   },
 });
 
@@ -480,8 +478,8 @@ defineCapability({
       payload: { windowDays: Number(input.windowDays ?? 90) },
       summary: `${ctx.persona.name} ran Renewal Watchdog (window ${Number(input.windowDays ?? 90)}d).`,
     });
-    // Task #509 — watchdog surfaces a list, so land on the Codex hub.
-    return withNav(result, "/codex");
+    // Task #512 — land on the renewals view.
+    return withNav(result, "/codex/renewals");
   },
 });
 
