@@ -25,6 +25,14 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit } from "@workspace/db";
 import { ENTITIES_SEED } from "./financeEntitiesRoutes";
+import {
+  computeBudget as computeFpaBudget,
+  computeHeadcount as computeFpaHeadcount,
+  computeRenewals as computeFpaRenewals,
+  computeBonus as computeFpaBonus,
+  compareScenarios as compareFpaScenarios,
+  SCENARIOS as FPA_SCENARIOS,
+} from "./financePlanFpaEngine";
 
 const router: IRouter = Router();
 
@@ -809,403 +817,41 @@ router.get("/finance/plan/entities", (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────
-// Renewals — subscription / framework renewal calendar (Task #440)
-//
-// Hand-curated demo seed of upcoming renewals across the firm —
-// SaaS subscriptions (Atelier, Snowflake, M365 …), MSA / framework
-// agreements with anchor clients, and recurring vendor contracts.
-// Each row carries owner, value (in local + USD), notice period
-// and lead-time so finance can stress-test renewal risk against
-// the 13-week strip and the longer-range plan.
+// Wave 8 (Task #420) — FP&A driver-based plan surfaces
 // ──────────────────────────────────────────────────────────────
-type RenewalKind = "subscription" | "framework" | "vendor" | "license";
-type RenewalStatus = "on_track" | "at_risk" | "in_negotiation" | "overdue";
-interface Renewal {
-  id: string;
-  kind: RenewalKind;
-  counterparty: string;
-  description: string;
-  ownerName: string;
-  ownerRole: string;
-  entityId: string;
-  currency: string;
-  annualValueLocal: number;
-  renewsOn: string;          // ISO
-  noticePeriodDays: number;  // contractual
-  status: RenewalStatus;
-  autoRenew: boolean;
-  notes?: string;
+function pickScenario(req: Request): string {
+  const s = String(req.query.scenario ?? "base");
+  return FPA_SCENARIOS.some((x) => x.id === s) ? s : "base";
 }
 
-const RENEWALS: Renewal[] = [
-  // Subscriptions / SaaS
-  { id: "rn_sub_snowflake",  kind: "subscription", counterparty: "Snowflake",            description: "Data warehouse — enterprise tier",      ownerName: "Yasmin Khan",      ownerRole: "CTO",            entityId: "fe_aico_uk",  currency: "GBP", annualValueLocal:  180_000, renewsOn: "2026-06-30", noticePeriodDays: 30, status: "in_negotiation", autoRenew: false, notes: "Re-papering to 3-year term for 18% discount." },
-  { id: "rn_sub_databricks", kind: "subscription", counterparty: "Databricks",           description: "Lakehouse — premium",                    ownerName: "Yasmin Khan",      ownerRole: "CTO",            entityId: "fe_aico_uae", currency: "USD", annualValueLocal:  240_000, renewsOn: "2026-07-15", noticePeriodDays: 60, status: "on_track",       autoRenew: true  },
-  { id: "rn_sub_m365",       kind: "subscription", counterparty: "Microsoft",            description: "M365 E5 + Copilot (firm-wide)",          ownerName: "Yasmin Khan",      ownerRole: "CTO",            entityId: "fe_aico_uk",  currency: "GBP", annualValueLocal:  420_000, renewsOn: "2026-08-01", noticePeriodDays: 90, status: "on_track",       autoRenew: true  },
-  { id: "rn_sub_atelier",    kind: "subscription", counterparty: "Atelier (internal)",   description: "Internal Atelier seats — partner pool",  ownerName: "Faisal Al-Suwaidi",ownerRole: "Founding Partner",entityId: "fe_aico_uae", currency: "AED", annualValueLocal:  330_000, renewsOn: "2026-06-15", noticePeriodDays: 30, status: "on_track",       autoRenew: true  },
-  { id: "rn_sub_salesforce", kind: "subscription", counterparty: "Salesforce",           description: "CRM — Unlimited",                        ownerName: "Layla Al-Mutairi", ownerRole: "Partner",        entityId: "fe_aico_ksa", currency: "SAR", annualValueLocal:  410_000, renewsOn: "2026-05-29", noticePeriodDays: 30, status: "at_risk",        autoRenew: false, notes: "Seat usage at 62% — opportunity to right-size." },
-  { id: "rn_sub_zoom",       kind: "subscription", counterparty: "Zoom",                 description: "Workplace + Webinars",                    ownerName: "Yasmin Khan",      ownerRole: "CTO",            entityId: "fe_aico_uk",  currency: "GBP", annualValueLocal:   58_000, renewsOn: "2026-07-22", noticePeriodDays: 30, status: "on_track",       autoRenew: true  },
-  { id: "rn_sub_atlassian",  kind: "subscription", counterparty: "Atlassian",            description: "Jira + Confluence (cloud premium)",      ownerName: "Yasmin Khan",      ownerRole: "CTO",            entityId: "fe_aico_uk",  currency: "GBP", annualValueLocal:   72_000, renewsOn: "2026-09-05", noticePeriodDays: 30, status: "on_track",       autoRenew: true  },
-
-  // Framework / MSA agreements with anchor clients
-  { id: "rn_msa_aramco",     kind: "framework", counterparty: "Aramco Digital",         description: "Master Services Agreement — 3yr",        ownerName: "Layla Al-Mutairi", ownerRole: "Partner",        entityId: "fe_aico_ksa", currency: "SAR", annualValueLocal: 9_600_000, renewsOn: "2026-08-31", noticePeriodDays: 90, status: "in_negotiation", autoRenew: false, notes: "Rate-card uplift 6% under negotiation." },
-  { id: "rn_msa_neom",       kind: "framework", counterparty: "NEOM Authority",        description: "JV framework — Sector Lab",              ownerName: "Yara Nasser",      ownerRole: "Partner",        entityId: "fe_aico_jv_neom",currency: "SAR", annualValueLocal: 6_400_000, renewsOn: "2026-07-15", noticePeriodDays: 90, status: "on_track",       autoRenew: false },
-  { id: "rn_msa_mubadala",   kind: "framework", counterparty: "Mubadala",              description: "MSA — Sov-Wealth advisory",              ownerName: "Faisal Al-Suwaidi",ownerRole: "Founding Partner",entityId: "fe_aico_uae", currency: "AED", annualValueLocal: 5_200_000, renewsOn: "2026-06-30", noticePeriodDays: 60, status: "at_risk",        autoRenew: false, notes: "Procurement requesting RFP — partner-led recovery." },
-  { id: "rn_msa_dewa",       kind: "framework", counterparty: "DEWA",                  description: "Framework — Utilities AI",               ownerName: "Faisal Al-Suwaidi",ownerRole: "Founding Partner",entityId: "fe_aico_uae", currency: "AED", annualValueLocal: 2_400_000, renewsOn: "2026-09-30", noticePeriodDays: 60, status: "on_track",       autoRenew: false },
-  { id: "rn_msa_hsbc",       kind: "framework", counterparty: "HSBC PLC",              description: "MSA — Banking advisory",                 ownerName: "Yara Nasser",      ownerRole: "Partner",        entityId: "fe_aico_uk",  currency: "GBP", annualValueLocal: 1_200_000, renewsOn: "2026-05-22", noticePeriodDays: 60, status: "overdue",        autoRenew: false, notes: "Notice window closed — needs partner intervention." },
-  { id: "rn_msa_sdaia",      kind: "framework", counterparty: "SDAIA",                 description: "Framework — Public-sector AI",           ownerName: "Layla Al-Mutairi", ownerRole: "Partner",        entityId: "fe_aico_ksa", currency: "SAR", annualValueLocal: 1_800_000, renewsOn: "2026-10-15", noticePeriodDays: 60, status: "on_track",       autoRenew: false },
-
-  // Vendor / professional services
-  { id: "rn_vnd_pi_ins",     kind: "vendor",    counterparty: "AIG (PI cover)",        description: "Professional Indemnity — firm cover",    ownerName: "Hadia Rahman",     ownerRole: "Finance Director",entityId: "fe_aico_uk", currency: "GBP", annualValueLocal:  140_000, renewsOn: "2026-06-01", noticePeriodDays: 30, status: "on_track",       autoRenew: true  },
-  { id: "rn_vnd_legal",      kind: "vendor",    counterparty: "Clyde & Co",            description: "Retained legal counsel (region)",         ownerName: "Hadia Rahman",     ownerRole: "Finance Director",entityId: "fe_aico_uae", currency: "AED", annualValueLocal:  360_000, renewsOn: "2026-07-01", noticePeriodDays: 30, status: "on_track",       autoRenew: false },
-  { id: "rn_vnd_audit",      kind: "vendor",    counterparty: "PwC",                   description: "Statutory audit — group + entities",      ownerName: "Hadia Rahman",     ownerRole: "Finance Director",entityId: "fe_aico_uk",  currency: "GBP", annualValueLocal:  220_000, renewsOn: "2026-09-15", noticePeriodDays: 60, status: "on_track",       autoRenew: false },
-  { id: "rn_vnd_difc_lease", kind: "vendor",    counterparty: "DIFC Properties",       description: "DIFC office lease — annual review",      ownerName: "Hadia Rahman",     ownerRole: "Finance Director",entityId: "fe_aico_uae", currency: "AED", annualValueLocal: 1_740_000, renewsOn: "2026-08-12", noticePeriodDays: 90, status: "on_track",       autoRenew: false },
-
-  // Licenses / regulatory
-  { id: "rn_lic_difc",       kind: "license",   counterparty: "DIFC Authority",        description: "DIFC commercial license",                ownerName: "Hadia Rahman",     ownerRole: "Finance Director",entityId: "fe_aico_uae", currency: "AED", annualValueLocal:   42_000, renewsOn: "2026-06-22", noticePeriodDays: 30, status: "on_track",       autoRenew: false },
-  { id: "rn_lic_misa",       kind: "license",   counterparty: "MISA",                  description: "MISA investment licence (KSA)",          ownerName: "Layla Al-Mutairi", ownerRole: "Partner",        entityId: "fe_aico_ksa", currency: "SAR", annualValueLocal:   85_000, renewsOn: "2026-07-30", noticePeriodDays: 60, status: "on_track",       autoRenew: false },
-];
-
-interface RenewalRow extends Renewal {
-  annualValueUsd: number;
-  annualValuePresentation: number;
-  daysUntilRenewal: number;
-  noticeWindowOpensInDays: number;  // days until notice window opens (negative = already open)
-  inNoticeWindow: boolean;
-  riskScore: number;                // 0..100 derived
-}
-interface RenewalsResp {
-  asOf: string;
-  presentationCurrency: string;
-  entityFilter: string | null;
-  totals: {
-    countNext13w: number;
-    valueNext13wPresentation: number;
-    countNext26w: number;
-    valueNext26wPresentation: number;
-    atRiskCount: number;
-    atRiskValuePresentation: number;
-  };
-  byKind: { kind: RenewalKind; count: number; valuePresentation: number }[];
-  byOwner: { owner: string; count: number; valuePresentation: number }[];
-  items: RenewalRow[];
-}
-function daysBetween(fromIso: string, toIso: string): number {
-  const a = new Date(`${fromIso}T00:00:00Z`).getTime();
-  const b = new Date(`${toIso}T00:00:00Z`).getTime();
-  return Math.round((b - a) / (1000 * 60 * 60 * 24));
-}
-function computeRenewals(presentation: string, entityFilter: string | null): RenewalsResp {
-  const items = RENEWALS
-    .filter((r) => !entityFilter || r.entityId === entityFilter)
-    .map<RenewalRow>((r) => {
-      const usd = toUsd(r.annualValueLocal, r.currency);
-      const days = daysBetween(AS_OF_MONDAY, r.renewsOn);
-      const noticeOpens = days - r.noticePeriodDays;
-      const inWindow = noticeOpens <= 0 && days >= 0;
-      // Risk score: status weight + proximity + outside-notice penalty
-      const statusWeight = r.status === "overdue" ? 90 : r.status === "at_risk" ? 70 : r.status === "in_negotiation" ? 45 : 15;
-      const proximity = days < 0 ? 100 : days <= 30 ? 80 : days <= 90 ? 50 : 20;
-      const outOfNotice = noticeOpens > 0 ? 0 : Math.min(40, Math.abs(noticeOpens) / 2);
-      const score = Math.min(100, Math.round(statusWeight * 0.5 + proximity * 0.35 + outOfNotice * 0.15));
-      return {
-        ...r,
-        annualValueUsd: usd,
-        annualValuePresentation: convert(usd, presentation),
-        daysUntilRenewal: days,
-        noticeWindowOpensInDays: noticeOpens,
-        inNoticeWindow: inWindow,
-        riskScore: score,
-      };
-    })
-    .sort((a, b) => a.daysUntilRenewal - b.daysUntilRenewal);
-
-  const next13w = items.filter((r) => r.daysUntilRenewal >= 0 && r.daysUntilRenewal <= 13 * 7);
-  const next26w = items.filter((r) => r.daysUntilRenewal >= 0 && r.daysUntilRenewal <= 26 * 7);
-  const atRisk = items.filter((r) => r.status === "at_risk" || r.status === "overdue" || r.status === "in_negotiation");
-
-  const byKindMap: Record<string, { kind: RenewalKind; count: number; valuePresentation: number }> = {};
-  for (const r of items) {
-    byKindMap[r.kind] = byKindMap[r.kind] ?? { kind: r.kind, count: 0, valuePresentation: 0 };
-    byKindMap[r.kind].count += 1;
-    byKindMap[r.kind].valuePresentation += r.annualValuePresentation;
-  }
-  const byOwnerMap: Record<string, { owner: string; count: number; valuePresentation: number }> = {};
-  for (const r of items) {
-    byOwnerMap[r.ownerName] = byOwnerMap[r.ownerName] ?? { owner: r.ownerName, count: 0, valuePresentation: 0 };
-    byOwnerMap[r.ownerName].count += 1;
-    byOwnerMap[r.ownerName].valuePresentation += r.annualValuePresentation;
-  }
-
-  return {
-    asOf: AS_OF_MONDAY,
-    presentationCurrency: presentation,
-    entityFilter,
-    totals: {
-      countNext13w: next13w.length,
-      valueNext13wPresentation: next13w.reduce((s, r) => s + r.annualValuePresentation, 0),
-      countNext26w: next26w.length,
-      valueNext26wPresentation: next26w.reduce((s, r) => s + r.annualValuePresentation, 0),
-      atRiskCount: atRisk.length,
-      atRiskValuePresentation: atRisk.reduce((s, r) => s + r.annualValuePresentation, 0),
-    },
-    byKind: Object.values(byKindMap).sort((a, b) => b.valuePresentation - a.valuePresentation),
-    byOwner: Object.values(byOwnerMap).sort((a, b) => b.valuePresentation - a.valuePresentation),
-    items,
-  };
-}
-
-router.get("/finance/plan/renewals", (req, res) => {
+router.get("/finance/plan/budget", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
-  res.json(computeRenewals(pickPresentation(req), pickEntity(req)));
+  res.json(computeFpaBudget(pickScenario(req), pickPresentation(req), pickEntity(req)));
 });
 
-// ──────────────────────────────────────────────────────────────
-// Scenarios — what-if vs base case (Task #440)
-//
-// The engine takes the existing 13-week + backlog computation and
-// applies a uniform scenario shock across three levers:
-//
-//  • utilisationDelta (–50..+50 %): scales milestone receipts (the
-//    portion that depends on chargeable delivery) and the future-
-//    quarter revenue plan. Negative utilisation → smaller receipts
-//    and a tougher coverage ratio.
-//  • rateDelta       (–30..+30 %): scales every receipt and
-//    backlog/pipeline value (rate uplift inflates revenue without
-//    consuming more capacity).
-//  • fxShock         (–25..+25 %): applies a uniform shock to the
-//    USD-equivalent of every non-USD line. Positive shock weakens
-//    USD (foreign currencies translate to more USD), negative
-//    strengthens it. Disbursement currency mix matters — UK debt
-//    and KSA payroll move the wrong way for a USD presentation.
-//
-// We re-run the same week bucketing and coverage maths and return
-// a base-vs-scenario delta snapshot. No state is persisted — this
-// is a pure GET with query-param assumptions.
-// ──────────────────────────────────────────────────────────────
-interface ScenarioAssumptions {
-  utilisationDelta: number;  // e.g. -0.10 = utilisation drops 10 pts
-  rateDelta: number;         // e.g. +0.05 = day-rates up 5%
-  fxShock: number;           // e.g. -0.15 = non-USD currencies devalue 15% vs USD
-}
-function clampPct(n: unknown, min: number, max: number): number {
-  const v = typeof n === "string" ? Number(n) : (typeof n === "number" ? n : 0);
-  if (!Number.isFinite(v)) return 0;
-  return Math.max(min, Math.min(max, v));
-}
-function fxAdjustedToUsd(amount: number, currency: string, fxShock: number): number {
-  const baseUsd = toUsd(amount, currency);
-  if (currency === "USD") return baseUsd;
-  return baseUsd * (1 + fxShock);
-}
-
-interface ScenarioWeek {
-  weekIndex: number;
-  weekStart: string;
-  baseClosing: number;
-  scenarioClosing: number;
-  delta: number;
-  scenarioBelowMinCash: boolean;
-  scenarioBelowCovenant: boolean;
-}
-interface ScenarioResp {
-  asOf: string;
-  presentationCurrency: string;
-  entityFilter: string | null;
-  assumptions: ScenarioAssumptions;
-  base: {
-    openingBalance: number;
-    minCashLine: number;
-    covenantLine: number | null;
-    closingWeek12: number;
-    minWeeklyClosing: number;
-    minCashBreaches: number;
-    covenantBreaches: number;
-    totalIn: number;
-    totalOut: number;
-    coverageRatio: number;
-    backlogPlusWeightedUsd: number;
-    next2qPlanUsd: number;
-  };
-  scenario: {
-    openingBalance: number;
-    minCashLine: number;
-    covenantLine: number | null;
-    closingWeek12: number;
-    minWeeklyClosing: number;
-    minCashBreaches: number;
-    covenantBreaches: number;
-    totalIn: number;
-    totalOut: number;
-    coverageRatio: number;
-    backlogPlusWeightedUsd: number;
-    next2qPlanUsd: number;
-  };
-  weeks: ScenarioWeek[];
-  notes: string[];
-}
-
-function computeScenario(
-  presentation: string,
-  entityFilter: string | null,
-  a: ScenarioAssumptions,
-): ScenarioResp {
-  const entities = entityFilter ? ENTITIES.filter((e) => e.id === entityFilter) : ENTITIES;
-  const fx = a.fxShock;
-  const presentScale = (usd: number) => convert(usd, presentation);
-  const presentScaleShocked = (usd: number) => {
-    // Presentation conversion uses base FX_TO_USD; the scenario shock has
-    // already been baked into `usd` via fxAdjustedToUsd, so the same
-    // back-conversion to the presentation currency holds.
-    return convert(usd, presentation);
-  };
-
-  // Opening / floors — apply FX shock on translation
-  const openingUsd = entities.reduce((s, e) => s + fxAdjustedToUsd(e.openingBalanceLocal, e.baseCurrency, fx), 0);
-  const minCashUsd = entities.reduce((s, e) => s + fxAdjustedToUsd(e.minCashPolicyLocal, e.baseCurrency, fx), 0);
-  const covenantUsd = entities.reduce((s, e) => s + (e.covenantFloorLocal != null ? fxAdjustedToUsd(e.covenantFloorLocal, e.baseCurrency, fx) : 0), 0);
-  const hasCovenant = entities.some((e) => e.covenantFloorLocal != null);
-
-  // Receipts — utilisation hits milestone receipts; rate hits all receipts
-  const receiptScale = (line: ReceiptLine): number => {
-    let scale = 1 + a.rateDelta;
-    if (line.source === "milestone") scale *= (1 + a.utilisationDelta);
-    return scale;
-  };
-
-  // Build base + scenario weekly buckets in one pass
-  const buckets = (mode: "base" | "scenario") => {
-    const weeks = weekStarts().map((ws, i) => ({
-      weekIndex: i, weekStart: ws,
-      opening: 0, expectedIn: 0, expectedOut: 0, closing: 0,
-      belowMinCash: false, belowCovenant: false,
-    }));
-    const inLines = RECEIPTS.filter((r) => !entityFilter || r.entityId === entityFilter);
-    const outLines = DISBURSEMENTS.filter((d) => !entityFilter || d.entityId === entityFilter);
-    for (const r of inLines) {
-      const ovr = OVERRIDES.get(r.id);
-      const amount = ovr?.lockedAmount ?? r.amount;
-      const date = ovr?.lockedDate ?? r.expectedDate;
-      const wi = weekIndexFor(date);
-      if (wi < 0 || wi > 12) continue;
-      const localScale = mode === "scenario" ? receiptScale(r) : 1;
-      const usd = mode === "scenario"
-        ? fxAdjustedToUsd(amount * localScale, r.currency, fx)
-        : toUsd(amount, r.currency);
-      weeks[wi].expectedIn += presentScale(usd);
-    }
-    for (const d of outLines) {
-      const ovr = OVERRIDES.get(d.id);
-      const amount = ovr?.lockedAmount ?? d.amount;
-      const date = ovr?.lockedDate ?? d.expectedDate;
-      const wi = weekIndexFor(date);
-      if (wi < 0 || wi > 12) continue;
-      const usd = mode === "scenario"
-        ? fxAdjustedToUsd(amount, d.currency, fx)
-        : toUsd(amount, d.currency);
-      weeks[wi].expectedOut += presentScale(usd);
-    }
-    const opening = mode === "scenario" ? presentScaleShocked(openingUsd) : presentScale(entities.reduce((s, e) => s + toUsd(e.openingBalanceLocal, e.baseCurrency), 0));
-    const minCash = mode === "scenario" ? presentScaleShocked(minCashUsd) : presentScale(entities.reduce((s, e) => s + toUsd(e.minCashPolicyLocal, e.baseCurrency), 0));
-    const covenant = !hasCovenant ? null : (mode === "scenario" ? presentScaleShocked(covenantUsd) : presentScale(entities.reduce((s, e) => s + (e.covenantFloorLocal != null ? toUsd(e.covenantFloorLocal, e.baseCurrency) : 0), 0)));
-    let running = opening;
-    let breachMin = 0;
-    let breachCov = 0;
-    for (const w of weeks) {
-      w.opening = running;
-      w.closing = running + w.expectedIn - w.expectedOut;
-      w.belowMinCash = w.closing < minCash;
-      w.belowCovenant = covenant != null && w.closing < covenant;
-      if (w.belowMinCash) breachMin += 1;
-      if (w.belowCovenant) breachCov += 1;
-      running = w.closing;
-    }
-    const totalIn = weeks.reduce((s, w) => s + w.expectedIn, 0);
-    const totalOut = weeks.reduce((s, w) => s + w.expectedOut, 0);
-    const minClosing = Math.min(...weeks.map((w) => w.closing));
-    return { weeks, opening, minCash, covenant, totalIn, totalOut, minClosing, breachMin, breachCov };
-  };
-
-  const base = buckets("base");
-  const scen = buckets("scenario");
-
-  // Backlog + coverage — rate hits both backlog & weighted pipeline values;
-  // utilisation hits the next-2Q revenue plan (delivery capacity).
-  const contracts = BACKLOG.filter((b) => !entityFilter || b.entityId === entityFilter);
-  const deals = PIPELINE.filter((p) => !entityFilter || p.entityId === entityFilter);
-  const baseBacklogUsd = contracts.reduce((s, b) => s + toUsd(b.remainingLocal, b.currency), 0);
-  const baseWeightedUsd = deals.reduce((s, d) => s + toUsd(d.acvLocal, d.currency) * d.stageProbability, 0);
-  const basePlanUsd = REVENUE_PLAN.reduce((s, q) => s + q.planUsd, 0);
-  const scenBacklogUsd = contracts.reduce((s, b) => s + fxAdjustedToUsd(b.remainingLocal, b.currency, fx) * (1 + a.rateDelta), 0);
-  const scenWeightedUsd = deals.reduce((s, d) => s + fxAdjustedToUsd(d.acvLocal, d.currency, fx) * d.stageProbability * (1 + a.rateDelta), 0);
-  // The plan target is denominated in USD already; utilisation delta represents
-  // the firm's revised delivery capacity, so plan moves in the same direction.
-  const scenPlanUsd = basePlanUsd * (1 + a.utilisationDelta);
-  const baseCoverage = basePlanUsd > 0 ? Math.round(((baseBacklogUsd + baseWeightedUsd) / basePlanUsd) * 100) / 100 : 0;
-  const scenCoverage = scenPlanUsd > 0 ? Math.round(((scenBacklogUsd + scenWeightedUsd) / scenPlanUsd) * 100) / 100 : 0;
-
-  const notes: string[] = [];
-  if (a.utilisationDelta !== 0) notes.push(`Utilisation ${a.utilisationDelta > 0 ? "+" : ""}${(a.utilisationDelta * 100).toFixed(0)}% applied to milestone receipts and Q3+Q4 plan.`);
-  if (a.rateDelta !== 0)        notes.push(`Day-rate uplift ${a.rateDelta > 0 ? "+" : ""}${(a.rateDelta * 100).toFixed(0)}% applied to all receipts, backlog and weighted pipeline.`);
-  if (a.fxShock !== 0)          notes.push(`FX shock ${a.fxShock > 0 ? "+" : ""}${(a.fxShock * 100).toFixed(0)}% applied to non-USD lines (positive = USD weakens).`);
-  if (notes.length === 0)       notes.push("No assumptions changed — scenario equals base case.");
-
-  return {
-    asOf: AS_OF_MONDAY,
-    presentationCurrency: presentation,
-    entityFilter,
-    assumptions: a,
-    base: {
-      openingBalance: base.opening,
-      minCashLine: base.minCash,
-      covenantLine: base.covenant,
-      closingWeek12: base.weeks[12].closing,
-      minWeeklyClosing: base.minClosing,
-      minCashBreaches: base.breachMin,
-      covenantBreaches: base.breachCov,
-      totalIn: base.totalIn,
-      totalOut: base.totalOut,
-      coverageRatio: baseCoverage,
-      backlogPlusWeightedUsd: presentScale(baseBacklogUsd + baseWeightedUsd),
-      next2qPlanUsd: presentScale(basePlanUsd),
-    },
-    scenario: {
-      openingBalance: scen.opening,
-      minCashLine: scen.minCash,
-      covenantLine: scen.covenant,
-      closingWeek12: scen.weeks[12].closing,
-      minWeeklyClosing: scen.minClosing,
-      minCashBreaches: scen.breachMin,
-      covenantBreaches: scen.breachCov,
-      totalIn: scen.totalIn,
-      totalOut: scen.totalOut,
-      coverageRatio: scenCoverage,
-      backlogPlusWeightedUsd: presentScale(scenBacklogUsd + scenWeightedUsd),
-      next2qPlanUsd: presentScale(scenPlanUsd),
-    },
-    weeks: base.weeks.map((b, i) => ({
-      weekIndex: i,
-      weekStart: b.weekStart,
-      baseClosing: b.closing,
-      scenarioClosing: scen.weeks[i].closing,
-      delta: scen.weeks[i].closing - b.closing,
-      scenarioBelowMinCash: scen.weeks[i].belowMinCash,
-      scenarioBelowCovenant: scen.weeks[i].belowCovenant,
-    })),
-    notes,
-  };
-}
+router.get("/finance/plan/headcount", (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  res.json(computeFpaHeadcount(pickScenario(req), pickEntity(req)));
+});
 
 router.get("/finance/plan/scenarios", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
-  const a: ScenarioAssumptions = {
-    utilisationDelta: clampPct(req.query.utilisationDelta, -0.5, 0.5),
-    rateDelta:        clampPct(req.query.rateDelta,        -0.3, 0.3),
-    fxShock:          clampPct(req.query.fxShock,          -0.25, 0.25),
-  };
-  res.json(computeScenario(pickPresentation(req), pickEntity(req), a));
+  res.json(compareFpaScenarios(pickPresentation(req), pickEntity(req)));
+});
+
+router.get("/finance/plan/renewals", (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  res.json(computeFpaRenewals(pickPresentation(req), pickEntity(req)));
+});
+
+router.get("/finance/plan/bonus", (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  res.json(computeFpaBonus(pickScenario(req), pickPresentation(req), pickEntity(req)));
 });
 
 export default router;

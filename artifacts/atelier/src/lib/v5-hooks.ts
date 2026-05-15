@@ -457,6 +457,137 @@ export function useCash13wAudit() {
 }
 
 // ============================================================
+// Finance — FP&A driver-based plan (Task #420, Wave 8)
+// ============================================================
+export interface FpaScenario {
+  id: string;
+  label: string;
+  utilisationDelta: number;
+  rateDelta: number;
+  fxDelta: number;
+  attritionDelta: number;
+  description: string;
+}
+export interface FpaMonthLine {
+  monthIndex: number; iso: string; label: string; quarter: string;
+  revenueUsd: number; directCostUsd: number; overheadUsd: number; ebitdaUsd: number;
+  fteEquivalent: number; billableHours: number; utilisedHours: number;
+}
+export interface FpaEntityRollup {
+  entityId: string; shortName: string; baseCurrency: string;
+  totalRevenueUsd: number; totalDirectCostUsd: number; totalOverheadUsd: number;
+  totalEbitdaUsd: number; ebitdaMarginPct: number; endingHeadcount: number;
+}
+export interface FpaRoleRollup {
+  roleCode: string; roleLabel: string; totalHeadcountMonths: number;
+  totalRevenueUsd: number; totalDirectCostUsd: number;
+  contributionMarginUsd: number; contributionMarginPct: number;
+}
+export interface FpaBudgetResp {
+  asOf: string; fyLabel: string;
+  scenarioId: string; scenarioLabel: string;
+  presentationCurrency: string; entityFilter: string | null;
+  months: FpaMonthLine[];
+  totals: { revenue: number; directCost: number; overhead: number; ebitda: number; ebitdaMarginPct: number; grossMarginPct: number };
+  byEntity: FpaEntityRollup[];
+  byRole: FpaRoleRollup[];
+  byQuarter: { quarter: string; revenue: number; ebitda: number }[];
+  scenarios: FpaScenario[];
+  driverNotes: string[];
+}
+export function useFpaBudget(scenario: string, presentation: string, entity: string | null) {
+  return useQuery<FpaBudgetResp>({
+    queryKey: ["atelier-v5", "fpa-budget", scenario, presentation, entity ?? "consolidated"],
+    queryFn: () => planGet<FpaBudgetResp>(`/finance/plan/budget?scenario=${scenario}&currency=${presentation}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+  });
+}
+
+export interface FpaHeadcountChange { monthIndex: number; delta: number; reason: string }
+export interface FpaHeadcountDetailRow {
+  entityId: string; entityShortName: string; roleCode: string; roleLabel: string;
+  startingHeadcount: number; endingHeadcount: number; netChange: number;
+  byMonth: { monthIndex: number; iso: string; label: string; headcount: number }[];
+  changes: FpaHeadcountChange[];
+}
+export interface FpaHeadcountResp {
+  asOf: string; scenarioId: string; scenarioLabel: string; entityFilter: string | null;
+  months: { index: number; iso: string; label: string; quarter: string }[];
+  rows: FpaHeadcountDetailRow[];
+  totals: { startingHeadcount: number; endingHeadcount: number; netHires: number; plannedHires: number; plannedExits: number };
+  byEntity: { entityId: string; shortName: string; starting: number; ending: number; net: number }[];
+  byRole: { roleCode: string; roleLabel: string; starting: number; ending: number; net: number }[];
+  scenarios: FpaScenario[];
+  asOfMonthLabel: string;
+}
+export function useFpaHeadcount(scenario: string, entity: string | null) {
+  return useQuery<FpaHeadcountResp>({
+    queryKey: ["atelier-v5", "fpa-headcount", scenario, entity ?? "consolidated"],
+    queryFn: () => planGet<FpaHeadcountResp>(`/finance/plan/headcount?scenario=${scenario}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+  });
+}
+
+export interface FpaScenarioComparison {
+  presentationCurrency: string; entityFilter: string | null; asOf: string;
+  comparisons: {
+    scenarioId: string; scenarioLabel: string; description: string;
+    revenue: number; ebitda: number; ebitdaMarginPct: number; grossMarginPct: number;
+    deltas: { revenuePct: number; ebitdaPct: number; ebitdaMarginPctPts: number };
+    quarter: { quarter: string; revenue: number; ebitda: number }[];
+  }[];
+}
+export function useFpaScenarios(presentation: string, entity: string | null) {
+  return useQuery<FpaScenarioComparison>({
+    queryKey: ["atelier-v5", "fpa-scenarios", presentation, entity ?? "consolidated"],
+    queryFn: () => planGet<FpaScenarioComparison>(`/finance/plan/scenarios?currency=${presentation}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+  });
+}
+
+export interface FpaRenewalRow {
+  id: string; client: string; kind: string; entityId: string; entityShortName: string;
+  currency: string; arrLocal: number; arrUsd: number; expiresOn: string; daysUntil: number;
+  ownerName: string; stage: string; riskBand: string; recommendation: string;
+}
+export interface FpaRenewalsResp {
+  asOf: string; presentationCurrency: string; entityFilter: string | null;
+  totalsArr: { totalUsd: number; atRiskUsd: number; lowRiskUsd: number; highRiskUsd: number };
+  byMonth: { monthIso: string; label: string; arrUsd: number; count: number; highRiskUsd: number }[];
+  byOwner: { owner: string; arrUsd: number; count: number }[];
+  byStage: { stage: string; arrUsd: number; count: number }[];
+  rows: FpaRenewalRow[];
+}
+export function useFpaRenewals(presentation: string, entity: string | null) {
+  return useQuery<FpaRenewalsResp>({
+    queryKey: ["atelier-v5", "fpa-renewals", presentation, entity ?? "consolidated"],
+    queryFn: () => planGet<FpaRenewalsResp>(`/finance/plan/renewals?currency=${presentation}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+  });
+}
+
+export interface FpaBonusResp {
+  asOf: string; scenarioId: string; scenarioLabel: string;
+  presentationCurrency: string; entityFilter: string | null;
+  marginGate: { firmGrossMarginPct: number; thresholdPct: number; gateMultiplier: number; passes: boolean };
+  ytdProgressPct: number;
+  totals: { bonusAccrual: number; commissionAccrual: number; combined: number; baseSalaryTotal: number };
+  rows: {
+    id: string; name: string; roleCode: string; roleLabel: string; entityId: string; entityShortName: string;
+    baseSalary: number; bonusTargetPct: number; perfMultiplier: number; gateMultiplier: number;
+    bonusAccrual: number; newArrClosed: number; commissionRate: number; commissionAccrual: number;
+    combined: number;
+  }[];
+}
+export function useFpaBonus(scenario: string, presentation: string, entity: string | null) {
+  return useQuery<FpaBonusResp>({
+    queryKey: ["atelier-v5", "fpa-bonus", scenario, presentation, entity ?? "consolidated"],
+    queryFn: () => planGet<FpaBonusResp>(`/finance/plan/bonus?scenario=${scenario}&currency=${presentation}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+  });
+}
+
+// ============================================================
 // Press
 // ============================================================
 export interface EditorialCalendarRow {

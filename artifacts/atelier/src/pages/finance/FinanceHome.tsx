@@ -55,6 +55,7 @@ import {
   buildCfoInbox,
   type CashForecastWeek,
 } from "./cfoData";
+import { useFpaBudget, useFpaHeadcount, useFpaRenewals } from "@/lib/v5-hooks";
 import FinanceSectionRibbon from "./FinanceSectionRibbon";
 import {
   useExpectedDisbursements,
@@ -945,6 +946,9 @@ export default function FinanceHome() {
   const margin = useMarginFirm();
   const cash = useCashForecast();
   const util = useUtilFirm();
+  const { data: fpaBudget } = useFpaBudget("base", "USD", null);
+  const { data: fpaHc } = useFpaHeadcount("base", null);
+  const { data: fpaRenewals } = useFpaRenewals("USD", null);
 
   // Inbox is entity-scoped: only producers tied to selected entities
   const inbox = React.useMemo(
@@ -1009,6 +1013,54 @@ export default function FinanceHome() {
 
         <section>
           <CloseComplianceInbox entities={ctx.selectedEntities} inbox={inbox} asOfMs={ctx.asOfMs} />
+        </section>
+
+        <section data-testid="finance-plan-fpa">
+          <Eyebrow>FP&amp;A · driver-based plan ({fpaBudget?.scenarioLabel ?? "Base case"})</Eyebrow>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+            <Link href="/finance/plan/budget">
+              <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-revenue-plan">
+                <Eyebrow>Revenue (FY plan)</Eyebrow>
+                <div className="text-2xl font-light mt-1 text-success">
+                  {fpaBudget ? formatMoney(fpaBudget.totals.revenue, "GBP", { localCode: "USD" }) : "—"}
+                </div>
+                <div className="text-[10px] font-mono text-text-mute mt-1">
+                  {fpaBudget ? `${fpaBudget.fyLabel} · ${fpaBudget.scenarioLabel}` : "loading…"}
+                </div>
+              </Card>
+            </Link>
+            <Link href="/finance/plan/budget">
+              <Card className={`p-4 cursor-pointer hover:border-gold/40 transition-colors h-full ${fpaBudget && fpaBudget.totals.ebitda < 0 ? "border-danger/40 bg-danger/5" : ""}`} data-testid="kpi-tile-ebitda-plan">
+                <Eyebrow>EBITDA (FY plan)</Eyebrow>
+                <div className={`text-2xl font-light mt-1 ${fpaBudget && fpaBudget.totals.ebitda >= 0 ? "text-success" : "text-danger"}`}>
+                  {fpaBudget ? formatMoney(fpaBudget.totals.ebitda, "GBP", { localCode: "USD" }) : "—"}
+                </div>
+                <div className="text-[10px] font-mono text-text-mute mt-1">
+                  Margin {fpaBudget ? formatPct(fpaBudget.totals.ebitdaMarginPct) : "—"}
+                </div>
+              </Card>
+            </Link>
+            <Link href="/finance/plan/headcount">
+              <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-headcount-plan">
+                <Eyebrow>Headcount EOP</Eyebrow>
+                <div className="text-2xl font-light mt-1">{fpaHc ? fpaHc.totals.endingHeadcount : "—"}</div>
+                <div className="text-[10px] font-mono text-text-mute mt-1">
+                  {fpaHc ? `+${fpaHc.totals.plannedHires} hires · −${fpaHc.totals.plannedExits} exits` : "loading…"}
+                </div>
+              </Card>
+            </Link>
+            <Link href="/finance/plan/renewals">
+              <Card className={`p-4 cursor-pointer hover:border-gold/40 transition-colors h-full ${fpaRenewals && fpaRenewals.totalsArr.highRiskUsd > 0 ? "border-amber-500/40 bg-amber-500/5" : ""}`} data-testid="kpi-tile-renewals">
+                <Eyebrow>ARR up for renewal</Eyebrow>
+                <div className="text-2xl font-light mt-1">
+                  {fpaRenewals ? formatMoney(fpaRenewals.totalsArr.totalUsd, "GBP", { localCode: "USD" }) : "—"}
+                </div>
+                <div className="text-[10px] font-mono text-text-mute mt-1">
+                  {fpaRenewals ? `${formatMoney(fpaRenewals.totalsArr.highRiskUsd, "GBP", { localCode: "USD" })} high-risk` : "loading…"}
+                </div>
+              </Card>
+            </Link>
+          </div>
         </section>
       </div>
 

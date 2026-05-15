@@ -102,11 +102,14 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
     lede:
       "Budget and re-forecasts, driver-based models (headcount × rate × utilisation), 13-week cash forecast, renewals, scenarios vs actuals, long-range forecast.",
     subPages: [
+      { label: "Driver-based budget", href: "/finance/plan/budget", blurb: "Annual P&L from headcount × utilisation × rate × realisation. Monthly + quarterly + by-entity / by-role roll-ups.", status: "live" },
+      { label: "Headcount plan", href: "/finance/plan/headcount", blurb: "Starting headcount + planned hires/exits over 12 months, by entity and role.", status: "live" },
+      { label: "Scenarios", href: "/finance/plan/scenarios", blurb: "Base / upside / downside / KSA-led — utilisation, rate, FX and attrition deltas vs base.", status: "live" },
+      { label: "Renewals calendar", href: "/finance/plan/renewals", blurb: "MSAs, retainers, subscriptions and frameworks expiring in the next 12 months.", status: "live" },
+      { label: "Bonus & commission accrual", href: "/finance/plan/bonus", blurb: "YTD accrual gated on firm gross margin × individual performance × commission on new ARR.", status: "live" },
       { label: "Long-range forecast", href: "/finance/plan/long-range", blurb: "Pipeline weighted forecast roll-ups (by partner / offering / sector / quarter).", status: "live" },
       { label: "13-week cash forecast", href: "/finance/plan/cash-13w", blurb: "Direct-method receipts and disbursements over the next 13 weeks with min-cash and covenant overlays.", status: "live" },
       { label: "Backlog & pipeline coverage", href: "/finance/plan/backlog", blurb: "Signed backlog plus probability-weighted pipeline against the next two quarters of revenue plan.", status: "live" },
-      { label: "Renewals", href: "/finance/plan/renewals", blurb: "Subscription / framework renewal calendar with owner, value and lead-time.", status: "live" },
-      { label: "Scenarios", href: "/finance/plan/scenarios", blurb: "What-if vs base case (utilisation, rate, FX) on cash and coverage.", status: "live" },
     ],
   },
   reports: {
