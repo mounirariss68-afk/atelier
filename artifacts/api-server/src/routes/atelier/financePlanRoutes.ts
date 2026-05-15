@@ -23,7 +23,7 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { desc, eq } from "drizzle-orm";
-import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit } from "@workspace/db";
+import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits } from "@workspace/db";
 import { ENTITIES_SEED } from "./financeEntitiesRoutes";
 import {
   computeBudget as computeFpaBudget,
@@ -32,6 +32,8 @@ import {
   computeBonus as computeFpaBonus,
   compareScenarios as compareFpaScenarios,
   SCENARIOS as FPA_SCENARIOS,
+  getCommittedScenarioId,
+  setCommittedScenarioId,
 } from "./financePlanFpaEngine";
 
 const router: IRouter = Router();
@@ -345,6 +347,85 @@ function ensureHydrated(): Promise<void> {
 void ensureHydrated().catch((err) => {
   console.error("[financePlanRoutes] failed to hydrate cash overrides:", err);
 });
+
+// ──────────────────────────────────────────────────────────────
+// Committed FP&A scenario — hydrated from atelier_finance_plan_commits.
+// Most recent row wins. The engine's getCommittedScenarioId() ref is
+// kept in sync so any caller (variance reporters, budget page) can read
+// the committed id synchronously.
+// ──────────────────────────────────────────────────────────────
+let commitsHydration: Promise<void> | null = null;
+function ensureCommitsHydrated(): Promise<void> {
+  if (!commitsHydration) {
+    commitsHydration = (async () => {
+      try {
+        const rows = await db
+          .select()
+          .from(atelierFinancePlanCommits)
+          .orderBy(desc(atelierFinancePlanCommits.committedAt))
+          .limit(1);
+        setCommittedScenarioId(rows[0]?.scenarioId ?? null);
+      } catch (err) {
+        commitsHydration = null;
+        throw err;
+      }
+    })();
+  }
+  return commitsHydration;
+}
+void ensureCommitsHydrated().catch((err) => {
+  console.error("[financePlanRoutes] failed to hydrate plan commits:", err);
+});
+
+async function readCommitHistory(limit = 50) {
+  const rows = await db
+    .select()
+    .from(atelierFinancePlanCommits)
+    .orderBy(desc(atelierFinancePlanCommits.committedAt))
+    .limit(limit);
+  return rows.map((r) => ({
+    id: r.id,
+    scenarioId: r.scenarioId,
+    scenarioLabel: r.scenarioLabel,
+    periodLabel: r.periodLabel ?? "",
+    note: r.note ?? "",
+    byUserId: r.byUserId,
+    byUserName: r.byUserName,
+    byRole: r.byRole,
+    committedAt: (r.committedAt instanceof Date ? r.committedAt : new Date(r.committedAt)).toISOString(),
+  }));
+}
+
+interface CommitInfo {
+  scenarioId: string;
+  scenarioLabel: string;
+  periodLabel: string;
+  note: string;
+  byUserName: string;
+  byRole: string;
+  committedAt: string;
+}
+async function readCurrentCommit(): Promise<CommitInfo | null> {
+  await ensureCommitsHydrated();
+  const id = getCommittedScenarioId();
+  if (!id) return null;
+  const rows = await db
+    .select()
+    .from(atelierFinancePlanCommits)
+    .orderBy(desc(atelierFinancePlanCommits.committedAt))
+    .limit(1);
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    scenarioId: r.scenarioId,
+    scenarioLabel: r.scenarioLabel,
+    periodLabel: r.periodLabel ?? "",
+    note: r.note ?? "",
+    byUserName: r.byUserName,
+    byRole: r.byRole,
+    committedAt: (r.committedAt instanceof Date ? r.committedAt : new Date(r.committedAt)).toISOString(),
+  };
+}
 
 async function persistAudit(actor: string, action: string, target: string, payload: Record<string, unknown>) {
   const id = `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -824,10 +905,18 @@ function pickScenario(req: Request): string {
   return FPA_SCENARIOS.some((x) => x.id === s) ? s : "base";
 }
 
-router.get("/finance/plan/budget", (req, res) => {
+router.get("/finance/plan/budget", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
-  res.json(computeFpaBudget(pickScenario(req), pickPresentation(req), pickEntity(req)));
+  const scenarioId = pickScenario(req);
+  const out = computeFpaBudget(scenarioId, pickPresentation(req), pickEntity(req));
+  const committed = await readCurrentCommit();
+  res.json({
+    ...out,
+    committedScenarioId: committed?.scenarioId ?? null,
+    committedScenario: committed,
+    isCommittedScenario: committed?.scenarioId === scenarioId,
+  });
 });
 
 router.get("/finance/plan/headcount", (req, res) => {
@@ -836,10 +925,84 @@ router.get("/finance/plan/headcount", (req, res) => {
   res.json(computeFpaHeadcount(pickScenario(req), pickEntity(req)));
 });
 
-router.get("/finance/plan/scenarios", (req, res) => {
+router.get("/finance/plan/scenarios", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
-  res.json(compareFpaScenarios(pickPresentation(req), pickEntity(req)));
+  const base = compareFpaScenarios(pickPresentation(req), pickEntity(req));
+  const committed = await readCurrentCommit();
+  res.json({
+    ...base,
+    committedScenarioId: committed?.scenarioId ?? null,
+    committedScenario: committed,
+    canCommit: isFinanceLeadership(me),
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Commit a scenario as the official forecast (Task #446).
+// Finance-leadership only. Append-only: every commit gets its own row,
+// the most recent row is the active "committed" forecast.
+// ──────────────────────────────────────────────────────────────
+router.post("/finance/plan/scenarios/commit", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  if (!isFinanceLeadership(me)) {
+    return res.status(403).json({ error: "forbidden", message: "Finance leadership only." });
+  }
+  const body = req.body as { scenarioId?: string; note?: string; periodLabel?: string };
+  if (!body?.scenarioId || typeof body.scenarioId !== "string") {
+    return res.status(400).json({ error: "invalid", message: "scenarioId required" });
+  }
+  const scenario = FPA_SCENARIOS.find((s) => s.id === body.scenarioId);
+  if (!scenario) {
+    return res.status(400).json({ error: "invalid", message: "unknown scenarioId" });
+  }
+  if (body.note !== undefined && (typeof body.note !== "string" || body.note.length > 1000)) {
+    return res.status(400).json({ error: "invalid", message: "note must be a string ≤ 1000 chars" });
+  }
+  if (body.periodLabel !== undefined && (typeof body.periodLabel !== "string" || body.periodLabel.length > 64)) {
+    return res.status(400).json({ error: "invalid", message: "periodLabel must be a string ≤ 64 chars" });
+  }
+  await ensureCommitsHydrated();
+  const nowIso = new Date().toISOString();
+  const id = `fpc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const periodLabel = body.periodLabel ?? "FY2026";
+  const note = body.note ?? "";
+  await db.insert(atelierFinancePlanCommits).values({
+    id,
+    scenarioId: scenario.id,
+    scenarioLabel: scenario.label,
+    periodLabel,
+    note,
+    byUserId: me.id,
+    byUserName: me.name,
+    byRole: me.role,
+    committedAt: new Date(nowIso),
+  });
+  setCommittedScenarioId(scenario.id);
+  await persistAudit(me.name, "fpa.scenario.commit", scenario.id, {
+    scenarioId: scenario.id, scenarioLabel: scenario.label, note, periodLabel, by: me.id, role: me.role,
+  });
+  res.json({
+    ok: true,
+    committed: {
+      scenarioId: scenario.id,
+      scenarioLabel: scenario.label,
+      periodLabel,
+      note,
+      byUserName: me.name,
+      byRole: me.role,
+      committedAt: nowIso,
+    },
+  });
+});
+
+router.get("/finance/plan/scenarios/commit", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  const current = await readCurrentCommit();
+  const history = await readCommitHistory(50);
+  res.json({ current, history, canCommit: isFinanceLeadership(me) });
 });
 
 router.get("/finance/plan/renewals", (req, res) => {

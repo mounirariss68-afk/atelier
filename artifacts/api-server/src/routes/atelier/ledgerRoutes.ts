@@ -35,6 +35,11 @@ import {
 } from "@workspace/db";
 import { runTimeSteward, runUtilizationAnalyst } from "../../lib/atelier-agents/runner.js";
 import {
+  computeBudget as computeFpaBudget,
+  getCommittedScenarioId,
+  SCENARIOS as FPA_SCENARIOS,
+} from "./financePlanFpaEngine.js";
+import {
   runLedgerNudgeTick,
   runLedgerStewardTick,
   runUtilizationSnapshotTick,
@@ -1851,6 +1856,32 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     };
   });
 
+  // Plan baseline — variance reporting reads the committed FP&A scenario
+  // (Task #446) instead of always assuming "base". When no scenario has
+  // been committed yet, falls back to "base" with `committed: false`.
+  const committedId = getCommittedScenarioId();
+  const planScenarioId = committedId ?? "base";
+  const planScenario = FPA_SCENARIOS.find((s) => s.id === planScenarioId) ?? FPA_SCENARIOS[0];
+  let planBaseline: {
+    scenarioId: string;
+    scenarioLabel: string;
+    grossMarginPct: number;
+    ebitdaMarginPct: number;
+    committed: boolean;
+  } | null = null;
+  try {
+    const budget = computeFpaBudget(planScenario.id, "USD", null);
+    planBaseline = {
+      scenarioId: planScenario.id,
+      scenarioLabel: planScenario.label,
+      grossMarginPct: budget.totals.grossMarginPct,
+      ebitdaMarginPct: budget.totals.ebitdaMarginPct,
+      committed: !!committedId,
+    };
+  } catch {
+    planBaseline = null;
+  }
+
   res.json({
     period: { weeks: 4, weekIsos: last4Iso },
     realizationRatePct,
@@ -1859,6 +1890,7 @@ router.get("/ledger/utilization/firm", async (req, res) => {
     partnerSummary,
     sectorSummary,
     engagementRollup,
+    planBaseline,
     snapshotsAvailable: snaps.length > 0,
     // Most recent snapshot timestamp across the rolling-4w window, not
     // index 0 of an unsorted array.

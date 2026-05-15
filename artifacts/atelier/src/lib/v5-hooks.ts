@@ -6,7 +6,7 @@
  * components can keep iterating directly without an extra null-guard. Cookies
  * are sent so the active persona on the API side resolves correctly.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Atelier proxy mounts the api-server at /api/*; using a vite-base-prefixed URL
 // (e.g. /atelier/api/atelier/...) gets swallowed by the SPA fallback, so target
@@ -25,6 +25,11 @@ async function get<T>(path: string): Promise<T> {
   }
   return (await res.json()) as T;
 }
+
+// Several finance/plan hooks below were authored against a `planGet` helper
+// that historically aliased `get`. Keep the alias alive in one place so the
+// callsites continue to work.
+const planGet = get;
 
 function listHook<T>(key: string, path: string) {
   return function useList(): T[] {
@@ -482,6 +487,15 @@ export interface FpaRoleRollup {
   totalRevenueUsd: number; totalDirectCostUsd: number;
   contributionMarginUsd: number; contributionMarginPct: number;
 }
+export interface FpaCommittedScenarioInfo {
+  scenarioId: string;
+  scenarioLabel: string;
+  periodLabel: string;
+  note: string;
+  byUserName: string;
+  byRole: string;
+  committedAt: string;
+}
 export interface FpaBudgetResp {
   asOf: string; fyLabel: string;
   scenarioId: string; scenarioLabel: string;
@@ -493,6 +507,9 @@ export interface FpaBudgetResp {
   byQuarter: { quarter: string; revenue: number; ebitda: number }[];
   scenarios: FpaScenario[];
   driverNotes: string[];
+  committedScenarioId: string | null;
+  committedScenario: FpaCommittedScenarioInfo | null;
+  isCommittedScenario: boolean;
 }
 export function useFpaBudget(scenario: string, presentation: string, entity: string | null) {
   return useQuery<FpaBudgetResp>({
@@ -535,6 +552,46 @@ export interface FpaScenarioComparison {
     deltas: { revenuePct: number; ebitdaPct: number; ebitdaMarginPctPts: number };
     quarter: { quarter: string; revenue: number; ebitda: number }[];
   }[];
+  committedScenarioId: string | null;
+  committedScenario: FpaCommittedScenarioInfo | null;
+  canCommit: boolean;
+}
+
+// Commit-a-scenario (Task #446): finance leadership marks one of the FP&A
+// variants as the official forecast for the period. Read returns the most
+// recent commit + audit trail; mutation triggers a refetch of scenarios,
+// budget and firm-economics views so badges/banner update immediately.
+export interface FpaCommitHistoryRow extends FpaCommittedScenarioInfo {
+  id: string;
+  byUserId: string;
+}
+export interface FpaCommitResp {
+  current: FpaCommittedScenarioInfo | null;
+  history: FpaCommitHistoryRow[];
+  canCommit: boolean;
+}
+export function useFpaCommittedScenario() {
+  return useQuery<FpaCommitResp>({
+    queryKey: ["atelier-v5", "fpa-scenario-commit"],
+    queryFn: () => planGet<FpaCommitResp>("/finance/plan/scenarios/commit"),
+    staleTime: 15_000,
+  });
+}
+export function useCommitFpaScenario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { scenarioId: string; note?: string; periodLabel?: string }) =>
+      postJson<{ ok: true; committed: FpaCommittedScenarioInfo }>(
+        "/finance/plan/scenarios/commit",
+        input,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-scenario-commit"] });
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-scenarios"] });
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-budget"] });
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "ledger-utilization-firm"] });
+    },
+  });
 }
 export function useFpaScenarios(presentation: string, entity: string | null) {
   return useQuery<FpaScenarioComparison>({

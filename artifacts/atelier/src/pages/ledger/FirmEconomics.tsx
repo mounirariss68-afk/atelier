@@ -7,6 +7,7 @@ interface PartnerSummary { partnerId: string; partnerName: string; utilPct: numb
 interface SectorSummary { sector: string; plannedMarginPct: number; realizedMarginPct: number; engagementCount: number; revenueUsd: number; }
 interface EngagementRollup { engagementId: string; engagementName: string; accountName: string; sector: string; partnerOwnerId: string; opportunityId: string | null; plannedMarginPct: number; realizedMarginPct: number; targetMarginPct: number; belowTarget: boolean; reLookHref: string | null; leakageHours: number; }
 
+interface PlanBaseline { scenarioId: string; scenarioLabel: string; grossMarginPct: number; ebitdaMarginPct: number; committed: boolean; }
 interface FirmResp {
   period: { weeks: number; weekIsos: string[] };
   realizationRatePct: number;
@@ -15,6 +16,7 @@ interface FirmResp {
   partnerSummary: PartnerSummary[];
   sectorSummary: SectorSummary[];
   engagementRollup: EngagementRollup[];
+  planBaseline: PlanBaseline | null;
   snapshotsAvailable: boolean;
   computedAt: string | null;
 }
@@ -88,6 +90,30 @@ export default function FirmEconomics() {
 
       {error && <Card className="border-red-500/40 p-3 text-sm text-red-300">{error}</Card>}
       {loading && <Card className="p-4 text-text-mute">Loading…</Card>}
+
+      {data?.planBaseline && (
+        <Card className={`p-3 ${data.planBaseline.committed ? "border-gold/40 bg-gold/5" : "border-border-soft"}`} data-testid="plan-baseline-banner">
+          <div className="text-xs flex items-center gap-2 flex-wrap">
+            <MonoChip tone={data.planBaseline.committed ? "gold" : "default"}>
+              {data.planBaseline.committed ? "COMMITTED" : "BASELINE"}
+            </MonoChip>
+            <span className="text-text">Variance vs {data.planBaseline.scenarioLabel}</span>
+            <span className="text-text-mute font-mono">
+              · plan gross margin {pct(data.planBaseline.grossMarginPct)} · plan EBITDA margin {pct(data.planBaseline.ebitdaMarginPct)}
+            </span>
+            {!data.planBaseline.committed && (
+              <Link href="/finance/plan/scenarios" className="ml-auto text-gold-400 hover:underline">
+                No scenario committed — using base case →
+              </Link>
+            )}
+            {data.planBaseline.committed && (
+              <Link href="/finance/plan/scenarios" className="ml-auto text-gold-400 hover:underline">
+                View commit history →
+              </Link>
+            )}
+          </div>
+        </Card>
+      )}
 
       {data && !data.snapshotsAvailable && (
         <Card className="border-amber-500/40 p-4 text-sm text-amber-200">

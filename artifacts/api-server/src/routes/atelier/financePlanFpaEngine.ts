@@ -162,6 +162,26 @@ export interface Scenario {
   attritionDelta: number;      // additive monthly attrition rate (e.g. 0.005 = +0.5%/mo)
   description: string;
 }
+// ──────────────────────────────────────────────────────────────
+// Committed scenario state (Task #446).
+//
+// One scenario id can be marked as the "committed" forecast for the period
+// by finance leadership. Variance reporting and the budget / scenarios
+// pages key off this instead of always assuming "base". The state lives
+// here as a small mutable ref so consumers (engine + routes) can resolve
+// it synchronously; the source of truth is Postgres
+// (atelier_finance_plan_commits) and the routes layer hydrates this ref
+// at boot and write-through-updates it on POST /commit.
+// ──────────────────────────────────────────────────────────────
+let committedScenarioId: string | null = null;
+export function getCommittedScenarioId(): string | null {
+  return committedScenarioId;
+}
+export function setCommittedScenarioId(id: string | null): void {
+  if (id !== null && !SCENARIOS.some((s) => s.id === id)) return;
+  committedScenarioId = id;
+}
+
 export const SCENARIOS: Scenario[] = [
   { id: "base",     label: "Base case",  utilisationDelta:  0.00, rateDelta:  0.00, fxDelta:  0.00, attritionDelta: 0.000, description: "Plan-of-record. Driver targets, FX as of plan, no incremental attrition." },
   { id: "upside",   label: "Upside",     utilisationDelta:  0.05, rateDelta:  0.04, fxDelta:  0.02, attritionDelta: 0.000, description: "+5pt utilisation, +4% rate realisation, +2% FX tailwind." },

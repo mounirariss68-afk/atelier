@@ -52,8 +52,22 @@ export default function FinancePlanBudget() {
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
         {!data ? <Card className="p-6 text-text-mute">Loading budget…</Card> : (
           <>
+            {data.committedScenario && (
+              <Card className={`p-3 ${data.isCommittedScenario ? "border-gold/40 bg-gold/5" : "border-border-soft"}`} data-testid="committed-banner">
+                <div className="text-xs font-mono flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <MonoChip tone="gold">COMMITTED</MonoChip>
+                    <span className="ml-2 text-text">{data.committedScenario.scenarioLabel}</span>
+                    <span className="text-text-mute"> is the official forecast · {data.committedScenario.periodLabel || "FY2026"} · {data.committedScenario.byUserName} ({data.committedScenario.byRole}) · {new Date(data.committedScenario.committedAt).toLocaleDateString()}</span>
+                  </div>
+                  {!data.isCommittedScenario && (
+                    <span className="text-[11px] text-text-mute italic">Viewing {data.scenarioLabel} (not the committed forecast)</span>
+                  )}
+                </div>
+              </Card>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="budget-kpis">
-              <Card className="p-3"><div className="text-[11px] font-mono uppercase text-text-faint">Revenue (12mo)</div><div className="text-2xl font-display mt-1" data-testid="kpi-revenue">{fmt(data.totals.revenue, presentation)}</div><div className="text-xs text-text-mute font-mono mt-1">{data.scenarioLabel} · {data.fyLabel}</div></Card>
+              <Card className="p-3"><div className="text-[11px] font-mono uppercase text-text-faint">Revenue (12mo)</div><div className="text-2xl font-display mt-1 flex items-center gap-2" data-testid="kpi-revenue">{fmt(data.totals.revenue, presentation)}{data.isCommittedScenario && <MonoChip tone="gold" data-testid="badge-committed">COMMITTED</MonoChip>}</div><div className="text-xs text-text-mute font-mono mt-1">{data.scenarioLabel} · {data.fyLabel}</div></Card>
               <Card className="p-3"><div className="text-[11px] font-mono uppercase text-text-faint">Direct cost</div><div className="text-2xl font-display mt-1">{fmt(data.totals.directCost, presentation)}</div><div className="text-xs text-text-mute font-mono mt-1">Loaded delivery cost</div></Card>
               <Card className="p-3"><div className="text-[11px] font-mono uppercase text-text-faint">Gross margin</div><div className="text-2xl font-display mt-1 text-success">{pct(data.totals.grossMarginPct)}</div><div className="text-xs text-text-mute font-mono mt-1">Revenue − direct cost</div></Card>
               <Card className="p-3"><div className="text-[11px] font-mono uppercase text-text-faint">EBITDA</div><div className={`text-2xl font-display mt-1 ${data.totals.ebitda >= 0 ? "text-success" : "text-danger"}`} data-testid="kpi-ebitda">{fmt(data.totals.ebitda, presentation)}</div><div className="text-xs text-text-mute font-mono mt-1">Margin {pct(data.totals.ebitdaMarginPct)}</div></Card>
