@@ -67,9 +67,14 @@ export const LENSES: readonly LensDef[] = [
     shortcutKey: "2",
     sections: [
       { id: "overview", label: "Overview", href: "/people" },
-      { id: "studio", label: "Studio", href: "/studio" },
-      { id: "roster", label: "Roster", href: "/roster/people" },
-      { id: "timesheets", label: "Timesheets", href: "/ledger/timesheets" },
+      { id: "attract", label: "Attract", href: "/people/attract" },
+      { id: "hire", label: "Hire", href: "/people/hire" },
+      { id: "onboard", label: "Onboard", href: "/people/onboard" },
+      { id: "develop", label: "Develop", href: "/people/develop" },
+      { id: "perform", label: "Perform", href: "/people/perform" },
+      { id: "reward", label: "Reward", href: "/people/reward" },
+      { id: "retain", label: "Retain", href: "/people/retain" },
+      { id: "offboard", label: "Offboard", href: "/people/offboard" },
     ],
   },
   {

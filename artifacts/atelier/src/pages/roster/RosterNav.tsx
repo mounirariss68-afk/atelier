@@ -1,7 +1,9 @@
 import * as React from "react";
 import { Link, useLocation } from "wouter";
 
-const ITEMS: { href: string; label: string }[] = [
+interface NavItem { href: string; label: string }
+
+const ROSTER_ITEMS: NavItem[] = [
   { href: "/roster/people", label: "People" },
   { href: "/roster/access-matrix", label: "Access matrix" },
   { href: "/roster/skill-graph", label: "Skill graph" },
@@ -11,11 +13,15 @@ const ITEMS: { href: string; label: string }[] = [
   { href: "/roster/compliance", label: "Compliance" },
 ];
 
-export function RosterNav(): React.ReactElement {
+// Task #364 — when these pages are mounted under /people/* we hide the
+// legacy roster nav (the People Studio shell renders the cross-module rail
+// instead) so the user doesn't see two competing navigations.
+export function RosterNav(): React.ReactElement | null {
   const [loc] = useLocation();
+  if (loc.startsWith("/people/")) return null;
   return (
     <div className="flex flex-wrap gap-1 mb-4 border-b border-line">
-      {ITEMS.map((it) => {
+      {ROSTER_ITEMS.map((it) => {
         const active = loc === it.href || loc.startsWith(it.href + "/");
         return (
           <Link

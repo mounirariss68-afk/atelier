@@ -53,7 +53,7 @@ export default function StudioIndex() {
   );
 }
 
-function RolesView() {
+export function RolesView() {
   const OPEN_ROLES = useOpenRoles();
   return (
     <div className="space-y-3">
@@ -82,7 +82,7 @@ function RolesView() {
   );
 }
 
-function CandidatesView() {
+export function CandidatesView() {
   const CANDIDATE_PIPELINE = useCandidates();
   const stages = ["sourced", "screening", "interview", "reference", "offer"] as const;
   return (
@@ -118,7 +118,7 @@ function CandidatesView() {
   );
 }
 
-function InterviewsView() {
+export function InterviewsView() {
   const INTERVIEW_PANELS = useInterviewPanels();
   return (
     <div className="space-y-3">
@@ -147,7 +147,7 @@ function InterviewsView() {
   );
 }
 
-function ReferencesView() {
+export function ReferencesView() {
   const REFERENCE_CHECKS = useReferenceChecks();
   return (
     <div className="space-y-3">
@@ -174,7 +174,7 @@ function ReferencesView() {
   );
 }
 
-function OffersView() {
+export function OffersView() {
   const OFFER_QUEUE = useOffers();
   return (
     <div className="space-y-3">
@@ -196,7 +196,7 @@ function OffersView() {
   );
 }
 
-function ReferralsView() {
+export function ReferralsView() {
   const REFERRALS = useReferrals();
   return (
     <div className="space-y-3">

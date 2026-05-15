@@ -33,17 +33,30 @@ const TABS = [
   { id: "access", label: "Access" },
   { id: "engagements", label: "Engagements" },
   { id: "skills", label: "Skills" },
-  { id: "timesheet", label: "Timesheet-summary" },
+  { id: "learning", label: "Learning" },
+  { id: "performance", label: "Performance" },
+  { id: "compensation", label: "Compensation" },
+  { id: "succession", label: "Succession" },
+  { id: "timesheet", label: "Time" },
   { id: "documents", label: "Documents" },
   { id: "conflicts", label: "Conflicts" },
   { id: "audit", label: "Audit" },
 ];
 
 export default function RosterPerson() {
-  const [, params] = useRoute("/roster/people/:id");
-  const [, paramsTab] = useRoute("/roster/people/:id/:tab");
-  const personId = params?.id ?? paramsTab?.id;
-  const activeTab = paramsTab?.tab ?? "profile";
+  // Task #364 — same component is now mounted under both the legacy
+  // `/roster/people/:id` and the new `/people/people/:id` paths. We match
+  // either prefix and keep all generated hrefs on whichever prefix the user
+  // arrived from.
+  const [, rParams]    = useRoute("/roster/people/:id");
+  const [, rParamsTab] = useRoute("/roster/people/:id/:tab");
+  const [, pParams]    = useRoute("/people/people/:id");
+  const [, pParamsTab] = useRoute("/people/people/:id/:tab");
+  const personId = rParams?.id ?? rParamsTab?.id ?? pParams?.id ?? pParamsTab?.id;
+  const activeTab = rParamsTab?.tab ?? pParamsTab?.tab ?? "profile";
+  const underPeople = !!(pParams || pParamsTab);
+  const dirHref = underPeople ? "/people/people" : "/roster/people";
+  const tabBase = `${dirHref}/${personId}`;
 
   const [person, setPerson] = React.useState<Person | null>(null);
   const [viewerCanSeeComp, setViewerCanSeeComp] = React.useState(false);
@@ -65,8 +78,8 @@ export default function RosterPerson() {
   return (
     <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
       <PageHero>
-        <Link href="/roster/people" className="text-text-mute hover:text-gold text-xs font-mono uppercase">
-          ← The Roster
+        <Link href={dirHref} className="text-text-mute hover:text-gold text-xs font-mono uppercase">
+          ← {underPeople ? "People directory" : "The Roster"}
         </Link>
         <SectionHead headline={person.fullName} />
         <div className="flex flex-wrap gap-2 mt-1">
@@ -89,8 +102,8 @@ export default function RosterPerson() {
             key={t.id}
             href={
               t.id === "profile"
-                ? `/roster/people/${personId}`
-                : `/roster/people/${personId}/${t.id}`
+                ? tabBase
+                : `${tabBase}/${t.id}`
             }
             active={activeTab === t.id}
             data-testid={`tab-${t.id}`}
@@ -115,7 +128,11 @@ export default function RosterPerson() {
             <SkillsTab personId={personId} />
           )
         )}
-        {activeTab === "timesheet" && <PlaceholderTab title="Timesheet summary" />}
+        {activeTab === "learning" && <PlaceholderTab title="Learning · enrollments, certifications, mentor pairing" />}
+        {activeTab === "performance" && <PlaceholderTab title="Performance · goals, check-ins, reviews, calibration outcomes" />}
+        {activeTab === "compensation" && <PlaceholderTab title="Compensation · band position, history, total rewards (Partner-only)" />}
+        {activeTab === "succession" && <PlaceholderTab title="Succession · roles this person is in the slate for" />}
+        {activeTab === "timesheet" && <PlaceholderTab title="Time · summary, recent weeks, approvals" />}
         {activeTab === "documents" && <DocumentsTab personId={personId} />}
         {activeTab === "conflicts" && <ConflictsTab personId={personId} />}
         {activeTab === "audit" && <AuditTab personId={personId} />}

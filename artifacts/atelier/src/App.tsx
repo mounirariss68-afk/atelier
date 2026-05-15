@@ -28,15 +28,10 @@ import AgentRun from "@/pages/AgentRun";
 import WinLoss from "@/pages/WinLoss";
 import WinLossLibrary from "@/pages/WinLossLibrary";
 import Reports from "@/pages/Reports";
-import RosterPeople from "@/pages/roster/RosterPeople";
-import RosterPerson from "@/pages/roster/RosterPerson";
-import RosterAccessMatrix from "@/pages/roster/RosterAccessMatrix";
-import RosterInvitations from "@/pages/roster/RosterInvitations";
-import RosterOnboarding from "@/pages/roster/RosterOnboarding";
-import RosterOffboarding from "@/pages/roster/RosterOffboarding";
-import RosterCompliance from "@/pages/roster/RosterCompliance";
-import RosterSkillGraph from "@/pages/roster/RosterSkillGraph";
-import Timesheet from "@/pages/ledger/Timesheet";
+// Task #364 — RosterPeople/RosterPerson/RosterAccessMatrix/RosterInvitations/
+// RosterOnboarding/RosterOffboarding/RosterCompliance/RosterSkillGraph and
+// Timesheet are now mounted under /people/* via PeopleShell wrappers; the
+// legacy /roster/* and /ledger/timesheet* paths permanently redirect.
 import LedgerApprovals from "@/pages/ledger/LedgerApprovals";
 import EngagementEconomics from "@/pages/ledger/EngagementEconomics";
 import Utilization from "@/pages/ledger/Utilization";
@@ -60,17 +55,18 @@ import { SalonRoot } from "@/pages/salon/SalonRoutes";
 // v5 — Scale & Trust
 import PressIndex from "@/pages/press/PressIndex";
 import PartnersIndex from "@/pages/partners/PartnersIndex";
-import StudioIndex from "@/pages/studio/StudioIndex";
+// Task #364 — StudioIndex view functions are now consumed by /people/hire and
+// /people/attract; the /studio/* paths permanently redirect.
 import GuardhouseIndex from "@/pages/guardhouse/GuardhouseIndex";
 import IpCatalog from "@/pages/atelier/IpCatalog";
 import Codex from "@/pages/Codex";
 import CodexContract from "@/pages/CodexContract";
-// Task #368 — Manage shell lens placeholders. The Clients/People/Partners
-// lens contents ship in their own follow-up tasks; until then these render
-// a "Lens coming soon" page so the picker, deep links and persistence still
-// resolve. /finance keeps its existing pages as its lens home.
+// Task #368 — Manage shell lens placeholders. The Clients lens content ships
+// in its own follow-up task; until then it renders a "Lens coming soon" page
+// so the picker, deep links and persistence still resolve. The People lens
+// is filled in by Task #364 with the People Studio. /finance keeps its
+// existing pages as its lens home.
 import {
-  PeopleLensHome,
   FinanceLensHome,
 } from "@/pages/lens/LensPlaceholder";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
@@ -100,6 +96,41 @@ import {
   ClientsReference,
 } from "@/pages/lens/ClientsStages";
 import { Redirect } from "@/components/Redirect";
+
+// Task #364 — People Studio (the People lens).
+import PeopleHome from "@/pages/people/PeopleHome";
+import PeopleAttract from "@/pages/people/PeopleAttract";
+import PeopleHire from "@/pages/people/PeopleHire";
+import PeopleOnboard from "@/pages/people/PeopleOnboard";
+import PeopleDevelop from "@/pages/people/PeopleDevelop";
+import PeoplePerform from "@/pages/people/PeoplePerform";
+import PeopleReward from "@/pages/people/PeopleReward";
+import PeopleRetain from "@/pages/people/PeopleRetain";
+import PeopleOffboard from "@/pages/people/PeopleOffboard";
+import PeopleOrg from "@/pages/people/PeopleOrg";
+import PeopleApprovals from "@/pages/people/PeopleApprovals";
+import PeoplePeople from "@/pages/people/PeoplePeople";
+import PeoplePerson from "@/pages/people/PeoplePerson";
+import PeopleAccess from "@/pages/people/PeopleAccess";
+import PeopleSkills from "@/pages/people/PeopleSkills";
+import PeopleCompliance from "@/pages/people/PeopleCompliance";
+import PeopleTime from "@/pages/people/PeopleTime";
+
+/**
+ * Permanent client-side redirect — used for the legacy /studio, /roster
+ * and /ledger/timesheet* paths which Task #364 folded into the People
+ * Studio. Preserves dynamic path segments and the search string so deep
+ * links from emails / dossiers keep landing on the right page.
+ */
+function redirectTo(target: string) {
+  return function Redirect() {
+    const search = window.location.search ?? "";
+    const dest = `${target}${search}`;
+    window.history.replaceState(null, "", dest);
+    window.location.replace(dest);
+    return null;
+  };
+}
 
 const queryClient = new QueryClient();
 
@@ -186,23 +217,57 @@ function Router() {
             return null;
           }}
         </Route>
-        <Route path="/studio" component={StudioIndex} />
-        <Route path="/studio/:section" component={StudioIndex} />
+        {/* Task #364 — /studio routes are folded into People Studio /people/hire.
+            The legacy components stay imported for code reuse but the URLs
+            permanently redirect. */}
+        <Route path="/studio">
+          {redirectTo("/people/hire")}
+        </Route>
+        <Route path="/studio/referrals">
+          {redirectTo("/people/attract/referrals")}
+        </Route>
+        <Route path="/studio/:section">
+          {(p) => {
+            const section = p.section ?? "roles";
+            window.location.replace(`/people/hire/${section}${window.location.search ?? ""}`);
+            return null;
+          }}
+        </Route>
         <Route path="/guardhouse" component={GuardhouseIndex} />
         <Route path="/guardhouse/:section" component={GuardhouseIndex} />
-        <Route path="/roster/access-matrix" component={RosterAccessMatrix} />
-        <Route path="/roster/skill-graph" component={RosterSkillGraph} />
-        <Route path="/roster/invitations" component={RosterInvitations} />
-        <Route path="/roster/onboarding" component={RosterOnboarding} />
-        <Route path="/roster/offboarding" component={RosterOffboarding} />
-        <Route path="/roster/compliance" component={RosterCompliance} />
-        <Route path="/roster/people" component={RosterPeople} />
-        <Route path="/roster/people/:id" component={RosterPerson} />
-        <Route path="/roster/people/:id/:tab" component={RosterPerson} />
-        <Route path="/ledger" component={Timesheet} />
-        <Route path="/ledger/timesheet" component={Timesheet} />
-        <Route path="/ledger/timesheets" component={Timesheet} />
-        <Route path="/ledger/timesheets/:personId/:weekIso" component={Timesheet} />
+        {/* Task #364 — Roster sub-pages now live under /people/*. The legacy
+            paths permanently redirect; the components are still mounted under
+            /people/* via thin wrappers. */}
+        <Route path="/roster">{redirectTo("/people/people")}</Route>
+        <Route path="/roster/access-matrix">{redirectTo("/people/access")}</Route>
+        <Route path="/roster/skill-graph">{redirectTo("/people/skills")}</Route>
+        <Route path="/roster/invitations">{redirectTo("/people/onboard/invitations")}</Route>
+        <Route path="/roster/onboarding">{redirectTo("/people/onboard")}</Route>
+        <Route path="/roster/offboarding">{redirectTo("/people/offboard")}</Route>
+        <Route path="/roster/compliance">{redirectTo("/people/compliance")}</Route>
+        <Route path="/roster/people">{redirectTo("/people/people")}</Route>
+        <Route path="/roster/people/:id">
+          {(p) => {
+            window.location.replace(`/people/people/${p.id}${window.location.search ?? ""}`);
+            return null;
+          }}
+        </Route>
+        <Route path="/roster/people/:id/:tab">
+          {(p) => {
+            window.location.replace(`/people/people/${p.id}/${p.tab}${window.location.search ?? ""}`);
+            return null;
+          }}
+        </Route>
+        {/* Task #364 — /ledger/timesheet* folds into /people/time. */}
+        <Route path="/ledger">{redirectTo("/people/time")}</Route>
+        <Route path="/ledger/timesheet">{redirectTo("/people/time")}</Route>
+        <Route path="/ledger/timesheets">{redirectTo("/people/time")}</Route>
+        <Route path="/ledger/timesheets/:personId/:weekIso">
+          {(p) => {
+            window.location.replace(`/people/time/${p.personId}/${p.weekIso}${window.location.search ?? ""}`);
+            return null;
+          }}
+        </Route>
         {/* Task #271 — Approvals fold into Home → "What needs me today".
             Redirect deep-links (notification emails, audit logs) to Home. */}
         <Route path="/ledger/approvals">
@@ -306,8 +371,36 @@ function Router() {
         <Route path="/clients/bill" component={ClientsBill} />
         <Route path="/clients/renew" component={ClientsRenew} />
         <Route path="/clients/reference" component={ClientsReference} />
-        <Route path="/people" component={PeopleLensHome} />
-        <Route path="/people/:rest*" component={PeopleLensHome} />
+        {/* Task #364 — People Studio. Order matters: more specific routes
+            first, then sub-section catch-alls, then the lens home. */}
+        <Route path="/people/attract" component={PeopleAttract} />
+        <Route path="/people/attract/:section" component={PeopleAttract} />
+        <Route path="/people/hire" component={PeopleHire} />
+        <Route path="/people/hire/:section" component={PeopleHire} />
+        <Route path="/people/onboard" component={PeopleOnboard} />
+        <Route path="/people/onboard/:section" component={PeopleOnboard} />
+        <Route path="/people/develop" component={PeopleDevelop} />
+        <Route path="/people/develop/:section" component={PeopleDevelop} />
+        <Route path="/people/perform" component={PeoplePerform} />
+        <Route path="/people/perform/:section" component={PeoplePerform} />
+        <Route path="/people/reward" component={PeopleReward} />
+        <Route path="/people/reward/:section" component={PeopleReward} />
+        <Route path="/people/retain" component={PeopleRetain} />
+        <Route path="/people/retain/:section" component={PeopleRetain} />
+        <Route path="/people/offboard" component={PeopleOffboard} />
+        <Route path="/people/offboard/:section" component={PeopleOffboard} />
+        <Route path="/people/org" component={PeopleOrg} />
+        <Route path="/people/org/:section" component={PeopleOrg} />
+        <Route path="/people/approvals" component={PeopleApprovals} />
+        <Route path="/people/people" component={PeoplePeople} />
+        <Route path="/people/people/:id" component={PeoplePerson} />
+        <Route path="/people/people/:id/:tab" component={PeoplePerson} />
+        <Route path="/people/access" component={PeopleAccess} />
+        <Route path="/people/skills" component={PeopleSkills} />
+        <Route path="/people/compliance" component={PeopleCompliance} />
+        <Route path="/people/time" component={PeopleTime} />
+        <Route path="/people/time/:personId/:weekIso" component={PeopleTime} />
+        <Route path="/people" component={PeopleHome} />
         {/* Task #371 — Partners lens (alliance lifecycle). The index +
             stage views all live in PartnersIndex, which keys off the
             :section param. */}

@@ -197,7 +197,7 @@ function TimesheetApprovalsCard({ role }: { role: string }) {
               <div className="min-w-[140px] flex-1">
                 <button
                   type="button"
-                  onClick={() => setLocation(`/ledger/timesheets/${row.week.personId}/${row.week.weekIso}`)}
+                  onClick={() => setLocation(`/people/time/${row.week.personId}/${row.week.weekIso}`)}
                   className="font-medium text-text hover:text-gold text-sm text-left"
                 >
                   {row.week.personName}
@@ -330,31 +330,32 @@ function WorkspaceShelf({ role }: { role: string }) {
   // references every render.
   const tiles = React.useMemo<Array<{ href: string; label: string; icon: React.ReactNode; state: React.ReactNode; testid: string }>>(() => {
     const out: Array<{ href: string; label: string; icon: React.ReactNode; state: React.ReactNode; testid: string }> = [];
-    if (canSeeTimesheet) {
+    // Task #364, Wave-4 review — Studio/Roster/Timesheet were unified into
+    // the People lens. Surface one People entrypoint that summarises both
+    // the headcount (Roster) and current-week timesheet state instead of
+    // three separate tiles.
+    if (canSeeTimesheet || canSeeRoster) {
       const w = ts?.week;
-      out.push({
-        href: "/ledger",
-        label: "Timesheet",
-        icon: <ClipboardList className="w-4 h-4" />,
-        state: w
-          ? <>
-              <span className="text-text">{w.totalHours.toFixed(1)}h</span>
-              <span className="text-text-faint"> · </span>
-              <span className="text-text-mute capitalize">{w.status.replace("_", " ")}</span>
-            </>
-          : <span className="text-text-faint">log this week</span>,
-        testid: "tile-workspace-timesheet",
+      const parts: React.ReactNode[] = [];
+      if (canSeeRoster && headcount != null) {
+        parts.push(<span key="hc"><span className="text-text">{headcount}</span><span className="text-text-faint"> people</span></span>);
+      }
+      if (canSeeTimesheet && w) {
+        parts.push(<span key="ts"><span className="text-text">{w.totalHours.toFixed(1)}h</span><span className="text-text-faint"> · </span><span className="text-text-mute capitalize">{w.status.replace("_", " ")}</span></span>);
+      } else if (canSeeTimesheet) {
+        parts.push(<span key="ts" className="text-text-faint">log this week</span>);
+      }
+      const interleaved: React.ReactNode[] = [];
+      parts.forEach((p, i) => {
+        if (i > 0) interleaved.push(<span key={`sep-${i}`} className="text-text-faint"> · </span>);
+        interleaved.push(p);
       });
-    }
-    if (canSeeRoster) {
       out.push({
-        href: "/roster/people",
-        label: "Roster",
+        href: "/people",
+        label: "People",
         icon: <Users className="w-4 h-4" />,
-        state: headcount != null
-          ? <><span className="text-text">{headcount}</span><span className="text-text-faint"> people</span></>
-          : <span className="text-text-faint">firm-wide</span>,
-        testid: "tile-workspace-roster",
+        state: interleaved.length ? <>{interleaved}</> : <span className="text-text-faint">lifecycle · directory · time</span>,
+        testid: "tile-workspace-people",
       });
     }
     if (canSeeFinance) {
