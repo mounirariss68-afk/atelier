@@ -31,6 +31,7 @@ import {
   CliConcurrencyError,
   type CliFrame,
 } from "../../lib/atelier-cli/index.js";
+import { stripLocalePreamble } from "../../lib/atelier-cli/locale.js";
 import {
   capabilitiesForPersona,
   CATALOG_SCHEMA_VERSION,
@@ -77,15 +78,22 @@ router.post("/cli/turn", async (req, res) => {
     async?: boolean;
     reset?: boolean;
   };
-  const promptRaw = (body.prompt ?? "").trim();
-  if (!promptRaw) {
+  const promptRawWithPreamble = (body.prompt ?? "").trim();
+  if (!promptRawWithPreamble) {
     res.status(400).json({ error: "prompt-required" });
     return;
   }
-  if (promptRaw.length > 4000) {
+  if (promptRawWithPreamble.length > 4000) {
     res.status(400).json({ error: "prompt-too-long" });
     return;
   }
+  // Task #484 — strip the client's locale-instruction preamble at HTTP
+  // ingress, BEFORE any downstream consumer sees the prompt. Without
+  // this, the preamble corrupts entity-hint extraction (returns
+  // ["Respond","English",...]), the country-extraction fallback regex
+  // (first-matches "in English" instead of "in UAE"), the mock router's
+  // 60-char prompt slice, redactText, and the durable rolling summary.
+  const promptRaw = stripLocalePreamble(promptRawWithPreamble);
   // `/new` (or explicit reset:true) starts a fresh session before the
   // turn runs. Strip the slash command from the prompt sent to the model.
   const isNewCmd = /^\/new\b/i.test(promptRaw);

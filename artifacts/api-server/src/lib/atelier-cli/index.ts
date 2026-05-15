@@ -59,6 +59,34 @@ import {
   shouldRequireTypedNameForAttachmentTurn,
   wrapAttachment,
 } from "./prompt-guard.js";
+import { stripLocalePreamble } from "./locale.js";
+// Task #484 — static import of DISPATCH_TABLE so getToolsForPersona can
+// strip legacy chat-writes whose (kind, verb) is now owned by
+// propose_write. The capability-retriever filter at line 215 only
+// applies inside retrieveCapabilities; the chat surface that Sonnet
+// actually sees is built here, so the filter must live here too.
+import { DISPATCH_TABLE } from "./write-dispatch.js";
+
+// Pre-compute the set of legacy tool names that propose_write now owns.
+// Built once at module load — DISPATCH_TABLE is static.
+const LEGACY_DISPATCH_TARGETS: ReadonlySet<string> = (() => {
+  const out = new Set<string>();
+  for (const verbs of Object.values(DISPATCH_TABLE)) {
+    for (const t of Object.values(verbs as Record<string, string>)) {
+      if (typeof t === "string" && t) out.add(t);
+    }
+  }
+  return out;
+})();
+// Meta tools (propose_write, evaluate_gate, undo_last_action, etc.)
+// are never stripped even when their toolName collides with a dispatch
+// target — they ARE the orchestrator surface.
+const ALWAYS_INCLUDE_TOOLS: ReadonlySet<string> = new Set([
+  "propose_write",
+  "evaluate_gate",
+  "undo_last_action",
+  "present_choices",
+]);
 
 // =====================================================================
 // 1. Types
@@ -744,6 +772,23 @@ export function getToolsForPersona(persona: CliPersona): ToolDef[] {
   const out: ToolDef[] = [];
   for (const entry of capabilitiesForPersona(persona)) {
     if (seenNames.has(entry.toolName)) continue;
+    // Task #484 — strip legacy chat-write tools whose (kind, verb) is
+    // now owned by propose_write. Without this gate, the chat surface
+    // that Sonnet sees still includes account_create, opportunity_create,
+    // etc., and the system-prompt instruction "use propose_write" is
+    // brittle under the synthetic-history bias documented in #484.
+    // Slash-command and direct-typed routes still resolve these via
+    // findToolByName (which falls back to the catalog when no persona
+    // is supplied), so undo, /new, and the typed dispatcher all keep
+    // working.
+    if (
+      entry.isWrite &&
+      entry.module !== "meta" &&
+      !ALWAYS_INCLUDE_TOOLS.has(entry.toolName) &&
+      LEGACY_DISPATCH_TARGETS.has(entry.toolName)
+    ) {
+      continue;
+    }
     seenNames.add(entry.toolName);
     out.push({
       name: entry.toolName,
@@ -766,6 +811,16 @@ export function getToolsForPersona(persona: CliPersona): ToolDef[] {
   for (const t of Object.values(TOOL_REGISTRY)) {
     if (seenNames.has(t.name)) continue;
     if (t.isWrite && READ_ONLY_ROLES.has(persona.role)) continue;
+    // Same legacy-chat-write strip as above (TOOL_REGISTRY currently
+    // holds only reads, but kept here as defense-in-depth in case a
+    // future contributor adds a legacy write).
+    if (
+      t.isWrite &&
+      !ALWAYS_INCLUDE_TOOLS.has(t.name) &&
+      LEGACY_DISPATCH_TARGETS.has(t.name)
+    ) {
+      continue;
+    }
     seenNames.add(t.name);
     out.push(t);
   }
@@ -2021,9 +2076,9 @@ export function noToolFallbackMessage(promptText: string): string {
  * After ANY tool result block in history, the mock emits an end_turn
  * narration (one tool call per turn keeps the test surface small).
  */
-function mockModelStep(args: {
+async function mockModelStep(args: {
   history: Array<{ role: "user" | "assistant"; content: unknown }>;
-}): ClaudeStep {
+}): Promise<ClaudeStep> {
   let lastTool: { role: "user" | "assistant"; content: unknown } | undefined;
   for (let i = args.history.length - 1; i >= 0; i--) {
     const h = args.history[i]!;
@@ -2108,37 +2163,35 @@ function mockModelStep(args: {
     return "";
   })().toLowerCase();
 
+  // Task #484 — replaced BOTH regex chains (the parity router AND the
+  // inline (find|who is|account) / (choose|pick|option) / RAID
+  // branches) with the same typed-Intent pipeline that the live path
+  // uses. Behaviour summary:
+  //   1. Slash commands (/undo, /annuler) route deterministically.
+  //   2. Otherwise classifyIntentTyped → if it's a write/transition,
+  //      emit `propose_write` with verb/kind/payload built from the
+  //      typed Intent's hints. The orchestrator's propose_write run
+  //      then takes care of the dispatch table, two-phase confirm,
+  //      and audit (same as live).
+  //   3. Read intents with at least one entity hint route to
+  //      resolve_account_by_name (the only catalog read that is
+  //      universally surfaced). Everything else falls through to the
+  //      no-tool fallback narration.
+  // The two regex chains were the proximate cause of the user's
+  // turn-1 (`name="new"`) and turn-3 (`query="respond in english.…"`)
+  // failures, and they emitted legacy chat-write tool names
+  // (account_create, opportunity_create, …) that propose_write now
+  // owns. They are gone for good.
   let toolCall: ClaudeToolCall | null = null;
   let text = "On it.";
-  // Task #335 — slash commands route deterministically to their
-  // capability, bypassing the model classifier. The live (Claude)
-  // router sees the same catalog via tool definitions and routes
-  // organically; the mock router needs an explicit branch here so
-  // tests + dev-mode both honour `/undo`, `/help`, etc.
+
   const slashMatch = promptText.match(/^\s*\/([a-z_-]+)\b/);
   if (slashMatch) {
     const slash = `/${slashMatch[1]}`;
     if (slash === "/undo" || slash === "/annuler") {
-      text = "Looking up your last reversible action.";
-      toolCall = {
-        id: rid("tu"),
-        name: "undo_last_action",
-        input: {},
-      };
-    }
-  }
-  // Task #338 — try the parity router next so natural-language prompts
-  // for new write capabilities (account.create, opportunity.move_stage,
-  // proposal.send, etc.) reach the catalog without slash syntax.
-  if (!toolCall) {
-    const routed = routePromptToCapability(promptText);
-    if (routed) {
-      // Friendly verb-first narration. Avoids the "a account create"
-      // article-mismatch bug and reads as a human sentence.
-      const verbPhrase = humanizeToolName(routed.toolName);
       return {
-        text: `Got it — I'll ${verbPhrase}. Review and confirm below.`,
-        toolCall: { id: rid("tu"), name: routed.toolName, input: routed.input },
+        text: "Looking up your last reversible action.",
+        toolCall: { id: rid("tu"), name: "undo_last_action", input: {} },
         stop: "tool_use",
         costUsd: 0,
         tokensIn: 0,
@@ -2146,63 +2199,79 @@ function mockModelStep(args: {
       };
     }
   }
-  if (!toolCall && promptText.includes("raid") && /(add|create|new|log)/.test(promptText)) {
-    const mEng = promptText.match(/eng[-_]?[a-z0-9_]+/i);
-    text = "I'll draft a RAID item for you to review.";
-    toolCall = {
-      id: rid("tu"),
-      name: "add_raid_item",
-      input: {
-        engagementId: mEng ? mEng[0] : "eng_unknown",
-        kind: /assumption/.test(promptText)
-          ? "assumption"
-          : /issue/.test(promptText)
-            ? "issue"
-            : /dependency/.test(promptText)
-              ? "dependency"
-              : "risk",
-        severity: /\bred\b/.test(promptText)
-          ? "red"
-          : /\bgreen\b/.test(promptText)
-            ? "green"
-            : "amber",
-        description: promptText.slice(0, 200),
+
+  // Typed-intent classification. We use the deterministic path
+  // directly (mock mode skips the network call anyway) so the mock
+  // stays synchronous-ish and never waits on integration env.
+  const { deterministicClassify } = await import("./intent-router.js");
+  const intent = deterministicClassify(promptText);
+
+  const isWriteVerb =
+    intent.verb === "create" ||
+    intent.verb === "update" ||
+    intent.verb === "delete" ||
+    intent.verb === "link" ||
+    intent.verb === "transition";
+
+  if (isWriteVerb && intent.kind !== "unknown") {
+    // Build a structured payload from the typed-Intent hints. The
+    // first hint is the most-likely entity name (already deduped by
+    // extractEntityHints). For account writes we additionally lift a
+    // trailing "in <Country>" out of the prompt so the confirm card
+    // pre-fills both fields. The preamble is already stripped at
+    // ingress, so the country regex can no longer first-match
+    // "in English".
+    const entityName = intent.entityHints[0] ?? "";
+    const payload: Record<string, unknown> = {};
+    if (entityName) payload.name = entityName;
+    if (intent.kind === "account") {
+      const cm = promptText.match(/\bin\s+(?:the\s+)?([A-Z][\p{L}]{1,40}|[A-Z]{2,5})\b/u);
+      if (cm?.[1]) payload.country = cm[1];
+    }
+    const verbPhrase = `${intent.verb} ${intent.kind.replace(/_/g, " ")}`;
+    const summary = entityName
+      ? `${verbPhrase}: ${entityName}`
+      : verbPhrase;
+    return {
+      text: `Got it — I'll prepare a ${verbPhrase} for you to review.`,
+      toolCall: {
+        id: rid("tu"),
+        name: "propose_write",
+        input: {
+          verb: intent.verb,
+          kind: intent.kind,
+          payload,
+          summary,
+        },
       },
+      stop: "tool_use",
+      costUsd: 0,
+      tokensIn: 0,
+      tokensOut: 0,
     };
-  } else if (promptText.includes("raid")) {
-    text = "Pulling your open RAID items.";
-    toolCall = { id: rid("tu"), name: "list_my_open_raid_items", input: { limit: 10 } };
-  } else if (/(find|who is|account)/.test(promptText)) {
-    const m = promptText.match(/(?:find|account|who is)\s+([a-z0-9 _-]+)/i);
-    text = "Looking that account up.";
-    toolCall = {
-      id: rid("tu"),
-      name: "resolve_account_by_name",
-      input: { query: (m?.[1] ?? promptText).trim().slice(0, 60) },
-    };
-  } else if (/(choose|pick|option)/.test(promptText)) {
-    text = "Here are some options.";
-    toolCall = {
-      id: rid("tu"),
-      name: "present_choices",
-      input: {
-        prompt: "Pick one:",
-        options: [
-          { id: "a", label: "Option A" },
-          { id: "b", label: "Option B" },
-        ],
-      },
-    };
-  } else {
-    // Task #338 — context-aware fallback. If we can name a near-miss
-    // catalog entry, point at it; otherwise explicitly say the action
-    // is not available from the assistant yet and name the UI surface.
-    text = noToolFallbackMessage(promptText);
   }
+
+  if (intent.verb === "read" && intent.entityHints.length > 0) {
+    return {
+      text: "Looking that up.",
+      toolCall: {
+        id: rid("tu"),
+        name: "resolve_account_by_name",
+        input: { query: intent.entityHints[0]!.slice(0, 60) },
+      },
+      stop: "tool_use",
+      costUsd: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+    };
+  }
+
+  // No-tool fallback — unchanged narrative.
+  text = noToolFallbackMessage(promptText);
   return {
     text,
     toolCall,
-    stop: toolCall ? "tool_use" : "end_turn",
+    stop: "end_turn",
     costUsd: 0,
     tokensIn: 0,
     tokensOut: 0,
@@ -2751,24 +2820,14 @@ export async function runTurn(
       const pc = _draft.pendingClarification;
       const tool = findToolByName(pc.tool, persona);
       if (tool) {
-        // Task #340 — the client wraps every prompt with a locale
-        // preamble ("Respond in English." / "أجب بالعربيّة.") followed
-        // by a blank line. The model usually filters that out, but the
-        // deterministic continuation merges raw input straight into a
-        // tool field, so we must strip it here to avoid persisting the
-        // preamble inside the RAID description / feature request body.
-        const LOCALE_PREAMBLES = [
-          "Respond in English.",
-          "أجب بالعربيّة.",
-          "أجب بالعربية.",
-        ] as const;
-        let answer = input.prompt ?? "";
-        for (const p of LOCALE_PREAMBLES) {
-          if (answer.startsWith(p)) {
-            answer = answer.slice(p.length).replace(/^\r?\n+/, "");
-            break;
-          }
-        }
+        // Task #484 — defense-in-depth strip. The HTTP ingress in
+        // cliRoutes.ts already strips the locale preamble before the
+        // prompt reaches runTurn, so this is a no-op for normal
+        // sessions. We keep the call so future entry points
+        // (test fixtures, internal callers, future RPC surfaces) that
+        // bypass cliRoutes still get the same treatment before raw
+        // text is merged into a tool field.
+        const answer = stripLocalePreamble(input.prompt ?? "");
         const mergedInput: Record<string, unknown> = {
           ...(pc.partial ?? {}),
           [pc.field]: answer,
@@ -3291,7 +3350,13 @@ export async function runTurn(
     if (
       status === "success" &&
       toolCalls.length === 1 &&
-      !TOOL_REGISTRY[toolCalls[0]!.tool as string]?.isWrite
+      // Task #484 — catalog-aware lookup. The previous check only
+      // consulted the legacy starter TOOL_REGISTRY, so successful
+      // catalog writes (account_create, opportunity_create, …) were
+      // mislabelled `read_only_no_op` because the lookup returned
+      // undefined and `!undefined === true`. findToolByName falls
+      // through to the catalog when no persona is supplied.
+      !findToolByName(toolCalls[0]!.tool as string)?.isWrite
     ) {
       status = "read_only_no_op";
     }
