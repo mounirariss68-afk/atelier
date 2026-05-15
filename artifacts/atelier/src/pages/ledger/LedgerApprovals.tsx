@@ -140,7 +140,7 @@ export default function LedgerApprovals() {
     <div className="p-4 md:p-6 space-y-6">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Ledger · Approvals"
+          eyebrow="Firm · Ledger"
           headline="Timesheet approvals"
           lede="Sun 21:00 GST submit · Tue 12:00 GST approve. Lead → Partner ladder. Grouped by engagement."
         />

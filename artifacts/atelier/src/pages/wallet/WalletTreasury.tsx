@@ -53,7 +53,7 @@ export default function WalletTreasury() {
       <PageHero>
         <div className="flex items-end justify-between gap-4">
           <SectionHead
-            eyebrow="Firm · Wallet · Treasury"
+            eyebrow="Firm · Wallet"
             headline="Treasury — 13-week cash forecast"
             lede="Direct-method forecast across 13 rolling weeks. Cash-gap weeks flagged red."
           />

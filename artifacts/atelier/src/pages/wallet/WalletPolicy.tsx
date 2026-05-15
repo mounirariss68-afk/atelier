@@ -64,7 +64,7 @@ export default function WalletPolicy() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Policy"
+          eyebrow="Firm · Wallet"
           headline="Expense policy"
           lede="Caps, hard blocks, and approval thresholds — keep the firm clean."
         />

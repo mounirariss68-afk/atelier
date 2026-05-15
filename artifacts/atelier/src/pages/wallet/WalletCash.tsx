@@ -71,7 +71,7 @@ export default function WalletCash() {
     <div className="min-h-screen bg-bg text-text" data-testid="page-wallet-cash">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Cash"
+          eyebrow="Firm · Wallet"
           headline="Cash application"
           lede="Receipts from bank statements matched and applied to open invoices."
         />

@@ -36,7 +36,7 @@ export default function WalletAr() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · AR aging"
+          eyebrow="Firm · Wallet"
           headline="AR aging"
           lede="Where the cash sits, by overdue bucket."
         />

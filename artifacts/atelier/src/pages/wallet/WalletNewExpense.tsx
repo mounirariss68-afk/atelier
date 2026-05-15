@@ -212,7 +212,7 @@ export default function WalletNewExpense() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · New expense"
+          eyebrow="Firm · Wallet"
           headline="New expense"
           lede="Pick a capture path. The Auditor classifies, checks policy, and proposes VAT + billability."
         />

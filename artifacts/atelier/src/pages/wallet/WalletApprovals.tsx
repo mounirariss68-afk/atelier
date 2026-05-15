@@ -138,7 +138,7 @@ export default function WalletApprovals() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Approvals"
+          eyebrow="Firm · Wallet"
           headline="Payment approvals"
           lede="Weekly contractor and partner-firm payment proposals composed by the Payment Proposer agent. Partner sign-off required for amounts over $250 and for all partner-firm invoices."
         />

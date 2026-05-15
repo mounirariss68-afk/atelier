@@ -56,7 +56,7 @@ export default function WalletCollections() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Collections"
+          eyebrow="Firm · Wallet"
           headline="Collections"
           lede="The dunning ladder runs per jurisdiction. Each step needs a real human nudge, and (after step one) a partner approver."
         />

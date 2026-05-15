@@ -224,7 +224,7 @@ export default function Timesheet() {
     <div className="p-4 md:p-6 space-y-6">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Ledger · Timesheet"
+          eyebrow="Firm · Ledger"
           headline={`Timesheet — ${w.weekIso}`}
           lede={`${w.personName} · week of ${w.weekStartDate}`}
         />

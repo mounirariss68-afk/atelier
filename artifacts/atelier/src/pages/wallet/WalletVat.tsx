@@ -30,7 +30,7 @@ export default function WalletVat() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · VAT"
+          eyebrow="Firm · Wallet"
           headline="VAT register"
           lede="KSA 15% · UAE 5% · everything else exported. Audit-ready CSV one click away."
         />

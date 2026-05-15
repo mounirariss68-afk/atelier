@@ -28,7 +28,7 @@ export default function IpCatalog() {
     <div className="animate-in fade-in">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Atelier · IP Catalog"
+          eyebrow="Firm · Atelier"
           headline="Every internal repo, OSS dep, demo URL, and IP grant — owned and tracked"
           lede="Extension of /atelier/assets. IP Steward nags owners when freshness lapses; OSS Compliance Sentinel blocks license-incompatible additions before they ship; Demo Environment Curator (a sub-agent of IP Steward) keeps demo URLs alive."
         />

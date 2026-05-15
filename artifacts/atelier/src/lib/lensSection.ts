@@ -34,6 +34,8 @@ export type FirmAreaId =
   | "codex"
   | "wallet"
   | "ledger"
+  | "studio"
+  | "alliances"
   | "reports"
   | "settings"
   | "admin";
@@ -60,6 +62,8 @@ export const FIRM_AREAS: readonly FirmArea[] = [
   { id: "codex", label: "Codex", prefix: "/codex" },
   { id: "wallet", label: "Wallet", prefix: "/wallet" },
   { id: "ledger", label: "Ledger", prefix: "/ledger" },
+  { id: "studio", label: "Studio", prefix: "/studio" },
+  { id: "alliances", label: "Alliances", prefix: "/alliances" },
   { id: "reports", label: "Reports", prefix: "/reports" },
   { id: "admin", label: "Admin", prefix: "/admin" },
   { id: "settings", label: "Settings", prefix: "/settings" },
@@ -103,10 +107,18 @@ function findLensSection(
         if (!best || s.href.length > best.href.length) best = s;
       }
     }
-    // Fall back to the lens overview when no section matches.
+    // Fall back to the lens overview when no section matches. Prefer
+    // an explicit overview section (`href === lens.prefix`); otherwise
+    // synthesize one so we don't mislabel the lens home as the first
+    // sub-section (e.g. `/agents` → "Design").
     if (!best) {
+      const overview = lens.sections.find((s) => s.href === lens.prefix);
       best =
-        lens.sections.find((s) => s.href === lens.prefix) ?? lens.sections[0];
+        overview ?? {
+          id: "overview",
+          label: "Overview",
+          href: lens.prefix,
+        };
     }
     return { lens: lens.id, lensLabel: lens.label, section: best };
   }

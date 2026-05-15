@@ -96,7 +96,7 @@ export default function WalletClientBillable() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Client-billable"
+          eyebrow="Firm · Wallet"
           headline={`Engagement ${engagementId}`}
           lede="Approved client-billable expenses and the latest invoice-line draft composed from billable hours plus pass-through expenses."
         />

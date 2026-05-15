@@ -69,7 +69,7 @@ export default function WalletInvoices() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Invoices"
+          eyebrow="Firm · Wallet"
           headline="Invoices"
           lede="Issue, clear with the tax authority, and chase. Numbers are gap-free per jurisdiction."
         />

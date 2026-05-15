@@ -102,7 +102,7 @@ export default function Utilization() {
     <div className="space-y-6">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Ledger · Utilization"
+          eyebrow="Firm · Ledger"
           headline={data?.personLabel ?? personId}
           lede={data ? `${data.role} · ${data.seniority} · target ${pct(data.targetPct)}. Rolling 4-week + YTD + engagement mix from snapshot store.` : "Loading…"}
         />

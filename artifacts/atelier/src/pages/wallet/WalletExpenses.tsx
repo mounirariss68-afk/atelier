@@ -73,7 +73,7 @@ export default function WalletExpenses() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Expenses"
+          eyebrow="Firm · Wallet"
           headline="Expenses"
           lede="Every expense policy-checked, VAT-handled, traceable to the client."
         />

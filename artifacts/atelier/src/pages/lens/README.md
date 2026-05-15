@@ -16,7 +16,8 @@ Atelier has three layers of navigation, in this order:
 Every workspace page must use ONE of two patterns:
 
 - **Managed lens page** → `Manage · {Lens} · {Section}`
-  (e.g. `Manage · Clients · Opportunities`, `Manage · People · Hire`)
+  (e.g. `Manage · Clients · Opportunities`, `Manage · People · Hire`,
+  `Manage · Agents · Overview`)
 - **Firm-menu surface** → `Firm · {Area}`
   (e.g. `Firm · Atelier`, `Firm · Press`, `Firm · Wallet`)
 

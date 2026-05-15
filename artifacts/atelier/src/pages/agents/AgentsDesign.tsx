@@ -17,6 +17,7 @@ import {
   Eyebrow,
   PillButton,
 } from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { useAtelierGetMe } from "@workspace/api-client-react";
 import { useAgentSpecs, type AgentSpec } from "@/lib/agents-lens-seed";

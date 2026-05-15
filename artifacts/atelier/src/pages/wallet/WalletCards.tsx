@@ -27,7 +27,7 @@ export default function WalletCards() {
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Cards"
+          eyebrow="Firm · Wallet"
           headline="Corporate cards"
           lede="Card-feed lines auto-flow into expense drafts; reconciled at submit."
         />

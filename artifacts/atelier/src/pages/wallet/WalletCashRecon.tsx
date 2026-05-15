@@ -42,7 +42,7 @@ export default function WalletCashRecon() {
     <div className="min-h-screen bg-bg text-text" data-testid="page-wallet-cash-recon">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Wallet · Bank reconciliation"
+          eyebrow="Firm · Wallet"
           headline="Bank reconciliation"
           lede="Open and finalise bank reconciliation periods. Finalising locks the period for cash & bank entries."
         />
