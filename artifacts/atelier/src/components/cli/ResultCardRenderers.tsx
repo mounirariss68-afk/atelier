@@ -241,8 +241,251 @@ function ShapeBody({
       return <CashForecastStrip data={data} locale={locale} />;
     case "renewal_card":
       return <RenewalCard data={data} locale={locale} />;
+    case "agent_run":
+      return <AgentRunCard data={data} locale={locale} />;
     default:
       return <FallbackJson data={data} />;
+  }
+}
+
+/* ─────────── Task #492 — prefill_from_specialist (agent_run) ─────────── */
+
+function AgentRunCard({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const specialist = asObj(data.specialist);
+  const draft = asObj(data.draft);
+  const missing = asArr(data.missingRequiredFields).map(asStr).filter(Boolean);
+  const cost = asNum(specialist.costUsd);
+  const mode = asStr(specialist.mode);
+  const specName = asStr(specialist.name) || asStr(specialist.id);
+
+  const priorities = asArr(draft.strategicPriorities);
+  const signals = asArr(draft.sourceSignals);
+  const dms = asArr(draft.decisionMakers);
+  const hypothesis = asStr(draft.aicoHypothesis);
+  const summary = asStr(draft.refreshedSummary);
+
+  const firmoFields: Array<[string, string]> = [
+    ["name", "Name"],
+    ["country", "Country"],
+    ["sector", "Sector"],
+    ["hqCity", "HQ"],
+    ["tier", "Tier"],
+    ["industryCode", "Industry"],
+    ["subIndustryCode", "Sub-industry"],
+  ];
+  const firmoRows = firmoFields
+    .map(([k, label]) => [label, asStr(draft[k])] as const)
+    .filter(([, v]) => v !== "");
+
+  const hasAnyDraft =
+    firmoRows.length > 0 ||
+    priorities.length > 0 ||
+    signals.length > 0 ||
+    dms.length > 0 ||
+    hypothesis !== "" ||
+    summary !== "";
+
+  return (
+    <div className="space-y-3" data-testid="cli-agent-run-card">
+      {/* Specialist banner */}
+      <div className="flex items-center justify-between text-[11px] font-mono">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-success" aria-hidden />
+          <span className="text-text-mute uppercase tracking-wider">
+            {ar ? "متخصص" : "Specialist"}
+          </span>
+          <span className="text-text">{specName || "(specialist)"}</span>
+          {mode && (
+            <span className="px-1.5 py-0.5 rounded border border-border-soft text-text-mute">
+              {mode}
+            </span>
+          )}
+        </div>
+        {cost != null && (
+          <span className="text-text-faint">{fmtUsd(cost)}</span>
+        )}
+      </div>
+
+      {!hasAnyDraft ? (
+        <div className="text-xs text-text-mute italic">
+          {ar ? "لم يُرجع المتخصص أي مسودة." : "Specialist returned no draft."}
+        </div>
+      ) : (
+        <>
+          {/* Firmographics */}
+          {firmoRows.length > 0 && (
+            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
+              {firmoRows.map(([label, value]) => (
+                <div
+                  key={label}
+                  className="bg-bg-deep border border-border-soft rounded px-2 py-1.5"
+                >
+                  <div className="text-text-faint uppercase text-[10px]">{label}</div>
+                  <div className="text-text">{value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Refreshed summary */}
+          {summary && (
+            <div className="text-xs text-text leading-relaxed">{summary}</div>
+          )}
+
+          {/* Strategic priorities */}
+          {priorities.length > 0 && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+                {ar ? "أولويات استراتيجية" : "Strategic priorities"}
+              </div>
+              <ul className="space-y-1.5">
+                {priorities.map((p, i) => {
+                  const po = asObj(p);
+                  const text = asStr(po.text) || asStr(p);
+                  const urls = asArr(po.sourceUrls).map(asStr).filter(Boolean);
+                  return (
+                    <li key={i} className="text-xs">
+                      <div className="flex gap-1.5">
+                        <span className="text-text-faint shrink-0">·</span>
+                        <span className="text-text">{text}</span>
+                      </div>
+                      {urls.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-0.5 ms-3">
+                          {urls.map((u, j) => (
+                            <a
+                              key={j}
+                              href={u}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-0.5 text-[10px] font-mono text-gold hover:underline"
+                              title={u}
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              {hostOf(u)}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* Source signals */}
+          {signals.length > 0 && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+                {ar ? "إشارات المصادر" : "Source signals"}
+              </div>
+              <ul className="space-y-1">
+                {signals.slice(0, 6).map((s, i) => {
+                  const so = asObj(s);
+                  const title = asStr(so.title) || asStr(so.url);
+                  const url = asStr(so.url);
+                  const kind = asStr(so.kind);
+                  const conf = asNum(so.confidence);
+                  return (
+                    <li
+                      key={i}
+                      className="flex items-baseline justify-between gap-2 text-[11px]"
+                    >
+                      <a
+                        href={url || undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-text hover:text-gold hover:underline"
+                        title={url || title}
+                      >
+                        {title || "(untitled)"}
+                      </a>
+                      <span className="shrink-0 font-mono text-text-faint text-[10px]">
+                        {kind}
+                        {conf != null && ` · ${(conf * 100).toFixed(0)}%`}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* Decision makers */}
+          {dms.length > 0 && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+                {ar ? "صنّاع القرار" : "Decision makers"}
+              </div>
+              <ul className="space-y-0.5">
+                {dms.slice(0, 8).map((d, i) => {
+                  const dmo = asObj(d);
+                  const name = asStr(dmo.name);
+                  const title = asStr(dmo.title);
+                  const conf = asNum(dmo.confidence);
+                  return (
+                    <li
+                      key={i}
+                      className="flex items-baseline justify-between gap-2 text-[11px]"
+                    >
+                      <span className="truncate">
+                        <span className="text-text">{name || "(name)"}</span>
+                        {title && (
+                          <span className="text-text-mute"> · {title}</span>
+                        )}
+                      </span>
+                      {conf != null && (
+                        <span className="shrink-0 font-mono text-text-faint text-[10px]">
+                          {(conf * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* AICo hypothesis */}
+          {hypothesis && (
+            <div className="border-t border-border-soft pt-2">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-0.5">
+                {ar ? "فرضية AICo" : "AICo hypothesis"}
+              </div>
+              <div className="text-xs text-text leading-relaxed italic">
+                {hypothesis}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Missing fields */}
+      {missing.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+          <span className="text-text-faint uppercase tracking-wider">
+            {ar ? "مطلوب" : "Needs"}
+          </span>
+          {missing.map((m) => (
+            <span
+              key={m}
+              className="px-1.5 py-0.5 rounded border border-warning/30 bg-warning/10 text-warning"
+            >
+              {m}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url.slice(0, 24);
   }
 }
 
