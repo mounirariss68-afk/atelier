@@ -89,3 +89,53 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useTheme(): ThemeCtx {
   return React.useContext(Ctx);
 }
+
+/**
+ * Theme-aware palette for Recharts. Recharts renders colors as SVG
+ * attributes (not inline styles), so `var(--token)` strings don't
+ * resolve. We pick concrete hex/rgba values keyed off the active
+ * theme, mirroring the palette tokens declared in `index.css`.
+ */
+export interface ChartPalette {
+  axis: string;
+  grid: string;
+  tooltipBg: string;
+  tooltipBorder: string;
+  tooltipText: string;
+  success: string;
+  warn: string;
+  warnSoft: string;
+  danger: string;
+  mute: string;
+}
+
+const DARK_PALETTE: ChartPalette = {
+  axis: "#8FA3C0",
+  grid: "rgba(255, 255, 255, 0.08)",
+  tooltipBg: "#15294A",
+  tooltipBorder: "rgba(255, 255, 255, 0.13)",
+  tooltipText: "#F1EEE6",
+  success: "#34d399",
+  warn: "#fbbf24",
+  warnSoft: "rgba(251, 191, 36, 0.40)",
+  danger: "#f87171",
+  mute: "#94a3b8",
+};
+
+const LIGHT_PALETTE: ChartPalette = {
+  axis: "#4A5B78",
+  grid: "rgba(14, 31, 61, 0.10)",
+  tooltipBg: "#FFFFFF",
+  tooltipBorder: "rgba(14, 31, 61, 0.15)",
+  tooltipText: "#0E1F3D",
+  success: "#15803D",
+  warn: "#B45309",
+  warnSoft: "rgba(180, 83, 9, 0.32)",
+  danger: "#B91C1C",
+  mute: "#6B7A95",
+};
+
+export function useChartPalette(): ChartPalette {
+  const { theme } = useTheme();
+  return theme === "light" ? LIGHT_PALETTE : DARK_PALETTE;
+}

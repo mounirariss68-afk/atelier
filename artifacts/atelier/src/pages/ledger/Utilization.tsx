@@ -2,6 +2,7 @@ import * as React from "react";
 import { useParams, Link } from "wouter";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
+import { useChartPalette } from "@/lib/theme";
 
 interface WeekRow { weekIso: string; weekStartDate: string; billableHours: number; totalHours: number; utilizationPct: number; targetPct: number; }
 interface MixRow { engagementId: string | null; name: string; hours: number; billable: boolean; }
@@ -41,6 +42,7 @@ function utilTone(util: number, target: number): "green" | "amber" | "red" {
 }
 
 export default function Utilization() {
+  const palette = useChartPalette();
   const params = useParams<{ personId?: string }>();
   const [me, setMe] = React.useState<{ id: string; role: string; name: string } | null>(null);
   const personId = params.personId ?? me?.id ?? "";
@@ -142,13 +144,13 @@ export default function Utilization() {
             <div className="h-64 w-full">
               <ResponsiveContainer>
                 <LineChart data={data.weeks.map((w) => ({ week: w.weekIso.slice(5), util: Math.round(w.utilizationPct * 100), target: Math.round(w.targetPct * 100) }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
-                  <XAxis dataKey="week" stroke="#94a3b8" fontSize={12} />
-                  <YAxis stroke="#94a3b8" fontSize={12} domain={[0, 100]} unit="%" />
-                  <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <ReferenceLine y={Math.round(data.targetPct * 100)} stroke="#fbbf24" strokeDasharray="4 4" label={{ value: "Target", position: "right", fill: "#fbbf24", fontSize: 11 }} />
-                  <Line type="monotone" dataKey="util" name="Utilization %" stroke="#34d399" strokeWidth={2} dot />
+                  <CartesianGrid strokeDasharray="3 3" stroke={palette.grid} />
+                  <XAxis dataKey="week" stroke={palette.axis} fontSize={12} />
+                  <YAxis stroke={palette.axis} fontSize={12} domain={[0, 100]} unit="%" />
+                  <Tooltip contentStyle={{ background: palette.tooltipBg, border: `1px solid ${palette.tooltipBorder}`, color: palette.tooltipText, fontSize: 12 }} labelStyle={{ color: palette.tooltipText }} itemStyle={{ color: palette.tooltipText }} />
+                  <Legend wrapperStyle={{ fontSize: 12, color: palette.axis }} />
+                  <ReferenceLine y={Math.round(data.targetPct * 100)} stroke={palette.warn} strokeDasharray="4 4" label={{ value: "Target", position: "right", fill: palette.warn, fontSize: 11 }} />
+                  <Line type="monotone" dataKey="util" name="Utilization %" stroke={palette.success} strokeWidth={2} dot />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -185,13 +187,13 @@ export default function Utilization() {
               <div className="h-56 w-full">
                 <ResponsiveContainer>
                   <BarChart data={data.engagementMix.slice(0, 8).map((m) => ({ name: m.name.length > 22 ? m.name.slice(0, 22) + "…" : m.name, hours: m.hours, billable: m.billable }))} layout="vertical" margin={{ left: 32 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
-                    <XAxis type="number" stroke="#94a3b8" fontSize={12} />
-                    <YAxis type="category" dataKey="name" stroke="#94a3b8" fontSize={11} width={140} />
-                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={palette.grid} />
+                    <XAxis type="number" stroke={palette.axis} fontSize={12} />
+                    <YAxis type="category" dataKey="name" stroke={palette.axis} fontSize={11} width={140} />
+                    <Tooltip contentStyle={{ background: palette.tooltipBg, border: `1px solid ${palette.tooltipBorder}`, color: palette.tooltipText, fontSize: 12 }} labelStyle={{ color: palette.tooltipText }} itemStyle={{ color: palette.tooltipText }} />
                     <Bar dataKey="hours" name="Hours">
                       {data.engagementMix.slice(0, 8).map((m, i) => (
-                        <Cell key={i} fill={m.billable ? "#34d399" : "#94a3b8"} />
+                        <Cell key={i} fill={m.billable ? palette.success : palette.mute} />
                       ))}
                     </Bar>
                   </BarChart>

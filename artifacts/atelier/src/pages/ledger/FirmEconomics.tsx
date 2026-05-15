@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link } from "wouter";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
+import { useChartPalette } from "@/lib/theme";
 
 interface PartnerSummary { partnerId: string; partnerName: string; utilPct: number; targetPct: number; peopleCount: number; people: { personId: string; name: string; utilPct: number; targetPct: number }[]; }
 interface SectorSummary { sector: string; plannedMarginPct: number; realizedMarginPct: number; engagementCount: number; revenueUsd: number; }
@@ -43,6 +44,7 @@ function deltaTone(deltaFrac: number): "green" | "amber" | "red" {
 }
 
 export default function FirmEconomics() {
+  const palette = useChartPalette();
   const [data, setData] = React.useState<FirmResp | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -145,13 +147,13 @@ export default function FirmEconomics() {
               <div className="h-64 w-full">
                 <ResponsiveContainer>
                   <BarChart data={data.partnerSummary.map((p) => ({ name: p.partnerName, util: Math.round(p.utilPct * 100), target: Math.round(p.targetPct * 100) }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
-                    <YAxis stroke="#94a3b8" fontSize={12} unit="%" domain={[0, 100]} />
-                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="util" name="Actual %" fill="#34d399" />
-                    <Bar dataKey="target" name="Target %" fill="#fbbf2466" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={palette.grid} />
+                    <XAxis dataKey="name" stroke={palette.axis} fontSize={12} />
+                    <YAxis stroke={palette.axis} fontSize={12} unit="%" domain={[0, 100]} />
+                    <Tooltip contentStyle={{ background: palette.tooltipBg, border: `1px solid ${palette.tooltipBorder}`, color: palette.tooltipText, fontSize: 12 }} labelStyle={{ color: palette.tooltipText }} itemStyle={{ color: palette.tooltipText }} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: palette.axis }} />
+                    <Bar dataKey="util" name="Actual %" fill={palette.success} />
+                    <Bar dataKey="target" name="Target %" fill={palette.warnSoft} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -188,15 +190,15 @@ export default function FirmEconomics() {
               <div className="h-64 w-full">
                 <ResponsiveContainer>
                   <BarChart data={data.sectorSummary.map((s) => ({ name: s.sector, planned: Math.round(s.plannedMarginPct * 100), realized: Math.round(s.realizedMarginPct * 100) }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
-                    <YAxis stroke="#94a3b8" fontSize={12} unit="%" />
-                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="planned" name="Planned %" fill="#fbbf2466" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={palette.grid} />
+                    <XAxis dataKey="name" stroke={palette.axis} fontSize={12} />
+                    <YAxis stroke={palette.axis} fontSize={12} unit="%" />
+                    <Tooltip contentStyle={{ background: palette.tooltipBg, border: `1px solid ${palette.tooltipBorder}`, color: palette.tooltipText, fontSize: 12 }} labelStyle={{ color: palette.tooltipText }} itemStyle={{ color: palette.tooltipText }} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: palette.axis }} />
+                    <Bar dataKey="planned" name="Planned %" fill={palette.warnSoft} />
                     <Bar dataKey="realized" name="Realized %">
                       {data.sectorSummary.map((s, i) => (
-                        <Cell key={i} fill={s.realizedMarginPct < s.plannedMarginPct - 0.05 ? "#f87171" : s.realizedMarginPct < s.plannedMarginPct ? "#fbbf24" : "#34d399"} />
+                        <Cell key={i} fill={s.realizedMarginPct < s.plannedMarginPct - 0.05 ? palette.danger : s.realizedMarginPct < s.plannedMarginPct ? palette.warn : palette.success} />
                       ))}
                     </Bar>
                   </BarChart>
