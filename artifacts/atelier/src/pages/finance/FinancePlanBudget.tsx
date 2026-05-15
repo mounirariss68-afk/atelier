@@ -17,6 +17,14 @@ function fmt(n: number, currency: string): string {
   return `${sign}${currency} ${abs.toFixed(0)}`;
 }
 function pct(n: number): string { return `${(n * 100).toFixed(1)}%`; }
+function signedPct(n: number): string { return `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`; }
+function varianceTone(n: number | null): string {
+  if (n == null) return "text-text-faint";
+  if (n >= 0.02) return "text-success";
+  if (n <= -0.05) return "text-danger";
+  if (n <= -0.02) return "text-warn";
+  return "text-text-mute";
+}
 
 export default function FinancePlanBudget() {
   const entities = usePlanEntities();
@@ -92,50 +100,102 @@ export default function FinancePlanBudget() {
             </Card>
 
             <Card className="p-4">
-              <div className="font-mono text-xs uppercase text-text-faint mb-3">Monthly detail</div>
+              <div className="flex items-baseline justify-between mb-3 gap-2 flex-wrap">
+                <div className="font-mono text-xs uppercase text-text-faint">Monthly detail · Plan vs Actual</div>
+                <div className="font-mono text-[10px] text-text-faint">
+                  Actuals through {data.ytdActual.throughLabel} · firm-economics realised
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs" data-testid="budget-monthly-table">
                   <thead className="text-[10px] font-mono uppercase text-text-faint">
                     <tr className="border-b border-border-soft">
                       <th className="text-left px-2 py-1.5">Month</th>
                       <th className="text-right px-2 py-1.5">FTEs</th>
-                      <th className="text-right px-2 py-1.5">Util-hrs</th>
-                      <th className="text-right px-2 py-1.5">Revenue</th>
+                      <th className="text-right px-2 py-1.5">Plan rev</th>
+                      <th className="text-right px-2 py-1.5">Actual rev</th>
+                      <th className="text-right px-2 py-1.5">Var %</th>
                       <th className="text-right px-2 py-1.5">Direct</th>
                       <th className="text-right px-2 py-1.5">Overhead</th>
-                      <th className="text-right px-2 py-1.5">EBITDA</th>
+                      <th className="text-right px-2 py-1.5">Plan EBITDA</th>
+                      <th className="text-right px-2 py-1.5">Actual EBITDA</th>
+                      <th className="text-right px-2 py-1.5">Var %</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.months.map((m) => (
-                      <tr key={m.iso} className="border-t border-border-soft">
-                        <td className="px-2 py-1.5">{m.label}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">{m.fteEquivalent.toFixed(0)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">{Math.round(m.utilisedHours).toLocaleString()}</td>
-                        <td className="px-2 py-1.5 text-right font-mono text-success">{fmt(m.revenueUsd, presentation)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">{fmt(m.directCostUsd, presentation)}</td>
-                        <td className="px-2 py-1.5 text-right font-mono">{fmt(m.overheadUsd, presentation)}</td>
-                        <td className={`px-2 py-1.5 text-right font-mono ${m.ebitdaUsd >= 0 ? "text-success" : "text-danger"}`}>{fmt(m.ebitdaUsd, presentation)}</td>
-                      </tr>
-                    ))}
+                    {data.months.map((m, i) => {
+                      const a = data.monthsActual[i];
+                      const partialFlag = a?.isElapsed && a.isPartial ? ` · MTD ${a.daysElapsed}/${a.daysInMonth}d` : "";
+                      return (
+                        <tr key={m.iso} className="border-t border-border-soft" data-testid={`budget-row-${m.iso}`}>
+                          <td className="px-2 py-1.5">
+                            {m.label}
+                            {partialFlag && <span className="text-[10px] text-text-faint font-mono ml-1">{partialFlag}</span>}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono">{m.fteEquivalent.toFixed(0)}</td>
+                          <td className="px-2 py-1.5 text-right font-mono text-text-mute">{fmt(a?.revenuePlanProratedUsd ?? m.revenueUsd, presentation)}</td>
+                          <td className="px-2 py-1.5 text-right font-mono text-success">
+                            {a?.revenueActualUsd != null ? fmt(a.revenueActualUsd, presentation) : <span className="text-text-faint">—</span>}
+                          </td>
+                          <td className={`px-2 py-1.5 text-right font-mono ${varianceTone(a?.revenueVariancePct ?? null)}`}>
+                            {a?.revenueVariancePct != null ? signedPct(a.revenueVariancePct) : <span className="text-text-faint">—</span>}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono">{fmt(m.directCostUsd, presentation)}</td>
+                          <td className="px-2 py-1.5 text-right font-mono">{fmt(m.overheadUsd, presentation)}</td>
+                          <td className={`px-2 py-1.5 text-right font-mono text-text-mute`}>{fmt(a?.ebitdaPlanProratedUsd ?? m.ebitdaUsd, presentation)}</td>
+                          <td className={`px-2 py-1.5 text-right font-mono ${(a?.ebitdaActualUsd ?? 0) >= 0 ? "text-success" : "text-danger"}`}>
+                            {a?.ebitdaActualUsd != null ? fmt(a.ebitdaActualUsd, presentation) : <span className="text-text-faint">—</span>}
+                          </td>
+                          <td className={`px-2 py-1.5 text-right font-mono ${varianceTone(a?.ebitdaVariancePct ?? null)}`}>
+                            {a?.ebitdaVariancePct != null ? signedPct(a.ebitdaVariancePct) : <span className="text-text-faint">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
+                  <tfoot className="text-[11px] font-mono">
+                    <tr className="border-t-2 border-border-soft" data-testid="budget-row-ytd">
+                      <td className="px-2 py-1.5 uppercase text-text-faint">YTD ({data.ytdActual.elapsedMonths} mo)</td>
+                      <td className="px-2 py-1.5"></td>
+                      <td className="px-2 py-1.5 text-right text-text-mute">{fmt(data.ytdActual.revenuePlanProrated, presentation)}</td>
+                      <td className="px-2 py-1.5 text-right text-success" data-testid="budget-ytd-actual-revenue">{fmt(data.ytdActual.revenueActual, presentation)}</td>
+                      <td className={`px-2 py-1.5 text-right ${varianceTone(data.ytdActual.revenueVariancePct)}`} data-testid="budget-ytd-revenue-variance">{signedPct(data.ytdActual.revenueVariancePct)}</td>
+                      <td className="px-2 py-1.5"></td>
+                      <td className="px-2 py-1.5"></td>
+                      <td className="px-2 py-1.5 text-right text-text-mute">{fmt(data.ytdActual.ebitdaPlanProrated, presentation)}</td>
+                      <td className={`px-2 py-1.5 text-right ${data.ytdActual.ebitdaActual >= 0 ? "text-success" : "text-danger"}`}>{fmt(data.ytdActual.ebitdaActual, presentation)}</td>
+                      <td className={`px-2 py-1.5 text-right ${varianceTone(data.ytdActual.ebitdaVariancePct)}`}>{signedPct(data.ytdActual.ebitdaVariancePct)}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </Card>
 
             <div className="grid md:grid-cols-2 gap-4">
               <Card className="p-4">
-                <div className="font-mono text-xs uppercase text-text-faint mb-3">By entity</div>
+                <div className="flex items-baseline justify-between mb-3 gap-2">
+                  <div className="font-mono text-xs uppercase text-text-faint">By entity</div>
+                  <div className="font-mono text-[10px] text-text-faint">Drill → engagement-economics actuals</div>
+                </div>
                 <table className="w-full text-sm" data-testid="budget-by-entity">
-                  <thead className="text-[11px] font-mono uppercase text-text-faint"><tr><th className="text-left px-2 py-1">Entity</th><th className="text-right px-2 py-1">Revenue</th><th className="text-right px-2 py-1">EBITDA</th><th className="text-right px-2 py-1">Margin</th><th className="text-right px-2 py-1">EOP HC</th></tr></thead>
+                  <thead className="text-[11px] font-mono uppercase text-text-faint"><tr><th className="text-left px-2 py-1">Entity</th><th className="text-right px-2 py-1">Revenue</th><th className="text-right px-2 py-1">EBITDA</th><th className="text-right px-2 py-1">Margin</th><th className="text-right px-2 py-1">EOP HC</th><th className="px-2 py-1"></th></tr></thead>
                   <tbody>
                     {data.byEntity.map((e) => (
-                      <tr key={e.entityId} className="border-t border-border-soft">
+                      <tr key={e.entityId} className="border-t border-border-soft hover:bg-bg-elevate/40" data-testid={`budget-entity-row-${e.entityId}`}>
                         <td className="px-2 py-1.5">{e.shortName}</td>
                         <td className="px-2 py-1.5 text-right font-mono">{fmt(e.totalRevenueUsd, presentation)}</td>
                         <td className={`px-2 py-1.5 text-right font-mono ${e.totalEbitdaUsd >= 0 ? "text-success" : "text-danger"}`}>{fmt(e.totalEbitdaUsd, presentation)}</td>
                         <td className="px-2 py-1.5 text-right font-mono">{pct(e.ebitdaMarginPct)}</td>
                         <td className="px-2 py-1.5 text-right font-mono">{e.endingHeadcount}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          <Link
+                            href={`/finance/reports/firm-economics?entity=${e.entityId}`}
+                            className="text-[11px] text-gold hover:underline font-mono"
+                            data-testid={`budget-entity-actuals-${e.entityId}`}
+                          >
+                            Actuals →
+                          </Link>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

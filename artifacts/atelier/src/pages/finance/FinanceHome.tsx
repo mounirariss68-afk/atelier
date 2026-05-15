@@ -1024,7 +1024,7 @@ export default function FinanceHome() {
 
         <section data-testid="finance-plan-fpa">
           <Eyebrow>FP&amp;A · driver-based plan ({fpaBudget?.scenarioLabel ?? "Base case"})</Eyebrow>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-2">
             <Link href="/finance/plan/budget">
               <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-revenue-plan">
                 <Eyebrow>Revenue (FY plan)</Eyebrow>
@@ -1033,6 +1033,48 @@ export default function FinanceHome() {
                 </div>
                 <div className="text-[10px] font-mono text-text-mute mt-1">
                   {fpaBudget ? `${fpaBudget.fyLabel} · ${fpaBudget.scenarioLabel}` : "loading…"}
+                </div>
+              </Card>
+            </Link>
+            <Link href="/finance/plan/budget">
+              <Card
+                className={`p-4 cursor-pointer hover:border-gold/40 transition-colors h-full ${
+                  fpaBudget && fpaBudget.ytdActual.revenueVariancePct <= -0.05
+                    ? "border-danger/40 bg-danger/5"
+                    : fpaBudget && fpaBudget.ytdActual.revenueVariancePct <= -0.02
+                      ? "border-amber-500/40 bg-amber-500/5"
+                      : ""
+                }`}
+                data-testid="kpi-tile-revenue-ytd-actual"
+              >
+                <Eyebrow>Revenue YTD · actual vs plan</Eyebrow>
+                <div className="text-2xl font-light mt-1 text-success">
+                  {fpaBudget ? formatMoney(fpaBudget.ytdActual.revenueActual, "GBP", { localCode: "USD" }) : "—"}
+                </div>
+                <div className="text-[10px] font-mono text-text-mute mt-1">
+                  {fpaBudget ? (
+                    <>
+                      Plan {formatMoney(fpaBudget.ytdActual.revenuePlanProrated, "GBP", { localCode: "USD" })}
+                      {" · "}
+                      <span
+                        className={
+                          fpaBudget.ytdActual.revenueVariancePct >= 0.02
+                            ? "text-success"
+                            : fpaBudget.ytdActual.revenueVariancePct <= -0.05
+                              ? "text-danger"
+                              : fpaBudget.ytdActual.revenueVariancePct <= -0.02
+                                ? "text-warn"
+                                : "text-text-mute"
+                        }
+                        data-testid="kpi-tile-revenue-ytd-variance"
+                      >
+                        {fpaBudget.ytdActual.revenueVariancePct >= 0 ? "+" : ""}
+                        {(fpaBudget.ytdActual.revenueVariancePct * 100).toFixed(1)}%
+                      </span>
+                      {" · "}
+                      thru {fpaBudget.ytdActual.throughLabel}
+                    </>
+                  ) : "loading…"}
                 </div>
               </Card>
             </Link>

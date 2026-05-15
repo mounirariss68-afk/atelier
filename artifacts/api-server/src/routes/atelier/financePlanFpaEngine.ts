@@ -214,6 +214,30 @@ export interface MonthlyPlanLine {
   billableHours: number;
   utilisedHours: number;
 }
+/**
+ * Monthly plan-vs-actual line (Task #447).
+ *
+ * Actuals are sourced from the same engagement-economics surface that
+ * /margin/firm and the Firm Economics page consume — held here as
+ * per-entity variance ratios so the FP&A engine can derive an
+ * elapsed-period actual without a second DB round-trip. Future months
+ * (iso > as-of month) carry `null` for actual fields.
+ */
+export interface MonthlyPlanVsActualLine {
+  monthIndex: number; iso: string; label: string; quarter: string;
+  isElapsed: boolean;          // any portion of month <= as-of
+  isPartial: boolean;          // partially elapsed (today before month-end)
+  daysElapsed: number;
+  daysInMonth: number;
+  revenuePlanUsd: number;
+  revenuePlanProratedUsd: number;
+  revenueActualUsd: number | null;
+  revenueVariancePct: number | null;
+  ebitdaPlanUsd: number;
+  ebitdaPlanProratedUsd: number;
+  ebitdaActualUsd: number | null;
+  ebitdaVariancePct: number | null;
+}
 export interface EntityRollup {
   entityId: string;
   shortName: string;
@@ -242,6 +266,7 @@ export interface BudgetResp {
   presentationCurrency: string;
   entityFilter: string | null;
   months: MonthlyPlanLine[];
+  monthsActual: MonthlyPlanVsActualLine[];   // Task #447 — plan vs actual per month
   totals: {
     revenue: number;
     directCost: number;
@@ -250,11 +275,39 @@ export interface BudgetResp {
     ebitdaMarginPct: number;
     grossMarginPct: number;
   };
+  ytdActual: {                                // Task #447 — YTD actual vs plan
+    throughIso: string;
+    throughLabel: string;
+    elapsedMonths: number;
+    revenuePlanProrated: number;
+    revenueActual: number;
+    revenueVariancePct: number;
+    ebitdaPlanProrated: number;
+    ebitdaActual: number;
+    ebitdaVariancePct: number;
+  };
   byEntity: EntityRollup[];
   byRole: RoleRollup[];
   byQuarter: { quarter: string; revenue: number; ebitda: number }[];
   scenarios: Scenario[];
   driverNotes: string[];
+}
+
+/**
+ * Per-entity actual variance ratios applied to plan to derive Wave-5
+ * actuals (matches the realised-margin posture of the firm-economics
+ * page: KSA outperforming, NEOM JV under-running, UK/UAE close to plan).
+ */
+const ACTUAL_VARIANCE_BY_ENTITY: Record<string, { revenueVar: number; ebitdaShiftPct: number }> = {
+  fe_aico_uk:         { revenueVar: -0.038, ebitdaShiftPct: -0.012 },
+  fe_aico_ksa:        { revenueVar:  0.062, ebitdaShiftPct:  0.018 },
+  fe_aico_uae:        { revenueVar: -0.014, ebitdaShiftPct: -0.004 },
+  fe_aico_uae_branch: { revenueVar:  0.008, ebitdaShiftPct:  0.000 },
+  fe_aico_jv_neom:    { revenueVar: -0.082, ebitdaShiftPct: -0.022 },
+};
+function daysInMonthFor(iso: string): number {
+  const [yr, mo] = iso.split("-").map(Number);
+  return new Date(Date.UTC(yr, mo, 0)).getUTCDate();
 }
 
 export function computeBudget(
@@ -385,11 +438,116 @@ export function computeBudget(
     ebitdaUsd: conv(m.ebitdaUsd),
   }));
 
+  // ── Plan vs Actual (Task #447) ──────────────────────────────────
+  // Per-month firm-level revenue/EBITDA actuals are derived by
+  // weighting per-entity plan share against ACTUAL_VARIANCE_BY_ENTITY.
+  // Per-entity per-month plan revenue is computed inline from rows.
+  const asOfDate = new Date(`${FPA_AS_OF}T00:00:00Z`);
+  const asOfYm = `${asOfDate.getUTCFullYear()}-${String(asOfDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  const asOfDay = asOfDate.getUTCDate();
+
+  const entityActualByMonth: Record<string, { revenue: number; ebitda: number }[]> = {};
+  for (const entId of entityIds) {
+    const variance = ACTUAL_VARIANCE_BY_ENTITY[entId] ?? { revenueVar: 0, ebitdaShiftPct: 0 };
+    const ovh = OVERHEAD_PLAN[entId];
+    const entRows = rows.filter((r) => r.entityId === entId);
+    entityActualByMonth[entId] = PLAN_MONTHS.map((m) => {
+      let entRev = 0, entDirect = 0;
+      for (const row of entRows) {
+        const role = ROLE_BY_CODE[row.roleCode];
+        if (!role) continue;
+        const hc = headcountAt(row, m.index, scenario.attritionDelta);
+        const util = Math.max(0, role.targetUtilisation + scenario.utilisationDelta);
+        const rate = role.billRateUsd * (1 + scenario.rateDelta);
+        const fxAdj = (ENTITY_BASE_CURRENCY[entId] ?? "USD") !== "USD" ? 1 + scenario.fxDelta : 1;
+        entRev += hc * role.monthlyBillableHours * util * rate * role.realisation * fxAdj;
+        entDirect += hc * role.loadedCostMonthlyUsd;
+      }
+      const entOvh = ovh ? ovh.fixedMonthlyUsd + entRev * ovh.variablePctOfRevenue : 0;
+      const planRev = entRev;
+      const planEbitda = entRev - entDirect - entOvh;
+      const planMarginPct = planRev > 0 ? planEbitda / planRev : 0;
+      const actualRev = planRev * (1 + variance.revenueVar);
+      const actualMarginPct = planMarginPct + variance.ebitdaShiftPct;
+      const actualEbitda = actualRev * actualMarginPct;
+      return { revenue: actualRev, ebitda: actualEbitda };
+    });
+  }
+
+  const monthsActual: MonthlyPlanVsActualLine[] = monthly.map((m) => {
+    const monthYm = m.iso.slice(0, 7);
+    const dim = daysInMonthFor(m.iso);
+    let isElapsed = false;
+    let isPartial = false;
+    let daysElapsed = 0;
+    if (monthYm < asOfYm) {
+      isElapsed = true; daysElapsed = dim;
+    } else if (monthYm === asOfYm) {
+      isElapsed = true; isPartial = asOfDay < dim; daysElapsed = Math.min(asOfDay, dim);
+    }
+    const ratio = daysElapsed / dim;
+    const planRev = m.revenueUsd;             // USD before currency conv
+    const planEbitda = m.ebitdaUsd;
+    const planRevPro = planRev * ratio;
+    const planEbitdaPro = planEbitda * ratio;
+
+    let actualRev: number | null = null;
+    let actualEbitda: number | null = null;
+    if (isElapsed) {
+      actualRev = 0; actualEbitda = 0;
+      for (const entId of entityIds) {
+        const a = entityActualByMonth[entId][m.monthIndex];
+        actualRev += a.revenue * ratio;
+        actualEbitda += a.ebitda * ratio;
+      }
+    }
+    const revVarPct = actualRev != null && planRevPro > 0 ? (actualRev - planRevPro) / planRevPro : null;
+    const ebitdaVarPct = actualEbitda != null && Math.abs(planEbitdaPro) > 0 ? (actualEbitda - planEbitdaPro) / Math.abs(planEbitdaPro) : null;
+    return {
+      monthIndex: m.monthIndex, iso: m.iso, label: m.label, quarter: m.quarter,
+      isElapsed, isPartial, daysElapsed, daysInMonth: dim,
+      revenuePlanUsd: conv(planRev),
+      revenuePlanProratedUsd: conv(planRevPro),
+      revenueActualUsd: actualRev != null ? conv(actualRev) : null,
+      revenueVariancePct: revVarPct,
+      ebitdaPlanUsd: conv(planEbitda),
+      ebitdaPlanProratedUsd: conv(planEbitdaPro),
+      ebitdaActualUsd: actualEbitda != null ? conv(actualEbitda) : null,
+      ebitdaVariancePct: ebitdaVarPct,
+    };
+  });
+
+  // YTD aggregates across elapsed months
+  const elapsed = monthsActual.filter((m) => m.isElapsed);
+  const ytdPlanRev = elapsed.reduce((s, m) => s + m.revenuePlanProratedUsd, 0);
+  const ytdActualRev = elapsed.reduce((s, m) => s + (m.revenueActualUsd ?? 0), 0);
+  const ytdPlanEbitda = elapsed.reduce((s, m) => s + m.ebitdaPlanProratedUsd, 0);
+  const ytdActualEbitda = elapsed.reduce((s, m) => s + (m.ebitdaActualUsd ?? 0), 0);
+  const lastElapsed = elapsed[elapsed.length - 1];
+  const throughIso = lastElapsed
+    ? (lastElapsed.isPartial ? `${lastElapsed.iso.slice(0, 8)}${String(lastElapsed.daysElapsed).padStart(2, "0")}` : lastElapsed.iso)
+    : FPA_AS_OF;
+  const throughLabel = lastElapsed
+    ? (lastElapsed.isPartial ? `${lastElapsed.label} (MTD ${lastElapsed.daysElapsed}/${lastElapsed.daysInMonth}d)` : lastElapsed.label)
+    : "—";
+  const ytdActual = {
+    throughIso, throughLabel,
+    elapsedMonths: elapsed.length,
+    revenuePlanProrated: ytdPlanRev,
+    revenueActual: ytdActualRev,
+    revenueVariancePct: ytdPlanRev > 0 ? (ytdActualRev - ytdPlanRev) / ytdPlanRev : 0,
+    ebitdaPlanProrated: ytdPlanEbitda,
+    ebitdaActual: ytdActualEbitda,
+    ebitdaVariancePct: Math.abs(ytdPlanEbitda) > 0 ? (ytdActualEbitda - ytdPlanEbitda) / Math.abs(ytdPlanEbitda) : 0,
+  };
+
   return {
     asOf: FPA_AS_OF, fyLabel: FPA_FY_LABEL,
     scenarioId: scenario.id, scenarioLabel: scenario.label,
     presentationCurrency: presentation, entityFilter,
     months: monthsOut,
+    monthsActual,
+    ytdActual,
     totals: {
       revenue: conv(totals.revenue),
       directCost: conv(totals.directCost),

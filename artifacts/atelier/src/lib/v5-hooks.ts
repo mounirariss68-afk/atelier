@@ -496,12 +496,27 @@ export interface FpaCommittedScenarioInfo {
   byRole: string;
   committedAt: string;
 }
+export interface FpaMonthActualLine {
+  monthIndex: number; iso: string; label: string; quarter: string;
+  isElapsed: boolean; isPartial: boolean; daysElapsed: number; daysInMonth: number;
+  revenuePlanUsd: number; revenuePlanProratedUsd: number;
+  revenueActualUsd: number | null; revenueVariancePct: number | null;
+  ebitdaPlanUsd: number; ebitdaPlanProratedUsd: number;
+  ebitdaActualUsd: number | null; ebitdaVariancePct: number | null;
+}
+export interface FpaYtdActual {
+  throughIso: string; throughLabel: string; elapsedMonths: number;
+  revenuePlanProrated: number; revenueActual: number; revenueVariancePct: number;
+  ebitdaPlanProrated: number; ebitdaActual: number; ebitdaVariancePct: number;
+}
 export interface FpaBudgetResp {
   asOf: string; fyLabel: string;
   scenarioId: string; scenarioLabel: string;
   presentationCurrency: string; entityFilter: string | null;
   months: FpaMonthLine[];
+  monthsActual: FpaMonthActualLine[];
   totals: { revenue: number; directCost: number; overhead: number; ebitda: number; ebitdaMarginPct: number; grossMarginPct: number };
+  ytdActual: FpaYtdActual;
   byEntity: FpaEntityRollup[];
   byRole: FpaRoleRollup[];
   byQuarter: { quarter: string; revenue: number; ebitda: number }[];
