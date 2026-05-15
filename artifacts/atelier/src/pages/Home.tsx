@@ -711,6 +711,9 @@ export default function Home() {
           {/* Workspace shelf — replaces the Ledger / Roster / Finance top-nav entries. */}
           {me?.role && <WorkspaceShelf role={me.role} />}
           {me?.role && <RenewalShelf role={me.role} />}
+          {/* Task #414 — Wave 2 Engagement Health tile (live EAC variance,
+              projects-at-risk count, open change orders). */}
+          {me?.role && <EngagementHealthTile role={me.role} />}
         </div>
 
         {/* PANE B & C Column */}
@@ -818,6 +821,109 @@ interface HomeRenewalRow {
 const RENEWAL_SHELF_ROLES = new Set([
   "founding_partner", "partner", "senior_manager", "finance", "board_observer",
 ]);
+
+interface EngagementHealthSummary {
+  totalEngagements: number;
+  projectsAtRisk: number;
+  openChangeOrders: number;
+  totalVacUsd: number;
+  weightedForecastMarginPct: number;
+}
+
+const ENGAGEMENT_HEALTH_ROLES = new Set([
+  "founding_partner",
+  "partner",
+  "senior_manager",
+  "finance",
+  "board_observer",
+]);
+
+function EngagementHealthTile({ role }: { role: string }) {
+  const [summary, setSummary] = React.useState<EngagementHealthSummary | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
+  React.useEffect(() => {
+    if (!ENGAGEMENT_HEALTH_ROLES.has(role)) {
+      setLoaded(true);
+      return;
+    }
+    let alive = true;
+    void fetch("/api/atelier/finance/engagement-pnl/summary", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { summary?: EngagementHealthSummary } | null) => {
+        if (alive && j?.summary) setSummary(j.summary);
+      })
+      .finally(() => {
+        if (alive) setLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [role]);
+  if (!ENGAGEMENT_HEALTH_ROLES.has(role)) return null;
+  if (!loaded || !summary) return null;
+  const vacTone = summary.totalVacUsd < 0 ? "red" : summary.totalVacUsd === 0 ? "default" : "green";
+  const vacLabel = `${summary.totalVacUsd < 0 ? "-" : ""}$${Math.abs(Math.round(summary.totalVacUsd)).toLocaleString()}`;
+  const marginTone =
+    summary.weightedForecastMarginPct < 0.30
+      ? "red"
+      : summary.weightedForecastMarginPct < 0.40
+        ? "amber"
+        : "green";
+  return (
+    <div className="mt-6" data-testid="home-engagement-health">
+      <div className="flex items-baseline justify-between mb-2">
+        <SectionLabel>Engagement health · EAC</SectionLabel>
+        <Link
+          href="/finance/plan/engagement-health"
+          className="text-[11px] font-mono text-text-faint hover:text-gold"
+        >
+          Open register →
+        </Link>
+      </div>
+      <Card className="p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">EAC variance</div>
+            <div
+              className={`mt-1 text-lg font-semibold ${vacTone === "red" ? "text-danger" : vacTone === "green" ? "text-green-400" : "text-text"}`}
+              data-testid="tile-eac-variance"
+            >
+              {vacLabel}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Projects at risk</div>
+            <div
+              className={`mt-1 text-lg font-semibold ${summary.projectsAtRisk > 0 ? "text-amber" : "text-text"}`}
+              data-testid="tile-projects-at-risk"
+            >
+              {summary.projectsAtRisk}
+              <span className="text-text-faint text-sm font-mono"> / {summary.totalEngagements}</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Open change orders</div>
+            <div
+              className={`mt-1 text-lg font-semibold ${summary.openChangeOrders > 0 ? "text-amber" : "text-text"}`}
+              data-testid="tile-open-change-orders"
+            >
+              {summary.openChangeOrders}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider">Portfolio fcst margin</div>
+            <div
+              className={`mt-1 text-lg font-semibold ${marginTone === "red" ? "text-danger" : marginTone === "amber" ? "text-amber" : "text-green-400"}`}
+              data-testid="tile-portfolio-margin"
+            >
+              {(summary.weightedForecastMarginPct * 100).toFixed(1)}%
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 function RenewalShelf({ role }: { role: string }) {
   const [rows, setRows] = React.useState<HomeRenewalRow[]>([]);

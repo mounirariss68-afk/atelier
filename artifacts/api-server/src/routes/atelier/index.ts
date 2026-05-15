@@ -81,6 +81,10 @@ import revrecRoutes from "./revrecRoutes";
 import bankRoutes from "./bankRoutes";
 import cashRoutes from "./cashRoutes";
 import renewalRoutes from "./renewalRoutes";
+// Task #414 — L2C Wave 2: per-engagement P&L, EAC engine, change-order
+// register and firm Engagement Health register. In-memory seed mock
+// workflow for the demo; re-baselines on change-order approval.
+import engagementPnlRoutes from "./engagementPnlRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -254,6 +258,9 @@ router.use(deliverableAcceptanceRoutes);
 // adjustments, WIP snapshots, engagement margin, leakage. Mounts
 // /revrec/*, /wip/*, /margin/*, /leakage. Gated per-handler.
 router.use(revrecRoutes);
+
+// Task #414 — Wave 2 engagement P&L / EAC / change-order register.
+router.use(engagementPnlRoutes);
 
 function ensurePersona(
   req: Request,

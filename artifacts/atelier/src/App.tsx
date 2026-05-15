@@ -95,6 +95,9 @@ import FinanceComplyInsurance from "@/pages/finance/FinanceComplyInsurance";
 // Task #415 — Finance Plan: 13-week cash forecast and backlog/pipeline coverage.
 import FinancePlanCash13w from "@/pages/finance/FinancePlanCash13w";
 import FinancePlanBacklog from "@/pages/finance/FinancePlanBacklog";
+// Task #414 — Wave 2 engagement P&L / EAC / change-order register pages.
+import EngagementHealth from "@/pages/finance/EngagementHealth";
+import EngagementPnl from "@/pages/finance/EngagementPnl";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
 // the bare /agents catalogue with a lifecycle ribbon; the catalogue
 // itself re-mounts under /agents/monitor and runs under
@@ -557,6 +560,10 @@ function Router() {
             return <Redirect to={target} />;
           }}
         </Route>
+        {/* Task #414 — Wave 2 engagement P&L pages (firm register +
+            per-engagement EAC / change-order workflow). */}
+        <Route path="/finance/plan/engagement-health" component={EngagementHealth} />
+        <Route path="/finance/plan/engagement-pnl/:engagementId" component={EngagementPnl} />
         <Route path="/finance/_lens" component={FinanceLensHome} />
         <Route component={NotFound} />
       </Switch>
