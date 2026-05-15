@@ -24,12 +24,12 @@ const TABS = [
 ];
 
 export default function Deliverable() {
-  // Task #375 — canonical path is `/clients/engagements/:engId/
+  // Task #375 — canonical path is `/clients/deliver/engagements/:engId/
   // deliverables/:delId`; the legacy `/engagements/:engId/deliverables/
   // :delId` route still resolves here so deep-links keep working until
   // App-level redirects land them on the new URL.
   const [matchLens, lensParams] = useRoute<{ engId: string; delId: string }>(
-    "/clients/engagements/:engId/deliverables/:delId",
+    "/clients/deliver/engagements/:engId/deliverables/:delId",
   );
   const [, legacyParams] = useRoute<{ engId: string; delId: string }>(
     "/engagements/:engId/deliverables/:delId",
@@ -81,7 +81,7 @@ export default function Deliverable() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href={`/clients/engagements/${engId}`} data-testid="link-back-engagement">
+        <BackLink href={`/clients/deliver/engagements/${engId}`} data-testid="link-back-engagement">
           Back to engagement
         </BackLink>
 

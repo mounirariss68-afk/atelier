@@ -76,7 +76,7 @@ export function DeliverablesTab({ engId }: { engId: string }) {
         {(items ?? []).map((d) => (
           <Link
             key={d.id}
-            href={`/engagements/${engId}/deliverables/${d.id}`}
+            href={`/clients/deliver/engagements/${engId}/deliverables/${d.id}`}
             className="block"
             data-testid={`deliverable-card-${d.id}`}
           >

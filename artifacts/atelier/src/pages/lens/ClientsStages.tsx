@@ -104,7 +104,7 @@ export function ClientsBilling() {
             review its economics tab.
           </p>
           <Link
-            href="/clients/engagements"
+            href="/clients/deliver/engagements"
             className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-gold hover:underline"
           >
             Open engagements <ArrowRight className="w-3 h-3" />

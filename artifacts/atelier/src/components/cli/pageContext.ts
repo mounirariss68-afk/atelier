@@ -41,7 +41,7 @@ export function derivePageContext(path: string): DerivedPageContext {
   // CRM: /crm or /crm/accounts/:id (defensive — single-segment is the list)
   const accMatch = path.match(/^\/(?:crm\/)?accounts?\/([^/]+)/) || path.match(/^\/account\/([^/]+)/);
   const oppMatch = path.match(/^\/opportunities\/([^/]+)/) || path.match(/^\/pipeline\/([^/]+)/);
-  const engMatch = path.match(/^\/engagements?\/([^/]+)/);
+  const engMatch = path.match(/^(?:\/clients(?:\/deliver)?)?\/engagements?\/([^/]+)/);
   const personMatch = path.match(/^\/roster\/people\/([^/]+)/);
   const expenseMatch = path.match(/^\/wallet\/expenses\/([^/]+)/);
   const agentMatch = path.match(/^\/agents\/([^/]+)/);
@@ -76,7 +76,12 @@ export function derivePageContext(path: string): DerivedPageContext {
   if (path.startsWith("/crm")) return { currentPath: path, surface: "crm" };
   if (path.startsWith("/opportunities") || path.startsWith("/pipeline"))
     return { currentPath: path, surface: "opportunity_workspace" };
-  if (path.startsWith("/engagements")) return { currentPath: path, surface: "engagement_dashboard" };
+  if (
+    path.startsWith("/engagements") ||
+    path.startsWith("/clients/engagements") ||
+    path.startsWith("/clients/deliver/engagements")
+  )
+    return { currentPath: path, surface: "engagement_dashboard" };
   if (path.startsWith("/wallet")) return { currentPath: path, surface: "wallet" };
   if (path.startsWith("/ledger")) return { currentPath: path, surface: "ledger" };
   if (path.startsWith("/roster")) return { currentPath: path, surface: "roster" };

@@ -805,7 +805,7 @@ function EngagementsTab({
       {engs.map((e) => (
         <Card key={e.id} className="p-5 hover:border-gold/50 transition-colors">
           <Link
-            href={`/engagements/${e.id}`}
+            href={`/clients/deliver/engagements/${e.id}`}
             className="font-semibold text-text hover:text-gold transition-colors block"
           >
             {e.title}

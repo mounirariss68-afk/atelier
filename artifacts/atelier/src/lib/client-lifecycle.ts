@@ -30,7 +30,7 @@ export const CLIENT_SECTIONS: readonly ClientSectionDef[] = [
   { id: "overview", label: "Overview", href: "/clients" },
   { id: "accounts", label: "Accounts", href: "/clients/accounts" },
   { id: "opportunities", label: "Opportunities", href: "/clients/opportunities" },
-  { id: "engagements", label: "Engagements", href: "/clients/engagements" },
+  { id: "engagements", label: "Engagements", href: "/clients/deliver/engagements" },
   { id: "billing", label: "Billing", href: "/clients/billing" },
   { id: "references", label: "References", href: "/clients/references" },
 ] as const;

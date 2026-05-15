@@ -637,7 +637,7 @@ export default function Home() {
 
   const navigateTo = (kind: string, targetId: string) => {
     if (kind === 'opportunity') setLocation(`/pipeline/${targetId}`);
-    else if (kind === 'engagement') setLocation(`/engagements/${targetId}`);
+    else if (kind === 'engagement') setLocation(`/clients/deliver/engagements/${targetId}`);
     else if (kind === 'atelier') setLocation(`/atelier/assets?focus=${targetId}`);
   };
 

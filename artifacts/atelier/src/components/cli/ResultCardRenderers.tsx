@@ -426,7 +426,7 @@ function ChangeOrderCard({ data, locale }: { data: Json; locale: CliLocale }) {
             </dt>
             <dd className="text-text font-mono text-[11px] truncate" title={engagementId}>
               <a
-                href={`/engagements/${engagementId}`}
+                href={`/clients/deliver/engagements/${engagementId}`}
                 className="hover:text-gold inline-flex items-center gap-1"
               >
                 {engagementId} <ExternalLink className="w-3 h-3" />
@@ -574,7 +574,7 @@ function DeliverableAcceptanceCard({ data, locale }: { data: Json; locale: CliLo
               {locale === "ar" ? "الارتباط" : "Engagement"}
             </dt>
             <dd className="text-text font-mono text-[11px] truncate">
-              <a href={`/engagements/${engagementId}`} className="hover:text-gold">
+              <a href={`/clients/deliver/engagements/${engagementId}`} className="hover:text-gold">
                 {engagementId}
               </a>
             </dd>

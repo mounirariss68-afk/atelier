@@ -182,25 +182,25 @@ function Router() {
         {/* Task #375 — engagement workspace re-mounted under the Clients
             lens. Listing + detail + deliverable detail (with the optional
             `:tab` deep-link segment) all live under
-            `/clients/engagements/*`; legacy `/engagements/*` paths
-            permanent-redirect via `<Redirect/>` (which preserves query
-            strings) so dossier links, audit logs and notification emails
-            keep resolving. */}
-        <Route path="/engagements">{() => <Redirect to="/clients/engagements" />}</Route>
+            `/clients/deliver/engagements/*`; legacy `/engagements/*` and
+            the interim `/clients/engagements/*` paths permanent-redirect
+            via `<Redirect/>` (which preserves query strings) so dossier
+            links, audit logs and notification emails keep resolving. */}
+        <Route path="/engagements">{() => <Redirect to="/clients/deliver/engagements" />}</Route>
         <Route path="/engagements/:engId/deliverables/:delId">
           {(p) => (
             <Redirect
-              to={`/clients/engagements/${p.engId}/deliverables/${p.delId}`}
+              to={`/clients/deliver/engagements/${p.engId}/deliverables/${p.delId}`}
             />
           )}
         </Route>
         <Route path="/engagements/:engId/:tab">
           {(p) => (
-            <Redirect to={`/clients/engagements/${p.engId}/${p.tab}`} />
+            <Redirect to={`/clients/deliver/engagements/${p.engId}/${p.tab}`} />
           )}
         </Route>
         <Route path="/engagements/:engId">
-          {(p) => <Redirect to={`/clients/engagements/${p.engId}`} />}
+          {(p) => <Redirect to={`/clients/deliver/engagements/${p.engId}`} />}
         </Route>
         {/* L2C Wave 1 (Task #360) — Codex (CLM) workspace. */}
         <Route path="/codex/contracts/:id" component={CodexContract} />
@@ -393,25 +393,25 @@ function Router() {
         <Route path="/clients/accounts" component={ClientsAccounts} />
         <Route path="/clients/opportunities" component={ClientsOpportunities} />
         {/* Task #375 — engagement workspace re-mounted under the Clients
-            lens. More-specific routes must precede the listing route so
-            wouter matches them first. The optional `:tab` segment lets
-            other surfaces deep-link straight to a workspace tab (charter /
-            workplan / deliverables / agents / processes / meetings /
-            artifacts / audit, including the L2C Wave 1 surfaces inside
-            those tabs). */}
+            lens at `/clients/deliver/engagements/*`. More-specific routes
+            must precede the listing route so wouter matches them first.
+            The optional `:tab` segment lets other surfaces deep-link
+            straight to a workspace tab (charter / workplan / deliverables
+            / agents / processes / meetings / artifacts / audit, including
+            the L2C Wave 1 surfaces inside those tabs). */}
         <Route
-          path="/clients/engagements/:engId/deliverables/:delId"
+          path="/clients/deliver/engagements/:engId/deliverables/:delId"
           component={ClientsEngagementDeliverable}
         />
         <Route
-          path="/clients/engagements/:engId/:tab"
+          path="/clients/deliver/engagements/:engId/:tab"
           component={ClientsEngagement}
         />
         <Route
-          path="/clients/engagements/:engId"
+          path="/clients/deliver/engagements/:engId"
           component={ClientsEngagement}
         />
-        <Route path="/clients/engagements" component={ClientsEngagements} />
+        <Route path="/clients/deliver/engagements" component={ClientsEngagements} />
         <Route path="/clients/billing" component={ClientsBilling} />
         <Route path="/clients/references" component={ClientsReferences} />
         {/* Permanent redirects from the previous lifecycle IA so external
@@ -419,7 +419,26 @@ function Router() {
         <Route path="/clients/prospect">{() => <Redirect to="/clients/accounts" />}</Route>
         <Route path="/clients/pursue">{() => <Redirect to="/clients/opportunities" />}</Route>
         <Route path="/clients/win">{() => <Redirect to="/clients/opportunities" />}</Route>
-        <Route path="/clients/deliver">{() => <Redirect to="/clients/engagements" />}</Route>
+        {/* Interim path from earlier in #375 — redirect into the canonical
+            `/clients/deliver/engagements/*` location. More-specific routes
+            first so deep links preserve their tab / deliverable segments. */}
+        <Route path="/clients/engagements/:engId/deliverables/:delId">
+          {(p) => (
+            <Redirect
+              to={`/clients/deliver/engagements/${p.engId}/deliverables/${p.delId}`}
+            />
+          )}
+        </Route>
+        <Route path="/clients/engagements/:engId/:tab">
+          {(p) => (
+            <Redirect to={`/clients/deliver/engagements/${p.engId}/${p.tab}`} />
+          )}
+        </Route>
+        <Route path="/clients/engagements/:engId">
+          {(p) => <Redirect to={`/clients/deliver/engagements/${p.engId}`} />}
+        </Route>
+        <Route path="/clients/engagements">{() => <Redirect to="/clients/deliver/engagements" />}</Route>
+        <Route path="/clients/deliver">{() => <Redirect to="/clients/deliver/engagements" />}</Route>
         <Route path="/clients/bill">{() => <Redirect to="/clients/billing" />}</Route>
         <Route path="/clients/renew">{() => <Redirect to="/clients/opportunities" />}</Route>
         <Route path="/clients/reference">{() => <Redirect to="/clients/references" />}</Route>

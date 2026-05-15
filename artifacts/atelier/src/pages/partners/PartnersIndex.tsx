@@ -440,7 +440,7 @@ function CoDeliverView() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-text-mute">
-        Engagement workspace lives in <Link href="/engagements" className="text-gold hover:underline">Clients · Engagements</Link>.
+        Engagement workspace lives in <Link href="/clients/deliver/engagements" className="text-gold hover:underline">Clients · Engagements</Link>.
         This view tracks the partner-side of co-delivery: signed sub-SOWs,
         rate-card lock dates, monthly burn, and the joint-quality acceptance gate.
       </p>

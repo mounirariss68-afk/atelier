@@ -38,16 +38,16 @@ const TAB_IDS = new Set(TABS.map((t) => t.id));
 
 export default function Engagement() {
   // Task #375 — workspace re-mount under the Clients lens. The canonical
-  // path is `/clients/engagements/:engId(/:tab)?`; the legacy
+  // path is `/clients/deliver/engagements/:engId(/:tab)?`; the legacy
   // `/engagements/:engId` route still resolves here so deep-links from
   // dossiers, audit logs and notification emails keep working until the
-  // App-level redirects do their work. Either route may carry an
+  // App-level redirects do their work. Any of these routes may carry an
   // optional `:tab` segment for deep-linking into a specific tab
   // (charter / workplan / deliverables / agents / processes / meetings /
   // artifacts / audit) including the L2C Wave 1 surfaces (CLM,
   // change-orders, acceptances) which live inside those tabs.
   const [matchLens, lensParams] = useRoute<{ engId: string; tab?: string }>(
-    "/clients/engagements/:engId/:tab?",
+    "/clients/deliver/engagements/:engId/:tab?",
   );
   const [, legacyParams] = useRoute<{ engId: string; tab?: string }>(
     "/engagements/:engId/:tab?",
@@ -76,7 +76,7 @@ export default function Engagement() {
   function selectTab(tabId: string) {
     setActiveTab(tabId);
     if (engId) {
-      setLocation(`/clients/engagements/${engId}/${tabId}`, { replace: true });
+      setLocation(`/clients/deliver/engagements/${engId}/${tabId}`, { replace: true });
     }
   }
 
@@ -86,7 +86,7 @@ export default function Engagement() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/clients/engagements">Back to Engagements</BackLink>
+        <BackLink href="/clients/deliver/engagements">Back to Engagements</BackLink>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
           <SectionHead

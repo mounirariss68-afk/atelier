@@ -467,7 +467,7 @@ function AccessTab({ personId }: { personId: string }) {
         <Card key={r.id} className="p-3">
           <div className="flex justify-between gap-3 items-center">
             <div className="text-sm text-text">
-              <Link href={`/engagements/${r.engagementId}`} className="hover:text-gold">
+              <Link href={`/clients/deliver/engagements/${r.engagementId}`} className="hover:text-gold">
                 {r.engagementName ?? r.engagementId}
               </Link>
               <span className="text-text-mute"> · {r.accountName ?? ""}</span>
@@ -528,7 +528,7 @@ function EngagementsTab({ personId }: { personId: string }) {
           <div className="flex justify-between gap-3">
             <div>
               <div className="font-medium text-text">
-                <Link href={`/engagements/${r.engagementId}`} className="hover:text-gold">
+                <Link href={`/clients/deliver/engagements/${r.engagementId}`} className="hover:text-gold">
                   {r.engagementName}
                 </Link>
               </div>

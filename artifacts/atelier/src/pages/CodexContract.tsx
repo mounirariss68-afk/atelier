@@ -540,7 +540,7 @@ export default function CodexContract() {
 
           {c.engagementId && (
             <Link
-              href={`/engagements/${c.engagementId}`}
+              href={`/clients/deliver/engagements/${c.engagementId}`}
               className="block text-[11px] font-mono uppercase tracking-wider text-gold hover:underline"
             >
               Open engagement →
