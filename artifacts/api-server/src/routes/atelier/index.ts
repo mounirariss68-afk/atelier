@@ -71,6 +71,7 @@ import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
+import financeComplyRoutes from "./financeComplyRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
 import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
@@ -220,6 +221,11 @@ router.use(financeEntitiesRoutes);
 // 3-way match, payment runs (maker-checker + dual signatories), WHT
 // register, subcontractor pay-when-paid. Seed-only data.
 router.use(financePayablesRoutes);
+// Task #419 — Wave 7: internal controls catalogue + SoD matrix,
+// statutory filings register, transfer-pricing register and
+// insurance register. All read-only seed; mounts under /api/atelier
+// with persona gating mirroring financeEntitiesRoutes.
+router.use(financeComplyRoutes);
 // Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
 // Retire) backed by Postgres; replaces the client-side seed module.
 router.use(agentsLensRoutes);

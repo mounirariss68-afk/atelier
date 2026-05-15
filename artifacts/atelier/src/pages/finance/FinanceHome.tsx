@@ -15,7 +15,13 @@ import {
   useFinanceEntities,
   useExpectedDisbursements,
   useStalledApprovals,
+  useStatutoryFilings,
+  useInsurancePolicies,
+  useInternalControls,
   type FinanceEntityRow,
+  type StatutoryFilingRow,
+  type InsurancePolicyRow,
+  type InternalControlRow,
 } from "@/lib/v5-hooks";
 import { ArrowRight } from "lucide-react";
 
@@ -63,7 +69,24 @@ interface NextAction {
   daysOut: number;
 }
 
-function buildNextActions(entities: FinanceEntityRow[]): NextAction[] {
+// Quarterly cadence approximated as 90d, monthly as 30d, etc. — used to
+// flag a control as overdue if it hasn't been re-tested within its
+// declared cadence window. Per-transaction controls are continuous and
+// surface only via their open exceptions.
+const CADENCE_DAYS: Record<InternalControlRow["frequency"], number | null> = {
+  per_transaction: null,
+  daily: 1,
+  monthly: 30,
+  quarterly: 90,
+  annual: 365,
+};
+
+function buildNextActions(
+  entities: FinanceEntityRow[],
+  filings: StatutoryFilingRow[],
+  insurance: InsurancePolicyRow[],
+  controls: InternalControlRow[],
+): NextAction[] {
   const out: NextAction[] = [];
   for (const e of entities) {
     for (const lic of e.tradeLicenses) {
@@ -108,8 +131,82 @@ function buildNextActions(entities: FinanceEntityRow[]): NextAction[] {
       });
     }
   }
+
+  // Statutory filings — surface anything not yet filed and either overdue
+  // or due within 60 days. The Comply register is authoritative; the home
+  // page just promotes the most-imminent items into the inbox.
+  for (const f of filings) {
+    if (f.status === "filed") continue;
+    const d = daysUntil(f.dueOn);
+    if (d > 60) continue;
+    const ent = entities.find((e) => e.id === f.entityId);
+    out.push({
+      id: `stat-${f.id}`,
+      section: "Comply",
+      href: "/finance/comply/statutory",
+      title: `${f.kind} — ${ent?.shortName ?? f.entityId}`,
+      detail: `${f.authority} · owner ${f.owner}`,
+      due: `${f.dueOn} (${fmtRelative(d)})`,
+      tone: d < 0 ? "red" : d <= 14 ? "amber" : d <= 30 ? "gold" : "default",
+      daysOut: d,
+    });
+  }
+
+  // Insurance — anything expired or expiring within 60 days.
+  for (const p of insurance) {
+    const d = daysUntil(p.periodTo);
+    if (d > 60 && p.status !== "expired") continue;
+    const ent = entities.find((e) => e.id === p.entityId);
+    out.push({
+      id: `ins-${p.id}`,
+      section: "Comply",
+      href: "/finance/comply/insurance",
+      title: `${p.kind} renewal — ${ent?.shortName ?? p.entityId}`,
+      detail: `${p.insurer} · ${p.policyNumber}`,
+      due: `${p.periodTo} (${fmtRelative(d)})`,
+      tone: p.status === "expired" || d < 0 ? "red" : d <= 14 ? "amber" : d <= 30 ? "gold" : "default",
+      daysOut: d,
+    });
+  }
+
+  // Internal controls — produce an action for any control with open
+  // exceptions, and for any cadence-based control that has slipped past
+  // its declared evidence window. Per-transaction controls have no
+  // declared window and surface only via open exceptions.
+  for (const c of controls) {
+    if (c.exceptionsOpen > 0) {
+      out.push({
+        id: `ctl-exc-${c.id}`,
+        section: "Comply",
+        href: "/finance/comply/controls",
+        title: `Control exception — ${c.title}`,
+        detail: `${c.exceptionsOpen} open · owner ${c.owner}`,
+        due: `since ${c.lastTestedOn}`,
+        tone: "amber",
+        daysOut: -1,
+      });
+    }
+    const window = CADENCE_DAYS[c.frequency];
+    if (window != null) {
+      const sinceTested = daysUntil(c.lastTestedOn) * -1;
+      const overdueBy = sinceTested - window;
+      if (overdueBy > 0) {
+        out.push({
+          id: `ctl-evd-${c.id}`,
+          section: "Comply",
+          href: "/finance/comply/controls",
+          title: `Control evidence due — ${c.title}`,
+          detail: `${c.frequency.replace("_", " ")} cadence · last tested ${c.lastTestedOn}`,
+          due: `${overdueBy}d past cadence`,
+          tone: overdueBy > 30 ? "red" : "amber",
+          daysOut: -overdueBy,
+        });
+      }
+    }
+  }
+
   out.sort((a, b) => a.daysOut - b.daysOut);
-  return out.slice(0, 6);
+  return out.slice(0, 8);
 }
 
 function toneClasses(t: NextAction["tone"]): string {
@@ -129,7 +226,13 @@ export default function FinanceHome() {
   const entities = useFinanceEntities();
   const disbursements = useExpectedDisbursements();
   const stalled = useStalledApprovals();
-  const nextActions = React.useMemo(() => buildNextActions(entities), [entities]);
+  const filings = useStatutoryFilings();
+  const insurance = useInsurancePolicies();
+  const controls = useInternalControls();
+  const nextActions = React.useMemo(
+    () => buildNextActions(entities, filings, insurance, controls),
+    [entities, filings, insurance, controls],
+  );
 
   const counts = React.useMemo(() => {
     const licCount = entities.reduce((n, e) => n + e.tradeLicenses.length, 0);
@@ -138,8 +241,11 @@ export default function FinanceHome() {
       (n, e) => n + e.tradeLicenses.filter((l) => l.status === "expiring_soon" || l.status === "renewal_in_progress").length,
       0,
     );
-    return { entities: entities.length, licCount, bankCount, expiring };
-  }, [entities]);
+    const statOpen = filings.filter((f) => f.status !== "filed").length;
+    const insExpired = insurance.filter((p) => p.status === "expired").length;
+    const ctlExceptions = controls.reduce((n, c) => n + c.exceptionsOpen, 0);
+    return { entities: entities.length, licCount, bankCount, expiring, statOpen, insExpired, ctlExceptions };
+  }, [entities, filings, insurance, controls]);
 
   return (
     <div className="animate-in fade-in">
@@ -154,6 +260,9 @@ export default function FinanceHome() {
           <MonoChip>{counts.licCount} licence(s)</MonoChip>
           <MonoChip tone={counts.expiring > 0 ? "amber" : "default"}>{counts.expiring} expiring / renewing</MonoChip>
           <MonoChip>{counts.bankCount} bank account(s)</MonoChip>
+          <MonoChip tone={counts.statOpen > 0 ? "amber" : "default"}>{counts.statOpen} statutory open</MonoChip>
+          <MonoChip tone={counts.insExpired > 0 ? "red" : "default"}>{counts.insExpired} insurance expired</MonoChip>
+          <MonoChip tone={counts.ctlExceptions > 0 ? "amber" : "green"}>{counts.ctlExceptions} control exception(s)</MonoChip>
         </div>
       </PageHero>
 

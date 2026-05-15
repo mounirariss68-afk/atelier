@@ -130,9 +130,10 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       "Tax filings calendar (VAT, CT, WHT, payroll tax), statutory filings & annual accounts, transfer pricing & related-party, internal controls / SOX-lite, segregation of duties.",
     subPages: [
       { label: "Tax filings calendar", href: "/finance/entities", blurb: "Per-entity next VAT / CT / WHT filing dates.", status: "live" },
-      { label: "Statutory filings", href: "/finance/comply", blurb: "Annual accounts, beneficial ownership, country-by-country.", status: "coming_soon" },
-      { label: "Transfer pricing", href: "/finance/comply", blurb: "TP method per IC link, master / local file.", status: "coming_soon" },
-      { label: "Internal controls", href: "/finance/comply", blurb: "Control catalogue, evidence cadence, exceptions.", status: "coming_soon" },
+      { label: "Internal controls", href: "/finance/comply/controls", blurb: "Control catalogue, evidence cadence, exceptions, SoD matrix.", status: "live" },
+      { label: "Statutory filings", href: "/finance/comply/statutory", blurb: "Annual accounts, beneficial ownership, country-by-country, MISA / DIFC / ADGM.", status: "live" },
+      { label: "Transfer pricing", href: "/finance/comply/tp", blurb: "TP method per IC link, master / local file, related-party schedule.", status: "live" },
+      { label: "Insurance", href: "/finance/comply/insurance", blurb: "PI, D&O, employer's liability, cyber cover and renewal calendar.", status: "live" },
     ],
   },
 };

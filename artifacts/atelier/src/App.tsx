@@ -87,6 +87,11 @@ import {
   FinancePayablesWht,
   FinancePayablesSubcontractors,
 } from "@/pages/finance/FinancePayables";
+// Task #419 — Wave 7: Finance Comply sub-pages.
+import FinanceComplyControls from "@/pages/finance/FinanceComplyControls";
+import FinanceComplyStatutory from "@/pages/finance/FinanceComplyStatutory";
+import FinanceComplyTp from "@/pages/finance/FinanceComplyTp";
+import FinanceComplyInsurance from "@/pages/finance/FinanceComplyInsurance";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
 // the bare /agents catalogue with a lifecycle ribbon; the catalogue
 // itself re-mounts under /agents/monitor and runs under
@@ -521,6 +526,12 @@ function Router() {
         <Route path="/finance/close">{() => <FinanceSection sectionId="close" />}</Route>
         <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>
         <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
+        {/* Task #419 — Comply registers (controls + SoD, statutory, TP, insurance).
+            These must come before the catch-all /finance/comply landing. */}
+        <Route path="/finance/comply/controls" component={FinanceComplyControls} />
+        <Route path="/finance/comply/statutory" component={FinanceComplyStatutory} />
+        <Route path="/finance/comply/tp" component={FinanceComplyTp} />
+        <Route path="/finance/comply/insurance" component={FinanceComplyInsurance} />
         <Route path="/finance/comply">{() => <FinanceSection sectionId="comply" />}</Route>
         {/* Re-mounts of existing pages under canonical /finance/* paths.
             The old URLs (/wallet/*, /ledger/firm-economics etc, /forecast,

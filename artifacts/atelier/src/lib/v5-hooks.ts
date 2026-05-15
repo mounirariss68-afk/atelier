@@ -105,6 +105,115 @@ export const useFinanceEntities = listHook<FinanceEntityRow>(
 );
 
 // ============================================================
+// Finance — Comply (Task #419, Wave 7)
+// ============================================================
+export interface InternalControlRow {
+  id: string;
+  title: string;
+  description: string;
+  area: "revenue" | "ar" | "cash" | "ap" | "payroll" | "journals" | "itgc";
+  owner: string;
+  ownerRole: string;
+  frequency: "per_transaction" | "daily" | "monthly" | "quarterly" | "annual";
+  evidenceCadence: string;
+  lastTestedOn: string;
+  lastResult: "pass" | "fail" | "exception" | "not_tested";
+  exceptionsOpen: number;
+  remediation: string | null;
+  appliesToEntities: string[];
+}
+export const useInternalControls = listHook<InternalControlRow>(
+  "finance-controls",
+  "/finance/comply/controls",
+);
+
+export interface SoDConflictRow {
+  id: string;
+  title: string;
+  description: string;
+  rolesA: string[];
+  rolesB: string[];
+  severity: "high" | "medium" | "low";
+  currentlyViolatingPeople: { name: string; role: string }[];
+  mitigation: string;
+  linkedControlIds: string[];
+}
+export const useSoDConflicts = listHook<SoDConflictRow>(
+  "finance-sod",
+  "/finance/comply/sod",
+);
+
+export interface StatutoryFilingRow {
+  id: string;
+  entityId: string;
+  kind: string;
+  authority: string;
+  description: string;
+  dueOn: string;
+  status: "not_started" | "in_progress" | "filed" | "overdue";
+  owner: string;
+  evidenceUrl: string | null;
+  notes: string;
+}
+export const useStatutoryFilings = listHook<StatutoryFilingRow>(
+  "finance-statutory",
+  "/finance/comply/statutory",
+);
+
+export interface TpFileVersionRow {
+  version: string;
+  publishedOn: string;
+  author: string;
+  notes: string;
+}
+export interface RelatedPartyTransactionRow {
+  id: string;
+  entityAId: string;
+  entityBId: string;
+  description: string;
+  fyAmountUsdK: number;
+  basis: string;
+}
+export interface TpRegisterRow {
+  id: string;
+  entityAId: string;
+  entityBId: string;
+  relationship: string;
+  tpMethod: "TNMM" | "CUP" | "Cost+" | "ResalePrice";
+  intercoServiceFeePct: number | null;
+  benchmarkRange: string;
+  benchmarkSource: string;
+  masterFile: { current: TpFileVersionRow | null; history: TpFileVersionRow[] };
+  localFile: { current: TpFileVersionRow | null; history: TpFileVersionRow[] };
+  relatedPartyTransactions: RelatedPartyTransactionRow[];
+  notes: string;
+}
+export const useTpRegister = listHook<TpRegisterRow>(
+  "finance-tp",
+  "/finance/comply/tp",
+);
+
+export interface InsurancePolicyRow {
+  id: string;
+  entityId: string;
+  kind: "Professional Indemnity" | "D&O" | "Employer's Liability" | "Cyber" | "Office / Property";
+  insurer: string;
+  policyNumber: string;
+  periodFrom: string;
+  periodTo: string;
+  coverageUsdK: number;
+  premiumUsdK: number;
+  excessUsdK: number;
+  status: "active" | "expiring_soon" | "expired" | "renewal_in_progress";
+  renewalOwner: string;
+  notes: string;
+}
+export const useInsurancePolicies = listHook<InsurancePolicyRow>(
+  "finance-insurance",
+  "/finance/comply/insurance",
+);
+
+// ============================================================
 // Press
 // ============================================================
 export interface EditorialCalendarRow {
