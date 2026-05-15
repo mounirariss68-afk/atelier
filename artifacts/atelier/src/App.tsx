@@ -98,6 +98,7 @@ import FinancePlanBacklog from "@/pages/finance/FinancePlanBacklog";
 // Task #414 — Wave 2 engagement P&L / EAC / change-order register pages.
 import EngagementHealth from "@/pages/finance/EngagementHealth";
 import EngagementPnl from "@/pages/finance/EngagementPnl";
+import FinanceClose from "@/pages/finance/FinanceClose";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
 // the bare /agents catalogue with a lifecycle ribbon; the catalogue
 // itself re-mounts under /agents/monitor and runs under
@@ -529,7 +530,7 @@ function Router() {
         <Route path="/finance/payables/payment-runs" component={FinancePayablesPaymentRuns} />
         <Route path="/finance/payables/wht" component={FinancePayablesWht} />
         <Route path="/finance/payables/subcontractors" component={FinancePayablesSubcontractors} />
-        <Route path="/finance/close">{() => <FinanceSection sectionId="close" />}</Route>
+        <Route path="/finance/close" component={FinanceClose} />
         <Route path="/finance/plan/cash-13w" component={FinancePlanCash13w} />
         <Route path="/finance/plan/backlog" component={FinancePlanBacklog} />
         <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>

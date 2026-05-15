@@ -90,9 +90,9 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       "Period close checklist with owners, reconciliations (bank, AR, AP, IC, payroll), adjusting / closing entries, audit trail and sign-offs.",
     subPages: [
       { label: "Bank reconciliation", href: "/wallet/cash/recon", blurb: "Match bank statements to ledger cash.", status: "live" },
-      { label: "Close checklist", href: "/finance/close", blurb: "Owner-by-owner close tasks per entity.", status: "coming_soon" },
-      { label: "Adjusting entries", href: "/finance/close", blurb: "Period-end accruals, deferrals, FX reval.", status: "coming_soon" },
-      { label: "Sign-offs & audit trail", href: "/finance/close", blurb: "Two-Partner sign-off and immutable trail.", status: "coming_soon" },
+      { label: "Close checklist", href: "/finance/close", blurb: "Owner-by-owner close tasks per entity.", status: "live" },
+      { label: "Adjusting entries", href: "/finance/close", blurb: "Period-end accruals, deferrals, FX reval.", status: "live" },
+      { label: "Sign-offs & audit trail", href: "/finance/close", blurb: "Two-partner sign-off and immutable trail.", status: "live" },
     ],
   },
   plan: {
