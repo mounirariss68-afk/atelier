@@ -156,6 +156,40 @@ const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
 // destination is known — pure Q&A, disambiguation, and refusals do not
 // auto-navigate.
 // ---------------------------------------------------------------------
+// Task #500 — implementation extracted to ./orchestrator-nav-path.ts so
+// it can be unit-tested in isolation. Re-exported here for Task #499's
+// callers in attachment-capabilities and the entityNavPath helper below.
+import { resolveNavPath } from "./orchestrator-nav-path.js";
+export { resolveNavPath };
+
+// Task #499 — convenience wrapper for read-side capabilities that
+// resolved a single entity. Returns the canonical UI page for that
+// entity (or null when unknown) so the caller can attach a
+// `navigateTo: { path, when: "on_commit" }` hint to its result. The
+// `verb` is fixed to "update" because resolveNavPath only inspects
+// verb for `expense` / `invoice` / `contract` (where create maps to
+// a "new" page) — for read flows we always want the detail page.
+export function entityNavPath(
+  kind: string,
+  id: string | null | undefined,
+  extras?: {
+    engagementId?: string | null;
+    opportunityId?: string | null;
+    accountId?: string | null;
+  },
+): string | null {
+  if (!id && !extras) return null;
+  const payload: Record<string, unknown> = {};
+  if (extras?.engagementId) payload.engagementId = extras.engagementId;
+  if (extras?.opportunityId) payload.opportunityId = extras.opportunityId;
+  if (extras?.accountId) payload.accountId = extras.accountId;
+  return resolveNavPath({
+    verb: "update",
+    kind: kind as WriteKind,
+    targetId: id ?? null,
+    payload,
+  });
+}
 
 // ---------------------------------------------------------------------
 // 1. resolve_entity
@@ -253,10 +287,16 @@ defineCapability({
     }
     if (candidates.length === 1) {
       const c = candidates[0];
+      // Task #499 — single-match resolves should land the user on the
+      // entity's canonical page. Optional: null for kinds with no
+      // dedicated SPA route (helper returns null in that case).
+      const navPath = entityNavPath(kind, c.id);
+      const navigateTo = navPath ? { path: navPath, when: "on_commit" as const } : null;
       return {
         ok: true,
         data: {
           entity: { kind, id: c.id, label: c.label, secondary: c.secondary, score: c.score, via: c.via },
+          navigateTo,
         },
       };
     }
@@ -1117,6 +1157,13 @@ defineCapability({
     }));
     const partnerOverrideAvailable = rows.some((r) => r.overrideAvailable === true);
 
+    // Task #499 — evaluate_gate resolves to a single opportunity; offer
+    // a navigateTo hint so the chat lands on the opportunity workspace
+    // while the partner reviews the gate report.
+    const oppNavPath = entityNavPath("opportunity", opp.id);
+    const oppNavigateTo = oppNavPath
+      ? { path: oppNavPath, when: "on_commit" as const }
+      : null;
     return {
       ok: true,
       data: {
@@ -1140,6 +1187,7 @@ defineCapability({
           qualify5cFromOpportunity: !proposed.qualify5c && !!opp.qualify5c,
           goNoGoFromOpportunity: !proposed.goNoGoDecision && !!opp.goNoGoDecision,
         },
+        navigateTo: oppNavigateTo,
       },
     };
   },

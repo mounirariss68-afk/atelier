@@ -105,6 +105,7 @@ import {
 } from "./capability-catalog.js";
 import { loadAttachment, loadChunk, type DocChunk } from "./attachments/index.js";
 import { scoreRubric, type RubricChunk } from "./qualification-rubric.js";
+import { entityNavPath } from "./orchestrator-capabilities.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -382,9 +383,18 @@ defineCapability({
         payloadSummary: `Rubric ${rubric.composite}/100 → ${rubric.band}`,
       },
     ]);
+    // Task #499 — commit landed a single opportunity row; jump there.
+    const navPath = entityNavPath("opportunity", id);
     return {
       ok: true,
-      data: { id, opportunityName, accountId, rubric, attachmentIds },
+      data: {
+        id,
+        opportunityName,
+        accountId,
+        rubric,
+        attachmentIds,
+        navigateTo: navPath ? { path: navPath, when: "on_commit" as const } : null,
+      },
     };
   },
 });
@@ -524,9 +534,18 @@ defineCapability({
       });
       created.push(id);
     }
+    // Task #499 — RAID lift commits target a single engagement; land
+    // the user on its workspace so they can review the new items.
+    const navPath = entityNavPath("engagement", engagementId);
     return {
       ok: true,
-      data: { engagementId, createdCount: created.length, ids: created, attachmentIds },
+      data: {
+        engagementId,
+        createdCount: created.length,
+        ids: created,
+        attachmentIds,
+        navigateTo: navPath ? { path: navPath, when: "on_commit" as const } : null,
+      },
     };
   },
 });
@@ -671,7 +690,21 @@ defineCapability({
       });
       created.push(id);
     }
-    return { ok: true, data: { ids: created, count: created.length, attachmentIds } };
+    // Task #499 — receipts land on the wallet expenses index (the
+    // batch can produce many rows, so navigate to the list, not a
+    // specific row).
+    return {
+      ok: true,
+      data: {
+        ids: created,
+        count: created.length,
+        attachmentIds,
+        navigateTo:
+          created.length > 0
+            ? { path: "/wallet/expenses", when: "on_commit" as const }
+            : null,
+      },
+    };
   },
 });
 
@@ -783,7 +816,17 @@ defineCapability({
       payload: { firmName, attachmentIds, turnId: ctx.turnId, version: nextVersion },
       payloadSummary: `CLI seeded Brand Profile draft v${nextVersion} from deck`,
     });
-    return { ok: true, data: { id, version: nextVersion, attachmentIds } };
+    // Task #499 — brand profile drafts always land on the firm
+    // profile review page so the partner can publish.
+    return {
+      ok: true,
+      data: {
+        id,
+        version: nextVersion,
+        attachmentIds,
+        navigateTo: { path: "/atelier/firm-profile", when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -898,7 +941,18 @@ defineCapability({
       payload: { title, attachmentIds, turnId: ctx.turnId, summaries },
       payloadSummary: `CLI persisted spreadsheet summary asset ${title}`,
     });
-    return { ok: true, data: { id, title, attachmentIds, summaries } };
+    // Task #499 — spreadsheet summaries persist as Codex assets;
+    // navigate to the assets section so the new card is visible.
+    return {
+      ok: true,
+      data: {
+        id,
+        title,
+        attachmentIds,
+        summaries,
+        navigateTo: { path: "/codex/assets", when: "on_commit" as const },
+      },
+    };
   },
 });
 

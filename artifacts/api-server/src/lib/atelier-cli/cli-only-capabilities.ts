@@ -108,7 +108,16 @@ defineCapability({
   async run(input, ctx) {
     const result = await resolveAccount(String(input.query ?? ""), ctx.persona);
     if (result.kind === "match") {
-      return { ok: true, data: { id: result.id, label: result.label } };
+      // Task #499 — single-match lookup: hint a navigation to the
+      // resolved account workspace.
+      return {
+        ok: true,
+        data: {
+          id: result.id,
+          label: result.label,
+          navigateTo: { path: `/accounts/${result.id}`, when: "on_commit" as const },
+        },
+      };
     }
     if (result.kind === "choices") {
       return {
@@ -323,7 +332,16 @@ defineCapability({
       payload: { accountId: acc.id, accountName: acc.name, viaCli: true, turnId: ctx.turnId },
       payloadSummary: `CLI deleted account ${acc.name}`,
     });
-    return { ok: true, data: { deleted: acc.id, name: acc.name } };
+    // Task #499 — after a delete the entity page no longer exists;
+    // land the user on the accounts index so they see their list.
+    return {
+      ok: true,
+      data: {
+        deleted: acc.id,
+        name: acc.name,
+        navigateTo: { path: "/accounts", when: "on_commit" as const },
+      },
+    };
   },
 });
 

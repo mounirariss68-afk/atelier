@@ -190,11 +190,14 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       };
       const tool = d.tool ?? "tool";
       const ok = d.ok !== false;
-      // Task #495 — propose_write commit-phase carries a navigateTo
-      // hint inside its result data; lift it onto the turn so the
-      // hook's stream consumer can fire onNavigate.
+      // Task #499 — generalized from #495: any tool result may carry
+      // a `navigateTo` hint in its data payload (read-side single-
+      // entity resolves, ingest commits, approval commits, etc.).
+      // Lift the first valid hint we see onto the turn so the hook's
+      // stream consumer can fire onNavigate. Hint is optional/null
+      // for capabilities that don't want to navigate.
       let nextNavigateTo = turn.navigateTo ?? null;
-      if (tool === "propose_write" && ok && d.data && typeof d.data === "object") {
+      if (ok && d.data && typeof d.data === "object") {
         const dd = d.data as { navigateTo?: { path?: string; when?: string } | null };
         if (
           dd.navigateTo &&

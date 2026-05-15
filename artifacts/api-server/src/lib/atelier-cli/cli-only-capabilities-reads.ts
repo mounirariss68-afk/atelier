@@ -749,6 +749,9 @@ defineCapability({
           (o) => !["won", "lost", "no_go"].includes(o.plmStage),
         ).length,
         activeEngagementCount: engs.filter((e) => e.plmStage !== "closed").length,
+        // Task #499 — dossier resolves a single account; navigate the
+        // user to the account workspace alongside the summary card.
+        navigateTo: { path: `/accounts/${acc.id}`, when: "on_commit" as const },
       },
     };
   },

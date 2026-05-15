@@ -321,7 +321,16 @@ defineCapability({
       };
     }
     await recordAudit(ctx, "account", accountId, `profile_update.${decision}.cli`, { updateId, decision, note: input.note ?? null }, `${ctx.persona.name} ${decision}d profile update ${updateId}.`);
-    return { ok: true, data: { accountId, updateId, decision } };
+    // Task #499 — approval lands on the affected account workspace.
+    return {
+      ok: true,
+      data: {
+        accountId,
+        updateId,
+        decision,
+        navigateTo: { path: `/accounts/${accountId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -774,7 +783,16 @@ defineCapability({
     }
     await db.update(atelierProposalSections).set({ status: "approved", updatedAt: new Date() }).where(eq(atelierProposalSections.id, sectionId));
     await recordAudit(ctx, "proposal_section", sectionId, "proposal.section.approve.cli", { sectionId }, `${ctx.persona.name} approved section "${s.name}".`);
-    return { ok: true, data: { sectionId, status: "approved" } };
+    // Task #499 — section approvals navigate to the parent proposal.
+    const sectionNav = s.proposalId ? `/proposals/${s.proposalId}` : null;
+    return {
+      ok: true,
+      data: {
+        sectionId,
+        status: "approved",
+        navigateTo: sectionNav ? { path: sectionNav, when: "on_commit" as const } : null,
+      },
+    };
   },
 });
 
@@ -886,7 +904,14 @@ defineCapability({
     }
     await db.update(atelierProposals).set({ partnerApprovedAt: new Date(), partnerApprovedByUserId: ctx.persona.id, updatedAt: new Date() }).where(eq(atelierProposals.id, proposalId));
     await recordAudit(ctx, "proposal", proposalId, "proposal.final_read.cli", { proposalId }, `${ctx.persona.name} signed off final read.`);
-    return { ok: true, data: { proposalId } };
+    // Task #499 — final-read approvals navigate to the proposal page.
+    return {
+      ok: true,
+      data: {
+        proposalId,
+        navigateTo: { path: `/proposals/${proposalId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -912,7 +937,14 @@ defineCapability({
       return { ok: true, data: { preview: { proposalId } }, confirmation: { summary: `Approve pricing on proposal ${proposalId}.`, diff: { update: { id: proposalId, action: "approve_pricing" } }, pending: { tool: "proposal_approve_pricing", input: { proposalId, confirm: true } } } };
     }
     await recordAudit(ctx, "proposal", proposalId, "proposal.pricing.approve.cli", { proposalId }, `${ctx.persona.name} approved pricing.`);
-    return { ok: true, data: { proposalId } };
+    // Task #499 — pricing approvals navigate to the proposal page.
+    return {
+      ok: true,
+      data: {
+        proposalId,
+        navigateTo: { path: `/proposals/${proposalId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -1078,7 +1110,19 @@ defineCapability({
     }
     await db.update(atelierCharterVersions).set(patch as Partial<typeof atelierCharterVersions.$inferInsert>).where(eq(atelierCharterVersions.id, versionId));
     await recordAudit(ctx, "engagement", engagementId, `charter.approve.${role}.cli`, { versionId, role, notes: input.notes ?? null }, `${ctx.persona.name} approved charter ${versionId} as ${role}.`);
-    return { ok: true, data: { engagementId, versionId, role } };
+    // Task #499 — charter approval lands on the engagement workspace.
+    return {
+      ok: true,
+      data: {
+        engagementId,
+        versionId,
+        role,
+        navigateTo: {
+          path: `/clients/deliver/engagements/${engagementId}`,
+          when: "on_commit" as const,
+        },
+      },
+    };
   },
 });
 
@@ -1108,7 +1152,18 @@ defineCapability({
     }
     await db.update(atelierRaidItems).set({ status: "closed", updatedAt: new Date() }).where(eq(atelierRaidItems.id, raidId));
     await recordAudit(ctx, "raid_item", raidId, "raid.close.cli", { raidId, mitigation: input.mitigation ?? null }, `${ctx.persona.name} closed RAID item ${raidId}.`);
-    return { ok: true, data: { raidId, status: "closed" } };
+    // Task #499 — closing a RAID lands on its engagement workspace.
+    return {
+      ok: true,
+      data: {
+        raidId,
+        status: "closed",
+        navigateTo: {
+          path: `/clients/deliver/engagements/${r.engagementId}`,
+          when: "on_commit" as const,
+        },
+      },
+    };
   },
 });
 
@@ -1217,7 +1272,19 @@ defineCapability({
     }
     await db.update(atelierTimesheetWeeks).set(patch).where(eq(atelierTimesheetWeeks.id, weekId));
     await recordAudit(ctx, "timesheet_week", weekId, `ledger.approve.${role}.cli`, { weekId, role, notes: input.notes ?? null }, `${ctx.persona.name} approved timesheet ${weekId} as ${role}.`);
-    return { ok: true, data: { weekId, role } };
+    // Task #499 — timesheet decisions land on the People → Time view
+    // for the affected person/week (route is /people/time/:personId/:weekIso).
+    const tsNav = w.personId && w.weekIso
+      ? `/people/time/${w.personId}/${w.weekIso}`
+      : "/people/time";
+    return {
+      ok: true,
+      data: {
+        weekId,
+        role,
+        navigateTo: { path: tsNav, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -1253,7 +1320,18 @@ defineCapability({
     }
     await db.update(atelierTimesheetWeeks).set({ status: "rejected", rejectedAt: new Date(), rejectedByUserId: ctx.persona.id, rejectionReason: reason, updatedAt: new Date() }).where(eq(atelierTimesheetWeeks.id, weekId));
     await recordAudit(ctx, "timesheet_week", weekId, "ledger.reject.cli", { weekId, reason }, `${ctx.persona.name} rejected timesheet ${weekId}.`);
-    return { ok: true, data: { weekId, status: "rejected" } };
+    const tsNav = w.personId && w.weekIso
+      ? `/people/time/${w.personId}/${w.weekIso}`
+      : "/people/time";
+    // Task #499 — timesheet rejections also land on the affected week.
+    return {
+      ok: true,
+      data: {
+        weekId,
+        status: "rejected",
+        navigateTo: { path: tsNav, when: "on_commit" as const },
+      },
+    };
   },
 });
 
