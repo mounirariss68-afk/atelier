@@ -19,6 +19,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChevronRight, ChevronLeft, Activity, MessageSquare, Bell, FileText, ExternalLink, X as XIcon, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfidenceChip } from "../ui/primitives";
+import { ManagePicker, LensSectionTabs } from "@/components/layout/ManagePicker";
+import {
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+} from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { CommandBar } from "@/components/cli/CommandBar";
 import { CliContext } from "@/components/cli/cli-context";
@@ -75,23 +84,32 @@ export function TopNav() {
     return () => { alive = false; };
   }, [isApprover, me?.role]);
 
-  // Task #306 — v5 Scale & Trust adds Press, Alliances, Studio, Guardhouse
-  // to the top nav. They sit after Engagements (the existing client-loop
-  // group) and before Atelier (the firm IP / agent group), so the nav reads
-  // commercial → scale → IP from left to right.
-  const navItems = [
-    { href: "/", label: "Home", badge: pendingApprovals },
-    { href: "/crm", label: "Accounts" },
-    { href: "/opportunities", label: "Opportunities" },
-    { href: "/engagements", label: "Engagements" },
-    { href: "/codex", label: "Codex" },
-    { href: "/alliances", label: "Alliances" },
-    { href: "/press", label: "Press" },
-    { href: "/studio", label: "Studio" },
-    { href: "/guardhouse", label: "Guardhouse" },
+  // Task #368 — Manage shell. The flat 10-item nav was collapsing into three
+  // muddled concepts (managed entities · firm IP/ops · personal landing).
+  // The top bar now reads: Logo · Home · ManagePicker · (lens section tabs,
+  // rendered by the active lens page itself) · CLI · Bell · Avatar.
+  // Firm-IP / ops items (Atelier, Press, Guardhouse, Reports, Wallet,
+  // Settings, Admin) moved into the avatar → Firm submenu. Underlying
+  // routes for old top-nav entries still resolve so deep-links don't die
+  // (see comments in App.tsx on `/crm`, `/opportunities`, `/engagements`,
+  // `/studio`, `/roster`, `/ledger`, `/wallet`, `/alliances`, `/agents`,
+  // `/finance`, `/pricing`, `/atelier`, `/press`, `/guardhouse`).
+  const homeItem = { href: "/", label: "Home", badge: pendingApprovals } as
+    { href: string; label: string; badge?: number };
+  const isHomeActive = location === "/";
+  const isFirmAdmin = me?.role === "founding_partner" || me?.role === "hr";
+
+  // Items shown under avatar → Firm submenu. Admin Console is gated to the
+  // same roles as before (founding_partner | hr).
+  const firmMenuItems: Array<{ href: string; label: string; gated?: boolean }> = [
     { href: "/atelier", label: "Atelier" },
-    { href: "/agents", label: "Agents" },
-  ] as Array<{ href: string; label: string; badge?: number }>;
+    { href: "/press", label: "Press" },
+    { href: "/guardhouse", label: "Guardhouse" },
+    { href: "/reports", label: "Reports" },
+    { href: "/wallet", label: "Wallet" },
+    { href: "/settings", label: "Settings" },
+    { href: "/admin", label: "Admin", gated: true },
+  ];
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60">
@@ -102,31 +120,34 @@ export function TopNav() {
           </span>
         </Link>
         
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-          {navItems.map(item => {
-            const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "transition-colors hover:text-gold inline-flex items-center gap-1.5",
-                  isActive ? "text-gold" : "text-text-mute"
-                )}
+        <nav className="hidden md:flex items-center gap-5 text-sm font-medium">
+          <Link
+            href={homeItem.href}
+            className={cn(
+              "transition-colors hover:text-gold inline-flex items-center gap-1.5",
+              isHomeActive ? "text-gold" : "text-text-mute",
+            )}
+          >
+            {homeItem.label}
+            {homeItem.badge && homeItem.badge > 0 ? (
+              <span
+                className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono font-semibold bg-gold/20 text-gold border border-gold/40"
+                title={`${homeItem.badge} pending approval${homeItem.badge === 1 ? "" : "s"}`}
+                data-testid="nav-badge-home-approvals"
               >
-                {item.label}
-                {item.badge && item.badge > 0 ? (
-                  <span
-                    className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono font-semibold bg-gold/20 text-gold border border-gold/40"
-                    title={`${item.badge} pending approval${item.badge === 1 ? "" : "s"}`}
-                    data-testid="nav-badge-home-approvals"
-                  >
-                    {item.badge}
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
+                {homeItem.badge}
+              </span>
+            ) : null}
+          </Link>
+          <ManagePicker userId={me?.id ?? null} role={me?.role ?? null} />
+          {/* Contextual lens-section tabs slot — Logo · Home · Manage ·
+              *here* · CLI · Bell · Avatar. Renders the active lens's
+              default sections; each lens task replaces these with its own
+              lifecycle-shaped tabs. Hidden on Home so the universal
+              landing page stays uncluttered. */}
+          {!isHomeActive && (
+            <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
+          )}
         </nav>
 
         <div className="ml-auto flex items-center gap-4">
@@ -177,14 +198,36 @@ export function TopNav() {
                   </>
                 )}
                 <div className="border-t border-border mt-1 pt-1">
-                  <DropdownMenuItem asChild className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer">
-                    <Link href="/settings">Settings</Link>
-                  </DropdownMenuItem>
-                  {(me.role === "founding_partner" || me.role === "hr") && (
-                    <DropdownMenuItem asChild className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer">
-                      <Link href="/admin">Admin Console</Link>
-                    </DropdownMenuItem>
-                  )}
+                  {/* Task #368 — Firm submenu groups items that don't belong
+                      to a managed entity lens (firm IP, ops, settings).
+                      Old top-nav entries for these were removed. */}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      data-testid="avatar-firm-submenu"
+                      className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer"
+                    >
+                      Firm
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent className="w-48 bg-bg-elevate border-border text-text">
+                        <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+                          Firm
+                        </DropdownMenuLabel>
+                        {firmMenuItems.map((item) => {
+                          if (item.gated && !isFirmAdmin) return null;
+                          return (
+                            <DropdownMenuItem
+                              key={item.href}
+                              asChild
+                              className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer"
+                            >
+                              <Link href={item.href}>{item.label}</Link>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
                   <DropdownMenuItem asChild className="focus:bg-bg-elevate-2 focus:text-danger cursor-pointer mt-1 border-t border-border-soft">
                     <Link href="/sign-in">Sign Out</Link>
                   </DropdownMenuItem>

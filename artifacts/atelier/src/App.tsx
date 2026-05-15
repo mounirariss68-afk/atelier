@@ -61,6 +61,18 @@ import GuardhouseIndex from "@/pages/guardhouse/GuardhouseIndex";
 import IpCatalog from "@/pages/atelier/IpCatalog";
 import Codex from "@/pages/Codex";
 import CodexContract from "@/pages/CodexContract";
+// Task #368 — Manage shell lens placeholders. The Clients/People/Partners
+// lens contents ship in their own follow-up tasks; until then these render
+// a "Lens coming soon" page so the picker, deep links and persistence still
+// resolve. /agents and /finance keep their existing pages as their lens
+// homes (no change to current behaviour).
+import {
+  ClientsLensHome,
+  PeopleLensHome,
+  PartnersLensHome,
+  AgentsLensHome,
+  FinanceLensHome,
+} from "@/pages/lens/LensPlaceholder";
 
 const queryClient = new QueryClient();
 
@@ -163,7 +175,10 @@ function Router() {
         <Route path="/wallet/wip" component={WalletWip} />
         <Route path="/wallet/margin" component={WalletMargin} />
         <Route path="/accounts/:accountId" component={Account} />
-        <Route path="/agents" component={Agents} />
+        {/* Task #368 — `/agents` becomes the Agents lens shell-phase
+            placeholder; the legacy library lives at `/agents/library`
+            and nested detail/run routes stay unchanged. */}
+        <Route path="/agents/library" component={Agents} />
         <Route path="/agents/runs/:runId" component={AgentRun} />
         <Route path="/agents/:agentId" component={AgentProfile} />
         <Route path="/settings" component={Settings} />
@@ -172,10 +187,26 @@ function Router() {
         <Route path="/admin/reference-data" component={ReferenceData} />
         {/* Finance: rate cards + margin policy (Partner-only). The legacy
             /pricing path stays as a back-compat alias so deep-linked rows
-            (audit links, dossier exports) keep resolving. */}
-        <Route path="/finance" component={Pricing} />
+            (audit links, dossier exports) keep resolving. Task #368 —
+            `/finance` itself becomes the Finance lens shell-phase
+            placeholder; rate-card sections move under `/finance/rates`
+            and the legacy `/pricing` alias keeps resolving. */}
+        <Route path="/finance/rates" component={Pricing} />
+        <Route path="/finance/rates/:section" component={Pricing} />
         <Route path="/finance/:section" component={Pricing} />
         <Route path="/pricing" component={Pricing} />
+        {/* Task #368 — Manage shell lens homes for all five lenses, with
+            catch-alls (`/:rest*`) so deep links under a lens prefix
+            (e.g. `/clients/foo`, `/people/bar/baz`) resolve to the
+            placeholder instead of 404 during the shell phase. */}
+        <Route path="/clients" component={ClientsLensHome} />
+        <Route path="/clients/:rest*" component={ClientsLensHome} />
+        <Route path="/people" component={PeopleLensHome} />
+        <Route path="/people/:rest*" component={PeopleLensHome} />
+        <Route path="/partners" component={PartnersLensHome} />
+        <Route path="/partners/:rest*" component={PartnersLensHome} />
+        <Route path="/agents" component={AgentsLensHome} />
+        <Route path="/finance" component={FinanceLensHome} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
