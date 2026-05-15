@@ -438,7 +438,15 @@ defineCapability({
         payloadSummary: `CLI emailed deliverable to <email>`,
       },
     ]);
-    return { ok: true, data: { sent: true, deliverableId, recipient } };
+    // Task #509 — outbound email is a pure side-effect; the chat has
+    // no canonical destination keyed by deliverableId alone (the
+    // deliverable workspace requires the parent engagementId, which we
+    // don't load here). Explicitly return null so callers get a
+    // consistent shape.
+    return {
+      ok: true,
+      data: { sent: true, deliverableId, recipient, navigateTo: null },
+    };
   },
 });
 

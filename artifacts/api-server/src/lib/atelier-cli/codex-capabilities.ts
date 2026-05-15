@@ -97,6 +97,43 @@ function denyIfMissing<T>(value: T | null | undefined, code: string): ToolResult
   return null;
 }
 
+// Task #509 — merge a `navigateTo` hint into a successful tool result so
+// the chat client lands the user on the affected entity. No-op for
+// failure results so error envelopes stay clean.
+function withNav(result: ToolResult, path: string | null): ToolResult {
+  if (!result.ok) return result;
+  if (!path) {
+    const base = (result.data && typeof result.data === "object") ? result.data : {};
+    return { ...result, data: { ...base, navigateTo: null } };
+  }
+  const base = (result.data && typeof result.data === "object") ? result.data : {};
+  return {
+    ...result,
+    data: {
+      ...base,
+      navigateTo: { path, when: "on_commit" as const },
+    },
+  };
+}
+
+function withContractNav(result: ToolResult, contractId: string): ToolResult {
+  return withNav(result, contractId ? `/codex/contracts/${contractId}` : "/codex");
+}
+
+function withEngagementNav(result: ToolResult, engagementId: string | null): ToolResult {
+  return withNav(result, engagementId ? `/clients/deliver/engagements/${engagementId}` : null);
+}
+
+// Task #509 — pull engagementId out of a change-order transition
+// result so the caller can build the navigateTo hint without a second
+// db lookup.
+function changeOrderEngagementId(result: ToolResult): string | null {
+  if (!result.ok) return null;
+  const data = result.data as { changeOrder?: { engagementId?: string | null } } | undefined;
+  const id = data?.changeOrder?.engagementId;
+  return typeof id === "string" && id ? id : null;
+}
+
 // =========================================================================
 // CODEX (CLM) — counterparty + clause library
 // =========================================================================
@@ -157,7 +194,9 @@ defineCapability({
       payload: { kind: input.kind, jurisdiction: input.jurisdiction },
       summary: `${ctx.persona.name} created counterparty "${input.displayName}" (${input.kind}, ${String(input.jurisdiction).toUpperCase()}).`,
     });
-    return { ok: true, data: { counterparty: row } };
+    // Task #509 — counterparty list lives under the Codex hub; no
+    // dedicated detail route exists yet, so land on /codex.
+    return { ok: true, data: { counterparty: row, navigateTo: { path: "/codex", when: "on_commit" as const } } };
   },
 });
 
@@ -215,7 +254,8 @@ defineCapability({
       payload: { family: existing.family, version: existing.version },
       summary: `${ctx.persona.name} published clause "${existing.title}" (v${existing.version}).`,
     });
-    return { ok: true, data: { clause: row } };
+    // Task #509 — clause publication lands on the Codex hub.
+    return { ok: true, data: { clause: row, navigateTo: { path: "/codex", when: "on_commit" as const } } };
   },
 });
 
@@ -275,13 +315,15 @@ defineCapability({
     const contractId = String(input.contractId);
     const [c] = await db.select().from(atelierContract).where(eq(atelierContract.id, contractId)).limit(1);
     if (!c) return { ok: false, errorCode: "not_found" };
-    return enqueueAgent(ctx, {
+    const result = await enqueueAgent(ctx, {
       agentId: "contract_composer",
       entityType: "contract",
       entityId: contractId,
       payload: { instrumentType: c.instrumentType },
       summary: `${ctx.persona.name} requested Contract Composer run on "${c.title}".`,
     });
+    // Task #509 — composer runs land on the contract detail page.
+    return withContractNav(result, contractId);
   },
 });
 
@@ -317,13 +359,16 @@ defineCapability({
         errorMessage: `contract status is ${c.status}; dispatch requires two_partner_countersigned`,
       };
     }
-    return enqueueAgent(ctx, {
+    const result = await enqueueAgent(ctx, {
       agentId: "esign_orchestrator",
       entityType: "contract",
       entityId: contractId,
       payload: { signMethod: "docusign" },
       summary: `${ctx.persona.name} dispatched contract "${c.title}" to counterparty.`,
     });
+    // Task #509 — dispatched contracts land on the contract page so
+    // the user can see the new e-sign status.
+    return withContractNav(result, contractId);
   },
 });
 
@@ -355,13 +400,15 @@ defineCapability({
     const contractId = String(input.contractId);
     const [c] = await db.select().from(atelierContract).where(eq(atelierContract.id, contractId)).limit(1);
     if (!c) return { ok: false, errorCode: "not_found" };
-    return enqueueAgent(ctx, {
+    const result = await enqueueAgent(ctx, {
       agentId: "redline_analyst",
       entityType: "contract",
       entityId: contractId,
       payload: { bodyChars: String(input.redlineBody).length },
       summary: `${ctx.persona.name} recorded a redline on "${c.title}" and queued Redline Analyst.`,
     });
+    // Task #509 — recorded redlines land on the contract page.
+    return withContractNav(result, contractId);
   },
 });
 
@@ -390,13 +437,16 @@ defineCapability({
     const dpaId = String(input.dpaId);
     const [d] = await db.select().from(atelierDpa).where(eq(atelierDpa.id, dpaId)).limit(1);
     if (!d) return { ok: false, errorCode: "not_found" };
-    return enqueueAgent(ctx, {
+    const result = await enqueueAgent(ctx, {
       agentId: "dpa_sentinel",
       entityType: "dpa",
       entityId: dpaId,
       payload: {},
       summary: `${ctx.persona.name} requested DPA Sentinel review on dpa ${dpaId}.`,
     });
+    // Task #509 — DPA reviews land on the Codex hub (no dedicated DPA
+    // detail route exists yet).
+    return withNav(result, "/codex");
   },
 });
 
@@ -423,13 +473,15 @@ defineCapability({
   surfaceOn: ["global"],
   representativePrompts: { en: ["Show contracts expiring in the next 60 days"] },
   async run(input, ctx) {
-    return enqueueAgent(ctx, {
+    const result = await enqueueAgent(ctx, {
       agentId: "renewal_watchdog",
       entityType: "firm",
       entityId: "firm",
       payload: { windowDays: Number(input.windowDays ?? 90) },
       summary: `${ctx.persona.name} ran Renewal Watchdog (window ${Number(input.windowDays ?? 90)}d).`,
     });
+    // Task #509 — watchdog surfaces a list, so land on the Codex hub.
+    return withNav(result, "/codex");
   },
 });
 
@@ -496,7 +548,11 @@ defineCapability({
       payload: { engagementId: input.engagementId, kind: input.kind ?? "scope" },
       summary: `${ctx.persona.name} proposed change order "${input.summary}".`,
     });
-    return { ok: true, data: { changeOrder: row } };
+    // Task #509 — proposed change orders land on the engagement workspace.
+    return withEngagementNav(
+      { ok: true, data: { changeOrder: row } },
+      String(input.engagementId),
+    );
   },
 });
 
@@ -559,7 +615,7 @@ defineCapability({
   surfaceOn: ["engagement_dashboard"],
   representativePrompts: { en: ["Approve change order co_123 as partner"] },
   async run(input, ctx) {
-    return transitionChangeOrder(
+    const result = await transitionChangeOrder(
       ctx,
       String(input.changeOrderId),
       "partner_approved",
@@ -568,6 +624,8 @@ defineCapability({
       "change_order_partner_approved",
       (t) => `${ctx.persona.name} partner-approved change order "${t}".`,
     );
+    // Task #509 — partner approvals land on the engagement workspace.
+    return withEngagementNav(result, changeOrderEngagementId(result));
   },
 });
 
@@ -593,7 +651,7 @@ defineCapability({
   surfaceOn: ["engagement_dashboard"],
   representativePrompts: { en: ["Send change order co_123 to the client"] },
   async run(input, ctx) {
-    return transitionChangeOrder(
+    const result = await transitionChangeOrder(
       ctx,
       String(input.changeOrderId),
       "client_proposed",
@@ -602,6 +660,8 @@ defineCapability({
       "change_order_client_proposed",
       (t) => `${ctx.persona.name} dispatched change order "${t}" to the client.`,
     );
+    // Task #509 — dispatched change orders land on the engagement workspace.
+    return withEngagementNav(result, changeOrderEngagementId(result));
   },
 });
 
@@ -646,7 +706,7 @@ defineCapability({
     // Auto-post per state machine — second hop must succeed since we
     // just moved into client_accepted; no race because writes are
     // serialised on the row.
-    return transitionChangeOrder(
+    const posted = await transitionChangeOrder(
       ctx,
       String(input.changeOrderId),
       "posted",
@@ -655,6 +715,8 @@ defineCapability({
       "change_order_posted",
       (t) => `${ctx.persona.name} posted change order "${t}" to the engagement budget.`,
     );
+    // Task #509 — posted change orders land on the engagement workspace.
+    return withEngagementNav(posted, changeOrderEngagementId(posted));
   },
 });
 
@@ -719,7 +781,11 @@ defineCapability({
       payload: { engagementId: input.engagementId, milestoneId: input.milestoneId ?? null },
       summary: `${ctx.persona.name} drafted acceptance attestation "${input.title}".`,
     });
-    return { ok: true, data: { acceptance: row } };
+    // Task #509 — drafted acceptances land on the engagement workspace.
+    return withEngagementNav(
+      { ok: true, data: { acceptance: row } },
+      String(input.engagementId),
+    );
   },
 });
 
@@ -790,7 +856,11 @@ defineCapability({
       payload: { signer: input.clientSignerEmail },
       summary: `${ctx.persona.name} submitted acceptance "${existing.title}" to ${input.clientSignerEmail}.`,
     });
-    return { ok: true, data: { acceptance: row } };
+    // Task #509 — submitted acceptances land on the engagement workspace.
+    return withEngagementNav(
+      { ok: true, data: { acceptance: row } },
+      existing.engagementId,
+    );
   },
 });
 
@@ -856,6 +926,10 @@ defineCapability({
       payload: { evidenceUrl: input.evidenceUrl },
       summary: `${ctx.persona.name} recorded client-signed evidence on "${existing.title}". Wave-2 milestone gate satisfied.`,
     });
-    return { ok: true, data: { acceptance: row } };
+    // Task #509 — signed acceptances land on the engagement workspace.
+    return withEngagementNav(
+      { ok: true, data: { acceptance: row } },
+      existing.engagementId,
+    );
   },
 });

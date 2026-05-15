@@ -379,7 +379,17 @@ defineCapability({
     }
     await db.update(atelierContacts).set({ disposition, updatedAt: new Date() }).where(eq(atelierContacts.id, contactId));
     await recordAudit(ctx, "account", c.accountId, "contact.disposition.cli", { contactId, before: c.disposition, after: disposition, note: input.note ?? null }, `${ctx.persona.name} set ${c.fullName}'s disposition to "${disposition}".`);
-    return { ok: true, data: { contactId, disposition } };
+    // Task #509 — disposition changes land on the contact's parent account workspace.
+    return {
+      ok: true,
+      data: {
+        contactId,
+        disposition,
+        navigateTo: c.accountId
+          ? { path: `/accounts/${c.accountId}`, when: "on_commit" as const }
+          : null,
+      },
+    };
   },
 });
 
@@ -821,7 +831,15 @@ defineCapability({
     }
     await db.update(atelierProposalSections).set({ content, status: (input.status as string) ?? s.status, updatedAt: new Date() }).where(eq(atelierProposalSections.id, sectionId));
     await recordAudit(ctx, "proposal_section", sectionId, "proposal.section.edit.cli", { sectionId, length: content.length }, `${ctx.persona.name} edited section "${s.name}".`);
-    return { ok: true, data: { sectionId } };
+    // Task #509 — section edits navigate to the parent proposal.
+    const editNav = s.proposalId ? `/proposals/${s.proposalId}` : null;
+    return {
+      ok: true,
+      data: {
+        sectionId,
+        navigateTo: editNav ? { path: editNav, when: "on_commit" as const } : null,
+      },
+    };
   },
 });
 
@@ -851,7 +869,16 @@ defineCapability({
     }
     await db.update(atelierProposalSections).set({ status: "red", notes: rationale, updatedAt: new Date() }).where(eq(atelierProposalSections.id, sectionId));
     await recordAudit(ctx, "proposal_section", sectionId, "proposal.section.reject.cli", { sectionId, rationale }, `${ctx.persona.name} rejected section "${s.name}".`);
-    return { ok: true, data: { sectionId, status: "red" } };
+    // Task #509 — section rejections navigate to the parent proposal.
+    const rejectNav = s.proposalId ? `/proposals/${s.proposalId}` : null;
+    return {
+      ok: true,
+      data: {
+        sectionId,
+        status: "red",
+        navigateTo: rejectNav ? { path: rejectNav, when: "on_commit" as const } : null,
+      },
+    };
   },
 });
 
@@ -877,7 +904,14 @@ defineCapability({
       return { ok: true, data: { preview: { proposalId } }, confirmation: { summary: `Confirm section assignments for proposal ${proposalId}.`, diff: { update: { table: "atelier_proposals", id: proposalId } }, pending: { tool: "proposal_confirm_assignments", input: { proposalId, confirm: true } } } };
     }
     await recordAudit(ctx, "proposal", proposalId, "proposal.confirm_assignments.cli", { proposalId }, `${ctx.persona.name} confirmed section assignments.`);
-    return { ok: true, data: { proposalId } };
+    // Task #509 — assignment confirmation lands on the proposal page.
+    return {
+      ok: true,
+      data: {
+        proposalId,
+        navigateTo: { path: `/proposals/${proposalId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -979,7 +1013,14 @@ defineCapability({
       };
     }
     await recordAudit(ctx, "proposal", proposalId, "proposal.pricing.override.cli", { proposalId, rationale }, `${ctx.persona.name} overrode pricing.`);
-    return { ok: true, data: { proposalId } };
+    // Task #509 — pricing overrides navigate to the proposal page.
+    return {
+      ok: true,
+      data: {
+        proposalId,
+        navigateTo: { path: `/proposals/${proposalId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -1019,7 +1060,17 @@ defineCapability({
     if (!recheck.allowed) return { ok: false, errorCode: "rate_limited", errorMessage: "rate limit exceeded between confirm" };
     await db.update(atelierProposals).set({ sentAt: new Date(), updatedAt: new Date() }).where(eq(atelierProposals.id, proposalId));
     await recordAudit(ctx, "proposal", proposalId, "proposal.send.cli", { proposalId, recipient }, `${ctx.persona.name} sent proposal to <email>.`);
-    return { ok: true, data: { proposalId, recipient, sent: true } };
+    // Task #509 — sent proposals land on the proposal page so the user
+    // can verify the sent state.
+    return {
+      ok: true,
+      data: {
+        proposalId,
+        recipient,
+        sent: true,
+        navigateTo: { path: `/proposals/${proposalId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -1058,7 +1109,18 @@ defineCapability({
       return { ok: true, data: { preview: { engagementId } }, confirmation: { summary: `Redraft charter for engagement ${engagementId}.`, diff: { create: { table: "atelier_charter_versions", engagementId } }, pending: { tool: "engagement_redraft_charter", input: { ...input, confirm: true } } } };
     }
     await recordAudit(ctx, "engagement", engagementId, "charter.redraft.cli", { engagementId }, `${ctx.persona.name} requested charter redraft.`);
-    return { ok: true, data: { engagementId, dispatched: true } };
+    // Task #509 — charter redrafts land on the engagement workspace.
+    return {
+      ok: true,
+      data: {
+        engagementId,
+        dispatched: true,
+        navigateTo: {
+          path: `/clients/deliver/engagements/${engagementId}`,
+          when: "on_commit" as const,
+        },
+      },
+    };
   },
 });
 
@@ -1215,7 +1277,19 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await recordAudit(ctx, "engagement", engagementId, "deliverable.created.cli", { id, type, name }, `${ctx.persona.name} created deliverable "${name}".`);
-    return { ok: true, data: { id, engagementId, name } };
+    // Task #509 — new deliverables land on the deliverable workspace.
+    return {
+      ok: true,
+      data: {
+        id,
+        engagementId,
+        name,
+        navigateTo: {
+          path: `/clients/deliver/engagements/${engagementId}/deliverables/${id}`,
+          when: "on_commit" as const,
+        },
+      },
+    };
   },
 });
 
@@ -1412,7 +1486,18 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await recordAudit(ctx, "expense", id, "wallet.expense.create.cli", { amount, currency, merchant, expenseDate }, `${ctx.persona.name} created expense ${amount} ${currency} at ${merchant}.`);
-    return { ok: true, data: { id, amount, currency, expenseDate, merchant } };
+    // Task #509 — new expenses land on the expense detail page.
+    return {
+      ok: true,
+      data: {
+        id,
+        amount,
+        currency,
+        expenseDate,
+        merchant,
+        navigateTo: { path: `/wallet/expenses/${id}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
