@@ -95,6 +95,11 @@ import FinanceComplyInsurance from "@/pages/finance/FinanceComplyInsurance";
 // Task #415 — Finance Plan: 13-week cash forecast and backlog/pipeline coverage.
 import FinancePlanCash13w from "@/pages/finance/FinancePlanCash13w";
 import FinancePlanBacklog from "@/pages/finance/FinancePlanBacklog";
+import FinanceReportsPnl from "@/pages/finance/FinanceReportsPnl";
+import FinanceReportsBs from "@/pages/finance/FinanceReportsBs";
+import FinanceReportsCf from "@/pages/finance/FinanceReportsCf";
+import FinanceReportsCube from "@/pages/finance/FinanceReportsCube";
+import FinanceReportsBoardPack from "@/pages/finance/FinanceReportsBoardPack";
 // Task #414 — Wave 2 engagement P&L / EAC / change-order register pages.
 import EngagementHealth from "@/pages/finance/EngagementHealth";
 import EngagementPnl from "@/pages/finance/EngagementPnl";
@@ -546,6 +551,12 @@ function Router() {
         <Route path="/finance/plan/renewals" component={FinancePlanRenewals} />
         <Route path="/finance/plan/bonus" component={FinancePlanBonus} />
         <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>
+        {/* Task #417 (Wave 5) — three-statement, profitability cube, board pack. */}
+        <Route path="/finance/reports/pnl" component={FinanceReportsPnl} />
+        <Route path="/finance/reports/bs" component={FinanceReportsBs} />
+        <Route path="/finance/reports/cf" component={FinanceReportsCf} />
+        <Route path="/finance/reports/profitability" component={FinanceReportsCube} />
+        <Route path="/finance/reports/board-pack" component={FinanceReportsBoardPack} />
         <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
         {/* Task #419 — Comply registers (controls + SoD, statutory, TP, insurance).
             These must come before the catch-all /finance/comply landing. */}

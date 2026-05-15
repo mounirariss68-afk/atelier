@@ -122,8 +122,11 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       { label: "Saved & scheduled reports", href: "/reports", blurb: "Templates, run history, PDF/CSV exports, schedules.", status: "live" },
       { label: "Firm economics", href: "/finance/reports/firm-economics", blurb: "Realisation, utilisation, margin by sector / partner.", status: "live" },
       { label: "Utilization", href: "/finance/reports/utilization", blurb: "Per-person utilisation vs target with rolling 4w / YTD.", status: "live" },
-      { label: "P&L · BS · CF", href: "/finance/reports", blurb: "Statutory three-statement view per entity / consolidated.", status: "coming_soon" },
-      { label: "Board / management pack", href: "/finance/reports", blurb: "Standing monthly board pack.", status: "coming_soon" },
+      { label: "P&L", href: "/finance/reports/pnl", blurb: "Per-entity / consolidated P&L with variance vs budget · forecast · prior year and auto-commentary.", status: "live" },
+      { label: "Balance Sheet", href: "/finance/reports/bs", blurb: "Closing balances per entity / consolidated; FX translation with FCTR plug; IC AR/AP and loans eliminate.", status: "live" },
+      { label: "Cash Flow", href: "/finance/reports/cf", blurb: "Indirect-method cash flow per entity and consolidated; closing cash ties to BS.", status: "live" },
+      { label: "Profitability cube", href: "/finance/reports/profitability", blurb: "Engagement revenue & gross margin rolled up by client · partner · sector · type.", status: "live" },
+      { label: "Board / management pack", href: "/finance/reports/board-pack", blurb: "Standing monthly board pack with PDF export and a monthly delivery schedule.", status: "live" },
     ],
   },
   comply: {

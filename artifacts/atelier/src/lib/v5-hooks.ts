@@ -456,7 +456,6 @@ export function useCash13wAudit() {
   return q;
 }
 
-// ============================================================
 // Finance — FP&A driver-based plan (Task #420, Wave 8)
 // ============================================================
 export interface FpaScenario {
@@ -583,6 +582,161 @@ export function useFpaBonus(scenario: string, presentation: string, entity: stri
   return useQuery<FpaBonusResp>({
     queryKey: ["atelier-v5", "fpa-bonus", scenario, presentation, entity ?? "consolidated"],
     queryFn: () => planGet<FpaBonusResp>(`/finance/plan/bonus?scenario=${scenario}&currency=${presentation}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+  });
+}
+
+// ============================================================
+// Finance — Reports (three-statement, profitability, board pack) — Task #417
+// ============================================================
+export interface PnlLines {
+  grossRevenue: number; intercoRevenue: number; netRevenue: number;
+  directCost: number; intercoCost: number; grossProfit: number;
+  payroll: number; opex: number; depreciation: number;
+  ebitda: number; ebit: number; interestExpense: number;
+  pretaxIncome: number; tax: number; netIncome: number;
+}
+export interface BsLines {
+  cash: number; ar: number; intercoAr: number; wip: number;
+  ppe: number; intangible: number; intercoLoanReceivable: number;
+  totalAssets: number;
+  ap: number; intercoAp: number; accruals: number; debt: number;
+  intercoLoanPayable: number; totalLiabilities: number;
+  shareCapital: number; retainedEarnings: number; fctr: number;
+  totalEquity: number; totalLiabilitiesAndEquity: number;
+}
+export interface CfLines {
+  netIncome: number; depreciation: number; workingCapitalChange: number;
+  cashFromOps: number; capex: number; cashFromInvesting: number;
+  debtRepayment: number; intercoFunding: number; cashFromFinancing: number;
+  fxOnCash: number; netChangeInCash: number; openingCash: number; closingCash: number;
+}
+export interface VarianceCell {
+  actual: number; budget: number; forecast: number; priorYear: number;
+  vsBudget: number; vsForecast: number; vsPriorYear: number;
+  vsBudgetPct: number; vsForecastPct: number; vsPriorYearPct: number;
+}
+export interface PnlVariance {
+  netRevenue: VarianceCell; grossProfit: VarianceCell;
+  ebitda: VarianceCell; ebit: VarianceCell; netIncome: VarianceCell;
+}
+export interface FinancePeriod { id: string; year: number; month: number; label: string; endsOn: string }
+export interface ReportEliminations {
+  intercoRevenueGbp: number; intercoCostGbp: number;
+  intercoArGbp: number; intercoApGbp: number; intercoLoanGbp: number;
+}
+export interface PnlEntityRow {
+  entityId: string; entityName: string; baseCurrency: string;
+  actual: PnlLines; budget: PnlLines; forecast: PnlLines; priorYear: PnlLines;
+  gbp: { actual: PnlLines; budget: PnlLines; forecast: PnlLines; priorYear: PnlLines };
+}
+export interface BsEntityRow {
+  entityId: string; entityName: string; baseCurrency: string;
+  local: BsLines; gbp: BsLines; display: BsLines;
+}
+export interface CfEntityRow {
+  entityId: string; entityName: string; baseCurrency: string;
+  display: CfLines; gbp: CfLines;
+}
+export interface PnlResp {
+  period: string; scope: string; currency: string; entity: string | null;
+  periodsCovered: string[];
+  perEntity: PnlEntityRow[];
+  consolidated: { actual: PnlLines; budget: PnlLines; forecast: PnlLines; priorYear: PnlLines } | null;
+  eliminations: ReportEliminations | null;
+  variance: PnlVariance | null; commentary: string[];
+}
+export interface BsResp {
+  period: string; currency: string; entity: string | null;
+  perEntity: BsEntityRow[]; consolidated: BsLines | null; eliminations: ReportEliminations | null;
+}
+export interface CfResp {
+  period: string; scope: string; currency: string; entity: string | null;
+  perEntity: CfEntityRow[]; consolidated: CfLines | null;
+}
+export interface CubeRow {
+  engagementId: string; engagementName: string;
+  client: string; partner: string; sector: string;
+  engagementType: "fixed_fee" | "tm" | "subscription" | "managed_service";
+  entityId: string;
+  revenueGbp: number; directCostGbp: number; grossMarginGbp: number; grossMarginPct: number;
+}
+export interface CubeRollupRow {
+  dim: string; revenueGbp: number; directCostGbp: number; grossMarginGbp: number; grossMarginPct: number; engagementCount: number;
+}
+export interface CubeResp {
+  period: string; scope: string; periodsCovered: string[];
+  rows: CubeRow[];
+  byClient: CubeRollupRow[]; byPartner: CubeRollupRow[];
+  bySector: CubeRollupRow[]; byEngagementType: CubeRollupRow[];
+}
+export interface BoardPackSection {
+  id: string; title: string;
+  commentary?: string[]; risks?: string[];
+  consolidated?: PnlLines | BsLines | CfLines | { actual: PnlLines; budget: PnlLines; forecast: PnlLines; priorYear: PnlLines };
+  variance?: PnlVariance; eliminations?: ReportEliminations;
+  topRevenue?: CubeRow[]; bottomMargin?: CubeRow[];
+}
+export interface BoardPackResp {
+  period: string; periodLabel: string; presentationCurrency: string;
+  sections: BoardPackSection[];
+}
+export interface BoardPackSchedule {
+  id: string; name: string; cron: string; nextRunOn: string;
+  recipients: string[]; enabled: boolean; createdBy: string; createdAt: string;
+}
+
+export function useFinanceReportsPeriods() {
+  return useQuery<{ periods: FinancePeriod[]; current: FinancePeriod }>({
+    queryKey: ["atelier-v5", "finance-reports-periods"],
+    queryFn: () => get("/finance/reports/periods"),
+    staleTime: 60_000,
+  });
+}
+export function useFinanceReportsPnl(period: string | null, scope: string, entity: string | null, currency: string) {
+  return useQuery<PnlResp>({
+    queryKey: ["atelier-v5", "finance-reports-pnl", period, scope, entity ?? "consolidated", currency],
+    queryFn: () => get<PnlResp>(`/finance/reports/pnl?period=${period ?? ""}&scope=${scope}&currency=${currency}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+    enabled: !!period,
+  });
+}
+export function useFinanceReportsBs(period: string | null, entity: string | null, currency: string) {
+  return useQuery<BsResp>({
+    queryKey: ["atelier-v5", "finance-reports-bs", period, entity ?? "consolidated", currency],
+    queryFn: () => get<BsResp>(`/finance/reports/bs?period=${period ?? ""}&currency=${currency}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+    enabled: !!period,
+  });
+}
+export function useFinanceReportsCf(period: string | null, scope: string, entity: string | null, currency: string) {
+  return useQuery<CfResp>({
+    queryKey: ["atelier-v5", "finance-reports-cf", period, scope, entity ?? "consolidated", currency],
+    queryFn: () => get<CfResp>(`/finance/reports/cf?period=${period ?? ""}&scope=${scope}&currency=${currency}${entity ? `&entity=${entity}` : ""}`),
+    staleTime: 30_000,
+    enabled: !!period,
+  });
+}
+export function useFinanceReportsProfitability(period: string | null, scope: string) {
+  return useQuery<CubeResp>({
+    queryKey: ["atelier-v5", "finance-reports-cube", period, scope],
+    queryFn: () => get<CubeResp>(`/finance/reports/profitability?period=${period ?? ""}&scope=${scope}`),
+    staleTime: 30_000,
+    enabled: !!period,
+  });
+}
+export function useFinanceReportsBoardPack(period: string | null) {
+  return useQuery<BoardPackResp>({
+    queryKey: ["atelier-v5", "finance-reports-board-pack", period],
+    queryFn: () => get<BoardPackResp>(`/finance/reports/board-pack?period=${period ?? ""}`),
+    staleTime: 30_000,
+    enabled: !!period,
+  });
+}
+export function useFinanceReportsSchedules() {
+  return useQuery<{ items: BoardPackSchedule[] }>({
+    queryKey: ["atelier-v5", "finance-reports-schedules"],
+    queryFn: () => get<{ items: BoardPackSchedule[] }>("/finance/reports/schedules"),
     staleTime: 30_000,
   });
 }

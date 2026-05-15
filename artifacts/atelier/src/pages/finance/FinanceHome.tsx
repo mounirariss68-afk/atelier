@@ -65,6 +65,8 @@ import {
   useInternalControls,
   useCash13w,
   useBacklogCoverage,
+  useFinanceReportsPnl,
+  useFinanceReportsPeriods,
   type StatutoryFilingRow,
   type InsurancePolicyRow,
   type InternalControlRow,
@@ -73,7 +75,6 @@ import { useSyncExternalStore } from "react";
 import { subscribeCloseStore, getCloseSnapshot, statusForEntity, type CloseStatusForEntity } from "@/data/finance-close-seed";
 import { ArrowRight, Lock, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 
-const PLAN_RATIO = { revenue: 0.92, ebitda: 0.88 } as const;
 const FIRM_SCOPE_NOTE = "firm-wide · entity slice W2";
 
 function useCloseSnapshot() {
@@ -185,15 +186,21 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
   const daysOfCash = cashOnHand && weeklyBurn > 0 ? Math.round((cashOnHand / weeklyBurn) * 7) : null;
   const netCash = weeksFromAsOf.length ? weeksFromAsOf.reduce((s, w) => s + (w.expectedIn - w.expectedOut), 0) : null;
 
-  // Revenue (recognised, firm-margin window)
-  const rev = margin?.firm.revenueRecognised ?? null;
-  const revPlan = rev ? rev / PLAN_RATIO.revenue : null;
-  const revDelta = rev != null && revPlan != null ? rev - revPlan : 0;
-
-  // EBITDA proxy = gross margin amount (full opex break-out lands Wave 6)
-  const grossMargin = margin?.firm.grossMarginAmount ?? null;
-  const ebitdaPlan = grossMargin ? grossMargin / PLAN_RATIO.ebitda : null;
-  const ebitdaDelta = grossMargin != null && ebitdaPlan != null ? grossMargin - ebitdaPlan : 0;
+  // Revenue + EBITDA — sourced from the live three-statement engine
+  // (Task #417, Wave 5). Period scope mirrors the dashboard period filter.
+  const periodsResp = useFinanceReportsPeriods();
+  const currentPeriod = periodsResp.data?.current?.id ?? null;
+  const reportScope: "mtd" | "qtd" | "ytd" | "r12" =
+    filters.period === "mtd" ? "mtd" : filters.period === "qtd" ? "qtd" : filters.period === "ytd" ? "ytd" : "r12";
+  const reportsPnl = useFinanceReportsPnl(currentPeriod, reportScope, null, "GBP");
+  const headPnl = reportsPnl.data?.consolidated ?? null;
+  const v = reportsPnl.data?.variance ?? null;
+  const rev = headPnl?.actual.netRevenue ?? null;
+  const revBudget = headPnl?.budget.netRevenue ?? null;
+  const revDelta = v ? v.netRevenue.vsBudget : (rev != null && revBudget != null ? rev - revBudget : 0);
+  const ebitda = headPnl?.actual.ebitda ?? null;
+  const ebitdaBudget = headPnl?.budget.ebitda ?? null;
+  const ebitdaDelta = v ? v.ebitda.vsBudget : (ebitda != null && ebitdaBudget != null ? ebitda - ebitdaBudget : 0);
   const marginPct = margin?.firm.grossMarginPct ?? null;
 
   // Lockup days = WIP days + DSO over the selected period window
@@ -216,8 +223,8 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
   const lockupRag = lockup == null ? "neutral" : lockup <= 75 ? "green" : lockup <= 110 ? "amber" : "red";
   const utilRag = utilAvg == null ? "neutral" : utilAvg >= utilTarget ? "green" : utilAvg >= utilTarget - 0.1 ? "amber" : "red";
   const realisationRag = realisation == null ? "neutral" : realisation >= 0.9 ? "green" : realisation >= 0.75 ? "amber" : "red";
-  const revRag = rev != null && revPlan != null ? (rev >= revPlan ? "green" : rev >= revPlan * 0.9 ? "amber" : "red") : "neutral";
-  const ebitdaRag = grossMargin != null && ebitdaPlan != null ? (grossMargin >= ebitdaPlan ? "green" : grossMargin >= ebitdaPlan * 0.9 ? "amber" : "red") : "neutral";
+  const revRag = rev != null && revBudget != null ? (rev >= revBudget ? "green" : rev >= revBudget * 0.9 ? "amber" : "red") : "neutral";
+  const ebitdaRag = ebitda != null && ebitdaBudget != null ? (ebitda >= ebitdaBudget ? "green" : ebitda >= ebitdaBudget * 0.9 ? "amber" : "red") : "neutral";
   const netCashRag = netCash == null ? "neutral" : netCash >= 0 ? "green" : "red";
 
   const firmScope = ctx.isAllEntities ? undefined : FIRM_SCOPE_NOTE;
@@ -267,13 +274,13 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         value={rev != null ? formatMoney(rev, ccy, fmtOpts) : "—"}
         rag={revRag}
         vsPlan={rev != null ? { delta: revDelta, kind: "money", tone: revRag } : undefined}
-        href="/finance/reports/firm-economics"
+        href="/finance/reports/pnl"
         scopeNote={firmScope}
         info={{
-          definition: "Recognised revenue in the period, all entities.",
-          formula: "Σ revenueRecognised (margin snapshot)",
-          source: "Margin engine · /margin/firm",
-          freshness: margin?.asOf ?? "live",
+          definition: "Net revenue (after IC eliminations) for the selected scope, all entities, in GBP.",
+          formula: "Σ netRevenue (consolidated P&L) − IC revenue",
+          source: "Reports engine · /finance/reports/pnl",
+          freshness: reportsPnl.data ? "live" : "loading",
         }}
         ccy={ccy}
         localCode={localCode}
@@ -281,17 +288,17 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
       <MetricTile
         testId="cfo-tile-ebitda"
         label="EBITDA vs plan"
-        value={grossMargin != null ? formatMoney(grossMargin, ccy, fmtOpts) : "—"}
+        value={ebitda != null ? formatMoney(ebitda, ccy, fmtOpts) : "—"}
         unit={marginPct != null ? `· ${formatPct(marginPct)}` : undefined}
         rag={ebitdaRag}
-        vsPlan={grossMargin != null ? { delta: ebitdaDelta, kind: "money", tone: ebitdaRag } : undefined}
-        href="/finance/reports/firm-economics"
+        vsPlan={ebitda != null ? { delta: ebitdaDelta, kind: "money", tone: ebitdaRag } : undefined}
+        href="/finance/reports/pnl"
         scopeNote={firmScope}
         info={{
-          definition: "Gross margin proxy until full opex break-out lands in Wave 6.",
-          formula: "revenueRecognised − directCost (margin snapshot)",
-          source: "Margin engine · /margin/firm",
-          freshness: margin?.asOf ?? "live",
+          definition: "Consolidated EBITDA for the selected scope, in GBP.",
+          formula: "grossProfit − payroll − opex (consolidated P&L)",
+          source: "Reports engine · /finance/reports/pnl",
+          freshness: reportsPnl.data ? "live" : "loading",
         }}
         ccy={ccy}
         localCode={localCode}

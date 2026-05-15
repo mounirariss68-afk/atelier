@@ -73,6 +73,7 @@ import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
 import financeComplyRoutes from "./financeComplyRoutes";
 import financePlanRoutes from "./financePlanRoutes";
+import financeReportsRoutes from "./financeReportsRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
 import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
@@ -234,6 +235,10 @@ router.use(financeComplyRoutes);
 // Task #415 — Finance Plan: 13-week direct-method cash forecast and
 // backlog/pipeline coverage. Seed-only data.
 router.use(financePlanRoutes);
+// Task #417 — Finance Reports (Wave 5): three-statement (P&L, BS, CF)
+// per entity + consolidated with FX translation and IC eliminations,
+// profitability cube, board pack with PDF export and monthly schedules.
+router.use(financeReportsRoutes);
 // Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
 // Retire) backed by Postgres; replaces the client-side seed module.
 router.use(agentsLensRoutes);
