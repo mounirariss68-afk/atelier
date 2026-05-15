@@ -12,14 +12,18 @@
  * translates to the requested presentation currency, and overlays a
  * per-entity min-cash policy and (where applicable) covenant line.
  *
- * In-memory override / lock layer with audit trail backs the "treasurer
- * can lock or override a line" behaviour. Persistence is process-local
- * (demo-only) — restarts clear overrides; this matches the rest of the
- * Atelier demo surfaces.
+ * Override / lock layer with audit trail backs the "treasurer can lock
+ * or override a line" behaviour. Both the override state and the audit
+ * trail are persisted to Postgres (atelier_cash_line_overrides +
+ * atelier_cash_audit, see migration 0037) so locks and overrides survive
+ * an API server restart and stay visible to all personas. The forecast
+ * engine reads the overrides from a process-local cache that is hydrated
+ * at module load and write-through-updated on POST /override.
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { atelierUsers } from "@workspace/db";
+import { desc, eq } from "drizzle-orm";
+import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit } from "@workspace/db";
 import { ENTITIES_SEED } from "./financeEntitiesRoutes";
 
 const router: IRouter = Router();
@@ -290,14 +294,53 @@ interface AuditEntry {
   target: string;
   payload: Record<string, unknown>;
 }
+// In-memory cache of overrides, hydrated from Postgres at module load and
+// kept in sync via write-through on POST /override. The forecast engine
+// reads this cache synchronously (resolveLine), so writes must update both
+// the database (for restart-survival + cross-process visibility) and the
+// cache (so the next computeForecast call sees the change).
 const OVERRIDES = new Map<string, Override>();
-const AUDIT: AuditEntry[] = [];
-function pushAudit(actor: string, action: string, target: string, payload: Record<string, unknown>) {
-  AUDIT.unshift({
-    id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-    ts: new Date().toISOString(), actor, action, target, payload,
-  });
-  if (AUDIT.length > 500) AUDIT.length = 500;
+
+function rowToOverride(r: typeof atelierCashLineOverrides.$inferSelect): Override {
+  return {
+    lineId: r.lineId,
+    lockedAmount: r.lockedAmount ?? undefined,
+    lockedDate: r.lockedDate ?? undefined,
+    locked: r.locked,
+    note: r.note ?? "",
+    byUserId: r.byUserId,
+    byUserName: r.byUserName,
+    byRole: r.byRole,
+    at: (r.at instanceof Date ? r.at : new Date(r.at)).toISOString(),
+  };
+}
+
+let hydrationPromise: Promise<void> | null = null;
+function ensureHydrated(): Promise<void> {
+  if (!hydrationPromise) {
+    hydrationPromise = (async () => {
+      try {
+        const rows = await db.select().from(atelierCashLineOverrides);
+        OVERRIDES.clear();
+        for (const r of rows) OVERRIDES.set(r.lineId, rowToOverride(r));
+      } catch (err) {
+        // Reset so a later request can retry hydration if the DB was
+        // transiently unavailable at boot.
+        hydrationPromise = null;
+        throw err;
+      }
+    })();
+  }
+  return hydrationPromise;
+}
+// Kick off hydration eagerly; the promise is awaited by handlers too.
+void ensureHydrated().catch((err) => {
+  console.error("[financePlanRoutes] failed to hydrate cash overrides:", err);
+});
+
+async function persistAudit(actor: string, action: string, target: string, payload: Record<string, unknown>) {
+  const id = `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  await db.insert(atelierCashAudit).values({ id, actor, action, target, payload });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -641,16 +684,18 @@ function pickEntity(req: Request): string | null {
   return ENTITIES.some((x) => x.id === e) ? e : null;
 }
 
-router.get("/finance/plan/cash-13w", (req, res) => {
+router.get("/finance/plan/cash-13w", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureHydrated();
   const out = computeForecast(pickPresentation(req), pickEntity(req));
   res.json(out);
 });
 
-router.get("/finance/plan/cash-13w/lines", (req, res) => {
+router.get("/finance/plan/cash-13w/lines", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureHydrated();
   const presentation = pickPresentation(req);
   const ef = pickEntity(req);
   const inLines = RECEIPTS.filter((r) => !ef || r.entityId === ef)
@@ -660,7 +705,7 @@ router.get("/finance/plan/cash-13w/lines", (req, res) => {
   res.json({ receipts: inLines, disbursements: outLines, asOf: AS_OF_MONDAY, presentationCurrency: presentation });
 });
 
-router.post("/finance/plan/cash-13w/override", (req, res) => {
+router.post("/finance/plan/cash-13w/override", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   if (!isFinanceLeadership(me)) {
@@ -689,11 +734,14 @@ router.post("/finance/plan/cash-13w/override", (req, res) => {
   if (body.note !== undefined && typeof body.note === "string" && body.note.length > 1000) {
     return res.status(400).json({ error: "invalid", message: "note exceeds 1000 chars" });
   }
+  await ensureHydrated();
   if (body.clear) {
+    await db.delete(atelierCashLineOverrides).where(eq(atelierCashLineOverrides.lineId, body.lineId));
     OVERRIDES.delete(body.lineId);
-    pushAudit(me.name, "cash13w.override.clear", body.lineId, { by: me.id });
+    await persistAudit(me.name, "cash13w.override.clear", body.lineId, { by: me.id });
     return res.json({ ok: true, cleared: true });
   }
+  const nowIso = new Date().toISOString();
   const ovr: Override = {
     lineId: body.lineId,
     lockedAmount: body.lockedAmount,
@@ -701,19 +749,51 @@ router.post("/finance/plan/cash-13w/override", (req, res) => {
     locked: !!body.locked,
     note: body.note ?? "",
     byUserId: me.id, byUserName: me.name, byRole: me.role,
-    at: new Date().toISOString(),
+    at: nowIso,
   };
+  await db.insert(atelierCashLineOverrides).values({
+    lineId: ovr.lineId,
+    lockedAmount: ovr.lockedAmount ?? null,
+    lockedDate: ovr.lockedDate ?? null,
+    locked: ovr.locked,
+    note: ovr.note,
+    byUserId: ovr.byUserId,
+    byUserName: ovr.byUserName,
+    byRole: ovr.byRole,
+    at: new Date(nowIso),
+  }).onConflictDoUpdate({
+    target: atelierCashLineOverrides.lineId,
+    set: {
+      lockedAmount: ovr.lockedAmount ?? null,
+      lockedDate: ovr.lockedDate ?? null,
+      locked: ovr.locked,
+      note: ovr.note,
+      byUserId: ovr.byUserId,
+      byUserName: ovr.byUserName,
+      byRole: ovr.byRole,
+      at: new Date(nowIso),
+    },
+  });
   OVERRIDES.set(body.lineId, ovr);
-  pushAudit(me.name, "cash13w.override.apply", body.lineId, {
+  await persistAudit(me.name, "cash13w.override.apply", body.lineId, {
     lockedAmount: body.lockedAmount, lockedDate: body.lockedDate, locked: body.locked, note: body.note,
   });
   res.json({ ok: true, override: ovr });
 });
 
-router.get("/finance/plan/cash-13w/audit", (req, res) => {
+router.get("/finance/plan/cash-13w/audit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
-  res.json({ items: AUDIT.slice(0, 50) });
+  const rows = await db.select().from(atelierCashAudit).orderBy(desc(atelierCashAudit.ts)).limit(50);
+  const items: AuditEntry[] = rows.map((r) => ({
+    id: r.id,
+    ts: (r.ts instanceof Date ? r.ts : new Date(r.ts)).toISOString(),
+    actor: r.actor,
+    action: r.action,
+    target: r.target,
+    payload: (r.payload ?? {}) as Record<string, unknown>,
+  }));
+  res.json({ items });
 });
 
 router.get("/finance/plan/backlog", (req, res) => {
