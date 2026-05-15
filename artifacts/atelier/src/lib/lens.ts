@@ -47,15 +47,15 @@ export const LENSES: readonly LensDef[] = [
     shortcut: "⌘1",
     shortcutKey: "1",
     sections: [
-      // Task #369 — Clients lens lifecycle stages.
+      // Flat section IA: Overview · Accounts · Opportunities · Engagements
+      // · Billing · References. Renewals/expansions live as a flag on each
+      // opportunity, not a separate tab.
       { id: "overview", label: "Overview", href: "/clients" },
-      { id: "prospect", label: "Prospect", href: "/clients/prospect" },
-      { id: "pursue", label: "Pursue", href: "/clients/pursue" },
-      { id: "win", label: "Win", href: "/clients/win" },
-      { id: "deliver", label: "Deliver", href: "/clients/deliver" },
-      { id: "bill", label: "Bill", href: "/clients/bill" },
-      { id: "renew", label: "Renew", href: "/clients/renew" },
-      { id: "reference", label: "Reference", href: "/clients/reference" },
+      { id: "accounts", label: "Accounts", href: "/clients/accounts" },
+      { id: "opportunities", label: "Opportunities", href: "/clients/opportunities" },
+      { id: "engagements", label: "Engagements", href: "/clients/engagements" },
+      { id: "billing", label: "Billing", href: "/clients/billing" },
+      { id: "references", label: "References", href: "/clients/references" },
     ],
   },
   {

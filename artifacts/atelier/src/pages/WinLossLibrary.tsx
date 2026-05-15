@@ -43,13 +43,15 @@ export default function WinLossLibrary({
 }: { defaultView?: "themes" | "debriefs" } = {}) {
   const [matchDebriefs] = useRoute("/win-loss/debriefs");
   const [location] = useLocation();
-  // Lens-aware tab hrefs: when mounted under /clients/* the tabs swap
-  // between /clients/win (debriefs) and /clients/reference (themes) so
-  // navigation stays in the Clients lens IA. The legacy /win-loss[/debriefs]
+  // Lens-aware tab hrefs: when mounted under /clients/* the themes tab
+  // stays inside the lens (`/clients/references`); debriefs intake is
+  // an opportunity-stage activity, so it deep-links into the standalone
+  // `/win-loss/debriefs` mount rather than synthesising a section that
+  // no longer exists in the flat IA. The legacy `/win-loss[/debriefs]`
   // mounts keep their own pair of hrefs.
   const inClientsLens = location.startsWith("/clients/");
-  const themesHref = inClientsLens ? "/clients/reference" : "/win-loss";
-  const debriefsHref = inClientsLens ? "/clients/win" : "/win-loss/debriefs";
+  const themesHref = inClientsLens ? "/clients/references" : "/win-loss";
+  const debriefsHref = "/win-loss/debriefs";
   const view: "themes" | "debriefs" = matchDebriefs
     ? "debriefs"
     : (defaultView ?? "themes");

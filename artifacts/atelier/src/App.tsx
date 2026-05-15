@@ -82,18 +82,18 @@ import AgentsDeploy from "@/pages/agents/AgentsDeploy";
 import AgentsImprove from "@/pages/agents/AgentsImprove";
 import AgentsRetire from "@/pages/agents/AgentsRetire";
 // Task #369 — Clients lens re-homes the commercial loop under /clients
-// with a lifecycle ribbon (Prospect → Pursue → Win → Deliver → Bill →
-// Renew → Reference). Old top-level URLs (/crm, /opportunities, …) keep
+// with a flat IA (Overview · Accounts · Opportunities · Engagements ·
+// Billing · References). Renewals/expansions are a flag on each
+// opportunity, not a separate tab. Old top-level URLs (/crm, /pipeline,
+// …) and the previous lifecycle URLs (/clients/prospect …) keep
 // resolving via permanent redirects below.
 import ClientsHome from "@/pages/lens/ClientsHome";
 import {
-  ClientsProspect,
-  ClientsPursue,
-  ClientsWin,
-  ClientsDeliver,
-  ClientsBill,
-  ClientsRenew,
-  ClientsReference,
+  ClientsAccounts,
+  ClientsOpportunities,
+  ClientsEngagements,
+  ClientsBilling,
+  ClientsReferences,
 } from "@/pages/lens/ClientsStages";
 import { Redirect } from "@/components/Redirect";
 
@@ -145,29 +145,28 @@ function Router() {
             /clients/*; old top-level URLs keep resolving so deep-links
             from email, dossiers and audit logs don't die. Detail routes
             (opp / engagement workspaces) stay at their existing paths. */}
-        <Route path="/crm">{() => <Redirect to="/clients/prospect" />}</Route>
-        <Route path="/pipeline">{() => <Redirect to="/clients/pursue" />}</Route>
+        <Route path="/crm">{() => <Redirect to="/clients/accounts" />}</Route>
+        <Route path="/pipeline">{() => <Redirect to="/clients/opportunities" />}</Route>
         {/* Listing-level redirects move to the lens; detail routes
             (workspaces) stay canonical at their existing paths. */}
-        <Route path="/opportunities">{() => <Redirect to="/clients/pursue" />}</Route>
+        <Route path="/opportunities">{() => <Redirect to="/clients/opportunities" />}</Route>
         <Route path="/pipeline/:oppId" component={Opportunity} />
         <Route path="/opportunities/:oppId/win-loss" component={WinLoss} />
         <Route path="/opportunities/:oppId" component={Opportunity} />
-        {/* `/win-loss-library` → reference (themes); `/win-loss` (and
-            its `/debriefs` sub-path) → the win stage's intake view. */}
-        <Route path="/win-loss-library">{() => <Redirect to="/clients/reference" />}</Route>
+        {/* `/win-loss-library` → references (themes); `/win-loss` debrief
+            intake stays available standalone for deep-links. */}
+        <Route path="/win-loss-library">{() => <Redirect to="/clients/references" />}</Route>
         <Route path="/win-loss/debriefs">{() => <WinLossLibrary />}</Route>
-        <Route path="/win-loss">{() => <Redirect to="/clients/win" />}</Route>
+        <Route path="/win-loss">{() => <WinLossLibrary defaultView="debriefs" />}</Route>
         {/* Task #271 — Forecast folded into Opportunities → Forecast tab.
-            Now also feeds `/clients/pursue?view=forecast`. Preserve any
-            ?by=… group-by selection so dossier/report deep-links land on
-            the same view they used to. */}
+            Preserve any ?by=… group-by selection so dossier/report
+            deep-links land on the same view they used to. */}
         <Route path="/forecast">
           {() => {
             const search = typeof window !== "undefined" ? window.location.search : "";
             const params = new URLSearchParams(search);
             const by = params.get("by");
-            const target = `/clients/pursue?view=forecast${by ? `&by=${encodeURIComponent(by)}` : ""}`;
+            const target = `/clients/opportunities?view=forecast${by ? `&by=${encodeURIComponent(by)}` : ""}`;
             return <Redirect to={target} />;
           }}
         </Route>
@@ -176,7 +175,7 @@ function Router() {
             detail / workspace routes stay canonical until the workspace
             re-mount lands (deferred per the task's sequencing note for
             L2C Wave 1 / #360). */}
-        <Route path="/engagements">{() => <Redirect to="/clients/deliver" />}</Route>
+        <Route path="/engagements">{() => <Redirect to="/clients/engagements" />}</Route>
         <Route path="/engagements/:engId" component={Engagement} />
         <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
         {/* L2C Wave 1 (Task #360) — Codex (CLM) workspace. */}
@@ -359,18 +358,25 @@ function Router() {
             (e.g. `/clients/foo`, `/people/bar/baz`) resolve to the
             placeholder instead of 404 during the shell phase. */}
         {/* Task #369 — Clients lens: lifecycle ribbon home + 7 stage
-            wrappers (Prospect → Pursue → Win → Deliver → Bill → Renew →
-            Reference). Engagement workspace re-mount under
-            `/clients/deliver/engagements/:id` is deferred until L2C
-            Wave 1 (#360) merges; current detail routes stay canonical. */}
+            wrappers (Accounts · Opportunities · Engagements · Billing ·
+            References). Engagement workspace re-mount under
+            `/clients/engagements/:id` is deferred until L2C Wave 1
+            (#360) merges; current detail routes stay canonical. */}
         <Route path="/clients" component={ClientsHome} />
-        <Route path="/clients/prospect" component={ClientsProspect} />
-        <Route path="/clients/pursue" component={ClientsPursue} />
-        <Route path="/clients/win" component={ClientsWin} />
-        <Route path="/clients/deliver" component={ClientsDeliver} />
-        <Route path="/clients/bill" component={ClientsBill} />
-        <Route path="/clients/renew" component={ClientsRenew} />
-        <Route path="/clients/reference" component={ClientsReference} />
+        <Route path="/clients/accounts" component={ClientsAccounts} />
+        <Route path="/clients/opportunities" component={ClientsOpportunities} />
+        <Route path="/clients/engagements" component={ClientsEngagements} />
+        <Route path="/clients/billing" component={ClientsBilling} />
+        <Route path="/clients/references" component={ClientsReferences} />
+        {/* Permanent redirects from the previous lifecycle IA so external
+            deep-links (dossiers, reports, audit trail) keep landing. */}
+        <Route path="/clients/prospect">{() => <Redirect to="/clients/accounts" />}</Route>
+        <Route path="/clients/pursue">{() => <Redirect to="/clients/opportunities" />}</Route>
+        <Route path="/clients/win">{() => <Redirect to="/clients/opportunities" />}</Route>
+        <Route path="/clients/deliver">{() => <Redirect to="/clients/engagements" />}</Route>
+        <Route path="/clients/bill">{() => <Redirect to="/clients/billing" />}</Route>
+        <Route path="/clients/renew">{() => <Redirect to="/clients/opportunities" />}</Route>
+        <Route path="/clients/reference">{() => <Redirect to="/clients/references" />}</Route>
         {/* Task #364 — People Studio. Order matters: more specific routes
             first, then sub-section catch-alls, then the lens home. */}
         <Route path="/people/attract" component={PeopleAttract} />
