@@ -11,7 +11,7 @@ import {
   TabNavItem,
   OwnershipPanel,
 } from "@/components/ui/primitives";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuditTab } from "@/components/AuditTab";
 import { CharterTab } from "@/components/tabs/CharterTab";
@@ -33,15 +33,51 @@ const TABS = [
   { id: 'audit', label: 'Audit Trail' }
 ];
 
+const TAB_IDS = new Set(TABS.map((t) => t.id));
+
 export default function Engagement() {
-  const [, params] = useRoute("/engagements/:engId");
-  const engId = params?.engId || "";
+  // Task #375 — workspace re-mount under the Clients lens. The canonical
+  // path is `/clients/engagements/:engId(/:tab)?`; the legacy
+  // `/engagements/:engId` route still resolves here so deep-links from
+  // dossiers, audit logs and notification emails keep working until the
+  // App-level redirects do their work. Either route may carry an
+  // optional `:tab` segment for deep-linking into a specific tab
+  // (charter / workplan / deliverables / agents / processes / meetings /
+  // artifacts / audit) including the L2C Wave 1 surfaces (CLM,
+  // change-orders, acceptances) which live inside those tabs.
+  const [matchLens, lensParams] = useRoute<{ engId: string; tab?: string }>(
+    "/clients/engagements/:engId/:tab?",
+  );
+  const [, legacyParams] = useRoute<{ engId: string; tab?: string }>(
+    "/engagements/:engId/:tab?",
+  );
+  const params = matchLens ? lensParams : legacyParams;
+  const engId = params?.engId ?? "";
+  const tabParam = params?.tab;
+  const urlTab = tabParam && TAB_IDS.has(tabParam) ? tabParam : null;
+  const [, setLocation] = useLocation();
 
   const { data: eng, isLoading, isError } = useAtelierGetEngagement(engId, {
     query: { enabled: !!engId, queryKey: getAtelierGetEngagementQueryKey(engId) },
   });
 
-  const [activeTab, setActiveTab] = React.useState('charter');
+  const [activeTab, setActiveTab] = React.useState(urlTab ?? 'charter');
+
+  // Sync state when the URL tab changes (e.g. back/forward navigation or
+  // a deep-link click from another surface).
+  React.useEffect(() => {
+    if (urlTab && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlTab]);
+
+  function selectTab(tabId: string) {
+    setActiveTab(tabId);
+    if (engId) {
+      setLocation(`/clients/engagements/${engId}/${tabId}`, { replace: true });
+    }
+  }
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (isError || !eng) return <div className="container-atelier py-12 text-danger">Failed to load engagement.</div>;
@@ -49,7 +85,7 @@ export default function Engagement() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/engagements">Back to Engagements</BackLink>
+        <BackLink href="/clients/engagements">Back to Engagements</BackLink>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
           <SectionHead
@@ -81,7 +117,7 @@ export default function Engagement() {
             <TabNavItem
               key={tab.id}
               active={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => selectTab(tab.id)}
               data-testid={`tab-${tab.id}`}
             >
               {tab.label}

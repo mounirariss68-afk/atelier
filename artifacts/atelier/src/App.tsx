@@ -95,6 +95,8 @@ import {
   ClientsAccounts,
   ClientsOpportunities,
   ClientsEngagements,
+  ClientsEngagement,
+  ClientsEngagementDeliverable,
   ClientsBilling,
   ClientsReferences,
 } from "@/pages/lens/ClientsStages";
@@ -174,13 +176,29 @@ function Router() {
           }}
         </Route>
         <Route path="/reports" component={Reports} />
-        {/* `/engagements` listing redirects to the Deliver stage; engagement
-            detail / workspace routes stay canonical until the workspace
-            re-mount lands (deferred per the task's sequencing note for
-            L2C Wave 1 / #360). */}
+        {/* Task #375 — engagement workspace re-mounted under the Clients
+            lens. Listing + detail + deliverable detail (with the optional
+            `:tab` deep-link segment) all live under
+            `/clients/engagements/*`; legacy `/engagements/*` paths
+            permanent-redirect via `<Redirect/>` (which preserves query
+            strings) so dossier links, audit logs and notification emails
+            keep resolving. */}
         <Route path="/engagements">{() => <Redirect to="/clients/engagements" />}</Route>
-        <Route path="/engagements/:engId" component={Engagement} />
-        <Route path="/engagements/:engId/deliverables/:delId" component={Deliverable} />
+        <Route path="/engagements/:engId/deliverables/:delId">
+          {(p) => (
+            <Redirect
+              to={`/clients/engagements/${p.engId}/deliverables/${p.delId}`}
+            />
+          )}
+        </Route>
+        <Route path="/engagements/:engId/:tab">
+          {(p) => (
+            <Redirect to={`/clients/engagements/${p.engId}/${p.tab}`} />
+          )}
+        </Route>
+        <Route path="/engagements/:engId">
+          {(p) => <Redirect to={`/clients/engagements/${p.engId}`} />}
+        </Route>
         {/* L2C Wave 1 (Task #360) — Codex (CLM) workspace. */}
         <Route path="/codex/contracts/:id" component={CodexContract} />
         <Route path="/codex/:section" component={Codex} />
@@ -371,6 +389,25 @@ function Router() {
         <Route path="/clients" component={ClientsHome} />
         <Route path="/clients/accounts" component={ClientsAccounts} />
         <Route path="/clients/opportunities" component={ClientsOpportunities} />
+        {/* Task #375 — engagement workspace re-mounted under the Clients
+            lens. More-specific routes must precede the listing route so
+            wouter matches them first. The optional `:tab` segment lets
+            other surfaces deep-link straight to a workspace tab (charter /
+            workplan / deliverables / agents / processes / meetings /
+            artifacts / audit, including the L2C Wave 1 surfaces inside
+            those tabs). */}
+        <Route
+          path="/clients/engagements/:engId/deliverables/:delId"
+          component={ClientsEngagementDeliverable}
+        />
+        <Route
+          path="/clients/engagements/:engId/:tab"
+          component={ClientsEngagement}
+        />
+        <Route
+          path="/clients/engagements/:engId"
+          component={ClientsEngagement}
+        />
         <Route path="/clients/engagements" component={ClientsEngagements} />
         <Route path="/clients/billing" component={ClientsBilling} />
         <Route path="/clients/references" component={ClientsReferences} />

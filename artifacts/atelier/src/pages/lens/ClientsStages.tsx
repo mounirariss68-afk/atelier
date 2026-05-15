@@ -10,6 +10,12 @@
  *
  * Each wrapper composes the existing surface (no functional rebuild) so
  * the lens shell can re-home commercial-loop work without forking pages.
+ *
+ * Task #375 — engagement workspace lives under the lens at
+ * `/clients/engagements/:engId(/:tab)?` (and the deliverable detail at
+ * `/clients/engagements/:engId/deliverables/:delId`). Legacy
+ * `/engagements/*` paths permanent-redirect into the new structure via
+ * `<Redirect/>` in App.tsx.
  */
 
 import { Link } from "wouter";
@@ -18,6 +24,8 @@ import { Card, MonoChip, PageHero, SectionHead, Eyebrow } from "@/components/ui/
 import Crm from "@/pages/Crm";
 import Pipeline from "@/pages/Pipeline";
 import Engagements from "@/pages/Engagements";
+import Engagement from "@/pages/Engagement";
+import Deliverable from "@/pages/Deliverable";
 import WinLossLibrary from "@/pages/WinLossLibrary";
 
 export function ClientsAccounts() {
@@ -40,6 +48,28 @@ export function ClientsEngagements() {
   return (
     <div className="animate-in fade-in">
       <Engagements />
+    </div>
+  );
+}
+
+/**
+ * Task #375 — engagement detail + deliverable detail mounted under the
+ * Clients lens at `/clients/engagements/:engId(/:tab)?` and
+ * `/clients/engagements/:engId/deliverables/:delId`. The flat IA has no
+ * stage ribbon, so these are thin wrappers around the existing pages.
+ */
+export function ClientsEngagement() {
+  return (
+    <div className="animate-in fade-in">
+      <Engagement />
+    </div>
+  );
+}
+
+export function ClientsEngagementDeliverable() {
+  return (
+    <div className="animate-in fade-in">
+      <Deliverable />
     </div>
   );
 }

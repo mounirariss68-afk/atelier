@@ -30,7 +30,7 @@ export default function Engagements() {
           <Card key={eng.id} hover className="p-5 space-y-4 group flex flex-col justify-between">
             <div className="space-y-4">
               <div className="flex justify-between items-start gap-2">
-                <Link href={`/engagements/${eng.id}`} className="font-semibold text-lg text-text group-hover:text-gold transition-colors block leading-tight">
+                <Link href={`/clients/engagements/${eng.id}`} className="font-semibold text-lg text-text group-hover:text-gold transition-colors block leading-tight">
                   {eng.name}
                 </Link>
               </div>
