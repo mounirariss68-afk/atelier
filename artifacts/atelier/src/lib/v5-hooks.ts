@@ -8,7 +8,10 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
+// Atelier proxy mounts the api-server at /api/*; using a vite-base-prefixed URL
+// (e.g. /atelier/api/atelier/...) gets swallowed by the SPA fallback, so target
+// the API directly.
+const API_BASE = "/api/atelier";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -277,22 +280,10 @@ export interface CashForecastResp {
   totalIn: number;
   totalOut: number;
 }
-// Direct API base — Atelier proxy mounts the api-server at /api/*; the
-// vite-base-prefixed `get()` above swallows real responses behind the SPA
-// fallback for paths that pass through the artifact router.
-const PLAN_API_BASE = "/api/atelier";
-async function planGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${PLAN_API_BASE}${path}`, {
-    credentials: "include",
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`Atelier API ${path} failed: ${res.status}`);
-  return (await res.json()) as T;
-}
 export function useCash13w(presentation: string, entity: string | null) {
   const q = useQuery<CashForecastResp>({
     queryKey: ["atelier-v5", "cash13w", presentation, entity ?? "consolidated"],
-    queryFn: () => planGet<CashForecastResp>(
+    queryFn: () => get<CashForecastResp>(
       `/finance/plan/cash-13w?currency=${presentation}${entity ? `&entity=${entity}` : ""}`,
     ),
     staleTime: 15_000,
@@ -325,7 +316,7 @@ export interface BacklogResp {
 export function useBacklogCoverage(presentation: string, entity: string | null) {
   const q = useQuery<BacklogResp>({
     queryKey: ["atelier-v5", "backlog", presentation, entity ?? "consolidated"],
-    queryFn: () => planGet<BacklogResp>(
+    queryFn: () => get<BacklogResp>(
       `/finance/plan/backlog?currency=${presentation}${entity ? `&entity=${entity}` : ""}`,
     ),
     staleTime: 30_000,
@@ -344,7 +335,7 @@ export interface PlanEntityRow {
 export function usePlanEntities(): PlanEntityRow[] {
   const q = useQuery<{ items: PlanEntityRow[] }>({
     queryKey: ["atelier-v5", "plan-entities"],
-    queryFn: () => planGet<{ items: PlanEntityRow[] }>("/finance/plan/entities"),
+    queryFn: () => get<{ items: PlanEntityRow[] }>("/finance/plan/entities"),
     staleTime: 30_000,
   });
   return q.data?.items ?? [];
@@ -361,7 +352,7 @@ export interface CashAuditRow {
 export function useCash13wAudit() {
   const q = useQuery<{ items: CashAuditRow[] }>({
     queryKey: ["atelier-v5", "cash13w-audit"],
-    queryFn: () => planGet<{ items: CashAuditRow[] }>("/finance/plan/cash-13w/audit"),
+    queryFn: () => get<{ items: CashAuditRow[] }>("/finance/plan/cash-13w/audit"),
     staleTime: 5_000,
   });
   return q;
