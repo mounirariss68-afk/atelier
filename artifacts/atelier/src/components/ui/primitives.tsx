@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { ArrowLeft, AlertTriangle, X, Link2, Check } from "lucide-react";
+import { ArrowLeft, Link2, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PlmStage, AgentActivityItemConfidence } from "@workspace/api-client-react";
@@ -383,83 +383,3 @@ export const StatusCard = ({
   );
 };
 
-/* ============================================================
-   MockFallbackBanner — dismissible amber banner with session
-   persistence. Two-line max sentence-case copy. When dismissed,
-   collapses to a small "⚠ mock fallback" pill with tooltip.
-   ============================================================ */
-
-const MOCK_FALLBACK_KEY = "atelier:mock-fallback-dismissed";
-
-const FULL_TEXT =
-  "Mock fallback active — Claude unavailable. Outputs are synthetic and not evidence. " +
-  "All agent runs and human decisions remain logged to the Audit Trail.";
-
-const SHORT_TEXT =
-  "Mock fallback active — Claude unavailable. Outputs are synthetic and not evidence.";
-
-export const MockFallbackBanner = ({
-  active = false,
-  className,
-}: {
-  /** Render the banner only when a real fallback signal is present.
-   *  Defaults to false so the assertive copy never appears speculatively. */
-  active?: boolean;
-  className?: string;
-}) => {
-  const [dismissed, setDismissed] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return sessionStorage.getItem(MOCK_FALLBACK_KEY) === "1";
-  });
-
-  if (!active) return null;
-
-  const dismiss = () => {
-    setDismissed(true);
-    try { sessionStorage.setItem(MOCK_FALLBACK_KEY, "1"); } catch { /* no-op */ }
-  };
-  const restore = () => {
-    setDismissed(false);
-    try { sessionStorage.removeItem(MOCK_FALLBACK_KEY); } catch { /* no-op */ }
-  };
-
-  if (dismissed) {
-    return (
-      <button
-        type="button"
-        onClick={restore}
-        title={FULL_TEXT}
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-full border border-warn/40 bg-warn/10 text-warn px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest hover:bg-warn/20 transition-colors",
-          className,
-        )}
-      >
-        <AlertTriangle className="w-3 h-3" /> Mock fallback
-      </button>
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        "flex items-start gap-3 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3",
-        className,
-      )}
-      role="status"
-    >
-      <span className="mono-chip amber shrink-0 mt-0.5">
-        <AlertTriangle className="w-3 h-3 inline -mt-0.5 mr-1" /> Mock
-      </span>
-      <p className="text-sm text-text leading-snug flex-1">{SHORT_TEXT}</p>
-      <button
-        type="button"
-        onClick={dismiss}
-        className="text-text-mute hover:text-text transition-colors shrink-0"
-        title="Dismiss for this session"
-        aria-label="Dismiss banner"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </div>
-  );
-};

@@ -182,8 +182,6 @@ const ROUTER_SYSTEM = [
   "Keep entityHints to fuzzy fragments the user typed (e.g. names, ids).",
 ].join("\n");
 
-const MOCK_MODE = process.env.ATELIER_CLI_MOCK === "1";
-
 export async function classifyIntentTyped(
   prompt: string,
   surface: string = "global",
@@ -202,7 +200,6 @@ export async function classifyIntentTyped(
     tokensOut,
     costUsd,
   });
-  if (MOCK_MODE) return fallback("mock-haiku");
   try {
     const { anthropic } = await import("@workspace/integrations-anthropic-ai");
     const ac = new AbortController();

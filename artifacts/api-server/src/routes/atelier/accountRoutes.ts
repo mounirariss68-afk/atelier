@@ -604,7 +604,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   const parsed = AtelierCartographerRefreshInput.safeParse(req.body ?? {});
   const focusOpportunityId = parsed.success ? (parsed.data.focusOpportunityId ?? null) : null;
 
-  const { runId, output, source, warning } = await runAccountCartographer({
+  const { runId, output } = await runAccountCartographer({
     accountId: a.id,
     accountName: a.name,
     accountSector: a.sector,
@@ -614,36 +614,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
     actorLabel: "Account Cartographer",
     focusOpportunityId,
   });
-
-  // Task #304 — when the Anthropic web_search call fails (e.g. bad key,
-  // network error, model 404), the runner returns deterministic mock
-  // content. Do NOT overwrite the account's profile with that mock prose
-  // (the user would see strings like "Real cartographer call did not
-  // run." in the summary). Instead, mark the run as failed so the
-  // existing failed-state banner is shown and surface the warning.
-  if (source === "mock_fallback") {
-    await db
-      .update(atelierAgentRuns)
-      .set({ status: "failed", statusMessage: warning ?? "Cartographer web_search call failed.", updatedAt: new Date() })
-      .where(eq(atelierAgentRuns.id, runId));
-    await db.insert(atelierAuditEvents).values({
-      id: rid("aud"),
-      entityType: "account",
-      entityId: a.id,
-      actorType: "agent",
-      actorId: "ag_account_cartographer",
-      actorLabel: "Account Cartographer",
-      action: "cartographer.refresh_failed",
-      payload: { source, warning: warning ?? null },
-      payloadSummary: `Cartographer refresh failed for ${a.name}; mock fallback was discarded.`,
-    });
-    const wsFail = await buildWorkspace(a.id, access);
-    res.status(502).json({
-      ...wsFail,
-      cartographerWarning: warning ?? "Cartographer web_search call failed.",
-    });
-    return;
-  }
+  void runId;
 
   // Task #275 — DIRECT WRITE. Cartographer is now grounded by Anthropic
   // web_search and produces citation URLs for every priority + contact,
@@ -790,10 +761,8 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
         priorityCount: priorityTexts.length,
         contactsInserted: inserted,
         contactsUpdated: updated,
-        source,
-        warning: warning ?? null,
       },
-      payloadSummary: `Cartographer ${source === "claude" ? "wrote" : "(mock) wrote"} ${priorityTexts.length} priorities, ${incomingSignals.length} signals, ${inserted}+${updated} contacts for ${a.name}.`,
+      payloadSummary: `Cartographer wrote ${priorityTexts.length} priorities, ${incomingSignals.length} signals, ${inserted}+${updated} contacts for ${a.name}.`,
     });
   });
 

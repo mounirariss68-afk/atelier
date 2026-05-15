@@ -8,8 +8,7 @@
  *   1. `atelier_agent_runs` start row + `agent.start` audit event always fire,
  *   2. budget is enforced before any LLM call,
  *   3. output is validated against the registry's Zod `outputSchema`,
- *   4. `agent.complete` / `agent.error` audit events always fire,
- *   5. mock-fallback runs are flagged as synthetic.
+ *   4. `agent.complete` / `agent.error` audit events always fire.
  *
  * The historical 15 hand-rolled `run<X>` functions in `runner.ts` predate
  * this helper. They use the same primitives (`startRun`, `progressRun`,
@@ -50,8 +49,6 @@ export interface RunAgentExecuteResult<TOutput> {
   costUsd?: number;
   confidence?: "green" | "amber" | "red";
   sourcesCount?: number;
-  source?: "claude" | "mock_config" | "mock_fallback";
-  warning?: string;
 }
 
 export interface RunAgentResult<TOutput> {
@@ -147,8 +144,6 @@ export async function runAgent<TInput, TOutput>(
       targetType: args.targetType,
       targetId: args.targetId,
       targetLabel: args.targetLabel,
-      source: result.source,
-      warning: result.warning,
     });
 
     return {

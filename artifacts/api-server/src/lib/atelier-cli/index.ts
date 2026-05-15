@@ -5,23 +5,23 @@
  * other tightly. Read top-to-bottom:
  *
  *   1.  Types     — SSE frames, tool registry, turn statuses.
- *   2.  IDs/util  — rid(), today UTC, mock detector, budget classes.
+ *   2.  IDs/util  — rid(), today UTC, budget classes.
  *   3.  Tools     — 4 starter capabilities (present_choices,
  *                   resolve_account_by_name, list_my_open_raid_items,
  *                   add_raid_item).
  *   4.  Quotas    — per-user concurrency lock + per-session daily $.
  *   5.  Sessions  — get-or-create + rolling summary helpers.
- *   6.  Loop      — runTurn() drives Claude tool-use (or mock); emits
- *                   SSE frames; persists atelier_cli_turns row +
+ *   6.  Loop      — runTurn() drives Claude tool-use; emits SSE frames;
+ *                   persists atelier_cli_turns row +
  *                   atelier_audit_events `cli.turn`.
  *   7.  Confirm   — confirmPendingWrite() is the second phase of the
  *                   diff/confirm protocol for write-tools (e.g.
  *                   add_raid_item with confirm:true). Idempotent.
  *
- * Mock mode (ATELIER_MOCK_AGENTS=1 or no Anthropic env) returns a
- * deterministic narration + one tool call so the integration test
- * can run without a network. Live mode mirrors `runner.ts`'s
- * callClaudeJson cost accounting.
+ * There is no mock mode. Every turn calls Claude (Sonnet for writes,
+ * Haiku for reads). If the Anthropic credentials are missing the module
+ * throws at import time so misconfigured deployments fail loudly
+ * instead of silently serving fake data.
  */
 
 import {
@@ -177,10 +177,18 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-const MOCK_MODE =
-  process.env.ATELIER_MOCK_AGENTS === "1" ||
+// Hard-fail at import time if Anthropic credentials are missing. The
+// orchestrator MUST drive every turn through Claude; there is no mock
+// fallback. Failing here surfaces the misconfiguration in the workflow
+// logs instead of silently serving deterministic fake data to users.
+if (
   !process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL ||
-  !process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+  !process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY
+) {
+  throw new Error(
+    "[atelier-cli] AI_INTEGRATIONS_ANTHROPIC_BASE_URL and AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. The Atelier chat orchestrator does not support mock mode.",
+  );
+}
 
 const SESSION_DAILY_BUDGET_USD = Number(
   process.env.ATELIER_CLI_SESSION_DAILY_BUDGET_USD ?? 5,
@@ -203,9 +211,9 @@ const ASYNC_HANDOFF_STEP_THRESHOLD = Number(
 );
 
 // Cheap-classifier (Haiku) model used for intent routing before the
-// Sonnet orchestration loop. Override via env; falls back to a
-// deterministic heuristic when MOCK_MODE is on or the upstream call
-// fails — the classification is advisory, never blocking.
+// Sonnet orchestration loop. Override via env. The advisory label is
+// derived from the typed router (intent-router.ts) — this constant is
+// kept only for places that still need a model id string.
 const HAIKU_CLASSIFIER_MODEL =
   process.env.ATELIER_CLI_HAIKU_MODEL ?? "claude-haiku-4-5";
 
@@ -239,68 +247,6 @@ function heuristicClassify(prompt: string): IntentLabel {
   if (/\b(list|show|find|search|who is|what is|view|fetch|get)\b/.test(p)) return "read";
   if (/\b(or|either|maybe|which one|choose between)\b/.test(p)) return "ambiguous";
   return "other";
-}
-
-/**
- * Classify the user's prompt with the cheap Haiku model so the loop can
- * route + budget appropriately. In MOCK_MODE or on any upstream failure
- * we fall back to a deterministic keyword heuristic. The result is
- * advisory — it is recorded in the audit payload and used to short-
- * circuit obvious cases (e.g. "reset" → start a fresh session).
- */
-async function classifyIntent(
-  prompt: string,
-): Promise<{ label: IntentLabel; model: string; tokensIn: number; tokensOut: number; costUsd: number }> {
-  const fallback = (): {
-    label: IntentLabel;
-    model: string;
-    tokensIn: number;
-    tokensOut: number;
-    costUsd: number;
-  } => ({
-    label: heuristicClassify(prompt),
-    model: MOCK_MODE ? "mock-haiku" : `${HAIKU_CLASSIFIER_MODEL} (fallback)`,
-    tokensIn: 0,
-    tokensOut: 0,
-    costUsd: 0,
-  });
-  if (MOCK_MODE) return fallback();
-  try {
-    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 5_000);
-    try {
-      const resp = await anthropic.messages.create(
-        {
-          model: HAIKU_CLASSIFIER_MODEL,
-          max_tokens: 16,
-          system:
-            // Task #406 — `transition` is the orchestrator's stage-move bucket
-            // (move/advance/promote a deal across the pipeline). Listed
-            // ahead of `write` so the model picks the more specific label.
-            "Classify the user prompt into one of: reset, read, write, transition, ambiguous, trivial, other. Use 'transition' when the user wants to move/advance/promote/close a sales opportunity to a new stage. Reply with just the label.",
-          messages: [{ role: "user", content: prompt }],
-        },
-        { signal: ac.signal },
-      );
-      const raw = resp.content
-        .map((b) => (b.type === "text" ? b.text : ""))
-        .join("")
-        .toLowerCase()
-        .trim();
-      const label: IntentLabel = (
-        ["reset", "read", "write", "transition", "ambiguous", "trivial", "other"] as IntentLabel[]
-      ).find((l) => raw.startsWith(l)) ?? heuristicClassify(prompt);
-      const tokensIn = resp.usage.input_tokens;
-      const tokensOut = resp.usage.output_tokens;
-      const costUsd = (tokensIn * 1 + tokensOut * 5) / 1_000_000;
-      return { label, model: resp.model ?? HAIKU_CLASSIFIER_MODEL, tokensIn, tokensOut, costUsd };
-    } finally {
-      clearTimeout(timer);
-    }
-  } catch {
-    return fallback();
-  }
 }
 
 /**
@@ -1196,6 +1142,18 @@ const SYSTEM_PROMPT = [
   "- Wrap every mutation in `propose_write` with a clear one-line summary so the user",
   "  reviews the diff and clicks Commit. Do not call entity write routes directly.",
   "- Terminal-stage transitions (lost / no_decision / withdrawn) ALWAYS need a `reasonCode`.",
+  "",
+  "ENTITY NORMALISATION (account creation):",
+  "- When the user describes a new account in natural language (e.g. \"create new account: ministry of energy in uae\"),",
+  "  you MUST normalise the entity name and country to their canonical full forms inside the `payload` you send to",
+  "  `propose_write`. Never propagate the raw lowercase fragment.",
+  "- Recognise common country codes / abbreviations and expand them to the full canonical name. Worked examples:",
+  "  • \"ministry of energy in uae\" → name=\"UAE Ministry of Energy and Infrastructure\", country=\"United Arab Emirates\"",
+  "  • \"new account: ministry of finance ksa\" → name=\"Saudi Arabia Ministry of Finance\", country=\"Saudi Arabia\"",
+  "  • \"add account: bundesministerium für wirtschaft germany\" → name=\"Federal Ministry for Economic Affairs and Climate Action (Germany)\", country=\"Germany\"",
+  "- Always populate BOTH `name` (full canonical title-cased string) and `country` (full canonical country name) in the",
+  "  payload — the confirm card relies on both fields. Use English unless the user explicitly typed in another language.",
+  "- If the user-provided fragment is genuinely ambiguous between two real entities, call `present_choices` first.",
 ].join("\n");
 
 interface ClaudeToolCall {
@@ -1226,7 +1184,6 @@ async function modelStep(args: {
   /** Task #411 — extra context block (entity neighbourhood) appended to the system prompt. */
   contextBlock?: string | null;
 }): Promise<ClaudeStep> {
-  if (MOCK_MODE) return mockModelStep(args);
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), Number(process.env.ATELIER_CLI_TIMEOUT_MS ?? 30_000));
@@ -2072,302 +2029,6 @@ export function noToolFallbackMessage(promptText: string): string {
   return "I can search accounts, list your open RAID items, draft a RAID, create accounts/opportunities, move stages, compose & send proposals, approve charters and timesheets, close RAID items, and log expenses. Tell me which one you mean — naming the entity (e.g. `opp_dewa`, `eng_acme`) helps a lot.";
 }
 
-/**
- * Deterministic mock so tests + dev work without Claude. Decisions are
- * keyword-based on the most recent user text:
- *   - "raid" + "list"  → list_my_open_raid_items
- *   - "raid" + ("add"|"create"|"new") → add_raid_item (preview phase)
- *   - "find" + "account" / "who is" → resolve_account_by_name
- *   - "choose"/"pick" → present_choices
- *   - else → end_turn with a friendly narration.
- *
- * After ANY tool result block in history, the mock emits an end_turn
- * narration (one tool call per turn keeps the test surface small).
- */
-async function mockModelStep(args: {
-  history: Array<{ role: "user" | "assistant"; content: unknown }>;
-}): Promise<ClaudeStep> {
-  let lastTool: { role: "user" | "assistant"; content: unknown } | undefined;
-  for (let i = args.history.length - 1; i >= 0; i--) {
-    const h = args.history[i]!;
-    if (
-      h.role === "user" &&
-      Array.isArray(h.content) &&
-      (h.content as Array<{ type?: string }>).some((b) => b?.type === "tool_result")
-    ) {
-      lastTool = h;
-      break;
-    }
-  }
-  if (lastTool) {
-    // Inspect the last tool_result to tailor the closing narration.
-    // Saying "Done." after a failure is misleading; surfacing the
-    // capability's errorMessage gives the user something actionable.
-    const blocks = (lastTool.content as Array<Record<string, unknown>>) ?? [];
-    const tr = blocks.find((b) => b?.type === "tool_result") as
-      | { content?: unknown; is_error?: boolean }
-      | undefined;
-    let closing = "Done.";
-    let isErr = false;
-    let needsConfirm = false;
-    try {
-      const raw = tr?.content;
-      const text = Array.isArray(raw)
-        ? (raw as Array<{ text?: string }>).map((b) => b?.text ?? "").join("")
-        : String(raw ?? "");
-      const parsed = text ? JSON.parse(text) : {};
-      isErr = parsed?.ok === false || tr?.is_error === true;
-      needsConfirm = parsed?.confirmation && parsed?.ok !== false;
-      if (isErr) {
-        const msg =
-          parsed?.errorMessage ?? parsed?.error?.message ?? "I couldn't complete that.";
-        closing = `I couldn't complete that — ${String(msg).replace(/[.?!]+$/, "")}.`;
-      } else if (needsConfirm) {
-        const summary = parsed?.confirmation?.summary;
-        closing = summary
-          ? `Ready to confirm: ${String(summary).replace(/[.?!]+$/, "")}.`
-          : "Ready when you confirm below.";
-      }
-    } catch {
-      // Best effort — leave default "Done." if the payload isn't JSON.
-    }
-    return {
-      text: closing,
-      toolCall: null,
-      stop: "end_turn",
-      costUsd: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-    };
-  }
-  // Find the LAST user prompt text — the rolling-summary primer is also
-  // pushed as a user message so we must scan from the end. Task #484 —
-  // we need BOTH the original-cased prompt (entity-hint extraction +
-  // country regex rely on capitalisation) and the lowercased version
-  // (slash-command match was historically case-insensitive via
-  // lowercase, so we keep that behaviour).
-  const promptRawCase = (() => {
-    for (let i = args.history.length - 1; i >= 0; i--) {
-      const h = args.history[i]!;
-      if (h.role !== "user") continue;
-      if (typeof h.content === "string") {
-        const s = h.content;
-        // Skip our own primer prefixes — keep walking back to find the
-        // actual user prompt.
-        if (s.startsWith("[prior session summary]") || s.startsWith("[page context]") || s.startsWith("[attachments]")) {
-          continue;
-        }
-        return s;
-      }
-      if (Array.isArray(h.content)) {
-        // Tool-result entries are arrays — skip them; we want the original
-        // text prompt.
-        const isToolResult = (h.content as Array<{ type?: string }>).some(
-          (b) => b?.type === "tool_result",
-        );
-        if (isToolResult) continue;
-        const txt = (h.content as Array<{ type?: string; text?: string }>).find(
-          (b) => b?.type === "text" && typeof b.text === "string",
-        );
-        if (txt) return String(txt.text);
-      }
-    }
-    return "";
-  })();
-  const promptText = promptRawCase.toLowerCase();
-
-  // Task #484 — replaced BOTH regex chains (the parity router AND the
-  // inline (find|who is|account) / (choose|pick|option) / RAID
-  // branches) with the same typed-Intent pipeline that the live path
-  // uses. Behaviour summary:
-  //   1. Slash commands (/undo, /annuler) route deterministically.
-  //   2. Otherwise classifyIntentTyped → if it's a write/transition,
-  //      emit `propose_write` with verb/kind/payload built from the
-  //      typed Intent's hints. The orchestrator's propose_write run
-  //      then takes care of the dispatch table, two-phase confirm,
-  //      and audit (same as live).
-  //   3. Read intents with at least one entity hint route to
-  //      resolve_account_by_name (the only catalog read that is
-  //      universally surfaced). Everything else falls through to the
-  //      no-tool fallback narration.
-  // The two regex chains were the proximate cause of the user's
-  // turn-1 (`name="new"`) and turn-3 (`query="respond in english.…"`)
-  // failures, and they emitted legacy chat-write tool names
-  // (account_create, opportunity_create, …) that propose_write now
-  // owns. They are gone for good.
-  let toolCall: ClaudeToolCall | null = null;
-  let text = "On it.";
-
-  const slashMatch = promptText.match(/^\s*\/([a-z_-]+)\b/);
-  if (slashMatch) {
-    const slash = `/${slashMatch[1]}`;
-    if (slash === "/undo" || slash === "/annuler") {
-      return {
-        text: "Looking up your last reversible action.",
-        toolCall: { id: rid("tu"), name: "undo_last_action", input: {} },
-        stop: "tool_use",
-        costUsd: 0,
-        tokensIn: 0,
-        tokensOut: 0,
-      };
-    }
-  }
-
-  // Typed-intent classification. We use the deterministic path
-  // directly (mock mode skips the network call anyway) so the mock
-  // stays synchronous-ish and never waits on integration env.
-  // Task #484 — pass the ORIGINAL-cased prompt: extractEntityHints
-  // relies on capitalised noun phrases, and lowercasing strips
-  // "Ministry of Energy" down to nothing.
-  const { deterministicClassify } = await import("./intent-router.js");
-  const intent = deterministicClassify(promptRawCase);
-
-  const isWriteVerb =
-    intent.verb === "create" ||
-    intent.verb === "update" ||
-    intent.verb === "delete" ||
-    intent.verb === "link" ||
-    intent.verb === "transition";
-
-  if (isWriteVerb && intent.kind !== "unknown") {
-    // Build a structured payload from the typed-Intent hints. The
-    // first hint is the most-likely entity name (already deduped by
-    // extractEntityHints). The preamble is already stripped at ingress,
-    // so the country regex can no longer first-match "in English".
-    //
-    // Task #484 follow-up — extractEntityHints requires capitalised
-    // noun phrases, so all-lowercase prompts ("create new account:
-    // ministry of energy in uae") yield zero hints. Layer on
-    // shape-based extraction that runs case-insensitively and
-    // title-cases the recovered name so the confirm card is populated
-    // either way.
-    let entityName = intent.hints[0] ?? "";
-    let countryHint: string | undefined;
-    const titleCase = (s: string) =>
-      s.replace(/\s+/g, " ").trim().replace(/\b\p{L}/gu, (c) => c.toUpperCase());
-
-    if (intent.kind === "account") {
-      // Two-step parser: locate the account-shape "tail" carrying the
-      // name+country, then split " in <country>" off it. Handling these
-      // as one regex keeps biting back (lazy quantifiers never enter
-      // optional trim groups), so we do it explicitly.
-      const stripped = promptRawCase
-        .replace(
-          /^\s*(?:please\s+)?(?:create|add|register|open|spin\s+up|set\s+up|new)\b\s*/i,
-          "",
-        )
-        .trim();
-
-      let tail: string | undefined;
-      // Form A: "[a|new] account: <rest>" — colon/dash delimiter.
-      let m = stripped.match(/^(?:a\s+)?(?:new\s+)?account\s*[:\-–—]\s*(.+)$/i);
-      if (m) tail = m[1];
-      // Form B: "[a|new] account [for] <rest>" — preposition-only delimiter.
-      if (!tail) {
-        m = stripped.match(/^(?:a\s+)?(?:new\s+)?account\s+(?:for\s+)?(.+)$/i);
-        if (m) tail = m[1];
-      }
-      // Form C: "<rest> account" — trailing keyword form.
-      if (!tail) {
-        m = stripped.match(/^(.+?)\s+account\s*$/i);
-        if (m) tail = m[1];
-      }
-
-      if (tail) {
-        // A leading "new " modifier sometimes survives Form C ("create
-        // new ministry of energy in uae account" → tail = "new ministry…").
-        tail = tail.replace(/^new\s+/i, "").trim();
-        // Split off a trailing " in <country>" — accept multi-word
-        // country names ("United Arab Emirates") via repeated tokens.
-        const cm = tail.match(
-          /^(.+?)\s+in\s+(?:the\s+)?([\p{L}]+(?:\s+[\p{L}]+){0,3})\s*$/iu,
-        );
-        if (cm) {
-          if (!entityName) entityName = titleCase(cm[1]);
-          const c = cm[2];
-          countryHint = c.length <= 4 ? c.toUpperCase() : titleCase(c);
-        } else if (!entityName && !/^in\s+/i.test(tail)) {
-          // Tail starting with "in …" is a country phrase, not a name —
-          // leave entityName empty so the confirm card doesn't pre-fill
-          // a bogus value like "In Uae".
-          entityName = titleCase(tail);
-        }
-      }
-
-      // If we still have no country, fall back to the original regex
-      // (handles "create account in UAE" with no name at all).
-      if (!countryHint) {
-        const cap = promptRawCase.match(
-          /\bin\s+(?:the\s+)?([A-Z][\p{L}]{1,40}|[A-Z]{2,5})\b/u,
-        );
-        const ci = promptRawCase.match(
-          /\bin\s+(?:the\s+)?([\p{L}]{2,40})(?=\s+account\b|\s*$|[,.!?])/iu,
-        );
-        const raw = cap?.[1] ?? ci?.[1];
-        if (raw) countryHint = raw.length <= 4 ? raw.toUpperCase() : titleCase(raw);
-      }
-    } else if (!entityName) {
-      // Generic kinds (opportunity, raid_item, …): grab a "<kind>: <name>"
-      // tail or fall back to the post-verb phrase.
-      const kindWord = intent.kind.replace(/_/g, " ");
-      const kre = new RegExp(`\\b${kindWord}\\s*[:\\-–—]\\s*(.+?)\\s*$`, "i");
-      const m = promptRawCase.match(kre);
-      if (m?.[1]) entityName = titleCase(m[1]);
-    }
-
-    const payload: Record<string, unknown> = {};
-    if (entityName) payload.name = entityName;
-    if (countryHint) payload.country = countryHint;
-    const verbPhrase = `${intent.verb} ${intent.kind.replace(/_/g, " ")}`;
-    const summary = entityName
-      ? `${verbPhrase}: ${entityName}`
-      : verbPhrase;
-    return {
-      text: `Got it — I'll prepare a ${verbPhrase} for you to review.`,
-      toolCall: {
-        id: rid("tu"),
-        name: "propose_write",
-        input: {
-          verb: intent.verb,
-          kind: intent.kind,
-          payload,
-          summary,
-        },
-      },
-      stop: "tool_use",
-      costUsd: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-    };
-  }
-
-  if (intent.verb === "read" && intent.hints.length > 0) {
-    return {
-      text: "Looking that up.",
-      toolCall: {
-        id: rid("tu"),
-        name: "resolve_account_by_name",
-        input: { query: intent.hints[0]!.slice(0, 60) },
-      },
-      stop: "tool_use",
-      costUsd: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-    };
-  }
-
-  // No-tool fallback — unchanged narrative.
-  text = noToolFallbackMessage(promptRawCase);
-  return {
-    text,
-    toolCall,
-    stop: "end_turn",
-    costUsd: 0,
-    tokensIn: 0,
-    tokensOut: 0,
-  };
-}
-
 export interface RunTurnDeps {
   persona: CliPersona;
   emit: (frame: CliFrame) => void;
@@ -3130,7 +2791,7 @@ export async function runTurn(
       totalCost += claudeStep.costUsd;
       totalIn += claudeStep.tokensIn;
       totalOut += claudeStep.tokensOut;
-      lastModel = process.env.ATELIER_CLI_MODEL ?? lastModel ?? (MOCK_MODE ? "mock" : "claude");
+      lastModel = process.env.ATELIER_CLI_MODEL ?? lastModel ?? "claude";
 
       if (claudeStep.text) {
         record({ type: "narration", data: { text: claudeStep.text, step } });
@@ -3635,7 +3296,6 @@ export async function runTurn(
               tokensOut: totalOut,
               latencyMs,
               model: lastModel,
-              mock: MOCK_MODE,
               dryRun: input.dryRun === true,
               attachmentCount: (input.attachmentIds ?? []).length,
               hasPageContext: !!pageCtx,

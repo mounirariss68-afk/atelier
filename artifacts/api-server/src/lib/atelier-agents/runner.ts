@@ -12,7 +12,7 @@
  * Each `run<X>` call:
  *   1. Inserts an `atelier_agent_runs` row in `running` state.
  *   2. Logs an `agent.start` audit event.
- *   3. Calls Claude (or, when `MOCK_MODE` is on / the integration env vars
+ *   3. Calls Claude (or, when `false` is on / the integration env vars
  *      are missing, returns a deterministic mock so the UX still works).
  *   4. Persists `output` + `steps` + `toolCalls` + `cost` and flips the
  *      run to `complete` (or `error`).
@@ -255,8 +255,6 @@ interface CompleteRunInput {
   targetType: string;
   targetId: string;
   targetLabel: string;
-  source?: "claude" | "mock_config" | "mock_fallback";
-  warning?: string;
 }
 
 /**
@@ -294,8 +292,6 @@ function validateAgentOutput(
 }
 
 export async function completeRun(input: CompleteRunInput): Promise<void> {
-  const isFallback = input.source === "mock_fallback";
-
   // Resolve agentId from the run row so we can validate output against
   // the registry. We avoid threading agentId through every callsite —
   // the row already knows.
@@ -305,7 +301,7 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
       .select({ agentId: atelierAgentRuns.agentId })
       .from(atelierAgentRuns)
       .where(eq(atelierAgentRuns.id, input.runId));
-    if (row?.agentId && !isFallback) {
+    if (row?.agentId) {
       const check = validateAgentOutput(row.agentId, input.output);
       if (!check.ok) {
         schemaWarning = `[${row.agentId}] ${check.reason}`;
@@ -321,21 +317,16 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
     // Best-effort lookup — never break v3 on a registry hiccup.
   }
 
-  // A mock-fallback (Claude error) is NOT a clean success — flag it so the
-  // UI/audit can surface that the data is synthetic and must not be treated
-  // as evidence. We still mark progress 100 so streams complete, but the
-  // `status` becomes `blocked` and `confidence` is forced to red.
-  const combinedWarning = [input.warning, schemaWarning].filter(Boolean).join(" | ") || undefined;
   await db
     .update(atelierAgentRuns)
     .set({
-      status: isFallback ? "blocked" : "complete",
-      statusMessage: isFallback
-        ? (input.warning ?? "mock fallback — Claude unavailable")
-        : (schemaWarning ? `complete (schema warning: ${schemaWarning.slice(0, 200)})` : "complete"),
+      status: "complete",
+      statusMessage: schemaWarning
+        ? `complete (schema warning: ${schemaWarning.slice(0, 200)})`
+        : "complete",
       progressPct: 100,
       output: input.output as never,
-      confidence: isFallback ? "red" : input.confidence,
+      confidence: input.confidence,
       costUsd: input.costUsd,
       durationMs: input.durationMs,
       sourcesCount: input.sourcesCount,
@@ -348,18 +339,14 @@ export async function completeRun(input: CompleteRunInput): Promise<void> {
     entityId: input.targetId,
     actorType: "agent",
     actorLabel: input.actorLabel,
-    action: isFallback ? "agent.mock_fallback" : "agent.complete",
+    action: "agent.complete",
     payload: {
       runId: input.runId,
-      confidence: isFallback ? "red" : input.confidence,
+      confidence: input.confidence,
       costUsd: input.costUsd,
-      source: input.source ?? "claude",
-      warning: combinedWarning,
       schemaWarning,
     },
-    payloadSummary: isFallback
-      ? `${input.actorLabel} fell back to MOCK on ${input.targetLabel} — Claude unavailable; output flagged synthetic`
-      : `${input.actorLabel} completed on ${input.targetLabel} (confidence ${input.confidence}, $${input.costUsd.toFixed(4)}, source ${input.source ?? "claude"})${schemaWarning ? " ⚠ schema-violation" : ""}`,
+    payloadSummary: `${input.actorLabel} completed on ${input.targetLabel} (confidence ${input.confidence}, $${input.costUsd.toFixed(4)})${schemaWarning ? " ⚠ schema-violation" : ""}`,
   });
 
   // Emit a dedicated audit event when the registry schema is violated so
@@ -423,126 +410,58 @@ export function applyCitationGuardrail(facts: AgentFact[]): AgentFact[] {
     .filter((f) => f.statement.trim().length > 0);
 }
 
-// ------- claude / mock dispatch -------
+// ------- claude dispatch -------
+//
+// There is no mock mode. Every agent run goes through Claude. If the
+// upstream call fails we throw — silent mock fallbacks have been removed
+// so synthetic placeholder data can never reach a user as if it were
+// real evidence.
 
-const MOCK_MODE =
-  process.env.ATELIER_MOCK_AGENTS === "1" ||
+if (
   !process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL ||
-  !process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+  !process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY
+) {
+  throw new Error(
+    "[atelier-agents] AI_INTEGRATIONS_ANTHROPIC_BASE_URL and AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set. The Atelier agent runner does not support mock mode.",
+  );
+}
 
 async function callClaudeJson<T>(
   model: string,
   systemPrompt: string,
-  userPrompt: string,
-  fallback: () => T,
-): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number; source: "claude" | "mock_config" | "mock_fallback"; warning?: string }> {
-  if (MOCK_MODE) {
-    return { value: fallback(), costUsd: 0, tokensIn: 0, tokensOut: 0, source: "mock_config" };
-  }
-  // Lazy import keeps cold-start light when running in mock mode.
+  userPrompt: string): Promise<{ value: T; costUsd: number; tokensIn: number; tokensOut: number }> {
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-  try {
-    const ac = new AbortController();
-    const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
-    const timer = setTimeout(() => ac.abort(), timeoutMs);
-    const resp = await anthropic.messages
-      .create(
-        {
-          model,
-          max_tokens: 8192,
-          system: `${systemPrompt}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
-          messages: [{ role: "user", content: userPrompt }],
-        },
-        { signal: ac.signal },
-      )
-      .finally(() => clearTimeout(timer));
-    const block = resp.content[0];
-    const text =
-      block && block.type === "text" ? block.text.trim() : "";
-    const stripped = text
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    const value = JSON.parse(stripped) as T;
-    const tokensIn = resp.usage.input_tokens;
-    const tokensOut = resp.usage.output_tokens;
-    // crude per-1M pricing — tuned for sonnet-4.6/haiku-4.5 ballpark.
-    const inRate = model.includes("haiku") ? 1 : 3;
-    const outRate = model.includes("haiku") ? 5 : 15;
-    const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
-    return { value, costUsd, tokensIn, tokensOut, source: "claude" };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // eslint-disable-next-line no-console
-    console.warn(
-      "[atelier-agents] Claude call failed; returning mock-fallback flagged output so the UI can warn:",
-      msg,
-    );
-    return {
-      value: fallback(),
-      costUsd: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-      source: "mock_fallback",
-      warning: `Claude call failed (${msg.slice(0, 160)}); output below is deterministic mock data — do NOT treat as evidence.`,
-    };
-  }
+  const ac = new AbortController();
+  const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000);
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  const resp = await anthropic.messages
+    .create(
+      {
+        model,
+        max_tokens: 8192,
+        system: `${systemPrompt}\n\nIMPORTANT: Reply with ONLY a single JSON object, no prose, no code fences.`,
+        messages: [{ role: "user", content: userPrompt }],
+      },
+      { signal: ac.signal },
+    )
+    .finally(() => clearTimeout(timer));
+  const block = resp.content[0];
+  const text = block && block.type === "text" ? block.text.trim() : "";
+  const stripped = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  const value = JSON.parse(stripped) as T;
+  const tokensIn = resp.usage.input_tokens;
+  const tokensOut = resp.usage.output_tokens;
+  const inRate = model.includes("haiku") ? 1 : 3;
+  const outRate = model.includes("haiku") ? 5 : 15;
+  const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
+  return { value, costUsd, tokensIn, tokensOut };
 }
 
 // ------- Pursuit Scout -------
 
-function mockScoutOutput(
-  accountName: string,
-  sector: string,
-  country: string,
-): PursuitScoutOutput {
-  const facts: AgentFact[] = [
-    { topic: "earnings", statement: `${accountName} reported single-digit revenue growth in its most recent fiscal year.`, sourceUrl: "https://example.com/earnings", sourceTitle: `${accountName} Annual Report`, snippet: "...low single-digit organic growth driven by EMEA volumes...", confidence: "green" },
-    { topic: "ai-strategy", statement: `${accountName} announced an enterprise AI program emphasising productivity and customer-facing pilots.`, sourceUrl: "https://example.com/ai-strategy", sourceTitle: "Press release", snippet: "...we will scale generative AI use cases across our group functions...", confidence: "amber" },
-    { topic: "buyer", statement: `The ${sector} sector in ${country} is consolidating around two or three platform vendors.`, sourceUrl: "https://example.com/sector", sourceTitle: "Sector outlook", snippet: "...consolidation is accelerating as scale benefits compound...", confidence: "amber" },
-    { topic: "regulation", statement: `Recent ${country} regulatory guidance increases governance pressure on AI procurement.`, sourceUrl: "https://example.com/regulator", sourceTitle: "Regulator guidance", snippet: "...covered entities must demonstrate human-in-the-loop oversight...", confidence: "green" },
-    { topic: "vendor-stack", statement: `${accountName} is publicly known to use Snowflake and Microsoft 365 as core platforms.`, sourceUrl: "https://example.com/vendors", sourceTitle: "Case study", snippet: "...migrated its data warehouse to Snowflake in 2024...", confidence: "green" },
-    { topic: "press", statement: `Recent press coverage flagged growing executive frustration with stalled digital programs.`, sourceUrl: "https://example.com/press", sourceTitle: "Trade press", snippet: "...board-level frustration with the pace of digital transformation...", confidence: "amber" },
-  ];
-  return {
-    accountSnapshot: {
-      oneLiner: `${accountName} is a ${sector} player headquartered in ${country} with a recent push into AI-led modernisation.`,
-      scaleHint: "Mid-to-large cap; precise revenue not publicly disclosed in this dataset.",
-      recentMoves: [
-        "Announced enterprise AI program with named exec sponsor.",
-        "Replaced Chief Data Officer in the past 18 months.",
-        "Renewed multi-year cloud commitment with a hyperscaler.",
-      ],
-    },
-    buyerLandscape: {
-      likelyBuyers: [
-        { title: "Chief Information Officer", rationale: "Owns the digital roadmap and cloud spend." },
-        { title: "Chief AI / Data Officer", rationale: "Newly empowered, hunting for a marquee win." },
-        { title: "Head of Strategy", rationale: "Funding pattern suggests strategy-led pursuits." },
-      ],
-      powerMap:
-        "Decision authority sits with the CEO via the CIO; CFO holds the gate on commercials. Procurement is centralised and slow.",
-    },
-    fiveCDraft: {
-      client: `${accountName} needs measurable, quarter-over-quarter productivity gains from AI without disrupting governance.`,
-      competition: "Likely competing pitches from Big-4 advisory firms and the hyperscaler's professional services arm.",
-      capability:
-        "We bring sector-specific reference architectures and a partner-led delivery model; gap is local language depth.",
-      capacity:
-        "We can field a 4-person discovery squad within two weeks if scoping closes by month-end.",
-      contract:
-        "Procurement is centralised; expect SOW + framework agreement; commercial preference for fixed-fee diagnostic with milestone-based build.",
-    },
-    openQuestions: [
-      `Who is the named executive sponsor for the AI program at ${accountName}?`,
-      "What is the budget envelope for the next 6 months and how is it released?",
-      "Which third parties are already engaged and on which scopes?",
-      "What does 'success' look like at the next board review?",
-    ],
-    facts,
-    confidence: "amber",
-  };
-}
 
 /**
  * Pursuit Scout v2 governed-write — Task #238 §2.5.
@@ -709,7 +628,7 @@ export async function runPursuitScout(args: {
     async (ctx) => {
       const system = loadPrompt("pursuit_scout");
       await ctx.progress(25, "Planning research lines");
-      const { value, costUsd, source, warning } = await callClaudeJson<PursuitScoutOutput>(
+      const { value, costUsd } = await callClaudeJson<PursuitScoutOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -719,7 +638,6 @@ export async function runPursuitScout(args: {
           opportunityName: args.opportunityName,
           contextBlurb: args.contextBlurb,
         }),
-        () => mockScoutOutput(args.accountName, args.accountSector, args.accountCountry),
       );
       await ctx.progress(70, "Synthesising 5C draft");
       const guarded: PursuitScoutOutput = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
@@ -738,8 +656,6 @@ export async function runPursuitScout(args: {
         output: guarded,
         costUsd,
         confidence: guarded.confidence ?? "amber",
-        source,
-        warning,
         sourcesCount: guarded.facts.length,
       };
     },
@@ -749,52 +665,7 @@ export async function runPursuitScout(args: {
 
 // ------- POV Author (3-step chain) -------
 
-function mockOutline(
-  opportunityName: string,
-  audience: string,
-  promotedFacts: AgentFact[],
-): PovOutline {
-  const ids = promotedFacts.map((f) => f.id ?? "f?");
-  return {
-    title: `Why ${opportunityName} matters now`,
-    thesis: `For ${audience}, the next 12 months are the cheapest window to lock in advantage; waiting compounds the deficit.`,
-    sections: [
-      { id: "s1", heading: "The window is closing", intent: "Frame urgency with macro + sector evidence.", factIds: ids.slice(0, 2) },
-      { id: "s2", heading: "What good looks like", intent: "Define the operating model for AI at scale.", factIds: ids.slice(2, 4) },
-      { id: "s3", heading: "Where peers are losing", intent: "Use competitor cases as a lesson.", factIds: ids.slice(4, 6) },
-      { id: "s4", heading: "How we would move", intent: "Outline a 90-day diagnostic with named owners.", factIds: ids.slice(0, 1) },
-      { id: "s5", heading: "Risks and how we de-risk", intent: "Acknowledge governance + capacity risks.", factIds: ids.slice(1, 3) },
-    ],
-  };
-}
 
-function mockSections(outline: PovOutline, facts: AgentFact[]): PovDraft {
-  const factById = new Map(facts.map((f) => [f.id ?? "", f]));
-  const sections = outline.sections.map((s) => {
-    const cited = s.factIds
-      .map((id) => factById.get(id)?.statement ?? "")
-      .filter(Boolean)
-      .map((t, i) => `${t} [#${s.factIds[i]}]`)
-      .join(" ");
-    const body = `${s.intent} ${cited} The implication is direct: leadership must commit to a measurable next step within the quarter, or the cost of inaction begins to dwarf the cost of the program. We translate this into three concrete moves and one explicit non-move, designed to compound rather than crowd the existing roadmap.`;
-    return {
-      id: s.id,
-      heading: s.heading,
-      body,
-      citationIds: s.factIds,
-    };
-  });
-  const totalCitations = sections.reduce((acc, s) => acc + s.citationIds.length, 0);
-  const coverage = Math.min(1, totalCitations / Math.max(1, facts.length));
-  const html = `<h1>${outline.title}</h1>\n<p><strong>${outline.thesis}</strong></p>\n${sections
-    .map(
-      (s) =>
-        `<h2>${s.heading}</h2><p>${s.body.replace(/\[#(f[^\]]+)\]/g, '<sup data-fact="$1">$1</sup>')}</p>`,
-    )
-    .join("\n")}`;
-  const wordCount = html.split(/\s+/).length;
-  return { sections, html, citationCoverage: coverage, voiceFlags: [], wordCount };
-}
 
 export async function runPovOutline(args: {
   opportunityId: string;
@@ -823,7 +694,7 @@ export async function runPovOutline(args: {
     async (ctx) => {
       const system = loadPrompt("pov_author");
       await ctx.progress(30, "Drafting outline");
-      const { value, costUsd, source, warning } = await callClaudeJson<PovOutline>(
+      const { value, costUsd } = await callClaudeJson<PovOutline>(
         "claude-haiku-4-5",
         system + "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.",
         JSON.stringify({
@@ -832,14 +703,11 @@ export async function runPovOutline(args: {
           objective: args.objective,
           approvedFacts: args.promotedFacts,
         }),
-        () => mockOutline(args.opportunityName, args.audience, args.promotedFacts),
       );
       return {
         output: value,
         costUsd,
         confidence: "amber",
-        source,
-        warning,
         sourcesCount: args.promotedFacts.length,
       };
     },
@@ -873,19 +741,16 @@ export async function runPovDraft(args: {
     async (ctx) => {
       const system = loadPrompt("pov_author");
       await ctx.progress(40, "Writing sections");
-      const { value, costUsd, source, warning } = await callClaudeJson<PovDraft>(
+      const { value, costUsd } = await callClaudeJson<PovDraft>(
         "claude-sonnet-4-5",
         system + "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.",
         JSON.stringify({ outline: args.outline, facts: args.promotedFacts }),
-        () => mockSections(args.outline, args.promotedFacts),
       );
       await ctx.progress(85, "Stylist polish");
       return {
         output: value,
         costUsd,
         confidence: value.citationCoverage >= 0.8 ? "green" : "amber",
-        source,
-        warning,
         sourcesCount: args.promotedFacts.length,
       };
     },
@@ -895,56 +760,6 @@ export async function runPovDraft(args: {
 
 // ------- Meeting Scribe -------
 
-function mockMeeting(
-  transcript: string,
-  kind: string,
-  hasPrior: boolean,
-): MeetingScribeOutput {
-  const tlen = transcript.length;
-  const summary = `Meeting (${kind}, ${tlen} chars of transcript) covered the standing pursuit thread for this opportunity. The team aligned on the next discovery checkpoint, identified two open scoping questions that must close before commercial conversations resume, and agreed the AI Engineer will share a worked example by the end of the week. No commercial commitments were made; both sides committed to a decision-review session next sprint.`;
-  return {
-    title: kind === "discovery" ? "Discovery call" : "Working session",
-    attendees: [
-      { name: "Speaker A", org: "client" },
-      { name: "Speaker B", org: "aico" },
-    ],
-    summary,
-    decisions: [
-      { id: "d1", statement: "Agreed to extend discovery by one session before drafting the SOW.", decidedBy: "Both parties", confidence: "green" },
-    ],
-    actionItems: [
-      { id: "a1", owner: "AICo Engineer", statement: "Share a worked example tied to client's pricing taxonomy.", due: null },
-      { id: "a2", owner: "UNOWNED", statement: "Identify a procurement counterpart on the client side.", due: null },
-    ],
-    openQuestions: [
-      "Who owns the data sharing memo on the client side?",
-      "Is the budget for the diagnostic confirmed?",
-    ],
-    fiveCDelta: hasPrior
-      ? {
-          client: "Sharper articulation of the operational pain.",
-          competition: "no change",
-          capability: "Confirmed our example resonates.",
-          capacity: "no change",
-          contract: "Procurement contact still open.",
-        }
-      : {
-          client: "no prior brief",
-          competition: "no prior brief",
-          capability: "no prior brief",
-          capacity: "no prior brief",
-          contract: "no prior brief",
-        },
-    suggestedPrototypeBrief: tlen > 200
-      ? {
-          audience: "Client decision-maker discussed in the call",
-          problem: "Demonstrate the worked example referenced in this meeting.",
-          agenticThesis: "An agent prepares the recommendation; the human decides.",
-          demos: ["Headline demo tied to the open scoping question"],
-        }
-      : null,
-  };
-}
 
 export async function runMeetingScribe(args: {
   opportunityId: string;
@@ -973,7 +788,7 @@ export async function runMeetingScribe(args: {
     async (ctx) => {
       const system = loadPrompt("meeting_scribe");
       await ctx.progress(35, "Normalising speakers");
-      const { value, costUsd, source, warning } = await callClaudeJson<MeetingScribeOutput>(
+      const { value, costUsd } = await callClaudeJson<MeetingScribeOutput>(
         "claude-haiku-4-5",
         system,
         JSON.stringify({
@@ -981,15 +796,12 @@ export async function runMeetingScribe(args: {
           meeting_kind: args.kind,
           prior_brief: args.priorBrief,
         }),
-        () => mockMeeting(args.transcript, args.kind, !!args.priorBrief),
       );
       await ctx.progress(80, "Extracting decisions & actions");
       return {
         output: value,
         costUsd,
         confidence: "amber",
-        source,
-        warning,
         sourcesCount: value.decisions.length + value.actionItems.length,
       };
     },
@@ -1077,93 +889,6 @@ export interface CharterArchitectOutput {
   meceFlags: string[];
 }
 
-function mockCharter(args: {
-  accountName: string;
-  proposalSummary: string;
-  hasBaseline: boolean;
-}): CharterArchitectOutput {
-  const acct = args.accountName;
-  const baseline = args.hasBaseline ? "current state measured pre-engagement" : "TBD-baseline";
-  return {
-    charter: {
-      objectives: [
-        `Cut top-process cycle time by 40% within 90 days for ${acct}.`,
-        `Lift adoption of agentic ops to ≥70% of leads by day 90.`,
-        `Stand up an audit-grade governance loop for every external action.`,
-      ],
-      scope: [
-        "Top-3 highest-volume services within the agreed function.",
-        "End-user telemetry, lead-by-lead dashboards, and weekly cadence.",
-        "Baseline RAID and weekly steering with named owners.",
-      ],
-      outOfScope: [
-        "Cross-function rollouts beyond the agreed top-3 services.",
-        "Full Gantt resource leveling and utilisation analytics (v2).",
-        "Customer-facing branding or marketing changes.",
-      ],
-      successMetrics: [
-        { name: "Mean handle time on Service-1", baseline, target: "−40% vs baseline by day 90" },
-        { name: "Adoption rate per lead", baseline, target: "≥70% of leads active by day 90" },
-        { name: "Audit completeness", baseline: "0% (not measured)", target: "100% of agent actions audited" },
-      ],
-      governance: "Weekly steering with Partner + Lead + client COO; bi-weekly demo to executive sponsor; RAID review every Friday.",
-      valueHypothesis: `For ${acct}, the next 90 days are the cheapest window to lock in agentic-ops gains; waiting compounds the cost of inaction.`,
-    },
-    hypothesisTree: {
-      rootIssue: `Can a senior-overseen agentic operations layer cut ${acct}'s mean handle time by 40% within 90 days while compounding adoption past 70%?`,
-      branches: [
-        {
-          hypothesis: "Top-volume services dominate handle-time variance; agentifying them captures most of the value.",
-          subHypotheses: [
-            "Service-1 (intake) is responsible for >40% of MHT variance.",
-            "Service-2 (status checks) can be fully agent-handled with one human checkpoint.",
-          ],
-          evidenceRequired: [
-            "30-day handle-time logs by service.",
-            "Quality-of-resolution audit on agent-handled tickets.",
-          ],
-        },
-        {
-          hypothesis: "Adoption compounds when ops leads see lead-by-lead telemetry and own the rollout pace.",
-          subHypotheses: [
-            "Per-lead dashboards lift adoption ≥15 ppt within 30 days of release.",
-            "Weekly 'service-of-the-week' cadence outperforms bulk launches.",
-          ],
-          evidenceRequired: [
-            "Adoption curves of comparable BPO transformations.",
-            "Lead survey data, weeks 2/6/10.",
-          ],
-        },
-        {
-          hypothesis: "Audit-grade governance unlocks executive trust to expand scope.",
-          subHypotheses: [
-            "100% audit coverage of agent actions removes the largest objection.",
-            "Partner-Authority-Lock pattern reduces rework by ≥30%.",
-          ],
-          evidenceRequired: [
-            "Audit coverage report.",
-            "Rework-rate comparison vs prior phase.",
-          ],
-        },
-      ],
-    },
-    raidBaseline: [
-      { kind: "risk", severity: "amber", ownerRole: "Engagement Lead", description: "Adoption tail of service-3 may lag plan if lead onboarding slips.", dueClass: "wk2" },
-      { kind: "issue", severity: "amber", ownerRole: "Architect", description: "Data-residency confirmation outstanding for one upstream integration partner.", dueClass: "wk1" },
-      { kind: "assumption", severity: "green", ownerRole: "Partner", description: `${acct} executive sponsor will attend bi-weekly demos.`, dueClass: "wk1" },
-      { kind: "dependency", severity: "amber", ownerRole: "Engagement Lead", description: "Access to production handle-time logs requires DPA addendum.", dueClass: "wk1" },
-    ],
-    proposedWorkstreams: [
-      { name: "Agentify top-3 services", leadRole: "Architect", linkedHypothesis: "Top-volume services dominate variance" },
-      { name: "Telemetry + adoption", leadRole: "Engagement Lead", linkedHypothesis: "Adoption compounds with telemetry" },
-      { name: "Governance + audit", leadRole: "Partner", linkedHypothesis: "Audit unlocks executive trust" },
-    ],
-    meceFlags: args.proposalSummary.toLowerCase().includes("overlapping") ||
-      /\bAND\b.*\bAND\b/.test(args.proposalSummary)
-      ? ["Scope appears to bundle stand-up + build + governance — verify these are disjoint workstreams or collapse to one."]
-      : [],
-  };
-}
 
 export async function runCharterArchitect(args: {
   engagementId: string;
@@ -1196,7 +921,7 @@ export async function runCharterArchitect(args: {
       await ctx.progress(60, "Hypothesis Tree Builder — building tree (max depth 3)");
       await ctx.progress(80, "RAID Baseliner — triaging baseline RAID items");
       const hasBaseline = !/no baseline/i.test(args.wonProposalSummary);
-      const { value, costUsd, source, warning } = await callClaudeJson<CharterArchitectOutput>(
+      const { value, costUsd } = await callClaudeJson<CharterArchitectOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -1205,7 +930,6 @@ export async function runCharterArchitect(args: {
           wonProposalSummary: args.wonProposalSummary,
           kickoffTranscriptExcerpt: args.kickoffTranscriptExcerpt,
         }),
-        () => mockCharter({ accountName: args.accountName, proposalSummary: args.wonProposalSummary, hasBaseline }),
       );
       if (value.hypothesisTree?.branches) {
         value.hypothesisTree.branches.forEach((b) => {
@@ -1218,8 +942,6 @@ export async function runCharterArchitect(args: {
         output: value,
         costUsd,
         confidence: value.meceFlags?.length ? "amber" : "green",
-        source,
-        warning,
         sourcesCount: value.raidBaseline?.length ?? 0,
       };
     },
@@ -1253,112 +975,6 @@ export interface SynthesisCriticOutput {
   readiness: "green" | "amber" | "red";
 }
 
-function mockCritique(args: {
-  body: string;
-  hypothesisTree: HypothesisTree | null;
-}): SynthesisCriticOutput {
-  // Heuristic critique used both as the mock and as the deterministic
-  // fallback when Claude is unavailable. Mirrors the prompt's logic.
-  const body = args.body || "";
-  // Section heuristic — each <h2> is a section.
-  const sectionRegex = /<h2[^>]*>(.*?)<\/h2>([\s\S]*?)(?=<h2|$)/gi;
-  const sections: { heading: string; text: string }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = sectionRegex.exec(body)) !== null) {
-    sections.push({
-      heading: m[1].replace(/<[^>]*>/g, "").trim(),
-      text: m[2].replace(/<[^>]*>/g, " ").trim(),
-    });
-  }
-  if (sections.length === 0) sections.push({ heading: "Body", text: body.replace(/<[^>]*>/g, " ").trim() });
-
-  // Citation coverage: count assertive sentences vs ones with [#fxx] markers.
-  const sentenceCount = (body.match(/[.!?](\s|<)/g) || []).length || 1;
-  const citationCount = (body.match(/\[#[a-z0-9_]+\]|<sup[^>]*>/gi) || []).length;
-  const evidence = Math.max(0, Math.min(100, Math.round((citationCount / sentenceCount) * 100)));
-
-  // Off-hypothesis sections: any section heading that doesn't match a tree node string.
-  const treeText = JSON.stringify(args.hypothesisTree || {}).toLowerCase();
-  const offHyp: string[] = [];
-  for (const s of sections) {
-    const k = s.heading.toLowerCase();
-    if (k === "body" || k.includes("bottom line") || k.includes("evidence") || k.includes("recommendation")) continue;
-    const tokens = k.split(/\W+/).filter((t) => t.length > 4);
-    const hit = tokens.some((t) => treeText.includes(t));
-    if (!hit) offHyp.push(s.heading);
-  }
-
-  const issues: SynthesisCriticIssue[] = [];
-  if (citationCount === 0 && sentenceCount > 1) {
-    issues.push({
-      type: "missing_citation",
-      severity: "high",
-      location: sections[0].heading,
-      description: "No citations detected in the body. Every factual claim must carry a source reference.",
-      suggestion: "Insert <sup data-fact='fXX'> markers next to each factual claim, or remove the claim.",
-    });
-  }
-  if (citationCount > 0 && evidence < 50) {
-    issues.push({
-      type: "missing_citation",
-      severity: "med",
-      location: sections[0].heading,
-      description: `Only ~${evidence}% of factual sentences carry a citation.`,
-      suggestion: "Audit each uncited assertion; either cite or soften.",
-    });
-  }
-  for (const s of offHyp) {
-    issues.push({
-      type: "off_hypothesis",
-      severity: "med",
-      location: s,
-      description: `Section "${s}" does not map to any branch of the hypothesis tree.`,
-      suggestion: "Either tie the section to an existing hypothesis or move it to an appendix.",
-    });
-  }
-  // Buried-lede heuristic: first section heading contains "background" or "history".
-  if (/background|history|introduction/i.test(sections[0].heading)) {
-    issues.push({
-      type: "no_governing_thought",
-      severity: "high",
-      location: sections[0].heading,
-      description: "Section opens with background instead of the governing thought (pyramid principle violation).",
-      suggestion: "Lead with the bottom-line recommendation; move background to a later section or appendix.",
-    });
-  }
-  // Trust-us / weak-so-what heuristic.
-  if (/trust us|fine|will be fine/i.test(body) && sentenceCount < 6) {
-    issues.push({
-      type: "weak_so_what",
-      severity: "high",
-      location: sections[0].heading,
-      description: "Vague reassurance language without a measurable claim.",
-      suggestion: "Replace with a measurable claim and a citation.",
-    });
-  }
-
-  // Pyramid score: fraction of sections that have a clear governing thought
-  // (proxy: heading contains a verb or a bottom-line marker).
-  const passed = sections.filter((s) =>
-    /recommend|cut|grow|reduce|adopt|bottom line|conclusion/i.test(s.heading) ||
-    /^\d+\.\s/.test(s.heading),
-  ).length;
-  const pyramid = sections.length === 0 ? 0 : Math.min(1, passed / sections.length + 0.2);
-
-  let readiness: "green" | "amber" | "red";
-  const highCount = issues.filter((i) => i.severity === "high").length;
-  if (pyramid >= 0.8 && evidence >= 80 && offHyp.length === 0 && highCount === 0) readiness = "green";
-  else if (pyramid < 0.5 || evidence < 50 || highCount >= 2) readiness = "red";
-  else readiness = "amber";
-
-  return {
-    issues,
-    pyramid_score: Number(pyramid.toFixed(2)),
-    evidence_coverage_pct: evidence,
-    off_hypothesis_sections: offHyp,
-    readiness,
-  };
-}
 
 export async function runSynthesisCritic(args: {
   engagementId: string;
@@ -1389,7 +1005,7 @@ export async function runSynthesisCritic(args: {
       const system = loadPrompt("synthesis_critic");
       await ctx.progress(25, "Walking sections + checking pyramid structure");
       await ctx.progress(60, "Auditing citations + hypothesis coverage");
-      const { value, costUsd, source, warning } = await callClaudeJson<SynthesisCriticOutput>(
+      const { value, costUsd } = await callClaudeJson<SynthesisCriticOutput>(
         "claude-opus-4-7",
         system,
         JSON.stringify({
@@ -1398,14 +1014,11 @@ export async function runSynthesisCritic(args: {
           hypothesisTree: args.hypothesisTree,
           audience: args.audience,
         }),
-        () => mockCritique({ body: args.body, hypothesisTree: args.hypothesisTree }),
       );
       return {
         output: value,
         costUsd,
         confidence: value.readiness === "green" ? "green" : value.readiness === "amber" ? "amber" : "red",
-        source,
-        warning,
         sourcesCount: value.issues?.length ?? 0,
       };
     },
@@ -1525,175 +1138,6 @@ export interface AgentArchitectOutput {
   candidateAgents: CandidateAgentDesign[];
 }
 
-function mockAgentArchitect(args: {
-  scopeHint: string;
-  source: string;
-}): AgentArchitectOutput {
-  const lc = args.source.toLowerCase();
-  const tokens = args.source
-    .split(/[.;\n]+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 4);
-  const verbs = tokens.length >= 3 ? tokens : [
-    "Inbound request received",
-    "Owner triages and classifies",
-    "Specialist resolves",
-    "QA samples a fraction of cases",
-  ];
-  const steps: ProcessStep[] = verbs.slice(0, 6).map((line, i) => {
-    const ownerGuess = /(specialist|senior|partner|legal)/i.test(line)
-      ? "Senior"
-      : /(qa|quality)/i.test(line)
-        ? "QA"
-        : /(agent|classifier|router)/i.test(line)
-          ? "Agent"
-          : i === 0 ? "Customer" : "Operator";
-    const cat: StepCategory = /classif|route|triage/i.test(line)
-      ? "decision"
-      : /reply|email|sms|comm/i.test(line)
-        ? "communication"
-        : /reconcil|match/i.test(line)
-          ? "reconciliation"
-          : /calculate|price|quote|boq/i.test(line)
-            ? "calculation"
-            : /send|sign|commit|refund|publish/i.test(line)
-              ? "irreversible_action"
-              : "retrieval";
-    const irreversible = cat === "irreversible_action";
-    // Customer communications and any step touching money/contracts are
-    // treated as high-risk surface area: drafts only, never auto-send.
-    const isCustomerComm = cat === "communication";
-    const isFinancialCommit =
-      irreversible && /(refund|sign|commit|payment|invoice|charge|wire)/i.test(line);
-    const agentifiable: ProcessStep["agentifiable"] = irreversible
-      ? "partial"
-      : isCustomerComm
-        ? "partial"
-        : cat === "decision" || cat === "retrieval" || cat === "reconciliation"
-          ? "yes"
-          : "yes";
-    void isFinancialCommit; // surfaced through the high-risk classifier below
-    return {
-      id: `step_${i + 1}`,
-      name: line.slice(0, 120),
-      currentOwner: ownerGuess,
-      category: cat,
-      agentifiable,
-      rationale: irreversible
-        ? "Irreversible — agent may draft, human must commit."
-        : agentifiable === "yes"
-          ? "Bounded inputs/outputs and reversible — strong fit."
-          : "Bounded but customer-facing — keep human-in-the-loop.",
-    };
-  });
-  // Cluster: map agentifiable steps to ≥3 candidate agents.
-  const triage = steps.find((s) => s.category === "decision");
-  const calc = steps.find((s) => s.category === "calculation");
-  const comm = steps.find((s) => s.category === "communication");
-  const recon = steps.find((s) => s.category === "reconciliation");
-  const retr = steps.find((s) => s.category === "retrieval");
-  const irr = steps.find((s) => s.category === "irreversible_action");
-  const candidates: CandidateAgentDesign[] = [];
-  candidates.push({
-    id: "ag_triage",
-    name: "Triage Agent",
-    purpose: `Classify each inbound item in scope of "${args.scopeHint}" and route it.`,
-    inputs: [
-      fld("raw_inbound_payload", "object", "Original inbound message/payload to classify."),
-      fld("service_catalog", "array", "Permitted route categories with descriptions."),
-    ],
-    outputs: [
-      fld("routed_class", "enum", "Selected service category."),
-      fld("confidence", "number", "Model confidence in [0,1]."),
-      fld("explain_md", "string", "Markdown rationale for the route."),
-    ],
-    tools: ["catalog_lookup", "history_search"],
-    guardrails: ["confidence_threshold>=0.7_or_escalate", "no_PII_to_third_parties"],
-    humanCheckpoints: ["sme_reviews_amber_routes_daily"],
-    riskClass: "low",
-  });
-  if (calc || retr || recon) {
-    candidates.push({
-      id: "ag_solver",
-      name: calc ? "Calculation Agent" : recon ? "Reconciliation Agent" : "Retrieval Agent",
-      purpose: calc ? "Produce calculated outputs (e.g., quotes, BOQs) from inputs." : "Reconcile or fetch authoritative records.",
-      inputs: calc
-        ? [fld("customer_request", "object", "Customer request payload."), fld("rate_card", "object", "Active pricing rate card.")]
-        : [fld("search_query", "string", "Free-text query."), fld("source_systems", "array", "List of authoritative systems to search.")],
-      outputs: calc
-        ? [fld("draft_quote", "object", "Computed quote (line items, totals, currency)."), fld("assumptions_md", "string", "Markdown of assumptions made.")]
-        : [fld("matched_records", "array", "Records returned from authoritative source."), fld("explain_md", "string", "Markdown rationale for match.")],
-      tools: calc ? ["pricing_engine", "rate_card_lookup"] : ["sql_read", "doc_search"],
-      guardrails: ["never_commit_without_human_signoff", "show_assumptions"],
-      humanCheckpoints: ["lead_approves_before_send"],
-      riskClass: "med",
-    });
-  }
-  if (comm || irr) {
-    // Customer comms ALWAYS high-risk per Atelier guardrail spec
-    // (customer-facing surface area = high), regardless of whether an
-    // irreversible-action step also exists. Same for any step that
-    // looks financial (refund/sign/commit/payment/invoice/charge/wire).
-    const financialKeyword = steps.some((s) =>
-      /(refund|sign|commit|payment|invoice|charge|wire)/i.test(s.name),
-    );
-    const isHigh = !!comm || !!irr || financialKeyword;
-    candidates.push({
-      id: "ag_drafter",
-      name: comm ? "Customer-Comms Drafter" : "Action Drafter",
-      purpose: "Draft outbound communication or action — never sends.",
-      inputs: [
-        fld("resolved_case_payload", "object", "Final case state to communicate."),
-        fld("tone_guide", "object", "Brand tone + bilingual guidance."),
-      ],
-      outputs: [
-        fld("draft_reply_md", "string", "Draft outbound message in markdown."),
-        fld("tone_score", "number", "Tone-fit score in [0,1]."),
-      ],
-      tools: ["template_library"],
-      guardrails: [
-        "never_auto_send",
-        "bilingual_when_required",
-        ...(isHigh ? ["partner_attention_required_for_first_run"] : []),
-      ],
-      humanCheckpoints: [
-        comm ? "operator_approves_each_send" : "operator_approves_each_action",
-        ...(isHigh ? ["partner_signs_off_on_first_5_sends"] : []),
-      ],
-      riskClass: isHigh ? "high" : "med",
-    });
-  }
-  while (candidates.length < 3) {
-    candidates.push({
-      id: `ag_extra_${candidates.length}`,
-      name: "QA Sampler Agent",
-      purpose: "Sample a fraction of completed cases and flag drift.",
-      inputs: [
-        fld("completed_cases", "array", "Set of recently completed cases to sample."),
-        fld("policy_rules", "array", "Authoritative policy/rule corpus to compare against."),
-      ],
-      outputs: [
-        fld("drift_report", "object", "Findings: drift items, severity, examples."),
-      ],
-      tools: ["sql_read"],
-      guardrails: ["read_only"],
-      humanCheckpoints: ["qa_lead_reviews_weekly"],
-      riskClass: "low",
-    });
-  }
-  // Mermaid
-  const lines = ["flowchart TD"];
-  steps.forEach((s, i) => {
-    const shape = s.category === "decision" ? `{${s.name.replace(/[{}|"]/g, "")}}` : `[${s.name.replace(/[\[\]|"]/g, "")}]`;
-    lines.push(`  ${s.id}${shape}`);
-    if (i > 0) lines.push(`  ${steps[i - 1].id} --> ${s.id}`);
-  });
-  return {
-    processDiagramMermaid: lines.join("\n"),
-    steps,
-    candidateAgents: candidates,
-  };
-}
 
 export async function runAgentArchitect(args: {
   engagementId: string;
@@ -1720,11 +1164,10 @@ export async function runAgentArchitect(args: {
       await ctx.progress(35, "Step Classifier — assigning category per step");
       await ctx.progress(60, "Agentifiability Judge — yes/partial/no with rationale");
       await ctx.progress(80, "Agent Designer — clustering into candidate designs");
-      const { value, costUsd, source, warning } = await callClaudeJson<AgentArchitectOutput>(
+      const { value, costUsd } = await callClaudeJson<AgentArchitectOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({ scopeHint: args.scopeHint, depth: args.depth, source: args.source }),
-        () => mockAgentArchitect({ scopeHint: args.scopeHint, source: args.source }),
       );
       // Server-side post-validation (defense-in-depth).
       const hasComm = value.steps.some(
@@ -1757,8 +1200,6 @@ export async function runAgentArchitect(args: {
         output: value,
         costUsd,
         confidence: value.candidateAgents.some((c) => c.riskClass === "high") ? "amber" : "green",
-        source,
-        warning,
         sourcesCount: value.steps.length,
       };
     },
@@ -1788,54 +1229,6 @@ export interface PrototypeForgeOutput {
   demoStoryboard: { id: string; title: string; moment: string; interaction: string; artifact: string }[];
 }
 
-function mockPrototypeForge(brief: PrototypeForgeBrief): PrototypeForgeOutput {
-  const safeDemos = brief.demos.length ? brief.demos : ["Hello world demo"];
-  const storyboard = safeDemos.map((d, i) => ({
-    id: `demo_${i + 1}`,
-    title: d,
-    moment: i === 0 ? "Opening" : i === safeDemos.length - 1 ? "Closing" : "Middle",
-    interaction: "User clicks a primary surface; agent responds with explainable output.",
-    artifact: "Visible card/panel with audit trail link.",
-  }));
-  const phases = [
-    { phase: "Phase 1 — surfaces + mock data", days: 2, deliverables: ["Routing", "Brand baseline", "Seed data"] },
-    { phase: "Phase 2 — agents (mock-LLM)", days: 3, deliverables: ["Agent runner skeleton", "Two demo agents", "Activity stream"] },
-    { phase: "Phase 3 — demo polish", days: 2, deliverables: ["Storyboard hook-up", "Audit trail", "Narrated walkthrough"] },
-  ];
-  const brandLine = brief.brandOverrides?.logo
-    ? `Brand: client-skinned (logo=\`${brief.brandOverrides.logo}\`, primary=\`${brief.brandOverrides.primary ?? "TBD"}\`).`
-    : "Brand: AICo defaults (Atelier dark, gold accent).";
-  const dataLine = brief.partnerDataApproved
-    ? "Real client data is permitted (Partner approved)."
-    : "Use synthetic/watermarked data only — Partner has NOT approved real client data.";
-  const promptMd = [
-    `# ${brief.name} — Replit build prompt`,
-    ``,
-    `**Audience:** ${brief.audience}`,
-    `**Problem:** ${brief.problem}`,
-    `**Agentic thesis:** ${brief.agenticThesis}`,
-    ``,
-    `## Surfaces`,
-    storyboard.map((s) => `- ${s.title}`).join("\n"),
-    ``,
-    `## Constraints`,
-    (brief.constraints.length ? brief.constraints : ["(none)"]).map((c) => `- ${c}`).join("\n"),
-    ``,
-    `## Brand`,
-    `- ${brandLine}`,
-    ``,
-    `## Data policy`,
-    `- ${dataLine}`,
-    ``,
-    `## AICo non-negotiables`,
-    `- Human authority is sovereign. Every irreversible action requires a human signoff.`,
-    `- Show the work. Every agent output ships with rationale + sources.`,
-    `- Audit trail. Every action is logged (who/what/when).`,
-    `- Bilingual-aware (EN/AR) where the audience requires.`,
-    `- Synthetic data is watermarked; never simulate a real customer outcome silently.`,
-  ].join("\n");
-  return { replitPromptMd: promptMd, buildPlan: phases, demoStoryboard: storyboard };
-}
 
 function enforcePrototypeNonNegotiables(
   output: PrototypeForgeOutput,
@@ -1892,11 +1285,10 @@ export async function runPrototypeForge(args: {
       await ctx.progress(45, "Demo Storyboarder — choosing demo moments");
       await ctx.progress(70, "Brand Translator — applying brand defaults/overrides");
       await ctx.progress(90, "Prompt Composer — assembling Replit-ready prompt");
-      const { value: rawValue, costUsd, source, warning } = await callClaudeJson<PrototypeForgeOutput>(
+      const { value: rawValue, costUsd } = await callClaudeJson<PrototypeForgeOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify(args.brief),
-        () => mockPrototypeForge(args.brief),
       );
       // Post-validate: AICo non-negotiables block must always be present in
       // the Replit prompt regardless of model drift. If the model omits the
@@ -1906,8 +1298,6 @@ export async function runPrototypeForge(args: {
         output: value,
         costUsd,
         confidence: "green",
-        source,
-        warning,
         sourcesCount: value.demoStoryboard.length,
       };
     },
@@ -1968,227 +1358,6 @@ const SELL_MULTIPLIER: Record<string, number> = {
   business_developer: 1.5,
 };
 
-function mockPricing(args: {
-  team: { role: string; alloc: number; days?: number }[];
-  durationWeeks: number;
-  targetMarginPct: number;
-}): PricingModel {
-  const seenPartner = new Set<string>();
-  const wedge = args.team
-    .filter((m) => {
-      if (m.role !== "partner") return true;
-      if (seenPartner.has("partner")) return false;
-      seenPartner.add("partner");
-      return true;
-    })
-    .map((m) => {
-      const days = m.days ?? Math.round((args.durationWeeks * 5 * (m.alloc ?? 50)) / 100);
-      const rate = DAY_RATES[m.role] ?? 2000;
-      const cost = days * rate;
-      const revenue = cost * (SELL_MULTIPLIER[m.role] ?? 1.5);
-      return { role: m.role, days, cost, revenue };
-    });
-  const totalCost = wedge.reduce((s, r) => s + r.cost, 0);
-  const totalRev = wedge.reduce((s, r) => s + r.revenue, 0);
-  const margin = totalRev > 0 ? ((totalRev - totalCost) / totalRev) * 100 : 0;
-  let verdict: PricingModel["verdict"];
-  if (totalRev === 0) verdict = "red";
-  else if (margin >= args.targetMarginPct) verdict = "green";
-  else if (margin >= args.targetMarginPct - 10) verdict = "amber";
-  else verdict = "partner_override_required";
-  return {
-    totalRevenueUsd: Math.round(totalRev),
-    totalCostUsd: Math.round(totalCost),
-    marginPct: Math.round(margin * 10) / 10,
-    verdict,
-    wedgeChart: wedge,
-  };
-}
-
-function mockCompliance(args: {
-  rfpRequirements: { id: string; requirement: string; severity: string }[];
-  proposalSections: { id: string; name: string; content: string }[];
-}): { matrix: ComplianceMatrixRow[]; overall: "green" | "red" } {
-  if (args.rfpRequirements.length === 0) {
-    return { matrix: [], overall: "green" };
-  }
-  const matrix = args.rfpRequirements.map((r) => {
-    const needles = r.requirement.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-    const hit = args.proposalSections.find((s) =>
-      needles.some((n) => s.content.toLowerCase().includes(n)),
-    );
-    if (hit) {
-      return { rfpReqId: r.id, requirement: r.requirement, status: "green" as const, evidence: `${hit.name}: matched on '${needles.find((n) => hit.content.toLowerCase().includes(n))}'` };
-    }
-    return { rfpReqId: r.id, requirement: r.requirement, status: "red" as const, evidence: "No evidence found in proposal." };
-  });
-  const overall: "green" | "red" = matrix.every((m) => m.status === "green") ? "green" : "red";
-  return { matrix, overall };
-}
-
-function mockProposal(args: {
-  opportunityId: string;
-  sectionsRequired: string[];
-  teamProposed: { role: string; alloc: number }[];
-  pricingIntent: { targetMarginPct: number; durationWeeks: number };
-  rfpRequirements: { id: string; requirement: string; severity: string }[];
-}): ProposalComposerOutput {
-  const sectionLib: Record<string, { name: string; owner: string; content: (oid: string) => string }> = {
-    cover: {
-      name: "Cover",
-      owner: "brand_profile_writer",
-      content: (oid) => `Proposal cover for ${oid}.`,
-    },
-    exec_summary: {
-      name: "Executive Summary",
-      owner: "context_writer",
-      content: (oid) => `Executive summary for ${oid}: a focused, senior-overseen agentic engagement with bilingual EN/AR coverage and an audit trail. Three workstreams, twelve weeks, outcomes-tied pricing.`,
-    },
-    hypothesis: {
-      name: "Hypothesis",
-      owner: "context_writer",
-      content: () => `We believe agentifying the top-priority services with senior oversight will compress cycle time by ≥40% and lift CSAT by ≥6 points within 90 days, without hiring growth.`,
-    },
-    company_profile: {
-      name: "Company Profile",
-      owner: "brand_profile_writer",
-      content: () => `(rendered from the published Firm Profile — see Company Profile section below.)`,
-    },
-    value_case: {
-      name: "Value Case",
-      owner: "approach_writer",
-      content: () => `Value bridge: 1) Cost-per-case −40% via senior-overseen drafter agents, 2) Cycle-time −60% via parallel agent + reviewer pipeline, 3) Audit posture lifted to ISO27001-aligned with full trail.`,
-    },
-    annexes: {
-      name: "Annexes",
-      owner: "context_writer",
-      content: () => `Annex A — Reference architecture · Annex B — Data isolation diagram · Annex C — Sample audit report · Annex D — Bilingual style guide.`,
-    },
-    appendices: {
-      name: "Appendices",
-      owner: "context_writer",
-      content: () => `Appendix 1 — Detailed CVs · Appendix 2 — Expanded case study deck · Appendix 3 — Tooling provenance.`,
-    },
-    context: {
-      name: "Context",
-      owner: "context_writer",
-      content: (oid) => `Client context for ${oid}: bilingual EN/AR coverage required. Audit trail expected. Senior-overseen agentic operations.`,
-    },
-    approach: {
-      name: "Approach",
-      owner: "approach_writer",
-      content: () => `Three MECE workstreams: (1) Agentify top-priority services with bilingual support, (2) Telemetry & adoption with audit trail, (3) Governance & ISO27001-aligned controls. Each promise maps to a workplan deliverable.`,
-    },
-    workplan: {
-      name: "Workplan",
-      owner: "workplan_writer",
-      content: () => `Phase 1 (wks 1–4): discovery + 1 agent live. Phase 2 (wks 5–8): scale + telemetry. Phase 3 (wks 9–12): adoption + handover. Deliverables: discovery memo, agent runtime, telemetry dashboard, handover pack.`,
-    },
-    team: {
-      name: "Team",
-      owner: "team_bios_writer",
-      content: () => `Partner (oversight), Engagement Lead (delivery), SME (domain), AI Engineer (build).`,
-    },
-    pricing: {
-      name: "Pricing",
-      owner: "pricing_analyst",
-      content: () => `Time-and-materials with capped margin floor. See pricing model.`,
-    },
-    case_studies: {
-      name: "Case Studies",
-      owner: "case_study_picker",
-      content: (oppId: string) => {
-        // Mock Case Study Picker — ranks the firm portfolio against the
-        // opportunity name and returns the top-3 credentials as one-pagers
-        // so the section is real text the lead can review (not placeholder).
-        const portfolio = [
-          { id: "cs_acme_refunds", client: "ACME Retail", sector: "Retail",
-            outcome: "Refund triage cycle 5d → 18h with senior-overseen agents.",
-            metric: "Cost / case −41%, CSAT +9pts" },
-          { id: "cs_nile_kyc", client: "Nile Bank", sector: "Financial services",
-            outcome: "KYC packet checks: 92% straight-through with reviewer signoff.",
-            metric: "Throughput ×3.2, SLA breaches −68%" },
-          { id: "cs_maw_rfp", client: "Mawared Group", sector: "Public sector advisory",
-            outcome: "RFP response time 11d → 3d with Composer + compliance matrix.",
-            metric: "Win-rate +14pts on shortlisted bids" },
-          { id: "cs_zaha_engops", client: "Zaha Insurance", sector: "Insurance",
-            outcome: "Claims engineering ops with bilingual EN/AR drafter agents.",
-            metric: "Backlog −55%, audit findings 0" },
-          { id: "cs_thuraya_ai", client: "Thuraya Telco", sector: "Telecom",
-            outcome: "Tier-2 ticket routing with confidence-thresholded escalation.",
-            metric: "First-contact resolution +22%" },
-        ];
-        const focus = oppId.toLowerCase();
-        // Cheap relevance ranking: any portfolio entry whose sector token
-        // appears in the opportunity id floats to the top; remainder fills.
-        const ranked = [...portfolio].sort((a, b) => {
-          const aHit = focus.includes(a.sector.toLowerCase().split(" ")[0]) ? 1 : 0;
-          const bHit = focus.includes(b.sector.toLowerCase().split(" ")[0]) ? 1 : 0;
-          return bHit - aHit;
-        });
-        const top3 = ranked.slice(0, 3);
-        return [
-          "Three relevant credentials selected from the Atelier portfolio:",
-          "",
-          ...top3.flatMap((c, i) => [
-            `${i + 1}. ${c.client} — ${c.sector}`,
-            `   Outcome: ${c.outcome}`,
-            `   Impact: ${c.metric}`,
-            `   Reference id: ${c.id}`,
-            "",
-          ]),
-        ].join("\n");
-      },
-    },
-    terms: {
-      name: "Terms & Risk",
-      owner: "terms_risk_writer",
-      content: () => `IP retained by AICo until acceptance. Standard MNDA. PII isolation honored.`,
-    },
-    compliance: {
-      name: "Compliance",
-      owner: "compliance_reviewer",
-      content: () => `See compliance matrix. ISO27001 evidence attached on request.`,
-    },
-  };
-  const sections: ProposalSection[] = args.sectionsRequired.map((sid) => {
-    const def = sectionLib[sid] ?? { name: sid, owner: "context_writer", content: () => `Section ${sid} draft.` };
-    return {
-      id: sid,
-      name: def.name,
-      ownerAgent: def.owner,
-      status: "draft" as const,
-      content: def.content(args.opportunityId),
-      citations: [],
-    };
-  });
-  const pricing = mockPricing({ team: args.teamProposed, durationWeeks: args.pricingIntent.durationWeeks, targetMarginPct: args.pricingIntent.targetMarginPct });
-  const compliance = mockCompliance({ rfpRequirements: args.rfpRequirements, proposalSections: sections.map((s) => ({ id: s.id, name: s.name, content: s.content })) });
-  // Mark statuses: pricing section = pricing verdict; compliance section = overall.
-  sections.forEach((s) => {
-    if (s.id === "pricing") {
-      s.status = pricing.verdict === "green" ? "green" : pricing.verdict === "amber" ? "amber" : "red";
-    } else if (s.id === "compliance") {
-      s.status = compliance.overall;
-    } else {
-      s.status = "green";
-    }
-  });
-  const winThemes = [
-    "Senior-overseen agentic operations (no shadow autopilot).",
-    "Bilingual EN/AR by default with audit trail.",
-    "Outcomes-tied pricing with measurable adoption gates.",
-  ];
-  return {
-    title: `Proposal — ${args.opportunityId}`,
-    sections,
-    pricingModel: pricing,
-    winThemes,
-    complianceMatrix: compliance.matrix,
-    complianceOverall: compliance.overall,
-  };
-}
-
 export async function runProposalComposer(args: {
   opportunityId: string;
   opportunityName: string;
@@ -2221,7 +1390,7 @@ export async function runProposalComposer(args: {
     await progressRun(runId, 72, "Pricing Analyst — building wedge");
     await progressRun(runId, 84, "Terms & Risk Writer — contractual language");
     await progressRun(runId, 95, "Compliance Reviewer — RFP matrix");
-    const { value, costUsd, source, warning } = await callClaudeJson<ProposalComposerOutput>(
+    const { value, costUsd } = await callClaudeJson<ProposalComposerOutput>(
       "claude-sonnet-4-5",
       system,
       JSON.stringify({
@@ -2231,13 +1400,6 @@ export async function runProposalComposer(args: {
         pricingIntent: args.pricingIntent,
         rfpRequirements: args.rfpRequirements,
         curatedWinThemes: args.curatedWinThemes ?? [],
-      }),
-      () => mockProposal({
-        opportunityId: args.opportunityId,
-        sectionsRequired: args.sectionsRequired,
-        teamProposed: args.teamProposed,
-        pricingIntent: args.pricingIntent,
-        rfpRequirements: args.rfpRequirements,
       }),
     );
     // Task #241: if curated firm-wide themes were supplied, fold them into
@@ -2274,8 +1436,6 @@ export async function runProposalComposer(args: {
       targetType: "opportunity",
       targetId: args.opportunityId,
       targetLabel: args.opportunityName,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -2305,61 +1465,6 @@ export interface BrandProfileOutput {
   brandColors?: { primary?: string; ink?: string; gold?: string };
 }
 
-function mockBrandProfile(args: {
-  firmName: string;
-  existingProfile?: Partial<BrandProfileOutput> | null;
-  userBrief?: string | null;
-}): BrandProfileOutput {
-  const existing = args.existingProfile ?? {};
-  return {
-    firmName: existing.firmName ?? args.firmName,
-    tagline: existing.tagline ?? "Senior-overseen agentic operations.",
-    missionStatement:
-      existing.missionStatement ??
-      "We operationalise agentic systems for ambitious firms in the GCC. Senior partners stay on the wheel; the audit trail is the proof. Bilingual EN/AR by default.",
-    voiceAttributes: existing.voiceAttributes ?? [
-      "Senior-overseen",
-      "Audit-trailed",
-      "Bilingual EN/AR",
-      "Outcomes-tied",
-      "Concrete, never theatrical",
-    ],
-    principles: existing.principles ?? [
-      { name: "No shadow autopilot", description: "Every consequential action is reviewed by a senior before it ships." },
-      { name: "Evidence over rhetoric", description: "Every claim cites a metric or a source — never both empty." },
-      { name: "Bilingual by default", description: "EN/AR coverage is built in, not retrofitted." },
-      { name: "Audit-first build", description: "Trails are designed before features." },
-    ],
-    boilerplateShort:
-      existing.boilerplateShort ??
-      `${args.firmName} operationalises agentic systems for GCC firms. Senior-overseen, audit-trailed, bilingual EN/AR. We ship outcomes, not pilots.`,
-    boilerplateLong:
-      existing.boilerplateLong ??
-      `${args.firmName} is a senior-led agentic operations firm working with banks, telcos, public-sector advisory and insurance carriers in the GCC. We design, build and run agent pipelines that compress cycle time and lift first-contact resolution while keeping a full audit trail. Our partners stay on the wheel — every consequential action is reviewed by a senior before it ships. Engagements are bilingual EN/AR by default and ISO27001-aligned.`,
-    capabilitiesPitch:
-      existing.capabilitiesPitch ??
-      "We cover the agent operating loop end-to-end: discovery and policy mapping; agent build with senior reviewer pipelines; bilingual drafting; telemetry and adoption; governance and ISO27001-aligned controls. Engagements are typically 12 weeks with outcomes-tied pricing and partner-approved go-lives.",
-    differentiators: existing.differentiators ?? [
-      "Senior-on-the-wheel pattern with explicit reviewer queues — no shadow autopilot",
-      "Bilingual EN/AR drafter agents from day one",
-      "ISO27001-aligned audit trail wired before features ship",
-      "Outcomes-tied pricing with partner-overrideable margin floors",
-    ],
-    proofPoints: existing.proofPoints ?? [
-      { label: "ACME Retail refund triage", metric: "Cycle 5d → 18h, cost/case −41%" },
-      { label: "Nile Bank KYC packets", metric: "92% straight-through with reviewer signoff" },
-      { label: "Mawared RFP responses", metric: "11d → 3d response, win-rate +14pts" },
-    ],
-    legalEntities: existing.legalEntities ?? [
-      { name: `${args.firmName} DIFC Ltd`, jurisdiction: "DIFC, UAE" },
-      { name: `${args.firmName} KSA`, jurisdiction: "Riyadh, Saudi Arabia" },
-    ],
-    contactBlock:
-      existing.contactBlock ??
-      `Gate Village 4, DIFC, Dubai\nfirm@${args.firmName.toLowerCase().replace(/\s+/g, "")}.ai\n+971 4 000 0000`,
-    brandColors: existing.brandColors ?? { primary: "#0f172a", ink: "#0f172a", gold: "#b8852b" },
-  };
-}
 
 export async function runBrandProfileWriter(args: {
   firmName: string;
@@ -2384,7 +1489,7 @@ export async function runBrandProfileWriter(args: {
     await progressRun(runId, 20, "Loading evidence corpus");
     await progressRun(runId, 50, "Drafting voice + boilerplate");
     await progressRun(runId, 80, "Drafting differentiators + proof points");
-    const { value, costUsd, source, warning } = await callClaudeJson<BrandProfileOutput>(
+    const { value, costUsd } = await callClaudeJson<BrandProfileOutput>(
       "claude-sonnet-4-5",
       system,
       JSON.stringify({
@@ -2393,7 +1498,6 @@ export async function runBrandProfileWriter(args: {
         userBrief: args.userBrief ?? null,
         evidenceCorpus: [],
       }),
-      () => mockBrandProfile({ firmName: args.firmName, existingProfile: args.existingProfile, userBrief: args.userBrief }),
     );
     // Guardrails on length budgets the prompt promises.
     if ((value.boilerplateShort ?? "").length > 500) {
@@ -2413,8 +1517,6 @@ export async function runBrandProfileWriter(args: {
       targetType: "firm",
       targetId: args.orgId ?? "firm_profile",
       targetLabel: args.firmName,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -2458,24 +1560,6 @@ export interface CartographerOutput {
   }>;
 }
 
-function mockCartographer(args: {
-  accountName: string;
-  sector: string;
-  country: string;
-}): CartographerOutput {
-  // Mock fallback only — used when the Anthropic key is missing or the
-  // web_search call errors. Marked low-confidence so the UI surfaces it
-  // as "deterministic mock data — do NOT treat as evidence".
-  return {
-    account: {
-      refreshedSummary: `${args.accountName} (mock fallback) — ${args.sector} player in ${args.country}. Real cartographer call did not run.`,
-      strategicPriorities: [],
-      aicoHypothesis: "",
-    },
-    sourceSignals: [],
-    decisionMakers: [],
-  };
-}
 
 /**
  * Task #275 — Anthropic web_search-grounded JSON call.
@@ -2489,108 +1573,74 @@ function mockCartographer(args: {
 async function callClaudeJsonWithWebSearch<T>(
   model: string,
   systemPrompt: string,
-  userPrompt: string,
-  fallback: () => T,
-  opts: { maxSearches?: number } = {},
-): Promise<{
+  userPrompt: string): Promise<{
   value: T;
   costUsd: number;
   tokensIn: number;
   tokensOut: number;
-  source: "claude" | "mock_config" | "mock_fallback";
-  warning?: string;
   citationUrls: Array<{ url: string; title?: string }>;
 }> {
-  if (MOCK_MODE) {
-    return {
-      value: fallback(),
-      costUsd: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-      source: "mock_config",
-      citationUrls: [],
-    };
-  }
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-  try {
-    const ac = new AbortController();
-    const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90_000);
-    const timer = setTimeout(() => ac.abort(), timeoutMs);
-    const resp = await anthropic.messages
-      .create(
-        {
-          model,
-          max_tokens: 8192,
-          system: `${systemPrompt}\n\nIMPORTANT: After your research is complete, your FINAL message MUST contain ONLY one JSON object that matches the schema. No prose, no code fences.`,
-          messages: [{ role: "user", content: userPrompt }],
-          tools: [
-            {
-              type: "web_search_20250305",
-              name: "web_search",
-              max_uses: opts.maxSearches ?? 6,
-            },
-          ],
-        },
-        { signal: ac.signal },
-      )
-      .finally(() => clearTimeout(timer));
-    // Find the last text block (Claude returns interleaved tool-use,
-    // tool-result, and text blocks; the final text is the answer).
-    const textBlocks = resp.content.filter(
-      (b): b is { type: "text"; text: string } & typeof b =>
-        b.type === "text" && typeof (b as { text?: unknown }).text === "string",
-    );
-    const lastText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : "";
-    const stripped = lastText
-      .trim()
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    // Extract JSON object even if model wrapped it in stray text.
-    const firstBrace = stripped.indexOf("{");
-    const lastBrace = stripped.lastIndexOf("}");
-    const json =
-      firstBrace >= 0 && lastBrace > firstBrace
-        ? stripped.slice(firstBrace, lastBrace + 1)
-        : stripped;
-    const value = JSON.parse(json) as T;
-    // Harvest citation URLs from web_search_tool_result blocks.
-    const citationUrls: Array<{ url: string; title?: string }> = [];
-    for (const block of resp.content) {
-      const b = block as {
-        type?: string;
-        content?: Array<{ type?: string; url?: string; title?: string }>;
-      };
-      if (b.type === "web_search_tool_result" && Array.isArray(b.content)) {
-        for (const item of b.content) {
-          if (item?.type === "web_search_result" && typeof item.url === "string") {
-            citationUrls.push({ url: item.url, title: item.title ?? undefined });
-          }
+  const ac = new AbortController();
+  const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90_000);
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  const resp = await anthropic.messages
+    .create(
+      {
+        model,
+        max_tokens: 8192,
+        system: `${systemPrompt}\n\nIMPORTANT: After your research is complete, your FINAL message MUST contain ONLY one JSON object that matches the schema. No prose, no code fences.`,
+        messages: [{ role: "user", content: userPrompt }],
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 6,
+          },
+        ],
+      },
+      { signal: ac.signal },
+    )
+    .finally(() => clearTimeout(timer));
+  // Find the last text block (Claude returns interleaved tool-use,
+  // tool-result, and text blocks; the final text is the answer).
+  const textBlocks = resp.content.filter(
+    (b): b is { type: "text"; text: string } & typeof b =>
+      b.type === "text" && typeof (b as { text?: unknown }).text === "string",
+  );
+  const lastText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : "";
+  const stripped = lastText
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  const firstBrace = stripped.indexOf("{");
+  const lastBrace = stripped.lastIndexOf("}");
+  const json =
+    firstBrace >= 0 && lastBrace > firstBrace
+      ? stripped.slice(firstBrace, lastBrace + 1)
+      : stripped;
+  const value = JSON.parse(json) as T;
+  const citationUrls: Array<{ url: string; title?: string }> = [];
+  for (const block of resp.content) {
+    const b = block as {
+      type?: string;
+      content?: Array<{ type?: string; url?: string; title?: string }>;
+    };
+    if (b.type === "web_search_tool_result" && Array.isArray(b.content)) {
+      for (const item of b.content) {
+        if (item?.type === "web_search_result" && typeof item.url === "string") {
+          citationUrls.push({ url: item.url, title: item.title ?? undefined });
         }
       }
     }
-    const tokensIn = resp.usage.input_tokens;
-    const tokensOut = resp.usage.output_tokens;
-    const inRate = model.includes("haiku") ? 1 : 3;
-    const outRate = model.includes("haiku") ? 5 : 15;
-    const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
-    return { value, costUsd, tokensIn, tokensOut, source: "claude", citationUrls };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(
-      "[atelier-agents] Cartographer web_search call failed; returning mock-fallback:",
-      msg,
-    );
-    return {
-      value: fallback(),
-      costUsd: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-      source: "mock_fallback",
-      warning: `Cartographer web_search call failed (${msg.slice(0, 160)}); output is deterministic mock — do NOT treat as evidence.`,
-      citationUrls: [],
-    };
   }
+  const tokensIn = resp.usage.input_tokens;
+  const tokensOut = resp.usage.output_tokens;
+  const inRate = model.includes("haiku") ? 1 : 3;
+  const outRate = model.includes("haiku") ? 5 : 15;
+  const costUsd = (tokensIn * inRate + tokensOut * outRate) / 1_000_000;
+  return { value, costUsd, tokensIn, tokensOut, citationUrls };
 }
 
 export async function runAccountCartographer(args: {
@@ -2602,7 +1652,7 @@ export async function runAccountCartographer(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
   focusOpportunityId?: string | null;
-}): Promise<{ runId: string; output: CartographerOutput; costUsd: number; source: "claude" | "mock_config" | "mock_fallback"; warning?: string }> {
+}): Promise<{ runId: string; output: CartographerOutput; costUsd: number }> {
   const t0 = Date.now();
   const runId = await startRun({
     agentId: "account_cartographer",
@@ -2616,7 +1666,7 @@ export async function runAccountCartographer(args: {
   try {
     const system = loadPrompt("account_cartographer");
     await progressRun(runId, 25, "Searching the public web");
-    const { value, costUsd, source, warning, citationUrls } =
+    const { value, costUsd, citationUrls } =
       await callClaudeJsonWithWebSearch<CartographerOutput>(
         "claude-sonnet-4-5",
         system,
@@ -2625,14 +1675,7 @@ export async function runAccountCartographer(args: {
           accountCountry: args.accountCountry,
           accountSector: args.accountSector,
           accountHqCity: args.accountHqCity ?? null,
-        }),
-        () =>
-          mockCartographer({
-            accountName: args.accountName,
-            sector: args.accountSector,
-            country: args.accountCountry,
-          }),
-      );
+        }));
     await progressRun(runId, 80, "Triangulating sources", {
       name: "cart.synth",
       durationMs: Date.now() - t0,
@@ -2693,7 +1736,7 @@ export async function runAccountCartographer(args: {
     await completeRun({
       runId,
       output: normalised as unknown,
-      confidence: source === "claude" ? "green" : "amber",
+      confidence: "green",
       costUsd,
       durationMs: Date.now() - t0,
       sourcesCount: normalised.sourceSignals.length,
@@ -2701,10 +1744,8 @@ export async function runAccountCartographer(args: {
       targetType: "account",
       targetId: args.accountId,
       targetLabel: args.accountName,
-      source,
-      warning,
     });
-    return { runId, output: normalised, costUsd, source, warning };
+    return { runId, output: normalised, costUsd };
   } catch (err) {
     await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "account", targetId: args.accountId });
     throw err;
@@ -2726,41 +1767,6 @@ export interface WhitespaceOutput {
   priorityMoves: string[];
 }
 
-function mockWhitespace(accountName: string): WhitespaceOutput {
-  const offerings = [
-    "Diagnostic Sprint",
-    "POV / Worked Example",
-    "Agentic Build",
-    "Operating Model Re-design",
-    "Compound Workshop",
-  ];
-  const personas = ["CEO", "COO", "CIO", "CDO", "Business Head", "Procurement"];
-  const cells = offerings.flatMap((o) =>
-    personas.map((p) => {
-      // Deterministic-ish state pattern.
-      const k = (o.length + p.length) % 5;
-      const state =
-        k === 0 ? "won" : k === 1 || k === 2 ? "qualified" : k === 3 ? "identified" : "empty";
-      return {
-        offering: o,
-        persona: p,
-        state: state as "empty" | "identified" | "qualified" | "won",
-        note: state === "empty" ? undefined : `${o} fits ${p}'s pain on adoption velocity at ${accountName}.`,
-        rationale: state === "empty" ? undefined : "Triangulated from prior engagements and stated priorities.",
-      };
-    }),
-  );
-  return {
-    offerings,
-    personas,
-    cells,
-    priorityMoves: [
-      `Open a Diagnostic Sprint conversation with the CIO at ${accountName} this quarter.`,
-      `Position an Agentic Build worked-example for the COO around shared-services intake.`,
-      `Pre-brief Procurement on framework agreement to compress cycle time.`,
-    ],
-  };
-}
 
 export async function runWhitespaceMapper(args: {
   accountId: string;
@@ -2780,11 +1786,10 @@ export async function runWhitespaceMapper(args: {
   });
   try {
     await progressRun(runId, 40, "Mapping offerings × personas");
-    const { value, costUsd, source, warning } = await callClaudeJson<WhitespaceOutput>(
+    const { value, costUsd } = await callClaudeJson<WhitespaceOutput>(
       "claude-haiku-4-5",
       "You are Whitespace Mapper. Produce an offerings × personas matrix with grounded rationales.",
       JSON.stringify({ accountName: args.accountName }),
-      () => mockWhitespace(args.accountName),
     );
     await completeRun({
       runId,
@@ -2797,8 +1802,6 @@ export async function runWhitespaceMapper(args: {
       targetType: "account",
       targetId: args.accountId,
       targetLabel: args.accountName,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -2816,40 +1819,6 @@ export interface QbrOutput {
   nextMoves: string[];
 }
 
-function mockQbr(accountName: string): QbrOutput {
-  const now = new Date();
-  const q = Math.floor(now.getUTCMonth() / 3) + 1;
-  return {
-    periodLabel: `Q${q} ${now.getUTCFullYear()} — ${accountName}`,
-    sections: [
-      {
-        heading: "What changed this quarter",
-        body: `${accountName} accelerated its AI program with a board-level mandate; CIO transition triggered a fresh procurement cycle. AICo posture has shifted from inbound-curiosity to active-pursuit on two named opportunities.`,
-      },
-      {
-        heading: "Where we created value",
-        body: `Diagnostic Sprint surfaced 9 agentifiable workflows; the worked-example for shared-services intake scored highest on adoption-readiness. Engagement lead recommends doubling down on this thread.`,
-      },
-      {
-        heading: "Where we lost ground",
-        body: `Two competitive pitches landed in parallel; commercial gating on procurement velocity slowed our scoping conversation by 3 weeks. Mitigation: pre-brief Procurement before next pursuit.`,
-      },
-      {
-        heading: "Compound — what to ship into Knowledge Atelier",
-        body: `The shared-services intake worked-example, the procurement playbook delta, and the CIO transition handoff template all warrant promotion to firm-wide assets.`,
-      },
-    ],
-    riskFlags: [
-      "Procurement velocity remains the single biggest pursuit risk.",
-      "Sponsor concentration: hypothesis depends on one CIO relationship — broaden coverage to COO and CDO.",
-    ],
-    nextMoves: [
-      "Schedule pre-procurement workshop within 30 days.",
-      "Open Whitespace conversation with COO around adoption playbook.",
-      "Convert worked-example to a publishable Credential after partner review.",
-    ],
-  };
-}
 
 export async function runQbrComposer(args: {
   accountId: string;
@@ -2869,11 +1838,10 @@ export async function runQbrComposer(args: {
   });
   try {
     await progressRun(runId, 50, "Composing QBR canvas");
-    const { value, costUsd, source, warning } = await callClaudeJson<QbrOutput>(
+    const { value, costUsd } = await callClaudeJson<QbrOutput>(
       "claude-sonnet-4-5",
       "You are QBR Composer. Produce a quarterly business-review canvas: what changed, where we created value, where we lost ground, what to compound. Honest, evidence-bound.",
       JSON.stringify({ accountName: args.accountName }),
-      () => mockQbr(args.accountName),
     );
     await completeRun({
       runId,
@@ -2886,8 +1854,6 @@ export async function runQbrComposer(args: {
       targetType: "account",
       targetId: args.accountId,
       targetLabel: args.accountName,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -3014,7 +1980,6 @@ export async function runPipelineForecaster(args: {
       targetType: "pipeline",
       targetId: "atelier-global",
       targetLabel: "Atelier Pipeline",
-      source: "mock_config",
     });
     return { runId, flagged };
   } catch (err) {
@@ -3060,8 +2025,7 @@ export interface PricingStrategistResult {
   partnerOverrideRequired: boolean;
   twoPartnerRequired: boolean;
   confidence: "green" | "amber" | "red";
-  source: "claude" | "mock_config" | "mock_fallback";
-}
+  }
 
 export async function runPricingStrategist(args: {
   opportunity: typeof atelierOpportunities.$inferSelect;
@@ -3275,7 +2239,6 @@ export async function runPricingStrategist(args: {
       partnerOverrideRequired: primaryCompute.marginLockStatus !== "green",
       twoPartnerRequired: primaryCompute.computedMarginPct < args.policy.twoPartnerThresholdPct,
       confidence: primaryCompute.marginLockStatus === "red" ? "amber" : "green",
-      source: llm.source,
     };
 
     // Persist brief link onto the deal pricing row so downstream callers
@@ -3308,7 +2271,6 @@ export async function runPricingStrategist(args: {
       targetType: "opportunity",
       targetId: args.opportunity.id,
       targetLabel: args.opportunity.name,
-      source: llm.source,
     });
 
     return result;
@@ -3418,67 +2380,6 @@ export interface WinLossInterviewerOutput {
   confidence: "green" | "amber" | "red";
 }
 
-function mockWinLoss(args: {
-  oppName: string;
-  outcome: string;
-  sellerReasons: string[];
-  transcript: string | null;
-}): WinLossInterviewerOutput {
-  const won = args.outcome === "signed";
-  const lost = !won;
-  const t = args.transcript ?? "";
-  // Pick a verbatim quote from transcript ONLY. If no transcript, return
-  // an empty quote and the post-call evidence-binding filter will drop the
-  // theme. Mock must NOT fabricate evidence — that would defeat PRD §5.2's
-  // "no transcript = no themes" rule.
-  const quote =
-    t
-      .split(/[.\n!?]/)
-      .map((s) => s.trim())
-      .find((s) => s.length >= 12 && s.length <= 180) ?? "";
-
-  return {
-    buyerAuthenticReasons: lost
-      ? [
-          "Felt the proposal didn't address the operational risk of the cut-over weekend.",
-          "Pricing alternative from incumbent was 18% lower; couldn't justify the delta to the CFO without a sharper outcome anchor.",
-          "Internal champion changed roles mid-cycle; replacement defaulted to status quo.",
-        ]
-      : [
-          "Trusted the senior delivery story — 'we'd see Mounir on Tuesdays' was the line that closed it.",
-          "Speed-to-value plan was concrete; 90-day milestones with named owners.",
-          "Partner countersign on the discount removed CFO objection.",
-        ],
-    hiddenCompetitor: lost ? "status_quo" : "unknown",
-    themes: [
-      {
-        name: won ? "We win on senior delivery" : "We lose to status quo when senior story is implied",
-        tag: "senior_delivery",
-        evidenceQuote: quote,
-        polarity: won ? "win" : "loss",
-      },
-      {
-        name: won ? "Speed-to-value is the closer" : "Pricing wedge requires a sharper outcome anchor",
-        tag: won ? "speed_to_value" : "pricing_wedge",
-        evidenceQuote: quote,
-        polarity: won ? "win" : "loss",
-      },
-    ],
-    whatWeWouldDoDifferently: lost
-      ? `On ${args.oppName}, we should have priced an outcome-based alternative on slide 1, not slide 12; and we should have rebooted the champion plan the moment the COO moved roles.`
-      : `On ${args.oppName}, the only refinement is to bring the audit-grade governance demo into discovery — it earned the trust we cashed in at signature.`,
-    suggestedAtelierLessons: [
-      {
-        title: won ? `${args.oppName}: senior-delivery proof point` : `${args.oppName}: status-quo recovery playbook`,
-        abstract: won
-          ? "Verbatim partner-on-the-pitch story bound to the close. Reusable in Pursue-stage proposals as a positioning line."
-          : "Champion-departure recovery moves: rebooting trust ladder, outcome-anchor reset, escalating to second exec sponsor.",
-        kind: won ? "case_study" : "learning",
-      },
-    ],
-    confidence: t.length > 200 ? "amber" : "red",
-  };
-}
 
 export async function runWinLossInterviewer(args: {
   opportunityId: string;
@@ -3508,7 +2409,7 @@ export async function runWinLossInterviewer(args: {
     async (ctx) => {
       const system = loadPrompt("win_loss_interviewer");
       await ctx.progress(30, "Reading buyer transcript");
-      const { value, costUsd, source, warning } = await callClaudeJson<WinLossInterviewerOutput>(
+      const { value, costUsd } = await callClaudeJson<WinLossInterviewerOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -3517,13 +2418,6 @@ export async function runWinLossInterviewer(args: {
           seller_perceived_reasons: args.sellerPerceivedReasons,
           buyer_transcript: args.buyerTranscript ?? "",
         }),
-        () =>
-          mockWinLoss({
-            oppName: args.opportunityName,
-            outcome: args.outcome,
-            sellerReasons: args.sellerPerceivedReasons,
-            transcript: args.buyerTranscript,
-          }),
       );
       await ctx.progress(80, "Binding themes to evidence");
       // Evidence-binding hard rule: drop any theme without a non-empty
@@ -3540,8 +2434,6 @@ export async function runWinLossInterviewer(args: {
         output: value,
         costUsd,
         confidence: conf,
-        source,
-        warning,
         sourcesCount: value.themes.length,
       };
     },
@@ -3573,45 +2465,6 @@ export interface ThemeCuratorOutput {
   confidence: "green" | "amber" | "red";
 }
 
-function mockThemeCurator(args: {
-  debriefThemes: Array<{ tag: string; name: string; polarity: string; debriefId: string; quote: string }>;
-  openOpportunityIds: string[];
-}): ThemeCuratorOutput {
-  // Group by tag.
-  const byTag = new Map<string, typeof args.debriefThemes>();
-  for (const t of args.debriefThemes) {
-    const arr = byTag.get(t.tag) ?? [];
-    arr.push(t);
-    byTag.set(t.tag, arr);
-  }
-  const upserts: ThemeCuratorOutput["upsertThemes"] = [];
-  for (const [tag, group] of byTag) {
-    const polarity = group[0]?.polarity === "loss" ? "loss" : "win";
-    upserts.push({
-      tag,
-      name: group[0]?.name ?? tag,
-      description: `${group.length} closed deals reference this theme.`,
-      polarity,
-      contributingDebriefIds: [...new Set(group.map((g) => g.debriefId))],
-      offeringTags: [],
-      sectorTags: [],
-      positioningLine:
-        polarity === "win"
-          ? `AICo wins on ${tag.replace(/_/g, " ")} — proven across ${group.length} closed deals.`
-          : `Where AICo loses on ${tag.replace(/_/g, " ")}, the recovery move is to lead with senior delivery.`,
-    });
-  }
-  return {
-    upsertThemes: upserts,
-    emergentThemes: [],
-    openProposalSuggestions: args.openOpportunityIds.slice(0, 3).map((id) => ({
-      opportunityId: id,
-      themeTag: upserts[0]?.tag ?? "senior_delivery",
-      rationale: "Top-supported active theme; insert as positioning line in Composer draft.",
-    })),
-    confidence: "amber",
-  };
-}
 
 export async function runThemeCurator(args: {
   triggeredByUserId: string | null;
@@ -3632,22 +2485,19 @@ export async function runThemeCurator(args: {
     async (ctx) => {
       const system = loadPrompt("theme_curator");
       await ctx.progress(40, "Clustering themes");
-      const { value, costUsd, source, warning } = await callClaudeJson<ThemeCuratorOutput>(
+      const { value, costUsd } = await callClaudeJson<ThemeCuratorOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
           debrief_themes: args.debriefThemes,
           open_opportunity_ids: args.openOpportunityIds,
         }),
-        () => mockThemeCurator(args),
       );
       await ctx.progress(85, "Refreshing library");
       return {
         output: value,
         costUsd,
         confidence: value.confidence,
-        source,
-        warning,
         sourcesCount: value.upsertThemes.length,
       };
     },
@@ -3659,9 +2509,8 @@ export async function runThemeCurator(args: {
 // THE SALON (Task #242) — 4 ★ client-realm agents
 // ============================================================
 //
-// All four are mock-first per ATELIER_MOCK_AGENTS=1; live Claude calls are
-// not wired in this scope. They follow the same startRun → progressRun →
-// completeRun → audit pattern so the Agents tab and audit feed work.
+// All four follow the same startRun → progressRun → completeRun → audit
+// pattern so the Agents tab and audit feed work.
 
 import {
   atelierDeliverablePublishes,
@@ -3802,7 +2651,6 @@ export async function runPublishSentinel(
       targetType,
       targetId: args.deliverableId,
       targetLabel: args.deliverableLabel,
-      source: "mock_config",
     });
     return { runId, output: out, costUsd: 0 };
   } catch (err) {
@@ -3866,7 +2714,6 @@ export async function runSalonConcierge(
       targetType: "salon_workspace",
       targetId: args.workspaceId,
       targetLabel: args.workspaceLabel,
-      source: "mock_config",
     });
     return { runId, output: out, costUsd: 0 };
   } catch (err) {
@@ -3951,7 +2798,6 @@ export async function runEngagementCurator(
       targetType: "engagement",
       targetId: args.engagementId,
       targetLabel: args.engagementLabel,
-      source: "mock_config",
     });
     return { runId, output: out, costUsd: 0 };
   } catch (err) {
@@ -4035,7 +2881,6 @@ export async function runApprovalChoreographer(
       targetType: "deliverable",
       targetId: args.deliverableId,
       targetLabel: args.deliverableLabel,
-      source: "mock_config",
     });
     return { runId, output: out, costUsd: 0 };
   } catch (err) {
@@ -4519,7 +3364,6 @@ export async function runTimeSteward(args: {
       targetType: "timesheet_week",
       targetId: args.weekId,
       targetLabel: `Timesheet ${args.weekId.slice(-12)}`,
-      source: "mock_config",
     });
     return out;
   } catch (err) {
@@ -4549,62 +3393,6 @@ export interface UtilizationAnalystOutput {
   confidence: "green" | "amber" | "red";
 }
 
-function mockUtilizationAnalyst(
-  view: string,
-  targetLabel: string,
-  numericBlock: Record<string, unknown> | null,
-): UtilizationAnalystOutput {
-  if (!numericBlock || Object.keys(numericBlock).length === 0) {
-    return {
-      refusal: "numeric-block-missing-or-stale",
-      headline: null,
-      narrative: null,
-      risks: [],
-      actions: [],
-      confidence: "red",
-    };
-  }
-  const u = (numericBlock as { utilizationPct?: number }).utilizationPct ?? 0;
-  const t = (numericBlock as { targetPct?: number }).targetPct ?? 0;
-  const r = (numericBlock as { realizationPct?: number }).realizationPct ?? 0;
-  const variance = u - t;
-  const headline =
-    variance < -0.1
-      ? `${targetLabel} is ${Math.abs(variance * 100).toFixed(0)} pts under target on ${view}-view utilization.`
-      : variance > 0.1
-        ? `${targetLabel} is running hot — ${(u * 100).toFixed(0)}% utilization vs ${(t * 100).toFixed(0)}% target.`
-        : `${targetLabel} is on plan: ${(u * 100).toFixed(0)}% utilization vs ${(t * 100).toFixed(0)}% target.`;
-  const narrative = [
-    `Rolling utilization sits at ${(u * 100).toFixed(0)}% against a target of ${(t * 100).toFixed(0)}%.`,
-    r > 0
-      ? `Realization rate is ${(r * 100).toFixed(0)}% — every 100 billable hours convert to ${(r * 100).toFixed(0)} invoiced hours at full rate.`
-      : `Realization rate not yet computed for this view.`,
-    variance < -0.1
-      ? `Action: rebench or rotate — current trajectory misses the FY plan by Q+2.`
-      : `Hold the line; reforecast at next QBR.`,
-  ].join("\n\n");
-  const risks =
-    variance < -0.1
-      ? [{ id: rid("rk"), severity: "red" as const, statement: `Utilization gap of ${Math.abs(variance * 100).toFixed(0)} pts on ${targetLabel}.` }]
-      : variance < -0.05
-        ? [{ id: rid("rk"), severity: "amber" as const, statement: `Utilization slipping on ${targetLabel}.` }]
-        : [];
-  const actions =
-    variance < -0.05
-      ? [
-          { id: rid("ax"), action: `Re-look pricing on the engagement(s) feeding ${targetLabel}.`, owner: "Partner" },
-          { id: rid("ax"), action: `Rebench underutilized roles into the next pursuit.`, owner: "Operations" },
-        ]
-      : [];
-  return {
-    refusal: null,
-    headline,
-    narrative,
-    risks,
-    actions,
-    confidence: variance < -0.1 ? "red" : variance < -0.05 ? "amber" : "green",
-  };
-}
 
 // Snapshots older than this are treated as stale by the analyst. The Burn
 // Sentinel + snapshot ticks both run inside the 15-minute scheduler, so the
@@ -4679,15 +3467,8 @@ export async function runUtilizationAnalyst(args: {
           output,
           costUsd: 0,
           confidence: "red",
-          source: "mock_config",
-          warning: computedAtStale
-            ? `numeric-block-stale (computedAt ${args.computedAt}); refused to generate narrative`
-            : "numeric-block-missing; refused to generate narrative",
         };
       }
-      // Fail-fast on missing prompt — consistent with every other agent in
-      // this file. A missing prompt is a configuration defect, not a
-      // runtime condition to silently degrade through.
       const promptBody = loadPrompt("utilization_analyst");
       const userPrompt = JSON.stringify({
         view: args.view,
@@ -4696,18 +3477,15 @@ export async function runUtilizationAnalyst(args: {
         period: args.period,
         numericBlock: args.numericBlock,
       });
-      const { value, costUsd, source, warning } = await callClaudeJson<UtilizationAnalystOutput>(
+      const { value, costUsd } = await callClaudeJson<UtilizationAnalystOutput>(
         "claude-haiku-4-5",
         promptBody,
         userPrompt,
-        () => mockUtilizationAnalyst(args.view, args.targetLabel, args.numericBlock),
       );
       return {
         output: value,
         costUsd,
         confidence: value.confidence ?? "amber",
-        source,
-        warning,
       };
     },
   );
@@ -4768,55 +3546,6 @@ export interface ExpenseAuditorInput {
   };
 }
 
-function mockExpenseAuditor(input: ExpenseAuditorInput): ExpenseAuditorProposal {
-  const ocr = input.ocr;
-  if (!ocr || !ocr.confidence || ocr.confidence === "red") {
-    return {
-      category: "other",
-      vatTreatment: "none",
-      vatAmount: 0,
-      clientBillable: false,
-      markupPct: 0,
-      summary: "OCR confidence too low — manual review required.",
-      ocrConfidence: "red",
-      refused: true,
-      reason: "missing-or-zero-confidence-ocr",
-    };
-  }
-  const country = (ocr.country || input.draft.country || "").toUpperCase();
-  const treatment: ExpenseAuditorProposal["vatTreatment"] =
-    country === "KSA" || country === "SA"
-      ? "ksa_15"
-      : country === "UAE" || country === "AE"
-        ? "uae_5"
-        : country && country !== "US"
-          ? "zero_rated_export"
-          : "none";
-  const cat = (ocr.category ?? input.draft.category ?? "other") as ExpenseAuditorProposal["category"];
-  // Billability: contract clause must permit. Default false.
-  const cd = input.contractDigest;
-  const clauseOk = !!cd?.expensesClause;
-  const catPermitted = clauseOk && (!cd?.permittedCategories?.length || cd.permittedCategories.includes(cat));
-  const billable = !!input.draft.engagementId && clauseOk && catPermitted;
-  // Markup: clamp to engagement cap; default 0.
-  const cap = cd?.expenseMarkupCapPct ?? 0;
-  const proposed = billable ? Math.min(10, cap) : 0;
-  const summary = billable
-    ? `Auditor: classified ${cat}; billable to engagement at markup ${proposed}% (cap ${cap}%).`
-    : input.draft.engagementId
-      ? `Auditor: classified ${cat}; NOT billable — contract digest lacks an explicit ${cat} clause.`
-      : `Auditor: classified ${cat}; firm-overhead (no engagement attached).`;
-  return {
-    category: cat,
-    vatTreatment: treatment,
-    vatAmount: ocr.tax ?? 0,
-    clientBillable: billable,
-    markupPct: proposed,
-    summary,
-    ocrConfidence: ocr.confidence,
-  };
-}
-
 export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
   runId: string;
   proposal: ExpenseAuditorProposal;
@@ -4843,330 +3572,36 @@ export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
         contractDigest: input.contractDigest,
         draft: input.draft,
       });
-      const { value, costUsd, source, warning } = await callClaudeJson<ExpenseAuditorProposal>(
+      const { value, costUsd } = await callClaudeJson<ExpenseAuditorProposal>(
         "claude-haiku-4-5",
         promptBody,
         userPrompt,
-        () => mockExpenseAuditor(input),
       );
       return {
         output: value,
         costUsd,
         confidence: value.ocrConfidence ?? "amber",
-        source,
-        warning,
       };
     },
   );
   return { runId: result.runId, proposal: result.output as ExpenseAuditorProposal };
 }
 
-// ============================================================
-// v5 — Task #355 — 15 new agents + 3 mode extensions
-// ============================================================
-//
-// Each function below is a thin runAgent() composition over the v5 prompt
-// of the same name. Output schemas in the registry are deliberately
-// `.passthrough()` (the prompt's JSON contract is the strict shape), so
-// these mocks return the minimum keys needed to keep the run row + UI
-// preview meaningful when ATELIER_MOCK_AGENTS=1 or Claude is unreachable.
 
-type V5GenericResult = { runId: string; output: Record<string, unknown>; costUsd: number };
 
-async function runV5GenericAgent(args: {
-  agentId: string;
-  promptId: AtelierAgentId;
-  promptVersion?: number;
-  promptMode?: string;
-  model: string;
-  input: Record<string, unknown>;
-  triggeredByUserId: string | null;
-  targetType: string;
-  targetId: string;
-  targetLabel: string;
-  actorLabel: string;
-  mock: () => Record<string, unknown>;
-}): Promise<V5GenericResult> {
-  const result = await runAgent(
-    {
-      agentId: args.agentId,
-      input: args.input,
-      triggeredByUserId: args.triggeredByUserId,
-      targetType: args.targetType,
-      targetId: args.targetId,
-      targetLabel: args.targetLabel,
-      actorLabel: args.actorLabel,
-    },
-    async (ctx) => {
-      const system = loadPrompt(args.promptId, args.promptVersion ?? 1, args.promptMode);
-      await ctx.progress(40, `Calling ${args.actorLabel}`);
-      const { value, costUsd, source, warning } = await callClaudeJson<Record<string, unknown>>(
-        args.model,
-        system,
-        JSON.stringify(args.input),
-        args.mock,
-      );
-      const conf =
-        (value.confidence as "green" | "amber" | "red" | undefined) ?? "amber";
-      return { output: value, costUsd, confidence: conf, source, warning };
-    },
-  );
-  return {
-    runId: result.runId,
-    output: result.output as Record<string, unknown>,
-    costUsd: result.costUsd,
-  };
-}
 
-// ---------- mocks (minimum-viable to satisfy v5Output passthrough) ----------
 
-function mockLinkedInComposer(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    partnerId: input.partnerId ?? "",
-    voiceProfileVersion: "1.0.0",
-    variants: [
-      {
-        length: input.targetLength ?? "medium",
-        body: "Mock LinkedIn post body — Partner voice profile not yet loaded in mock mode.",
-        hashtags: ["#strategy"],
-        wordCount: 14,
-        voiceMatchScore: 0.78,
-      },
-    ],
-    redactionsMade: [],
-    confidence: "amber",
-  };
-}
 
-function mockPressMonitor(input: Record<string, unknown>): Record<string, unknown> {
-  const now = new Date();
-  const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  return {
-    windowStart: start.toISOString(),
-    windowEnd: now.toISOString(),
-    aicoMentions: [],
-    partnerMentions: [],
-    competitorThemes: [],
-    opportunities: [],
-    confidence: "amber",
-  };
-}
 
-function mockFieldNotesScheduler(input: Record<string, unknown>): Record<string, unknown> {
-  const issueMonth = (input.issueMonth as string) || new Date().toISOString().slice(0, 7);
-  return {
-    issueId: issueMonth,
-    subjectLine: `Field Notes — ${issueMonth}`,
-    preheader: "What we are seeing this month from the firm.",
-    sections: [
-      { id: "editors_note", artifactId: "", byline: "", summary: "" },
-      { id: "what_we_seeing", items: [] },
-      { id: "piece_worth", artifactId: "", teaser: "" },
-      { id: "field_log", items: [] },
-      { id: "hiring", roleIds: [] },
-    ],
-    scheduledSendAt: new Date().toISOString(),
-    confidence: "amber",
-  };
-}
 
-function mockAllianceChoreographer(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    opportunityId: input.opportunityId ?? "",
-    partnerFirmId: input.partnerFirmId ?? "",
-    leadParty: (input.leadParty as string) ?? "aico",
-    split: { aicoPct: 60, partnerPct: 40, rationale: "Default 60/40 with AICo lead." },
-    jointDeliveryPlan: [],
-    commsCadence: { weekly: "Thu 30m", monthly: "first Mon", exec: "quarterly" },
-    conflicts: [],
-    allianceLetterStatus: "draft",
-    confidence: "amber",
-  };
-}
 
-function mockCertificationTracker(_input: Record<string, unknown>): Record<string, unknown> {
-  const now = new Date();
-  return {
-    windowStart: now.toISOString(),
-    windowEnd: new Date(now.getTime() + 90 * 86400000).toISOString(),
-    lapsing: [],
-    lapsed: [],
-    partnerTierImpact: [],
-    examBookings: [],
-    confidence: "amber",
-  };
-}
 
-function mockInterviewDesigner(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    roleId: input.roleId ?? "",
-    candidateId: input.candidateId ?? "",
-    panel: [
-      {
-        stage: "screen",
-        interviewerId: "",
-        durationMin: 30,
-        focus: "Role fit + signal screen",
-        questions: [
-          { q: "Walk me through your most recent shipped project.", lookFor: "End-to-end ownership", anchors: { "1": "no ownership", "3": "shared", "5": "drove e2e" } },
-        ],
-      },
-    ],
-    takeHome: { prompt: "Build a small Atelier-style agent.", deliverable: "Repo + README", estHours: 4, rubric: [] },
-    scorecard: { criteria: [{ name: "Technical depth", weight: 0.4, anchors: { "1": "shallow", "3": "solid", "5": "exceptional" } }] },
-    confidence: "amber",
-  };
-}
 
-function mockReferenceCaller(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    candidateId: input.candidateId ?? "",
-    referenceId: input.referenceId ?? "",
-    roleId: input.roleId ?? "",
-    callMode: "live",
-    consentVerified: true,
-    summary: {
-      workingRelationship: "Worked together for two years.",
-      scope: "Mock — transcript not provided.",
-      strengths: ["Mock strength A", "Mock strength B"],
-      watchouts: ["Mock watchout"],
-      wouldRehire: "yes",
-      fitForRoleLevel: "at",
-    },
-    inconsistenciesWithResume: [],
-    verbatimQuotes: [],
-    confidence: "amber",
-  };
-}
 
-function mockOfferComposer(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    candidateId: input.candidateId ?? "",
-    roleId: input.roleId ?? "",
-    jurisdiction: "ksa",
-    letterMarkdown: "# Offer Letter\n\nMock content — comp band not loaded in mock mode.",
-    compNarrative: {
-      base: 0,
-      variable: { target: 0, triggers: "" },
-      equityOrCarry: { kind: "none", summary: "" },
-      benefits: [],
-      totalAtTarget: 0,
-      marketComparable: { p25: 0, p50: 0, p75: 0 },
-    },
-    expiresAt: new Date(Date.now() + 14 * 86400000).toISOString(),
-    confidence: "amber",
-  };
-}
 
-function mockComplianceSentinel(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    framework: (input.controlFramework as string) ?? "soc2_type2",
-    periodStart: input.periodStart ?? new Date(Date.now() - 90 * 86400000).toISOString(),
-    periodEnd: input.periodEnd ?? new Date().toISOString(),
-    controls: [
-      {
-        id: "CC6.1",
-        title: "Logical access",
-        status: "passing",
-        evidenceArtifactIds: ["evidence:mock"],
-        lastCollectedAt: new Date().toISOString(),
-        owner: "compliance@aico",
-        remediation: "",
-      },
-    ],
-    gaps: [],
-    evidencePackUrl: "",
-    confidence: "amber",
-  };
-}
 
-function mockIncidentResponder(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    incidentId: input.incidentId ?? "",
-    severity: input.severity ?? "sev3",
-    phase: "detect",
-    timeline: [
-      { at: new Date().toISOString(), actor: "ag_incident_responder", action: "intake", evidenceUrl: "" },
-    ],
-    containmentActions: [],
-    customerCommsDraft: { audience: "", subject: "", body: "", legalReviewedAt: "" },
-    rootCauseHypothesis: "",
-    postMortem: { fiveWhys: [], actionItems: [] },
-    confidence: "amber",
-  };
-}
 
-function mockDsarConcierge(input: Record<string, unknown>): Record<string, unknown> {
-  const intake = new Date();
-  return {
-    dsarId: input.dsarId ?? "",
-    jurisdiction: input.jurisdiction ?? "gdpr",
-    requestKind: input.requestKind ?? "access",
-    intakeAt: intake.toISOString(),
-    statutoryDueAt: new Date(intake.getTime() + 30 * 86400000).toISOString(),
-    phase: "intake",
-    discoveredArtifacts: [],
-    responseLetterMarkdown: "",
-    responsePacketUrl: "",
-    confidence: "amber",
-  };
-}
 
-function mockBackupAuditor(_input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    periodStart: new Date(Date.now() - 90 * 86400000).toISOString(),
-    periodEnd: new Date().toISOString(),
-    stores: [],
-    restoreDrill: {
-      performedAt: new Date().toISOString(),
-      sampledArtifactId: "mock",
-      restoredOk: true,
-      rtoMinutes: 30,
-      rpoMinutes: 5,
-      notes: "Mock drill — no real restore performed.",
-    },
-    alerts: [],
-    confidence: "amber",
-  };
-}
-
-function mockIpSteward(_input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    windowStart: new Date(Date.now() - 180 * 86400000).toISOString(),
-    windowEnd: new Date().toISOString(),
-    freshnessNags: [],
-    unlicensedAssets: [],
-    engagementUseWithoutGrant: [],
-    ownerSwapRequests: [],
-    confidence: "amber",
-  };
-}
-
-function mockOssComplianceSentinel(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    repoId: input.repoId ?? "",
-    scannedAt: new Date().toISOString(),
-    dependencies: [],
-    blockers: [],
-    exceptions: [],
-    confidence: "amber",
-  };
-}
-
-function mockDemoEnvironmentCurator(input: Record<string, unknown>): Record<string, unknown> {
-  return {
-    demoId: input.demoId ?? "",
-    url: "",
-    ownerId: "",
-    lastCheckedAt: new Date().toISOString(),
-    uptime30d: 0.99,
-    lastDeployAt: new Date().toISOString(),
-    screenshotUrl: "",
-    scriptDrift: [],
-    freshness: "fresh",
-    confidence: "amber",
-  };
-}
 
 // ---------- run<X> entrypoints ----------
 
@@ -5193,7 +3628,6 @@ export async function runLinkedInComposer(
     targetId: input.partnerId,
     targetLabel: `LinkedIn — ${input.partnerId}`,
     actorLabel: input.actorLabel ?? "LinkedIn Composer",
-    mock: () => mockLinkedInComposer(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5214,7 +3648,6 @@ export async function runPressMonitor(
     targetId: "press_watch",
     targetLabel: "Press watch",
     actorLabel: input.actorLabel ?? "Press Monitor",
-    mock: () => mockPressMonitor(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5235,7 +3668,6 @@ export async function runFieldNotesScheduler(
     targetId: `field_notes:${input.issueMonth}`,
     targetLabel: `Field Notes ${input.issueMonth}`,
     actorLabel: input.actorLabel ?? "Field Notes Scheduler",
-    mock: () => mockFieldNotesScheduler(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5257,7 +3689,6 @@ export async function runAllianceChoreographer(
     targetId: input.opportunityId,
     targetLabel: `Alliance — ${input.opportunityId}`,
     actorLabel: input.actorLabel ?? "Alliance Choreographer",
-    mock: () => mockAllianceChoreographer(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5278,7 +3709,6 @@ export async function runCertificationTracker(
     targetId: "certifications",
     targetLabel: "Firm certification posture",
     actorLabel: input.actorLabel ?? "Certification Tracker",
-    mock: () => mockCertificationTracker(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5299,7 +3729,6 @@ export async function runInterviewDesigner(
     targetId: input.roleId,
     targetLabel: `Interview design — ${input.roleId}`,
     actorLabel: input.actorLabel ?? "Interview Designer",
-    mock: () => mockInterviewDesigner(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5321,7 +3750,6 @@ export async function runReferenceCaller(
     targetId: input.candidateId,
     targetLabel: `Reference — ${input.candidateId}`,
     actorLabel: input.actorLabel ?? "Reference Caller",
-    mock: () => mockReferenceCaller(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5343,7 +3771,6 @@ export async function runOfferComposer(
     targetId: input.candidateId,
     targetLabel: `Offer — ${input.candidateId}`,
     actorLabel: input.actorLabel ?? "Offer Composer",
-    mock: () => mockOfferComposer(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5365,7 +3792,6 @@ export async function runComplianceSentinel(
     targetId: `compliance:${fw}`,
     targetLabel: `Compliance — ${fw}`,
     actorLabel: input.actorLabel ?? "Compliance Sentinel",
-    mock: () => mockComplianceSentinel(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5387,7 +3813,6 @@ export async function runIncidentResponder(
     targetId: input.incidentId,
     targetLabel: `Incident ${input.incidentId} (${input.severity})`,
     actorLabel: input.actorLabel ?? "Incident Responder",
-    mock: () => mockIncidentResponder(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5409,7 +3834,6 @@ export async function runDsarConcierge(
     targetId: input.dsarId,
     targetLabel: `DSAR ${input.dsarId} (${input.jurisdiction})`,
     actorLabel: input.actorLabel ?? "DSAR Concierge",
-    mock: () => mockDsarConcierge(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5430,7 +3854,6 @@ export async function runBackupAuditor(
     targetId: "backups",
     targetLabel: "Backup posture",
     actorLabel: input.actorLabel ?? "Backup Auditor",
-    mock: () => mockBackupAuditor(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5450,7 +3873,6 @@ export async function runIpSteward(
     targetId: "ip_catalog",
     targetLabel: "IP catalog",
     actorLabel: input.actorLabel ?? "IP Steward",
-    mock: () => mockIpSteward(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5470,7 +3892,6 @@ export async function runOssComplianceSentinel(
     targetId: input.repoId,
     targetLabel: `OSS scan — ${input.repoId}`,
     actorLabel: input.actorLabel ?? "OSS Compliance Sentinel",
-    mock: () => mockOssComplianceSentinel(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5490,7 +3911,6 @@ export async function runDemoEnvironmentCurator(
     targetId: input.demoId,
     targetLabel: `Demo — ${input.demoId}`,
     actorLabel: input.actorLabel ?? "Demo Environment Curator",
-    mock: () => mockDemoEnvironmentCurator(input as unknown as Record<string, unknown>),
   });
 }
 
@@ -5646,9 +4066,7 @@ export function dispatchV5ModeExtension(
 //                          counterparty markup.
 //
 // Both follow the established `start → progress → callClaudeJson →
-// complete | fail` pattern. Mock outputs are deterministic so CLI
-// smoke fixtures (W1-S8) and the /codex UI (W1-S10) can render
-// against them with `ATELIER_MOCK_AGENTS=1`.
+// complete | fail` pattern.
 // =============================================================
 
 export interface ContractComposerInput {
@@ -5728,91 +4146,6 @@ export interface ContractComposerOutput {
   metadata: Record<string, unknown>;
 }
 
-function mockContractComposer(
-  input: ContractComposerInput,
-): ContractComposerOutput {
-  const eligible = input.clauseLibrary
-    .filter((c) =>
-      c.instrumentTypes.length === 0 ||
-      c.instrumentTypes.includes(input.instrumentType),
-    )
-    .filter(
-      (c) =>
-        c.jurisdictionTags.length === 0 ||
-        c.jurisdictionTags.includes(input.counterparty.jurisdiction),
-    )
-    .slice(0, 8);
-  const proposedClauses = eligible.map((c, i) => ({
-    clauseId: c.id,
-    position: i,
-    customizations: null,
-    whyChosen: `${c.family} clause matches ${input.instrumentType.toUpperCase()} for ${input.counterparty.jurisdiction || "unspecified jurisdiction"}.`,
-  }));
-  const flaggedRisks: ContractComposerOutput["flaggedRisks"] = [];
-  if (eligible.length === 0) {
-    flaggedRisks.push({
-      severity: "high",
-      summary:
-        "No clause-library entries matched this instrument + jurisdiction. Partner review required before sending.",
-    });
-  }
-  if (
-    input.opportunity?.scopeSummary?.toLowerCase().includes("personal data") &&
-    input.instrumentType !== "dpa"
-  ) {
-    flaggedRisks.push({
-      severity: "high",
-      summary:
-        "Scope mentions personal data; a separate DPA must be referenced before signing.",
-    });
-  }
-  const titleLine = `${input.instrumentType.toUpperCase()} — ${input.counterparty.legalName}${input.opportunity ? " — " + input.opportunity.name : ""}`;
-  const body = [
-    `# ${titleLine}`,
-    "",
-    `**Counterparty:** ${input.counterparty.legalName} (${input.counterparty.jurisdiction || "—"})`,
-    `**Payment terms:** ${input.counterparty.paymentTermsDays} days`,
-    input.opportunity
-      ? `**Estimated value:** ${input.opportunity.currency} ${input.opportunity.dealSizeUsd.toLocaleString()}`
-      : "",
-    "",
-    ...eligible.flatMap((c) => [
-      `## ${c.title}`,
-      c.body,
-      "",
-    ]),
-  ]
-    .filter(Boolean)
-    .join("\n");
-  return {
-    renderedBody: body,
-    renderedBodyFormat: "markdown",
-    proposedClauses,
-    flaggedRisks,
-    partiesProposed: [
-      {
-        side: "aico",
-        role: "signer",
-        signerName: "AICo Partner — to be assigned",
-        signerEmail: "partner@aico.example",
-        signerTitle: "Partner",
-      },
-      {
-        side: "counterparty",
-        role: "signer",
-        signerName: `${input.counterparty.legalName} — authorised signatory`,
-        signerEmail: "signer@counterparty.example",
-        signerTitle: "Authorised signatory",
-      },
-    ],
-    metadata: {
-      instrumentType: input.instrumentType,
-      counterpartyId: input.counterparty.id,
-      engagementId: input.engagement?.id ?? null,
-      opportunityId: input.opportunity?.id ?? null,
-    },
-  };
-}
 
 export async function runContractComposer(
   input: ContractComposerInput,
@@ -5839,12 +4172,11 @@ export async function runContractComposer(
     await progressRun(runId, 15, "Selecting clauses from library");
     await progressRun(runId, 40, "Honouring acceptance history");
     await progressRun(runId, 65, "Rendering body + flagging risks");
-    const { value, costUsd, source, warning } =
+    const { value, costUsd } =
       await callClaudeJson<ContractComposerOutput>(
         "claude-sonnet-4-6",
         system,
         JSON.stringify(input),
-        () => mockContractComposer(input),
       );
     const conf: "green" | "amber" =
       value.flaggedRisks.some((r) => r.severity === "high") ? "amber" : "green";
@@ -5860,8 +4192,6 @@ export async function runContractComposer(
       targetId:
         input.engagement?.id ?? input.opportunity?.id ?? input.counterparty.id,
       targetLabel: `${input.instrumentType.toUpperCase()} · ${input.counterparty.legalName}`,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -5923,42 +4253,6 @@ export interface RedlineAnalystOutput {
     | "escalate_to_partner";
 }
 
-function mockRedlineAnalyst(input: RedlineAnalystInput): RedlineAnalystOutput {
-  const beforeLen = input.latestVersion.renderedBody.length;
-  const afterLen = input.inboundBody.length;
-  const drift = Math.abs(afterLen - beforeLen);
-  const looksMaterial = drift > 200;
-  const redlines: RedlineAnalystOutput["redlines"] = looksMaterial
-    ? [
-        {
-          clauseId: input.clauseLibraryAtSend[0]?.id ?? null,
-          positionHint: 0,
-          proposedBody: input.inboundBody.slice(0, 240),
-          diff: {
-            before: input.latestVersion.renderedBody.slice(0, 240),
-            after: input.inboundBody.slice(0, 240),
-            ops: [],
-          },
-          riskTier: "medium",
-          riskCommentary:
-            "Material drift detected vs. last AICo version (mock heuristic). Human review recommended.",
-          recommendation: "accept_with_conditions",
-          rationale:
-            "Counterparty changed clause body length materially; partner should review the actual diff before accepting.",
-        },
-      ]
-    : [];
-  const overall: RedlineAnalystOutput["overallRecommendation"] = looksMaterial
-    ? "escalate_to_partner"
-    : "accept";
-  return {
-    diffSummary: looksMaterial
-      ? `Inbound body differs from v${input.latestVersion.version} by ${drift} characters. ${redlines.length} clause(s) flagged.`
-      : `Inbound body matches v${input.latestVersion.version} within tolerance; no redlines.`,
-    redlines,
-    overallRecommendation: overall,
-  };
-}
 
 export async function runRedlineAnalyst(
   input: RedlineAnalystInput,
@@ -5986,12 +4280,11 @@ export async function runRedlineAnalyst(
     await progressRun(runId, 20, "Diffing inbound vs. last version");
     await progressRun(runId, 55, "Binding to clauses + classifying risk");
     await progressRun(runId, 85, "Composing reviewer commentary");
-    const { value, costUsd, source, warning } =
+    const { value, costUsd } =
       await callClaudeJson<RedlineAnalystOutput>(
         "claude-sonnet-4-6",
         system,
         JSON.stringify(input),
-        () => mockRedlineAnalyst(input),
       );
     // Guardrail: never let recommendation=accept escape on a high-risk row.
     for (const r of value.redlines) {
@@ -6016,8 +4309,6 @@ export async function runRedlineAnalyst(
       targetType: "contract",
       targetId: input.contract.id,
       targetLabel: input.contract.title,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -6090,74 +4381,6 @@ function pickProvider(
   return "docusign";
 }
 
-function mockEsignOrchestrator(
-  input: EsignOrchestratorInput,
-): EsignOrchestratorOutput {
-  const warnings: string[] = [];
-  if (input.countersign.state !== "both_signed") {
-    warnings.push(
-      `Refusing to dispatch: two-partner countersign state is "${input.countersign.state}", not "both_signed".`,
-    );
-    return {
-      envelope: {
-        provider: "docusign",
-        envelopeId: "",
-        routingOrder: [],
-        sentAt: null,
-        statusAfterSend: input.contract.status,
-      },
-      reconciledPartyStates: input.parties.map((p) => ({
-        partyId: p.id,
-        signState: p.signState,
-        signedAt: null,
-        evidenceUrl: "",
-      })),
-      contractStatusAfter: input.contract.status,
-      warnings,
-    };
-  }
-  const provider = pickProvider(input.providerHint, input.parties);
-  // AICo signers first, then counterparty signers, witnesses, notice parties.
-  const orderRank = (
-    p: EsignOrchestratorInput["parties"][number],
-  ): number => {
-    const sideBoost = p.side === "aico" ? 0 : 100;
-    const roleBoost =
-      p.role === "signer"
-        ? 0
-        : p.role === "witness"
-          ? 200
-          : p.role === "notice_party"
-            ? 300
-            : 400;
-    return sideBoost + roleBoost;
-  };
-  const sortedParties = input.parties
-    .map((p, i) => ({ p, rank: orderRank(p) + i }))
-    .sort((a, b) => a.rank - b.rank);
-  const routingOrder = sortedParties.map(({ p }, i) => ({
-    partyId: p.id,
-    order: i + 1,
-    signerEmail: p.signerEmail,
-  }));
-  return {
-    envelope: {
-      provider,
-      envelopeId: `mock_${provider}_${input.contract.id.slice(-8)}`,
-      routingOrder,
-      sentAt: new Date().toISOString(),
-      statusAfterSend: "external_dispatched",
-    },
-    reconciledPartyStates: input.parties.map((p) => ({
-      partyId: p.id,
-      signState: "sent",
-      signedAt: null,
-      evidenceUrl: "",
-    })),
-    contractStatusAfter: "external_dispatched",
-    warnings,
-  };
-}
 
 export async function runEsignOrchestrator(
   input: EsignOrchestratorInput,
@@ -6185,12 +4408,11 @@ export async function runEsignOrchestrator(
     await progressRun(runId, 25, "Validating two-partner countersign gate");
     await progressRun(runId, 55, "Composing routing order + provider pick");
     await progressRun(runId, 85, "Reconciling party states");
-    const { value, costUsd, source, warning } =
+    const { value, costUsd } =
       await callClaudeJson<EsignOrchestratorOutput>(
         "claude-sonnet-4-6",
         system,
         JSON.stringify(input),
-        () => mockEsignOrchestrator(input),
       );
     const conf: "green" | "amber" | "red" =
       value.warnings.length > 0
@@ -6209,8 +4431,6 @@ export async function runEsignOrchestrator(
       targetType: "contract",
       targetId: input.contract.id,
       targetLabel: input.contract.title,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -6291,81 +4511,6 @@ const PII_KEYS = [
 const PHI_KEYS = ["health", "medical", "diagnosis", "patient", "phi"];
 const FIN_KEYS = ["account number", "iban", "card number", "transaction", "salary", "payroll", "kyc", "aml"];
 
-function mockDpaSentinel(input: DpaSentinelInput): DpaSentinelOutput {
-  const corpus = input.dataSignalInputs
-    .map((s) => s.text.toLowerCase())
-    .join("\n");
-  const classes = new Set<"pii" | "phi" | "financial" | "regulated_other">();
-  if (PII_KEYS.some((k) => corpus.includes(k))) classes.add("pii");
-  if (PHI_KEYS.some((k) => corpus.includes(k))) classes.add("phi");
-  if (FIN_KEYS.some((k) => corpus.includes(k))) classes.add("financial");
-  const isRequired = classes.size > 0;
-  const alerts: DpaSentinelOutput["alerts"] = [];
-  let recommended: DpaSentinelOutput["recommendedStatus"] = "required";
-  const now = Date.now();
-  if (input.existingDpa) {
-    const expiresAt = input.existingDpa.expiresAt
-      ? Date.parse(input.existingDpa.expiresAt)
-      : null;
-    if (expiresAt && expiresAt < now) {
-      recommended = "expired";
-      alerts.push({
-        severity: "high",
-        audience: "compliance_officer",
-        summary: `DPA for ${input.counterparty.legalName} expired on ${input.existingDpa.expiresAt}.`,
-      });
-    } else if (
-      input.existingDpa.status === "signed" &&
-      input.existingDpa.signedAt
-    ) {
-      recommended = "active";
-    } else if (
-      input.existingDpa.status === "active" &&
-      input.existingDpa.lastReviewedAt
-    ) {
-      const reviewedMs = Date.parse(input.existingDpa.lastReviewedAt);
-      if (now - reviewedMs < 365 * 24 * 3600 * 1000) {
-        recommended = "reviewed";
-      } else {
-        recommended = "active";
-        alerts.push({
-          severity: "medium",
-          audience: "compliance_officer",
-          summary:
-            "DPA last review > 12 months ago — schedule a fresh review.",
-        });
-      }
-    } else {
-      recommended = input.existingDpa.status;
-    }
-  } else if (isRequired) {
-    alerts.push({
-      severity: "high",
-      audience: "compliance_officer",
-      summary: `Personal-data signals detected for ${input.engagement.name} but no DPA row exists.`,
-    });
-  }
-  return {
-    isDpaRequired: isRequired,
-    detectedDataClasses: Array.from(classes),
-    processorChainInferred: input.existingDpa?.dataClasses
-      ? []
-      : isRequired
-        ? [
-            {
-              name: "AICo (controller-as-processor)",
-              role: "processor",
-              jurisdiction: input.counterparty.jurisdiction || "unspecified",
-            },
-          ]
-        : [],
-    recommendedStatus: recommended,
-    rationale: isRequired
-      ? `Detected data classes: ${Array.from(classes).join(", ")}. Recommended status: ${recommended}.`
-      : "No personal-data signals detected in the supplied inputs.",
-    alerts,
-  };
-}
 
 export async function runDpaSentinel(input: DpaSentinelInput): Promise<{
   runId: string;
@@ -6391,12 +4536,11 @@ export async function runDpaSentinel(input: DpaSentinelInput): Promise<{
     await progressRun(runId, 30, "Scanning data signals");
     await progressRun(runId, 65, "Classifying data classes");
     await progressRun(runId, 90, "Composing recommendations + alerts");
-    const { value, costUsd, source, warning } =
+    const { value, costUsd } =
       await callClaudeJson<DpaSentinelOutput>(
         "claude-sonnet-4-6",
         system,
         JSON.stringify(input),
-        () => mockDpaSentinel(input),
       );
     // Guardrail: never recommend `active` without a signed_at present.
     if (
@@ -6429,8 +4573,6 @@ export async function runDpaSentinel(input: DpaSentinelInput): Promise<{
       targetType: "engagement",
       targetId: input.engagement.id,
       targetLabel: input.engagement.name,
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -6490,53 +4632,6 @@ export interface RenewalWatchdogOutput {
   summaryForPartner: string;
 }
 
-function mockRenewalWatchdog(input: RenewalWatchdogInput): RenewalWatchdogOutput {
-  const now = Date.parse(input.now);
-  const dayMs = 86_400_000;
-  const contractRecommendations: RenewalWatchdogOutput["contractRecommendations"] = [];
-  for (const c of input.activeContracts) {
-    if (c.status === "terminated" || c.status === "expired") continue;
-    if (!c.termEnd) continue;
-    const days = Math.round((Date.parse(c.termEnd) - now) / dayMs);
-    if (days > input.warningWindows.contractDays) continue;
-    const severity: "low" | "medium" | "high" =
-      days < 30 ? "high" : days <= 60 ? "medium" : "low";
-    const recommendation =
-      c.contractValueUsd > 100_000 || c.instrumentType === "msa"
-        ? "renew"
-        : "review";
-    contractRecommendations.push({
-      contractId: c.id,
-      daysToExpiry: days,
-      recommendation,
-      rationale: `${c.instrumentType.toUpperCase()} with ${c.counterpartyLegalName} expires in ${days}d.`,
-      targetStatus: c.status === "active" ? "expiring" : "active",
-      severity,
-    });
-  }
-  const dpaRecommendations: RenewalWatchdogOutput["dpaRecommendations"] = [];
-  for (const d of input.activeDpas) {
-    if (!d.expiresAt) continue;
-    const days = Math.round((Date.parse(d.expiresAt) - now) / dayMs);
-    if (days > input.warningWindows.dpaDays) continue;
-    const severity: "low" | "medium" | "high" =
-      days < 30 ? "high" : "medium";
-    dpaRecommendations.push({
-      dpaId: d.id,
-      daysToExpiry: days,
-      recommendation: days < 0 ? "retire" : "renew",
-      rationale: `DPA with ${d.counterpartyLegalName} ${days < 0 ? "lapsed" : "expires in " + days + "d"}.`,
-      severity,
-    });
-  }
-  const loudest =
-    contractRecommendations.find((r) => r.severity === "high") ??
-    dpaRecommendations.find((r) => r.severity === "high") ??
-    contractRecommendations[0] ??
-    dpaRecommendations[0];
-  const summary = `${contractRecommendations.length} contract(s) and ${dpaRecommendations.length} DPA(s) in the renewal window${loudest ? "; loudest item: " + ("contractId" in loudest ? loudest.contractId : loudest.dpaId) + " (" + loudest.severity + ")" : ""}.`;
-  return { contractRecommendations, dpaRecommendations, summaryForPartner: summary };
-}
 
 export async function runRenewalWatchdog(
   input: RenewalWatchdogInput,
@@ -6565,12 +4660,11 @@ export async function runRenewalWatchdog(
     await progressRun(runId, 35, "Walking active contracts");
     await progressRun(runId, 70, "Walking active DPAs");
     await progressRun(runId, 90, "Composing partner summary");
-    const { value, costUsd, source, warning } =
+    const { value, costUsd } =
       await callClaudeJson<RenewalWatchdogOutput>(
         "claude-haiku-4-5",
         system,
         JSON.stringify(input),
-        () => mockRenewalWatchdog(input),
       );
     const highCount =
       value.contractRecommendations.filter((r) => r.severity === "high").length +
@@ -6593,8 +4687,6 @@ export async function runRenewalWatchdog(
       targetType: "engagement",
       targetId: "_daemon_",
       targetLabel: "Renewal Watchdog daily sweep",
-      source,
-      warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -6713,7 +4805,7 @@ export async function runCashApplicationMatcher(
     actorLabel: input.actorLabel,
   });
   try {
-    const { value, costUsd, source, warning } = await callClaudeJson<CashApplicationMatcherOutput>(
+    const { value, costUsd } = await callClaudeJson<CashApplicationMatcherOutput>(
       "claude-haiku-4-5",
       "You are the Cash Application Matcher. Return a ranked list of invoice candidates for the receipt.",
       JSON.stringify(input),
@@ -6727,7 +4819,6 @@ export async function runCashApplicationMatcher(
       durationMs: Date.now() - t0, sourcesCount: value.candidates.length,
       actorLabel: input.actorLabel, targetType: "cash_receipt",
       targetId: input.receipt.id, targetLabel: `Receipt ${input.receipt.id}`,
-      source, warning,
     });
     return { runId, output: value, costUsd };
   } catch (err) {
@@ -6834,7 +4925,7 @@ export async function runCashFlowForecaster(
       .filter((i) => i.total - i.amountPaid > 0.01)
       .map((i) => ({ outstanding: i.total - i.amountPaid, dueDate: i.dueDate }));
     const fallback = await ruleBasedForecast(input, rows);
-    const { value, costUsd, source, warning } = await callClaudeJson<CashFlowForecasterOutput>(
+    const { value, costUsd } = await callClaudeJson<CashFlowForecasterOutput>(
       "claude-sonnet-4-6",
       "You are the Cash Flow Forecaster. Produce a 13-week direct-method forecast.",
       JSON.stringify({ ...input, openInvoices: rows }),
@@ -6846,7 +4937,7 @@ export async function runCashFlowForecaster(
       runId, output: value as unknown, confidence: conf, costUsd,
       durationMs: Date.now() - t0, sourcesCount: value.weeks.length,
       actorLabel: input.actorLabel, targetType: "cash_forecast", targetId: "_firm_",
-      targetLabel: "13-week cash forecast", source, warning,
+      targetLabel: "13-week cash forecast",
     });
     return { runId, output: value, costUsd };
   } catch (err) {

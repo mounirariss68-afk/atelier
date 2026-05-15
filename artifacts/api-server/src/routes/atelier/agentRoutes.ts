@@ -1151,10 +1151,9 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
     targetId: r.targetId ?? r.id,
     targetLabel: r.targetLabel ?? r.id,
   });
-  // Server-side state transition: if the human approved AND the run was a
-  // genuine Claude (or mock_config) run (NOT a mock_fallback / blocked run),
-  // flip the linked record's status from 'draft' → 'official'. This is the
-  // only way records become "committed memory".
+  // Server-side state transition: if the human approved AND the run was not
+  // blocked, flip the linked record's status from 'draft' → 'official'.
+  // This is the only way records become "committed memory".
   if (parsed.data.decision === "approve" && r.status !== "blocked") {
     const ts = new Date();
     // Accept both canonical (`ag_*`) and legacy bare IDs so historic

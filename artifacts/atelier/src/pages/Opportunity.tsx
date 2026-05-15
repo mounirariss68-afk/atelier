@@ -17,7 +17,6 @@ import {
   TabNavItem,
   HeroStat,
   OwnershipPanel,
-  MockFallbackBanner,
 } from "@/components/ui/primitives";
 import { useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -143,12 +142,6 @@ export default function Opportunity() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-6">
-        {/* Banner is gated on a real fallback signal. Until the API surfaces
-            `agent.mock_fallback` (see api-server/src/lib/atelier-agents/runner.ts
-            `source: "mock_fallback"`) on a client-readable field, we keep this
-            inactive so the assertive copy never displays speculatively. */}
-        <MockFallbackBanner active={false} />
-
         {/* Primary creative-work toolbar — anchored next to the tabs.
             Gold accent reserved for the Draft POV primary action. */}
         <div className="flex flex-wrap items-center justify-between gap-3">

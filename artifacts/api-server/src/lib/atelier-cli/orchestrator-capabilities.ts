@@ -378,13 +378,12 @@ defineCapability({
                 id: "ag_account_cartographer",
                 name: "Account Cartographer",
                 runId: result.runId,
-                source: result.source,
                 costUsd: result.costUsd,
               },
               draft,
               missingRequiredFields,
               missingOptionalFields: [],
-              lowConfidenceFields: result.warning ? ["*"] : [],
+              lowConfidenceFields: [],
             },
           };
         } catch (e) {

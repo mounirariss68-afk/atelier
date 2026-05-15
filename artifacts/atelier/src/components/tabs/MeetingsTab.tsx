@@ -26,8 +26,7 @@ function PendingApprovalBanner({ runId }: { runId: string | null }) {
   if (!runId) return null;
   const decisions = ((run?.humanDecisions as Array<{ decision?: string }> | undefined) ?? []);
   const approved = decisions.some((d) => d?.decision === "approve");
-  const isMockFallback = run?.status === "blocked";
-  if (approved && !isMockFallback) {
+  if (approved) {
     return (
       <div className="rounded border border-success/40 bg-success/10 px-3 py-2 text-xs font-mono text-success">
         ✓ Approved · committed to opportunity memory.
@@ -35,13 +34,8 @@ function PendingApprovalBanner({ runId }: { runId: string | null }) {
     );
   }
   return (
-    <div className={`rounded border px-3 py-2 text-xs font-mono ${
-      isMockFallback ? "border-danger/50 bg-danger/10 text-danger" : "border-gold/40 bg-gold/5 text-gold"
-    }`}>
-      {isMockFallback ? "⚠ MOCK FALLBACK" : "● PENDING APPROVAL"} ·{" "}
-      {isMockFallback
-        ? "Claude was unavailable — scribe output below is synthetic. Review carefully and approve only if the underlying transcript supports each item."
-        : "Decisions and actions below are NOT yet in opportunity memory. Use Approve/Edit/Reject to commit or send back."}
+    <div className="rounded border border-gold/40 bg-gold/5 text-gold px-3 py-2 text-xs font-mono">
+      ● PENDING APPROVAL · Decisions and actions below are NOT yet in opportunity memory. Use Approve/Edit/Reject to commit or send back.
     </div>
   );
 }

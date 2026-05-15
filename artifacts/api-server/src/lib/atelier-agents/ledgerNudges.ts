@@ -551,7 +551,6 @@ export async function runBurnSentinelTick(opts: { force?: boolean } = {}): Promi
     targetType: "ledger.burn_sentinel",
     targetId: "firm",
     targetLabel: "Firm-wide burn sweep",
-    source: "mock_config",
   });
   return { alertsWritten, engagementsScanned: burns.length };
 }

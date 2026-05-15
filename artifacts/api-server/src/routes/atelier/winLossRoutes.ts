@@ -11,7 +11,7 @@
  *   GET    /win-themes                                -> theme library
  *   POST   /win-themes/curate                         -> Theme Curator run
  *
- * Uses ATELIER_MOCK_AGENTS=1 path automatically through callClaudeJson.
+ * Dispatches through callClaudeJson (live Sonnet/Haiku — no mock fallback).
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";

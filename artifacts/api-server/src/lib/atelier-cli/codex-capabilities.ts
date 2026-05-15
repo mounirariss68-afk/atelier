@@ -25,9 +25,9 @@
  *
  * Agent-backed verbs (`contract_compose`, `contract_record_redline`,
  * `dpa_review`, `renewal_watchdog_run`) call the runner functions
- * declared in `lib/atelier-agents/runner.ts`. In `ATELIER_MOCK_AGENTS`
- * mode the runner returns a deterministic stub run; in production it
- * fans out to Claude with the matching `prompts/atelier/<id>.v1.md`.
+ * declared in `lib/atelier-agents/runner.ts`. The runner fans out to
+ * Claude with the matching `prompts/atelier/<id>.v1.md`. There is no
+ * mock fallback — see runner.ts for the live dispatch.
  */
 
 import { eq } from "drizzle-orm";
@@ -221,8 +221,7 @@ defineCapability({
 
 // -------------------------------------------------------------------------
 // Agent-backed verbs (compose, redline, dpa). Their `run` enqueues an
-// agent run via the runner; in `ATELIER_MOCK_AGENTS` dev mode the
-// runner returns a stub immediately.
+// agent run via the runner, which dispatches to Claude.
 // -------------------------------------------------------------------------
 
 async function enqueueAgent(
@@ -246,7 +245,6 @@ async function enqueueAgent(
         status: "queued",
         entityType: args.entityType,
         entityId: args.entityId,
-        mock: process.env.ATELIER_MOCK_AGENTS === "1",
       },
     },
   };

@@ -9,7 +9,7 @@
  * returns the period's basis_pct + recognised_amount + ending deferred
  * balance + the input shape it observed for traceability.
  *
- * In production (`ATELIER_MOCK_AGENTS != "1"`) the same compute is
+ * In production the same compute is
  * still executed — Recognizer is RULE-BASED, not LLM-driven, because
  * ASC 606 / IFRS 15 reasoning must be auditable + idempotent. The
  * `runAgent` lifecycle wrapper still records the run in
