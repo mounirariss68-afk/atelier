@@ -143,15 +143,11 @@ export async function ensureCapabilityEmbeddings(): Promise<void> {
 
 async function bootstrapOnce(): Promise<void> {
   if (bootstrapDone) return;
-  try {
-    await ensureCapabilityEmbeddings();
-    bootstrapDone = true;
-  } catch {
-    // Don't block the turn loop on a backfill failure — fall through
-    // to the cosine-skip path which keeps everything that has *some*
-    // embedding row, falls back to alphabetical for the rest.
-    bootstrapDone = true;
-  }
+  // Embedding bootstrap is required for live capability ranking. Any
+  // failure here (missing API key, upstream outage) must surface to
+  // the caller so the turn fails loudly — no silent degradation.
+  await ensureCapabilityEmbeddings();
+  bootstrapDone = true;
 }
 
 export interface RetrievedTools {
@@ -216,15 +212,12 @@ export async function retrieveCapabilities(args: {
   });
 
   const queryEmb = await embedText(args.query || "");
-  let rows: Array<{ toolName: string; vec: number[] }>;
-  try {
-    const all = await db.select().from(atelierCapabilityEmbeddings);
-    rows = all
-      .filter((r) => r.dim === queryEmb.dim)
-      .map((r) => ({ toolName: r.toolName, vec: r.vec as number[] }));
-  } catch {
-    rows = [];
-  }
+  // Capability-embedding fetch failures must propagate — silent
+  // fallbacks were deleted along with mock mode.
+  const all = await db.select().from(atelierCapabilityEmbeddings);
+  const rows: Array<{ toolName: string; vec: number[] }> = all
+    .filter((r) => r.dim === queryEmb.dim)
+    .map((r) => ({ toolName: r.toolName, vec: r.vec as number[] }));
 
   const eligibleNames = new Set(eligible.map((t) => t.name));
   const selected = new Set<string>();

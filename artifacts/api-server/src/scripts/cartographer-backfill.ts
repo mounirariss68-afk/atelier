@@ -48,7 +48,7 @@ async function backfillOne(accountId: string): Promise<void> {
   }
   console.log(`[backfill] ${accountId} (${a.name}) — calling cartographer…`);
 
-  const { output, source, warning } = await runAccountCartographer({
+  const { output } = await runAccountCartographer({
     accountId: a.id,
     accountName: a.name,
     accountSector: a.sector,
@@ -59,9 +59,8 @@ async function backfillOne(accountId: string): Promise<void> {
     focusOpportunityId: null,
   });
 
-  if (warning) console.warn(`[backfill] ${accountId} warning: ${warning}`);
   console.log(
-    `[backfill] ${accountId} source=${source} priorities=${output.account.strategicPriorities?.length ?? 0} signals=${output.sourceSignals?.length ?? 0} dms=${output.decisionMakers?.length ?? 0}`,
+    `[backfill] ${accountId} priorities=${output.account.strategicPriorities?.length ?? 0} signals=${output.sourceSignals?.length ?? 0} dms=${output.decisionMakers?.length ?? 0}`,
   );
 
   const incomingSignals = output.sourceSignals ?? [];
@@ -195,10 +194,8 @@ async function backfillOne(accountId: string): Promise<void> {
         priorityCount: priorityTexts.length,
         contactsInserted: inserted,
         contactsUpdated: updated,
-        source,
-        warning: warning ?? null,
       },
-      payloadSummary: `Backfill ${source === "claude" ? "wrote" : "(mock) wrote"} ${priorityTexts.length} priorities, ${incomingSignals.length} signals, ${inserted}+${updated} contacts for ${a.name}.`,
+      payloadSummary: `Backfill wrote ${priorityTexts.length} priorities, ${incomingSignals.length} signals, ${inserted}+${updated} contacts for ${a.name}.`,
     });
 
     console.log(

@@ -221,7 +221,7 @@ router.get("/cli/turns/:id/recording", async (req, res) => {
   // messages) yet — call out the gap explicitly so consumers don't
   // assume forensic fidelity. What we DO have is the persisted SSE
   // frames + tool_calls + plan_json + step_results, which are enough
-  // to replay the deterministic-mock model path end-to-end.
+  // to replay the live model path end-to-end.
   res.json({
     turnId: turn.id,
     sessionId: turn.sessionId,

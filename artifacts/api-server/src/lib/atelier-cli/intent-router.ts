@@ -219,7 +219,11 @@ export async function classifyIntentTyped(
         .join("")
         .trim();
       const m = raw.match(/\{[\s\S]*\}/);
-      if (!m) return fallback(resp.model ?? HAIKU_MODEL, (resp.usage.input_tokens + resp.usage.output_tokens * 5) / 1_000_000, resp.usage.input_tokens, resp.usage.output_tokens);
+      if (!m) {
+        throw new Error(
+          `intent-router: classifier model ${resp.model ?? HAIKU_MODEL} returned no parseable JSON object — refusing to silently fall back.`,
+        );
+      }
       const parsed = JSON.parse(m[0]) as Partial<{
         verb: IntentVerb;
         kind: IntentKind;
@@ -250,8 +254,13 @@ export async function classifyIntentTyped(
     } finally {
       clearTimeout(timer);
     }
-  } catch {
-    return fallback(`${HAIKU_MODEL} (fallback)`);
+  } catch (err) {
+    // Live classifier is required — surface the failure so the caller
+    // can show an explicit error instead of silently routing on the
+    // deterministic heuristic. The mock-mode fallback was deleted.
+    throw new Error(
+      `intent-router: live classifier (${HAIKU_MODEL}) call failed — ${(err as { message?: string })?.message ?? String(err)}`,
+    );
   }
 }
 

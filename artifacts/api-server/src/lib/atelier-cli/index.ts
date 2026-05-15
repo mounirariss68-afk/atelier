@@ -1172,6 +1172,8 @@ interface ClaudeStep {
   tokensOut: number;
   /** Raw stop_reason for diagnostics. */
   stopReason?: string | null;
+  /** Real model identifier returned by the Anthropic API for this step. */
+  model: string;
 }
 
 /** Abstract model dispatch (live Sonnet/Haiku via Anthropic SDK). */
@@ -1292,7 +1294,7 @@ async function modelStep(args: {
     // stop reason (e.g. max_tokens), still execute the tool — but mark
     // aborted on the next iteration if the model bails.
     if (toolCall && stop === "aborted") stop = "tool_use";
-    return { text: text.trim(), toolCall, stop, costUsd, tokensIn, tokensOut, stopReason: resp.stop_reason ?? null };
+    return { text: text.trim(), toolCall, stop, costUsd, tokensIn, tokensOut, stopReason: resp.stop_reason ?? null, model: model || chosenModel };
   } finally {
     clearTimeout(timer);
   }
@@ -1302,9 +1304,9 @@ async function modelStep(args: {
 // Task #338 — Natural-language → catalog routing.
 //
 // `routePromptToCapability` is a pure heuristic that maps an unstructured
-// prompt to a capability + extracted input. Used by the mock model and
-// available to live mode as a pre-filter / fallback. Each branch picks
-// the first thing that matches and stops — keep cheap+deterministic.
+// prompt to a capability + extracted input. Available as a pre-filter
+// for the live model. Each branch picks the first thing that matches
+// and stops — keep cheap+deterministic.
 // =====================================================================
 
 export interface RoutedCapability {
@@ -2791,7 +2793,7 @@ export async function runTurn(
       totalCost += claudeStep.costUsd;
       totalIn += claudeStep.tokensIn;
       totalOut += claudeStep.tokensOut;
-      lastModel = process.env.ATELIER_CLI_MODEL ?? lastModel ?? "claude";
+      lastModel = claudeStep.model;
 
       if (claudeStep.text) {
         record({ type: "narration", data: { text: claudeStep.text, step } });

@@ -4845,7 +4845,6 @@ export async function runCashApplicationMatcher(
       "claude-haiku-4-5",
       "You are the Cash Application Matcher. Return a ranked list of invoice candidates for the receipt.",
       JSON.stringify(input),
-      () => ruleBasedCashMatch(input),
     );
     const conf: "green" | "amber" | "red" =
       value.candidates[0]?.confidence >= 0.85 ? "green" :
