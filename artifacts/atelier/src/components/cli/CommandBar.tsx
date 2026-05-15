@@ -62,6 +62,7 @@ import {
 import { emitCliOpened } from "./telemetry";
 import type { CliCapability, CliClarification, CliLocale, CliTurn } from "./types";
 import { ToolResultCardList } from "./ResultCardRenderers";
+import { Markdown } from "./Markdown";
 
 const MAX_INPUT_CHARS = 4000;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -1179,18 +1180,30 @@ function TurnBody({
 }) {
   return (
     <div className="space-y-2.5">
-      {turn.trace.length > 0 && (
-        <div
-          className="bg-bg-elevate border border-border rounded-md px-3 py-2 text-[12px] font-mono text-text-mute space-y-0.5"
-          data-testid="cli-trace"
-        >
-          {turn.trace.slice(-8).map((line, i) => (
-            <div key={i} className="leading-snug">
-              {line.text}
-            </div>
-          ))}
-        </div>
-      )}
+      {turn.trace.length > 0 && (() => {
+        const recent = turn.trace.slice(-12);
+        const breadcrumbs = recent.filter((l) => l.kind !== "narration");
+        const narrations = recent.filter((l) => l.kind === "narration");
+        return (
+          <div
+            className="bg-bg-elevate border border-border rounded-md px-3 py-2 space-y-2"
+            data-testid="cli-trace"
+          >
+            {breadcrumbs.length > 0 && (
+              <div className="text-[12px] font-mono text-text-mute space-y-0.5">
+                {breadcrumbs.slice(-6).map((line, i) => (
+                  <div key={`b${i}`} className="leading-snug">
+                    {line.text}
+                  </div>
+                ))}
+              </div>
+            )}
+            {narrations.length > 0 && (
+              <Markdown text={narrations.map((n) => n.text).join("\n\n")} />
+            )}
+          </div>
+        );
+      })()}
 
       {turn.status === "streaming" && (
         <div
