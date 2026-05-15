@@ -119,8 +119,14 @@ export const LENSES: readonly LensDef[] = [
     shortcutKey: "5",
     sections: [
       { id: "overview", label: "Overview", href: "/finance" },
-      { id: "ledger", label: "Ledger", href: "/ledger" },
-      { id: "economics", label: "Economics", href: "/ledger/firm-economics" },
+      { id: "entities", label: "Entities", href: "/finance/entities" },
+      { id: "ledger", label: "Record", href: "/finance/ledger" },
+      { id: "billing", label: "Bill & Collect", href: "/finance/billing" },
+      { id: "payables", label: "Pay", href: "/finance/payables" },
+      { id: "close", label: "Close", href: "/finance/close" },
+      { id: "plan", label: "Plan", href: "/finance/plan" },
+      { id: "reports", label: "Report", href: "/finance/reports" },
+      { id: "comply", label: "Comply", href: "/finance/comply" },
     ],
   },
 ] as const;

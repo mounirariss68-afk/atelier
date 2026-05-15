@@ -35,6 +35,76 @@ function listHook<T>(key: string, path: string) {
 }
 
 // ============================================================
+// Finance — Entities backbone (Task #372)
+// ============================================================
+export interface FinanceEntityRow {
+  id: string;
+  legalName: string;
+  shortName: string;
+  kind: "parent" | "subsidiary" | "branch" | "jv";
+  parentId: string | null;
+  status: "active" | "dormant" | "winding_down";
+  country: "SA" | "AE" | "GB";
+  jurisdiction: string;
+  baseCurrency: string;
+  reportingCurrency: string;
+  incorporatedOn: string;
+  commercialRegistration: { number: string; authority: string; expiresOn: string };
+  taxIds: { vat: string | null; corporate: string | null; whtAgent: string | null };
+  eInvoicing: Array<{
+    scheme: "ZATCA" | "FTA" | "Peppol" | "HMRC_MTD";
+    id: string;
+    status: "live" | "sandbox" | "pending";
+    enrolledAt: string;
+  }>;
+  tradeLicenses: Array<{
+    id: string;
+    authority: string;
+    number: string;
+    issuedOn: string;
+    expiresOn: string;
+    status: "active" | "expiring_soon" | "expired" | "renewal_in_progress";
+    scope: string;
+  }>;
+  bankAccounts: Array<{
+    id: string;
+    bank: string;
+    iban: string;
+    currency: string;
+    purpose: "operating" | "tax" | "payroll" | "escrow";
+    signatories: string[];
+    primary: boolean;
+  }>;
+  signatories: Array<{
+    id: string;
+    name: string;
+    role: string;
+    authorityLevel: "A" | "B" | "C";
+    resolutionRef: string | null;
+  }>;
+  fiscal: {
+    yearEnd: string;
+    vatPeriod: "monthly" | "quarterly";
+    ctPeriod: "annual";
+    nextClose: string;
+    nextVatFiling: string;
+    nextCtFiling: string;
+  };
+  interCompany: Array<{
+    counterpartyId: string;
+    relationship: "subsidiary" | "branch" | "shareholder" | "service_provider";
+    tpMethod: "TNMM" | "CUP" | "Cost+" | "ResalePrice";
+    intercoServiceFeePct: number | null;
+  }>;
+  staffCount: number;
+  notes: string;
+}
+export const useFinanceEntities = listHook<FinanceEntityRow>(
+  "finance-entities",
+  "/finance/entities",
+);
+
+// ============================================================
 // Press
 // ============================================================
 export interface EditorialCalendarRow {

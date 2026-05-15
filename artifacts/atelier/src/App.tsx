@@ -72,6 +72,13 @@ import CodexContract from "@/pages/CodexContract";
 import {
   FinanceLensHome,
 } from "@/pages/lens/LensPlaceholder";
+// Task #372 — Finance lens (Entities · Record · Bill & Collect · Pay ·
+// Close · Plan · Report · Comply). Entities is the new backbone; the
+// other sections re-mount existing wallet/ledger/forecast/pricing/reports
+// pages under canonical /finance/* paths with old URLs preserved.
+import FinanceHome from "@/pages/finance/FinanceHome";
+import FinanceEntities from "@/pages/finance/FinanceEntities";
+import FinanceSection from "@/pages/finance/FinanceSection";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
 // the bare /agents catalogue with a lifecycle ribbon; the catalogue
 // itself re-mounts under /agents/monitor and runs under
@@ -376,9 +383,13 @@ function Router() {
             `/finance` itself becomes the Finance lens shell-phase
             placeholder; rate-card sections move under `/finance/rates`
             and the legacy `/pricing` alias keeps resolving. */}
-        <Route path="/finance/rates" component={Pricing} />
-        <Route path="/finance/rates/:section" component={Pricing} />
-        <Route path="/finance/:section" component={Pricing} />
+        {/* Task #372 — `/finance/rates*` is a back-compat alias for the
+            new canonical `/finance/billing/rate-cards`; the bare `/pricing`
+            deep-link also still resolves. */}
+        <Route path="/finance/rates">{() => <Redirect to="/finance/billing/rate-cards" />}</Route>
+        <Route path="/finance/rates/:section">{() => <Redirect to="/finance/billing/rate-cards" />}</Route>
+        <Route path="/finance/billing/rate-cards" component={Pricing} />
+        <Route path="/finance/billing/rate-cards/:section" component={Pricing} />
         <Route path="/pricing" component={Pricing} />
         {/* Task #368 — Manage shell lens homes for all five lenses, with
             catch-alls (`/:rest*`) so deep links under a lens prefix
@@ -478,7 +489,44 @@ function Router() {
         <Route path="/partners" component={PartnersIndex} />
         <Route path="/partners/:section" component={PartnersIndex} />
         <Route path="/agents" component={AgentsLensHome} />
-        <Route path="/finance" component={FinanceLensHome} />
+        {/* Task #372 — Finance lens. Eight sections: Entities · Record ·
+            Bill & Collect · Pay · Close · Plan · Report · Comply. The
+            Entities backbone is the new ground-truth list of legal
+            entities (CR, tax IDs, e-invoicing, licences, banks,
+            signatories, fiscal calendar, IC/TP); other sections are
+            landing pages that link into the existing wallet / ledger /
+            forecast / pricing / reports surfaces re-mounted under
+            canonical /finance/* paths. */}
+        <Route path="/finance" component={FinanceHome} />
+        <Route path="/finance/entities" component={FinanceEntities} />
+        <Route path="/finance/entities/:id" component={FinanceEntities} />
+        <Route path="/finance/ledger">{() => <FinanceSection sectionId="ledger" />}</Route>
+        <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
+        <Route path="/finance/payables">{() => <FinanceSection sectionId="payables" />}</Route>
+        <Route path="/finance/close">{() => <FinanceSection sectionId="close" />}</Route>
+        <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>
+        <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
+        <Route path="/finance/comply">{() => <FinanceSection sectionId="comply" />}</Route>
+        {/* Re-mounts of existing pages under canonical /finance/* paths.
+            The old URLs (/wallet/*, /ledger/firm-economics etc, /forecast,
+            /reports) keep working — internal links throughout the app
+            still target them — but the canonical Finance lens path is the
+            new one. */}
+        <Route path="/finance/reports/firm-economics" component={FirmEconomics} />
+        <Route path="/finance/reports/utilization" component={Utilization} />
+        <Route path="/finance/reports/utilization/:personId" component={Utilization} />
+        <Route path="/finance/reports/engagement-economics/:engagementId" component={EngagementEconomics} />
+        <Route path="/finance/reports/saved" component={Reports} />
+        <Route path="/finance/plan/long-range">
+          {() => {
+            const search = typeof window !== "undefined" ? window.location.search : "";
+            const params = new URLSearchParams(search);
+            const by = params.get("by");
+            const target = `/clients/opportunities?view=forecast${by ? `&by=${encodeURIComponent(by)}` : ""}`;
+            return <Redirect to={target} />;
+          }}
+        </Route>
+        <Route path="/finance/_lens" component={FinanceLensHome} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
