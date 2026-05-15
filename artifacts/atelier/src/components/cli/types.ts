@@ -148,6 +148,19 @@ export interface CliTurn {
    * loop runs on a re-opened session. Informational only. */
   proactiveRecap?: CliProactiveRecap;
   /**
+   * Task #495 — explicit auto-navigation hint emitted by the
+   * orchestrator's `propose_write` capability. `when:"on_propose"`
+   * lands the user on a context page while reviewing the confirm
+   * card; `when:"on_commit"` lands them on the result page after a
+   * successful write. Pure Q&A / disambiguation / refusals leave
+   * this null and the chat does not auto-navigate.
+   */
+  navigateTo?: { path: string; when: "on_propose" | "on_commit" } | null;
+  /** Last path we already auto-navigated to for this turn — guards
+   * against firing the same destination twice (e.g. propose and
+   * commit phases both pointing at the same opportunity page). */
+  navigatedTo?: string | null;
+  /**
    * Task #348 — captured `tool_result` frame payloads in arrival order.
    * Each entry is the raw `data` returned by a CLI capability so the
    * client can render a real chart (kpi_strip, ranked_list,

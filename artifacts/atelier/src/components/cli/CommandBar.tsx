@@ -81,14 +81,26 @@ export interface CommandBarProps {
 }
 
 export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [locale, setLocale] = React.useState<CliLocale>(() => {
     if (typeof window === "undefined") return "en";
     return (window.localStorage.getItem("atelier-cli-locale") as CliLocale) ?? "en";
   });
   const dir = locale === "ar" ? "rtl" : "ltr";
 
-  const cli = useCli({ locale });
+  // Task #495 — let the chat agent auto-navigate to the relevant
+  // screen when it proposes or commits a write. CommandBar is
+  // mounted in the Shell above the route Switch, so navigation
+  // does not unmount the chat panel and the active stream stays
+  // alive across page changes.
+  const handleCliNavigate = React.useCallback(
+    (path: string) => {
+      if (typeof path !== "string" || !path.startsWith("/")) return;
+      setLocation(path);
+    },
+    [setLocation],
+  );
+  const cli = useCli({ locale, onNavigate: handleCliNavigate });
   const pageCtx = React.useMemo(() => derivePageContext(location), [location]);
   const cliCtx = React.useContext(CliContext);
   // Register the bar's turn-injector with the context so deep-link

@@ -48,6 +48,13 @@ interface SubmitArgs {
 interface UseCliOptions {
   locale: CliLocale;
   onAsync?: (jobId: string, turnId: string) => void;
+  /**
+   * Task #495 — invoked when a frame for the active turn carries a
+   * `navigateTo` hint that hasn't yet been applied. The hook calls
+   * this once per unique destination per turn so the chat can drive
+   * the app to the relevant screen automatically.
+   */
+  onNavigate?: (path: string, when: "on_propose" | "on_commit") => void;
 }
 
 export interface UseCliReturn {
@@ -156,8 +163,26 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       };
       const tool = d.tool ?? "tool";
       const ok = d.ok !== false;
+      // Task #495 — propose_write commit-phase carries a navigateTo
+      // hint inside its result data; lift it onto the turn so the
+      // hook's stream consumer can fire onNavigate.
+      let nextNavigateTo = turn.navigateTo ?? null;
+      if (tool === "propose_write" && ok && d.data && typeof d.data === "object") {
+        const dd = d.data as { navigateTo?: { path?: string; when?: string } | null };
+        if (
+          dd.navigateTo &&
+          typeof dd.navigateTo.path === "string" &&
+          (dd.navigateTo.when === "on_propose" || dd.navigateTo.when === "on_commit")
+        ) {
+          nextNavigateTo = {
+            path: dd.navigateTo.path,
+            when: dd.navigateTo.when,
+          };
+        }
+      }
       return {
         ...turn,
+        navigateTo: nextNavigateTo,
         trace: [
           ...turn.trace,
           {
@@ -197,12 +222,28 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       };
     }
     case "needs_confirmation": {
-      const d = frame.data as unknown as CliPendingConfirmation;
+      const d = frame.data as unknown as CliPendingConfirmation & {
+        diff?: { navigateTo?: { path?: string; when?: string } | null } | null;
+      };
+      // Task #495 — propose_write embeds a proposal-time navigateTo
+      // inside `diff.navigateTo`. Lift it onto the turn so the chat
+      // can land on the context page while the user reviews the
+      // confirm card.
+      let nextNavigateTo = turn.navigateTo ?? null;
+      const diffNav = d.diff?.navigateTo;
+      if (
+        diffNav &&
+        typeof diffNav.path === "string" &&
+        (diffNav.when === "on_propose" || diffNav.when === "on_commit")
+      ) {
+        nextNavigateTo = { path: diffNav.path, when: diffNav.when };
+      }
       return {
         ...turn,
         status: "needs_confirmation",
         pending: d,
         proposedPlan: d.steps ?? turn.proposedPlan,
+        navigateTo: nextNavigateTo,
       };
     }
     case "needs_clarification": {
@@ -344,7 +385,7 @@ function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
 }
 
 export function useCli(opts: UseCliOptions): UseCliReturn {
-  const { locale, onAsync } = opts;
+  const { locale, onAsync, onNavigate } = opts;
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [turns, setTurns] = useState<CliTurn[]>([]);
   const [current, setCurrent] = useState<CliTurn | null>(null);
@@ -422,7 +463,24 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
             // Pull sessionId from any frame that carries it.
             const sid = (frame.data as { sessionId?: string }).sessionId;
             if (sid && !sessionId) setSessionId(sid);
+            const prevNavPath = live.navigatedTo ?? null;
             live = applyFrame(live, frame);
+            // Task #495 — fire the consumer's auto-navigation
+            // callback exactly once per unique destination per turn.
+            // Skipped when the stream is no longer active so a stale
+            // turn can't yank the user around after a newer submit.
+            if (
+              isActive() &&
+              live.navigateTo &&
+              live.navigateTo.path !== prevNavPath
+            ) {
+              try {
+                onNavigate?.(live.navigateTo.path, live.navigateTo.when);
+              } catch {
+                /* swallow — navigation must never break the stream */
+              }
+              live = { ...live, navigatedTo: live.navigateTo.path };
+            }
             if (!isActive()) continue;
             setCurrent(live);
             setTurns((t) => {
@@ -454,7 +512,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         setTurns((t) => [live, ...t.filter((x) => x.clientTurnKey !== clientTurnKey)]);
       }
     },
-    [sessionId, onAsync],
+    [sessionId, onAsync, onNavigate],
   );
 
   const submit = useCallback(

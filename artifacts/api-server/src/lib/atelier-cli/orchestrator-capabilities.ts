@@ -146,6 +146,106 @@ const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
 };
 
 // ---------------------------------------------------------------------
+// Task #495 — UI navigation map. `ROUTE_HINTS` above describe HTTP
+// dispatch routes for the confirm card; this map computes the actual
+// in-app SPA path the chat UI should jump to so the user lands on
+// the relevant screen automatically (proposal-time → context page,
+// commit-time → result page).
+//
+// The resolver consumes the (verb, kind, targetId, payload) on the
+// proposal phase and additionally `resultData` on the commit phase
+// (where the new entity's id lives in `result.id`). Returns null when
+// no meaningful destination is known — the caller treats that as
+// "do not navigate", preserving today's behavior for pure Q&A,
+// disambiguation, and refusals.
+// ---------------------------------------------------------------------
+function resolveNavPath(args: {
+  verb: WriteVerb;
+  kind: WriteKind;
+  targetId: string | null;
+  payload: Record<string, unknown>;
+  resultData?: unknown;
+}): string | null {
+  const { verb, kind, targetId, payload, resultData } = args;
+  const dataObj =
+    resultData && typeof resultData === "object"
+      ? (resultData as Record<string, unknown>)
+      : {};
+  const pickStr = (key: string): string | null => {
+    const fromResult = dataObj[key];
+    if (typeof fromResult === "string" && fromResult) return fromResult;
+    const fromPayload = payload[key];
+    if (typeof fromPayload === "string" && fromPayload) return fromPayload;
+    return null;
+  };
+  const resultId = typeof dataObj.id === "string" ? dataObj.id : null;
+  const id = resultId ?? targetId ?? null;
+  const engagementId = pickStr("engagementId");
+  const opportunityId = pickStr("opportunityId");
+  const accountId = pickStr("accountId");
+  switch (kind) {
+    case "account":
+      if (id) return `/accounts/${id}`;
+      return null;
+    case "opportunity":
+      if (id) return `/opportunities/${id}`;
+      return null;
+    case "contact":
+      // No standalone contact page; land on the parent account if known.
+      if (accountId) return `/accounts/${accountId}`;
+      return null;
+    case "engagement":
+      if (id) return `/clients/deliver/engagements/${id}`;
+      return null;
+    case "deliverable": {
+      const deliverableId = id;
+      if (engagementId && deliverableId)
+        return `/clients/deliver/engagements/${engagementId}/deliverables/${deliverableId}`;
+      if (engagementId) return `/clients/deliver/engagements/${engagementId}`;
+      return null;
+    }
+    case "expense":
+      if (id) return `/wallet/expenses/${id}`;
+      if (verb === "create") return "/wallet/expenses/new";
+      return null;
+    case "invoice":
+      if (id) return `/wallet/invoices/${id}`;
+      if (verb === "create") return "/wallet/invoices";
+      return null;
+    case "contract":
+      if (id) return `/codex/contracts/${id}`;
+      return "/codex";
+    case "agent_design":
+      if (id) return `/agents/design/${id}`;
+      return null;
+    case "timesheet_entry": {
+      // Write payloads in this codebase use `weekId` (the timesheet
+      // week row id), while the route param is named `:weekIso`. The
+      // PeopleTime page accepts either form, so pass through whichever
+      // key we have. For update flows we may only know the entry's
+      // targetId — fall back to the generic week list in that case.
+      const personId = pickStr("personId");
+      const weekKey = pickStr("weekIso") ?? pickStr("weekId");
+      if (personId && weekKey) return `/people/time/${personId}/${weekKey}`;
+      return "/people/time";
+    }
+    case "raid_item":
+    case "proposal":
+    case "pov":
+    case "change_order":
+      // These live inside an opportunity / engagement workspace.
+      if (engagementId) return `/clients/deliver/engagements/${engagementId}`;
+      if (opportunityId) return `/opportunities/${opportunityId}`;
+      return null;
+    case "win_loss_debrief":
+      if (opportunityId) return `/opportunities/${opportunityId}/win-loss`;
+      return null;
+    default:
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------------
 // 1. resolve_entity
 // ---------------------------------------------------------------------
 
@@ -1224,9 +1324,28 @@ defineCapability({
     const dispatchToolName = dispatchTarget(verb as DispatchVerb, kind);
 
     if (input.confirm !== true) {
+      // Task #495 — at proposal time, compute the context page the
+      // user should be looking at while reviewing the confirm card
+      // (e.g. the opportunity detail page when proposing a stage
+      // transition, or the timesheet edit screen when updating an
+      // entry). Skipped for `create` when no targetId/payload hints
+      // exist — there is no destination yet.
+      const proposeNavPath = resolveNavPath({ verb, kind, targetId, payload });
+      const navigateTo = proposeNavPath
+        ? { path: proposeNavPath, when: "on_propose" as const }
+        : null;
       return {
         ok: true,
-        data: { stage: "preview", verb, kind, targetId, payload, route, dispatchTool: dispatchToolName ?? null },
+        data: {
+          stage: "preview",
+          verb,
+          kind,
+          targetId,
+          payload,
+          route,
+          dispatchTool: dispatchToolName ?? null,
+          navigateTo,
+        },
         confirmation: {
           summary,
           diff: {
@@ -1236,6 +1355,7 @@ defineCapability({
             payload,
             route,
             dispatchTool: dispatchToolName ?? null,
+            navigateTo,
             note: dispatchToolName
               ? `On commit, the orchestrator runs ${dispatchToolName} in-process with the payload.`
               : "On commit, the client posts to the route above with the payload — no in-process dispatch is registered for this (verb, kind).",
@@ -1285,10 +1405,26 @@ defineCapability({
           void mirrorEntityEmbedding(ctx.persona.orgId, kind, newId, label, summary);
         }
       }
+      // Task #495 — on a successful commit, compute the destination
+      // page so the chat client can auto-navigate. Falls back to null
+      // (no navigation) when the (verb, kind) has no known UI route.
+      const commitNavPath = out.ok
+        ? resolveNavPath({ verb, kind, targetId, payload, resultData: out.data })
+        : null;
+      const commitNavigateTo = commitNavPath
+        ? { path: commitNavPath, when: "on_commit" as const }
+        : null;
       return {
         ok: out.ok,
         data: out.ok
-          ? { stage: "committed", verb, kind, dispatchTool: dispatchToolName, result: out.data ?? null }
+          ? {
+              stage: "committed",
+              verb,
+              kind,
+              dispatchTool: dispatchToolName,
+              result: out.data ?? null,
+              navigateTo: commitNavigateTo,
+            }
           : { stage: "failed", verb, kind, dispatchTool: dispatchToolName, errorCode: out.errorCode, errorMessage: out.errorMessage },
         errorCode: out.ok ? undefined : out.errorCode ?? "dispatch_failed",
         errorMessage: out.ok ? undefined : out.errorMessage ?? `dispatch ${dispatchToolName} failed`,
