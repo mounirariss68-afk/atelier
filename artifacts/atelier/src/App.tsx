@@ -92,6 +92,9 @@ import FinanceComplyControls from "@/pages/finance/FinanceComplyControls";
 import FinanceComplyStatutory from "@/pages/finance/FinanceComplyStatutory";
 import FinanceComplyTp from "@/pages/finance/FinanceComplyTp";
 import FinanceComplyInsurance from "@/pages/finance/FinanceComplyInsurance";
+// Task #415 — Finance Plan: 13-week cash forecast and backlog/pipeline coverage.
+import FinancePlanCash13w from "@/pages/finance/FinancePlanCash13w";
+import FinancePlanBacklog from "@/pages/finance/FinancePlanBacklog";
 // Task #370 — Agents lens (Design → Retire). The lens home replaces
 // the bare /agents catalogue with a lifecycle ribbon; the catalogue
 // itself re-mounts under /agents/monitor and runs under
@@ -524,6 +527,8 @@ function Router() {
         <Route path="/finance/payables/wht" component={FinancePayablesWht} />
         <Route path="/finance/payables/subcontractors" component={FinancePayablesSubcontractors} />
         <Route path="/finance/close">{() => <FinanceSection sectionId="close" />}</Route>
+        <Route path="/finance/plan/cash-13w" component={FinancePlanCash13w} />
+        <Route path="/finance/plan/backlog" component={FinancePlanBacklog} />
         <Route path="/finance/plan">{() => <FinanceSection sectionId="plan" />}</Route>
         <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
         {/* Task #419 — Comply registers (controls + SoD, statutory, TP, insurance).

@@ -214,6 +214,160 @@ export const useInsurancePolicies = listHook<InsurancePolicyRow>(
 );
 
 // ============================================================
+// Finance — Plan / FP&A (Task #415, Wave 3)
+// ============================================================
+export type ReceiptSource = "open_ar" | "milestone" | "other";
+export type DisbursementCategory =
+  | "payroll" | "vendor" | "tax_vat" | "tax_ct" | "lease" | "debt_service" | "other";
+export interface CashLineRow {
+  id: string;
+  direction: "in" | "out";
+  weekIndex: number;
+  weekStart: string;
+  entityId: string;
+  currency: string;
+  amount: number;
+  amountUsd: number;
+  amountInPresentation: number;
+  source?: ReceiptSource;
+  category?: DisbursementCategory;
+  counterparty?: string;
+  vendor?: string;
+  label: string;
+  detail?: string;
+  confidence: "high" | "medium" | "low";
+  expectedDate: string;
+  locked: boolean;
+  override?: {
+    lockedAmount?: number;
+    lockedDate?: string;
+    locked: boolean;
+    note: string;
+    byUserName: string;
+    at: string;
+  };
+}
+export interface CashWeekRow {
+  weekIndex: number;
+  weekStart: string;
+  openingBalance: number;
+  expectedIn: number;
+  expectedOut: number;
+  netMovement: number;
+  closingBalance: number;
+  inBySource: Record<ReceiptSource, number>;
+  outByCategory: Record<DisbursementCategory, number>;
+  belowMinCash: boolean;
+  belowCovenant: boolean;
+  lines: CashLineRow[];
+}
+export interface CashForecastResp {
+  asOf: string;
+  presentationCurrency: string;
+  entityFilter: string | null;
+  consolidated: boolean;
+  openingBalance: number;
+  minCashLine: number;
+  covenantLine: number | null;
+  weeks: CashWeekRow[];
+  breaches: { weekIndex: number; kind: "min_cash" | "covenant"; gapAmount: number }[];
+  topReceipts: CashLineRow[];
+  topDisbursements: CashLineRow[];
+  daysOfCash: number;
+  totalIn: number;
+  totalOut: number;
+}
+// Direct API base — Atelier proxy mounts the api-server at /api/*; the
+// vite-base-prefixed `get()` above swallows real responses behind the SPA
+// fallback for paths that pass through the artifact router.
+const PLAN_API_BASE = "/api/atelier";
+async function planGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${PLAN_API_BASE}${path}`, {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`Atelier API ${path} failed: ${res.status}`);
+  return (await res.json()) as T;
+}
+export function useCash13w(presentation: string, entity: string | null) {
+  const q = useQuery<CashForecastResp>({
+    queryKey: ["atelier-v5", "cash13w", presentation, entity ?? "consolidated"],
+    queryFn: () => planGet<CashForecastResp>(
+      `/finance/plan/cash-13w?currency=${presentation}${entity ? `&entity=${entity}` : ""}`,
+    ),
+    staleTime: 15_000,
+  });
+  return q;
+}
+
+export interface BacklogTotals {
+  backlogUsd: number;
+  weightedPipelineUsd: number;
+  backlogPlusWeightedUsd: number;
+  next2qPlanUsd: number;
+  coverageRatio: number;
+  backlogCoverageMonths: number;
+}
+export interface BacklogResp {
+  asOf: string;
+  presentationCurrency: string;
+  entityFilter: string | null;
+  totals: BacklogTotals;
+  byEntity: { entityId: string; entityName: string; backlogUsd: number; weightedUsd: number }[];
+  bySector: { sector: string; backlogUsd: number; weightedUsd: number }[];
+  byPartner: { partner: string; backlogUsd: number; weightedUsd: number }[];
+  byStage: { stage: string; weightedUsd: number; rawUsd: number; count: number }[];
+  topDeals: { id: string; name: string; client: string; partner: string; stage: string; rawUsd: number; weightedUsd: number; expectedClose: string }[];
+  contracts: { id: string; client: string; sector: string; partner: string; entityId: string; remainingUsd: number; endsOn: string; quartersOfRunway: number }[];
+  revenuePlan: { quarterLabel: string; startsOn: string; endsOn: string; planUsd: number }[];
+  targetCoverage: number;
+}
+export function useBacklogCoverage(presentation: string, entity: string | null) {
+  const q = useQuery<BacklogResp>({
+    queryKey: ["atelier-v5", "backlog", presentation, entity ?? "consolidated"],
+    queryFn: () => planGet<BacklogResp>(
+      `/finance/plan/backlog?currency=${presentation}${entity ? `&entity=${entity}` : ""}`,
+    ),
+    staleTime: 30_000,
+  });
+  return q;
+}
+
+export interface PlanEntityRow {
+  id: string;
+  shortName: string;
+  baseCurrency: string;
+  openingBalanceLocal: number;
+  minCashPolicyLocal: number;
+  covenantFloorLocal: number | null;
+}
+export function usePlanEntities(): PlanEntityRow[] {
+  const q = useQuery<{ items: PlanEntityRow[] }>({
+    queryKey: ["atelier-v5", "plan-entities"],
+    queryFn: () => planGet<{ items: PlanEntityRow[] }>("/finance/plan/entities"),
+    staleTime: 30_000,
+  });
+  return q.data?.items ?? [];
+}
+
+export interface CashAuditRow {
+  id: string;
+  ts: string;
+  actor: string;
+  action: string;
+  target: string;
+  payload: Record<string, unknown>;
+}
+export function useCash13wAudit() {
+  const q = useQuery<{ items: CashAuditRow[] }>({
+    queryKey: ["atelier-v5", "cash13w-audit"],
+    queryFn: () => planGet<{ items: CashAuditRow[] }>("/finance/plan/cash-13w/audit"),
+    staleTime: 5_000,
+  });
+  return q;
+}
+
+// ============================================================
 // Press
 // ============================================================
 export interface EditorialCalendarRow {

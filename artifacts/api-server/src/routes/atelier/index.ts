@@ -72,6 +72,7 @@ import v5Routes from "./v5Routes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
 import financeComplyRoutes from "./financeComplyRoutes";
+import financePlanRoutes from "./financePlanRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
 import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
@@ -226,6 +227,9 @@ router.use(financePayablesRoutes);
 // insurance register. All read-only seed; mounts under /api/atelier
 // with persona gating mirroring financeEntitiesRoutes.
 router.use(financeComplyRoutes);
+// Task #415 — Finance Plan: 13-week direct-method cash forecast and
+// backlog/pipeline coverage. Seed-only data.
+router.use(financePlanRoutes);
 // Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
 // Retire) backed by Postgres; replaces the client-side seed module.
 router.use(agentsLensRoutes);

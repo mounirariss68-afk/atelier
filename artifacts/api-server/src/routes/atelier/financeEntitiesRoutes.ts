@@ -107,7 +107,7 @@ interface FinanceEntity {
   notes: string;
 }
 
-const ENTITIES: FinanceEntity[] = [
+export const ENTITIES_SEED: FinanceEntity[] = [
   {
     id: "fe_aico_uk",
     legalName: "AICo Group Holdings Ltd",
@@ -281,14 +281,14 @@ router.get("/finance/entities", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   if (denyRecruiter(me, res)) return;
-  res.json({ items: ENTITIES });
+  res.json({ items: ENTITIES_SEED });
 });
 
 router.get("/finance/entities/:id", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   if (denyRecruiter(me, res)) return;
-  const row = ENTITIES.find((e) => e.id === req.params.id);
+  const row = ENTITIES_SEED.find((e) => e.id === req.params.id);
   if (!row) return res.status(404).json({ error: "not-found" });
   res.json({ entity: row });
 });

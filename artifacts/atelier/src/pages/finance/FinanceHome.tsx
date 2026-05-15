@@ -18,12 +18,21 @@ import {
   useStatutoryFilings,
   useInsurancePolicies,
   useInternalControls,
+  useCash13w,
+  useBacklogCoverage,
   type FinanceEntityRow,
   type StatutoryFilingRow,
   type InsurancePolicyRow,
   type InternalControlRow,
 } from "@/lib/v5-hooks";
 import { ArrowRight } from "lucide-react";
+
+function fmtUsd(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `USD ${(abs / 1_000_000).toFixed(2)}m`;
+  if (abs >= 1_000) return `USD ${(abs / 1_000).toFixed(0)}k`;
+  return `USD ${abs.toFixed(0)}`;
+}
 
 interface SectionTile {
   id: string;
@@ -233,6 +242,8 @@ export default function FinanceHome() {
     () => buildNextActions(entities, filings, insurance, controls),
     [entities, filings, insurance, controls],
   );
+  const { data: cash } = useCash13w("USD", null);
+  const { data: backlog } = useBacklogCoverage("USD", null);
 
   const counts = React.useMemo(() => {
     const licCount = entities.reduce((n, e) => n + e.tradeLicenses.length, 0);
@@ -268,6 +279,70 @@ export default function FinanceHome() {
 
       <div className="container-atelier py-10 grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          <section data-testid="finance-plan-kpis">
+            <SectionHead headline="Plan — at a glance" />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+              <Link href="/finance/plan/cash-13w">
+                <Card className={`p-4 cursor-pointer hover:border-gold/40 transition-colors h-full ${cash && cash.breaches.length > 0 ? "border-danger/40 bg-danger/5" : ""}`} data-testid="kpi-tile-days-of-cash">
+                  <Eyebrow>Days of cash</Eyebrow>
+                  <div className="text-3xl font-display mt-1">{cash ? cash.daysOfCash : "—"}</div>
+                  <div className="text-xs text-text-mute mt-1">
+                    Opening {cash ? fmtUsd(cash.openingBalance) : "—"} · {cash ? `${cash.breaches.length} cash gap${cash.breaches.length === 1 ? "" : "s"}` : "loading…"}
+                  </div>
+                </Card>
+              </Link>
+              <Link href="/finance/plan/cash-13w">
+                <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-receipts-13w">
+                  <Eyebrow>Receipts (13w)</Eyebrow>
+                  <div className="text-3xl font-display mt-1 text-success">{cash ? fmtUsd(cash.totalIn) : "—"}</div>
+                  <div className="text-xs text-text-mute mt-1">vs. {cash ? fmtUsd(cash.totalOut) : "—"} disbursements</div>
+                </Card>
+              </Link>
+              <Link href="/finance/plan/backlog">
+                <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-backlog-months">
+                  <Eyebrow>Backlog coverage</Eyebrow>
+                  <div className="text-3xl font-display mt-1">{backlog ? `${backlog.totals.backlogCoverageMonths.toFixed(1)} mo` : "—"}</div>
+                  <div className="text-xs text-text-mute mt-1">Signed backlog {backlog ? fmtUsd(backlog.totals.backlogUsd) : "—"}</div>
+                </Card>
+              </Link>
+              <Link href="/finance/plan/backlog">
+                <Card className={`p-4 cursor-pointer hover:border-gold/40 transition-colors h-full ${backlog && backlog.totals.coverageRatio < backlog.targetCoverage ? "border-amber-500/40 bg-amber-500/5" : ""}`} data-testid="kpi-tile-coverage-ratio">
+                  <Eyebrow>Plan coverage</Eyebrow>
+                  <div className="text-3xl font-display mt-1">{backlog ? `${backlog.totals.coverageRatio.toFixed(2)}×` : "—"}</div>
+                  <div className="text-xs text-text-mute mt-1">
+                    Target {backlog ? `${backlog.targetCoverage.toFixed(1)}×` : "—"} · weighted pipeline {backlog ? fmtUsd(backlog.totals.weightedPipelineUsd) : "—"}
+                  </div>
+                </Card>
+              </Link>
+            </div>
+            {cash && (cash.topReceipts.length > 0 || cash.topDisbursements.length > 0) && (
+              <div className="grid md:grid-cols-2 gap-3 mt-3">
+                <Card className="p-3" data-testid="kpi-top-receipts">
+                  <div className="text-[11px] font-mono uppercase text-text-faint mb-2">Top expected receipts</div>
+                  <ul className="space-y-1.5 text-sm">
+                    {cash.topReceipts.slice(0, 3).map((l) => (
+                      <li key={l.id} className="flex items-baseline justify-between gap-2">
+                        <span className="text-text truncate">{l.label}</span>
+                        <span className="font-mono text-success whitespace-nowrap">{fmtUsd(l.amountInPresentation)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+                <Card className="p-3" data-testid="kpi-top-disbursements">
+                  <div className="text-[11px] font-mono uppercase text-text-faint mb-2">Top expected disbursements</div>
+                  <ul className="space-y-1.5 text-sm">
+                    {cash.topDisbursements.slice(0, 3).map((l) => (
+                      <li key={l.id} className="flex items-baseline justify-between gap-2">
+                        <span className="text-text truncate">{l.label}</span>
+                        <span className="font-mono text-warning whitespace-nowrap">−{fmtUsd(l.amountInPresentation).replace("-", "")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </div>
+            )}
+          </section>
+
           <section>
             <SectionHead headline="Sections" />
             <div className="grid sm:grid-cols-2 gap-3 mt-3" data-testid="finance-section-ribbon">
