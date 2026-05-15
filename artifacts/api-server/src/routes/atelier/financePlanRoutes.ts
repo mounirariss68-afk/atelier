@@ -364,7 +364,11 @@ function ensureCommitsHydrated(): Promise<void> {
           .from(atelierFinancePlanCommits)
           .orderBy(desc(atelierFinancePlanCommits.committedAt))
           .limit(1);
-        setCommittedScenarioId(rows[0]?.scenarioId ?? null);
+        // Map sentinel "uncommit" rows back to null explicitly so the engine ref
+        // stays in sync without relying on setCommittedScenarioId's unknown-id
+        // rejection as a side effect.
+        const latestId = rows[0]?.scenarioId ?? null;
+        setCommittedScenarioId(latestId === UNCOMMIT_SENTINEL ? null : latestId);
       } catch (err) {
         commitsHydration = null;
         throw err;
@@ -377,23 +381,55 @@ void ensureCommitsHydrated().catch((err) => {
   console.error("[financePlanRoutes] failed to hydrate plan commits:", err);
 });
 
+// Sentinel scenarioId used when finance leadership explicitly clears the
+// committed forecast (DELETE /finance/plan/scenarios/commit). Stored as a
+// row in atelier_finance_plan_commits so the audit trail captures both
+// commit and uncommit events; treated as "no current commit" by the
+// engine + readers.
+const UNCOMMIT_SENTINEL = "__uncommitted__";
+const UNCOMMIT_LABEL = "Forecast unlocked";
+
+// Window (in days) within which a follow-on commit/uncommit is treated
+// as "churn" and visually flagged on the audit trail. Mid-period CFO
+// flips inside this window almost always warrant a variance note.
+export const COMMIT_CHURN_DAYS = 14;
+
 async function readCommitHistory(limit = 50) {
   const rows = await db
     .select()
     .from(atelierFinancePlanCommits)
     .orderBy(desc(atelierFinancePlanCommits.committedAt))
     .limit(limit);
-  return rows.map((r) => ({
-    id: r.id,
-    scenarioId: r.scenarioId,
-    scenarioLabel: r.scenarioLabel,
-    periodLabel: r.periodLabel ?? "",
-    note: r.note ?? "",
-    byUserId: r.byUserId,
-    byUserName: r.byUserName,
-    byRole: r.byRole,
-    committedAt: (r.committedAt instanceof Date ? r.committedAt : new Date(r.committedAt)).toISOString(),
-  }));
+  // rows are ordered newest → oldest. A row is "superseded with churn"
+  // when the *next* (newer) commit/uncommit landed within COMMIT_CHURN_DAYS.
+  return rows.map((r, i) => {
+    const at = r.committedAt instanceof Date ? r.committedAt : new Date(r.committedAt);
+    const newer = i > 0 ? rows[i - 1] : null;
+    let supersededByKind: "commit" | "uncommit" | null = null;
+    let supersededWithinDays: number | null = null;
+    if (newer) {
+      const newerAt = newer.committedAt instanceof Date ? newer.committedAt : new Date(newer.committedAt);
+      const days = Math.max(0, Math.floor((newerAt.getTime() - at.getTime()) / (1000 * 60 * 60 * 24)));
+      supersededWithinDays = days;
+      supersededByKind = newer.scenarioId === UNCOMMIT_SENTINEL ? "uncommit" : "commit";
+    }
+    const isUncommit = r.scenarioId === UNCOMMIT_SENTINEL;
+    return {
+      id: r.id,
+      kind: (isUncommit ? "uncommit" : "commit") as "commit" | "uncommit",
+      scenarioId: isUncommit ? null : r.scenarioId,
+      scenarioLabel: isUncommit ? UNCOMMIT_LABEL : r.scenarioLabel,
+      periodLabel: r.periodLabel ?? "",
+      note: r.note ?? "",
+      byUserId: r.byUserId,
+      byUserName: r.byUserName,
+      byRole: r.byRole,
+      committedAt: at.toISOString(),
+      supersededByKind,
+      supersededWithinDays,
+      churn: supersededWithinDays != null && supersededWithinDays <= COMMIT_CHURN_DAYS,
+    };
+  });
 }
 
 interface CommitInfo {
@@ -415,7 +451,7 @@ async function readCurrentCommit(): Promise<CommitInfo | null> {
     .orderBy(desc(atelierFinancePlanCommits.committedAt))
     .limit(1);
   const r = rows[0];
-  if (!r) return null;
+  if (!r || r.scenarioId === UNCOMMIT_SENTINEL) return null;
   return {
     scenarioId: r.scenarioId,
     scenarioLabel: r.scenarioLabel,
@@ -949,19 +985,25 @@ router.post("/finance/plan/scenarios/commit", async (req, res) => {
   if (!isFinanceLeadership(me)) {
     return res.status(403).json({ error: "forbidden", message: "Finance leadership only." });
   }
-  const body = req.body as { scenarioId?: string; note?: string; periodLabel?: string };
-  if (!body?.scenarioId || typeof body.scenarioId !== "string") {
-    return res.status(400).json({ error: "invalid", message: "scenarioId required" });
-  }
-  const scenario = FPA_SCENARIOS.find((s) => s.id === body.scenarioId);
-  if (!scenario) {
-    return res.status(400).json({ error: "invalid", message: "unknown scenarioId" });
-  }
+  const body = (req.body ?? {}) as { scenarioId?: string | null; note?: string; periodLabel?: string };
   if (body.note !== undefined && (typeof body.note !== "string" || body.note.length > 1000)) {
     return res.status(400).json({ error: "invalid", message: "note must be a string ≤ 1000 chars" });
   }
   if (body.periodLabel !== undefined && (typeof body.periodLabel !== "string" || body.periodLabel.length > 64)) {
     return res.status(400).json({ error: "invalid", message: "periodLabel must be a string ≤ 64 chars" });
+  }
+  // POST with scenarioId: null is an alias for DELETE (uncommit). Lets clients
+  // that can't issue DELETE — or want to send a body with reason — use POST.
+  if (body.scenarioId === null) {
+    const out = await uncommitForecast(me, body.note, body.periodLabel);
+    return res.json(out);
+  }
+  if (!body?.scenarioId || typeof body.scenarioId !== "string") {
+    return res.status(400).json({ error: "invalid", message: "scenarioId required (or pass null to uncommit)" });
+  }
+  const scenario = FPA_SCENARIOS.find((s) => s.id === body.scenarioId);
+  if (!scenario) {
+    return res.status(400).json({ error: "invalid", message: "unknown scenarioId" });
   }
   await ensureCommitsHydrated();
   const nowIso = new Date().toISOString();
@@ -997,12 +1039,72 @@ router.post("/finance/plan/scenarios/commit", async (req, res) => {
   });
 });
 
+// DELETE /finance/plan/scenarios/commit — clear the committed forecast and
+// write an uncommit row to the audit trail. Variance reports + budget /
+// scenarios pages immediately stop locking to a committed scenario.
+async function uncommitForecast(me: Me, noteIn?: string, periodLabelIn?: string) {
+  await ensureCommitsHydrated();
+  const previousId = getCommittedScenarioId();
+  const nowIso = new Date().toISOString();
+  const id = `fpc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const periodLabel = periodLabelIn ?? "FY2026";
+  const note = noteIn ?? "";
+  await db.insert(atelierFinancePlanCommits).values({
+    id,
+    scenarioId: UNCOMMIT_SENTINEL,
+    scenarioLabel: UNCOMMIT_LABEL,
+    periodLabel,
+    note,
+    byUserId: me.id,
+    byUserName: me.name,
+    byRole: me.role,
+    committedAt: new Date(nowIso),
+  });
+  setCommittedScenarioId(null);
+  await persistAudit(me.name, "fpa.scenario.uncommit", previousId ?? "(none)", {
+    previousScenarioId: previousId, note, periodLabel, by: me.id, role: me.role,
+  });
+  return {
+    ok: true as const,
+    uncommitted: true as const,
+    previousScenarioId: previousId,
+    periodLabel,
+    note,
+    byUserName: me.name,
+    byRole: me.role,
+    committedAt: nowIso,
+  };
+}
+
+router.delete("/finance/plan/scenarios/commit", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  if (!isFinanceLeadership(me)) {
+    return res.status(403).json({ error: "forbidden", message: "Finance leadership only." });
+  }
+  const body = (req.body ?? {}) as { note?: string; periodLabel?: string };
+  if (body.note !== undefined && (typeof body.note !== "string" || body.note.length > 1000)) {
+    return res.status(400).json({ error: "invalid", message: "note must be a string ≤ 1000 chars" });
+  }
+  if (body.periodLabel !== undefined && (typeof body.periodLabel !== "string" || body.periodLabel.length > 64)) {
+    return res.status(400).json({ error: "invalid", message: "periodLabel must be a string ≤ 64 chars" });
+  }
+  const out = await uncommitForecast(me, body.note, body.periodLabel);
+  res.json(out);
+});
+
 router.get("/finance/plan/scenarios/commit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   const current = await readCurrentCommit();
   const history = await readCommitHistory(50);
-  res.json({ current, history, canCommit: isFinanceLeadership(me) });
+  res.json({
+    current,
+    history,
+    canCommit: isFinanceLeadership(me),
+    canUncommit: isFinanceLeadership(me) && current != null,
+    churnWindowDays: COMMIT_CHURN_DAYS,
+  });
 });
 
 router.get("/finance/plan/renewals", (req, res) => {

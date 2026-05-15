@@ -6,7 +6,7 @@ import * as React from "react";
 import { Link } from "wouter";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
-import { useCommitFpaScenario, useFpaCommittedScenario, useFpaScenarios, usePlanEntities } from "@/lib/v5-hooks";
+import { useCommitFpaScenario, useFpaCommittedScenario, useFpaScenarios, usePlanEntities, useUncommitFpaScenario } from "@/lib/v5-hooks";
 
 const PRESENTATION_CURRENCIES = ["USD", "GBP", "AED", "SAR", "EUR"];
 
@@ -31,12 +31,18 @@ export default function FinancePlanScenarios() {
   const { data } = useFpaScenarios(presentation, entityFilter);
   const commitsQ = useFpaCommittedScenario();
   const commitMut = useCommitFpaScenario();
+  const uncommitMut = useUncommitFpaScenario();
   const [commitFor, setCommitFor] = React.useState<string | null>(null);
   const [commitNote, setCommitNote] = React.useState("");
   const [commitErr, setCommitErr] = React.useState<string | null>(null);
+  const [showUncommit, setShowUncommit] = React.useState(false);
+  const [uncommitNote, setUncommitNote] = React.useState("");
+  const [uncommitErr, setUncommitErr] = React.useState<string | null>(null);
   const committedId = data?.committedScenarioId ?? null;
   const canCommit = !!data?.canCommit;
   const current = commitsQ.data?.current ?? data?.committedScenario ?? null;
+  const canUncommit = !!commitsQ.data?.canUncommit && current != null;
+  const churnWindowDays = commitsQ.data?.churnWindowDays ?? 14;
 
   async function submitCommit() {
     if (!commitFor) return;
@@ -46,6 +52,16 @@ export default function FinancePlanScenarios() {
       setCommitFor(null); setCommitNote("");
     } catch (e) {
       setCommitErr(e instanceof Error ? e.message : "Commit failed");
+    }
+  }
+
+  async function submitUncommit() {
+    setUncommitErr(null);
+    try {
+      await uncommitMut.mutateAsync({ note: uncommitNote.trim() || undefined });
+      setShowUncommit(false); setUncommitNote("");
+    } catch (e) {
+      setUncommitErr(e instanceof Error ? e.message : "Unlock failed");
     }
   }
 
@@ -75,13 +91,66 @@ export default function FinancePlanScenarios() {
           <>
             {current && (
               <Card className="p-3 border-gold/40 bg-gold/5" data-testid="committed-banner">
-                <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="text-xs font-mono">
                     <MonoChip tone="gold">COMMITTED</MonoChip>
                     <span className="ml-2 text-text">{current.scenarioLabel}</span>
                     <span className="text-text-mute"> · {current.periodLabel || "FY2026"} · committed by {current.byUserName} ({current.byRole}) on {new Date(current.committedAt).toLocaleDateString()}</span>
                   </div>
-                  {current.note && <div className="text-[11px] text-text-mute italic max-w-md truncate" title={current.note}>“{current.note}”</div>}
+                  <div className="flex items-center gap-3">
+                    {current.note && <div className="text-[11px] text-text-mute italic max-w-md truncate" title={current.note}>“{current.note}”</div>}
+                    {canUncommit && (
+                      <button
+                        type="button"
+                        onClick={() => { setShowUncommit(true); setUncommitNote(""); setUncommitErr(null); }}
+                        disabled={uncommitMut.isPending}
+                        className="text-[11px] font-mono px-2 py-1 rounded border border-gold/50 text-gold hover:bg-gold/10 disabled:opacity-50"
+                        data-testid="button-uncommit"
+                      >
+                        Unlock committed forecast
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {showUncommit && (
+              <Card className="p-4 border-gold/40" data-testid="uncommit-confirm">
+                <div className="text-sm font-display mb-2">
+                  Unlock the committed forecast?
+                </div>
+                <div className="text-xs text-text-mute mb-3">
+                  This reverts variance reporting (firm economics) and the budget page to no committed forecast (base case). The action is recorded in the audit trail and visible to all personas.
+                </div>
+                <textarea
+                  value={uncommitNote}
+                  onChange={(e) => setUncommitNote(e.target.value.slice(0, 1000))}
+                  placeholder="Reason (optional) — e.g. mid-period re-plan, board-pack revision."
+                  className="w-full bg-bg-elevate border border-border rounded p-2 text-xs font-mono"
+                  rows={2}
+                  data-testid="input-uncommit-note"
+                />
+                {uncommitErr && <div className="text-xs text-danger mt-2">{uncommitErr}</div>}
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={submitUncommit}
+                    disabled={uncommitMut.isPending}
+                    className="text-xs font-mono px-3 py-1.5 rounded bg-gold text-bg disabled:opacity-50"
+                    data-testid="button-uncommit-confirm"
+                  >
+                    {uncommitMut.isPending ? "Unlocking…" : "Confirm unlock"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowUncommit(false); setUncommitNote(""); setUncommitErr(null); }}
+                    disabled={uncommitMut.isPending}
+                    className="text-xs font-mono px-3 py-1.5 rounded border border-border"
+                    data-testid="button-uncommit-cancel"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </Card>
             )}
@@ -186,11 +255,15 @@ export default function FinancePlanScenarios() {
 
             {commitsQ.data && commitsQ.data.history.length > 0 && (
               <Card className="p-4">
-                <div className="font-mono text-xs uppercase text-text-faint mb-3">Commit audit trail</div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-mono text-xs uppercase text-text-faint">Commit audit trail</div>
+                  <div className="font-mono text-[10px] text-text-faint">Churn window: ≤ {churnWindowDays} days</div>
+                </div>
                 <table className="w-full text-xs" data-testid="commit-history">
                   <thead className="text-[10px] font-mono uppercase text-text-faint">
                     <tr className="border-b border-border-soft">
                       <th className="text-left px-2 py-1.5">When</th>
+                      <th className="text-left px-2 py-1.5">Action</th>
                       <th className="text-left px-2 py-1.5">Scenario</th>
                       <th className="text-left px-2 py-1.5">Period</th>
                       <th className="text-left px-2 py-1.5">By</th>
@@ -198,15 +271,29 @@ export default function FinancePlanScenarios() {
                     </tr>
                   </thead>
                   <tbody>
-                    {commitsQ.data.history.map((h) => (
-                      <tr key={h.id} className="border-t border-border-soft">
-                        <td className="px-2 py-1.5 font-mono">{new Date(h.committedAt).toLocaleString()}</td>
-                        <td className="px-2 py-1.5">{h.scenarioLabel} <span className="text-text-faint font-mono">({h.scenarioId})</span></td>
+                    {commitsQ.data.history.map((h) => {
+                      const isUncommit = h.kind === "uncommit";
+                      return (
+                      <tr key={h.id} className={`border-t border-border-soft ${h.churn ? "bg-danger/5" : ""}`} data-testid={`commit-history-row-${h.id}`}>
+                        <td className="px-2 py-1.5 font-mono whitespace-nowrap">{new Date(h.committedAt).toLocaleString()}</td>
+                        <td className="px-2 py-1.5">
+                          <MonoChip tone={isUncommit ? "amber" : "gold"}>{isUncommit ? "UNCOMMIT" : "COMMIT"}</MonoChip>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <span className={isUncommit ? "text-text-mute italic" : ""}>{h.scenarioLabel}</span>
+                          {h.scenarioId && <span className="text-text-faint font-mono"> ({h.scenarioId})</span>}
+                          {h.churn && (
+                            <MonoChip tone="red" className="ml-2" data-testid={`badge-churn-${h.id}`}>
+                              Superseded in {h.supersededWithinDays}d
+                            </MonoChip>
+                          )}
+                        </td>
                         <td className="px-2 py-1.5 font-mono">{h.periodLabel || "—"}</td>
                         <td className="px-2 py-1.5">{h.byUserName} <span className="text-text-faint font-mono">· {h.byRole}</span></td>
                         <td className="px-2 py-1.5 text-text-mute italic max-w-md truncate" title={h.note}>{h.note || "—"}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </Card>

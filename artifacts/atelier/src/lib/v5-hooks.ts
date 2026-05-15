@@ -576,14 +576,27 @@ export interface FpaScenarioComparison {
 // variants as the official forecast for the period. Read returns the most
 // recent commit + audit trail; mutation triggers a refetch of scenarios,
 // budget and firm-economics views so badges/banner update immediately.
-export interface FpaCommitHistoryRow extends FpaCommittedScenarioInfo {
+export interface FpaCommitHistoryRow {
   id: string;
+  kind: "commit" | "uncommit";
+  scenarioId: string | null;
+  scenarioLabel: string;
+  periodLabel: string;
+  note: string;
   byUserId: string;
+  byUserName: string;
+  byRole: string;
+  committedAt: string;
+  supersededByKind: "commit" | "uncommit" | null;
+  supersededWithinDays: number | null;
+  churn: boolean;
 }
 export interface FpaCommitResp {
   current: FpaCommittedScenarioInfo | null;
   history: FpaCommitHistoryRow[];
   canCommit: boolean;
+  canUncommit: boolean;
+  churnWindowDays: number;
 }
 export function useFpaCommittedScenario() {
   return useQuery<FpaCommitResp>({
@@ -600,6 +613,24 @@ export function useCommitFpaScenario() {
         "/finance/plan/scenarios/commit",
         input,
       ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-scenario-commit"] });
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-scenarios"] });
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-budget"] });
+      qc.invalidateQueries({ queryKey: ["atelier-v5", "ledger-utilization-firm"] });
+    },
+  });
+}
+// Uncommit (Task #468) — clears the committed forecast. Persists an
+// audit row so the variance / scenarios pages flag the unlock.
+export function useUncommitFpaScenario() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { note?: string; periodLabel?: string }) =>
+      deleteJson<{
+        ok: true; uncommitted: true; previousScenarioId: string | null;
+        periodLabel: string; note: string; byUserName: string; byRole: string; committedAt: string;
+      }>("/finance/plan/scenarios/commit", input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-scenario-commit"] });
       qc.invalidateQueries({ queryKey: ["atelier-v5", "fpa-scenarios"] });
@@ -1647,6 +1678,23 @@ export const usePayablesAudit = listHook<AuditEntryRow>("pay-audit", "/finance/p
 export async function postJson<T = unknown>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+  if (!res.ok) {
+    const msg = (parsed as { error?: string; detail?: string } | null)?.detail ?? (parsed as { error?: string } | null)?.error ?? `${res.status} ${res.statusText}`;
+    throw new Error(msg);
+  }
+  return parsed as T;
+}
+
+export async function deleteJson<T = unknown>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
     credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body ?? {}),
