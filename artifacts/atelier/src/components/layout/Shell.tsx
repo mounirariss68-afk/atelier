@@ -141,11 +141,9 @@ export function TopNav() {
           </Link>
           {/* Contextual lens-section tabs slot. Renders the active lens's
               default sections; each lens task replaces these with its own
-              lifecycle-shaped tabs. Hidden on Home so the universal
-              landing page stays uncluttered. */}
-          {!isHomeActive && (
-            <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
-          )}
+              lifecycle-shaped tabs. Always visible (including on Home) so
+              the menu doesn't appear empty on first load. */}
+          <LensSectionTabs userId={me?.id ?? null} role={me?.role ?? null} />
         </nav>
 
         <div className="ml-auto flex items-center gap-4">
