@@ -72,12 +72,14 @@ export default function WalletMargin() {
   };
 
   return (
-    <PageHero>
-      <SectionHead
-        eyebrow="Firm · Wallet"
-        headline="Margin & leakage"
-        lede="Firm-wide margin snapshots and leakage trail — where realised value drops below contracted scope."
-      />
+    <div className="min-h-screen bg-bg text-text">
+      <PageHero>
+        <SectionHead
+          eyebrow="Firm · Wallet"
+          headline="Margin & leakage"
+          lede="Firm-wide margin snapshots and leakage trail — where realised value drops below contracted scope."
+        />
+      </PageHero>
       <SubSectionTabs
         tabs={[
         { id: "expenses", label: "Expenses", href: "/wallet" },
@@ -87,8 +89,9 @@ export default function WalletMargin() {
       ]}
       />
 
+      <div className="px-6 py-4 max-w-7xl mx-auto">
       {firm && (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <Card className="p-4"><div className="text-xs text-text-mute uppercase">Revenue</div><div className="text-2xl mt-1 font-mono">{fmtUsd(firm.firm.revenueRecognised)}</div></Card>
           <Card className="p-4"><div className="text-xs text-text-mute uppercase">Direct cost</div><div className="text-2xl mt-1 font-mono">{fmtUsd(firm.firm.directCost)}</div></Card>
           <Card className="p-4"><div className="text-xs text-text-mute uppercase">Gross margin</div><div className="text-2xl mt-1 font-mono">{fmtUsd(firm.firm.grossMarginAmount)}</div><MonoChip tone={firm.firm.grossMarginPct >= 0.45 ? "green" : firm.firm.grossMarginPct >= 0.3 ? "amber" : "red"} className="mt-1">{fmtPct(firm.firm.grossMarginPct)}</MonoChip></Card>
@@ -140,6 +143,7 @@ export default function WalletMargin() {
           </table>
         </Card>
       )}
-    </PageHero>
+      </div>
+    </div>
   );
 }

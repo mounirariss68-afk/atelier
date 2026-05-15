@@ -141,12 +141,14 @@ export default function WalletRevrec() {
   const pendingPosting = postings.find((p) => p.periodLabel === period && !p.postedAt);
 
   return (
-    <PageHero>
-      <SectionHead
-        eyebrow="Firm · Wallet"
-        headline="Revenue recognition"
-        lede="Schedules, period postings, and lock state for ASC 606 / IFRS 15 revenue recognition."
-      />
+    <div className="min-h-screen bg-bg text-text">
+      <PageHero>
+        <SectionHead
+          eyebrow="Firm · Wallet"
+          headline="Revenue recognition"
+          lede="Schedules, period postings, and lock state for ASC 606 / IFRS 15 revenue recognition."
+        />
+      </PageHero>
       <SubSectionTabs
         tabs={[
         { id: "expenses", label: "Expenses", href: "/wallet" },
@@ -156,7 +158,8 @@ export default function WalletRevrec() {
       ]}
       />
 
-      <div className="flex items-end gap-3 mt-6">
+      <div className="px-6 py-4 max-w-7xl mx-auto">
+      <div className="flex items-end gap-3">
         <div>
           <label className="text-xs text-text-mute uppercase block mb-1">Period</label>
           <Input value={period} onChange={(e) => setPeriod(e.target.value)} placeholder="YYYY-MM" className="w-32" />
@@ -225,6 +228,7 @@ export default function WalletRevrec() {
           </table>
         )}
       </Card>
-    </PageHero>
+      </div>
+    </div>
   );
 }

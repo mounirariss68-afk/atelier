@@ -52,12 +52,14 @@ export default function WalletWip() {
   const isFinance = me?.role === "finance" || me?.role === "founding_partner" || me?.role === "partner";
 
   return (
-    <PageHero>
-      <SectionHead
-        eyebrow="Firm · Wallet"
-        headline="Work-in-progress"
-        lede="Unbilled WIP, recognised vs invoiced revenue, and per-engagement WIP snapshots."
-      />
+    <div className="min-h-screen bg-bg text-text">
+      <PageHero>
+        <SectionHead
+          eyebrow="Firm · Wallet"
+          headline="Work-in-progress"
+          lede="Unbilled WIP, recognised vs invoiced revenue, and per-engagement WIP snapshots."
+        />
+      </PageHero>
       <SubSectionTabs
         tabs={[
         { id: "expenses", label: "Expenses", href: "/wallet" },
@@ -67,8 +69,9 @@ export default function WalletWip() {
       ]}
       />
 
+      <div className="px-6 py-4 max-w-7xl mx-auto">
       {latest && (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <Card className="p-4"><div className="text-xs text-text-mute uppercase">Engagements</div><div className="text-2xl mt-1">{latest.firm.count}</div></Card>
           <Card className="p-4"><div className="text-xs text-text-mute uppercase">Recognised</div><div className="text-2xl mt-1 font-mono">{fmtUsd(latest.firm.recognised)}</div></Card>
           <Card className="p-4"><div className="text-xs text-text-mute uppercase">Invoiced</div><div className="text-2xl mt-1 font-mono">{fmtUsd(latest.firm.invoiced)}</div></Card>
@@ -117,6 +120,7 @@ export default function WalletWip() {
           ))}
         </ul>
       </Card>
-    </PageHero>
+      </div>
+    </div>
   );
 }
