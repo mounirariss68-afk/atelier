@@ -78,6 +78,11 @@ import {
   atelierPartnerFirmInvoices,
   atelierInvoiceLineDrafts,
   atelierVatRegister,
+  atelierEngagementBudget,
+  atelierEngagementCostToDate,
+  atelierEngagementEtc,
+  atelierEngagementPnlChangeOrder,
+  atelierEngagementPnlAudit,
 } from "@workspace/db";
 import { sql, eq, and, isNull, inArray } from "drizzle-orm";
 
@@ -4020,6 +4025,9 @@ async function main() {
   // ============================================================
   await seedV3Wallet();
 
+  // Task #430 — Engagement P&L durable persistence.
+  await seedEngagementPnl();
+
   console.log(
     `[seed-atelier] done — ${PERSONAS.length} personas · ${ACCOUNTS.length} accounts · ${AGENTS.length} agents · ${OPPORTUNITIES.length} opportunities · ${ENGAGEMENTS.length} engagements · ${ASSETS.length} assets · ${PANE_A.length} pane A · ${AGENT_RUNS.length} runs · ${WIN_THEMES.length} win themes · 1 debrief · 1 scheduled report · 1 salon workspace · ${SALON_USERS.length} salon users · 4 salon deliverables (3 published) · ${employeesToInsert.length} employees · ${CONTRACTORS.length} contractors · ${PARTNER_FIRMS.length} partner firms · ${PARTNER_RESOURCES.length} partner-firm resources · ${snapshotsToInsert.length} utilization snapshots.`,
   );
@@ -4399,6 +4407,306 @@ async function seedV3Wallet() {
   ]);
 
   console.log("[seed-atelier] v3 wallet (Task #260): 2 contractor + 1 partner-firm proposal + 1 invoice draft.");
+}
+
+// ============================================================
+// Task #430 — Engagement P&L durable state.
+// Mirrors the constants in
+// artifacts/api-server/src/data/atelier-engagement-pnl-seed.ts.
+// Kept inline here so this script does not import from the api-server
+// artifact (TypeScript project-references graph would not resolve).
+// ============================================================
+async function seedEngagementPnl() {
+  const today = "2026-05-15";
+  const daysAgo = (n: number): string => {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  await db.delete(atelierEngagementPnlAudit);
+  await db.delete(atelierEngagementPnlChangeOrder);
+  await db.delete(atelierEngagementEtc);
+  await db.delete(atelierEngagementCostToDate);
+  await db.delete(atelierEngagementBudget);
+
+  await db.insert(atelierEngagementBudget).values([
+    {
+      engagementId: "eng_tasama_bpo_phase1",
+      contractValueUsd: 2_400_000,
+      budgetLabourHours: 9_600,
+      budgetLabourCostUsd: 1_344_000,
+      budgetExpensesUsd: 96_000,
+      budgetSubsUsd: 240_000,
+      budgetAtCompletionUsd: 1_680_000,
+      baselinedAt: daysAgo(60),
+      partnerOwnerId: "p_mounir_ariss",
+      engagementLeadId: "p_layla_haddad",
+      sector: "BPO / Shared Services",
+    },
+    {
+      engagementId: "eng_dge_effortless_v1",
+      contractValueUsd: 720_000,
+      budgetLabourHours: 2_400,
+      budgetLabourCostUsd: 336_000,
+      budgetExpensesUsd: 24_000,
+      budgetSubsUsd: 60_000,
+      budgetAtCompletionUsd: 420_000,
+      baselinedAt: daysAgo(180),
+      partnerOwnerId: "p_mounir_ariss",
+      engagementLeadId: "p_omar_najjar",
+      sector: "Public Sector",
+    },
+    {
+      engagementId: "eng_aldrees_workshop",
+      contractValueUsd: 180_000,
+      budgetLabourHours: 480,
+      budgetLabourCostUsd: 72_000,
+      budgetExpensesUsd: 12_000,
+      budgetSubsUsd: 0,
+      budgetAtCompletionUsd: 84_000,
+      baselinedAt: daysAgo(45),
+      partnerOwnerId: "p_gokhan_guney",
+      engagementLeadId: "p_layla_haddad",
+      sector: "Industrial",
+    },
+    {
+      engagementId: "eng_nhc_ar_pilot",
+      contractValueUsd: 540_000,
+      budgetLabourHours: 1_800,
+      budgetLabourCostUsd: 252_000,
+      budgetExpensesUsd: 18_000,
+      budgetSubsUsd: 30_000,
+      budgetAtCompletionUsd: 300_000,
+      baselinedAt: daysAgo(20),
+      partnerOwnerId: "p_mounir_ariss",
+      engagementLeadId: "p_layla_haddad",
+      sector: "Real Estate",
+    },
+  ]);
+
+  await db.insert(atelierEngagementCostToDate).values([
+    {
+      engagementId: "eng_tasama_bpo_phase1",
+      asOf: today,
+      labourHoursToDate: 5_280,
+      labourCostToDateUsd: 792_000,
+      expensesToDateUsd: 61_000,
+      subsToDateUsd: 144_000,
+      costToDateUsd: 997_000,
+      revenueRecognisedToDateUsd: 1_320_000,
+      invoicedToDateUsd: 1_140_000,
+      cashCollectedToDateUsd: 760_000,
+      pctComplete: 0.55,
+    },
+    {
+      engagementId: "eng_dge_effortless_v1",
+      asOf: today,
+      labourHoursToDate: 2_350,
+      labourCostToDateUsd: 329_000,
+      expensesToDateUsd: 22_400,
+      subsToDateUsd: 58_500,
+      costToDateUsd: 409_900,
+      revenueRecognisedToDateUsd: 720_000,
+      invoicedToDateUsd: 720_000,
+      cashCollectedToDateUsd: 720_000,
+      pctComplete: 1.0,
+    },
+    {
+      engagementId: "eng_aldrees_workshop",
+      asOf: today,
+      labourHoursToDate: 460,
+      labourCostToDateUsd: 69_000,
+      expensesToDateUsd: 11_200,
+      subsToDateUsd: 0,
+      costToDateUsd: 80_200,
+      revenueRecognisedToDateUsd: 180_000,
+      invoicedToDateUsd: 180_000,
+      cashCollectedToDateUsd: 165_000,
+      pctComplete: 1.0,
+    },
+    {
+      engagementId: "eng_nhc_ar_pilot",
+      asOf: today,
+      labourHoursToDate: 720,
+      labourCostToDateUsd: 122_400,
+      expensesToDateUsd: 9_600,
+      subsToDateUsd: 18_000,
+      costToDateUsd: 150_000,
+      revenueRecognisedToDateUsd: 162_000,
+      invoicedToDateUsd: 108_000,
+      cashCollectedToDateUsd: 54_000,
+      pctComplete: 0.30,
+    },
+  ]);
+
+  await db.insert(atelierEngagementEtc).values([
+    {
+      engagementId: "eng_tasama_bpo_phase1",
+      method: "manual",
+      manualEtcUsd: 820_000,
+      rationale:
+        "Lead's bottoms-up: rollout workstream slipping ~3 weeks; held additional QA hours and one extra sub-engagement.",
+      updatedAtIso: daysAgo(7),
+      updatedByUserId: "p_layla_haddad",
+    },
+    {
+      engagementId: "eng_dge_effortless_v1",
+      method: "manual",
+      manualEtcUsd: 0,
+      rationale: "Closed engagement; nothing left to spend.",
+      updatedAtIso: daysAgo(20),
+      updatedByUserId: "p_omar_najjar",
+    },
+    {
+      engagementId: "eng_aldrees_workshop",
+      method: "manual",
+      manualEtcUsd: 0,
+      rationale: "Workshop closed; learning harvest captured.",
+      updatedAtIso: daysAgo(15),
+      updatedByUserId: "p_layla_haddad",
+    },
+    {
+      engagementId: "eng_nhc_ar_pilot",
+      method: "extrapolation",
+      manualEtcUsd: null,
+      rationale:
+        "Driver-based: CTD is 50% of BAC at only 30% complete — extrapolation forecasts a material over-run.",
+      updatedAtIso: daysAgo(3),
+      updatedByUserId: "p_layla_haddad",
+    },
+  ]);
+
+  type CoSeed = {
+    id: string;
+    engagementId: string;
+    number: string;
+    description: string;
+    valueUsd: number;
+    hoursImpact: number;
+    costImpactUsd: number;
+    status: "draft" | "submitted" | "approved" | "rejected";
+    submittedAtIso: string | null;
+    approvedAtIso: string | null;
+    rejectedAtIso: string | null;
+    raisedByUserId: string;
+    approvedByUserId: string | null;
+    rejectionReason: string | null;
+    createdAtIso: string;
+  };
+  const cos: CoSeed[] = [
+    {
+      id: "co_tasama_001",
+      engagementId: "eng_tasama_bpo_phase1",
+      number: "CO-001",
+      description:
+        "Add Arabic-language conversational coverage for top-3 services (out-of-scope in original SOW).",
+      valueUsd: 180_000,
+      hoursImpact: 720,
+      costImpactUsd: 100_800,
+      status: "approved",
+      submittedAtIso: daysAgo(35),
+      approvedAtIso: daysAgo(28),
+      rejectedAtIso: null,
+      raisedByUserId: "p_layla_haddad",
+      approvedByUserId: "p_mounir_ariss",
+      rejectionReason: null,
+      createdAtIso: daysAgo(40),
+    },
+    {
+      id: "co_tasama_002",
+      engagementId: "eng_tasama_bpo_phase1",
+      number: "CO-002",
+      description:
+        "Extend rollout cadence by two weeks to absorb client's holiday freeze; partner-firm subs to bridge.",
+      valueUsd: 60_000,
+      hoursImpact: 240,
+      costImpactUsd: 50_400,
+      status: "submitted",
+      submittedAtIso: daysAgo(4),
+      approvedAtIso: null,
+      rejectedAtIso: null,
+      raisedByUserId: "p_layla_haddad",
+      approvedByUserId: null,
+      rejectionReason: null,
+      createdAtIso: daysAgo(6),
+    },
+    {
+      id: "co_nhc_001",
+      engagementId: "eng_nhc_ar_pilot",
+      number: "CO-001",
+      description:
+        "Add CRM hand-off integration discovered during week-2 walkthrough; client agreed in steering.",
+      valueUsd: 72_000,
+      hoursImpact: 240,
+      costImpactUsd: 33_600,
+      status: "submitted",
+      submittedAtIso: daysAgo(2),
+      approvedAtIso: null,
+      rejectedAtIso: null,
+      raisedByUserId: "p_layla_haddad",
+      approvedByUserId: null,
+      rejectionReason: null,
+      createdAtIso: daysAgo(3),
+    },
+    {
+      id: "co_dge_001",
+      engagementId: "eng_dge_effortless_v1",
+      number: "CO-001",
+      description: "Carve-out of compliance dashboard scope; client deferred to phase 2.",
+      valueUsd: -45_000,
+      hoursImpact: -150,
+      costImpactUsd: -21_000,
+      status: "approved",
+      submittedAtIso: daysAgo(120),
+      approvedAtIso: daysAgo(115),
+      rejectedAtIso: null,
+      raisedByUserId: "p_omar_najjar",
+      approvedByUserId: "p_mounir_ariss",
+      rejectionReason: null,
+      createdAtIso: daysAgo(125),
+    },
+  ];
+  await db.insert(atelierEngagementPnlChangeOrder).values(cos);
+
+  // Seed initial audit rows derived from the change-order history so the
+  // trail is non-empty on first load (matches the prior in-memory seed).
+  const auditRows: Array<typeof atelierEngagementPnlAudit.$inferInsert> = [];
+  for (const co of cos) {
+    auditRows.push({
+      id: `aud_${co.id}_created`,
+      engagementId: co.engagementId,
+      atIso: co.createdAtIso,
+      actorUserId: co.raisedByUserId,
+      action: "change_order.created",
+      detail: `${co.number} drafted: ${co.description}`,
+    });
+    if (co.submittedAtIso) {
+      auditRows.push({
+        id: `aud_${co.id}_submitted`,
+        engagementId: co.engagementId,
+        atIso: co.submittedAtIso,
+        actorUserId: co.raisedByUserId,
+        action: "change_order.submitted",
+        detail: `${co.number} submitted for approval (value ${co.valueUsd >= 0 ? "+" : ""}$${co.valueUsd.toLocaleString()}).`,
+      });
+    }
+    if (co.status === "approved" && co.approvedAtIso) {
+      auditRows.push({
+        id: `aud_${co.id}_approved`,
+        engagementId: co.engagementId,
+        atIso: co.approvedAtIso,
+        actorUserId: co.approvedByUserId,
+        action: "change_order.approved",
+        detail: `${co.number} approved — engagement re-baselined.`,
+      });
+    }
+  }
+  await db.insert(atelierEngagementPnlAudit).values(auditRows);
+
+  console.log(
+    `[seed-atelier] engagement P&L (Task #430): 4 budgets, 4 cost snapshots, 4 ETCs, ${cos.length} change orders, ${auditRows.length} audit rows.`,
+  );
 }
 
 main()

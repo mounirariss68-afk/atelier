@@ -423,3 +423,114 @@ export const atelierInsuranceCertificate = pgTable(
     index("idx_atelier_insurance_kind").on(t.kind),
   ],
 );
+
+// ============================================================
+// ENGAGEMENT P&L (Task #430) — durable persistence for the
+// engagement budget / cost-to-date / ETC / change-order /
+// audit surfaces previously held in-memory.
+// ============================================================
+
+export const atelierEngagementBudget = pgTable(
+  "atelier_engagement_budget",
+  {
+    engagementId: text("engagement_id").primaryKey(),
+    orgId: ORG("org_id"),
+    contractValueUsd: doublePrecision("contract_value_usd").notNull().default(0),
+    budgetLabourHours: doublePrecision("budget_labour_hours").notNull().default(0),
+    budgetLabourCostUsd: doublePrecision("budget_labour_cost_usd").notNull().default(0),
+    budgetExpensesUsd: doublePrecision("budget_expenses_usd").notNull().default(0),
+    budgetSubsUsd: doublePrecision("budget_subs_usd").notNull().default(0),
+    budgetAtCompletionUsd: doublePrecision("budget_at_completion_usd").notNull().default(0),
+    baselinedAt: text("baselined_at").notNull().default(""),
+    partnerOwnerId: text("partner_owner_id").notNull().default(""),
+    engagementLeadId: text("engagement_lead_id").notNull().default(""),
+    sector: text("sector").notNull().default(""),
+    ...COMMON,
+  },
+  (t) => [index("idx_atelier_eng_budget_org").on(t.orgId)],
+);
+
+export const atelierEngagementCostToDate = pgTable(
+  "atelier_engagement_cost_to_date",
+  {
+    engagementId: text("engagement_id").primaryKey(),
+    orgId: ORG("org_id"),
+    asOf: text("as_of").notNull().default(""),
+    labourHoursToDate: doublePrecision("labour_hours_to_date").notNull().default(0),
+    labourCostToDateUsd: doublePrecision("labour_cost_to_date_usd").notNull().default(0),
+    expensesToDateUsd: doublePrecision("expenses_to_date_usd").notNull().default(0),
+    subsToDateUsd: doublePrecision("subs_to_date_usd").notNull().default(0),
+    costToDateUsd: doublePrecision("cost_to_date_usd").notNull().default(0),
+    revenueRecognisedToDateUsd: doublePrecision("revenue_recognised_to_date_usd").notNull().default(0),
+    invoicedToDateUsd: doublePrecision("invoiced_to_date_usd").notNull().default(0),
+    cashCollectedToDateUsd: doublePrecision("cash_collected_to_date_usd").notNull().default(0),
+    pctComplete: doublePrecision("pct_complete").notNull().default(0),
+    ...COMMON,
+  },
+  (t) => [index("idx_atelier_eng_ctd_org").on(t.orgId)],
+);
+
+export const atelierEngagementEtc = pgTable(
+  "atelier_engagement_etc",
+  {
+    engagementId: text("engagement_id").primaryKey(),
+    orgId: ORG("org_id"),
+    method: text("method").notNull().default("manual"), // 'manual' | 'extrapolation'
+    manualEtcUsd: doublePrecision("manual_etc_usd"),
+    rationale: text("rationale").notNull().default(""),
+    updatedAtIso: text("updated_at_iso").notNull().default(""),
+    updatedByUserId: text("updated_by_user_id"),
+    ...COMMON,
+  },
+  (t) => [index("idx_atelier_eng_etc_org").on(t.orgId)],
+);
+
+// Separate from atelier_change_order — that table models the L2C/CLM
+// change-order workflow (kind/summary/partner-approval/client-sig) and
+// is bound to the SOW/contract record. The Engagement P&L surface
+// uses a lighter shape (number / value / hours / cost-impact + simple
+// state machine) and re-baselines the budget on approval.
+export const atelierEngagementPnlChangeOrder = pgTable(
+  "atelier_engagement_pnl_change_order",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    number: text("number").notNull(),
+    description: text("description").notNull().default(""),
+    valueUsd: doublePrecision("value_usd").notNull().default(0),
+    hoursImpact: doublePrecision("hours_impact").notNull().default(0),
+    costImpactUsd: doublePrecision("cost_impact_usd").notNull().default(0),
+    status: text("status").notNull().default("draft"), // draft|submitted|approved|rejected
+    submittedAtIso: text("submitted_at_iso"),
+    approvedAtIso: text("approved_at_iso"),
+    rejectedAtIso: text("rejected_at_iso"),
+    raisedByUserId: text("raised_by_user_id").notNull().default(""),
+    approvedByUserId: text("approved_by_user_id"),
+    rejectionReason: text("rejection_reason"),
+    createdAtIso: text("created_at_iso").notNull().default(""),
+    ...COMMON,
+  },
+  (t) => [
+    index("idx_atelier_eng_pnl_co_engagement").on(t.engagementId),
+    index("idx_atelier_eng_pnl_co_status").on(t.status),
+  ],
+);
+
+export const atelierEngagementPnlAudit = pgTable(
+  "atelier_engagement_pnl_audit",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    engagementId: text("engagement_id").notNull(),
+    atIso: text("at_iso").notNull().default(""),
+    actorUserId: text("actor_user_id"),
+    action: text("action").notNull(),
+    detail: text("detail").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_eng_pnl_audit_engagement").on(t.engagementId),
+    index("idx_atelier_eng_pnl_audit_at").on(t.atIso),
+  ],
+);

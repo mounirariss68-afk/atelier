@@ -1,10 +1,11 @@
 /**
- * Atelier — Engagement P&L, EAC and ETC seed (Task #414, Wave 2; Task #431).
+ * Atelier — Engagement P&L, EAC and Change-Order data layer (Task #414, Wave 2;
+ * persisted in Postgres per Task #430).
  *
- * Demo-only data describing per-engagement budgets, costs incurred to date,
- * and estimate-to-complete (ETC). The state is held in-memory on the
- * server so the page can demonstrate re-baselining and RAG behaviour
- * end-to-end without touching the GL.
+ * Originally an in-memory seed; now backed by drizzle tables so that
+ * re-baselining (change-order approval) and ETC overrides survive an
+ * API server restart. The seed *data* (SEED_BUDGETS / SEED_COSTS / SEED_ETCS)
+ * is still defined here so it can be loaded by the `pnpm seed:atelier` script.
  *
  * Cost figures are at *cost rate* (not bill rate) — labour is loaded at
  * USD/hour cost, not the rack rate the client pays.
@@ -17,6 +18,16 @@
  * which the server calls when a CO transitions to `posted` so the
  * engagement budget gets re-baselined and the EAC engine recomputes.
  */
+
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import {
+  db,
+  atelierEngagementBudget,
+  atelierEngagementCostToDate,
+  atelierEngagementEtc,
+  atelierEngagementPnlChangeOrder,
+  atelierEngagementPnlAudit,
+} from "@workspace/db";
 
 export interface EngagementBudget {
   engagementId: string;
@@ -98,15 +109,19 @@ export interface AuditEntry {
   detail: string;
 }
 
-const today = "2026-05-15";
-const daysAgo = (n: number) => {
-  const d = new Date(today);
+// ============================================================
+// Initial demo seed (used by scripts/src/seed-atelier.ts and as a
+// fallback if the API encounters an empty table on first read)
+// ============================================================
+
+const SEED_TODAY = "2026-05-15";
+const seedDaysAgo = (n: number): string => {
+  const d = new Date(SEED_TODAY);
   d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString().slice(0, 10);
 };
 
-// ----- BUDGETS (baselines) -------------------------------------------
-const BUDGETS: EngagementBudget[] = [
+export const SEED_BUDGETS: EngagementBudget[] = [
   {
     engagementId: "eng_tasama_bpo_phase1",
     contractValueUsd: 2_400_000,
@@ -115,7 +130,7 @@ const BUDGETS: EngagementBudget[] = [
     budgetExpensesUsd: 96_000,
     budgetSubsUsd: 240_000,
     budgetAtCompletionUsd: 1_680_000, // labour + expenses + subs
-    baselinedAt: daysAgo(60),
+    baselinedAt: seedDaysAgo(60),
     partnerOwnerId: "p_mounir_ariss",
     engagementLeadId: "p_layla_haddad",
     sector: "BPO / Shared Services",
@@ -128,7 +143,7 @@ const BUDGETS: EngagementBudget[] = [
     budgetExpensesUsd: 24_000,
     budgetSubsUsd: 60_000,
     budgetAtCompletionUsd: 420_000,
-    baselinedAt: daysAgo(180),
+    baselinedAt: seedDaysAgo(180),
     partnerOwnerId: "p_mounir_ariss",
     engagementLeadId: "p_omar_najjar",
     sector: "Public Sector",
@@ -141,7 +156,7 @@ const BUDGETS: EngagementBudget[] = [
     budgetExpensesUsd: 12_000,
     budgetSubsUsd: 0,
     budgetAtCompletionUsd: 84_000,
-    baselinedAt: daysAgo(45),
+    baselinedAt: seedDaysAgo(45),
     partnerOwnerId: "p_gokhan_guney",
     engagementLeadId: "p_layla_haddad",
     sector: "Industrial",
@@ -154,18 +169,23 @@ const BUDGETS: EngagementBudget[] = [
     budgetExpensesUsd: 18_000,
     budgetSubsUsd: 30_000,
     budgetAtCompletionUsd: 300_000,
-    baselinedAt: daysAgo(20),
+    baselinedAt: seedDaysAgo(20),
     partnerOwnerId: "p_mounir_ariss",
     engagementLeadId: "p_layla_haddad",
     sector: "Real Estate",
   },
 ];
 
-// ----- COSTS-TO-DATE -------------------------------------------------
-const COSTS: EngagementCostToDate[] = [
+// Tuned so that:
+//   - tasama (amber) — over plan on hours; ETC will push EAC ~5–8% over BAC
+//   - dge (green) — closed/compounded, on-plan
+//   - aldrees (green) — closed/compounded, on-plan
+//   - nhc (red) — early-stage but already burning fast; ETC drives EAC
+//     ~18% over BAC and forecast margin slips well below planned 44%
+export const SEED_COSTS: EngagementCostToDate[] = [
   {
     engagementId: "eng_tasama_bpo_phase1",
-    asOf: today,
+    asOf: SEED_TODAY,
     labourHoursToDate: 5_280,
     labourCostToDateUsd: 792_000,
     expensesToDateUsd: 61_000,
@@ -178,7 +198,7 @@ const COSTS: EngagementCostToDate[] = [
   },
   {
     engagementId: "eng_dge_effortless_v1",
-    asOf: today,
+    asOf: SEED_TODAY,
     labourHoursToDate: 2_350,
     labourCostToDateUsd: 329_000,
     expensesToDateUsd: 22_400,
@@ -191,7 +211,7 @@ const COSTS: EngagementCostToDate[] = [
   },
   {
     engagementId: "eng_aldrees_workshop",
-    asOf: today,
+    asOf: SEED_TODAY,
     labourHoursToDate: 460,
     labourCostToDateUsd: 69_000,
     expensesToDateUsd: 11_200,
@@ -204,7 +224,7 @@ const COSTS: EngagementCostToDate[] = [
   },
   {
     engagementId: "eng_nhc_ar_pilot",
-    asOf: today,
+    asOf: SEED_TODAY,
     labourHoursToDate: 720,
     labourCostToDateUsd: 122_400,
     expensesToDateUsd: 9_600,
@@ -217,15 +237,14 @@ const COSTS: EngagementCostToDate[] = [
   },
 ];
 
-// ----- ETC (initial state) -------------------------------------------
-const ETCS: EngagementEtc[] = [
+export const SEED_ETCS: EngagementEtc[] = [
   {
     engagementId: "eng_tasama_bpo_phase1",
     method: "manual",
     manualEtcUsd: 820_000,
     rationale:
       "Lead's bottoms-up: rollout workstream slipping ~3 weeks; held additional QA hours and one extra sub-engagement.",
-    updatedAt: daysAgo(7),
+    updatedAt: seedDaysAgo(7),
     updatedByUserId: "p_layla_haddad",
   },
   {
@@ -233,7 +252,7 @@ const ETCS: EngagementEtc[] = [
     method: "manual",
     manualEtcUsd: 0,
     rationale: "Closed engagement; nothing left to spend.",
-    updatedAt: daysAgo(20),
+    updatedAt: seedDaysAgo(20),
     updatedByUserId: "p_omar_najjar",
   },
   {
@@ -241,7 +260,7 @@ const ETCS: EngagementEtc[] = [
     method: "manual",
     manualEtcUsd: 0,
     rationale: "Workshop closed; learning harvest captured.",
-    updatedAt: daysAgo(15),
+    updatedAt: seedDaysAgo(15),
     updatedByUserId: "p_layla_haddad",
   },
   {
@@ -250,45 +269,233 @@ const ETCS: EngagementEtc[] = [
     manualEtcUsd: null,
     rationale:
       "Driver-based: CTD is 50% of BAC at only 30% complete — extrapolation forecasts a material over-run.",
-    updatedAt: daysAgo(3),
+    updatedAt: seedDaysAgo(3),
     updatedByUserId: "p_layla_haddad",
   },
 ];
 
-// ----- AUDIT TRAIL (initial state) -----------------------------------
-const AUDIT: AuditEntry[] = [];
-function pushAudit(entry: AuditEntry): void {
-  AUDIT.unshift(entry);
-}
+export const SEED_CHANGE_ORDERS: any[] = [
+  {
+    id: "co_tasama_001",
+    engagementId: "eng_tasama_bpo_phase1",
+    number: "CO-001",
+    description:
+      "Add Arabic-language conversational coverage for top-3 services (out-of-scope in original SOW).",
+    valueUsd: 180_000,
+    hoursImpact: 720,
+    costImpactUsd: 100_800,
+    status: "posted",
+    submittedAt: seedDaysAgo(35),
+    approvedAt: seedDaysAgo(28),
+    rejectedAt: null,
+    raisedByUserId: "p_layla_haddad",
+    approvedByUserId: "p_mounir_ariss",
+    rejectionReason: null,
+    createdAt: seedDaysAgo(40),
+  },
+  {
+    id: "co_tasama_002",
+    engagementId: "eng_tasama_bpo_phase1",
+    number: "CO-002",
+    description:
+      "Extend rollout cadence by two weeks to absorb client's holiday freeze; partner-firm subs to bridge.",
+    valueUsd: 60_000,
+    hoursImpact: 240,
+    costImpactUsd: 50_400,
+    status: "partner_approved",
+    submittedAt: seedDaysAgo(4),
+    approvedAt: null,
+    rejectedAt: null,
+    raisedByUserId: "p_layla_haddad",
+    approvedByUserId: null,
+    rejectionReason: null,
+    createdAt: seedDaysAgo(6),
+  },
+  {
+    id: "co_nhc_001",
+    engagementId: "eng_nhc_ar_pilot",
+    number: "CO-001",
+    description:
+      "Add CRM hand-off integration discovered during week-2 walkthrough; client agreed in steering.",
+    valueUsd: 72_000,
+    hoursImpact: 240,
+    costImpactUsd: 33_600,
+    status: "partner_approved",
+    submittedAt: seedDaysAgo(2),
+    approvedAt: null,
+    rejectedAt: null,
+    raisedByUserId: "p_layla_haddad",
+    approvedByUserId: null,
+    rejectionReason: null,
+    createdAt: seedDaysAgo(3),
+  },
+  {
+    id: "co_dge_001",
+    engagementId: "eng_dge_effortless_v1",
+    number: "CO-001",
+    description: "Carve-out of compliance dashboard scope; client deferred to phase 2.",
+    valueUsd: -45_000,
+    hoursImpact: -150,
+    costImpactUsd: -21_000,
+    status: "posted",
+    submittedAt: seedDaysAgo(120),
+    approvedAt: seedDaysAgo(115),
+    rejectedAt: null,
+    raisedByUserId: "p_omar_najjar",
+    approvedByUserId: "p_mounir_ariss",
+    rejectionReason: null,
+    createdAt: seedDaysAgo(125),
+  },
+];
 
 // ============================================================
-// Read accessors
+// Row mappers (drizzle row ⇄ domain type)
 // ============================================================
-export function listBudgets(): EngagementBudget[] {
-  return BUDGETS;
+type BudgetRow = typeof atelierEngagementBudget.$inferSelect;
+type CostRow = typeof atelierEngagementCostToDate.$inferSelect;
+type EtcRow = typeof atelierEngagementEtc.$inferSelect;
+type CoRow = typeof atelierEngagementPnlChangeOrder.$inferSelect;
+type AuditRow = typeof atelierEngagementPnlAudit.$inferSelect;
+
+function budgetFromRow(r: BudgetRow): EngagementBudget {
+  return {
+    engagementId: r.engagementId,
+    contractValueUsd: r.contractValueUsd,
+    budgetLabourHours: r.budgetLabourHours,
+    budgetLabourCostUsd: r.budgetLabourCostUsd,
+    budgetExpensesUsd: r.budgetExpensesUsd,
+    budgetSubsUsd: r.budgetSubsUsd,
+    budgetAtCompletionUsd: r.budgetAtCompletionUsd,
+    baselinedAt: r.baselinedAt,
+    partnerOwnerId: r.partnerOwnerId,
+    engagementLeadId: r.engagementLeadId,
+    sector: r.sector,
+  };
 }
-export function getBudget(engagementId: string): EngagementBudget | null {
-  return BUDGETS.find((b) => b.engagementId === engagementId) ?? null;
+function costFromRow(r: CostRow): EngagementCostToDate {
+  return {
+    engagementId: r.engagementId,
+    asOf: r.asOf,
+    labourHoursToDate: r.labourHoursToDate,
+    labourCostToDateUsd: r.labourCostToDateUsd,
+    expensesToDateUsd: r.expensesToDateUsd,
+    subsToDateUsd: r.subsToDateUsd,
+    costToDateUsd: r.costToDateUsd,
+    revenueRecognisedToDateUsd: r.revenueRecognisedToDateUsd,
+    invoicedToDateUsd: r.invoicedToDateUsd,
+    cashCollectedToDateUsd: r.cashCollectedToDateUsd,
+    pctComplete: r.pctComplete,
+  };
 }
-export function listCosts(): EngagementCostToDate[] {
-  return COSTS;
+function etcFromRow(r: EtcRow): EngagementEtc {
+  return {
+    engagementId: r.engagementId,
+    method: (r.method === "extrapolation" ? "extrapolation" : "manual") as EtcMethod,
+    manualEtcUsd: r.manualEtcUsd ?? null,
+    rationale: r.rationale,
+    updatedAt: r.updatedAtIso,
+    updatedByUserId: r.updatedByUserId ?? null,
+  };
 }
-export function getCost(engagementId: string): EngagementCostToDate | null {
-  return COSTS.find((c) => c.engagementId === engagementId) ?? null;
+function coFromRow(r: CoRow): ChangeOrder {
+  return {
+    id: r.id,
+    engagementId: r.engagementId,
+    status: r.status as ChangeOrder["status"],
+    valueDeltaUsd: r.valueUsd,
+  };
 }
-export function listEtcs(): EngagementEtc[] {
-  return ETCS;
-}
-export function getEtc(engagementId: string): EngagementEtc | null {
-  return ETCS.find((e) => e.engagementId === engagementId) ?? null;
-}
-export function listAudit(engagementId?: string, limit = 100): AuditEntry[] {
-  const rows = engagementId ? AUDIT.filter((a) => a.engagementId === engagementId) : AUDIT;
-  return rows.slice(0, limit);
+function auditFromRow(r: AuditRow): AuditEntry {
+  return {
+    id: r.id,
+    engagementId: r.engagementId,
+    at: r.atIso,
+    actorUserId: r.actorUserId ?? null,
+    action: r.action,
+    detail: r.detail,
+  };
 }
 
+export async function listChangeOrders(engagementId?: string): Promise<ChangeOrder[]> {
+  const where = engagementId
+    ? and(
+        isNull(atelierEngagementPnlChangeOrder.deletedAt),
+        eq(atelierEngagementPnlChangeOrder.engagementId, engagementId),
+      )
+    : isNull(atelierEngagementPnlChangeOrder.deletedAt);
+  const rows = await db
+    .select()
+    .from(atelierEngagementPnlChangeOrder)
+    .where(where)
+    .orderBy(asc(atelierEngagementPnlChangeOrder.createdAtIso));
+  return rows.map(coFromRow);
+}
+export async function getChangeOrder(id: string): Promise<ChangeOrder | null> {
+  const [row] = await db
+    .select()
+    .from(atelierEngagementPnlChangeOrder)
+    .where(eq(atelierEngagementPnlChangeOrder.id, id))
+    .limit(1);
+  return row ? coFromRow(row) : null;
+}
 // ============================================================
-// Mutations (in-memory only)
+// Read accessors (drizzle-backed; async)
+// ============================================================
+export async function listBudgets(): Promise<EngagementBudget[]> {
+  const rows = await db
+    .select()
+    .from(atelierEngagementBudget)
+    .where(isNull(atelierEngagementBudget.deletedAt));
+  return rows.map(budgetFromRow);
+}
+export async function getBudget(engagementId: string): Promise<EngagementBudget | null> {
+  const [row] = await db
+    .select()
+    .from(atelierEngagementBudget)
+    .where(eq(atelierEngagementBudget.engagementId, engagementId))
+    .limit(1);
+  return row ? budgetFromRow(row) : null;
+}
+export async function listCosts(): Promise<EngagementCostToDate[]> {
+  const rows = await db
+    .select()
+    .from(atelierEngagementCostToDate)
+    .where(isNull(atelierEngagementCostToDate.deletedAt));
+  return rows.map(costFromRow);
+}
+export async function getCost(engagementId: string): Promise<EngagementCostToDate | null> {
+  const [row] = await db
+    .select()
+    .from(atelierEngagementCostToDate)
+    .where(eq(atelierEngagementCostToDate.engagementId, engagementId))
+    .limit(1);
+  return row ? costFromRow(row) : null;
+}
+export async function listEtcs(): Promise<EngagementEtc[]> {
+  const rows = await db
+    .select()
+    .from(atelierEngagementEtc)
+    .where(isNull(atelierEngagementEtc.deletedAt));
+  return rows.map(etcFromRow);
+}
+export async function getEtc(engagementId: string): Promise<EngagementEtc | null> {
+  const [row] = await db
+    .select()
+    .from(atelierEngagementEtc)
+    .where(eq(atelierEngagementEtc.engagementId, engagementId))
+    .limit(1);
+  return row ? etcFromRow(row) : null;
+}
+export async function listAudit(engagementId?: string, limit = 100): Promise<AuditEntry[]> {
+  const base = db.select().from(atelierEngagementPnlAudit);
+  const rows = await (engagementId
+    ? base.where(eq(atelierEngagementPnlAudit.engagementId, engagementId))
+    : base
+  )
+    .orderBy(desc(atelierEngagementPnlAudit.atIso), desc(atelierEngagementPnlAudit.createdAt))
+    .limit(limit);
+  return rows.map(auditFromRow);
+}
 // ============================================================
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -308,6 +515,20 @@ function nowIso(): string {
  */
 const APPLIED_POSTED_COS = new Set<string>();
 
+async function insertAudit(
+  entry: Omit<AuditEntry, "id" | "at"> & { id?: string; at?: string },
+  executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
+): Promise<void> {
+  await executor.insert(atelierEngagementPnlAudit).values({
+    id: entry.id ?? rid("aud"),
+    engagementId: entry.engagementId,
+    atIso: entry.at ?? nowIso(),
+    actorUserId: entry.actorUserId,
+    action: entry.action,
+    detail: entry.detail,
+  });
+}
+
 /**
  * Re-baseline an engagement when its change order transitions to `posted`.
  * Adds the value delta to contract value and marks the budget as
@@ -324,7 +545,7 @@ export type ApplyPostedChangeOrderResult =
   | { status: "already_applied" }
   | { status: "engagement_unknown" };
 
-export function applyPostedChangeOrder(args: {
+export async function applyPostedChangeOrder(args: {
   engagementId: string;
   changeOrderId: string;
   valueDeltaUsd: number;
@@ -336,48 +557,84 @@ export function applyPostedChangeOrder(args: {
    * engagement as "re-baselined just now".
    */
   baselinedAtIso?: string;
-}): ApplyPostedChangeOrderResult {
+}): Promise<ApplyPostedChangeOrderResult> {
   if (APPLIED_POSTED_COS.has(args.changeOrderId)) {
     return { status: "already_applied" };
   }
-  const budget = getBudget(args.engagementId);
-  if (!budget) return { status: "engagement_unknown" };
-  const delta = Number.isFinite(args.valueDeltaUsd) ? args.valueDeltaUsd : 0;
-  budget.contractValueUsd += delta;
-  budget.baselinedAt = args.baselinedAtIso ?? nowIso();
-  APPLIED_POSTED_COS.add(args.changeOrderId);
-  pushAudit({
-    id: rid("aud"),
-    engagementId: args.engagementId,
-    at: budget.baselinedAt,
-    actorUserId: args.actorUserId,
-    action: "change_order.posted",
-    detail: `${args.changeOrderId} posted — engagement re-baselined: contract value ${delta >= 0 ? "+" : ""}$${Math.round(delta).toLocaleString()}.`,
+
+  return await db.transaction(async (tx) => {
+    const budget = await getBudget(args.engagementId);
+    if (!budget) return { status: "engagement_unknown" };
+
+    const delta = Number.isFinite(args.valueDeltaUsd) ? args.valueDeltaUsd : 0;
+    const newContractValue = budget.contractValueUsd + delta;
+    const baselinedAt = args.baselinedAtIso ?? nowIso();
+
+    await tx
+      .update(atelierEngagementBudget)
+      .set({
+        contractValueUsd: newContractValue,
+        baselinedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierEngagementBudget.engagementId, args.engagementId));
+
+    APPLIED_POSTED_COS.add(args.changeOrderId);
+
+    await insertAudit(
+      {
+        engagementId: args.engagementId,
+        at: baselinedAt,
+        actorUserId: args.actorUserId,
+        action: "change_order.posted",
+        detail: `${args.changeOrderId} posted — engagement re-baselined: contract value ${delta >= 0 ? "+" : ""}$${Math.round(delta).toLocaleString()}.`,
+      },
+      tx,
+    );
+
+    return {
+      status: "applied",
+      budget: { ...budget, contractValueUsd: newContractValue, baselinedAt },
+    };
   });
-  return { status: "applied", budget };
 }
 
-export function setEtc(input: {
+export async function setEtc(input: {
   engagementId: string;
   method: EtcMethod;
   manualEtcUsd: number | null;
   rationale: string;
   actorUserId: string;
-}): EngagementEtc | null {
-  const existing = getEtc(input.engagementId);
+}): Promise<EngagementEtc | null> {
+  const existing = await getEtc(input.engagementId);
   if (!existing) return null;
-  existing.method = input.method;
-  existing.manualEtcUsd = input.method === "manual" ? input.manualEtcUsd ?? 0 : null;
-  existing.rationale = input.rationale;
-  existing.updatedAt = nowIso();
-  existing.updatedByUserId = input.actorUserId;
-  pushAudit({
+  const updatedAt = nowIso();
+  const manual = input.method === "manual" ? input.manualEtcUsd ?? 0 : null;
+  await db
+    .update(atelierEngagementEtc)
+    .set({
+      method: input.method,
+      manualEtcUsd: manual,
+      rationale: input.rationale,
+      updatedAtIso: updatedAt,
+      updatedByUserId: input.actorUserId,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierEngagementEtc.engagementId, input.engagementId));
+  await insertAudit({
     id: rid("aud"),
     engagementId: input.engagementId,
-    at: existing.updatedAt,
+    at: updatedAt,
     actorUserId: input.actorUserId,
     action: "etc.updated",
     detail: `ETC updated (${input.method})${input.method === "manual" && input.manualEtcUsd != null ? ` to $${input.manualEtcUsd.toLocaleString()}` : ""}.`,
   });
-  return existing;
+  return {
+    engagementId: input.engagementId,
+    method: input.method,
+    manualEtcUsd: manual,
+    rationale: input.rationale,
+    updatedAt,
+    updatedByUserId: input.actorUserId,
+  };
 }

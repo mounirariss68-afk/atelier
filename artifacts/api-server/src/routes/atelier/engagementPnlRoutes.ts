@@ -146,8 +146,8 @@ async function loadChangeOrders(
 
 function buildHealthRow(
   budget: EngagementBudget,
-  cost: ReturnType<typeof getCost>,
-  etcRow: ReturnType<typeof getEtc>,
+  cost: Awaited<ReturnType<typeof getCost>>,
+  etcRow: Awaited<ReturnType<typeof getEtc>>,
   changeOrders: ChangeOrder[],
   engagementName: string,
 ): EngagementHealthRow | null {
@@ -189,12 +189,16 @@ function buildHealthRow(
 router.get("/finance/engagement-pnl", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const budgets = listBudgets();
+  const budgets = await listBudgets();
   const ids = budgets.map((b) => b.engagementId);
-  const [names, allCoRows] = await Promise.all([
+  const [names, allCoRows, allCosts, allEtcs] = await Promise.all([
     loadEngagementNames(ids),
     loadChangeOrders(req, ids),
+    listCosts(),
+    listEtcs(),
   ]);
+  const costByEng = new Map(allCosts.map((c) => [c.engagementId, c]));
+  const etcByEng = new Map(allEtcs.map((e) => [e.engagementId, e]));
   const cosByEng = new Map<string, ChangeOrder[]>();
   for (const row of allCoRows) {
     const slim = projectChangeOrder(row, me.role);
@@ -206,8 +210,8 @@ router.get("/finance/engagement-pnl", async (req, res) => {
   for (const b of budgets) {
     const row = buildHealthRow(
       b,
-      getCost(b.engagementId),
-      getEtc(b.engagementId),
+      costByEng.get(b.engagementId) ?? null,
+      etcByEng.get(b.engagementId) ?? null,
       cosByEng.get(b.engagementId) ?? [],
       names.get(b.engagementId) ?? b.engagementId,
     );
@@ -231,15 +235,21 @@ router.get("/finance/engagement-pnl", async (req, res) => {
 router.get("/finance/engagement-pnl/summary", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const budgets = listBudgets();
-  const allCoRows = await loadChangeOrders(req);
+  const [budgets, allCosts, allEtcs, allCoRows] = await Promise.all([
+    listBudgets(),
+    listCosts(),
+    listEtcs(),
+    loadChangeOrders(req),
+  ]);
+  const costByEng = new Map(allCosts.map((c) => [c.engagementId, c]));
+  const etcByEng = new Map(allEtcs.map((e) => [e.engagementId, e]));
   let projectsAtRisk = 0;
   let totalVacUsd = 0;
   let weightedForecastMarginNum = 0;
   let weightedForecastMarginDen = 0;
   for (const b of budgets) {
-    const cost = getCost(b.engagementId);
-    const etcRow = getEtc(b.engagementId);
+    const cost = costByEng.get(b.engagementId) ?? null;
+    const etcRow = etcByEng.get(b.engagementId) ?? null;
     if (!cost || !etcRow) continue;
     const eac = computeEac({ budget: b, cost, etc: etcRow });
     if (eac.ragStatus !== "green") projectsAtRisk += 1;
@@ -275,17 +285,18 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const id = req.params.engagementId;
-  const budget = getBudget(id);
-  const cost = getCost(id);
-  const etcRow = getEtc(id);
+  const [budget, cost, etcRow, coRows, audit, names] = await Promise.all([
+    getBudget(id),
+    getCost(id),
+    getEtc(id),
+    loadChangeOrders(req, [id]),
+    listAudit(id, 50),
+    loadEngagementNames([id]),
+  ]);
   if (!budget || !cost || !etcRow) {
     res.status(404).json({ error: "engagement-pnl-not-found" });
     return;
   }
-  const [names, coRows] = await Promise.all([
-    loadEngagementNames([id]),
-    loadChangeOrders(req, [id]),
-  ]);
   const eac = computeEac({ budget, cost, etc: etcRow });
   const wip = cost.revenueRecognisedToDateUsd - cost.invoicedToDateUsd;
   const ar = cost.invoicedToDateUsd - cost.cashCollectedToDateUsd;
@@ -314,14 +325,14 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
       engagementLeadName: personName(budget.engagementLeadId),
     },
     changeOrders: coRows.map((r) => projectChangeOrder(r, me.role)),
-    audit: listAudit(id, 50),
+    audit,
   });
 });
 
 // ---------------------------------------------------------------
 // ETC override
 // ---------------------------------------------------------------
-router.post("/finance/engagement-pnl/:engagementId/etc", (req, res) => {
+router.post("/finance/engagement-pnl/:engagementId/etc", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   if (!canWrite(me.role)) {
@@ -337,7 +348,7 @@ router.post("/finance/engagement-pnl/:engagementId/etc", (req, res) => {
     return;
   }
   const rationale = String(body.rationale ?? "").trim();
-  const updated = setEtc({
+  const updated = await setEtc({
     engagementId: id,
     method,
     manualEtcUsd,
@@ -348,8 +359,7 @@ router.post("/finance/engagement-pnl/:engagementId/etc", (req, res) => {
     res.status(404).json({ error: "engagement-etc-not-found" });
     return;
   }
-  const budget = getBudget(id);
-  const cost = getCost(id);
+  const [budget, cost] = await Promise.all([getBudget(id), getCost(id)]);
   const eac = budget && cost ? computeEac({ budget, cost, etc: updated }) : null;
   res.json({ etc: updated, eac });
 });
@@ -357,10 +367,11 @@ router.post("/finance/engagement-pnl/:engagementId/etc", (req, res) => {
 // ---------------------------------------------------------------
 // Debug-friendly listings
 // ---------------------------------------------------------------
-router.get("/finance/engagement-pnl-debug/budgets", (req, res) => {
+router.get("/finance/engagement-pnl-debug/budgets", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  res.json({ items: listBudgets(), costs: listCosts(), etcs: listEtcs() });
+  const [items, costs, etcs] = await Promise.all([listBudgets(), listCosts(), listEtcs()]);
+  res.json({ items, costs, etcs });
 });
 
 export default router;
