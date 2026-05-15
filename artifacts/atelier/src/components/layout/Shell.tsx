@@ -262,10 +262,21 @@ export function TopNav() {
   );
 }
 
+type RailTabValue = "agent" | "activity" | "reports";
+
 const RailContext = React.createContext<{
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
-}>({ collapsed: false, setCollapsed: () => {} });
+  /** Task #501 — active rail tab; lifted to context so the assistant
+   * entry points can switch to the Agent tab. */
+  tab: RailTabValue;
+  setTab: (t: RailTabValue) => void;
+}>({
+  collapsed: false,
+  setCollapsed: () => {},
+  tab: "agent",
+  setTab: () => {},
+});
 
 // Compact saved-reports list for the right rail "Reports" tab. Reads the
 // same /api/atelier/reports endpoint the full Reports page uses, but renders
@@ -353,11 +364,15 @@ function ReportsRailPanel() {
   );
 }
 
-type RailTab = "activity" | "reports";
+type RailTab = "agent" | "activity" | "reports";
 
 export function RightRail() {
-  const { collapsed, setCollapsed } = React.useContext(RailContext);
-  const [tab, setTab] = React.useState<RailTab>("activity");
+  // Task #501 — Agent is now the first rail tab and the default
+  // selection. Tab + collapse state is lifted into RailContext so
+  // entry points (⌘K, Home input, sparkles bubble, deep-links) can
+  // open the rail directly to the Agent tab via openCli().
+  const { collapsed, setCollapsed, tab, setTab } = React.useContext(RailContext);
+  const cliTriggerRef = React.useContext(CliContext).triggerRef;
   const { data: activities } = useAtelierGetActivity(
     { limit: 15 },
     {
@@ -412,9 +427,23 @@ export function RightRail() {
     >
       <div className="flex items-center justify-between p-3 border-b border-border">
         {!collapsed && (
-          // Tab strip: Activity is the primary tab (live agent feed); Reports
-          // is the secondary tab (saved-report list, pulled from full library).
+          // Task #501 — Tab strip: Agent (conversational AI) is the
+          // primary, default-selected tab; Activity is the live agent
+          // feed; Reports is the saved-report list.
           <div className="flex items-center gap-1 font-mono text-[11px] font-semibold uppercase tracking-widest">
+            <button
+              ref={(el) => { if (cliTriggerRef) cliTriggerRef.current = el; }}
+              type="button"
+              onClick={() => setTab("agent")}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded transition-colors",
+                tab === "agent" ? "text-gold bg-bg-elevate-2" : "text-text-mute hover:text-text",
+              )}
+              data-testid="rail-tab-agent"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Agent
+            </button>
             <button
               type="button"
               onClick={() => setTab("activity")}
@@ -422,6 +451,7 @@ export function RightRail() {
                 "flex items-center gap-1.5 px-2 py-1 rounded transition-colors",
                 tab === "activity" ? "text-gold bg-bg-elevate-2" : "text-text-mute hover:text-text",
               )}
+              data-testid="rail-tab-activity"
             >
               <Activity className="w-3.5 h-3.5" />
               Activity
@@ -439,6 +469,7 @@ export function RightRail() {
                 "flex items-center gap-1.5 px-2 py-1 rounded transition-colors",
                 tab === "reports" ? "text-gold bg-bg-elevate-2" : "text-text-mute hover:text-text",
               )}
+              data-testid="rail-tab-reports"
             >
               <FileText className="w-3.5 h-3.5" />
               Reports
@@ -447,7 +478,7 @@ export function RightRail() {
         )}
         {collapsed && (
           <div className="w-full flex justify-center relative">
-            <Activity className="w-4 h-4 text-text-mute" />
+            <Sparkles className="w-4 h-4 text-text-mute" />
             {activeCount > 0 && (
               <span className="absolute top-0 right-1 w-2 h-2 rounded-full bg-gold animate-pulse" />
             )}
@@ -461,7 +492,20 @@ export function RightRail() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
+      {/* Task #501 — when the Agent tab is active, the embedded
+       * CommandBar fills the rail body (it manages its own scroll &
+       * composer). Activity/Reports keep the padded scroll area. */}
+      {!collapsed && tab === "agent" && (
+        <div className="flex-1 min-h-0">
+          <CommandBar embedded />
+        </div>
+      )}
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3",
+          (!collapsed && tab === "agent") && "hidden",
+        )}
+      >
         {!collapsed && tab === "activity" && cliRecentTurns.length > 0 && (
           <div className="space-y-1.5" data-testid="cli-rail-turns">
             {cliRecentTurns.map((t) => {
@@ -691,24 +735,43 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const isSignIn = location === "/sign-in";
 
   const [collapsed, setCollapsed] = React.useState(false);
-  const [cliOpen, setCliOpen] = React.useState(false);
+  // Task #501 — Agent is the default rail tab. The conversational AI
+  // is open whenever the rail is expanded AND the Agent tab is active;
+  // we no longer track a separate `cliOpen` flag or render a modal.
+  const [tab, setTab] = React.useState<RailTabValue>("agent");
   const cliTriggerRef = React.useRef<HTMLElement | null>(null);
+  const cliOpen = !collapsed && tab === "agent";
   // Hydration handoff: /cli page enqueues a request, CommandBar drains
   // it on mount/effect. Held in a ref so producer side doesn't trigger
   // re-renders.
   const hydrationRef = React.useRef<import("@/components/cli/cli-context").CliHydrationRequest | null>(null);
   const injectTurnRef = React.useRef<((t: import("@/components/cli/types").CliTurn) => void) | null>(null);
+
+  // Task #501 — opening the CLI now means: switch the rail to the
+  // Agent tab and uncollapse it. Closing means collapsing the rail.
+  const openAgentTab = React.useCallback(() => {
+    setTab("agent");
+    setCollapsed(false);
+  }, []);
+  const closeAgentTab = React.useCallback(() => {
+    setCollapsed(true);
+  }, []);
+
   const cliCtxValue = React.useMemo(
     () => ({
       open: cliOpen,
-      setOpen: setCliOpen,
-      toggle: () => setCliOpen((v) => !v),
+      setOpen: (v: boolean) => {
+        if (v) openAgentTab();
+        else closeAgentTab();
+      },
+      toggle: () => {
+        if (cliOpen) closeAgentTab();
+        else openAgentTab();
+      },
       triggerRef: cliTriggerRef,
       requestHydration: (req: import("@/components/cli/cli-context").CliHydrationRequest) => {
         hydrationRef.current = req;
-        setCliOpen(true);
-        // If the bar is already mounted with a registered injectTurn,
-        // we still leave the queue for it to drain via consumeHydration().
+        openAgentTab();
       },
       consumeHydration: () => {
         const v = hydrationRef.current;
@@ -742,10 +805,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
             /* ignore */
           }
         }
-        setCliOpen(true);
+        openAgentTab();
       },
     }),
-    [cliOpen],
+    [cliOpen, openAgentTab, closeAgentTab],
   );
 
   // Global ⌘K / Ctrl+K binding. Stays mounted across pages so the bar
@@ -757,19 +820,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
         e.preventDefault();
         // Task #342 — emit cli.opened on each ⌘K open so we can
         // attribute opens via keyboard separately from the header click.
-        setCliOpen((v) => {
-          const next = !v;
-          if (next) {
-            const surface = derivePageContext(window.location.pathname).surface;
-            emitCliOpened("shortcut", { surface });
-          }
-          return next;
-        });
+        if (cliOpen) {
+          closeAgentTab();
+        } else {
+          const surface = derivePageContext(window.location.pathname).surface;
+          emitCliOpened("shortcut", { surface });
+          openAgentTab();
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isSignIn]);
+  }, [isSignIn, cliOpen, openAgentTab, closeAgentTab]);
+
+  const railCtxValue = React.useMemo(
+    () => ({ collapsed, setCollapsed, tab, setTab }),
+    [collapsed, tab],
+  );
 
   if (isSignIn) {
     return <div className="min-h-screen flex flex-col">{children}</div>;
@@ -779,7 +846,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <CliContext.Provider
       value={cliCtxValue}
     >
-      <RailContext.Provider value={{ collapsed, setCollapsed }}>
+      <RailContext.Provider value={railCtxValue}>
         <div className="min-h-screen flex flex-col relative">
           <TopNav />
           <div className="flex flex-1">
@@ -793,11 +860,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </main>
             <RightRail />
           </div>
-          <CommandBar
-            open={cliOpen}
-            onClose={() => setCliOpen(false)}
-            triggerRef={cliTriggerRef}
-          />
           <FloatingCliBubble />
         </div>
       </RailContext.Provider>

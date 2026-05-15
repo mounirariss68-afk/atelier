@@ -77,13 +77,35 @@ const ALLOWED_MIME = new Set([
 ]);
 
 export interface CommandBarProps {
-  open: boolean;
-  onClose: () => void;
+  open?: boolean;
+  onClose?: () => void;
   /** Element to restore focus to on close (typically the top-nav button). */
   triggerRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Task #501 — when true, the bar renders inline inside its parent
+   * container (e.g. the right-rail Agent tab) instead of as a fixed
+   * centered modal with a backdrop. Embedded mode also disables the
+   * focus trap and the trigger-focus restoration so it co-exists
+   * cleanly with the rest of the page. In embedded mode, `open` and
+   * `onClose` default to the surrounding CliContext so the rail can
+   * mount the bar with no props.
+   */
+  embedded?: boolean;
 }
 
-export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
+export function CommandBar(props: CommandBarProps) {
+  const { triggerRef, embedded = false } = props;
+  const _cliCtxForProps = React.useContext(CliContext);
+  const open = props.open ?? (embedded ? _cliCtxForProps.open : false);
+  // Task #501 — `onClose` is referenced as an effect dep below; stabilize
+  // its identity so the focus-management effect doesn't re-fire (and
+  // re-call setSavedPrompts) on every render, which would loop.
+  const propsOnClose = props.onClose;
+  const ctxSetOpen = _cliCtxForProps.setOpen;
+  const onClose = React.useCallback(() => {
+    if (propsOnClose) propsOnClose();
+    else ctxSetOpen(false);
+  }, [propsOnClose, ctxSetOpen]);
   const [location, setLocation] = useLocation();
   const [locale, setLocale] = React.useState<CliLocale>(() => {
     if (typeof window === "undefined") return "en";
@@ -243,6 +265,9 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
         onClose();
         return;
       }
+      // Task #501 — embedded mode (rail) skips the focus trap so the
+      // user can Tab between the agent panel and the rest of the page.
+      if (embedded) return;
       if (e.key === "Tab" && panelRef.current) {
         const nodes = Array.from(
           panelRef.current.querySelectorAll<HTMLElement>(TABBABLE),
@@ -269,25 +294,32 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
     window.addEventListener("keydown", onKey);
 
     // Defensive: if focus somehow lands outside (e.g., a 3rd-party
-    // tooltip portal), pull it back to the composer.
+    // tooltip portal), pull it back to the composer. Skipped in
+    // embedded mode (rail) so the user can click around the page
+    // without focus snapping back to the agent composer.
     const onFocusIn = (e: FocusEvent) => {
+      if (embedded) return;
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         composerRef.current?.focus();
       }
     };
-    document.addEventListener("focusin", onFocusIn);
+    if (!embedded) document.addEventListener("focusin", onFocusIn);
 
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.removeEventListener("focusin", onFocusIn);
+      if (!embedded) document.removeEventListener("focusin", onFocusIn);
       clearTimeout(t);
       // Focus restoration: defer one frame so any close animation
-      // doesn't fight us for the active element.
-      requestAnimationFrame(() => {
-        triggerRef?.current?.focus();
-      });
+      // doesn't fight us for the active element. Embedded mode (rail)
+      // doesn't restore focus — the rail has no single trigger button
+      // to return to.
+      if (!embedded) {
+        requestAnimationFrame(() => {
+          triggerRef?.current?.focus();
+        });
+      }
     };
-  }, [open, onClose, triggerRef]);
+  }, [open, onClose, triggerRef, embedded]);
 
   // Auto-scroll transcript on new content.
   React.useEffect(() => {
@@ -540,54 +572,49 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
   const status = cli.status;
   const current = cli.current;
 
-  return (
+  // Task #501 — embedded mode (right-rail Agent tab) renders the panel
+  // body inline inside its parent (no fixed/backdrop wrapper, no fixed
+  // sizing, no ContextPanel — the rail is too narrow to host it).
+  const panel = (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      data-testid="cli-overlay"
+      ref={panelRef}
+      dir={dir}
+      role={embedded ? "region" : "dialog"}
+      aria-modal={embedded ? undefined : true}
+      aria-label="Atelier command bar"
+      className={cn(
+        embedded
+          ? "relative w-full h-full bg-bg-deep flex flex-col overflow-hidden text-text"
+          : cn(
+              "relative w-full sm:w-[760px] sm:max-w-[calc(100vw-2rem)]",
+              "h-[88vh] sm:h-[640px] sm:max-h-[calc(100vh-3rem)]",
+              "bg-bg-deep border border-border sm:rounded-xl shadow-2xl",
+              "flex flex-col overflow-hidden text-text",
+            ),
+      )}
+      data-testid="cli-panel"
+      data-status={status}
+      data-locale={locale}
+      data-embedded={embedded ? "1" : "0"}
     >
-      <div
-        className={cn(
-          "absolute inset-0 bg-black/60",
-          reduced ? "" : "backdrop-blur-sm transition-opacity duration-200",
-        )}
-        aria-hidden
+      <Header
+        locale={locale}
+        onLocaleChange={setLocale}
+        onClose={onClose}
+        onHelp={() => {
+          setHelpOpen((v) => !v);
+          setSavedOpen(false);
+        }}
+        onSaved={() => {
+          setSavedOpen((v) => !v);
+          setHelpOpen(false);
+        }}
+        surface={pageCtx.surface}
+        status={status}
+        hideClose={embedded}
       />
-      <div
-        ref={panelRef}
-        dir={dir}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Atelier command bar"
-        className={cn(
-          "relative w-full sm:w-[760px] sm:max-w-[calc(100vw-2rem)]",
-          "h-[88vh] sm:h-[640px] sm:max-h-[calc(100vh-3rem)]",
-          "bg-bg-deep border border-border sm:rounded-xl shadow-2xl",
-          "flex flex-col overflow-hidden text-text",
-        )}
-        data-testid="cli-panel"
-        data-status={status}
-        data-locale={locale}
-      >
-        <Header
-          locale={locale}
-          onLocaleChange={setLocale}
-          onClose={onClose}
-          onHelp={() => {
-            setHelpOpen((v) => !v);
-            setSavedOpen(false);
-          }}
-          onSaved={() => {
-            setSavedOpen((v) => !v);
-            setHelpOpen(false);
-          }}
-          surface={pageCtx.surface}
-          status={status}
-        />
 
-        <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0">
         <div ref={transcriptRef} className="flex-1 overflow-y-auto scrollbar-thin min-w-0">
           {helpOpen ? (
             <HelpPanel
@@ -667,38 +694,42 @@ export function CommandBar({ open, onClose, triggerRef }: CommandBarProps) {
             />
           )}
         </div>
-          <ContextPanel pageCtx={pageCtx} locale={locale} />
-        </div>
-
-        <Composer
-          input={input}
-          onInput={setInput}
-          onKeyDown={onComposerKey}
-          onSubmit={() => handleSubmit()}
-          onAttach={() => fileInputRef.current?.click()}
-          onDropFiles={(fl) => handleAttach(fl)}
-          attachments={attachments}
-          onRemoveAttachment={removeAttachment}
-          locale={locale}
-          status={status}
-          slashOpen={slashOpen}
-          slashCandidates={slashCandidates}
-          slashIndex={slashIndex}
-          onPickSlash={pickSlash}
-          composerRef={composerRef}
-        />
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => handleAttach(e.target.files)}
-          data-testid="cli-file-input"
-        />
+        {!embedded && <ContextPanel pageCtx={pageCtx} locale={locale} />}
       </div>
+
+      <Composer
+        input={input}
+        onInput={setInput}
+        onKeyDown={onComposerKey}
+        onSubmit={() => handleSubmit()}
+        onAttach={() => fileInputRef.current?.click()}
+        onDropFiles={(fl) => handleAttach(fl)}
+        attachments={attachments}
+        onRemoveAttachment={removeAttachment}
+        locale={locale}
+        status={status}
+        slashOpen={slashOpen}
+        slashCandidates={slashCandidates}
+        slashIndex={slashIndex}
+        onPickSlash={pickSlash}
+        composerRef={composerRef}
+      />
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => handleAttach(e.target.files)}
+        data-testid="cli-file-input"
+      />
     </div>
   );
+
+  // Task #501 — the centered modal has been removed. The bar is now
+  // exclusively rendered embedded inside the right-rail Agent tab, so
+  // there is no fixed-position / backdrop wrapper.
+  return panel;
 }
 
 /* ───────────────────────────── Header ───────────────────────────── */
@@ -711,6 +742,7 @@ function Header({
   onSaved,
   surface,
   status,
+  hideClose = false,
 }: {
   locale: CliLocale;
   onLocaleChange: (l: CliLocale) => void;
@@ -719,6 +751,9 @@ function Header({
   onSaved: () => void;
   surface: string;
   status: string;
+  /** Task #501 — hide the X close button when the bar is embedded in
+   * the right rail (the rail's collapse chevron handles dismissal). */
+  hideClose?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-bg-elevate">
@@ -757,15 +792,17 @@ function Header({
       >
         <HelpCircle className="w-4 h-4" />
       </button>
-      <button
-        type="button"
-        onClick={onClose}
-        className="text-text-mute hover:text-text p-1.5 rounded hover:bg-bg-elevate-2 transition-colors"
-        title={s("close", locale)}
-        data-testid="cli-close"
-      >
-        <X className="w-4 h-4" />
-      </button>
+      {!hideClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-text-mute hover:text-text p-1.5 rounded hover:bg-bg-elevate-2 transition-colors"
+          title={s("close", locale)}
+          data-testid="cli-close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
     </div>
   );
 }
