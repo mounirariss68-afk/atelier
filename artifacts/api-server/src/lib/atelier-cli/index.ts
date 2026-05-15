@@ -2766,13 +2766,28 @@ export async function runTurn(
         status = "partial";
         break;
       }
-      if (elapsed > SOFT_WALL_MS) {
+      // Task #492 — research-heavy specialists (Account Cartographer,
+      // Pursuit Scout) routinely run 30-70s on real Sonnet web-search
+      // calls. If one already ran this turn the model still needs a
+      // follow-up step to call `propose_write`, otherwise the user
+      // sees the prefill card with no gold confirm card. Extend the
+      // soft wall (still under HARD_WALL_MS) so the propose_write
+      // follow-through fits in the same turn.
+      const ranLongSpecialist = toolCalls.some(
+        (c) => c.tool === "prefill_from_specialist",
+      );
+      const sawProposeWrite = toolCalls.some((c) => c.tool === "propose_write");
+      const effectiveSoftWall =
+        ranLongSpecialist && !sawProposeWrite
+          ? Math.min(HARD_WALL_MS - 10_000, SOFT_WALL_MS + 60_000)
+          : SOFT_WALL_MS;
+      if (elapsed > effectiveSoftWall) {
         record({
           type: "budget_exceeded",
           data: {
             code: "soft_wall_exceeded",
             elapsedMs: elapsed,
-            softMs: SOFT_WALL_MS,
+            softMs: effectiveSoftWall,
             hardMs: HARD_WALL_MS,
             options: ["continue", "handoff_async", "cancel"],
             message:
