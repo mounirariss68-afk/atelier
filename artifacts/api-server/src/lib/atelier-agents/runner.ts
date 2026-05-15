@@ -13,7 +13,7 @@
  *   1. Inserts an `atelier_agent_runs` row in `running` state.
  *   2. Logs an `agent.start` audit event.
  *   3. Calls Claude (or, when `false` is on / the integration env vars
- *      are missing, returns a deterministic mock so the UX still works).
+ *      are missing, throws — no fallback is returned).
  *   4. Persists `output` + `steps` + `toolCalls` + `cost` and flips the
  *      run to `complete` (or `error`).
  *   5. Logs an `agent.complete` audit event with payload summary.
@@ -2215,7 +2215,6 @@ export async function runPricingStrategist(args: {
       "claude-sonnet-4-5",
       systemPrompt,
       userPrompt,
-      () => ({ narrative: fallbackNarrative, talkingPoints: fallbackTalkingPoints, risks: fallbackRisks }),
     );
 
     const result: PricingStrategistResult = {
@@ -4918,18 +4917,16 @@ export async function runCashFlowForecaster(
     actorLabel: input.actorLabel,
   });
   try {
-    // Pull open AR rows for the rule-based fallback path.
+    // Pull open AR rows so the model has grounded source data.
     const { db: dbRef, atelierInvoice: invTbl } = await import("@workspace/db");
     const { isNull: isN } = await import("drizzle-orm");
     const rows = (await dbRef.select().from(invTbl).where(isN(invTbl.deletedAt)))
       .filter((i) => i.total - i.amountPaid > 0.01)
       .map((i) => ({ outstanding: i.total - i.amountPaid, dueDate: i.dueDate }));
-    const fallback = await ruleBasedForecast(input, rows);
     const { value, costUsd } = await callClaudeJson<CashFlowForecasterOutput>(
       "claude-sonnet-4-6",
       "You are the Cash Flow Forecaster. Produce a 13-week direct-method forecast.",
       JSON.stringify({ ...input, openInvoices: rows }),
-      () => fallback,
     );
     const conf: "green" | "amber" | "red" =
       value.cashGapWeeks.length === 0 ? "green" : value.cashGapWeeks.some((w) => w < 4) ? "red" : "amber";

@@ -29,12 +29,12 @@ export interface TabellioSendResult {
   warning?: string;
 }
 
-const MOCK_MODE = process.env.ATELIER_TABELLIO_ENABLED !== "1";
+const LIVE_ENABLED = process.env.ATELIER_TABELLIO_ENABLED === "1";
 
 export async function sendEnvelope(
   args: TabellioSendArgs,
 ): Promise<TabellioSendResult> {
-  if (!MOCK_MODE) {
+  if (LIVE_ENABLED) {
     throw new Error(
       "[atelier-codex/tabellio] Real Tabellio integration is not yet wired. " +
         "Unset ATELIER_TABELLIO_ENABLED until production credentials are configured.",

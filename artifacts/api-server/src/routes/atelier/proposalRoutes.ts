@@ -171,7 +171,7 @@ router.post("/engagements/:engId/processes", async (req, res) => {
   // Normalize each accepted sourceType into the canonical text the runner
   // expects. Transcripts are line-stripped of speaker tags; BPMN XML is
   // extracted into ordered task names so step extraction still works.
-  // Images use a deterministic mock OCR (hash-of-bytes → pinned step labels)
+  // Images use a deterministic stub OCR (hash-of-bytes → pinned step labels)
   // so the demo loop is reproducible without an actual vision model.
   let normalizedSource = body.source ?? "";
   if (sourceType === "transcript") {

@@ -1170,11 +1170,11 @@ interface ClaudeStep {
   costUsd: number;
   tokensIn: number;
   tokensOut: number;
-  /** Raw stop_reason for diagnostics; null for mock. */
+  /** Raw stop_reason for diagnostics. */
   stopReason?: string | null;
 }
 
-/** Abstract model dispatch — mock or live. */
+/** Abstract model dispatch (live Sonnet/Haiku via Anthropic SDK). */
 async function modelStep(args: {
   history: Array<{ role: "user" | "assistant"; content: unknown }>;
   tools: ToolDef[];

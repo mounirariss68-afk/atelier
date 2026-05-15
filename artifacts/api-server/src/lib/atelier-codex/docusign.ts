@@ -2,9 +2,9 @@
  * DocuSign adapter stub for The Atelier — Codex (CLM).
  *
  * Lives behind the E-Sign Orchestrator. Real DocuSign integration is
- * out of scope for L2C Wave 1 — this stub returns deterministic
- * envelope ids and synthesises a "sent" envelope so the contract
- * state machine can advance in demo / dev / mock mode.
+ * out of scope for L2C Wave 1 — this stub returns synthetic envelope
+ * ids and a "sent" envelope so the contract state machine can advance
+ * in demo / dev environments.
  *
  * When `ATELIER_DOCUSIGN_ENABLED=1` is set, this stub will throw
  * loudly so we never silently mock-out a real send. The route layer
@@ -40,13 +40,12 @@ export interface DocusignSendResult {
   warning?: string;
 }
 
-const MOCK_MODE =
-  process.env.ATELIER_DOCUSIGN_ENABLED !== "1";
+const LIVE_ENABLED = process.env.ATELIER_DOCUSIGN_ENABLED === "1";
 
 export async function sendEnvelope(
   args: DocusignSendArgs,
 ): Promise<DocusignSendResult> {
-  if (!MOCK_MODE) {
+  if (LIVE_ENABLED) {
     throw new Error(
       "[atelier-codex/docusign] Real DocuSign integration is not yet wired. " +
         "Unset ATELIER_DOCUSIGN_ENABLED until production credentials are configured.",
