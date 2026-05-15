@@ -28,6 +28,19 @@ function tone(util: number, target: number): "green" | "amber" | "red" {
   if (util >= target - 0.1) return "amber";
   return "red";
 }
+// Variance vs committed plan baseline (Task #469). Returns the signed
+// delta in percentage points, with a sign. Traffic-light tone:
+//   green ≥ 0pp, amber within -5pp of plan, red below that.
+function fmtDeltaPp(deltaFrac: number): string {
+  const pp = deltaFrac * 100;
+  const sign = pp > 0 ? "+" : pp < 0 ? "" : "±";
+  return `${sign}${pp.toFixed(1)}pp`;
+}
+function deltaTone(deltaFrac: number): "green" | "amber" | "red" {
+  if (deltaFrac >= 0) return "green";
+  if (deltaFrac >= -0.05) return "amber";
+  return "red";
+}
 
 export default function FirmEconomics() {
   const [data, setData] = React.useState<FirmResp | null>(null);
@@ -196,19 +209,35 @@ export default function FirmEconomics() {
                     <th className="py-1 text-right">Engagements</th>
                     <th className="py-1 text-right">Realized margin</th>
                     <th className="py-1 text-right">Planned margin</th>
+                    <th className="py-1 text-right" title={data.planBaseline ? `vs ${data.planBaseline.scenarioLabel} gross margin ${pct(data.planBaseline.grossMarginPct)}${data.planBaseline.committed ? "" : " (base, uncommitted)"}` : undefined}>
+                      {data.planBaseline
+                        ? data.planBaseline.committed
+                          ? "Δ vs committed"
+                          : "Δ vs (base, uncommitted)"
+                        : "Δ vs committed"}
+                    </th>
                     <th className="py-1 text-right">Revenue (actual)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.sectorSummary.map((s) => (
-                    <tr key={s.sector} className="border-t border-white/5">
-                      <td className="py-2">{s.sector}</td>
-                      <td className="py-2 text-right">{s.engagementCount}</td>
-                      <td className="py-2 text-right"><MonoChip tone={s.realizedMarginPct < s.plannedMarginPct - 0.05 ? "red" : s.realizedMarginPct < s.plannedMarginPct ? "amber" : "green"}>{pct(s.realizedMarginPct)}</MonoChip></td>
-                      <td className="py-2 text-right text-text-mute">{pct(s.plannedMarginPct)}</td>
-                      <td className="py-2 text-right">{fmtMoney(s.revenueUsd)}</td>
-                    </tr>
-                  ))}
+                  {data.sectorSummary.map((s) => {
+                    const baseline = data.planBaseline?.grossMarginPct;
+                    const delta = baseline !== undefined ? s.realizedMarginPct - baseline : null;
+                    return (
+                      <tr key={s.sector} className="border-t border-white/5">
+                        <td className="py-2">{s.sector}</td>
+                        <td className="py-2 text-right">{s.engagementCount}</td>
+                        <td className="py-2 text-right"><MonoChip tone={s.realizedMarginPct < s.plannedMarginPct - 0.05 ? "red" : s.realizedMarginPct < s.plannedMarginPct ? "amber" : "green"}>{pct(s.realizedMarginPct)}</MonoChip></td>
+                        <td className="py-2 text-right text-text-mute">{pct(s.plannedMarginPct)}</td>
+                        <td className="py-2 text-right" data-testid={`sector-delta-${s.sector}`}>
+                          {delta === null
+                            ? <span className="text-text-mute">—</span>
+                            : <MonoChip tone={deltaTone(delta)}>{fmtDeltaPp(delta)}</MonoChip>}
+                        </td>
+                        <td className="py-2 text-right">{fmtMoney(s.revenueUsd)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               </>
@@ -224,25 +253,41 @@ export default function FirmEconomics() {
                   <th className="py-1">Account</th>
                   <th className="py-1 text-right">Realized margin</th>
                   <th className="py-1 text-right">Target</th>
+                  <th className="py-1 text-right" title={data.planBaseline ? `vs ${data.planBaseline.scenarioLabel} gross margin ${pct(data.planBaseline.grossMarginPct)}${data.planBaseline.committed ? "" : " (base, uncommitted)"}` : undefined}>
+                    {data.planBaseline
+                      ? data.planBaseline.committed
+                        ? "Δ vs committed plan"
+                        : "Δ vs plan (base, uncommitted)"
+                      : "Δ vs committed plan"}
+                  </th>
                   <th className="py-1 text-right">Leakage (hrs)</th>
                   <th className="py-1"></th>
                 </tr>
               </thead>
               <tbody>
-                {data.engagementRollup.map((e) => (
-                  <tr key={e.engagementId} className="border-t border-white/5">
-                    <td className="py-2">
-                      <Link href={`/ledger/engagement-economics/${e.engagementId}`} className="hover:underline">{e.engagementName}</Link>
-                    </td>
-                    <td className="py-2 text-text-mute">{e.accountName}</td>
-                    <td className="py-2 text-right"><MonoChip tone={e.belowTarget ? "red" : "green"}>{pct(e.realizedMarginPct)}</MonoChip></td>
-                    <td className="py-2 text-right text-text-mute">{pct(e.targetMarginPct)}</td>
-                    <td className="py-2 text-right">{e.leakageHours.toFixed(0)}</td>
-                    <td className="py-2 text-right">
-                      {e.reLookHref ? <Link href={e.reLookHref} className="text-xs text-gold-400 hover:underline">Re-look pricing →</Link> : null}
-                    </td>
-                  </tr>
-                ))}
+                {data.engagementRollup.map((e) => {
+                  const baseline = data.planBaseline?.grossMarginPct;
+                  const delta = baseline !== undefined ? e.realizedMarginPct - baseline : null;
+                  return (
+                    <tr key={e.engagementId} className="border-t border-white/5">
+                      <td className="py-2">
+                        <Link href={`/ledger/engagement-economics/${e.engagementId}`} className="hover:underline">{e.engagementName}</Link>
+                      </td>
+                      <td className="py-2 text-text-mute">{e.accountName}</td>
+                      <td className="py-2 text-right"><MonoChip tone={e.belowTarget ? "red" : "green"}>{pct(e.realizedMarginPct)}</MonoChip></td>
+                      <td className="py-2 text-right text-text-mute">{pct(e.targetMarginPct)}</td>
+                      <td className="py-2 text-right" data-testid={`engagement-delta-${e.engagementId}`}>
+                        {delta === null
+                          ? <span className="text-text-mute">—</span>
+                          : <MonoChip tone={deltaTone(delta)}>{fmtDeltaPp(delta)}</MonoChip>}
+                      </td>
+                      <td className="py-2 text-right">{e.leakageHours.toFixed(0)}</td>
+                      <td className="py-2 text-right">
+                        {e.reLookHref ? <Link href={e.reLookHref} className="text-xs text-gold-400 hover:underline">Re-look pricing →</Link> : null}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </Card>
