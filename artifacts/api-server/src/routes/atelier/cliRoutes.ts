@@ -94,6 +94,14 @@ router.post("/cli/turn", async (req, res) => {
   // (first-matches "in English" instead of "in UAE"), the mock router's
   // 60-char prompt slice, redactText, and the durable rolling summary.
   const promptRaw = stripLocalePreamble(promptRawWithPreamble);
+  // Task #484 — guard against a prompt that was non-empty pre-strip but
+  // is now empty post-strip (i.e. the client sent the locale preamble
+  // alone with nothing else). Reject with the same shape as the
+  // initial empty-prompt check so the client can render it identically.
+  if (!promptRaw.trim()) {
+    res.status(400).json({ error: "prompt-required" });
+    return;
+  }
   // `/new` (or explicit reset:true) starts a fresh session before the
   // turn runs. Strip the slash command from the prompt sent to the model.
   const isNewCmd = /^\/new\b/i.test(promptRaw);
