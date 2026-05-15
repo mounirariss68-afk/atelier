@@ -1,6 +1,16 @@
 import * as React from "react";
 import { Link, useRoute } from "wouter";
-import { ArrowLeft, Activity, FileText, Wrench, CheckCircle2, XCircle, Edit3, Play } from "lucide-react";
+import {
+  ArrowLeft,
+  Activity,
+  FileText,
+  Wrench,
+  CheckCircle2,
+  XCircle,
+  Edit3,
+  Play,
+  AlertTriangle,
+} from "lucide-react";
 import {
   useAtelierListAgents,
   useAtelierGetAgentRun,
@@ -16,6 +26,7 @@ import type {
 import { useQueryClient } from "@tanstack/react-query";
 import { SectionHead, PageHero, MonoChip, Card } from "@/components/ui/primitives";
 import { AuditTab } from "@/components/AuditTab";
+import { useFileIncident, type FileIncidentInput } from "@/lib/agents-lens-seed";
 
 const TABS = [
   { id: "trace", label: "Trace" },
@@ -98,6 +109,12 @@ export default function AgentRun() {
       </PageHero>
 
       <div className="container-atelier py-8 space-y-8">
+        <FileIncidentPanel
+          runId={runId}
+          agentId={agent?.id}
+          agentName={agent?.name}
+          status={status}
+        />
         <div className="border-b border-border">
           <div className="flex gap-6 overflow-x-auto scrollbar-thin">
             {TABS.map((tab) => (
@@ -624,6 +641,178 @@ function SchemaCard({
             </div>
           ))}
         </div>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * File-incident panel — lets the operator capture a Monitor-stage
+ * failure as an Improve incident with a back-link to this run.
+ */
+function FileIncidentPanel({
+  runId,
+  agentId,
+  agentName,
+  status,
+}: {
+  runId: string;
+  agentId: string | undefined;
+  agentName: string | undefined;
+  status: string | undefined;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [filed, setFiled] = React.useState<string | null>(null);
+  const [form, setForm] = React.useState<{
+    title: string;
+    severity: FileIncidentInput["severity"];
+    cluster: string;
+    rootCause: string;
+    proposedChange: string;
+  }>({
+    title: "",
+    severity: "sev2",
+    cluster: "Monitor-surfaced regression",
+    rootCause: "",
+    proposedChange: "",
+  });
+  const fileIncident = useFileIncident();
+
+  const canFile = !!agentId && !!agentName;
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canFile || !form.title.trim() || !form.proposedChange.trim()) return;
+    const row = fileIncident({
+      agentId: agentId!,
+      agentName: agentName!,
+      title: form.title.trim(),
+      severity: form.severity,
+      cluster: form.cluster.trim() || "Monitor-surfaced regression",
+      rootCause: form.rootCause.trim() || undefined,
+      proposedChange: form.proposedChange.trim(),
+      runId,
+    });
+    setFiled(row.id);
+    setOpen(false);
+    setForm({
+      title: "",
+      severity: "sev2",
+      cluster: "Monitor-surfaced regression",
+      rootCause: "",
+      proposedChange: "",
+    });
+  };
+
+  return (
+    <Card className="p-4 border-l-4 border-l-amber-500/60" data-testid="card-file-incident">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5" />
+          <div>
+            <div className="text-sm font-semibold text-text">Surface this run as an incident</div>
+            <div className="text-xs text-text-mute">
+              Files an Improve-stage row linked back to <code className="text-gold">{runId}</code>
+              {status === "error" && (
+                <span className="ml-2 text-danger">— run errored, candidate for sev2+.</span>
+              )}
+            </div>
+          </div>
+        </div>
+        {filed ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-success" data-testid="text-incident-filed">
+              Filed {filed}
+            </span>
+            <Link
+              href="/agents/improve"
+              className="text-xs font-mono text-gold hover:underline"
+              data-testid="link-open-improve"
+            >
+              Open Improve →
+            </Link>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            disabled={!canFile}
+            data-testid="button-toggle-file-incident"
+            className="inline-flex items-center gap-1.5 bg-amber-500 text-bg-deep px-3 py-1.5 rounded text-xs font-medium hover:bg-amber-400 disabled:opacity-50 transition-colors"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {open ? "Cancel" : "File incident"}
+          </button>
+        )}
+      </div>
+      {open && canFile && (
+        <form onSubmit={submit} className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <label className="md:col-span-2 block">
+            <span className="text-xs font-mono text-text-mute">Title *</span>
+            <input
+              type="text"
+              required
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              data-testid="input-incident-title"
+              className="mt-1 w-full bg-bg-deep border border-border-soft rounded px-3 py-2 text-sm text-text"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-mono text-text-mute">Severity</span>
+            <select
+              value={form.severity}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, severity: e.target.value as FileIncidentInput["severity"] }))
+              }
+              data-testid="select-incident-severity"
+              className="mt-1 w-full bg-bg-deep border border-border-soft rounded px-3 py-2 text-sm font-mono text-text"
+            >
+              <option value="sev1">sev1 — outage</option>
+              <option value="sev2">sev2 — degraded</option>
+              <option value="sev3">sev3 — minor</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-mono text-text-mute">Failure cluster</span>
+            <input
+              type="text"
+              value={form.cluster}
+              onChange={(e) => setForm((f) => ({ ...f, cluster: e.target.value }))}
+              data-testid="input-incident-cluster"
+              className="mt-1 w-full bg-bg-deep border border-border-soft rounded px-3 py-2 text-sm text-text"
+            />
+          </label>
+          <label className="md:col-span-2 block">
+            <span className="text-xs font-mono text-text-mute">Suspected root cause</span>
+            <textarea
+              rows={2}
+              value={form.rootCause}
+              onChange={(e) => setForm((f) => ({ ...f, rootCause: e.target.value }))}
+              data-testid="input-incident-root-cause"
+              className="mt-1 w-full bg-bg-deep border border-border-soft rounded px-3 py-2 text-sm text-text"
+            />
+          </label>
+          <label className="md:col-span-2 block">
+            <span className="text-xs font-mono text-text-mute">Proposed change *</span>
+            <textarea
+              rows={2}
+              required
+              value={form.proposedChange}
+              onChange={(e) => setForm((f) => ({ ...f, proposedChange: e.target.value }))}
+              data-testid="input-incident-proposed-change"
+              className="mt-1 w-full bg-bg-deep border border-border-soft rounded px-3 py-2 text-sm text-text"
+            />
+          </label>
+          <div className="md:col-span-2 flex justify-end">
+            <button
+              type="submit"
+              data-testid="button-submit-incident"
+              className="inline-flex items-center gap-1.5 bg-gold text-bg-deep px-4 py-2 rounded text-sm font-medium hover:bg-gold/90 transition-colors"
+            >
+              File incident
+            </button>
+          </div>
+        </form>
       )}
     </Card>
   );

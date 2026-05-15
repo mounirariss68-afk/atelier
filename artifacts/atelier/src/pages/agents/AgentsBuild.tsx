@@ -4,6 +4,8 @@
  * Versioned change-log per agent: prompt deltas, tool wiring,
  * candidate vs shipped status.
  */
+import * as React from "react";
+import { Rocket } from "lucide-react";
 import {
   PageHero,
   SectionHead,
@@ -11,7 +13,11 @@ import {
   MonoChip,
   Eyebrow,
 } from "@/components/ui/primitives";
-import { useAgentVersions, type AgentVersion } from "@/lib/agents-lens-seed";
+import {
+  useAgentVersions,
+  usePromoteVersion,
+  type AgentVersion,
+} from "@/lib/agents-lens-seed";
 
 const STATUS_TONE: Record<AgentVersion["status"], "default" | "gold" | "green"> = {
   draft: "default",
@@ -21,10 +27,22 @@ const STATUS_TONE: Record<AgentVersion["status"], "default" | "gold" | "green"> 
 
 export default function AgentsBuild() {
   const versions = useAgentVersions();
+  const promote = usePromoteVersion();
+  const [toast, setToast] = React.useState<string | null>(null);
   const byAgent = versions.reduce<Record<string, AgentVersion[]>>((acc, v) => {
     (acc[v.agentName] ||= []).push(v);
     return acc;
   }, {});
+
+  const handlePromote = (versionId: string, env: "staging" | "prod") => {
+    const row = promote(versionId, env, "You · Build owner");
+    if (row) {
+      setToast(
+        `Promoted ${row.agentName} v${row.version} → ${env.toUpperCase()} (${row.rolloutStrategy} · ${row.trafficPct}%)`,
+      );
+      setTimeout(() => setToast(null), 4000);
+    }
+  };
 
   return (
     <div className="animate-in fade-in">
@@ -36,6 +54,17 @@ export default function AgentsBuild() {
           className="mt-3"
         />
       </PageHero>
+
+      {toast && (
+        <div
+          className="container-atelier pt-4"
+          data-testid="toast-promote"
+        >
+          <div className="rounded border border-success/40 bg-success/10 px-4 py-2 text-sm text-success font-mono">
+            {toast}
+          </div>
+        </div>
+      )}
 
       <div className="container-atelier py-10 space-y-10">
         {Object.entries(byAgent).map(([agent, vers]) => (
@@ -82,6 +111,30 @@ export default function AgentsBuild() {
                       ))}
                     </div>
                   )}
+
+                  <div className="border-t border-border-soft pt-3 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-mono text-text-faint">
+                      Promote this version to create a Deploy row.
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePromote(v.id, "staging")}
+                        data-testid={`button-promote-staging-${v.id}`}
+                        className="inline-flex items-center gap-1.5 bg-bg-elevate text-text px-3 py-1.5 rounded text-xs font-medium border border-gold/40 hover:bg-gold/10 transition-colors"
+                      >
+                        <Rocket className="w-3.5 h-3.5" /> Promote → staging
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePromote(v.id, "prod")}
+                        data-testid={`button-promote-prod-${v.id}`}
+                        className="inline-flex items-center gap-1.5 bg-gold text-bg-deep px-3 py-1.5 rounded text-xs font-medium hover:bg-gold/90 transition-colors"
+                      >
+                        <Rocket className="w-3.5 h-3.5" /> Promote → prod
+                      </button>
+                    </div>
+                  </div>
                 </Card>
               ))}
             </div>

@@ -4,6 +4,8 @@
  * Incidents and post-mortems, grouped by failure cluster, with the
  * proposed fix that feeds back into Build / Evaluate.
  */
+import { Link } from "wouter";
+import { ArrowUpRight } from "lucide-react";
 import {
   PageHero,
   SectionHead,
@@ -84,6 +86,18 @@ export default function AgentsImprove() {
                   </span>
                   <span className="text-text">{i.proposedChange}</span>
                 </div>
+                {i.runId && (
+                  <div className="text-xs">
+                    <Link
+                      href={`/agents/monitor/runs/${i.runId}`}
+                      className="inline-flex items-center gap-1 font-mono text-gold hover:underline"
+                      data-testid={`link-incident-run-${i.id}`}
+                    >
+                      Originating run · {i.runId}
+                      <ArrowUpRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+                )}
               </Card>
             ))}
           </div>

@@ -3,6 +3,8 @@
  *
  * Eval suites with rubric, case count, and last-run pass-rate.
  */
+import * as React from "react";
+import { Play } from "lucide-react";
 import {
   PageHero,
   SectionHead,
@@ -11,10 +13,27 @@ import {
   Eyebrow,
   HeroStat,
 } from "@/components/ui/primitives";
-import { useEvalSuites } from "@/lib/agents-lens-seed";
+import {
+  useEvalSuites,
+  useRunEvalSuite,
+  type EvalRunResult,
+} from "@/lib/agents-lens-seed";
 
 export default function AgentsEvaluate() {
   const suites = useEvalSuites();
+  const runSuite = useRunEvalSuite();
+  const [results, setResults] = React.useState<Record<string, EvalRunResult>>({});
+  const [pending, setPending] = React.useState<string | null>(null);
+
+  const handleRun = (suiteId: string) => {
+    setPending(suiteId);
+    // Simulate a short scorecard run so the spinner is visible.
+    setTimeout(() => {
+      const r = runSuite(suiteId);
+      if (r) setResults((prev) => ({ ...prev, [suiteId]: r }));
+      setPending(null);
+    }, 600);
+  };
   const avgPass = suites.length
     ? Math.round((suites.reduce((s, x) => s + x.passRate, 0) / suites.length) * 100)
     : 0;
@@ -72,6 +91,31 @@ export default function AgentsEvaluate() {
                   style={{ width: `${pct}%` }}
                   aria-hidden
                 />
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {results[s.id] ? (
+                  <span
+                    className="text-xs font-mono text-text-mute"
+                    data-testid={`eval-result-${s.id}`}
+                  >
+                    Last run: <span className="text-success">{results[s.id].passed} passed</span> ·{" "}
+                    <span className="text-danger">{results[s.id].failed} failed</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-mono text-text-faint">
+                    Run produces a fresh scorecard.
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleRun(s.id)}
+                  disabled={pending === s.id}
+                  data-testid={`button-run-suite-${s.id}`}
+                  className="inline-flex items-center gap-1.5 bg-gold text-bg-deep px-3 py-1.5 rounded text-xs font-medium hover:bg-gold/90 disabled:opacity-50 transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  {pending === s.id ? "Running…" : "Run suite"}
+                </button>
               </div>
             </Card>
           );

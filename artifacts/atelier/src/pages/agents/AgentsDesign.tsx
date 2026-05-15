@@ -4,8 +4,9 @@
  * Lists agent specs awaiting Build, with intent / tools / guardrails
  * and a fork-from-library entry into Atelier (the firm IP catalogue).
  */
+import * as React from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, GitFork } from "lucide-react";
+import { ArrowUpRight, GitFork, Check, MessageSquareWarning } from "lucide-react";
 import {
   PageHero,
   SectionHead,
@@ -14,7 +15,11 @@ import {
   Eyebrow,
   PillButton,
 } from "@/components/ui/primitives";
-import { useAgentSpecs, type AgentSpec } from "@/lib/agents-lens-seed";
+import {
+  useAgentSpecs,
+  useDesignSpecActions,
+  type AgentSpec,
+} from "@/lib/agents-lens-seed";
 
 const STATUS_TONE: Record<AgentSpec["status"], "default" | "gold" | "green"> = {
   drafting: "default",
@@ -24,6 +29,7 @@ const STATUS_TONE: Record<AgentSpec["status"], "default" | "gold" | "green"> = {
 
 export default function AgentsDesign() {
   const specs = useAgentSpecs();
+  const actions = useDesignSpecActions();
   return (
     <div className="animate-in fade-in">
       <PageHero>
@@ -120,6 +126,8 @@ export default function AgentsDesign() {
               </div>
             </div>
 
+            <SpecActions spec={spec} actions={actions} />
+
             <div className="flex justify-end">
               <Link
                 href={`/agents/design/${spec.forkedFrom ?? spec.id}`}
@@ -131,6 +139,66 @@ export default function AgentsDesign() {
             </div>
           </Card>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function SpecActions({
+  spec,
+  actions,
+}: {
+  spec: AgentSpec;
+  actions: ReturnType<typeof useDesignSpecActions>;
+}) {
+  const [note, setNote] = React.useState("");
+  const [pending, setPending] = React.useState<"approve" | "request_changes" | null>(null);
+  const isApproved = spec.status === "approved";
+
+  const submit = (kind: "approve" | "request_changes") => {
+    setPending(kind);
+    const actor = "You · Reviewer";
+    if (kind === "approve") actions.approve(spec.id, actor, note.trim());
+    else actions.requestChanges(spec.id, actor, note.trim());
+    setNote("");
+    setTimeout(() => setPending(null), 350);
+  };
+
+  return (
+    <div
+      className="border-t border-border-soft pt-3 flex flex-col sm:flex-row sm:items-center gap-3"
+      data-testid={`spec-actions-${spec.id}`}
+    >
+      <input
+        type="text"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Reviewer note (optional)…"
+        className="flex-1 bg-bg-deep border border-border-soft rounded px-3 py-2 text-xs text-text"
+        data-testid={`input-spec-note-${spec.id}`}
+      />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={isApproved || pending !== null}
+          onClick={() => submit("request_changes")}
+          data-testid={`button-spec-request-changes-${spec.id}`}
+          className="inline-flex items-center gap-1.5 bg-bg-elevate text-text px-3 py-1.5 rounded text-xs font-medium border border-border-soft hover:bg-bg-elevate/80 disabled:opacity-50 transition-colors"
+        >
+          <MessageSquareWarning className="w-3.5 h-3.5" /> Request changes
+        </button>
+        <button
+          type="button"
+          disabled={isApproved || pending !== null}
+          onClick={() => submit("approve")}
+          data-testid={`button-spec-approve-${spec.id}`}
+          className="inline-flex items-center gap-1.5 bg-success text-bg-deep px-3 py-1.5 rounded text-xs font-medium hover:bg-success/90 disabled:opacity-50 transition-colors"
+        >
+          <Check className="w-3.5 h-3.5" /> Approve
+        </button>
+        {isApproved && (
+          <span className="text-xs text-text-faint italic">Approved — ready for Build.</span>
+        )}
       </div>
     </div>
   );
