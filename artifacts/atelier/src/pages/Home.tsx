@@ -3,7 +3,7 @@ import { useAtelierGetHome, useAtelierGetMe } from "@workspace/api-client-react"
 import { SectionHead, PageHero, Card, MonoChip, PlmPill, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, ClipboardList, Sparkles, MessageSquare } from "lucide-react";
+import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, ClipboardList, Sparkles, MessageSquare, Store } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CliContext } from "@/components/cli/cli-context";
 import { s as cliS } from "@/components/cli/locale";
@@ -376,6 +376,13 @@ function WorkspaceShelf({ role }: { role: string }) {
         testid: "tile-workspace-margin-wip",
       });
     }
+    out.push({
+      href: "/salon",
+      label: "Salon",
+      icon: <Store className="w-4 h-4" />,
+      state: <span className="text-text-faint">client portal</span>,
+      testid: "tile-workspace-salon",
+    });
     return out;
   }, [canSeeTimesheet, canSeeRoster, canSeeFinance, ts, headcount, marginTarget]);
 
