@@ -44,6 +44,10 @@ import {
   summariseChangeOrders,
   type EngagementHealthRow,
 } from "../../lib/atelier-eac-engine.js";
+import {
+  recomputeAllEngagementCostsToDate,
+  recomputeEngagementCostToDate,
+} from "../../lib/atelier-engagement-pnl-recompute.js";
 
 const router: IRouter = Router();
 
@@ -193,6 +197,7 @@ function buildHealthRow(
 router.get("/finance/engagement-pnl", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  await recomputeAllEngagementCostsToDate({ actorUserId: me.id });
   const budgets = await listBudgets();
   const ids = budgets.map((b) => b.engagementId);
   const [names, allCoRows, allCosts, allEtcs] = await Promise.all([
@@ -239,6 +244,7 @@ router.get("/finance/engagement-pnl", async (req, res) => {
 router.get("/finance/engagement-pnl/summary", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  await recomputeAllEngagementCostsToDate({ actorUserId: me.id });
   const [budgets, allCosts, allEtcs, allCoRows] = await Promise.all([
     listBudgets(),
     listCosts(),
@@ -289,6 +295,7 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const id = req.params.engagementId;
+  await recomputeEngagementCostToDate(id, { actorUserId: me.id });
   const [budget, cost, etcRow, coRows, audit, names] = await Promise.all([
     getBudget(id),
     getCost(id),
@@ -394,6 +401,39 @@ router.post("/finance/engagement-pnl/:engagementId/etc", async (req, res) => {
   const [budget, cost] = await Promise.all([getBudget(id), getCost(id)]);
   const eac = budget && cost ? computeEac({ budget, cost, etc: updated }) : null;
   res.json({ etc: updated, eac });
+});
+
+// ---------------------------------------------------------------
+// On-demand recompute of cost-to-date from live timesheet/expense data
+// POST /finance/engagement-pnl/recompute
+// POST /finance/engagement-pnl/:engagementId/recompute
+// ---------------------------------------------------------------
+router.post("/finance/engagement-pnl/recompute", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!canWrite(me.role)) {
+    res.status(403).json({ error: "recompute-denied" });
+    return;
+  }
+  const results = await recomputeAllEngagementCostsToDate({ actorUserId: me.id });
+  res.json({ results });
+});
+
+router.post("/finance/engagement-pnl/:engagementId/recompute", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!canWrite(me.role)) {
+    res.status(403).json({ error: "recompute-denied" });
+    return;
+  }
+  const result = await recomputeEngagementCostToDate(req.params.engagementId, {
+    actorUserId: me.id,
+  });
+  if (result.status === "engagement_unknown" || result.status === "no_cost_row") {
+    res.status(404).json({ error: result.status, result });
+    return;
+  }
+  res.json({ result });
 });
 
 // ---------------------------------------------------------------
