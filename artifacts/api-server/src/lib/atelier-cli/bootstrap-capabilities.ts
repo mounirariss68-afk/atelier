@@ -27,6 +27,13 @@ import "./parity-capabilities.js";
 // recruiter) and board observers — defence in depth above each
 // entry's `requiredRoles`.
 import "./codex-capabilities.js";
+// L2C Wave 2 (Task #361) — revenue recognition, period postings,
+// adjustments, WIP, margin, leakage. Catalog gate strips the
+// `revrec`/`wip`/`margin`/`leakage` modules from restricted personas
+// and from board_observer EXCEPT the rollup ids in
+// `BOARD_OBSERVER_ROLLUP_ALLOWLIST` (wip_report, leakage_report,
+// revrec_compute_schedule).
+import "./revrec-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

@@ -20,6 +20,68 @@ interface RollupRow { partnerFirmId: string; hours: number; costAmount: number; 
 interface HoursRow { id: string; partnerFirmId: string; resourceName: string; weekIso: string; hours: number; costAmount: number; costCurrency: string; uploadedAt: string; }
 interface EconResp { engagementId: string; engagementName: string; partnerFirmRollup: RollupRow[]; rows: HoursRow[]; }
 
+function EngagementMarginCard({ engagementId }: { engagementId: string }) {
+  const [data, setData] = React.useState<{
+    snapshot: { revenueRecognised: number; directCost: number; grossMarginAmount: number; grossMarginPct: number; leakageAmount: number; realizationRate: number; periodLabel: string } | null;
+    milestones: Array<{ id: string; label: string; status: string; amount: number; currency: string }>;
+  } | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    Promise.all([
+      fetch(`/api/atelier/margin/engagements/${engagementId}`, { credentials: "include" }).then((r) => r.json()).catch(() => null),
+      fetch(`/api/atelier/revrec/milestones?engagementId=${engagementId}`, { credentials: "include" }).then((r) => r.json()).catch(() => ({ milestones: [] })),
+    ]).then(([m, ms]) => {
+      if (!alive) return;
+      const raw = (m?.snapshots ?? [])[0] ?? null;
+      const snap = raw ? {
+        revenueRecognised: Number(raw.revenueRecognised ?? raw.revenue_recognised ?? 0),
+        directCost: Number(raw.directCost ?? raw.direct_cost ?? 0),
+        grossMarginAmount: Number(raw.grossMarginAmount ?? raw.gross_margin_amount ?? 0),
+        grossMarginPct: Number(raw.grossMarginPct ?? raw.gross_margin_pct ?? 0),
+        leakageAmount: Number(raw.leakageAmount ?? raw.leakage_amount ?? 0),
+        realizationRate: Number(raw.realizationRate ?? raw.realization_rate ?? 0),
+        periodLabel: String(raw.periodLabel ?? raw.period_label ?? ""),
+      } : null;
+      setData({ snapshot: snap, milestones: ms?.milestones ?? [] });
+    });
+    return () => { alive = false; };
+  }, [engagementId]);
+  if (!data || !data.snapshot) return null;
+  const s = data.snapshot;
+  const fmt = (n: number) => `$${(n ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  const pctFmt = (n: number) => `${((n ?? 0) * 100).toFixed(1)}%`;
+  const tone = s.grossMarginPct >= 0.45 ? "green" : s.grossMarginPct >= 0.3 ? "amber" : "red";
+  return (
+    <Card className="p-4" data-testid="engagement-margin-card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm uppercase tracking-wider text-text-mute">Recognised revenue, margin & leakage · {s.periodLabel}</h3>
+        <Link href="/wallet/revrec" className="text-xs text-gold underline">Open rev-rec</Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+        <div><div className="text-xs text-text-mute">Revenue</div><div className="font-mono">{fmt(s.revenueRecognised)}</div></div>
+        <div><div className="text-xs text-text-mute">Direct cost</div><div className="font-mono">{fmt(s.directCost)}</div></div>
+        <div><div className="text-xs text-text-mute">Margin</div><div className="font-mono">{fmt(s.grossMarginAmount)}</div><MonoChip tone={tone}>{pctFmt(s.grossMarginPct)}</MonoChip></div>
+        <div><div className="text-xs text-text-mute">Realization</div><div className="font-mono">{pctFmt(s.realizationRate)}</div></div>
+        <div><div className="text-xs text-text-mute">Leakage</div><div className="font-mono text-gold">{fmt(s.leakageAmount)}</div></div>
+      </div>
+      {data.milestones.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs uppercase text-text-mute mb-2">Milestones</div>
+          <ul className="space-y-1 text-sm">
+            {data.milestones.map((m) => (
+              <li key={m.id} className="flex items-center gap-2">
+                <MonoChip tone={m.status === "earned" || m.status === "invoiceable" ? "green" : m.status === "client_accepted" ? "gold" : "default"}>{m.status}</MonoChip>
+                <span className="flex-1 truncate">{m.label}</span>
+                <span className="font-mono text-xs text-text-mute">{fmt(m.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 interface PlanVsActualRow { seniority: string; plannedHours: number; actualHours: number; variancePct: number; actualCostUsd: number; actualPriceUsd: number; }
 interface UtilEngResp {
   engagementId: string;
@@ -185,6 +247,8 @@ export default function EngagementEconomics() {
 
       {error && <Card className="border-red-500/40 p-3 text-sm text-red-300">{error}</Card>}
       {loading && <Card className="p-4 text-text-mute">Loading…</Card>}
+
+      <EngagementMarginCard engagementId={engagementId} />
 
       {util && (
         <>

@@ -3181,7 +3181,25 @@ export async function confirmPendingWrite(
   };
 
   if (!turn) return fail("not_found", `turn ${turnId} not found`);
-  if (turn.userId !== persona.id) return fail("forbidden", "not your turn");
+  // Task #361 — capability `approverRoles` enables initiator/approver
+  // separation on irreversible writes (e.g. revrec_post_period: initiated
+  // by finance, posted by founding_partner). When set, the confirming
+  // persona must (a) match an approverRole and (b) NOT be the initiator
+  // of the turn (cross-user attestation). Otherwise fall back to the
+  // pre-Wave-2 behaviour: same-user confirmation.
+  const pendingTool = (turn.pendingWrite as { tool?: string } | null)?.tool;
+  const approverEntry = pendingTool ? findByToolName(pendingTool) : null;
+  const approverRoles = approverEntry?.approverRoles ?? [];
+  if (approverRoles.length > 0) {
+    if (!(approverRoles as string[]).includes(persona.role)) {
+      return fail("forbidden", `confirm requires one of: ${approverRoles.join(", ")}`);
+    }
+    if (turn.userId === persona.id) {
+      return fail("forbidden", "approver must differ from initiator");
+    }
+  } else if (turn.userId !== persona.id) {
+    return fail("forbidden", "not your turn");
+  }
   if (turn.status !== "awaiting_confirmation") {
     // Idempotent re-confirm: if it already succeeded, replay final frame.
     if (turn.status === "success" || turn.status === "partial") {

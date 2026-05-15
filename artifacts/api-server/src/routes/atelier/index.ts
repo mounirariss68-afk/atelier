@@ -71,6 +71,7 @@ import v5Routes from "./v5Routes";
 import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
 import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
+import revrecRoutes from "./revrecRoutes";
 
 async function recordEngagementRead(
   me: typeof atelierUsers.$inferSelect,
@@ -219,6 +220,11 @@ router.use(changeOrderRoutes);
 // atelier_milestone_acceptance_v (migration 0032) to enforce that
 // `client_accepted` requires a `client_signed` row here.
 router.use(deliverableAcceptanceRoutes);
+
+// L2C Wave 2 (Task #361) — Revenue recognition, period postings,
+// adjustments, WIP snapshots, engagement margin, leakage. Mounts
+// /revrec/*, /wip/*, /margin/*, /leakage. Gated per-handler.
+router.use(revrecRoutes);
 
 function ensurePersona(
   req: Request,

@@ -62,7 +62,16 @@ export type CapabilityModule =
   // regardless of `requiredRoles`. See `capabilitiesForPersona` below.
   | "codex"
   | "change_order"
-  | "deliverable_acceptance";
+  | "deliverable_acceptance"
+  // L2C Wave 2 (Task #361) — Revenue recognition, WIP, engagement
+  // margin, leakage. board_observer is allow-listed onto the firm-wide
+  // rollup capabilities (`wip_report`, `leakage_report`,
+  // `revrec_compute_schedule` read-only) via the explicit
+  // `BOARD_OBSERVER_ROLLUP_ALLOWLIST` set below — never module-wide.
+  | "revrec"
+  | "wip"
+  | "margin"
+  | "leakage";
 
 /**
  * Outbound side-effect channel a capability fires when it commits.
@@ -224,6 +233,15 @@ export interface CapabilityEntry {
   irreversible: boolean;
   /** Personas allowed to invoke. Empty/omitted ⇒ everyone except `board_observer`. */
   requiredRoles?: AtelierRole[];
+  /**
+   * L2C Wave 2 (Task #361) — Personas allowed on the SECOND phase
+   * (`/confirm`) of a two-phase write. Empty/omitted preserves the
+   * pre-Wave-2 behaviour: the same `requiredRoles` are required for
+   * both phases. Set this when the approver perimeter must be tighter
+   * than the initiator perimeter (e.g. `revrec_post_period` is
+   * initiated by `finance` but irrev-posted only by `founding_partner`).
+   */
+  approverRoles?: AtelierRole[];
   /** Surfaces where the slash-command palette should advertise this. */
   surfaceOn: SurfaceContext[];
   /**
@@ -343,6 +361,30 @@ const RESTRICTED_DENIED_MODULES: ReadonlySet<CapabilityModule> = new Set([
   "codex",
   "change_order",
   "deliverable_acceptance",
+  // L2C Wave 2 — restricted personas (contractor / partner_firm_resource /
+  // recruiter) never see revenue, WIP, margin, or leakage surfaces.
+  "revrec",
+  "wip",
+  "margin",
+  "leakage",
+]);
+
+/**
+ * L2C Wave 2 (Task #361) — Allow-list of capability ids the
+ * `board_observer` persona is permitted to call despite the strict
+ * read-only/board-realm gate below. Hard-coded ids (NOT module-wide)
+ * so individual invoice / receipt / dunning capabilities (Waves 3+4)
+ * remain denied until the boardroom realm declares them.
+ *
+ * Wave-3 + Wave-4 ids are declared up-front per spec so the catalog
+ * gate is the only thing that needs to change when those waves ship.
+ */
+export const BOARD_OBSERVER_ROLLUP_ALLOWLIST: ReadonlySet<string> = new Set([
+  "wip_report",
+  "leakage_report",
+  "revrec_compute_schedule", // read-only invocation: returns cached schedule
+  "ar_aging_report", // Wave 3 — declared up-front
+  "cash_forecast_13w", // Wave 4 — declared up-front
 ]);
 
 export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
@@ -360,6 +402,11 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
       // agent mapped to `meta`) cannot leak a mutation onto the
       // observer surface.
       if (e.isWrite) return false;
+      // L2C Wave 2 — explicit allow-list of firm-wide rollup ids the
+      // board_observer is permitted to see. Checked BEFORE the
+      // module-deny gate so the rollup capabilities can live in the
+      // (otherwise denied) revrec / wip / leakage modules.
+      if (BOARD_OBSERVER_ROLLUP_ALLOWLIST.has(e.id)) return true;
       // Board observer also denied L2C surfaces (no contract / change-
       // order / acceptance visibility) until the boardroom realm ships.
       if (RESTRICTED_DENIED_MODULES.has(e.module)) return false;

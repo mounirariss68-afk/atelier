@@ -367,6 +367,13 @@ function WorkspaceShelf({ role }: { role: string }) {
           : <span className="text-text-faint">rate cards</span>,
         testid: "tile-workspace-finance",
       });
+      out.push({
+        href: "/wallet/margin",
+        label: "Margin & WIP",
+        icon: <Wallet className="w-4 h-4" />,
+        state: <span className="text-text-faint">rev-rec · leakage</span>,
+        testid: "tile-workspace-margin-wip",
+      });
     }
     return out;
   }, [canSeeTimesheet, canSeeRoster, canSeeFinance, ts, headcount, marginTarget]);
