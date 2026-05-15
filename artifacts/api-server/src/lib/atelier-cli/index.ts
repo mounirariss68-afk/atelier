@@ -2286,6 +2286,15 @@ export async function runTurn(
     let finalEmitted = false;
 
     function record(frame: CliFrame): void {
+      // Tag every frame with the real Anthropic model id observed for
+      // this turn so SSE consumers see the actual Sonnet/Haiku name on
+      // every step (per acceptance criterion: no implicit "claude" /
+      // env-var labels). Frames emitted before the first modelStep
+      // call carry `null` to make the absence explicit.
+      const data = (frame as { data?: Record<string, unknown> }).data;
+      if (data && typeof data === "object" && !("model" in data)) {
+        (data as Record<string, unknown>).model = lastModel ?? null;
+      }
       frames.push(frame);
       if (frame.type === "final") finalEmitted = true;
       emit(frame);

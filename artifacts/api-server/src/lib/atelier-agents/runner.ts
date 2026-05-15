@@ -3647,12 +3647,16 @@ async function runV5GenericAgent(args: {
       actorLabel: args.actorLabel,
     },
     async (_ctx) => {
-      const promptBody = loadPrompt(args.promptId as AtelierAgentId);
-      const userPrompt = JSON.stringify({
-        ...(args.promptVersion ? { _promptVersion: args.promptVersion } : {}),
-        ...(args.promptMode ? { _promptMode: args.promptMode } : {}),
-        ...args.input,
-      });
+      // Honor the v5 mode-extension contract: `(promptId, version, mode)`
+      // resolves to the right `vN_<mode>_mode.md` file (e.g. press,
+      // partner, recruiting). Falling back to the base prompt would
+      // silently regress those agents.
+      const promptBody = loadPrompt(
+        args.promptId as AtelierAgentId,
+        args.promptVersion ?? 1,
+        args.promptMode,
+      );
+      const userPrompt = JSON.stringify(args.input);
       const { value, costUsd } = await callClaudeJson<unknown>(
         args.model,
         promptBody,
