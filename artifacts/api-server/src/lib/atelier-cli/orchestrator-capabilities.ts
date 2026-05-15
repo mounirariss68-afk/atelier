@@ -56,6 +56,10 @@ import {
   type StageGateInput,
 } from "../atelier-agents/pipeline.js";
 import type { SalesStage } from "../atelier-agents/pipeline.js";
+import {
+  runAccountCartographer,
+  runPursuitScout,
+} from "../atelier-agents/runner.js";
 
 const FUZZY_LIMIT = 5;
 
@@ -336,6 +340,11 @@ defineCapability({
         type: "string",
         enum: ["account", "opportunity", "contact", "engagement"],
       },
+      targetId: {
+        type: "string",
+        description:
+          "Existing entity id (verb=update). When provided, the specialist is dispatched against the live row; when absent (verb=create) the call returns advisory hints only.",
+      },
       input: {
         type: "object",
         additionalProperties: true,
@@ -352,16 +361,86 @@ defineCapability({
   irreversible: false,
   surfaceOn: ["global"],
   source: "cli-only",
-  async run(input) {
+  async run(input, ctx) {
     const kind = String(input.kind ?? "");
     const inp = (input.input ?? {}) as Record<string, unknown>;
 
+    const targetId = typeof input.targetId === "string" ? input.targetId : null;
+
     if (kind === "account") {
-      // We do NOT actually fire Account Cartographer here — the
-      // existing pre-create accountRoutes flow already auto-runs it
-      // and persists pendingProfileUpdates. This capability returns
-      // the dispatch hint + a structured prefill stub the LLM can
-      // surface so the user knows what to expect.
+      // When targetId is provided (verb=update), actually dispatch
+      // Account Cartographer via runAgent so the orchestrator returns
+      // a real, freshly-derived prefill (firmographics + signals).
+      // Without targetId (verb=create) we degrade to an advisory hint
+      // because Cartographer requires an existing account row — the
+      // post-create accountRoutes flow handles that case.
+      if (targetId) {
+        try {
+          const [acct] = await db
+            .select({
+              id: atelierAccounts.id,
+              name: atelierAccounts.name,
+              brandName: atelierAccounts.brandName,
+              sector: atelierAccounts.sector,
+              country: atelierAccounts.country,
+            })
+            .from(atelierAccounts)
+            .where(
+              and(
+                eq(atelierAccounts.id, targetId),
+                eq(atelierAccounts.orgId, ctx.persona.orgId),
+                isNull(atelierAccounts.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!acct) {
+            return {
+              ok: false,
+              errorCode: "not_found",
+              errorMessage: `Account ${targetId} not found in this org.`,
+            };
+          }
+          const result = await runAccountCartographer({
+            accountId: acct.id,
+            accountName: acct.brandName ?? acct.name,
+            accountSector: acct.sector ?? "",
+            accountCountry: acct.country ?? "",
+            triggeredByUserId: ctx.persona.id,
+            actorLabel: "Chat Orchestrator",
+          });
+          const out = result.output as unknown as Record<string, unknown> | null;
+          // Normalise into { draft, missingRequiredFields, ... }
+          // contract expected by the orchestrator policy.
+          const draft = out ?? {};
+          const required = ["sector", "country", "primaryCurrency", "primaryLanguage"];
+          const missingRequiredFields = required.filter(
+            (k) => !(k in draft) || draft[k] == null || draft[k] === "",
+          );
+          return {
+            ok: true,
+            data: {
+              specialist: {
+                id: "ag_account_cartographer",
+                name: "Account Cartographer",
+                runId: result.runId,
+                source: result.source,
+                costUsd: result.costUsd,
+              },
+              draft,
+              missingRequiredFields,
+              missingOptionalFields: [],
+              lowConfidenceFields: result.warning ? ["*"] : [],
+            },
+          };
+        } catch (e) {
+          return {
+            ok: false,
+            errorCode: "specialist_failed",
+            errorMessage: `Cartographer dispatch failed: ${(e as Error).message}`,
+          };
+        }
+      }
+      // Pre-create advisory hint.
       return {
         ok: true,
         data: {
@@ -369,9 +448,9 @@ defineCapability({
             id: "ag_account_cartographer",
             name: "Account Cartographer",
             triggeredOn: "create",
-            note: "Cartographer auto-runs after the account is created and queues firmographics + signals as pendingProfileUpdates for partner review.",
+            note: "Cartographer auto-runs post-create on the existing accountRoutes path and queues firmographics + signals as pendingProfileUpdates for partner review.",
           },
-          prefill: {
+          draft: {
             sector: typeof inp.sector === "string" ? inp.sector : null,
             country: typeof inp.country === "string" ? inp.country : null,
             tier: typeof inp.tier === "string" ? inp.tier : "C",
@@ -380,11 +459,89 @@ defineCapability({
             primaryLanguage:
               typeof inp.primaryLanguage === "string" ? inp.primaryLanguage : "en",
           },
+          missingRequiredFields: ["partnerOwnerId"],
+          missingOptionalFields: ["website", "tier"],
+          lowConfidenceFields: [],
         },
       };
     }
 
     if (kind === "opportunity") {
+      // Same pattern: real Pursuit Scout when targetId exists,
+      // advisory hint otherwise.
+      if (targetId) {
+        try {
+          const [opp] = await db
+            .select({
+              id: atelierOpportunities.id,
+              name: atelierOpportunities.name,
+              accountId: atelierOpportunities.accountId,
+            })
+            .from(atelierOpportunities)
+            .where(
+              and(
+                eq(atelierOpportunities.id, targetId),
+                eq(atelierOpportunities.orgId, ctx.persona.orgId),
+                isNull(atelierOpportunities.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!opp) {
+            return {
+              ok: false,
+              errorCode: "not_found",
+              errorMessage: `Opportunity ${targetId} not found in this org.`,
+            };
+          }
+          const [acct] = await db
+            .select({
+              name: atelierAccounts.name,
+              brandName: atelierAccounts.brandName,
+              sector: atelierAccounts.sector,
+              country: atelierAccounts.country,
+            })
+            .from(atelierAccounts)
+            .where(eq(atelierAccounts.id, opp.accountId))
+            .limit(1);
+          const result = await runPursuitScout({
+            opportunityId: opp.id,
+            accountName: acct?.brandName ?? acct?.name ?? "",
+            accountCountry: acct?.country ?? "",
+            accountSector: acct?.sector ?? "",
+            opportunityName: opp.name,
+            contextBlurb:
+              typeof inp.contextBlurb === "string" ? inp.contextBlurb : opp.name,
+            triggeredByUserId: ctx.persona.id,
+            actorLabel: "Chat Orchestrator",
+          });
+          const draft = (result.output as unknown as Record<string, unknown> | null) ?? {};
+          const required = ["qualify5c", "decisionMakers"];
+          const missingRequiredFields = required.filter(
+            (k) => !(k in draft) || draft[k] == null,
+          );
+          return {
+            ok: true,
+            data: {
+              specialist: {
+                id: "ag_pursuit_scout",
+                name: "Pursuit Scout",
+                runId: result.runId,
+                costUsd: result.costUsd,
+              },
+              draft,
+              missingRequiredFields,
+              missingOptionalFields: [],
+              lowConfidenceFields: [],
+            },
+          };
+        } catch (e) {
+          return {
+            ok: false,
+            errorCode: "specialist_failed",
+            errorMessage: `Pursuit Scout dispatch failed: ${(e as Error).message}`,
+          };
+        }
+      }
       return {
         ok: true,
         data: {
@@ -392,9 +549,9 @@ defineCapability({
             id: "ag_pursuit_scout",
             name: "Pursuit Scout",
             triggeredOn: "create",
-            note: "Pursuit Scout auto-runs after the opportunity is created and writes a 5C draft + buyer landscape to the opportunity workspace.",
+            note: "Pursuit Scout auto-runs post-create and writes a 5C draft + buyer landscape to the opportunity workspace.",
           },
-          prefill: {
+          draft: {
             stage: "suspect",
             subStatus: "cold",
             probabilityPct: 5,
@@ -403,6 +560,9 @@ defineCapability({
               typeof inp.opportunityName === "string" ? inp.opportunityName : null,
             contextBlurb: typeof inp.contextBlurb === "string" ? inp.contextBlurb : null,
           },
+          missingRequiredFields: ["accountId", "opportunityName"],
+          missingOptionalFields: ["dealValueUsd", "expectedCloseDate"],
+          lowConfidenceFields: [],
         },
       };
     }
@@ -486,8 +646,21 @@ defineCapability({
   inputSchema: {
     type: "object",
     properties: {
-      opportunityId: { type: "string" },
-      toStage: { type: "string", enum: ALL_STAGES },
+      kind: {
+        type: "string",
+        enum: ["opportunity", "engagement", "deliverable", "expense"],
+        description: "Entity whose transition is being evaluated. Defaults to 'opportunity'.",
+      },
+      opportunityId: { type: "string", description: "Opportunity id (kind=opportunity)." },
+      targetId: {
+        type: "string",
+        description: "Target entity id for kind in {engagement, deliverable, expense}.",
+      },
+      toStage: {
+        type: "string",
+        description:
+          "Desired next stage / status. For opportunity: one of the SalesStage enum. For engagement: mobilize|deliver|compound|closed. For deliverable: in_review|published|final. For expense: submitted|approved|rejected.",
+      },
       proposed: {
         type: "object",
         properties: {
@@ -505,7 +678,7 @@ defineCapability({
         additionalProperties: true,
       },
     },
-    required: ["opportunityId", "toStage"],
+    required: ["toStage"],
     additionalProperties: false,
   },
   isWrite: false,
@@ -517,17 +690,226 @@ defineCapability({
   source: "cli-only",
   async run(input, ctx) {
     const orgId = ctx.persona.orgId;
-    const opportunityId = String(input.opportunityId ?? "");
-    const toStage = String(input.toStage ?? "") as SalesStage;
+    const kind = (typeof input.kind === "string" ? input.kind : "opportunity") as
+      | "opportunity"
+      | "engagement"
+      | "deliverable"
+      | "expense";
+    const toStage = String(input.toStage ?? "");
     const proposed = (input.proposed ?? {}) as Record<string, unknown>;
 
-    if (!opportunityId || !ALL_STAGES.includes(toStage)) {
+    // ----- Non-opportunity adapters (table-driven). The opportunity
+    // path stays as the canonical implementation that consumes
+    // validateStageTransition; the others are thin status-taxonomy
+    // checks until dedicated validators land (task spec lists them
+    // as "to be located/added").
+    if (kind !== "opportunity") {
+      const targetId = typeof input.targetId === "string" ? input.targetId : "";
+      if (!targetId || !toStage) {
+        return {
+          ok: false,
+          errorCode: "bad_input",
+          errorMessage: `evaluate_gate(${kind}) requires targetId and toStage.`,
+        };
+      }
+      type GateRow = {
+        id: string;
+        label: string;
+        met: boolean;
+        missing?: string[];
+        reason?: string;
+        overrideAvailable: boolean;
+      };
+      const partnerOverride = proposed.partnerOverride === true;
+      let currentStage = "";
+      let entityName = "";
+      const rows: GateRow[] = [];
+
+      if (kind === "engagement") {
+        const allowed: Record<string, string[]> = {
+          mobilize: ["deliver"],
+          deliver: ["compound", "closed"],
+          compound: ["closed"],
+          closed: [],
+        };
+        const [row] = await db
+          .select({
+            id: atelierEngagements.id,
+            name: atelierEngagements.name,
+            plmStage: atelierEngagements.plmStage,
+          })
+          .from(atelierEngagements)
+          .where(
+            and(
+              eq(atelierEngagements.id, targetId),
+              eq(atelierEngagements.orgId, orgId),
+              isNull(atelierEngagements.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          return { ok: false, errorCode: "not_found", errorMessage: `Engagement ${targetId} not found.` };
+        }
+        currentStage = row.plmStage;
+        entityName = row.name;
+        const validNext = (allowed[currentStage] ?? []).includes(toStage);
+        rows.push({
+          id: "engagement_phase_taxonomy",
+          label: `PLM phase advance ${currentStage} → ${toStage}`,
+          met: validNext || partnerOverride,
+          reason: validNext
+            ? undefined
+            : `Engagements in '${currentStage}' may transition only to: ${(allowed[currentStage] ?? []).join(", ") || "none"}.`,
+          overrideAvailable: true,
+        });
+      } else if (kind === "deliverable") {
+        // Partner Authority Lock: critic readiness must be GREEN to
+        // publish (or partner override w/ rationale).
+        const [row] = await db
+          .select({
+            id: atelierDeliverables.id,
+            name: atelierDeliverables.name,
+            status: atelierDeliverables.status,
+            criticReadiness: atelierDeliverables.criticReadiness,
+            partnerApprovedAt: atelierDeliverables.partnerApprovedAt,
+          })
+          .from(atelierDeliverables)
+          .where(
+            and(
+              eq(atelierDeliverables.id, targetId),
+              eq(atelierDeliverables.orgId, orgId),
+              isNull(atelierDeliverables.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          return { ok: false, errorCode: "not_found", errorMessage: `Deliverable ${targetId} not found.` };
+        }
+        currentStage = row.status;
+        entityName = row.name;
+        const isPublish = toStage === "published" || toStage === "final";
+        if (isPublish) {
+          rows.push({
+            id: "synthesis_critic_green",
+            label: "Synthesis Critic readiness is GREEN",
+            met: row.criticReadiness === "green" || partnerOverride,
+            reason:
+              row.criticReadiness === "green"
+                ? undefined
+                : `Critic readiness is '${row.criticReadiness ?? "unknown"}'. Resolve criticisms or record a partner override with rationale.`,
+            overrideAvailable: true,
+          });
+          rows.push({
+            id: "partner_authority_lock",
+            label: "Partner Authority Lock satisfied",
+            met: !!row.partnerApprovedAt || partnerOverride,
+            reason: row.partnerApprovedAt
+              ? undefined
+              : "A partner must approve before publish (or override with logged rationale).",
+            overrideAvailable: true,
+          });
+        } else {
+          rows.push({
+            id: "deliverable_status_taxonomy",
+            label: `Deliverable status advance ${currentStage} → ${toStage}`,
+            met: true,
+            overrideAvailable: false,
+          });
+        }
+      } else if (kind === "expense") {
+        const [row] = await db
+          .select({
+            id: atelierExpenses.id,
+            status: atelierExpenses.status,
+            policyStatus: atelierExpenses.policyStatus,
+            captureSource: atelierExpenses.captureSource,
+            merchant: atelierExpenses.merchant,
+          })
+          .from(atelierExpenses)
+          .where(
+            and(
+              eq(atelierExpenses.id, targetId),
+              eq(atelierExpenses.orgId, orgId),
+              isNull(atelierExpenses.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!row) {
+          return { ok: false, errorCode: "not_found", errorMessage: `Expense ${targetId} not found.` };
+        }
+        currentStage = row.status;
+        entityName = row.merchant ?? targetId;
+        if (toStage === "approved") {
+          rows.push({
+            id: "expense_policy_green",
+            label: "Policy check is GREEN",
+            met: row.policyStatus === "green" || partnerOverride,
+            reason:
+              row.policyStatus === "green"
+                ? undefined
+                : `Policy status is '${row.policyStatus}'. Resolve flags or record an override.`,
+            overrideAvailable: true,
+          });
+          rows.push({
+            id: "expense_must_be_submitted",
+            label: "Expense is in 'submitted' state",
+            met: row.status === "submitted",
+            reason:
+              row.status === "submitted"
+                ? undefined
+                : `Expense is currently '${row.status}'; only submitted expenses may be approved.`,
+            overrideAvailable: false,
+          });
+        } else if (toStage === "submitted") {
+          rows.push({
+            id: "expense_capture_present",
+            label: "Capture source recorded",
+            met: !!row.captureSource,
+            overrideAvailable: false,
+          });
+        } else {
+          rows.push({
+            id: "expense_status_taxonomy",
+            label: `Expense status advance ${currentStage} → ${toStage}`,
+            met: ["draft", "submitted", "approved", "rejected"].includes(toStage),
+            overrideAvailable: false,
+          });
+        }
+      }
+
+      const allMet = rows.every((r) => r.met);
+      return {
+        ok: true,
+        data: {
+          gateReport: {
+            kind,
+            targetId,
+            entityName,
+            fromStage: currentStage,
+            toStage,
+            partnerOverride,
+            allMet,
+            gates: rows,
+          },
+        },
+      };
+    }
+
+    // Opportunity path (canonical) — uses validateStageTransition.
+    const opportunityId = String(input.opportunityId ?? input.targetId ?? "");
+    const toStageOpp = toStage as SalesStage;
+
+    if (!opportunityId || !ALL_STAGES.includes(toStageOpp)) {
       return {
         ok: false,
         errorCode: "bad_input",
-        errorMessage: "evaluate_gate requires opportunityId and a valid toStage.",
+        errorMessage: "evaluate_gate(opportunity) requires opportunityId and a valid toStage.",
       };
     }
+    // Re-bind the opportunity-stage-typed local that the canonical
+    // block below uses (the outer `toStage` is the broader string
+    // shape that engagement/deliverable/expense also share).
+    const toStageNarrow: SalesStage = toStageOpp;
 
     // Org-scoped + soft-delete-filtered load including persisted gate
     // evidence — without this, suspect→prospect always reports "5C
@@ -578,7 +960,7 @@ defineCapability({
 
     const gateInput: StageGateInput = {
       fromStage,
-      toStage,
+      toStage: toStageNarrow,
       partnerOverride,
       qualify5c: mergedQualify5c,
       goNoGoDecision: mergedGoNoGo,
@@ -608,15 +990,15 @@ defineCapability({
       met: boolean;
       missing?: string[];
       reason?: string;
-      partnerOverridable: boolean;
+      overrideAvailable: boolean;
     };
     const rows: GateRow[] = [];
 
-    const isSuspectToProspect = fromStage === "suspect" && toStage === "prospect";
-    const isConvertToRunner = fromStage === "convert" && toStage === "runner";
-    const isRunnerToContract = fromStage === "runner" && toStage === "contract";
+    const isSuspectToProspect = fromStage === "suspect" && toStageNarrow === "prospect";
+    const isConvertToRunner = fromStage === "convert" && toStageNarrow === "runner";
+    const isRunnerToContract = fromStage === "runner" && toStageNarrow === "contract";
     const isTerminal =
-      toStage === "lost" || toStage === "no_decision" || toStage === "withdrawn";
+      toStageNarrow === "lost" || toStageNarrow === "no_decision" || toStageNarrow === "withdrawn";
 
     if (isSuspectToProspect) {
       const isThisGate = err?.gate === "suspect_to_prospect_5c";
@@ -627,7 +1009,7 @@ defineCapability({
         reason: isThisGate
           ? "5C must be filled (client, competition, capability, capacity, contract) and Go/No-go decided."
           : undefined,
-        partnerOverridable: true,
+        overrideAvailable: true,
       });
     }
     if (isConvertToRunner) {
@@ -638,7 +1020,7 @@ defineCapability({
         met: !isThisGate,
         missing: isThisGate ? err?.missing ?? [] : [],
         reason: isThisGate ? err?.reason : undefined,
-        partnerOverridable: true,
+        overrideAvailable: true,
       });
     }
     if (isRunnerToContract) {
@@ -648,7 +1030,7 @@ defineCapability({
         label: "Signed instrument attached as artifact",
         met: !isThisGate,
         reason: isThisGate ? err?.reason : undefined,
-        partnerOverridable: true,
+        overrideAvailable: true,
       });
     }
     if (isTerminal) {
@@ -658,7 +1040,7 @@ defineCapability({
         label: `Reason code required to enter ${toStage}`,
         met: !isThisGate,
         reason: isThisGate ? err?.reason : undefined,
-        partnerOverridable: false,
+        overrideAvailable: false,
       });
     }
     if (proposed.subStatus) {
@@ -668,7 +1050,7 @@ defineCapability({
         label: "Sub-status is in the published taxonomy",
         met: !isSubGate,
         reason: isSubGate ? err?.reason : undefined,
-        partnerOverridable: false,
+        overrideAvailable: false,
       });
     }
 
