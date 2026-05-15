@@ -3,6 +3,7 @@ import { useParams } from "wouter";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Link } from "wouter";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
+import { useChartPalette } from "@/lib/theme";
 
 interface InvoiceDraftSummary {
   id: string;
@@ -121,6 +122,7 @@ function burnTone(b: number): "green" | "amber" | "red" {
 }
 
 export default function EngagementEconomics() {
+  const palette = useChartPalette();
   const params = useParams<{ engagementId: string }>();
   const engagementId = params.engagementId;
   const [data, setData] = React.useState<EconResp | null>(null);
@@ -288,15 +290,15 @@ export default function EngagementEconomics() {
               <div className="h-64 w-full">
                 <ResponsiveContainer>
                   <BarChart data={util.planVsActual.map((r) => ({ name: r.seniority, planned: Math.round(r.plannedHours), actual: Math.round(r.actualHours) }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff14" />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
-                    <YAxis stroke="#94a3b8" fontSize={12} />
-                    <Tooltip contentStyle={{ background: "#0b1320", border: "1px solid #ffffff22", fontSize: 12 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="planned" name="Planned hrs" fill="#fbbf2466" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={palette.grid} />
+                    <XAxis dataKey="name" stroke={palette.axis} fontSize={12} />
+                    <YAxis stroke={palette.axis} fontSize={12} />
+                    <Tooltip contentStyle={{ background: palette.tooltipBg, border: `1px solid ${palette.tooltipBorder}`, color: palette.tooltipText, fontSize: 12 }} labelStyle={{ color: palette.tooltipText }} itemStyle={{ color: palette.tooltipText }} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: palette.axis }} />
+                    <Bar dataKey="planned" name="Planned hrs" fill={palette.warnSoft} />
                     <Bar dataKey="actual" name="Actual hrs">
                       {util.planVsActual.map((r, i) => (
-                        <Cell key={i} fill={r.plannedHours > 0 && r.variancePct > 0.1 ? "#f87171" : r.plannedHours > 0 && r.variancePct > 0 ? "#fbbf24" : "#34d399"} />
+                        <Cell key={i} fill={r.plannedHours > 0 && r.variancePct > 0.1 ? palette.danger : r.plannedHours > 0 && r.variancePct > 0 ? palette.warn : palette.success} />
                       ))}
                     </Bar>
                   </BarChart>
