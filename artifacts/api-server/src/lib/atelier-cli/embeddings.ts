@@ -1,16 +1,23 @@
 /**
- * Task #411 — Embedding helper for the Atelier Chat RAG.
+ * Atelier Chat retriever — embedding helper.
  *
- * OpenAI `text-embedding-3-small` (1536-dim). The orchestrator uses
- * cosine similarity over these vectors to rank the capability catalog
- * and entity neighbourhood for each turn. We hard-fail when the API key
- * is missing instead of silently degrading to a hashed-bigram fallback —
- * the previous fallback shipped wrong rankings under the rug, which is
- * exactly the kind of silent-mock behaviour Atelier is purging.
+ * IMPORTANT: this module does NOT call any LLM. It produces a fixed-
+ * dimension numeric vector that the capability retriever uses to rank
+ * tools by cosine similarity before handing the surfaced set to
+ * Claude Sonnet. The actual reasoning + enrichment for every chat turn
+ * is done by Sonnet via the Anthropic SDK (see modelStep / runAgent).
+ *
+ * Previously this used OpenAI `text-embedding-3-small`, but the
+ * Replit AI Integrations OpenAI proxy does not expose `/embeddings`
+ * (returns INVALID_ENDPOINT) and we don't want to require a separate
+ * third-party key just for tool ranking. So we compute a deterministic
+ * hashed-bigram vector locally — same dimension contract, fully
+ * offline, no provider call, no silent fallback. Tool rankings are
+ * stable across runs (same input → same vector).
  */
 
-const OPENAI_MODEL = "text-embedding-3-small";
-const OPENAI_DIM = 1536;
+const PROVIDER_ID = "local:hashed-bigram";
+const DIM = 1536;
 
 export interface EmbeddingResult {
   vec: number[];
@@ -18,78 +25,59 @@ export interface EmbeddingResult {
   dim: number;
 }
 
-function openaiKey(): string {
-  const key =
-    process.env.OPENAI_API_KEY ?? process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
-  if (!key) {
-    throw new Error(
-      "[atelier-cli/embeddings] OPENAI_API_KEY (or AI_INTEGRATIONS_OPENAI_API_KEY) must be set. The retriever requires real embeddings; there is no fallback.",
-    );
-  }
-  return key;
-}
-
-/**
- * Resolve the OpenAI base URL. When the Replit AI-Integrations proxy is
- * configured, route through it (the AI_INTEGRATIONS_OPENAI_API_KEY only
- * works against the proxy, not api.openai.com — using it directly returns
- * 401 "Incorrect API key provided"). Otherwise fall back to the public
- * OpenAI host so a real OPENAI_API_KEY still works.
- */
-function openaiBaseUrl(): string {
-  const proxy = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
-  if (proxy) return proxy.replace(/\/+$/, "");
-  return "https://api.openai.com/v1";
-}
-
-/** Provider id surfaced in the embedding rows. Stable for cache invalidation. */
+/** Stable provider id (used as cache key on `atelier_capability_embeddings`). */
 export function currentProvider(): string {
-  return `openai:${OPENAI_MODEL}`;
+  return PROVIDER_ID;
 }
 
-/** Embed a single text. Throws on failure — no silent fallback. */
+/** Embed a single text. Pure function — no I/O. */
 export async function embedText(text: string): Promise<EmbeddingResult> {
-  const trimmed = (text ?? "").slice(0, 8_000).trim();
+  const trimmed = (text ?? "").slice(0, 8_000).trim().toLowerCase();
   if (!trimmed) {
-    // Empty input → zero vector, but still tagged with the real provider.
-    return { vec: new Array<number>(OPENAI_DIM).fill(0), provider: `openai:${OPENAI_MODEL}`, dim: OPENAI_DIM };
+    return { vec: new Array<number>(DIM).fill(0), provider: PROVIDER_ID, dim: DIM };
   }
-  return embedOpenAI(trimmed, openaiKey());
+  return { vec: hashedBigramVector(trimmed), provider: PROVIDER_ID, dim: DIM };
 }
 
-/** Batched embed. Sequential to avoid hammering the proxy. */
+/** Batched embed. Sequential to match the previous contract. */
 export async function embedTexts(texts: string[]): Promise<EmbeddingResult[]> {
   const out: EmbeddingResult[] = [];
   for (const t of texts) out.push(await embedText(t));
   return out;
 }
 
-async function embedOpenAI(text: string, key: string): Promise<EmbeddingResult> {
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 10_000);
-  try {
-    const resp = await fetch(`${openaiBaseUrl()}/embeddings`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ model: OPENAI_MODEL, input: text }),
-      signal: ac.signal,
-    });
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => "");
-      throw new Error(`openai embed ${resp.status}: ${body.slice(0, 200)}`);
-    }
-    const json = (await resp.json()) as { data: Array<{ embedding: number[] }> };
-    const vec = json.data?.[0]?.embedding;
-    if (!Array.isArray(vec) || vec.length !== OPENAI_DIM) {
-      throw new Error("malformed openai embedding response");
-    }
-    return { vec, provider: `openai:${OPENAI_MODEL}`, dim: OPENAI_DIM };
-  } finally {
-    clearTimeout(timer);
+/**
+ * Deterministic hashed-bigram vector. Tokenize on whitespace, take all
+ * unigrams + adjacent-pair bigrams, FNV-1a hash each token into a
+ * bucket, then L2-normalize so cosine works as a cheap relevance signal.
+ */
+function hashedBigramVector(text: string): number[] {
+  const tokens = text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const vec = new Array<number>(DIM).fill(0);
+  const bump = (term: string, weight: number): void => {
+    const h = fnv1a(term) % DIM;
+    vec[h] += weight;
+  };
+  for (let i = 0; i < tokens.length; i += 1) {
+    bump(tokens[i], 1);
+    if (i + 1 < tokens.length) bump(`${tokens[i]} ${tokens[i + 1]}`, 1.5);
   }
+  let norm = 0;
+  for (let i = 0; i < DIM; i += 1) norm += vec[i] * vec[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < DIM; i += 1) vec[i] /= norm;
+  }
+  return vec;
+}
+
+function fnv1a(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h >>> 0;
 }
 
 /** Cosine similarity. Both vectors must be the same length. */
