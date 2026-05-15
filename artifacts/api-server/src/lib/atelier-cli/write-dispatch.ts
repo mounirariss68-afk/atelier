@@ -162,6 +162,42 @@ const PAYLOAD_TRANSLATORS: Record<string, Partial<Record<DispatchVerb, Translato
       return out;
     },
   },
+  // Task #492 — chat-create-account prefill returns a rich payload
+  // (strategicPriorities as {text, sourceUrls} objects, plus
+  // sourceSignals / decisionMakers / aicoHypothesis / refreshedSummary)
+  // so the propose_write confirm card can SHOW the research. The
+  // backing `account_create` tool only accepts the writable
+  // firmographic subset, so strip the display-only fields here. The
+  // post-create cartographer auto-run on accountRoutes.ts will
+  // re-research and persist the priorities + signals + DMs once the
+  // row exists.
+  account: {
+    create: (payload) => {
+      const allowed = new Set([
+        "name",
+        "country",
+        "sector",
+        "brandName",
+        "hqCity",
+        "tier",
+        "primaryCurrency",
+        "primaryLanguage",
+        "partnerOwnerId",
+      ]);
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(payload)) {
+        if (allowed.has(k) && v != null && v !== "") out[k] = v;
+      }
+      // Coerce a "D" tier coming from the chat draft (Cartographer
+      // outputs A|B|C only — D is reserved for disqualified targets
+      // and shouldn't be auto-set here, but if it ever leaks through
+      // we drop to "C" rather than fail validation).
+      if (out.tier && !["A", "B", "C", "D"].includes(String(out.tier))) {
+        out.tier = "C";
+      }
+      return out;
+    },
+  },
 };
 
 /**

@@ -394,30 +394,98 @@ defineCapability({
           };
         }
       }
-      // Pre-create advisory hint.
-      return {
-        ok: true,
-        data: {
-          specialist: {
-            id: "ag_account_cartographer",
-            name: "Account Cartographer",
-            triggeredOn: "create",
-            note: "Cartographer auto-runs post-create on the existing accountRoutes path and queues firmographics + signals as pendingProfileUpdates for partner review.",
+      // Pre-create research mode. Dispatch Account Cartographer in
+      // research_only mode (no DB writes, no agent_runs row) using the
+      // user-provided fragment so the confirm card is pre-populated
+      // with real, web-search-grounded firmographics + signals + DMs.
+      const rawName =
+        typeof inp.name === "string" && inp.name.trim().length > 0
+          ? inp.name.trim()
+          : null;
+      if (!rawName) {
+        return {
+          ok: false,
+          errorCode: "missing_input",
+          errorMessage:
+            "prefill_from_specialist: input.name is required when targetId is absent (verb=create).",
+        };
+      }
+      try {
+        const result = await runAccountCartographer({
+          accountId: null,
+          accountName: rawName,
+          accountSector: typeof inp.sector === "string" ? inp.sector : "",
+          accountCountry: typeof inp.country === "string" ? inp.country : "",
+          accountHqCity: typeof inp.hqCity === "string" ? inp.hqCity : null,
+          triggeredByUserId: ctx.persona.id,
+          actorLabel: "Chat Orchestrator (prefill)",
+          mode: "research_only",
+        });
+        const out = result.output;
+        const sourceSignals = (out.sourceSignals ?? []).slice(0, 6).map((s) => ({
+          kind: s.kind,
+          title: s.title,
+          url: s.url,
+          summary: s.summary,
+          publishedAt: s.publishedAt,
+          confidence: s.confidence ?? "amber",
+        }));
+        const decisionMakers = (out.decisionMakers ?? []).slice(0, 7).map((d) => ({
+          fullName: d.fullName,
+          title: d.title ?? null,
+          seniority: d.seniority ?? null,
+          buyerPersona: d.buyerPersona ?? null,
+          sourceUrl: d.sourceUrl ?? null,
+          confidence: d.confidence,
+        }));
+        const draft: Record<string, unknown> = {
+          name: out.account.canonicalName || rawName,
+          country:
+            out.account.country ||
+            (typeof inp.country === "string" ? inp.country : null),
+          sector: out.account.sector ?? null,
+          hqCity: out.account.hqCity ?? null,
+          tier: out.account.tier ?? null,
+          industryCode: out.account.industryCode ?? null,
+          subIndustryCode: out.account.subIndustryCode ?? null,
+          strategicPriorities: (out.account.strategicPriorities ?? [])
+            .slice(0, 5)
+            .map((p) => ({ text: p.text, sourceUrls: p.sourceUrls })),
+          aicoHypothesis: out.account.aicoHypothesis ?? "",
+          refreshedSummary: out.account.refreshedSummary ?? "",
+          sourceSignals,
+          decisionMakers,
+        };
+        const required = ["name", "country", "sector"];
+        const missingRequiredFields = required.filter((k) => {
+          const v = draft[k];
+          return v == null || (typeof v === "string" && v.trim() === "");
+        });
+        // partnerOwnerId is always missing pre-create — the partner picks
+        // themself or another partner on the confirm card.
+        missingRequiredFields.push("partnerOwnerId");
+        return {
+          ok: true,
+          data: {
+            specialist: {
+              id: "ag_account_cartographer",
+              name: "Account Cartographer",
+              mode: "research_only",
+              costUsd: result.costUsd,
+            },
+            draft,
+            missingRequiredFields,
+            missingOptionalFields: ["website", "size"],
+            lowConfidenceFields: [],
           },
-          draft: {
-            sector: typeof inp.sector === "string" ? inp.sector : null,
-            country: typeof inp.country === "string" ? inp.country : null,
-            tier: typeof inp.tier === "string" ? inp.tier : "C",
-            primaryCurrency:
-              typeof inp.primaryCurrency === "string" ? inp.primaryCurrency : "USD",
-            primaryLanguage:
-              typeof inp.primaryLanguage === "string" ? inp.primaryLanguage : "en",
-          },
-          missingRequiredFields: ["partnerOwnerId"],
-          missingOptionalFields: ["website", "tier"],
-          lowConfidenceFields: [],
-        },
-      };
+        };
+      } catch (e) {
+        return {
+          ok: false,
+          errorCode: "specialist_failed",
+          errorMessage: `Cartographer prefill failed: ${(e as Error).message}`,
+        };
+      }
     }
 
     if (kind === "opportunity") {

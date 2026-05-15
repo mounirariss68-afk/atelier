@@ -1533,6 +1533,16 @@ export async function runBrandProfileWriter(args: {
 export interface CartographerOutput {
   account: {
     refreshedSummary: string;
+    // Inferred firmographics — populated when running against a sparse
+    // input (e.g. chat "create account" prefill). Always present, may be
+    // empty strings / null when the model could not resolve them.
+    canonicalName?: string;
+    country?: string;
+    sector?: string;
+    hqCity?: string | null;
+    tier?: "A" | "B" | "C" | null;
+    industryCode?: string | null;
+    subIndustryCode?: string | null;
     // Sourced strategic priorities. `text` mirrors the v1 string list,
     // `sourceUrls` contains the citation URLs the agent pulled (Task #275).
     strategicPriorities: Array<{ text: string; sourceUrls: string[] }>;
@@ -1644,7 +1654,10 @@ async function callClaudeJsonWithWebSearch<T>(
 }
 
 export async function runAccountCartographer(args: {
-  accountId: string;
+  // `null` is allowed only when `mode === "research_only"` — the run is
+  // not persisted to atelier_agent_runs and no DB writes happen. Used by
+  // the chat orchestrator to pre-fill the Create Account confirm card.
+  accountId: string | null;
   accountName: string;
   accountSector: string;
   accountCountry: string;
@@ -1652,20 +1665,28 @@ export async function runAccountCartographer(args: {
   triggeredByUserId: string | null;
   actorLabel: string;
   focusOpportunityId?: string | null;
-}): Promise<{ runId: string; output: CartographerOutput; costUsd: number }> {
+  mode?: "live" | "research_only";
+}): Promise<{ runId: string | null; output: CartographerOutput; costUsd: number }> {
+  const mode = args.mode ?? "live";
+  if (mode === "live" && !args.accountId) {
+    throw new Error("runAccountCartographer: accountId is required in live mode");
+  }
   const t0 = Date.now();
-  const runId = await startRun({
-    agentId: "account_cartographer",
-    triggeredByUserId: args.triggeredByUserId,
-    targetType: "account",
-    targetId: args.accountId,
-    targetLabel: args.accountName,
-    inputs: { focusOpportunityId: args.focusOpportunityId ?? null },
-    actorLabel: args.actorLabel,
-  });
+  const runId =
+    mode === "live"
+      ? await startRun({
+          agentId: "account_cartographer",
+          triggeredByUserId: args.triggeredByUserId,
+          targetType: "account",
+          targetId: args.accountId as string,
+          targetLabel: args.accountName,
+          inputs: { focusOpportunityId: args.focusOpportunityId ?? null },
+          actorLabel: args.actorLabel,
+        })
+      : null;
   try {
     const system = loadPrompt("account_cartographer");
-    await progressRun(runId, 25, "Searching the public web");
+    if (runId) await progressRun(runId, 25, "Searching the public web");
     const { value, costUsd, citationUrls } =
       await callClaudeJsonWithWebSearch<CartographerOutput>(
         "claude-sonnet-4-5",
@@ -1676,10 +1697,12 @@ export async function runAccountCartographer(args: {
           accountSector: args.accountSector,
           accountHqCity: args.accountHqCity ?? null,
         }));
-    await progressRun(runId, 80, "Triangulating sources", {
-      name: "cart.synth",
-      durationMs: Date.now() - t0,
-    });
+    if (runId) {
+      await progressRun(runId, 80, "Triangulating sources", {
+        name: "cart.synth",
+        durationMs: Date.now() - t0,
+      });
+    }
 
     // Defensive normalisation — the model occasionally returns the v1
     // shape (strategicPriorities: string[]) or omits decisionMakers.
@@ -1687,6 +1710,36 @@ export async function runAccountCartographer(args: {
     const normalised: CartographerOutput = {
       account: {
         refreshedSummary: value?.account?.refreshedSummary ?? "",
+        canonicalName:
+          typeof value?.account?.canonicalName === "string"
+            ? value.account.canonicalName.trim()
+            : undefined,
+        country:
+          typeof value?.account?.country === "string"
+            ? value.account.country.trim()
+            : undefined,
+        sector:
+          typeof value?.account?.sector === "string"
+            ? value.account.sector.trim()
+            : undefined,
+        hqCity:
+          typeof value?.account?.hqCity === "string"
+            ? value.account.hqCity.trim()
+            : null,
+        tier:
+          value?.account?.tier === "A" ||
+          value?.account?.tier === "B" ||
+          value?.account?.tier === "C"
+            ? value.account.tier
+            : null,
+        industryCode:
+          typeof value?.account?.industryCode === "string"
+            ? value.account.industryCode.trim()
+            : null,
+        subIndustryCode:
+          typeof value?.account?.subIndustryCode === "string"
+            ? value.account.subIndustryCode.trim()
+            : null,
         strategicPriorities: Array.isArray(value?.account?.strategicPriorities)
           ? value.account.strategicPriorities
               .map((p) =>
@@ -1733,21 +1786,29 @@ export async function runAccountCartographer(args: {
       }
     }
 
-    await completeRun({
-      runId,
-      output: normalised as unknown,
-      confidence: "green",
-      costUsd,
-      durationMs: Date.now() - t0,
-      sourcesCount: normalised.sourceSignals.length,
-      actorLabel: args.actorLabel,
-      targetType: "account",
-      targetId: args.accountId,
-      targetLabel: args.accountName,
-    });
+    if (runId) {
+      await completeRun({
+        runId,
+        output: normalised as unknown,
+        confidence: "green",
+        costUsd,
+        durationMs: Date.now() - t0,
+        sourcesCount: normalised.sourceSignals.length,
+        actorLabel: args.actorLabel,
+        targetType: "account",
+        targetId: args.accountId as string,
+        targetLabel: args.accountName,
+      });
+    }
     return { runId, output: normalised, costUsd };
   } catch (err) {
-    await failRun(runId, err, { actorLabel: args.actorLabel, targetType: "account", targetId: args.accountId });
+    if (runId) {
+      await failRun(runId, err, {
+        actorLabel: args.actorLabel,
+        targetType: "account",
+        targetId: args.accountId as string,
+      });
+    }
     throw err;
   }
 }
