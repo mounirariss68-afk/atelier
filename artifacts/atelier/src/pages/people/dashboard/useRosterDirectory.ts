@@ -7,6 +7,8 @@ export interface RosterDirectoryRow {
   seniority: string | null;
   country: string | null;
   status: string;
+  /** ISO date the person started — used for tenure-band aggregation. */
+  startDate: string | null;
 }
 
 interface State {

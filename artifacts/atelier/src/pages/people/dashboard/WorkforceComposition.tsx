@@ -64,6 +64,36 @@ export function WorkforceComposition() {
 
   const seniorityTotal = senioritySegments.reduce((s, x) => s + x.value, 0);
 
+  const tenureRows: BarRowDatum[] = React.useMemo(() => {
+    if (!rosterPeople) return [];
+    const bands: { label: string; minYears: number; maxYears: number }[] = [
+      { label: "< 1 yr",   minYears: 0,  maxYears: 1 },
+      { label: "1–3 yrs",  minYears: 1,  maxYears: 3 },
+      { label: "3–5 yrs",  minYears: 3,  maxYears: 5 },
+      { label: "5–10 yrs", minYears: 5,  maxYears: 10 },
+      { label: "10+ yrs",  minYears: 10, maxYears: Infinity },
+    ];
+    const counts = bands.map(() => 0);
+    const now = Date.now();
+    const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+    let withDate = 0;
+    rosterPeople.forEach((p) => {
+      if (!p.startDate) return;
+      const t = Date.parse(p.startDate);
+      if (Number.isNaN(t)) return;
+      withDate += 1;
+      const years = (now - t) / MS_PER_YEAR;
+      const idx = bands.findIndex((b) => years >= b.minYears && years < b.maxYears);
+      if (idx >= 0) counts[idx]! += 1;
+    });
+    if (withDate === 0) return [];
+    return bands.map((b, i) => ({
+      label: b.label,
+      value: counts[i]!,
+      tone: "default" as const,
+    }));
+  }, [rosterPeople]);
+
   return (
     <section className="space-y-3" data-testid="dashboard-composition">
       <h3 className="font-mono text-xs uppercase tracking-widest text-text-mute">
@@ -112,10 +142,17 @@ export function WorkforceComposition() {
             <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-3">
               By tenure band
             </div>
-            <div className="text-xs text-text-faint leading-relaxed">
-              Hire-date is not yet captured on the roster directory.
-              Add <span className="font-mono text-text-mute">hireDate</span>{" "}
-              to enable this band.
+            {rosterPeople === null ? (
+              <div className="text-xs text-text-faint">Loading roster…</div>
+            ) : tenureRows.length === 0 ? (
+              <div className="text-xs text-text-faint">
+                No start-date data on the roster directory.
+              </div>
+            ) : (
+              <BarRows rows={tenureRows} />
+            )}
+            <div className="mt-3 font-mono text-[9px] uppercase tracking-widest text-text-faint">
+              from roster directory · live
             </div>
           </Card>
         </Link>
