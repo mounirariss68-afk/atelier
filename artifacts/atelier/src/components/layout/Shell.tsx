@@ -264,6 +264,37 @@ export function TopNav() {
 
 type RailTabValue = "agent" | "activity" | "reports";
 
+/** Task #515 — user-resizable rail. Width is in CSS px and is clamped
+ * to [RAIL_MIN_WIDTH, RAIL_MAX_WIDTH] (or 60% of viewport, whichever
+ * is smaller, on the upper bound). The collapsed icon strip is a
+ * separate fixed 48px (3rem) and ignores the stored width. */
+export const RAIL_MIN_WIDTH = 320;
+export const RAIL_MAX_WIDTH = 720;
+export const RAIL_DEFAULT_WIDTH = 320;
+export const RAIL_COLLAPSED_WIDTH = 48; // matches w-12 (3rem)
+const RAIL_STORAGE_KEY = "atelier-rail-width";
+
+export function clampRailWidth(n: number, viewportW?: number): number {
+  if (!Number.isFinite(n)) return RAIL_DEFAULT_WIDTH;
+  const vp = typeof viewportW === "number" && viewportW > 0 ? viewportW : 1280;
+  const upper = Math.min(RAIL_MAX_WIDTH, Math.floor(vp * 0.6));
+  const lo = Math.min(RAIL_MIN_WIDTH, upper);
+  return Math.max(lo, Math.min(upper, Math.round(n)));
+}
+
+export function loadRailWidth(): number {
+  if (typeof window === "undefined") return RAIL_DEFAULT_WIDTH;
+  try {
+    const raw = window.localStorage.getItem(RAIL_STORAGE_KEY);
+    if (!raw) return RAIL_DEFAULT_WIDTH;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return RAIL_DEFAULT_WIDTH;
+    return clampRailWidth(n, window.innerWidth);
+  } catch {
+    return RAIL_DEFAULT_WIDTH;
+  }
+}
+
 const RailContext = React.createContext<{
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
@@ -271,11 +302,16 @@ const RailContext = React.createContext<{
    * entry points can switch to the Agent tab. */
   tab: RailTabValue;
   setTab: (t: RailTabValue) => void;
+  /** Task #515 — current rail width in CSS px (expanded only). */
+  width: number;
+  setWidth: (n: number) => void;
 }>({
   collapsed: false,
   setCollapsed: () => {},
   tab: "agent",
   setTab: () => {},
+  width: RAIL_DEFAULT_WIDTH,
+  setWidth: () => {},
 });
 
 // Compact saved-reports list for the right rail "Reports" tab. Reads the
@@ -371,7 +407,70 @@ export function RightRail() {
   // selection. Tab + collapse state is lifted into RailContext so
   // entry points (⌘K, Home input, sparkles bubble, deep-links) can
   // open the rail directly to the Agent tab via openCli().
-  const { collapsed, setCollapsed, tab, setTab } = React.useContext(RailContext);
+  const { collapsed, setCollapsed, tab, setTab, width, setWidth } =
+    React.useContext(RailContext);
+
+  // Task #515 — drag-to-resize. Pointer events on the left-edge handle
+  // update width with rAF coalescing so we don't dispatch a setState per
+  // mousemove. The handle is also keyboard-operable: Left/Right nudge by
+  // 16px, Home/End jump to clamp bounds.
+  const dragRef = React.useRef<{ raf: number | null; nextW: number | null }>({
+    raf: null,
+    nextW: null,
+  });
+  const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = width;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (ev: PointerEvent) => {
+      // Rail is anchored to the right edge; dragging LEFT (delta<0)
+      // should WIDEN the rail.
+      const next = clampRailWidth(startW - (ev.clientX - startX), window.innerWidth);
+      dragRef.current.nextW = next;
+      if (dragRef.current.raf == null) {
+        dragRef.current.raf = requestAnimationFrame(() => {
+          dragRef.current.raf = null;
+          if (dragRef.current.nextW != null) setWidth(dragRef.current.nextW);
+        });
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      if (dragRef.current.raf != null) {
+        cancelAnimationFrame(dragRef.current.raf);
+        dragRef.current.raf = null;
+      }
+      const final = clampRailWidth(startW - (ev.clientX - startX), window.innerWidth);
+      setWidth(final);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+  const onHandleKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const vp = typeof window !== "undefined" ? window.innerWidth : 1280;
+    const upper = Math.min(RAIL_MAX_WIDTH, Math.floor(vp * 0.6));
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      setWidth(clampRailWidth(width + 16, vp));
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      setWidth(clampRailWidth(width - 16, vp));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setWidth(upper);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setWidth(RAIL_MIN_WIDTH);
+    }
+  };
   const cliTriggerRef = React.useContext(CliContext).triggerRef;
   const { data: activities } = useAtelierGetActivity(
     { limit: 15 },
@@ -419,12 +518,39 @@ export function RightRail() {
   const activeCount = activities?.filter(a => a.status === 'running').length || 0;
 
   return (
-    <aside 
+    <aside
       className={cn(
-        "fixed right-0 top-14 bottom-0 z-30 border-l border-border bg-bg-deep/80 backdrop-blur transition-all duration-300 ease-[--ease] flex flex-col",
-        collapsed ? "w-12" : "w-80"
+        "fixed right-0 top-14 bottom-0 z-30 border-l border-border bg-bg-deep/80 backdrop-blur flex flex-col",
+        collapsed ? "transition-[width] duration-300 ease-[--ease] w-12" : "",
       )}
+      style={collapsed ? undefined : { width: `${width}px` }}
+      data-testid="right-rail"
+      data-rail-width={collapsed ? RAIL_COLLAPSED_WIDTH : width}
     >
+      {/* Task #515 — drag handle on the left edge (only when expanded). */}
+      {!collapsed && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize agent rail"
+          aria-valuemin={RAIL_MIN_WIDTH}
+          aria-valuemax={
+            typeof window !== "undefined"
+              ? Math.min(RAIL_MAX_WIDTH, Math.floor(window.innerWidth * 0.6))
+              : RAIL_MAX_WIDTH
+          }
+          aria-valuenow={width}
+          tabIndex={0}
+          onPointerDown={onHandlePointerDown}
+          onKeyDown={onHandleKey}
+          className={cn(
+            "absolute left-0 top-0 bottom-0 w-1.5 -translate-x-1/2 cursor-col-resize z-40",
+            "hover:bg-gold/40 focus:bg-gold/60 focus:outline-none transition-colors",
+            "before:content-[''] before:absolute before:inset-y-0 before:-left-2 before:-right-2",
+          )}
+          data-testid="right-rail-resize-handle"
+        />
+      )}
       <div className="flex items-center justify-between p-3 border-b border-border">
         {!collapsed && (
           // Task #501 — Tab strip: Agent (conversational AI) is the
@@ -615,7 +741,7 @@ function FloatingCliBubble() {
   // it. RTL flips the rail-collision side too because the rail itself
   // mirrors via `right-0` on the parent — when locale is RTL the rail
   // visually sits on the left, so the bubble offsets accordingly.
-  const { collapsed: railCollapsed } = React.useContext(RailContext);
+  const { collapsed: railCollapsed, width: railWidth } = React.useContext(RailContext);
   // Toast viewport (`components/ui/toast.tsx` Viewport): fixed bottom-0
   // right-0 on sm+, max-w-[420px] with p-4. When at least one toast is
   // active, lift the bubble above that lane so it doesn't sit on top
@@ -666,13 +792,13 @@ function FloatingCliBubble() {
     }
     setDismissed(true);
   };
-  // Compute side-offset to clear the right rail. Tailwind's `right-`/
-  // `left-` arbitrary values support `calc(...)` so we can compose the
-  // rail width + a 1.5rem gutter inline.
-  const railOffsetRem = railCollapsed ? 3 : 20; // matches w-12 / w-80
+  // Compute side-offset to clear the right rail. Task #515 — rail is
+  // user-resizable, so we read the live width from RailContext rather
+  // than hard-coding the previous w-80 (20rem).
+  const railOffsetPx = railCollapsed ? RAIL_COLLAPSED_WIDTH : railWidth;
   const sideStyle: React.CSSProperties = dir === "rtl"
-    ? { left: `calc(${railOffsetRem}rem + 1.5rem)` }
-    : { right: `calc(${railOffsetRem}rem + 1.5rem)` };
+    ? { left: `calc(${railOffsetPx}px + 1.5rem)` }
+    : { right: `calc(${railOffsetPx}px + 1.5rem)` };
   // Bottom offset: clear the toast lane (toasts cap around 5–6rem tall
   // each, but most show one at a time; 6rem is a safe baseline) plus
   // the safe-area inset on tablets.
@@ -739,6 +865,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
   // is open whenever the rail is expanded AND the Agent tab is active;
   // we no longer track a separate `cliOpen` flag or render a modal.
   const [tab, setTab] = React.useState<RailTabValue>("agent");
+  // Task #515 — user-resizable rail width, persisted in localStorage.
+  const [railWidth, setRailWidthState] = React.useState<number>(() =>
+    typeof window === "undefined" ? RAIL_DEFAULT_WIDTH : loadRailWidth(),
+  );
+  const setRailWidth = React.useCallback((n: number) => {
+    const vp = typeof window !== "undefined" ? window.innerWidth : 1280;
+    const clamped = clampRailWidth(n, vp);
+    setRailWidthState(clamped);
+    try {
+      window.localStorage.setItem("atelier-rail-width", String(clamped));
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  // Re-clamp on viewport resize so an aggressive width on a small
+  // screen doesn't push past the 60% cap after the window shrinks.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => {
+      setRailWidthState((w) => clampRailWidth(w, window.innerWidth));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const cliTriggerRef = React.useRef<HTMLElement | null>(null);
   const cliOpen = !collapsed && tab === "agent";
   // Hydration handoff: /cli page enqueues a request, CommandBar drains
@@ -834,8 +984,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [isSignIn, cliOpen, openAgentTab, closeAgentTab]);
 
   const railCtxValue = React.useMemo(
-    () => ({ collapsed, setCollapsed, tab, setTab }),
-    [collapsed, tab],
+    () => ({ collapsed, setCollapsed, tab, setTab, width: railWidth, setWidth: setRailWidth }),
+    [collapsed, tab, railWidth, setRailWidth],
   );
 
   if (isSignIn) {
@@ -852,9 +1002,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <div className="flex flex-1">
             <main
               className={cn(
-                "flex-1 w-full pb-20 transition-all duration-300",
-                collapsed ? "pr-12" : "pr-12 lg:pr-80",
+                "flex-1 w-full pb-20",
+                collapsed ? "pr-12 transition-[padding] duration-300" : "pr-12",
               )}
+              style={
+                collapsed
+                  ? undefined
+                  : { paddingRight: `max(3rem, ${railWidth}px)` }
+              }
             >
               {children}
             </main>

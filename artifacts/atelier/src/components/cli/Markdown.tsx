@@ -149,7 +149,7 @@ export function Markdown({
   return (
     <div
       className={cn(
-        "text-sm text-text leading-relaxed space-y-2 [&_strong]:font-semibold [&_strong]:text-text",
+        "text-xs text-text leading-relaxed space-y-1.5 [&_strong]:font-semibold [&_strong]:text-text",
         className,
       )}
       data-testid="cli-markdown"
@@ -179,7 +179,7 @@ export function Markdown({
           );
         return (
           <div key={i} className="overflow-x-auto">
-            <table className="w-full text-[12px] border-collapse">
+            <table className="w-full text-[11px] border-collapse">
               <thead>
                 <tr className="border-b border-border">
                   {b.header.map((h, j) => (

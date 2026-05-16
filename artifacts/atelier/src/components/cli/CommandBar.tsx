@@ -948,7 +948,7 @@ function Composer({
           aria-label={s("placeholder", locale)}
           disabled={status === "streaming"}
           className={cn(
-            "flex-1 resize-none text-sm leading-relaxed bg-bg-deep border rounded-md px-3 py-2",
+            "flex-1 resize-none text-xs leading-relaxed bg-bg-deep border rounded-md px-2.5 py-1.5",
             "focus:outline-none focus:ring-1 max-h-40 placeholder:text-text-faint",
             "disabled:opacity-60",
             overLimit
@@ -1089,7 +1089,7 @@ function Transcript({
               className={cn("flex mb-2", dir === "rtl" ? "justify-start" : "justify-end")}
               data-testid="cli-user-bubble"
             >
-              <div className="max-w-[85%] bg-gold/10 border border-gold/30 text-text rounded-2xl px-3.5 py-2 text-sm leading-relaxed">
+              <div className="max-w-[85%] bg-gold/10 border border-gold/30 text-text rounded-2xl px-3 py-1.5 text-xs leading-relaxed">
                 {t.prompt}
               </div>
             </div>
@@ -1190,7 +1190,7 @@ function TurnBody({
             data-testid="cli-trace"
           >
             {breadcrumbs.length > 0 && (
-              <div className="text-[12px] font-mono text-text-mute space-y-0.5">
+              <div className="text-[11px] font-mono text-text-mute space-y-0.5">
                 {breadcrumbs.slice(-6).map((line, i) => (
                   <div key={`b${i}`} className="leading-snug">
                     {line.text}
