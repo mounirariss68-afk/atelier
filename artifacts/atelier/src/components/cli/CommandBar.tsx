@@ -757,10 +757,10 @@ function Header({
   hideClose?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-bg-elevate">
+    <div className="flex items-center gap-3 px-3 py-2 border-b border-border bg-bg-elevate">
       <Sparkles className="w-4 h-4 text-gold shrink-0" aria-hidden />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold leading-tight">The Atelier</div>
+        <div className="text-xs font-semibold leading-tight">The Atelier</div>
         <div className="text-[11px] font-mono text-text-faint uppercase tracking-wider truncate">
           {surface.replaceAll("_", " ")} · {status}
         </div>
@@ -878,7 +878,7 @@ function Composer({
               aria-selected={i === slashIndex}
               onClick={() => onPickSlash(c)}
               className={cn(
-                "w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-3 transition-colors",
+                "w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-3 transition-colors",
                 i === slashIndex ? "bg-bg-elevate-2 text-gold" : "hover:bg-bg-elevate text-text",
               )}
               data-testid="cli-slash-item"
@@ -1044,9 +1044,9 @@ function Transcript({
     // hint demoted to a small helper line so the bar reads as a chat,
     // not a CLI. Slash commands remain available via `/`.
     return (
-      <div className="p-6 space-y-5" data-testid="cli-empty">
+      <div className="p-4 space-y-4" data-testid="cli-empty">
         <div className="space-y-1.5">
-          <h3 className="text-base font-semibold text-text leading-snug">
+          <h3 className="text-sm font-semibold text-text leading-snug">
             {s("emptyConversational", locale)}
           </h3>
           <p className="text-xs text-text-faint leading-relaxed">
@@ -1059,7 +1059,7 @@ function Transcript({
               key={sug.text}
               type="button"
               onClick={() => onPickSuggestion(sug.text)}
-              className="text-start text-sm bg-bg-elevate hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded-md px-3 py-2.5 transition-colors"
+              className="text-start text-xs bg-bg-elevate hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded-md px-2.5 py-1.5 transition-colors"
               data-testid="cli-suggestion"
             >
               {sug.text}
@@ -1251,7 +1251,7 @@ function TurnBody({
               )}
           </div>
           {turn.proactiveRecap.summary && (
-            <div className="text-sm text-text leading-relaxed whitespace-pre-wrap">
+            <div className="text-xs text-text leading-relaxed whitespace-pre-wrap">
               {turn.proactiveRecap.summary}
             </div>
           )}
@@ -1287,7 +1287,7 @@ function TurnBody({
           <div className="text-xs font-mono uppercase tracking-wider text-warning">
             {s("refusalTitle", locale)}
           </div>
-          <div className="text-sm text-text leading-relaxed">{turn.refusal.reason}</div>
+          <div className="text-xs text-text leading-relaxed">{turn.refusal.reason}</div>
           {turn.refusal.suggestion && (
             <div className="text-xs text-text-mute leading-relaxed">
               {turn.refusal.suggestion}
@@ -1336,7 +1336,7 @@ function TurnBody({
                 key={opt.id}
                 type="button"
                 onClick={() => onPickDisambig(opt.id, opt.label)}
-                className="text-start bg-bg-deep hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded px-3 py-2 text-sm transition-colors"
+                className="text-start bg-bg-deep hover:bg-bg-elevate-2 border border-border hover:border-gold/50 rounded px-3 py-2 text-xs transition-colors"
                 data-testid="cli-disambig-option"
               >
                 <div className="font-medium">{opt.label}</div>
@@ -1368,7 +1368,7 @@ function TurnBody({
           className="bg-bg-elevate border border-gold rounded-md p-3 space-y-2.5"
           data-testid="cli-confirm-card"
         >
-          <div className="text-sm">{turn.pending.summary}</div>
+          <div className="text-xs">{turn.pending.summary}</div>
           {turn.pending.typedNameRequired && (
             <div className="space-y-1">
               <label
@@ -1382,7 +1382,7 @@ function TurnBody({
                 value={typedName}
                 onChange={(e) => setTypedName(e.target.value)}
                 placeholder={turn.pending.typedNameRequired}
-                className="w-full bg-bg-deep border border-danger/50 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-danger"
+                className="w-full bg-bg-deep border border-danger/50 rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-danger"
                 data-testid="cli-typed-name-input"
               />
               {typedName && typedName.trim() !== turn.pending.typedNameRequired.trim() && (
@@ -1400,7 +1400,7 @@ function TurnBody({
                 !!turn.pending.typedNameRequired &&
                 typedName.trim() !== turn.pending.typedNameRequired.trim()
               }
-              className="inline-flex items-center gap-1.5 bg-gold text-bg-deep font-semibold text-sm px-3 py-1.5 rounded hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 bg-gold text-bg-deep font-semibold text-xs px-3 py-1.5 rounded hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="cli-confirm"
             >
               <CheckCircle2 className="w-4 h-4" />
@@ -1409,7 +1409,7 @@ function TurnBody({
             <button
               type="button"
               onClick={() => setEditingPlanRow(0)}
-              className="text-sm text-text-mute hover:text-text px-3 py-1.5 rounded hover:bg-bg-elevate-2"
+              className="text-xs text-text-mute hover:text-text px-3 py-1.5 rounded hover:bg-bg-elevate-2"
               data-testid="cli-edit"
             >
               {s("edit", locale)}
@@ -1417,7 +1417,7 @@ function TurnBody({
             <button
               type="button"
               onClick={onCancelTurn}
-              className="text-sm text-text-mute hover:text-danger px-3 py-1.5 rounded hover:bg-bg-elevate-2"
+              className="text-xs text-text-mute hover:text-danger px-3 py-1.5 rounded hover:bg-bg-elevate-2"
               data-testid="cli-cancel"
             >
               {s("cancel", locale)}
@@ -1433,7 +1433,7 @@ function TurnBody({
           data-testid="cli-async-handoff"
         >
           <Clock className="w-4 h-4 text-gold mt-0.5 shrink-0" />
-          <div className="flex-1 text-sm">
+          <div className="flex-1 text-xs">
             {s("asyncHandoff", locale)}
             <div className="text-[11px] font-mono text-text-faint mt-1">
               job {turn.asyncJob.jobId}
@@ -1452,7 +1452,7 @@ function TurnBody({
         >
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
-            <div className="text-sm">
+            <div className="text-xs">
               {sFmt("partialBanner", locale, { n: turn.partial.failedStepIndex + 1 })}
               <div className="text-xs font-mono text-danger mt-1">{turn.partial.error}</div>
             </div>
@@ -1531,7 +1531,7 @@ function TurnBody({
           data-testid="cli-error"
         >
           <XCircle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
-          <div className="flex-1 text-sm">
+          <div className="flex-1 text-xs">
             <div className="font-mono text-xs uppercase tracking-wider text-danger mb-0.5">
               {s("errorBadge", locale)} · {turn.error.code}
             </div>
@@ -1605,7 +1605,7 @@ function ClarificationCard({
           </span>
         )}
       </div>
-      <div className="text-sm text-text leading-relaxed">
+      <div className="text-xs text-text leading-relaxed">
         {clarification.question}
       </div>
       {clarification.suggestions && clarification.suggestions.length > 0 && (
@@ -1636,14 +1636,14 @@ function ClarificationCard({
             }
           }}
           placeholder={clarification.field}
-          className="flex-1 bg-bg-deep border border-border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold"
+          className="flex-1 bg-bg-deep border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
           data-testid="cli-clarification-input"
         />
         <button
           type="button"
           onClick={() => answer.trim() && onSubmit(answer.trim())}
           disabled={!answer.trim()}
-          className="text-sm bg-gold text-bg-deep font-semibold px-3 py-1.5 rounded disabled:opacity-50"
+          className="text-xs bg-gold text-bg-deep font-semibold px-3 py-1.5 rounded disabled:opacity-50"
           data-testid="cli-clarification-submit"
         >
           {s("clarificationSubmit", locale)}
@@ -1651,7 +1651,7 @@ function ClarificationCard({
         <button
           type="button"
           onClick={onCancel}
-          className="text-sm text-text-mute hover:text-danger px-2 py-1.5 rounded hover:bg-bg-elevate-2"
+          className="text-xs text-text-mute hover:text-danger px-2 py-1.5 rounded hover:bg-bg-elevate-2"
         >
           {s("cancel", locale)}
         </button>
@@ -1709,7 +1709,7 @@ function PlanCard({
         )}
       </div>
       {isBulk && !showAll && (
-        <div className="text-sm text-text-mute" data-testid="cli-plan-bulk-summary">
+        <div className="text-xs text-text-mute" data-testid="cli-plan-bulk-summary">
           {sFmt("bulkSummary", locale, { n: plan.length })}
         </div>
       )}
@@ -1720,7 +1720,7 @@ function PlanCard({
             <div
               key={i}
               className={cn(
-                "flex items-start gap-2 text-sm py-1 border-b border-border-soft last:border-0",
+                "flex items-start gap-2 text-xs py-1 border-b border-border-soft last:border-0",
                 isExcluded && "opacity-50 line-through",
               )}
               data-testid="cli-plan-row"
@@ -1757,7 +1757,7 @@ function PlanCard({
                       setEditingRow(null);
                     }
                   }}
-                  className="flex-1 bg-bg-deep border border-gold/50 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-gold"
+                  className="flex-1 bg-bg-deep border border-gold/50 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
                   data-testid="cli-plan-row-edit"
                 />
               ) : (
@@ -1822,7 +1822,7 @@ function ResultCard({
       <div className="flex items-start gap-2">
         <CheckCircle2 className="w-4 h-4 text-success mt-0.5 shrink-0" />
         <div className="flex-1">
-          <div className="text-sm font-semibold">{result.title}</div>
+          <div className="text-xs font-semibold">{result.title}</div>
           {result.summary && (
             <div className="text-xs text-text-mute mt-1">{result.summary}</div>
           )}
@@ -2124,7 +2124,7 @@ function HelpPanel({
   return (
     <div className="p-4 space-y-3" data-testid="cli-help">
       <div>
-        <div className="text-sm font-semibold">{s("helpTitle", locale)}</div>
+        <div className="text-xs font-semibold">{s("helpTitle", locale)}</div>
         <div className="text-xs text-text-faint mt-0.5">{s("helpHint", locale)}</div>
       </div>
       {error && (
@@ -2197,7 +2197,7 @@ function SavedPanel({
 }) {
   return (
     <div className="p-4 space-y-3" data-testid="cli-saved">
-      <div className="text-sm font-semibold">{s("savedDrawerTitle", locale)}</div>
+      <div className="text-xs font-semibold">{s("savedDrawerTitle", locale)}</div>
       {prompts.length === 0 ? (
         <div className="text-xs text-text-faint italic">{s("savedDrawerEmpty", locale)}</div>
       ) : (
@@ -2207,7 +2207,7 @@ function SavedPanel({
             return (
               <div
                 key={p.id}
-                className="bg-bg-elevate border border-border rounded p-2.5 text-sm"
+                className="bg-bg-elevate border border-border rounded p-2.5 text-xs"
                 data-testid="cli-saved-row"
               >
                 <div className="font-medium leading-snug">{p.label}</div>
