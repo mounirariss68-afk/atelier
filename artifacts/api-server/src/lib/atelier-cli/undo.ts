@@ -593,6 +593,8 @@ defineCapability({
         stepResults,
         irreversibleSteps: hit.irreversibleSiblings,
         partial: hit.irreversibleSiblings.length > 0 || stepResults.some((r) => !r.ok),
+        // Task #511 — undo lands on whatever surface the user was on; no fixed path.
+        navigateTo: null,
       },
     };
   },

@@ -244,7 +244,18 @@ defineCapability({
       payload: { ...args, viaCli: true, turnId: ctx.turnId },
       payloadSummary: `CLI added ${args.severity} ${args.kind}`,
     });
-    return { ok: true, data: { id, ...args } };
+    // Task #511 — RAID drafts land on the parent engagement dashboard.
+    return {
+      ok: true,
+      data: {
+        id,
+        ...args,
+        navigateTo: {
+          path: `/clients/deliver/engagements/${args.engagementId}`,
+          when: "on_commit" as const,
+        },
+      },
+    };
   },
 });
 
@@ -799,11 +810,13 @@ defineCapability({
     const draft = getSessionDraft(ctx.sessionId);
     const candidateTurnId = draft.lastWriteTurnId;
     if (!candidateTurnId) {
+      // Task #511 — undo has no destination; stay on the current surface.
       return {
         ok: true,
         data: {
           canUndo: false,
           reason: "no recent CLI write in this session",
+          navigateTo: null,
         },
       };
     }
@@ -815,7 +828,7 @@ defineCapability({
     if (!turn) {
       return {
         ok: true,
-        data: { canUndo: false, reason: "prior write turn not found" },
+        data: { canUndo: false, reason: "prior write turn not found", navigateTo: null },
       };
     }
     const tool = String(draft.lastWriteTool ?? "");
@@ -840,6 +853,7 @@ defineCapability({
             tool,
             reason: "underlying RAID row already removed",
             raidId,
+            navigateTo: null,
           },
         };
       }
@@ -880,6 +894,7 @@ defineCapability({
           inverseAction: "raid.cancel",
           raidId,
           auditEventId: auditId,
+          navigateTo: null,
         },
       };
     }
@@ -897,6 +912,7 @@ defineCapability({
         guidance: irreversibleHint,
         auditEntityType: "cli_turn",
         auditEntityId: turn.id,
+        navigateTo: null,
       },
     };
   },
@@ -956,6 +972,7 @@ defineCapability({
       },
       payloadSummary: `CLI feature request: ${text.slice(0, 100)}`,
     });
+    // Task #511 — feature requests are pure audit writes with no destination.
     return {
       ok: true,
       data: {
@@ -964,6 +981,7 @@ defineCapability({
         text,
         message:
           "Thanks — I logged this as a feature request. The product team reviews these in the weekly CLI sync.",
+        navigateTo: null,
       },
     };
   },

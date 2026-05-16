@@ -1371,9 +1371,6 @@ defineCapability({
       const commitNavPath = out.ok
         ? resolveNavPath({ verb, kind, targetId, payload, resultData: out.data })
         : null;
-      const commitNavigateTo = commitNavPath
-        ? { path: commitNavPath, when: "on_commit" as const }
-        : null;
       return {
         ok: out.ok,
         data: out.ok
@@ -1383,7 +1380,12 @@ defineCapability({
               kind,
               dispatchTool: dispatchToolName,
               result: out.data ?? null,
-              navigateTo: commitNavigateTo,
+              // Task #511 — inline the literal so the navigateTo
+              // contract test (which scans `run` source for the
+              // `{ path, when: "on_commit" }` shape) can see it.
+              navigateTo: commitNavPath
+                ? { path: commitNavPath, when: "on_commit" as const }
+                : null,
             }
           : { stage: "failed", verb, kind, dispatchTool: dispatchToolName, errorCode: out.errorCode, errorMessage: out.errorMessage },
         errorCode: out.ok ? undefined : out.errorCode ?? "dispatch_failed",

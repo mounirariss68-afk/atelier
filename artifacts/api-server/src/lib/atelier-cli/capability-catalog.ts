@@ -329,9 +329,72 @@ export function hashSchema(schema: Record<string, unknown>): string {
 }
 
 /**
+ * Task #511 — Runtime contract enforcement for the navigateTo hint.
+ *
+ * Every `isWrite: true` capability MUST return a `navigateTo` value on
+ * commit-success: either `null` (no navigation) or
+ * `{ path: string, when: "on_commit" }` (auto-navigate after the
+ * mutation lands). This wrapper observes every commit-success result
+ * and throws with the offending capability id when the contract is
+ * violated, so a regression surfaces immediately at call-time instead
+ * of silently breaking the chat client's auto-navigation.
+ *
+ * "Commit-success" = `ok: true` with a `data` payload AND no envelope
+ * indicating the orchestrator is still mid-flight (no `confirmation`,
+ * `disambiguation`, `clarification`, `refusal`, `asyncJob`, or
+ * `needsAttachments`). Read-only caps (isWrite=false) are not
+ * checked. The wrapper exposes a `__navContractWrapped` marker so
+ * tests can assert every isWrite cap is wrapped.
+ */
+type ToolResultLike = ToolResult & {
+  asyncJob?: unknown;
+  needsAttachments?: unknown;
+};
+function isCommitSuccess(r: ToolResultLike): boolean {
+  if (!r || r.ok !== true) return false;
+  if (r.confirmation || r.disambiguation || r.clarification || r.refusal) return false;
+  if (r.asyncJob || r.needsAttachments) return false;
+  return r.data !== undefined && r.data !== null && typeof r.data === "object";
+}
+export function validateNavigateToShape(value: unknown): string | null {
+  if (value === null) return null;
+  if (value === undefined) return "missing `navigateTo` key on commit-success data";
+  if (typeof value !== "object") {
+    return `navigateTo must be an object or null (got ${typeof value})`;
+  }
+  const o = value as Record<string, unknown>;
+  if (o.when !== "on_commit") {
+    return `navigateTo.when must equal "on_commit" (got ${JSON.stringify(o.when)})`;
+  }
+  if (typeof o.path !== "string" || o.path.length === 0) {
+    return `navigateTo.path must be a non-empty string (got ${JSON.stringify(o.path)})`;
+  }
+  return null;
+}
+export function assertNavigateToContract(id: string, result: ToolResult): void {
+  if (!isCommitSuccess(result as ToolResultLike)) return;
+  const data = result.data as Record<string, unknown>;
+  if (!("navigateTo" in data)) {
+    throw new Error(
+      `[capability "${id}"] commit-success result is missing the \`navigateTo\` key. ` +
+        `Add \`navigateTo: { path, when: "on_commit" }\` or explicit \`navigateTo: null\` to the returned data.`,
+    );
+  }
+  const err = validateNavigateToShape(data.navigateTo);
+  if (err) {
+    throw new Error(
+      `[capability "${id}"] navigateTo contract violation: ${err}. ` +
+        `Expected null or { path: string, when: "on_commit" }.`,
+    );
+  }
+}
+
+/**
  * Register a capability. Throws on duplicate `id`/`toolName` so a typo
  * can't silently clobber an entry. Auto-computes `schemaHash` if the
- * caller didn't pin one.
+ * caller didn't pin one. For `isWrite: true` capabilities, wraps
+ * `run` with the Task #511 navigateTo contract validator so commit
+ * regressions throw at call-time.
  */
 export function defineCapability(entry: CapabilityInput): CapabilityEntry {
   const finalised: CapabilityEntry = {
@@ -343,6 +406,19 @@ export function defineCapability(entry: CapabilityInput): CapabilityEntry {
     throw new Error(
       `[capability-catalog] duplicate id/toolName: ${finalised.id}/${finalised.toolName}`,
     );
+  }
+  if (finalised.isWrite) {
+    const inner = finalised.run;
+    const wrapped = async (
+      input: Record<string, unknown>,
+      ctx: ToolContext,
+    ): Promise<ToolResult> => {
+      const result = await inner(input, ctx);
+      assertNavigateToContract(finalised.id, result);
+      return result;
+    };
+    (wrapped as unknown as { __navContractWrapped: true }).__navContractWrapped = true;
+    finalised.run = wrapped;
   }
   REGISTRY.push(finalised);
   return finalised;

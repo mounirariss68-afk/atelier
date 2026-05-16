@@ -172,7 +172,14 @@ defineCapability({
     });
     await recordAudit(ctx, id, "wallet.invoice.drafted", { jurisdiction }, `Drafted invoice (${jurisdiction})`);
     const full = await loadFull(ctx.persona.orgId, id);
-    return { ok: true, data: full ?? { invoiceId: id }, resultCardHint: "invoice_card" };
+    return {
+      ok: true,
+      data: {
+        ...(full ?? { invoiceId: id }),
+        navigateTo: { path: `/wallet/invoices/${id}`, when: "on_commit" as const },
+      },
+      resultCardHint: "invoice_card",
+    };
   },
 });
 
@@ -291,7 +298,15 @@ defineCapability({
     const allAmounts = [...existing.map((l) => ({ amount: l.amount })), ...newLines.map((l) => ({ amount: l.amount as number }))];
     const tot = recomputeTotals(allAmounts, inv.vatRatePct);
     await db.update(atelierInvoice).set({ subtotal: tot.subtotal, vatAmount: tot.vat, total: tot.total, updatedAt: new Date() }).where(eq(atelierInvoice.id, inv.id));
-    return { ok: true, data: { added: newLines.length, ...(await loadFull(ctx.persona.orgId, inv.id)) }, resultCardHint: "invoice_card" };
+    return {
+      ok: true,
+      data: {
+        added: newLines.length,
+        ...(await loadFull(ctx.persona.orgId, inv.id)),
+        navigateTo: { path: `/wallet/invoices/${inv.id}`, when: "on_commit" as const },
+      },
+      resultCardHint: "invoice_card",
+    };
   },
 });
 
@@ -410,7 +425,14 @@ defineCapability({
     await recordAudit(ctx, result.inv.id, "wallet.invoice.issued",
       { invoiceNumber: result.invoiceNumber, total: result.inv.total },
       `Issued ${result.invoiceNumber} ($${result.inv.total})`);
-    return { ok: true, data: await loadFull(ctx.persona.orgId, result.inv.id), resultCardHint: "invoice_card" };
+    return {
+      ok: true,
+      data: {
+        ...(await loadFull(ctx.persona.orgId, result.inv.id)),
+        navigateTo: { path: `/wallet/invoices/${result.inv.id}`, when: "on_commit" as const },
+      },
+      resultCardHint: "invoice_card",
+    };
   },
 });
 
@@ -465,7 +487,14 @@ defineCapability({
     }).where(eq(atelierInvoice.id, inv.id));
     await recordAudit(ctx, inv.id, "wallet.invoice.voided",
       { reason, invoiceNumber: inv.invoiceNumber }, `Voided: ${reason}`);
-    return { ok: true, data: await loadFull(ctx.persona.orgId, inv.id), resultCardHint: "invoice_card" };
+    return {
+      ok: true,
+      data: {
+        ...(await loadFull(ctx.persona.orgId, inv.id)),
+        navigateTo: { path: `/wallet/invoices/${inv.id}`, when: "on_commit" as const },
+      },
+      resultCardHint: "invoice_card",
+    };
   },
 });
 
@@ -620,7 +649,14 @@ defineCapability({
       });
     }
     out.sort((a, b) => (b.daysOverdue as number) - (a.daysOverdue as number));
-    return { ok: true, data: { nextActions: out }, resultCardHint: "dunning_card" };
+    return {
+      ok: true,
+      data: {
+        nextActions: out,
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+      resultCardHint: "dunning_card",
+    };
   },
 });
 
@@ -701,7 +737,11 @@ defineCapability({
       `Sent ${step.template} (step ${stepIndex + 1})`);
     return {
       ok: true,
-      data: { event: { id: eventId, stepIndex, template: step.template }, ...(await loadFull(ctx.persona.orgId, invoiceId)) },
+      data: {
+        event: { id: eventId, stepIndex, template: step.template },
+        ...(await loadFull(ctx.persona.orgId, invoiceId)),
+        navigateTo: { path: `/wallet/invoices/${invoiceId}`, when: "on_commit" as const },
+      },
       resultCardHint: "dunning_card",
     };
   },
@@ -762,6 +802,13 @@ defineCapability({
     await recordAudit(ctx, invoiceId, "dunning.promise.recorded",
       { promisedAmount, promisedDate, contactName: (input.contactName as string) ?? null },
       `P2P $${promisedAmount} by ${promisedDate}`);
-    return { ok: true, data: await loadFull(ctx.persona.orgId, invoiceId), resultCardHint: "dunning_card" };
+    return {
+      ok: true,
+      data: {
+        ...(await loadFull(ctx.persona.orgId, invoiceId)),
+        navigateTo: { path: `/wallet/invoices/${invoiceId}`, when: "on_commit" as const },
+      },
+      resultCardHint: "dunning_card",
+    };
   },
 });

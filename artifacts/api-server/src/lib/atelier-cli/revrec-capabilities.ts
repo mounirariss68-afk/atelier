@@ -135,7 +135,11 @@ defineCapability({
       payload: { engagement_id: input.engagement_id, method: input.method },
       summary: `Set revenue method ${input.method} for ${input.engagement_id}`,
     });
-    return { ok: true, data: { method: row } };
+    // Task #511 — revrec writes land on the wallet surface.
+    return {
+      ok: true,
+      data: { method: row, navigateTo: { path: "/wallet", when: "on_commit" as const } },
+    };
   },
 });
 
@@ -256,7 +260,14 @@ defineCapability({
         written.push(n);
       }
     }
-    return { ok: true, data: { schedules: written, period } };
+    return {
+      ok: true,
+      data: {
+        schedules: written,
+        period,
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -302,7 +313,13 @@ defineCapability({
       payload: { period: row.periodLabel, eng: row.engagementId },
       summary: `Froze schedule ${row.periodLabel}/${row.engagementId}`,
     });
-    return { ok: true, data: { schedule: row } };
+    return {
+      ok: true,
+      data: {
+        schedule: row,
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -422,7 +439,14 @@ defineCapability({
       payload: { period, lines: scheds.length, gross },
       summary: `POSTED ${period} (${scheds.length} lines, gross ${gross})`,
     });
-    return { ok: true, data: { posting, locked: true } };
+    return {
+      ok: true,
+      data: {
+        posting,
+        locked: true,
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -512,7 +536,14 @@ defineCapability({
       payload: { posting_id: input.posting_id, delta, eng: input.engagement_id },
       summary: `Adjustment ${delta} on ${input.posting_id}: ${rationale.slice(0, 80)}`,
     });
-    return { ok: true, data: { adjustment: line, id: adjId } };
+    return {
+      ok: true,
+      data: {
+        adjustment: line,
+        id: adjId,
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+    };
   },
 });
 

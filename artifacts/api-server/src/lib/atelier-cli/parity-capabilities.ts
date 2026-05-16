@@ -224,7 +224,15 @@ defineCapability({
       { name: row.name, country: row.country, sector: row.sector, tier: row.tier },
       `${ctx.persona.name} created account "${row.name}" via CLI.`,
     );
-    return { ok: true, data: { id: row.id, name: row.name } };
+    // Task #511 — newly created account opens its workspace.
+    return {
+      ok: true,
+      data: {
+        id: row.id,
+        name: row.name,
+        navigateTo: { path: `/accounts/${row.id}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -272,7 +280,15 @@ defineCapability({
       };
     }
     await recordAudit(ctx, "account", accountId, "cartographer.refresh.cli", { accountId }, `${ctx.persona.name} requested Cartographer refresh.`);
-    return { ok: true, data: { dispatched: true, accountId } };
+    // Task #511 — refreshing Cartographer lands on the account workspace.
+    return {
+      ok: true,
+      data: {
+        dispatched: true,
+        accountId,
+        navigateTo: { path: `/accounts/${accountId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -473,7 +489,16 @@ defineCapability({
       })
       .returning();
     await recordAudit(ctx, "opportunity", row.id, "opportunity.created.cli", { name, accountId }, `${ctx.persona.name} created opportunity "${name}" via CLI.`);
-    return { ok: true, data: { id: row.id, name: row.name, accountId } };
+    // Task #511 — newly created opportunity opens its workspace.
+    return {
+      ok: true,
+      data: {
+        id: row.id,
+        name: row.name,
+        accountId,
+        navigateTo: { path: `/opportunities/${row.id}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -531,7 +556,16 @@ defineCapability({
       rationaleText: String(input.rationale ?? ""),
     });
     await recordAudit(ctx, "opportunity", opp.id, "opportunity.stage_changed.cli", { fromStage: opp.salesStage, toStage }, `${ctx.persona.name} moved "${opp.name}" to ${toStage}.`);
-    return { ok: true, data: { id: opp.id, fromStage: opp.salesStage, toStage } };
+    // Task #511 — stage transitions land back on the opportunity workspace.
+    return {
+      ok: true,
+      data: {
+        id: opp.id,
+        fromStage: opp.salesStage,
+        toStage,
+        navigateTo: { path: `/opportunities/${opp.id}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -577,7 +611,14 @@ defineCapability({
     const fiveC = (input.fiveC as Record<string, string> | undefined) ?? {};
     await db.update(atelierOpportunities).set({ qualify5c: fiveC, updatedAt: new Date() }).where(and(eq(atelierOpportunities.id, opportunityId), eq(atelierOpportunities.orgId, ctx.persona.orgId)));
     await recordAudit(ctx, "opportunity", opportunityId, "opportunity.qualifier.cli", { fiveC, decision: input.decision ?? null, rationale: input.rationale ?? null }, `${ctx.persona.name} updated 5C qualifier.`);
-    return { ok: true, data: { opportunityId } };
+    // Task #511 — qualifier edits land on the opportunity workspace.
+    return {
+      ok: true,
+      data: {
+        opportunityId,
+        navigateTo: { path: `/opportunities/${opportunityId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -633,7 +674,16 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await recordAudit(ctx, "opportunity", opportunityId, "pov.created.cli", { id, title }, `${ctx.persona.name} drafted POV "${title}".`);
-    return { ok: true, data: { id, opportunityId, title } };
+    // Task #511 — drafted POV lands on the parent opportunity workspace.
+    return {
+      ok: true,
+      data: {
+        id,
+        opportunityId,
+        title,
+        navigateTo: { path: `/opportunities/${opportunityId}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -696,7 +746,20 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await recordAudit(ctx, parentType, parentId, "meeting.captured.cli", { id, title, date }, `${ctx.persona.name} captured meeting "${title}".`);
-    return { ok: true, data: { id, title, date } };
+    // Task #511 — meetings land on the parent opportunity / engagement.
+    const meetingNav =
+      parentType === "engagement"
+        ? `/clients/deliver/engagements/${parentId}`
+        : `/opportunities/${parentId}`;
+    return {
+      ok: true,
+      data: {
+        id,
+        title,
+        date,
+        navigateTo: { path: meetingNav, when: "on_commit" as const },
+      },
+    };
   },
 });
 
@@ -755,7 +818,16 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await recordAudit(ctx, "proposal", id, "proposal.created.cli", { opportunityId, title }, `${ctx.persona.name} composed proposal "${title}".`);
-    return { ok: true, data: { id, opportunityId, title } };
+    // Task #511 — composed proposal opens the proposal workspace.
+    return {
+      ok: true,
+      data: {
+        id,
+        opportunityId,
+        title,
+        navigateTo: { path: `/proposals/${id}`, when: "on_commit" as const },
+      },
+    };
   },
 });
 

@@ -136,7 +136,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "meeting", id, "create", input);
-    return { ok: true, data: { id, kind: "meeting" } };
+    return { ok: true, data: { id, kind: "meeting", navigateTo: null } };
   },
 });
 
@@ -192,7 +192,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "raid_item", id, "create", input);
-    return { ok: true, data: { id, kind: "raid_item" } };
+    return { ok: true, data: { id, kind: "raid_item", navigateTo: null } };
   },
 });
 
@@ -251,7 +251,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "timesheet_entry", id, "create", input);
-    return { ok: true, data: { id, kind: "timesheet_entry" } };
+    return { ok: true, data: { id, kind: "timesheet_entry", navigateTo: null } };
   },
 });
 
@@ -296,7 +296,7 @@ defineCapability({
       .set(patch)
       .where(and(eq(atelierTimesheetEntries.id, id), eq(atelierTimesheetEntries.orgId, ctx.persona.orgId), isNull(atelierTimesheetEntries.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "timesheet_entry", id, "update", input);
-    return { ok: true, data: { id, kind: "timesheet_entry" } };
+    return { ok: true, data: { id, kind: "timesheet_entry", navigateTo: null } };
   },
 });
 
@@ -351,7 +351,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "invoice", id, "create", input);
-    return { ok: true, data: { id, kind: "invoice" } };
+    return { ok: true, data: { id, kind: "invoice", navigateTo: null } };
   },
 });
 
@@ -406,7 +406,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "rate_card", id, "create", input);
-    return { ok: true, data: { id, kind: "rate_card" } };
+    return { ok: true, data: { id, kind: "rate_card", navigateTo: null } };
   },
 });
 
@@ -453,7 +453,7 @@ defineCapability({
       .set(patch)
       .where(and(eq(atelierRateCards.id, id), eq(atelierRateCards.orgId, ctx.persona.orgId), isNull(atelierRateCards.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "rate_card", id, "update", input);
-    return { ok: true, data: { id, kind: "rate_card" } };
+    return { ok: true, data: { id, kind: "rate_card", navigateTo: null } };
   },
 });
 
@@ -512,7 +512,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "partner_firm", id, "create", input);
-    return { ok: true, data: { id, kind: "partner_firm" } };
+    return { ok: true, data: { id, kind: "partner_firm", navigateTo: null } };
   },
 });
 
@@ -561,7 +561,7 @@ defineCapability({
       .set(patch)
       .where(and(eq(atelierPartnerFirms.id, id), eq(atelierPartnerFirms.orgId, ctx.persona.orgId), isNull(atelierPartnerFirms.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "partner_firm", id, "update", input);
-    return { ok: true, data: { id, kind: "partner_firm" } };
+    return { ok: true, data: { id, kind: "partner_firm", navigateTo: null } };
   },
 });
 
@@ -614,7 +614,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "win_theme", id, "create", input);
-    return { ok: true, data: { id, kind: "win_theme" } };
+    return { ok: true, data: { id, kind: "win_theme", navigateTo: null } };
   },
 });
 
@@ -666,7 +666,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "win_loss_debrief", id, "create", input);
-    return { ok: true, data: { id, kind: "win_loss_debrief" } };
+    return { ok: true, data: { id, kind: "win_loss_debrief", navigateTo: null } };
   },
 });
 
@@ -718,7 +718,7 @@ defineCapability({
       .set(patch)
       .where(and(eq(atelierProposals.id, id), eq(atelierProposals.orgId, ctx.persona.orgId), isNull(atelierProposals.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "proposal", id, "update", input);
-    return { ok: true, data: { id, kind: "proposal" } };
+    return { ok: true, data: { id, kind: "proposal", navigateTo: null } };
   },
 });
 
@@ -765,7 +765,7 @@ defineCapability({
       .set(patch)
       .where(and(eq(atelierPovs.id, id), eq(atelierPovs.orgId, ctx.persona.orgId), isNull(atelierPovs.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "pov", id, "update", input);
-    return { ok: true, data: { id, kind: "pov" } };
+    return { ok: true, data: { id, kind: "pov", navigateTo: null } };
   },
 });
 
@@ -818,7 +818,7 @@ defineCapability({
       .set(patch)
       .where(and(eq(atelierContract.id, id), eq(atelierContract.orgId, ctx.persona.orgId), isNull(atelierContract.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "contract", id, "update", input);
-    return { ok: true, data: { id, kind: "contract" } };
+    return { ok: true, data: { id, kind: "contract", navigateTo: null } };
   },
 });
 
@@ -867,7 +867,7 @@ defineCapability({
       .set(patch)
       .where(and(eq(atelierWinLossDebriefs.id, id), eq(atelierWinLossDebriefs.orgId, ctx.persona.orgId), isNull(atelierWinLossDebriefs.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "win_loss_debrief", id, "update", input);
-    return { ok: true, data: { id, kind: "win_loss_debrief" } };
+    return { ok: true, data: { id, kind: "win_loss_debrief", navigateTo: null } };
   },
 });
 
@@ -916,7 +916,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "brief", id, "create", input);
-    return { ok: true, data: { id, kind: "brief" } };
+    return { ok: true, data: { id, kind: "brief", navigateTo: null } };
   },
 });
 
@@ -965,7 +965,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "agent_design", id, "create", input);
-    return { ok: true, data: { id, kind: "agent_design" } };
+    return { ok: true, data: { id, kind: "agent_design", navigateTo: null } };
   },
 });
 
@@ -1025,7 +1025,7 @@ defineCapability({
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "renewal", id, "create", input);
     void mirrorEntityEmbedding(ctx.persona.orgId, "renewal", id, `renewal ${input.accountId}`);
-    return { ok: true, data: { id, kind: "renewal" } };
+    return { ok: true, data: { id, kind: "renewal", navigateTo: null } };
   },
 });
 
@@ -1076,7 +1076,7 @@ defineCapability({
     await db.update(atelierInvoice).set(patch)
       .where(and(eq(atelierInvoice.id, id), eq(atelierInvoice.orgId, ctx.persona.orgId), isNull(atelierInvoice.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "invoice", id, "update", input);
-    return { ok: true, data: { id, kind: "invoice" } };
+    return { ok: true, data: { id, kind: "invoice", navigateTo: null } };
   },
 });
 
@@ -1121,7 +1121,7 @@ defineCapability({
     await db.update(atelierRenewal).set(patch)
       .where(and(eq(atelierRenewal.id, id), eq(atelierRenewal.orgId, ctx.persona.orgId), isNull(atelierRenewal.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "renewal", id, "update", input);
-    return { ok: true, data: { id, kind: "renewal" } };
+    return { ok: true, data: { id, kind: "renewal", navigateTo: null } };
   },
 });
 
@@ -1166,7 +1166,7 @@ defineCapability({
     await db.update(atelierChangeOrder).set(patch)
       .where(and(eq(atelierChangeOrder.id, id), eq(atelierChangeOrder.orgId, ctx.persona.orgId), isNull(atelierChangeOrder.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "change_order", id, "update", input);
-    return { ok: true, data: { id, kind: "change_order" } };
+    return { ok: true, data: { id, kind: "change_order", navigateTo: null } };
   },
 });
 
@@ -1209,7 +1209,7 @@ defineCapability({
     await db.update(atelierWinThemes).set(patch)
       .where(and(eq(atelierWinThemes.id, id), eq(atelierWinThemes.orgId, ctx.persona.orgId), isNull(atelierWinThemes.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "win_theme", id, "update", input);
-    return { ok: true, data: { id, kind: "win_theme" } };
+    return { ok: true, data: { id, kind: "win_theme", navigateTo: null } };
   },
 });
 
@@ -1252,7 +1252,7 @@ defineCapability({
     await db.update(atelierBriefs).set(patch)
       .where(and(eq(atelierBriefs.id, id), eq(atelierBriefs.orgId, ctx.persona.orgId), isNull(atelierBriefs.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "brief", id, "update", input);
-    return { ok: true, data: { id, kind: "brief" } };
+    return { ok: true, data: { id, kind: "brief", navigateTo: null } };
   },
 });
 
@@ -1295,7 +1295,7 @@ defineCapability({
     await db.update(atelierAgentDesigns).set(patch)
       .where(and(eq(atelierAgentDesigns.id, id), eq(atelierAgentDesigns.orgId, ctx.persona.orgId), isNull(atelierAgentDesigns.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "agent_design", id, "update", input);
-    return { ok: true, data: { id, kind: "agent_design" } };
+    return { ok: true, data: { id, kind: "agent_design", navigateTo: null } };
   },
 });
 
@@ -1348,7 +1348,7 @@ defineCapability({
     await db.update(atelierAccounts).set(patch)
       .where(and(eq(atelierAccounts.id, id), eq(atelierAccounts.orgId, ctx.persona.orgId), isNull(atelierAccounts.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "account", id, "update", input);
-    return { ok: true, data: { id, kind: "account" } };
+    return { ok: true, data: { id, kind: "account", navigateTo: null } };
   },
 });
 
@@ -1398,7 +1398,7 @@ defineCapability({
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "contact", id, "create", input);
     try { await mirrorEntityEmbedding(ctx.persona.orgId, "contact", id, String(input.fullName)); } catch {}
-    return { ok: true, data: { id, kind: "contact" } };
+    return { ok: true, data: { id, kind: "contact", navigateTo: null } };
   },
 });
 
@@ -1445,7 +1445,7 @@ defineCapability({
     await db.update(atelierOpportunities).set(patch)
       .where(and(eq(atelierOpportunities.id, id), eq(atelierOpportunities.orgId, ctx.persona.orgId), isNull(atelierOpportunities.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "opportunity", id, "update", input);
-    return { ok: true, data: { id, kind: "opportunity" } };
+    return { ok: true, data: { id, kind: "opportunity", navigateTo: null } };
   },
 });
 
@@ -1488,7 +1488,7 @@ defineCapability({
     await db.update(atelierDeliverables).set(patch)
       .where(and(eq(atelierDeliverables.id, id), eq(atelierDeliverables.orgId, ctx.persona.orgId), isNull(atelierDeliverables.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "deliverable", id, "update", input);
-    return { ok: true, data: { id, kind: "deliverable" } };
+    return { ok: true, data: { id, kind: "deliverable", navigateTo: null } };
   },
 });
 
@@ -1535,6 +1535,6 @@ defineCapability({
     await db.update(atelierExpenses).set(patch)
       .where(and(eq(atelierExpenses.id, id), eq(atelierExpenses.orgId, ctx.persona.orgId), isNull(atelierExpenses.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "expense", id, "update", input);
-    return { ok: true, data: { id, kind: "expense" } };
+    return { ok: true, data: { id, kind: "expense", navigateTo: null } };
   },
 });

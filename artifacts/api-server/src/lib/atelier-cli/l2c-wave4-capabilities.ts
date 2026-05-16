@@ -127,7 +127,16 @@ defineCapability({
     }
     await recordAudit(ctx, "bank_statement_import", importId, "bank_import.create",
       { rowsCount: parsed.rows.length }, `Imported ${parsed.rows.length} bank rows`);
-    return { ok: true, data: { importId, rowsImported: parsed.rows.length, errors: parsed.errors }, resultCardHint: "entity_card" };
+    return {
+      ok: true,
+      data: {
+        importId,
+        rowsImported: parsed.rows.length,
+        errors: parsed.errors,
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+      resultCardHint: "entity_card",
+    };
   },
 });
 
@@ -205,7 +214,15 @@ defineCapability({
     await db.update(atelierCashReceipt).set({
       appliedAmount: round2(r.appliedAmount + totalRequested), updatedAt: new Date(),
     }).where(eq(atelierCashReceipt.id, r.id));
-    return { ok: true, data: { receipt: { id: r.id, totalAmount: r.totalAmount, appliedAmount: round2(r.appliedAmount + totalRequested) }, applicationIds: created }, resultCardHint: "cash_receipt_card" };
+    return {
+      ok: true,
+      data: {
+        receipt: { id: r.id, totalAmount: r.totalAmount, appliedAmount: round2(r.appliedAmount + totalRequested) },
+        applicationIds: created,
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+      resultCardHint: "cash_receipt_card",
+    };
   },
 });
 
@@ -296,7 +313,15 @@ defineCapability({
     await recordAudit(ctx, "bank_recon_period", i.reconId, "bank_recon.finalise",
       { variance: period.variance, varianceAccepted: !!i.varianceAccepted },
       `Finalised recon ${period.periodLabel}`);
-    return { ok: true, data: { id: i.reconId, status: "finalised" }, resultCardHint: "bank_recon_card" };
+    return {
+      ok: true,
+      data: {
+        id: i.reconId,
+        status: "finalised",
+        navigateTo: { path: "/wallet", when: "on_commit" as const },
+      },
+      resultCardHint: "bank_recon_card",
+    };
   },
 });
 
@@ -404,6 +429,12 @@ defineCapability({
     await recordAudit(ctx, "renewal", id, "renewal.open",
       { accountId: i.accountId, currentArrUsd: cur, nrrDeltaPct: nrr },
       `Opened renewal ARR $${cur} → $${proposed} (${nrr >= 0 ? "+" : ""}${nrr}% NRR)`);
+    // Task #511 — opened renewals land on the originating account/engagement.
+    const renewalNav = i.engagementId
+      ? `/clients/deliver/engagements/${i.engagementId}`
+      : i.accountId
+        ? `/accounts/${i.accountId}`
+        : null;
     return {
       ok: true,
       data: {
@@ -413,6 +444,9 @@ defineCapability({
           renewalDueAt: i.renewalDueAt ?? null, riskTier: i.riskTier ?? "green",
           status: "open",
         },
+        navigateTo: renewalNav
+          ? { path: renewalNav, when: "on_commit" as const }
+          : null,
       },
       resultCardHint: "renewal_card",
     };

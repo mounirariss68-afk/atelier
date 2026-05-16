@@ -147,10 +147,14 @@ export function registerAgentCapabilities(): CapabilityEntry[] {
         // orchestrator uses to either (a) confirm + hand off to the
         // existing agent route, or (b) report back to the model so it
         // can ask the user for missing inputs.
+        // Task #511 — agent dispatch has no SPA destination on its own
+        // (the run lives behind the agent route + a "View run" link in
+        // the UI). All commit returns explicitly emit `navigateTo: null`
+        // so the navigateTo contract test recognises them as wired.
         if (input.confirm !== true) {
           return {
             ok: true,
-            data: { agentId: agent.id, agentName: agent.name, preview: input },
+            data: { agentId: agent.id, agentName: agent.name, preview: input, navigateTo: null },
             confirmation: {
               summary: `Run ${agent.name}. ${agent.humanCheckpoints.length > 0 ? "Human checkpoint required after the run." : ""}`.trim(),
               diff: {
@@ -178,6 +182,7 @@ export function registerAgentCapabilities(): CapabilityEntry[] {
             turnId: ctx.turnId,
             note:
               "Agent run was queued for the existing agent dispatch route — see atelier_agent_runs for status.",
+            navigateTo: null,
           },
         };
       },
