@@ -282,6 +282,42 @@ export function clampRailWidth(n: number, viewportW?: number): number {
   return Math.max(lo, Math.min(upper, Math.round(n)));
 }
 
+/** Pure helper: compute the new rail width while the user drags the
+ * left-edge handle. The rail is anchored to the right edge, so dragging
+ * LEFT (negative deltaX) WIDENS the rail. Exported for unit tests. */
+export function computeRailDragWidth(
+  startWidth: number,
+  deltaX: number,
+  viewportW: number,
+): number {
+  return clampRailWidth(startWidth - deltaX, viewportW);
+}
+
+/** Pure helper: keyboard handler for the rail resize separator.
+ * Returns the next clamped width, or `null` if the key is not a
+ * recognised resize key (caller should not preventDefault). Convention:
+ * Home → minimum width (start of range), End → maximum (end of range);
+ * ArrowLeft widens by 16px (rail anchored right), ArrowRight shrinks. */
+export function applyRailKeyAction(
+  key: string,
+  currentWidth: number,
+  viewportW: number,
+): number | null {
+  const upper = Math.min(RAIL_MAX_WIDTH, Math.floor(viewportW * 0.6));
+  switch (key) {
+    case "ArrowLeft":
+      return clampRailWidth(currentWidth + 16, viewportW);
+    case "ArrowRight":
+      return clampRailWidth(currentWidth - 16, viewportW);
+    case "Home":
+      return RAIL_MIN_WIDTH;
+    case "End":
+      return upper;
+    default:
+      return null;
+  }
+}
+
 export function loadRailWidth(): number {
   if (typeof window === "undefined") return RAIL_DEFAULT_WIDTH;
   try {
@@ -426,9 +462,7 @@ export function RightRail() {
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     const onMove = (ev: PointerEvent) => {
-      // Rail is anchored to the right edge; dragging LEFT (delta<0)
-      // should WIDEN the rail.
-      const next = clampRailWidth(startW - (ev.clientX - startX), window.innerWidth);
+      const next = computeRailDragWidth(startW, ev.clientX - startX, window.innerWidth);
       dragRef.current.nextW = next;
       if (dragRef.current.raf == null) {
         dragRef.current.raf = requestAnimationFrame(() => {
@@ -447,7 +481,7 @@ export function RightRail() {
         cancelAnimationFrame(dragRef.current.raf);
         dragRef.current.raf = null;
       }
-      const final = clampRailWidth(startW - (ev.clientX - startX), window.innerWidth);
+      const final = computeRailDragWidth(startW, ev.clientX - startX, window.innerWidth);
       setWidth(final);
     };
     window.addEventListener("pointermove", onMove);
@@ -456,19 +490,10 @@ export function RightRail() {
   };
   const onHandleKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const vp = typeof window !== "undefined" ? window.innerWidth : 1280;
-    const upper = Math.min(RAIL_MAX_WIDTH, Math.floor(vp * 0.6));
-    if (e.key === "ArrowLeft") {
+    const next = applyRailKeyAction(e.key, width, vp);
+    if (next != null) {
       e.preventDefault();
-      setWidth(clampRailWidth(width + 16, vp));
-    } else if (e.key === "ArrowRight") {
-      e.preventDefault();
-      setWidth(clampRailWidth(width - 16, vp));
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      setWidth(upper);
-    } else if (e.key === "End") {
-      e.preventDefault();
-      setWidth(RAIL_MIN_WIDTH);
+      setWidth(next);
     }
   };
   const cliTriggerRef = React.useContext(CliContext).triggerRef;

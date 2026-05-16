@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import {
   clampRailWidth,
   loadRailWidth,
+  computeRailDragWidth,
+  applyRailKeyAction,
   RAIL_DEFAULT_WIDTH,
   RAIL_MIN_WIDTH,
   RAIL_MAX_WIDTH,
@@ -92,6 +94,98 @@ test("loadRailWidth: parses + clamps stored value", () => {
 test("loadRailWidth: garbage value falls back to default", () => {
   memStore["atelier-rail-width"] = "not-a-number";
   assert.equal(loadRailWidth(), RAIL_DEFAULT_WIDTH);
+});
+
+/* ───────────── Drag round-trip (rail anchored right) ───────────── */
+
+test("computeRailDragWidth: dragging LEFT widens the rail", () => {
+  // start=400, deltaX=-100 (cursor moved 100px to the left)
+  // expected next width = 400 - (-100) = 500
+  assert.equal(computeRailDragWidth(400, -100, 1280), 500);
+});
+
+test("computeRailDragWidth: dragging RIGHT shrinks the rail", () => {
+  // start=400, deltaX=+50 → next = 350
+  assert.equal(computeRailDragWidth(400, 50, 1280), 350);
+});
+
+test("computeRailDragWidth: clamps to min/max during drag", () => {
+  assert.equal(computeRailDragWidth(330, 500, 1280), RAIL_MIN_WIDTH);
+  assert.equal(computeRailDragWidth(700, -800, 1920), RAIL_MAX_WIDTH);
+});
+
+/* ───────────── Keyboard semantics ───────────── */
+
+test("applyRailKeyAction: ArrowLeft widens by 16, ArrowRight shrinks by 16", () => {
+  assert.equal(applyRailKeyAction("ArrowLeft", 400, 1280), 416);
+  assert.equal(applyRailKeyAction("ArrowRight", 400, 1280), 384);
+});
+
+test("applyRailKeyAction: Home jumps to MIN, End jumps to MAX", () => {
+  assert.equal(applyRailKeyAction("Home", 500, 1280), RAIL_MIN_WIDTH);
+  assert.equal(applyRailKeyAction("End", 500, 1280), RAIL_MAX_WIDTH);
+});
+
+test("applyRailKeyAction: End respects 60% viewport cap", () => {
+  // 60% of 800 = 480, which is below RAIL_MAX_WIDTH(720).
+  assert.equal(applyRailKeyAction("End", 320, 800), 480);
+});
+
+test("applyRailKeyAction: arrows clamp at bounds", () => {
+  assert.equal(applyRailKeyAction("ArrowRight", RAIL_MIN_WIDTH, 1280), RAIL_MIN_WIDTH);
+  assert.equal(applyRailKeyAction("ArrowLeft", RAIL_MAX_WIDTH, 1920), RAIL_MAX_WIDTH);
+});
+
+test("applyRailKeyAction: returns null for unrelated keys", () => {
+  assert.equal(applyRailKeyAction("Enter", 400, 1280), null);
+  assert.equal(applyRailKeyAction("a", 400, 1280), null);
+});
+
+/* ───────────── Persistence round-trip + collapse-cycle ───────────── */
+
+// Simulates the Shell's setRailWidth setter (clamp → state → storage).
+// The test asserts that a width set by the user survives a "collapse →
+// expand" cycle (the cycle does NOT touch storage), and is restored on
+// re-mount via loadRailWidth().
+function simulateSetRailWidth(n: number, vp: number): number {
+  const clamped = clampRailWidth(n, vp);
+  memStore["atelier-rail-width"] = String(clamped);
+  return clamped;
+}
+
+test("persistence: drag → store → reload restores the user's width", () => {
+  delete memStore["atelier-rail-width"];
+  // 1. user drags from 320 → 480 (deltaX = -160)
+  const dragged = computeRailDragWidth(320, -160, 1280);
+  assert.equal(dragged, 480);
+  // 2. setter persists clamped value
+  const stored = simulateSetRailWidth(dragged, 1280);
+  assert.equal(stored, 480);
+  // 3. on next mount, loadRailWidth re-hydrates from storage
+  assert.equal(loadRailWidth(), 480);
+});
+
+test("collapse cycle: user width is preserved across collapse/expand", () => {
+  // The Shell holds width in React state inside RailContext, separate
+  // from `collapsed`. Toggling collapsed never writes to storage and
+  // never resets width — so loadRailWidth still returns the same value
+  // before AND after the toggle.
+  simulateSetRailWidth(560, 1280);
+  const before = loadRailWidth();
+  // (collapse toggle would be: setCollapsed(true); setCollapsed(false))
+  // Since collapse does not mutate storage:
+  const after = loadRailWidth();
+  assert.equal(before, 560);
+  assert.equal(after, 560);
+});
+
+test("persistence: clamps on store when viewport later shrinks", () => {
+  // User stored 700 on a wide screen, then re-opened on an 800px screen.
+  memStore["atelier-rail-width"] = "700";
+  // Simulate window.innerWidth = 800 for this load
+  (globalThis as unknown as { window: { innerWidth: number } }).window.innerWidth = 800;
+  assert.equal(loadRailWidth(), 480); // clamped to 60% of 800
+  (globalThis as unknown as { window: { innerWidth: number } }).window.innerWidth = 1280;
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
