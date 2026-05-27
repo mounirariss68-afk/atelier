@@ -375,7 +375,7 @@ export default function Home() {
                   transition={{ delay: i * 0.1, duration: 0.5 }}
                   className="flex gap-4 p-5 bg-white rounded-xl border border-gray-100 shadow-sm"
                 >
-                  <span className="text-[#F5A623] font-black text-xl leading-none mt-0.5 w-8 flex-shrink-0">{item.num}</span>
+                  <span className="text-[#C45BB8] font-black text-xl leading-none mt-0.5 w-8 flex-shrink-0">{item.num}</span>
                   <div>
                     <h3 className="font-bold text-[#0A1230] mb-1">{item.title}</h3>
                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
@@ -415,7 +415,7 @@ export default function Home() {
                   { label: tStr(HOME_COPY.diffItem5Title, lang), desc: tStr(HOME_COPY.diffItem5Desc, lang) },
                 ].map((item, i) => (
                   <div key={i} className="flex gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#F5A623] mt-2 flex-shrink-0" />
+                    <div className="w-2 h-2 rounded-full bg-[#C45BB8] mt-2 flex-shrink-0" />
                     <div>
                       <span className="font-bold text-white">{item.label} — </span>
                       <span className="text-gray-300 text-sm">{item.desc}</span>
@@ -423,7 +423,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <Link href="/about" className="mt-8 inline-flex items-center gap-2 text-[#F5A623] font-semibold text-sm hover:text-white transition-colors">
+              <Link href="/about" className="mt-8 inline-flex items-center gap-2 text-[#C45BB8] font-semibold text-sm hover:text-white transition-colors">
                 {tStr(HOME_COPY.diffLearnMore, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
               </Link>
             </motion.div>
@@ -451,7 +451,7 @@ export default function Home() {
             <p className="text-lg text-gray-600 leading-relaxed">
               {tStr(TWO_PATHS_COPY.introA, lang)}{" "}
               <strong className="text-[#5B7CFF]">{tStr(TWO_PATHS_COPY.introProject, lang)}</strong>{" "}
-              <strong className="text-[#F5A623]">{tStr(TWO_PATHS_COPY.introAsset, lang)}</strong>{" "}
+              <strong className="text-[#C45BB8]">{tStr(TWO_PATHS_COPY.introAsset, lang)}</strong>{" "}
               {tStr(TWO_PATHS_COPY.introBlend, lang)}
             </p>
           </motion.div>
@@ -489,7 +489,7 @@ export default function Home() {
                       <span className="text-xs text-gray-700 leading-snug">{tStr(f.project, lang)}</span>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#F5A623] flex-shrink-0" />
+                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#C45BB8] flex-shrink-0" />
                       <span className="text-xs text-gray-700 leading-snug">{tStr(f.asset, lang)}</span>
                     </div>
                   </div>
@@ -511,21 +511,21 @@ export default function Home() {
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <Package size={16} className="text-[#F5A623]" />
-                <span className="text-xs font-bold uppercase tracking-widest text-[#F5A623]">{tStr(TWO_PATHS_COPY.cardAsset, lang)}</span>
+                <Package size={16} className="text-[#C45BB8]" />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#C45BB8]">{tStr(TWO_PATHS_COPY.cardAsset, lang)}</span>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardAssetDesc, lang)}</p>
-              <Link href="/marketplace" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#F5A623] hover:text-[#d4622a]">
+              <Link href="/marketplace" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#C45BB8] hover:text-[#d4622a]">
                 {tStr(TWO_PATHS_COPY.ctaMarketplace, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <GitMerge size={16} className="text-[#196B24]" />
-                <span className="text-xs font-bold uppercase tracking-widest text-[#196B24]">{tStr(TWO_PATHS_COPY.cardBlended, lang)}</span>
+                <GitMerge size={16} className="text-[#8A5BD6]" />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#8A5BD6]">{tStr(TWO_PATHS_COPY.cardBlended, lang)}</span>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardBlendedDesc, lang)}</p>
-              <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#196B24] hover:text-[#0A1230]">
+              <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#8A5BD6] hover:text-[#0A1230]">
                 {tStr(TWO_PATHS_COPY.ctaPov, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>
@@ -573,7 +573,7 @@ export default function Home() {
                   <p className="text-sm text-gray-600 leading-relaxed mb-5">{serviceDescription(service, lang)}</p>
                   <Link
                     href={`/services/${service.slug}`}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#5B7CFF] group-hover:text-[#F5A623] transition-colors"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#5B7CFF] group-hover:text-[#C45BB8] transition-colors"
                   >
                     {tStr(HOME_COPY.learnMore, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                   </Link>
@@ -596,7 +596,7 @@ export default function Home() {
               <h2 className="text-4xl font-extrabold text-[#0A1230] mb-2">{tStr(HOME_COPY.featuredTitle, lang)}</h2>
               <p className="text-gray-600">{tStr(HOME_COPY.featuredSub, lang)}</p>
             </div>
-            <Link href="/insights" className="hidden sm:inline-flex items-center gap-2 text-[#5B7CFF] font-semibold text-sm hover:text-[#F5A623] transition-colors">
+            <Link href="/insights" className="hidden sm:inline-flex items-center gap-2 text-[#5B7CFF] font-semibold text-sm hover:text-[#C45BB8] transition-colors">
               {tStr(HOME_COPY.allInsights, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
             </Link>
           </div>
@@ -626,7 +626,7 @@ export default function Home() {
                       <span
                         className="text-xs font-bold px-3 py-1 rounded-full"
                         style={{
-                          backgroundColor: INSIGHT_CATEGORY_COLORS[insight.category] ?? "#196B24",
+                          backgroundColor: INSIGHT_CATEGORY_COLORS[insight.category] ?? "#8A5BD6",
                           color: "white",
                         }}
                       >
@@ -646,7 +646,7 @@ export default function Home() {
                     <p className="text-sm text-gray-600 leading-relaxed mb-4">{insightSummary(insight, lang)}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-400">{insightReadTimeLabel(insight, lang)}</span>
-                      <span className="text-sm font-semibold text-[#5B7CFF] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
+                      <span className="text-sm font-semibold text-[#5B7CFF] group-hover:text-[#C45BB8] transition-colors flex items-center gap-1">
                         {tStr(HOME_COPY.read, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                       </span>
                     </div>
@@ -661,15 +661,15 @@ export default function Home() {
       {/* ── FOUNDER QUOTE ── */}
       <section className="py-24 bg-[#0A1230] relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "40px 40px" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #C45BB8 1px, transparent 1px)`, backgroundSize: "40px 40px" }} />
         </div>
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <Quote size={48} className="text-[#F5A623] mx-auto mb-8 opacity-60" />
+          <Quote size={48} className="text-[#C45BB8] mx-auto mb-8 opacity-60" />
           <blockquote className="text-2xl sm:text-3xl font-semibold text-white leading-relaxed mb-10">
             "{tStr(HOME_COPY.founderQuote, lang)}"
           </blockquote>
           <div className="flex items-center justify-center gap-4">
-            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#5B7CFF] border-2 border-[#F5A623]">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#5B7CFF] border-2 border-[#C45BB8]">
               <img
                 src={mounirHeadshot}
                 alt="Mounir Aris"
@@ -724,7 +724,7 @@ export default function Home() {
                 </p>
                 <h3 className="text-xl font-bold text-[#0A1230] mb-3">{industryTitle(ind, lang)}</h3>
                 <p className="text-sm text-gray-600 leading-relaxed mb-6 flex-1">{industrySubtitle(ind, lang)}</p>
-                <Link href={`/industries#${ind.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#5B7CFF] group-hover:text-[#F5A623] transition-colors">
+                <Link href={`/industries#${ind.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#5B7CFF] group-hover:text-[#C45BB8] transition-colors">
                   {tStr(HOME_COPY.explore, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                 </Link>
               </motion.div>
@@ -774,9 +774,9 @@ export default function Home() {
                   </span>
                 </div>
                 {[
-                  { label: tStr(HOME_COPY.vrRow1, lang), expected: 4.2, realized: 3.35, color: "#196B24" },
-                  { label: tStr(HOME_COPY.vrRow2, lang), expected: 6.8, realized: 4.6, color: "#196B24" },
-                  { label: tStr(HOME_COPY.vrRow3, lang), expected: 9.5, realized: 5.2, color: "#F5A623" },
+                  { label: tStr(HOME_COPY.vrRow1, lang), expected: 4.2, realized: 3.35, color: "#8A5BD6" },
+                  { label: tStr(HOME_COPY.vrRow2, lang), expected: 6.8, realized: 4.6, color: "#8A5BD6" },
+                  { label: tStr(HOME_COPY.vrRow3, lang), expected: 9.5, realized: 5.2, color: "#C45BB8" },
                   { label: tStr(HOME_COPY.vrRow4, lang), expected: 3.1, realized: 1.4, color: "#5B7CFF" },
                   { label: tStr(HOME_COPY.vrRow5, lang), expected: 5.4, realized: 0.0, color: "#B91C1C" },
                 ].map((row) => {

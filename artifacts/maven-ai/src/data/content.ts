@@ -640,14 +640,14 @@ export const insights = [
   <rect width="700" height="280" fill="#F8FAFC"/>
   <text x="20" y="22" font-size="12" font-weight="700" fill="#0A1230">Layer · failure mode reversed</text>
   <text x="430" y="22" font-size="12" font-weight="700" fill="#0A1230">Share of programme budget</text><text x="430" y="38" font-size="10" fill="#475569">Cognirise (filled) vs Tier-1 typical (outline)</text>
-  <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">L0 · Value Case</text><text x="32" y="86" fill="#fff" font-size="10">"No measurable outcome" → quantified before/after</text>
-  <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <rect x="20" y="50" width="380" height="44" fill="#C45BB8" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">L0 · Value Case</text><text x="32" y="86" fill="#fff" font-size="10">"No measurable outcome" → quantified before/after</text>
+  <rect x="430" y="58" width="100" height="14" fill="#C45BB8"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="540" y="70" font-size="10" fill="#0A1230" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
   <rect x="20" y="104" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">L1 · Data & Foundations</text><text x="32" y="140" fill="#fff" font-size="10">"Data not agent-ready" → lineage, masters, retrieval</text>
   <rect x="430" y="112" width="160" height="14" fill="#5B7CFF"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="600" y="124" font-size="10" fill="#0A1230" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
-  <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">L2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot can't scale" → production agents, sovereign-fit</text>
-  <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <rect x="20" y="158" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">L2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot can't scale" → production agents, sovereign-fit</text>
+  <rect x="430" y="166" width="180" height="14" fill="#5B7CFF"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="618" y="178" font-size="10" fill="#0A1230" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
   <rect x="20" y="212" width="380" height="44" fill="#0A1230" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">L3 · Change & Adoption</text><text x="32" y="248" fill="#fff" font-size="10">"Adoption stalls" → role redesign, training, comms</text>
   <rect x="430" y="220" width="125" height="14" fill="#0A1230"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
@@ -679,14 +679,14 @@ export const insights = [
   <line x1="520" y1="40" x2="520" y2="180" stroke="#E2E8F0"/><text x="520" y="200" text-anchor="middle">W21</text>
   <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
   </g>
-  <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Value case · W1–3</text>
+  <rect x="40" y="48" width="72" height="20" fill="#C45BB8" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Value case · W1–3</text>
   <rect x="112" y="76" width="168" height="20" fill="#5B7CFF" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Data readiness · W4–10</text>
-  <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototype · W9–14</text>
+  <rect x="232" y="104" width="120" height="20" fill="#5B7CFF" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototype · W9–14</text>
   <rect x="328" y="132" width="216" height="20" fill="#0A1230" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Production hardening · W13–22</text>
   <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">Change & launch · W20–26</text>
-  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">Gate 1: ROI signed</text>
-  <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">Gate 2: Pilot proven</text>
-  <line x1="544" y1="44" x2="544" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#F5A623" text-anchor="end">Gate 3: Prod sign-off</text></g>
+  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#C45BB8">Gate 1: ROI signed</text>
+  <line x1="328" y1="44" x2="328" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#C45BB8">Gate 2: Pilot proven</text>
+  <line x1="544" y1="44" x2="544" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#C45BB8" text-anchor="end">Gate 3: Prod sign-off</text></g>
   <text x="40" y="225" font-size="10" fill="#475569">No-go at any gate ends the programme — gates are designed to halt, not to delay.</text>
   </svg>
   <figcaption>Figure 2 — The 26-week sequence with three go/no-go gates. Weeks 1–3 must close with a quantified ROI; the prototype gate at W12 demands a measurable pilot outcome; production sign-off at W22 is conditioned on observability and rollback readiness. Skipping any gate is the most common driver of failed scale-up.</figcaption>
@@ -906,14 +906,14 @@ export const insights = [
   <rect width="700" height="280" fill="#F8FAFC"/>
   <text x="20" y="22" font-size="12" font-weight="700" fill="#0A1230">الطبقة · وضع الفشل المُعالَج</text>
   <text x="430" y="22" font-size="12" font-weight="700" fill="#0A1230">حصة ميزانية البرنامج</text><text x="430" y="38" font-size="10" fill="#475569">Cognirise (ممتلئ) مقابل الفئة الأولى التقليدي (محيط)</text>
-  <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">الطبقة 0 · حالة القيمة</text><text x="32" y="86" fill="#fff" font-size="10">"لا نتيجة قابلة للقياس" ← قبل/بعد مُكمَّم</text>
-  <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <rect x="20" y="50" width="380" height="44" fill="#C45BB8" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">الطبقة 0 · حالة القيمة</text><text x="32" y="86" fill="#fff" font-size="10">"لا نتيجة قابلة للقياس" ← قبل/بعد مُكمَّم</text>
+  <rect x="430" y="58" width="100" height="14" fill="#C45BB8"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="540" y="70" font-size="10" fill="#0A1230" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (الفئة الأولى)</text>
   <rect x="20" y="104" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">الطبقة 1 · أسس البيانات</text><text x="32" y="140" fill="#fff" font-size="10">"البيانات غير جاهزة للوكيل" ← نسب البيانات والاسترجاع</text>
   <rect x="430" y="112" width="160" height="14" fill="#5B7CFF"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="600" y="124" font-size="10" fill="#0A1230" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
-  <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">الطبقة 2 · الذكاء الوكيل</text><text x="32" y="194" fill="#fff" font-size="10">"التجربة لا تتوسع" ← وكلاء إنتاج · ملاءمة سيادية</text>
-  <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <rect x="20" y="158" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">الطبقة 2 · الذكاء الوكيل</text><text x="32" y="194" fill="#fff" font-size="10">"التجربة لا تتوسع" ← وكلاء إنتاج · ملاءمة سيادية</text>
+  <rect x="430" y="166" width="180" height="14" fill="#5B7CFF"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="618" y="178" font-size="10" fill="#0A1230" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
   <rect x="20" y="212" width="380" height="44" fill="#0A1230" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">الطبقة 3 · التغيير والتبني</text><text x="32" y="248" fill="#fff" font-size="10">"التبني يتعثر" ← إعادة تصميم الأدوار · تدريب</text>
   <rect x="430" y="220" width="125" height="14" fill="#0A1230"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
@@ -936,14 +936,14 @@ export const insights = [
   <line x1="520" y1="40" x2="520" y2="180" stroke="#E2E8F0"/><text x="520" y="200" text-anchor="middle">W21</text>
   <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
   </g>
-  <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">حالة القيمة · أ1–3</text>
+  <rect x="40" y="48" width="72" height="20" fill="#C45BB8" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">حالة القيمة · أ1–3</text>
   <rect x="112" y="76" width="168" height="20" fill="#5B7CFF" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">جاهزية البيانات · أ4–10</text>
-  <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">النموذج الأولي · أ9–14</text>
+  <rect x="232" y="104" width="120" height="20" fill="#5B7CFF" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">النموذج الأولي · أ9–14</text>
   <rect x="328" y="132" width="216" height="20" fill="#0A1230" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">تصلب الإنتاج · أ13–22</text>
   <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">التغيير والإطلاق · أ20–26</text>
-  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">بوابة 1: عائد الاستثمار موقّع</text>
-  <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">بوابة 2: التجربة مُثبتة</text>
-  <line x1="544" y1="44" x2="544" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#F5A623" text-anchor="end">بوابة 3: اعتماد الإنتاج</text></g>
+  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#C45BB8">بوابة 1: عائد الاستثمار موقّع</text>
+  <line x1="328" y1="44" x2="328" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#C45BB8">بوابة 2: التجربة مُثبتة</text>
+  <line x1="544" y1="44" x2="544" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#C45BB8" text-anchor="end">بوابة 3: اعتماد الإنتاج</text></g>
   <text x="40" y="225" font-size="10" fill="#475569">الرفض عند أي بوابة ينهي البرنامج — البوابات مصممة للإيقاف لا للتأجيل.</text>
   </svg>
   <figcaption>الشكل 2 — تسلسل الـ26 أسبوعاً مع ثلاث بوابات قرار. يجب أن تنغلق الأسابيع 1–3 بعائد استثمار مُكمَّم؛ تتطلب بوابة النموذج الأولي في الأسبوع 12 نتيجة تجربة قابلة للقياس؛ يشترط اعتماد الإنتاج في الأسبوع 22 جاهزية المراقبة والاسترجاع. تخطي أي بوابة هو السبب الأكثر شيوعاً لفشل التوسع.</figcaption>
@@ -1081,14 +1081,14 @@ export const insights = [
   <rect width="700" height="280" fill="#F8FAFC"/>
   <text x="20" y="22" font-size="12" font-weight="700" fill="#0A1230">Katman · tersine çevrilen başarısızlık</text>
   <text x="430" y="22" font-size="12" font-weight="700" fill="#0A1230">Program bütçesi payı</text><text x="430" y="38" font-size="10" fill="#475569">Cognirise (dolu) vs Tier-1 tipik (kontur)</text>
-  <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">K0 · Değer Durumu</text><text x="32" y="86" fill="#fff" font-size="10">"Ölçülebilir sonuç yok" → nicelendirilmiş öncesi/sonrası</text>
-  <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <rect x="20" y="50" width="380" height="44" fill="#C45BB8" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">K0 · Değer Durumu</text><text x="32" y="86" fill="#fff" font-size="10">"Ölçülebilir sonuç yok" → nicelendirilmiş öncesi/sonrası</text>
+  <rect x="430" y="58" width="100" height="14" fill="#C45BB8"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="540" y="70" font-size="10" fill="#0A1230" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
   <rect x="20" y="104" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">K1 · Veri & Temeller</text><text x="32" y="140" fill="#fff" font-size="10">"Veri ajan için hazır değil" → soyağacı, getirme</text>
   <rect x="430" y="112" width="160" height="14" fill="#5B7CFF"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="600" y="124" font-size="10" fill="#0A1230" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
-  <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">K2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot ölçeklenemiyor" → üretim ajanları · egemenlik uyumu</text>
-  <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <rect x="20" y="158" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">K2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot ölçeklenemiyor" → üretim ajanları · egemenlik uyumu</text>
+  <rect x="430" y="166" width="180" height="14" fill="#5B7CFF"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
   <text x="618" y="178" font-size="10" fill="#0A1230" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
   <rect x="20" y="212" width="380" height="44" fill="#0A1230" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">K3 · Değişim & Benimseme</text><text x="32" y="248" fill="#fff" font-size="10">"Benimseme tıkanıyor" → rol tasarımı · eğitim · iletişim</text>
   <rect x="430" y="220" width="125" height="14" fill="#0A1230"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
@@ -1111,14 +1111,14 @@ export const insights = [
   <line x1="520" y1="40" x2="520" y2="180" stroke="#E2E8F0"/><text x="520" y="200" text-anchor="middle">W21</text>
   <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
   </g>
-  <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Değer durumu · H1–3</text>
+  <rect x="40" y="48" width="72" height="20" fill="#C45BB8" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Değer durumu · H1–3</text>
   <rect x="112" y="76" width="168" height="20" fill="#5B7CFF" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Veri hazırlığı · H4–10</text>
-  <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototip · H9–14</text>
+  <rect x="232" y="104" width="120" height="20" fill="#5B7CFF" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototip · H9–14</text>
   <rect x="328" y="132" width="216" height="20" fill="#0A1230" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Üretim sertleştirme · H13–22</text>
   <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">Değişim & başlatma · H20–26</text>
-  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">Kapı 1: ROI imzalı</text>
-  <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">Kapı 2: Pilot kanıtlandı</text>
-  <line x1="544" y1="44" x2="544" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#F5A623" text-anchor="end">Kapı 3: Üretim onayı</text></g>
+  <g><line x1="112" y1="44" x2="112" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#C45BB8">Kapı 1: ROI imzalı</text>
+  <line x1="328" y1="44" x2="328" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#C45BB8">Kapı 2: Pilot kanıtlandı</text>
+  <line x1="544" y1="44" x2="544" y2="180" stroke="#C45BB8" stroke-dasharray="3 3" stroke-width="1.5"/><text x="540" y="42" font-size="9" font-weight="700" fill="#C45BB8" text-anchor="end">Kapı 3: Üretim onayı</text></g>
   <text x="40" y="225" font-size="10" fill="#475569">Herhangi bir kapıdaki "gitme" kararı programı sonlandırır — kapılar geciktirmek için değil, durdurmak için tasarlanmıştır.</text>
   </svg>
   <figcaption>Şekil 2 — Üç git/gitme kapılı 26 haftalık sıra. Haftalar 1–3 nicelendirilmiş bir ROI ile kapanmalıdır; H12'deki prototip kapısı ölçülebilir bir pilot sonucu talep eder; H22'deki üretim onayı gözlemlenebilirlik ve geri alma hazırlığına bağlıdır. Herhangi bir kapıyı atlamak, başarısız ölçeklenmenin en yaygın itici gücüdür.</figcaption>

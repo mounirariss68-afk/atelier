@@ -151,13 +151,13 @@ export default function ChatWidget() {
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.2 }}
             onClick={() => setOpen(true)}
-            className={`fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#e69a1f] text-[#0A1230] font-bold px-5 py-3.5 rounded-full shadow-2xl shadow-amber-500/20 transition-colors`}
+            className={`fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 bg-[#C45BB8] hover:bg-[#A04A99] text-[#0A1230] font-bold px-5 py-3.5 rounded-full shadow-2xl shadow-amber-500/20 transition-colors`}
             aria-label={t(T.open)}
             data-testid="button-open-chat"
           >
             <motion.span
               aria-hidden
-              className="absolute inset-0 rounded-full bg-[#F5A623]"
+              className="absolute inset-0 rounded-full bg-[#C45BB8]"
               animate={{ scale: [1, 1.35, 1], opacity: [0.5, 0, 0.5] }}
               transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut" }}
             />
@@ -191,8 +191,8 @@ export default function ChatWidget() {
             {/* Header */}
             <div className="bg-[#0A1230] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-[#F5A623]/15 border border-[#F5A623]/30 flex items-center justify-center">
-                  <Sparkles size={16} className="text-[#F5A623]" />
+                <div className="w-9 h-9 rounded-full bg-[#C45BB8]/15 border border-[#C45BB8]/30 flex items-center justify-center">
+                  <Sparkles size={16} className="text-[#C45BB8]" />
                 </div>
                 <div>
                   <div className="font-bold text-sm leading-tight">{t(T.title)}</div>
@@ -278,7 +278,7 @@ export default function ChatWidget() {
                             renderInline(m.content)
                           ) : (
                             <span className="text-gray-400 inline-flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#F5A623] animate-pulse" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#C45BB8] animate-pulse" />
                               {t(T.thinking)}
                             </span>
                           )}
@@ -290,7 +290,7 @@ export default function ChatWidget() {
                                 key={`${s.kind}-${s.href}`}
                                 href={s.href}
                                 onClick={() => setOpen(false)}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold bg-[#F5A623]/10 hover:bg-[#F5A623] text-[#0A1230] hover:text-white border border-[#F5A623]/30 hover:border-[#F5A623] px-3 py-1.5 rounded-full transition-colors"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold bg-[#C45BB8]/10 hover:bg-[#C45BB8] text-[#0A1230] hover:text-white border border-[#C45BB8]/30 hover:border-[#C45BB8] px-3 py-1.5 rounded-full transition-colors"
                                 data-testid="link-chat-suggestion"
                               >
                                 {s.label}

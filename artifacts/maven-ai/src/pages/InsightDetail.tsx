@@ -126,11 +126,11 @@ export default function InsightDetail() {
 
               {/* Key takeaways */}
               <div className="bg-[#0A1230] rounded-xl p-6 text-white">
-                <h3 className="font-bold mb-4 text-sm uppercase tracking-wider text-[#F5A623]">{tStr(COPY.keyTakeaways, lang)}</h3>
+                <h3 className="font-bold mb-4 text-sm uppercase tracking-wider text-[#C45BB8]">{tStr(COPY.keyTakeaways, lang)}</h3>
                 <ul className="space-y-3">
                   {[COPY.takeaway1, COPY.takeaway2, COPY.takeaway3].map((point, i) => (
                     <li key={i} className="flex gap-2 text-sm text-gray-300">
-                      <span className="text-[#F5A623] font-bold mt-0.5">→</span>
+                      <span className="text-[#C45BB8] font-bold mt-0.5">→</span>
                       {tStr(point, lang)}
                     </li>
                   ))}
@@ -141,7 +141,7 @@ export default function InsightDetail() {
               <div className="border border-gray-200 rounded-xl p-6">
                 <h3 className="font-bold text-[#0A1230] mb-2 text-sm">{tStr(COPY.talkTeam, lang)}</h3>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">{tStr(COPY.talkPara, lang)}</p>
-                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#F5A623] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#e69a1f] transition-colors">
+                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#C45BB8] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#A04A99] transition-colors">
                   {tStr(COPY.scheduleCall, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                 </Link>
               </div>
