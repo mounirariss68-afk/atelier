@@ -44,7 +44,7 @@ export const CONDUCTOR_AGENTS: ConductorAgent[] = [
     id: "realization-conductor",
     name: { en: "Realization Conductor", ar: "منسّق تحقيق القيمة" },
     role: { en: "Plans the chase, coordinates specialists, gates approvals.", ar: "يخطّط مهمة المتابعة وينسّق المتخصّصين ويحرس الموافقات." },
-    color: "#196B24",
+    color: "#8A5BD6",
     scenarioAgentId: "orchestrator",
   },
   {
@@ -58,7 +58,7 @@ export const CONDUCTOR_AGENTS: ConductorAgent[] = [
     id: "evidence-auditor",
     name: { en: "Evidence Auditor", ar: "مُدقّق الأدلّة" },
     role: { en: "Audits ERP, P&L and ticket data behind every claim.", ar: "يدقّق بيانات ERP والربح والخسارة والتذاكر خلف كل ادّعاء." },
-    color: "#156082",
+    color: "#5B7CFF",
     scenarioAgentId: "watcher",
   },
   {
@@ -72,7 +72,7 @@ export const CONDUCTOR_AGENTS: ConductorAgent[] = [
     id: "rebaseline-drafter",
     name: { en: "Re-baseline Drafter", ar: "كاتب إعادة الاحتساب" },
     role: { en: "Drafts the re-baseline memo for sponsor + CFO sign-off.", ar: "يصوغ مذكّرة إعادة الاحتساب لتوقيع الراعي والمدير المالي." },
-    color: "#196B24",
+    color: "#8A5BD6",
     scenarioAgentId: "narrator",
   },
   {

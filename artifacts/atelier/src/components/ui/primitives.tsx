@@ -14,7 +14,7 @@ Eyebrow.displayName = "Eyebrow";
 
 export const GoldRule = () => <span className="gold-rule" />;
 
-/** 48×3 gold bar — Maven-inspired major section divider. */
+/** 48×3 gold bar — Cognirise-inspired major section divider. */
 export const SectionDivider = ({ className }: { className?: string }) => (
   <span className={cn("section-divider", className)} />
 );

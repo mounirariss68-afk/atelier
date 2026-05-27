@@ -88,7 +88,7 @@ export default function DealerChat({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div className={`max-w-[85%] rounded-xl px-4 py-3 ${
-              msg.role === "user" ? "bg-[#0E2841] text-white" : "bg-white border border-gray-100 shadow-sm"
+              msg.role === "user" ? "bg-[#0A1230] text-white" : "bg-white border border-gray-100 shadow-sm"
             }`}>
               <p className="text-xs whitespace-pre-line leading-relaxed">{msg.text}</p>
               {msg.type === "table" && !!msg.data?.headers && (

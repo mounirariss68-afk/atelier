@@ -12,7 +12,7 @@ interface MemoArgs {
 
 function buildSystemPrompt(args: MemoArgs): string {
   const { def, profile, result } = args;
-  return `You are writing a 1-page executive memo signed by the four founders of Maven AI — a boutique GCC AI advisory and engineering firm.
+  return `You are writing a 1-page executive memo signed by the two founders of Cognirise — a boutique GCC AI advisory and engineering firm.
 
 Tone: senior, McKinsey-grade, direct, candid. No fluff. No bullet-list filler. Numbers where possible. Speak like a partner who has run 20 of these engagements.
 
@@ -36,7 +36,7 @@ Write 4 short paragraphs (~80 words each):
 3) The 6-12 month strategic shift — what changes structurally if they take this seriously.
 4) The honesty paragraph — the trade-off, the risk, or the thing a vendor would not tell them.
 
-End with: "— The Maven AI partnership"
+End with: "— The Cognirise partnership"
 
 Output PLAIN TEXT only. No markdown, no headers, no asterisks. Each paragraph separated by a blank line. Maximum 380 words total.`;
 }
@@ -101,7 +101,7 @@ function buildTemplateMemo(args: MemoArgs, language: "en" | "ar" | "tr"): string
       `أهم تحرك خلال 90 يوماً: ${result.recommendations.quickWins90d[0]?.ar ?? "تحديد راعٍ تنفيذي بصلاحية P&L."}. هذا التحرك يفك أكبر اختناق في وضعكم الحالي بأقل تكلفة.`,
       `التحول الاستراتيجي خلال 6–12 شهراً: ${result.recommendations.strategic12m[0]?.ar ?? "نقل القدرة من المختبر إلى الإنتاج."} يفعل ${"$" + result.costOfInaction.ebitDeltaUsd.toLocaleString()} من القيمة المتروكة على الطاولة.`,
       `الحقيقة التي لن يخبركم بها مزود: ${def.antiVendor.ar[0] ?? "نتائجكم ليست مشكلة تقنية، بل مشكلة نموذج تشغيل وحوكمة."}`,
-      "— شراكة Maven AI",
+      "— شراكة Cognirise",
     ].join("\n\n");
   }
   if (language === "tr") {
@@ -114,7 +114,7 @@ function buildTemplateMemo(args: MemoArgs, language: "en" | "ar" | "tr"): string
       `90 günlük hamle: ${trQuick} Bu, mevcut işletim modelinizdeki en büyük kısıtı en düşük maliyetle açar.`,
       `6–12 aylık dönüşüm: ${trStrategic} Bu, şu anda masada bırakılan ${"$" + result.costOfInaction.ebitDeltaUsd.toLocaleString()} değerini harekete geçirir.`,
       `Dürüst paragraf: ${trAntiVendor}`,
-      "— Maven AI ortaklığı",
+      "— Cognirise ortaklığı",
     ].join("\n\n");
   }
   return [
@@ -122,6 +122,6 @@ function buildTemplateMemo(args: MemoArgs, language: "en" | "ar" | "tr"): string
     `The 90-day move: ${result.recommendations.quickWins90d[0]?.en ?? "Name an executive sponsor with P&L authority for one priority use case."} This unlocks the biggest constraint in your current operating model at the lowest cost.`,
     `The 6–12 month shift: ${result.recommendations.strategic12m[0]?.en ?? "Move agentic capability from lab to production."} This is what activates the ${"$" + result.costOfInaction.ebitDeltaUsd.toLocaleString()} of value currently left on the table.`,
     `The honesty paragraph: ${def.antiVendor.en[0] ?? "Your scores reflect an operating-model problem, not a technology problem. No platform purchase will move this number."}`,
-    "— The Maven AI partnership",
+    "— The Cognirise partnership",
   ].join("\n\n");
 }

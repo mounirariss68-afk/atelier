@@ -121,7 +121,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                     {(m.response.data.rows as [string, string][]).map(([k, v], i) => (
                       <div key={i} className="rounded-lg bg-gray-50 border border-gray-100 p-2">
                         <div className="text-[10px] text-gray-400">{k}</div>
-                        <div className="text-sm font-bold text-[#0E2841]">{v}</div>
+                        <div className="text-sm font-bold text-[#0A1230]">{v}</div>
                       </div>
                     ))}
                   </div>
@@ -150,7 +150,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                   <div className="mt-2 bg-white border border-gray-200 rounded-xl p-3">
                     {Boolean(m.response.data.headline) && (
                       <div className="mb-2">
-                        <div className="text-base font-extrabold text-[#0E2841]">{String(m.response.data.headline)}</div>
+                        <div className="text-base font-extrabold text-[#0A1230]">{String(m.response.data.headline)}</div>
                         {Boolean(m.response.data.headlineLabel) && (
                           <div className="text-[10px] text-gray-400">{String(m.response.data.headlineLabel)}</div>
                         )}
@@ -167,7 +167,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                               <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                                 <div className="h-full rounded-full" style={{ width: `${(b.value / max) * 100}%`, background: BRAND }} />
                               </div>
-                              <div className="text-[10px] font-semibold text-[#0E2841] w-12 text-right">{b.value}</div>
+                              <div className="text-[10px] font-semibold text-[#0A1230] w-12 text-right">{b.value}</div>
                             </div>
                           ))}
                         </div>
@@ -187,7 +187,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
 
                 {(m.response?.type === "recommendation" || m.response?.type === "memo") && m.response.data && (
                   <div className="mt-2 bg-white border-2 rounded-xl p-3" style={{ borderColor: BRAND }}>
-                    {Boolean(m.response.data.subject) && <p className="text-[11px] font-bold text-[#0E2841] mb-1.5">{String(m.response.data.subject)}</p>}
+                    {Boolean(m.response.data.subject) && <p className="text-[11px] font-bold text-[#0A1230] mb-1.5">{String(m.response.data.subject)}</p>}
                     {Boolean(m.response.data.rationale) && <p className="text-[11px] text-gray-600 mb-2">{String(m.response.data.rationale)}</p>}
                     {Array.isArray(m.response.data.bullets) && (
                       <ul className="text-[11px] text-gray-700 list-disc list-inside space-y-1">
@@ -198,7 +198,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
                       <div className="mt-2 text-[10px] font-semibold" style={{ color: BRAND }}>{isAr ? "ثقة" : "Confidence"}: {String(m.response.data.confidence)}%</div>
                     )}
                     {Boolean(m.response.data.action) && (
-                      <div className="mt-2 text-[10px] font-bold uppercase tracking-wide" style={{ color: BRAND }}>{isAr ? "الإجراء الموصى" : "Recommended action"}: <span className="font-medium normal-case text-[#0E2841]">{String(m.response.data.action)}</span></div>
+                      <div className="mt-2 text-[10px] font-bold uppercase tracking-wide" style={{ color: BRAND }}>{isAr ? "الإجراء الموصى" : "Recommended action"}: <span className="font-medium normal-case text-[#0A1230]">{String(m.response.data.action)}</span></div>
                     )}
                   </div>
                 )}

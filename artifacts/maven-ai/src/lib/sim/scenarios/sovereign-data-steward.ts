@@ -13,7 +13,7 @@ import type { Scenario } from "../types";
 const sovereignDataScenario: Scenario = {
   slug: "sovereign-data-steward",
   toolTitle: { en: "Sovereign Data Steward", ar: "حارس البيانات السيادي" },
-  accent: "#0E2841",
+  accent: "#0A1230",
   description: {
     en: "An on-prem orchestrator runs a data run inside an air-gapped enclave: Schema Explorer, Arabic NER, Pipeline Drafter, Lineage Compiler, and Quality Contract Drafter coordinate to land a clean, mastered, regulator-defensible data product — blocking sinks that violate residency.",
     ar: "منسّق محلّي يدير جولة داخل بيئة معزولة: مستكشف البنية، وأداة الكيانات العربية، وكاتب التدفق، ومسجّل النسب، وكاتب عقد الجودة، يتعاونون لإصدار منتج بيانات نظيف ومضبوط وقابل للدفاع — مع حجب أيّ مصبّ يخالف الإقامة.",
@@ -21,12 +21,12 @@ const sovereignDataScenario: Scenario = {
   buyer: { en: "CDO + Head of AI Foundations", ar: "المدير الرقمي ورئيس أُسس الذكاء الاصطناعي" },
   trigger: { en: "New 'Citizen Sentiment Dashboard' request lands in the enclave landing zone.", ar: "طلب 'لوحة مشاعر المواطنين' وصل إلى منطقة الإدخال السيادية." },
   agents: [
-    { id: "orch", name: { en: "Steward Conductor", ar: "منسّق الحارس" }, role: { en: "Plans the run and gates publish.", ar: "يخطّط الجولة ويراقب النشر." }, kind: "orchestrator", color: "#0E2841" },
-    { id: "schema", name: { en: "Schema Explorer", ar: "مستكشف البنية" }, role: { en: "Profiles each source schema and distributions.", ar: "يحلّل البنية والتوزيعات لكل مصدر." }, kind: "specialist", color: "#156082" },
+    { id: "orch", name: { en: "Steward Conductor", ar: "منسّق الحارس" }, role: { en: "Plans the run and gates publish.", ar: "يخطّط الجولة ويراقب النشر." }, kind: "orchestrator", color: "#0A1230" },
+    { id: "schema", name: { en: "Schema Explorer", ar: "مستكشف البنية" }, role: { en: "Profiles each source schema and distributions.", ar: "يحلّل البنية والتوزيعات لكل مصدر." }, kind: "specialist", color: "#5B7CFF" },
     { id: "ner", name: { en: "Arabic NER", ar: "كيانات عربية" }, role: { en: "Tags Arabic free-text sources.", ar: "يصنّف الكيانات في النصوص العربية." }, kind: "specialist", color: "#5C8CA8" },
-    { id: "pipeline", name: { en: "Pipeline Drafter", ar: "كاتب التدفق" }, role: { en: "Composes the transform DAG.", ar: "يصوغ مخطط التحويل." }, kind: "drafter", color: "#F5A623" },
+    { id: "pipeline", name: { en: "Pipeline Drafter", ar: "كاتب التدفق" }, role: { en: "Composes the transform DAG.", ar: "يصوغ مخطط التحويل." }, kind: "drafter", color: "#C45BB8" },
     { id: "lineage", name: { en: "Lineage Compiler", ar: "مسجّل النسب" }, role: { en: "Validates each sink against the obligation register.", ar: "يدقّق كل مصبّ مقابل سجل الالتزامات." }, kind: "critic", color: "#D9534F" },
-    { id: "contract", name: { en: "Quality Contract Drafter", ar: "كاتب عقد الجودة" }, role: { en: "Drafts the data-product quality contract.", ar: "يصوغ عقد جودة المنتج." }, kind: "drafter", color: "#196B24" },
+    { id: "contract", name: { en: "Quality Contract Drafter", ar: "كاتب عقد الجودة" }, role: { en: "Drafts the data-product quality contract.", ar: "يصوغ عقد جودة المنتج." }, kind: "drafter", color: "#8A5BD6" },
   ],
   tools: [
     { name: "profile_schemas", description: { en: "Profiles every source schema and distribution.", ar: "يحلّل بنية وتوزيع كل مصدر." } },
@@ -96,7 +96,7 @@ const sovereignDataScenario: Scenario = {
       preview: { en: "4 sources (CRM, contact-centre transcripts AR, social listening, complaints), 2 sinks (internal Looker + external BI partner).", ar: "4 مصادر و2 مصبّ (Looker داخلي وشريك BI خارجي)." },
       receivedAt: "Mon 09:30",
       status: "new",
-      accent: "#0E2841",
+      accent: "#0A1230",
     },
   ],
   initialWorkspace: [],

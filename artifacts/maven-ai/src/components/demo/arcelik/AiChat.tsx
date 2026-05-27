@@ -84,7 +84,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
       className="fixed right-0 top-0 bottom-0 w-[400px] bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col"
     >
-      <div className="flex-shrink-0 h-14 bg-[#0E2841] text-white flex items-center px-4 gap-3">
+      <div className="flex-shrink-0 h-14 bg-[#0A1230] text-white flex items-center px-4 gap-3">
         <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
           <Bot size={18} />
         </div>
@@ -100,7 +100,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
           <div key={msg.id} className={`flex gap-2.5 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             {msg.role === "assistant" && (
               <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-white ${
-                msg.response?.agent === "campaign-mgr" ? "bg-[#F5A623]" : "bg-[#0E2841]"
+                msg.response?.agent === "campaign-mgr" ? "bg-[#C45BB8]" : "bg-[#0A1230]"
               }`}>
                 {msg.response?.agent === "campaign-mgr" ? <Sparkles size={14} /> : <Bot size={14} />}
               </div>
@@ -120,7 +120,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
               </div>
 
               {msg.response?.type === "metric" && msg.response.data && (
-                <div className="mt-2 bg-gradient-to-r from-[#0E2841] to-[#1a3a5c] rounded-xl p-3 text-white">
+                <div className="mt-2 bg-gradient-to-r from-[#0A1230] to-[#1B2755] rounded-xl p-3 text-white">
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-extrabold">{String(msg.response.data.value)}</span>
                     {msg.response.data.trend === "up" ? (
@@ -168,7 +168,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
               )}
 
               {msg.response?.type === "chart" && msg.response.data && (() => {
-                const CHART_COLORS = ["#E30613", "#0E2841", "#F5A623", "#16a34a", "#7c3aed", "#0891b2", "#db2777", "#d97706"];
+                const CHART_COLORS = ["#E30613", "#0A1230", "#C45BB8", "#16a34a", "#7c3aed", "#0891b2", "#db2777", "#d97706"];
                 const cData = msg.response.data.chartData as { name: string; value: number }[];
                 const cType = msg.response.data.chartType as string;
                 return (
@@ -220,7 +220,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
 
         {typing && (
           <div className="flex gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#0E2841] flex-shrink-0 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-[#0A1230] flex-shrink-0 flex items-center justify-center">
               <Bot size={14} className="text-white" />
             </div>
             <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3">

@@ -26,7 +26,7 @@ export default function ApprovalsView() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-[#0E2841]">{t.title[lang]}</h1>
+        <h1 className="text-2xl font-bold text-[#0A1230]">{t.title[lang]}</h1>
         <p className="text-sm text-gray-500 mt-1">{t.subtitle[lang]}</p>
       </header>
 
@@ -51,16 +51,16 @@ export default function ApprovalsView() {
                   <span className="ml-auto text-[10px] font-bold" style={{ color: BRAND }}>{r.confidence}% confidence</span>
                 </div>
 
-                <h3 className="text-base font-bold text-[#0E2841]">{isAr ? r.titleAr : r.titleEn}</h3>
+                <h3 className="text-base font-bold text-[#0A1230]">{isAr ? r.titleAr : r.titleEn}</h3>
                 <p className="text-[13px] text-gray-700 mt-2">{isAr ? r.rationaleAr : r.rationaleEn}</p>
 
                 <div className="mt-3 bg-gray-50 rounded-lg p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">{isAr ? "الإجراء الموصى" : "Recommended action"}</p>
-                  <p className="text-sm font-semibold text-[#0E2841]">{isAr ? r.recommendedActionAr : r.recommendedActionEn}</p>
+                  <p className="text-sm font-semibold text-[#0A1230]">{isAr ? r.recommendedActionAr : r.recommendedActionEn}</p>
                 </div>
 
                 <details className="mt-2">
-                  <summary className="text-[11px] text-gray-500 cursor-pointer hover:text-[#0E2841]">{t.alternate[lang]}</summary>
+                  <summary className="text-[11px] text-gray-500 cursor-pointer hover:text-[#0A1230]">{t.alternate[lang]}</summary>
                   <ul className="mt-1.5 text-[12px] text-gray-600 list-disc list-inside space-y-1">
                     {(isAr ? r.alternateActionsAr : r.alternateActionsEn).map((a, i) => <li key={i}>{a}</li>)}
                   </ul>

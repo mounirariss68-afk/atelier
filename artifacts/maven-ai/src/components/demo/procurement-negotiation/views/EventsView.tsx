@@ -29,7 +29,7 @@ export default function EventsView({ onOpenEvent, onApprove }: { onOpenEvent: (i
     <div className="space-y-6">
       <header>
         <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: BRAND }}>{isAr ? persona.roleAr : persona.roleEn}</p>
-        <h1 className="text-2xl font-bold text-[#0E2841] mt-1">{isAr ? `أهلاً، ${persona.nameAr}` : `Welcome, ${persona.nameEn}`}</h1>
+        <h1 className="text-2xl font-bold text-[#0A1230] mt-1">{isAr ? `أهلاً، ${persona.nameAr}` : `Welcome, ${persona.nameEn}`}</h1>
         <p className="text-sm text-gray-500 mt-1">{st.personaTagline[lang]}</p>
       </header>
 
@@ -41,7 +41,7 @@ export default function EventsView({ onOpenEvent, onApprove }: { onOpenEvent: (i
           return (
             <div key={k.id} className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">{isAr ? k.labelAr : k.labelEn}</div>
-              <div className="text-2xl font-extrabold text-[#0E2841] mt-1.5">{k.value}</div>
+              <div className="text-2xl font-extrabold text-[#0A1230] mt-1.5">{k.value}</div>
               <div className="flex items-center gap-1 mt-1">
                 <TIcon size={11} className={tColor} />
                 <span className="text-[11px] text-gray-500">{isAr ? k.subAr : k.subEn}</span>
@@ -54,7 +54,7 @@ export default function EventsView({ onOpenEvent, onApprove }: { onOpenEvent: (i
       {/* Agent recommendations strip */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-[#0E2841] flex items-center gap-2">
+          <h2 className="text-sm font-bold text-[#0A1230] flex items-center gap-2">
             <Sparkles size={14} style={{ color: BRAND }} />
             {t.recsTitle[lang]}
           </h2>
@@ -73,7 +73,7 @@ export default function EventsView({ onOpenEvent, onApprove }: { onOpenEvent: (i
                   <span className="text-[10px] text-gray-500">{r.recordId}</span>
                   <span className="ml-auto text-[10px] font-bold" style={{ color: BRAND }}>{r.confidence}%</span>
                 </div>
-                <p className="text-sm font-bold text-[#0E2841]">{isAr ? r.titleAr : r.titleEn}</p>
+                <p className="text-sm font-bold text-[#0A1230]">{isAr ? r.titleAr : r.titleEn}</p>
                 <p className="text-[12px] text-gray-600 mt-1.5 line-clamp-3">{isAr ? r.rationaleAr : r.rationaleEn}</p>
                 <button onClick={onApprove} className="mt-2 text-[11px] font-semibold hover:underline" style={{ color: BRAND }}>
                   {t.open2[lang]} →
@@ -87,7 +87,7 @@ export default function EventsView({ onOpenEvent, onApprove }: { onOpenEvent: (i
       {/* Events table */}
       <section>
         <div className="mb-3">
-          <h2 className="text-sm font-bold text-[#0E2841]">{t.title[lang]}</h2>
+          <h2 className="text-sm font-bold text-[#0A1230]">{t.title[lang]}</h2>
           <p className="text-xs text-gray-500 mt-0.5">{t.subtitle[lang]}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -110,7 +110,7 @@ export default function EventsView({ onOpenEvent, onApprove }: { onOpenEvent: (i
                 return (
                   <tr key={e.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => onOpenEvent(e.id)}>
                     <td className="px-3 py-2.5">
-                      <div className="font-bold text-[#0E2841]">{e.refId}</div>
+                      <div className="font-bold text-[#0A1230]">{e.refId}</div>
                       <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{isAr ? e.titleAr : e.titleEn}</div>
                     </td>
                     <td className="px-3 py-2.5 text-gray-700">{isAr ? e.categoryAr : e.categoryEn}</td>

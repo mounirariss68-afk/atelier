@@ -17,7 +17,7 @@ export default function SuppliersView() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-[#0E2841]">{t.title[lang]}</h1>
+        <h1 className="text-2xl font-bold text-[#0A1230]">{t.title[lang]}</h1>
         <p className="text-sm text-gray-500 mt-1">{t.subtitle[lang]}</p>
       </header>
 
@@ -28,7 +28,7 @@ export default function SuppliersView() {
               <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ background: BRAND }}>{s.code.slice(0, 2)}</div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-bold text-[#0E2841] truncate">{isAr ? s.nameAr : s.nameEn}</h3>
+                  <h3 className="text-sm font-bold text-[#0A1230] truncate">{isAr ? s.nameAr : s.nameEn}</h3>
                   {s.incumbent && <Star size={11} className="text-amber-500 fill-amber-500" />}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] text-gray-500">
@@ -66,7 +66,7 @@ export default function SuppliersView() {
 }
 
 function Stat({ label, value, good, warn }: { label: string; value: string; good?: boolean; warn?: boolean }) {
-  const color = good ? SEMANTIC.good : warn ? SEMANTIC.warn : "#0E2841";
+  const color = good ? SEMANTIC.good : warn ? SEMANTIC.warn : "#0A1230";
   return (
     <div className="bg-gray-50 rounded-lg p-2">
       <div className="text-[9px] text-gray-400 uppercase tracking-wider">{label}</div>
@@ -87,7 +87,7 @@ function SupplierDrawer({ supplier: s, onClose }: { supplier: Supplier; onClose:
       <div className={`fixed top-0 bottom-0 ${isAr ? "left-0" : "right-0"} w-[440px] bg-white shadow-2xl overflow-y-auto`} onClick={(e) => e.stopPropagation()} dir={isAr ? "rtl" : "ltr"}>
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-[#0E2841]">{isAr ? s.nameAr : s.nameEn}</h3>
+            <h3 className="text-base font-bold text-[#0A1230]">{isAr ? s.nameAr : s.nameEn}</h3>
             <p className="text-[11px] text-gray-500">{isAr ? s.countryAr : s.countryEn} · {s.code}</p>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={16} /></button>
@@ -127,7 +127,7 @@ function Box({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-gray-50 rounded-lg p-2">
       <div className="text-[9px] text-gray-400 uppercase tracking-wider">{label}</div>
-      <div className="text-sm font-bold text-[#0E2841] mt-0.5">{value}</div>
+      <div className="text-sm font-bold text-[#0A1230] mt-0.5">{value}</div>
     </div>
   );
 }
@@ -135,7 +135,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between text-[12px]">
       <span className="text-gray-500">{label}</span>
-      <span className="font-semibold text-[#0E2841]">{value}</span>
+      <span className="font-semibold text-[#0A1230]">{value}</span>
     </div>
   );
 }

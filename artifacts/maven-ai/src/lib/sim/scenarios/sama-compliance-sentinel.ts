@@ -14,7 +14,7 @@ import type { Scenario } from "../types";
 const samaScenario: Scenario = {
   slug: "sama-compliance-sentinel",
   toolTitle: { en: "SAMA Compliance Sentinel", ar: "حارس الامتثال لمؤسسة النقد" },
-  accent: "#F5A623",
+  accent: "#C45BB8",
   description: {
     en: "A compliance orchestrator monitors regulator updates, retrieves the affected controls, drafts the CRO-grade impact memo, and stages the audit-ready evidence pack — pausing for the CRO and Internal Audit before any filing leaves the building.",
     ar: "منسّق امتثال يراقب تحديثات المنظّم، ويسترجع الضوابط المتأثّرة، ويصوغ مذكّرة أثر بمستوى مدير المخاطر، ويُعدّ حزمة أدلّة جاهزة للتدقيق — مع توقف لمدير المخاطر والتدقيق الداخلي.",
@@ -22,11 +22,11 @@ const samaScenario: Scenario = {
   buyer: { en: "CRO + Head of Compliance", ar: "مدير المخاطر ورئيس الامتثال" },
   trigger: { en: "SAMA publishes Cyber Resilience Update CRU-2026-04 at 09:00.", ar: "نشر مؤسسة النقد تحديث المرونة السيبرانية CRU-2026-04 الساعة 09:00." },
   agents: [
-    { id: "orch", name: { en: "Sentinel Conductor", ar: "منسّق الحارس" }, role: { en: "Plans the response and gates filings.", ar: "يخطّط الاستجابة ويراقب الإيداع." }, kind: "orchestrator", color: "#F5A623" },
-    { id: "monitor", name: { en: "Regulator Monitor", ar: "مراقب المنظّم" }, role: { en: "Watches SAMA / PDPL / CMA bulletins.", ar: "يراقب نشرات ساما والبيانات والسوق." }, kind: "monitor", color: "#156082" },
+    { id: "orch", name: { en: "Sentinel Conductor", ar: "منسّق الحارس" }, role: { en: "Plans the response and gates filings.", ar: "يخطّط الاستجابة ويراقب الإيداع." }, kind: "orchestrator", color: "#C45BB8" },
+    { id: "monitor", name: { en: "Regulator Monitor", ar: "مراقب المنظّم" }, role: { en: "Watches SAMA / PDPL / CMA bulletins.", ar: "يراقب نشرات ساما والبيانات والسوق." }, kind: "monitor", color: "#5B7CFF" },
     { id: "policy", name: { en: "Policy Retriever", ar: "مسترجِع السياسات" }, role: { en: "Pulls all affected internal controls.", ar: "يجلب الضوابط الداخلية المتأثّرة." }, kind: "retriever", color: "#5C8CA8" },
     { id: "memo", name: { en: "Impact Memo Drafter", ar: "كاتب مذكّرة الأثر" }, role: { en: "Drafts the CRO impact memo and remediation plan.", ar: "يصوغ مذكّرة الأثر وخطة المعالجة." }, kind: "drafter", color: "#5BA98A" },
-    { id: "evidence", name: { en: "Evidence Compiler", ar: "مُجمّع الأدلة" }, role: { en: "Stages the audit-ready evidence pack.", ar: "يُعدّ حزمة الأدلّة." }, kind: "compiler", color: "#196B24" },
+    { id: "evidence", name: { en: "Evidence Compiler", ar: "مُجمّع الأدلة" }, role: { en: "Stages the audit-ready evidence pack.", ar: "يُعدّ حزمة الأدلّة." }, kind: "compiler", color: "#8A5BD6" },
   ],
   tools: [
     { name: "watch_regulator", description: { en: "Polls SAMA / PDPL / CMA bulletin feeds.", ar: "يجلب نشرات ساما والبيانات والسوق." } },
@@ -93,7 +93,7 @@ const samaScenario: Scenario = {
       preview: { en: "New controls cover identity attestation cadence, privileged-access reviews, and SaaS connector inventory.", ar: "ضوابط جديدة لإقرارات الهويّة ومراجعات الصلاحيات الحسّاسة وجرد موصلات SaaS." },
       receivedAt: "09:00",
       status: "new",
-      accent: "#F5A623",
+      accent: "#C45BB8",
     },
   ],
   initialWorkspace: [],

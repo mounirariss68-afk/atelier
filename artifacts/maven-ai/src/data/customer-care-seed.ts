@@ -410,10 +410,10 @@ export const CARE_NOTIFICATIONS: CareNotification[] = [
 
 export const CARE_AGENT_BADGES: Record<string, { nameEn: string; nameAr: string; color: string }> = {
   orch: { nameEn: "Care Conductor", nameAr: "منسّق الرعاية", color: "#5BA98A" },
-  intent: { nameEn: "Issue Classifier", nameAr: "مصنّف المشكلات", color: "#156082" },
-  crm: { nameEn: "Identity Resolver", nameAr: "محلّل الهوية", color: "#F5A623" },
+  intent: { nameEn: "Issue Classifier", nameAr: "مصنّف المشكلات", color: "#5B7CFF" },
+  crm: { nameEn: "Identity Resolver", nameAr: "محلّل الهوية", color: "#C45BB8" },
   drafter: { nameEn: "Comms Drafter", nameAr: "كاتب الردود", color: "#5C8CA8" },
-  qa: { nameEn: "QA Auditor", nameAr: "ناقد الجودة", color: "#196B24" },
+  qa: { nameEn: "QA Auditor", nameAr: "ناقد الجودة", color: "#8A5BD6" },
   investigator: { nameEn: "Cross-system Investigator", nameAr: "محقّق الأنظمة", color: "#8B5CF6" },
   goodwill: { nameEn: "Goodwill Recommender", nameAr: "موصي التعويض", color: "#E91E63" },
 };

@@ -7,7 +7,7 @@ export default function WorkflowsTab({ scenario }: { scenario: Scenario }) {
   const agentName = (id: string) =>
     scenario.agents.find((a) => a.id === id)?.name ?? { en: id, ar: id };
   const agentColor = (id: string) =>
-    scenario.agents.find((a) => a.id === id)?.color ?? "#156082";
+    scenario.agents.find((a) => a.id === id)?.color ?? "#5B7CFF";
   return (
     <div className="space-y-5">
       {scenario.workflows.map((w) => (
@@ -16,11 +16,11 @@ export default function WorkflowsTab({ scenario }: { scenario: Scenario }) {
           className="bg-white border border-gray-200 rounded-xl p-6"
         >
           <div className="flex items-start gap-3 mb-3">
-            <div className="w-9 h-9 rounded-lg bg-[#156082]/10 flex items-center justify-center flex-shrink-0">
-              <Zap size={16} className="text-[#156082]" />
+            <div className="w-9 h-9 rounded-lg bg-[#5B7CFF]/10 flex items-center justify-center flex-shrink-0">
+              <Zap size={16} className="text-[#5B7CFF]" />
             </div>
             <div className="flex-1">
-              <p className="text-base font-bold text-[#0E2841]">
+              <p className="text-base font-bold text-[#0A1230]">
                 {tStr(w.name, lang)}
               </p>
               <p className="text-sm text-gray-600 mt-1 leading-relaxed">
@@ -64,16 +64,16 @@ function renderStep(
       <div
         className="px-3 py-2 rounded-lg bg-[#FEF7E5]"
         style={{
-          border: "1.5px dashed #F5A623",
+          border: "1.5px dashed #C45BB8",
         }}
       >
         <div className="flex items-center gap-1.5">
-          <UserCheck size={11} className="text-[#F5A623]" />
+          <UserCheck size={11} className="text-[#C45BB8]" />
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A3000]">
             {s.human ? tStr(s.human, lang) : tStr({ en: "Human", ar: "إنسان" }, lang)}
           </p>
         </div>
-        <p className="text-xs text-[#0E2841] mt-0.5">{tStr(s.label, lang)}</p>
+        <p className="text-xs text-[#0A1230] mt-0.5">{tStr(s.label, lang)}</p>
       </div>
     );
   }
@@ -92,7 +92,7 @@ function renderStep(
       >
         {tStr(agentName(id), lang)}
       </p>
-      <p className="text-xs text-[#0E2841] mt-0.5">{tStr(s.label, lang)}</p>
+      <p className="text-xs text-[#0A1230] mt-0.5">{tStr(s.label, lang)}</p>
     </div>
   );
 }

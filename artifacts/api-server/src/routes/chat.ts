@@ -78,9 +78,9 @@ function buildSystemPrompt(language: "en" | "ar"): string {
       ? "Respond in modern standard Arabic (فصحى) unless the user writes in English. Keep proper nouns and slugs in Latin script."
       : "Respond in English unless the user writes in Arabic.";
 
-  return `You are the Maven AI website assistant — a calm, partner-grade voice answering questions for executives and founders considering Maven AI.
+  return `You are the Cognirise website assistant — a calm, partner-grade voice answering questions for executives and founders considering Cognirise.
 
-ABOUT MAVEN AI
+ABOUT COGNIRISE
 ${kb.firmFacts.positioning}
 Offices: ${kb.firmFacts.offices}
 Promise: ${kb.firmFacts.promise}
@@ -108,7 +108,7 @@ ${marketplace}
 RULES
 1. Ground every answer in the knowledge above. If the user asks something this knowledge does not cover (e.g. specific delivered case studies, pricing in dollars, named clients), say so honestly and suggest they book a 30-minute partner readout.
 2. Never invent service names, slugs, report titles, founder names, statistics, or client names.
-3. When you reference a specific Maven AI artefact (a service, insight report, assessment, or industry profile), cite it inline by its exact title in plain text — for example: "Our Agentic AI Transformation service…" or "See our report The Agentic Enterprise: From Pilot to Production." Do NOT use markdown link syntax — the suggestion cards below the answer carry the clickable links.
+3. When you reference a specific Cognirise artefact (a service, insight report, assessment, or industry profile), cite it inline by its exact title in plain text — for example: "Our Agentic AI Transformation service…" or "See our report The Agentic Enterprise: From Pilot to Production." Do NOT use markdown link syntax — the suggestion cards below the answer carry the clickable links.
 4. Tone: senior, candid, McKinsey-grade. No emojis. No fluff. 2–4 short paragraphs maximum.
 5. ${langNote}
 6. End every response with a single line in this exact format on its own line, nothing after it:
@@ -434,12 +434,12 @@ router.post("/", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // /api/chat/personal-agent
 //
-// Dedicated streaming endpoint for the Maven Personal Agent Cockpit demo.
+// Dedicated streaming endpoint for the Cognirise Personal Agent Cockpit demo.
 // The client sends its own grounded system prompt (built from the persona's
 // PCG nodes) plus the messages, and the server streams the reply back.
 //
 // Why a separate endpoint:
-//   - The website chat hard-codes a Maven-marketing system prompt and uses
+//   - The website chat hard-codes a Cognirise-marketing system prompt and uses
 //     the suggestion-strip protocol; the personal-agent persona has a
 //     different voice, citation contract, and "no SUGGESTIONS link" rule.
 //   - Keeping the website's chat schema (api-zod's ChatBody) untouched.
@@ -581,14 +581,14 @@ router.post("/personal-agent", async (req: Request, res: Response) => {
 function templateFallback(language: "en" | "ar", _lastUserText: string): string {
   // Both AI providers are unavailable. Be explicit that the assistant is
   // offline rather than pretending to answer the question.
-  const en = `The Maven AI assistant is offline right now, so I can't generate a tailored answer. You can still browse our services and insights, run a 12-minute diagnostic, or reach a partner directly through the Contact page.\n<<<SUGGESTIONS>>>${JSON.stringify({
+  const en = `The Cognirise assistant is offline right now, so I can't generate a tailored answer. You can still browse our services and insights, run a 12-minute diagnostic, or reach a partner directly through the Contact page.\n<<<SUGGESTIONS>>>${JSON.stringify({
     items: [
       { kind: "page", href: "/services", label: "Our services" },
       { kind: "page", href: "/assessments", label: "Run a diagnostic" },
       { kind: "page", href: "/contact", label: "Reach a partner" },
     ],
   })}<<<END>>>`;
-  const ar = `مساعد Maven AI غير متاح حالياً، ولا يمكنني توليد إجابة مخصصة. يمكنك تصفح خدماتنا ورؤانا، أو إجراء تشخيص لمدة 12 دقيقة، أو التواصل مع أحد الشركاء مباشرة عبر صفحة الاتصال.\n<<<SUGGESTIONS>>>${JSON.stringify({
+  const ar = `مساعد Cognirise غير متاح حالياً، ولا يمكنني توليد إجابة مخصصة. يمكنك تصفح خدماتنا ورؤانا، أو إجراء تشخيص لمدة 12 دقيقة، أو التواصل مع أحد الشركاء مباشرة عبر صفحة الاتصال.\n<<<SUGGESTIONS>>>${JSON.stringify({
     items: [
       { kind: "page", href: "/services", label: "خدماتنا" },
       { kind: "page", href: "/assessments", label: "تشخيص" },

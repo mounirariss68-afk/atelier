@@ -37,8 +37,8 @@ export default function ProductDetailView() {
         <Tile label={t("statusLabel", productDetail)} value={t(`status${product.status.charAt(0).toUpperCase()}${product.status.slice(1)}`, catalogue)} tone={statusColor(product.status)} />
         <Tile label={t("classLabel", productDetail)} value={t(`class${product.classification.charAt(0).toUpperCase()}${product.classification.slice(1)}`, catalogue)} tone={classificationColor(product.classification)} />
         <Tile label={t("ownerLabel", productDetail)} value={product.owner[lang]} tone={BRAND_INK} small />
-        <Tile label={t("freshLabel", productDetail)} value={fmtFreshness(product.freshnessMin, lang)} tone="#156082" />
-        <Tile label="PDPL" value={`${product.pdplPass}/${product.pdplTotal}`} tone="#196B24" />
+        <Tile label={t("freshLabel", productDetail)} value={fmtFreshness(product.freshnessMin, lang)} tone="#5B7CFF" />
+        <Tile label="PDPL" value={`${product.pdplPass}/${product.pdplTotal}`} tone="#8A5BD6" />
       </div>
 
       {/* Quality contract */}

@@ -70,12 +70,12 @@ const COUNTRY_PATHS: { id: string; d: string; label: string; cx: number; cy: num
 
 const STATUS_FILL: Record<Site["status"], string> = {
   ok: "#5BA98A",
-  degraded: "#F5A623",
+  degraded: "#C45BB8",
   down: "#D9534F",
 };
 const LINK_STROKE: Record<NetLink["status"], string> = {
   ok: "#94A3B8",
-  degraded: "#F5A623",
+  degraded: "#C45BB8",
   down: "#D9534F",
 };
 
@@ -175,7 +175,7 @@ function GccMapInner({ selectedSiteId, onSelectSite, highlightedSiteIds, isAr }:
                 x={p.x + 9}
                 y={p.y + 3}
                 fontSize={9.5}
-                fill="#0E2841"
+                fill="#0A1230"
                 fontWeight={600}
                 style={{ pointerEvents: "none" }}
               >

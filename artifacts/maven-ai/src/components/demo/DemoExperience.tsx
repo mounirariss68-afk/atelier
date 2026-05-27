@@ -63,22 +63,22 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
   // the legend), COMPLETE green.
   const statusColor: Record<string, string> = {
     idle: "#7C8A99",
-    playing: "#F5A623",
-    paused: "#F5A623",
+    playing: "#C45BB8",
+    paused: "#C45BB8",
     "awaiting-human": "#D9534F",
-    complete: "#196B24",
+    complete: "#8A5BD6",
   };
   const statusPulses = state.status === "playing";
 
   return (
     <div
-      className="h-screen flex flex-col bg-[#F4F6F8] text-[#0E2841]"
+      className="h-screen flex flex-col bg-[#F4F6F8] text-[#0A1230]"
       dir={dir}
     >
       {/* Top bar */}
       <DemoTopBar
         marketplaceSlug={scenario.slug}
-        accent={getDemoAccent(scenario.slug, scenario.accent ?? "#F5A623")}
+        accent={getDemoAccent(scenario.slug, scenario.accent ?? "#C45BB8")}
         brandTag={tStr({ en: "Interactive demo", ar: "عرض تفاعلي" }, lang)}
         platformTitle={tStr(scenario.toolTitle, lang)}
         backLabel={tStr({ en: "Back to detail", ar: "العودة للتفاصيل" }, lang)}
@@ -131,7 +131,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
           className="h-full transition-all duration-300"
           style={{
             width: `${progress}%`,
-            background: progress >= 100 ? "#196B24" : "#156082",
+            background: progress >= 100 ? "#8A5BD6" : "#5B7CFF",
           }}
         />
       </div>
@@ -150,8 +150,8 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
                 onClick={() => setTab(t.id)}
                 className={`px-4 py-3 flex items-center gap-3 text-sm font-semibold border-l-2 transition-colors text-start ${
                   active
-                    ? "border-[#F5A623] text-[#0E2841] bg-[#F5A623]/5"
-                    : "border-transparent text-gray-500 hover:text-[#0E2841] hover:bg-gray-50"
+                    ? "border-[#C45BB8] text-[#0A1230] bg-[#C45BB8]/5"
+                    : "border-transparent text-gray-500 hover:text-[#0A1230] hover:bg-gray-50"
                 }`}
               >
                 <Icon size={16} />
@@ -198,7 +198,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
             state.status === "complete" ||
             !!state.pendingCheckpoint
           }
-          className="px-4 py-2 rounded-lg bg-[#196B24] text-white font-bold text-sm inline-flex items-center gap-2 disabled:opacity-40"
+          className="px-4 py-2 rounded-lg bg-[#8A5BD6] text-white font-bold text-sm inline-flex items-center gap-2 disabled:opacity-40"
         >
           <Play size={14} fill="currentColor" />
           {tStr({ en: "Play", ar: "تشغيل" }, lang)}
@@ -207,7 +207,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
           type="button"
           onClick={engine.pause}
           disabled={state.status !== "playing"}
-          className="px-3 py-2 rounded-lg border border-gray-300 text-[#0E2841] text-sm inline-flex items-center gap-2 disabled:opacity-40"
+          className="px-3 py-2 rounded-lg border border-gray-300 text-[#0A1230] text-sm inline-flex items-center gap-2 disabled:opacity-40"
         >
           <Pause size={14} />
           {tStr({ en: "Pause", ar: "إيقاف" }, lang)}
@@ -216,7 +216,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
           type="button"
           onClick={engine.step}
           disabled={state.status === "complete" || !!state.pendingCheckpoint}
-          className="px-3 py-2 rounded-lg border border-gray-300 text-[#0E2841] text-sm inline-flex items-center gap-2 disabled:opacity-40"
+          className="px-3 py-2 rounded-lg border border-gray-300 text-[#0A1230] text-sm inline-flex items-center gap-2 disabled:opacity-40"
         >
           <StepForward size={14} />
           {tStr({ en: "Step", ar: "خطوة" }, lang)}
@@ -225,7 +225,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
           type="button"
           onClick={engine.rewindOne}
           disabled={state.cursor === 0}
-          className="px-3 py-2 rounded-lg border border-gray-300 text-[#0E2841] text-sm inline-flex items-center gap-2 disabled:opacity-40"
+          className="px-3 py-2 rounded-lg border border-gray-300 text-[#0A1230] text-sm inline-flex items-center gap-2 disabled:opacity-40"
         >
           <RotateCcw size={14} />
           {tStr({ en: "Rewind", ar: "تراجع" }, lang)}
@@ -266,7 +266,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
             });
           }}
           disabled={!!state.pendingCheckpoint || state.status === "complete"}
-          className="px-3 py-2 rounded-lg border border-[#F5A623]/50 text-[#5A3000] bg-[#F5A623]/10 hover:bg-[#F5A623]/20 text-sm inline-flex items-center gap-2 disabled:opacity-40"
+          className="px-3 py-2 rounded-lg border border-[#C45BB8]/50 text-[#5A3000] bg-[#C45BB8]/10 hover:bg-[#C45BB8]/20 text-sm inline-flex items-center gap-2 disabled:opacity-40"
           title={tStr(
             {
               en: "Inject a synthetic exception (e.g. an unexpected document or compliance flag) to see how the orchestrator reacts in real time.",
@@ -303,7 +303,7 @@ export default function DemoExperience({ scenario }: { scenario: Scenario }) {
             role="dialog"
             aria-modal="true"
           >
-            <p className="text-lg font-bold text-[#0E2841] mb-2">
+            <p className="text-lg font-bold text-[#0A1230] mb-2">
               {tStr({ en: "Reset Demo?", ar: "إعادة العرض؟" }, lang)}
             </p>
             <p className="text-sm text-gray-600 mb-5 leading-relaxed">

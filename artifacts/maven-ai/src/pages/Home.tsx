@@ -515,7 +515,7 @@ export default function Home() {
                 <span className="text-xs font-bold uppercase tracking-widest text-[#C45BB8]">{tStr(TWO_PATHS_COPY.cardAsset, lang)}</span>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardAssetDesc, lang)}</p>
-              <Link href="/marketplace" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#C45BB8] hover:text-[#d4622a]">
+              <Link href="/marketplace" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#C45BB8] hover:text-[#A04A99]">
                 {tStr(TWO_PATHS_COPY.ctaMarketplace, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>

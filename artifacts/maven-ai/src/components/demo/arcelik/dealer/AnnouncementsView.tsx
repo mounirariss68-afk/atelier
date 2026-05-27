@@ -88,7 +88,7 @@ export default function AnnouncementsView() {
         <div className="flex gap-1.5 flex-wrap">
           <button
             onClick={() => setFilter(null)}
-            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors ${!filter ? "bg-[#0E2841] text-white" : "bg-white text-gray-600 border border-gray-200"}`}
+            className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors ${!filter ? "bg-[#0A1230] text-white" : "bg-white text-gray-600 border border-gray-200"}`}
           >
             {t.all}
           </button>
@@ -96,7 +96,7 @@ export default function AnnouncementsView() {
             <button
               key={catKey}
               onClick={() => setFilter(catKey)}
-              className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors ${filter === catKey ? "bg-[#0E2841] text-white" : "bg-white text-gray-600 border border-gray-200"}`}
+              className={`px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-colors ${filter === catKey ? "bg-[#0A1230] text-white" : "bg-white text-gray-600 border border-gray-200"}`}
             >
               {t[catKey] ?? catKey}
             </button>
@@ -130,7 +130,7 @@ export default function AnnouncementsView() {
                 </div>
                 <button
                   onClick={() => toggleRead(a.id)}
-                  className="text-gray-400 hover:text-[#0E2841] p-1 flex-shrink-0"
+                  className="text-gray-400 hover:text-[#0A1230] p-1 flex-shrink-0"
                   title={a.read ? t.markUnread : t.markRead}
                 >
                   {a.read ? <EyeOff size={14} /> : <Eye size={14} />}

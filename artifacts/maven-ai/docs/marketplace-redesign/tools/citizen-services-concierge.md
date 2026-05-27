@@ -12,7 +12,7 @@
 - McKinsey's 2024 *State of AI* finds gov CX is one of the highest-
   ROI gen-AI use cases when grounded on policy and gated by
   confidence-thresholded HITL [S1].
-- Maven advisory benchmarks: **35–45%** of GCC ministry contact
+- Cognirise advisory benchmarks: **35–45%** of GCC ministry contact
   volume is bilingual / dialect-mixed; current rule-based bots
   resolve **< 20%** unaided [M3].
 - Buyer quote (representative, GCC ministry CX head):

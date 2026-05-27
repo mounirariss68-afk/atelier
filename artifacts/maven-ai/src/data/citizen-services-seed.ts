@@ -20,8 +20,8 @@ export interface Ministry {
 
 export const MINISTRIES: Ministry[] = [
   { id: "moc",       name: { en: "Ministry of Commerce",     ar: "وزارة التجارة" },                short: { en: "MOC",       ar: "التجارة" },     color: "#5BA98A" },
-  { id: "interior",  name: { en: "Ministry of Interior",     ar: "وزارة الداخلية" },               short: { en: "Interior",  ar: "الداخلية" },    color: "#156082" },
-  { id: "zatca",     name: { en: "Zakat, Tax & Customs",     ar: "هيئة الزكاة والضريبة والجمارك" }, short: { en: "ZATCA",     ar: "الزكاة" },      color: "#F5A623" },
+  { id: "interior",  name: { en: "Ministry of Interior",     ar: "وزارة الداخلية" },               short: { en: "Interior",  ar: "الداخلية" },    color: "#5B7CFF" },
+  { id: "zatca",     name: { en: "Zakat, Tax & Customs",     ar: "هيئة الزكاة والضريبة والجمارك" }, short: { en: "ZATCA",     ar: "الزكاة" },      color: "#C45BB8" },
   { id: "riyadh-am", name: { en: "Riyadh Municipality",      ar: "أمانة منطقة الرياض" },           short: { en: "Riyadh AM", ar: "الأمانة" },     color: "#5C8CA8" },
   { id: "mol",       name: { en: "Ministry of Human Resources", ar: "وزارة الموارد البشرية" },     short: { en: "MHRSD",     ar: "الموارد" },     color: "#8B5CF6" },
 ];
@@ -279,11 +279,11 @@ export function getCase(id: string): Case | undefined { return ACTIVE_CASES.find
 // Agents (mirror of scenario file, kept here so chat + recs can render badges)
 export const CSC_AGENTS = [
   { id: "orch",     name: { en: "Service Conductor",   ar: "منسّق الكونسيرج" }, color: "#5BA98A" },
-  { id: "nlu",      name: { en: "Identity Verifier",   ar: "مُحقّق الهوية" },    color: "#156082" },
-  { id: "policy",   name: { en: "Cross-agency Tracer", ar: "مُتعقّب الجهات" },   color: "#F5A623" },
+  { id: "nlu",      name: { en: "Identity Verifier",   ar: "مُحقّق الهوية" },    color: "#5B7CFF" },
+  { id: "policy",   name: { en: "Cross-agency Tracer", ar: "مُتعقّب الجهات" },   color: "#C45BB8" },
   { id: "drafter",  name: { en: "Comms Drafter",       ar: "كاتب التواصل" },    color: "#5C8CA8" },
   { id: "conf",     name: { en: "Eligibility Checker", ar: "مُدقّق الأهلية" },   color: "#D9534F" },
-  { id: "audit",    name: { en: "Closure Auditor",     ar: "مُدقّق الإغلاق" },   color: "#196B24" },
+  { id: "audit",    name: { en: "Closure Auditor",     ar: "مُدقّق الإغلاق" },   color: "#8A5BD6" },
 ] as const;
 
 export function getCscAgent(id: string) { return CSC_AGENTS.find((a) => a.id === id); }

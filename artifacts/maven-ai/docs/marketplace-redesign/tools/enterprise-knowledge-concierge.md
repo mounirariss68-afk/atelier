@@ -11,7 +11,7 @@
 - Glean's published references show enterprise-search agents save
   **2–5 hours per knowledge worker per week** when properly
   governed [V3, S2].
-- Maven advisory benchmarks: **15–25%** of internal questions touch
+- Cognirise advisory benchmarks: **15–25%** of internal questions touch
   permission-restricted material; an unpermissioned agent leaks on
   every one of them [M3].
 - Buyer quote (representative, GCC bank Chief AI Officer):

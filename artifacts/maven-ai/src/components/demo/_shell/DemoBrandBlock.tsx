@@ -25,7 +25,7 @@ export default function DemoBrandBlock({
   title,
   subtitle,
   accent,
-  ink = "#0E2841",
+  ink = "#0A1230",
   collapsed = false,
   surface = "white",
 }: DemoBrandBlockProps) {

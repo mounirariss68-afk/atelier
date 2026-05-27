@@ -1,5 +1,5 @@
 /**
- * Maven Personal Agent — Cockpit demo.
+ * Cognirise Personal Agent — Cockpit demo.
  *
  * Three-pane layout:
  *   - Left: chat against /api/chat/personal-agent (PCG-grounded system prompt
@@ -441,7 +441,7 @@ export default function Cockpit() {
   const liveGrounding = lastAssistant?.citedNodes ?? [];
 
   return (
-    <div className="min-h-screen bg-[#0E2841] text-white flex flex-col" dir={lang === "ar" ? "rtl" : "ltr"}>
+    <div className="min-h-screen bg-[#0A1230] text-white flex flex-col" dir={lang === "ar" ? "rtl" : "ltr"}>
       {/* Header */}
       <header className="border-b border-white/10 bg-[#091828]">
         <div className="max-w-[1500px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
@@ -451,7 +451,7 @@ export default function Cockpit() {
           </Link>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: accent }}>
-              <Brain size={14} className="text-[#0E2841]" />
+              <Brain size={14} className="text-[#0A1230]" />
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
@@ -518,7 +518,7 @@ export default function Cockpit() {
                     key={card.id}
                     data-testid={`pending-card-${card.id}`}
                     data-highlighted={isHighlighted ? "true" : "false"}
-                    className={`rounded-xl bg-[#0E2841]/60 border p-3 transition-all duration-300 ${isHighlighted ? "border-amber-300 ring-2 ring-amber-300/40 shadow-[0_0_24px_rgba(252,211,77,0.25)]" : "border-white/10"}`}
+                    className={`rounded-xl bg-[#0A1230]/60 border p-3 transition-all duration-300 ${isHighlighted ? "border-amber-300 ring-2 ring-amber-300/40 shadow-[0_0_24px_rgba(252,211,77,0.25)]" : "border-white/10"}`}
                   >
                     {isHighlighted && (
                       <div className="mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-300/15 text-amber-200 text-[10px] font-bold uppercase tracking-widest">
@@ -552,7 +552,7 @@ export default function Cockpit() {
                     <div className="mt-2.5 flex flex-wrap gap-2">
                       {!isEditing && (
                         <>
-                          <button onClick={() => approve(card)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-400 text-[#0E2841] text-xs font-bold hover:bg-emerald-300">
+                          <button onClick={() => approve(card)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-400 text-[#0A1230] text-xs font-bold hover:bg-emerald-300">
                             <Check size={12} />
                             {tStr(COPY.approve, lang)}
                           </button>
@@ -568,7 +568,7 @@ export default function Cockpit() {
                       )}
                       {isEditing && (
                         <>
-                          <button onClick={() => approve(card)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-400 text-[#0E2841] text-xs font-bold hover:bg-emerald-300">
+                          <button onClick={() => approve(card)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-400 text-[#0A1230] text-xs font-bold hover:bg-emerald-300">
                             <Check size={12} />
                             {tStr(COPY.saveChanges, lang)} & {tStr(COPY.approve, lang)}
                           </button>
@@ -687,7 +687,7 @@ export default function Cockpit() {
             <div className="px-4 pb-4 space-y-2.5 max-h-[460px] overflow-y-auto">
               {receipts.length === 0 && <p className="text-xs text-white/45 italic">{tStr(COPY.noReceiptsYet, lang)}</p>}
               {receipts.map((r) => (
-                <div key={r.id} className="rounded-xl bg-[#0E2841]/60 border border-cyan-400/20 p-2.5">
+                <div key={r.id} className="rounded-xl bg-[#0A1230]/60 border border-cyan-400/20 p-2.5">
                   <p className="text-xs font-bold text-white mb-1">✓ {r.title}</p>
                   <p className="text-[10px] text-white/55 mb-1.5">{r.sentAt} · {r.autonomyLevel} · {tStr(COPY.receiptSaved, lang)} {r.estTimeSavedMin} min</p>
                   <p className="text-[10px] text-white/60 mb-1">{tStr(COPY.receiptCited, lang)}:</p>
@@ -739,7 +739,7 @@ function ChatBubble({ msg, accent, snippetTitle }: { msg: ChatMsg; accent: strin
   if (msg.role === "user") {
     return (
       <div className="flex justify-end rtl:justify-start">
-        <div className="max-w-[85%] px-3 py-2 rounded-2xl rounded-br-sm bg-white text-[#0E2841] text-sm">
+        <div className="max-w-[85%] px-3 py-2 rounded-2xl rounded-br-sm bg-white text-[#0A1230] text-sm">
           {msg.content}
         </div>
       </div>
@@ -790,7 +790,7 @@ function PeopleSnippetCard({ snippet, accent, title }: { snippet: PeopleSnippet;
     return { ...nb, x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
   });
   return (
-    <div className="mb-1.5 rounded-xl bg-[#0E2841]/70 border border-white/10 p-2.5" data-testid="people-snippet">
+    <div className="mb-1.5 rounded-xl bg-[#0A1230]/70 border border-white/10 p-2.5" data-testid="people-snippet">
       <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: accent }}>{title}</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={tStr(snippet.center.label, lang)}>
         {placements.map((p, i) => (
@@ -798,7 +798,7 @@ function PeopleSnippetCard({ snippet, accent, title }: { snippet: PeopleSnippet;
         ))}
         {placements.map((p, i) => (
           <g key={`n${i}`}>
-            <circle cx={p.x} cy={p.y} r={5} fill="#0E2841" stroke={accent} strokeWidth={1.5} />
+            <circle cx={p.x} cy={p.y} r={5} fill="#0A1230" stroke={accent} strokeWidth={1.5} />
             <text x={p.x} y={p.y - 8} textAnchor="middle" fill="rgba(255,255,255,0.85)" fontSize={9}>
               {tStr(p.node.label, lang).slice(0, 18)}
             </text>
@@ -831,7 +831,7 @@ function ChatInput({ disabled, onSend, placeholder, sendLabel, accent }: { disab
         placeholder={placeholder}
         className="flex-1 bg-white/5 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-white/20 disabled:opacity-50"
       />
-      <button type="submit" disabled={disabled || !value.trim()} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-[#0E2841] text-xs font-bold disabled:opacity-40" style={{ background: accent }} aria-label={sendLabel}>
+      <button type="submit" disabled={disabled || !value.trim()} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-[#0A1230] text-xs font-bold disabled:opacity-40" style={{ background: accent }} aria-label={sendLabel}>
         <Send size={12} />
         <span className="hidden sm:inline">{sendLabel}</span>
       </button>

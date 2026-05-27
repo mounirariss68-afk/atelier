@@ -45,7 +45,7 @@ test.describe("Demo experience: /demo/value-realization", () => {
     // top-level link; assert it is NOT present on the demo route.
     await expect(page.locator("nav").getByRole("link", { name: "Marketplace", exact: true })).toHaveCount(0);
     // No site footer, no chat widget.
-    await expect(page.locator("footer").getByText(/Maven AI Consulting|©/)).toHaveCount(0);
+    await expect(page.locator("footer").getByText(/Cognirise Consulting|©/)).toHaveCount(0);
 
     // Header chrome present
     await expect(page.getByText("Interactive demo", { exact: true })).toBeVisible();

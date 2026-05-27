@@ -93,7 +93,7 @@ export default function InitiativeDetailView({ initiativeId, onBack, onSelectIni
         />
         <WorkspaceCard
           icon={<Search size={14} />}
-          tint="#156082"
+          tint="#5B7CFF"
           title={tr(iDict, "sectionEvidence", lang)}
           agent="evidence-auditor"
           lang={lang}

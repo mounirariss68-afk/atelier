@@ -95,7 +95,7 @@ export default function Demo() {
     );
   }
 
-  // Maven Personal Agent has two purpose-built demos that bypass the generic
+  // Cognirise Personal Agent has two purpose-built demos that bypass the generic
   // scenario engine because they need a chat surface and a graph viz that
   // don't fit DemoExperience's "agent trace + workspace widgets" template.
   if (slug === "customer-care-hive" && variant === "desk") {
@@ -164,9 +164,9 @@ export default function Demo() {
 
   if (!scenario) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0E2841] text-white p-6">
+      <div className="min-h-screen flex items-center justify-center bg-[#0A1230] text-white p-6">
         <div className="max-w-md text-center space-y-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8]">
             {tStr({ en: "Demo not found", ar: "العرض غير موجود" }, lang)}
           </p>
           <h1 className="text-2xl font-extrabold">
@@ -189,7 +189,7 @@ export default function Demo() {
           </p>
           <Link
             href="/marketplace"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-sm"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#C45BB8] text-[#0A1230] font-bold text-sm"
           >
             <ArrowLeft size={14} className="rtl:rotate-180" />
             {tStr({ en: "Back to marketplace", ar: "العودة للسوق" }, lang)}

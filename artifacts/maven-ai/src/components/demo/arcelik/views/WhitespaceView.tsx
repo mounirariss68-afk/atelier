@@ -257,8 +257,8 @@ function OpportunityCard({
       onClick={onSelect}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`w-full text-left rounded-xl border ${cfg.border} ${cfg.bg} p-4 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#0E2841]/40 ${
-        isActive ? "ring-2 ring-[#0E2841] ring-offset-1" : ""
+      className={`w-full text-left rounded-xl border ${cfg.border} ${cfg.bg} p-4 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#0A1230]/40 ${
+        isActive ? "ring-2 ring-[#0A1230] ring-offset-1" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -273,7 +273,7 @@ function OpportunityCard({
                 {getPriceTierLabel(opp.tier, lang)}
               </span>
             </div>
-            <h3 className="font-bold text-[#0E2841] text-sm">{opp.title}</h3>
+            <h3 className="font-bold text-[#0A1230] text-sm">{opp.title}</h3>
             <p className="text-[11px] text-gray-600 mt-1">{opp.description}</p>
           </div>
         </div>
@@ -409,7 +409,7 @@ export default function WhitespaceView() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
+          <h2 className="text-lg font-bold text-[#0A1230] flex items-center gap-2">
             <Crosshair size={20} /> {t.title}
           </h2>
           <p className="text-[11px] text-gray-500 mt-0.5">{t.subtitle}</p>
@@ -419,7 +419,7 @@ export default function WhitespaceView() {
       <div className="grid grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
           <p className="text-[10px] text-gray-500">{t.totalOpps}</p>
-          <p className="text-xl font-bold text-[#0E2841]">{filteredOpps.length}</p>
+          <p className="text-xl font-bold text-[#0A1230]">{filteredOpps.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
           <p className="text-[10px] text-gray-500">{t.noProductGaps}</p>
@@ -439,7 +439,7 @@ export default function WhitespaceView() {
         <button
           onClick={() => setSelectedCat("all")}
           className={`px-3 py-1 text-[10px] rounded-full border transition-colors ${
-            selectedCat === "all" ? "bg-[#0E2841] text-white border-[#0E2841]" : "border-gray-200 text-gray-600 hover:border-gray-400"
+            selectedCat === "all" ? "bg-[#0A1230] text-white border-[#0A1230]" : "border-gray-200 text-gray-600 hover:border-gray-400"
           }`}
         >
           {t.allCategories}
@@ -449,7 +449,7 @@ export default function WhitespaceView() {
             key={cat}
             onClick={() => setSelectedCat(cat)}
             className={`px-3 py-1 text-[10px] rounded-full border transition-colors ${
-              selectedCat === cat ? "bg-[#0E2841] text-white border-[#0E2841]" : "border-gray-200 text-gray-600 hover:border-gray-400"
+              selectedCat === cat ? "bg-[#0A1230] text-white border-[#0A1230]" : "border-gray-200 text-gray-600 hover:border-gray-400"
             }`}
           >
             {getCategoryLabel(cat, lang)}
@@ -461,7 +461,7 @@ export default function WhitespaceView() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-2">
+              <h3 className="text-sm font-bold text-[#0A1230] flex items-center gap-2">
                 <Grid3x3 size={14} /> {t.matrixTitle}
               </h3>
               <p className="text-[10px] text-gray-500 mt-0.5">{t.matrixSubtitle}</p>
@@ -491,7 +491,7 @@ export default function WhitespaceView() {
               <tbody>
                 {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map(cat => (
                   <tr key={cat}>
-                    <td className="text-[10px] font-semibold text-[#0E2841] pr-2 py-1 whitespace-nowrap">
+                    <td className="text-[10px] font-semibold text-[#0A1230] pr-2 py-1 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-sm" style={{ background: CAT_COLORS[cat] || "#6b7280" }} />
                         {getCategoryLabel(cat, lang)}
@@ -505,7 +505,7 @@ export default function WhitespaceView() {
                           <button
                             onClick={() => setSelectedCell(isSelected ? null : { cat, tier })}
                             className={`w-full px-2 py-2 rounded border text-[10px] font-semibold transition-all ${densityClass(cell.density)} ${
-                              isSelected ? "ring-2 ring-[#0E2841] ring-offset-1" : "hover:opacity-80"
+                              isSelected ? "ring-2 ring-[#0A1230] ring-offset-1" : "hover:opacity-80"
                             }`}
                             title={`${t.matrixArcelikLabel}: ${cell.arcelikCount}, ${t.matrixCompLabel}: ${cell.compCount}`}
                           >
@@ -525,7 +525,7 @@ export default function WhitespaceView() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-bold text-[#0E2841] mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-[#0A1230] mb-3 flex items-center gap-2">
             <Target size={14} /> {t.matrixSelectedHeader}
           </h3>
           {!selectedCellData && (
@@ -547,11 +547,11 @@ export default function WhitespaceView() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-gray-50 rounded-lg p-2">
                   <p className="text-[9px] text-gray-500">{t.matrixArcelikLabel}</p>
-                  <p className="text-base font-bold text-[#0E2841]">{selectedCellData.arcelikCount}</p>
+                  <p className="text-base font-bold text-[#0A1230]">{selectedCellData.arcelikCount}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-2">
                   <p className="text-[9px] text-gray-500">{t.matrixCompLabel}</p>
-                  <p className="text-base font-bold text-[#0E2841]">{selectedCellData.compCount}</p>
+                  <p className="text-base font-bold text-[#0A1230]">{selectedCellData.compCount}</p>
                 </div>
               </div>
               {selectedCellData.arcelikProducts.length > 0 && (
@@ -591,7 +591,7 @@ export default function WhitespaceView() {
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-2">
+            <h3 className="text-sm font-bold text-[#0A1230] flex items-center gap-2">
               <ListChecks size={14} /> {t.featureTitle} —{" "}
               <span className="text-[12px] text-gray-600">{getCategoryLabel(featureCategory, lang)}</span>
             </h3>
@@ -617,7 +617,7 @@ export default function WhitespaceView() {
                 const unservedTiers = TIER_ORDER.filter(tier => !fc.arcelikTiers.has(tier) && !fc.compTiers.has(tier));
                 return (
                   <tr key={fc.feature} className="border-b border-gray-100">
-                    <td className="py-2 px-2 font-medium text-[#0E2841]">{fc.feature}</td>
+                    <td className="py-2 px-2 font-medium text-[#0A1230]">{fc.feature}</td>
                     {TIER_ORDER.map(tier => {
                       const a = fc.arcelikTiers.has(tier);
                       const c = fc.compTiers.has(tier);
@@ -663,7 +663,7 @@ export default function WhitespaceView() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-2">
+              <h3 className="text-sm font-bold text-[#0A1230] flex items-center gap-2">
                 <MapPin size={14} /> {t.geoTitle}
               </h3>
               <p className="text-[10px] text-gray-500 mt-0.5">{t.geoSubtitle}</p>
@@ -685,13 +685,13 @@ export default function WhitespaceView() {
                   <circle cx={pos.x} cy={pos.y} r={r + 3} fill={color} fillOpacity={0.18} />
                   <circle cx={pos.x} cy={pos.y} r={r} fill={color} fillOpacity={0.85} stroke="#fff" strokeWidth={0.6} />
                   {(isHovered || co.level === "high") && (
-                    <text x={pos.x} y={pos.y - r - 1.5} textAnchor="middle" fontSize="3.6" fontWeight="700" fill="#0E2841">
+                    <text x={pos.x} y={pos.y - r - 1.5} textAnchor="middle" fontSize="3.6" fontWeight="700" fill="#0A1230">
                       {co.city.name}
                     </text>
                   )}
                   {isHovered && (
                     <g>
-                      <rect x={pos.x + 8} y={pos.y - 12} width={48} height={20} rx={2} fill="#0E2841" fillOpacity={0.95} />
+                      <rect x={pos.x + 8} y={pos.y - 12} width={48} height={20} rx={2} fill="#0A1230" fillOpacity={0.95} />
                       <text x={pos.x + 10} y={pos.y - 5} fontSize="3.5" fill="#fff" fontWeight="700">{co.city.name}</text>
                       <text x={pos.x + 10} y={pos.y - 0.5} fontSize="3" fill="#fff">{t.geoOppScore}: {co.score}</text>
                       <text x={pos.x + 10} y={pos.y + 4} fontSize="3" fill="#fff">{t.geoMarketShare}: %{co.city.marketSharePercent}</text>
@@ -703,7 +703,7 @@ export default function WhitespaceView() {
           </TurkeyMap>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-bold text-[#0E2841] mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-[#0A1230] mb-3 flex items-center gap-2">
             <Sparkles size={14} /> {t.geoTopCities}
           </h3>
           <div className="space-y-2">
@@ -713,20 +713,20 @@ export default function WhitespaceView() {
                 onMouseEnter={() => setHoveredCity(co.city.id)}
                 onMouseLeave={() => setHoveredCity(null)}
                 className={`flex items-center justify-between gap-2 p-2 rounded-lg border transition-colors cursor-pointer ${
-                  hoveredCity === co.city.id ? "border-[#0E2841] bg-gray-50" : "border-gray-100 hover:bg-gray-50"
+                  hoveredCity === co.city.id ? "border-[#0A1230] bg-gray-50" : "border-gray-100 hover:bg-gray-50"
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: levelDotColor(co.level) }} />
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-[#0E2841] truncate">{co.city.name}</p>
+                    <p className="text-[11px] font-bold text-[#0A1230] truncate">{co.city.name}</p>
                     <p className="text-[9px] text-gray-500">
                       {t.geoMarketShare}: %{co.city.marketSharePercent} · {co.city.dealerCount} {t.geoDealers}
                     </p>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-base font-bold text-[#0E2841]">{co.score}</p>
+                  <p className="text-base font-bold text-[#0A1230]">{co.score}</p>
                   <p className="text-[9px] text-gray-400">/100</p>
                 </div>
               </div>
@@ -737,7 +737,7 @@ export default function WhitespaceView() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-bold text-[#0E2841] mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-[#0A1230] mb-3 flex items-center gap-2">
             <Layers size={14} /> {t.tierDistTitle}
           </h3>
           <div className="h-[250px]">
@@ -757,7 +757,7 @@ export default function WhitespaceView() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="text-sm font-bold text-[#0E2841] mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-[#0A1230] mb-3 flex items-center gap-2">
             <Sparkles size={14} /> {t.oppMapTitle}
           </h3>
           <div className="h-[250px]">
@@ -781,7 +781,7 @@ export default function WhitespaceView() {
                     const d = payload[0].payload;
                     return (
                       <div className="bg-white shadow-lg rounded-lg p-3 border text-[11px]">
-                        <p className="font-bold text-[#0E2841]">{d.name}</p>
+                        <p className="font-bold text-[#0A1230]">{d.name}</p>
                         <p>Arçelik: {d.arcelikCount} {t.products}</p>
                         <p>{t.compProducts}: {d.compCount}</p>
                         <p>{t.opportunities}: {d.opportunities}</p>
@@ -801,7 +801,7 @@ export default function WhitespaceView() {
       </div>
 
       <div>
-        <h3 className="text-sm font-bold text-[#0E2841] mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-bold text-[#0A1230] mb-3 flex items-center gap-2">
           <Lightbulb size={14} /> {t.oppListTitle}
           <span className="text-[10px] font-normal text-gray-500">({filteredOpps.length} {t.opportunities})</span>
         </h3>

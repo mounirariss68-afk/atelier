@@ -143,8 +143,8 @@ function Shell() {
   const clearPendingNav = useCallback(() => setPendingNav(null), []);
 
   return (
-    <div className="h-screen flex flex-col bg-[#F4F6F8] text-[#0E2841]">
-      <header className="flex-shrink-0 h-14 bg-[#0E2841] text-white flex items-center px-4 gap-3 z-20">
+    <div className="h-screen flex flex-col bg-[#F4F6F8] text-[#0A1230]">
+      <header className="flex-shrink-0 h-14 bg-[#0A1230] text-white flex items-center px-4 gap-3 z-20">
         <Link href="/marketplace/arcelik-fiyat-istihbarati" className="flex items-center gap-1 text-xs text-gray-400 hover:text-white">
           <ChevronLeft size={14} />
         </Link>
@@ -181,7 +181,7 @@ function Shell() {
                 data-testid="panel-notifications"
               >
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-1.5">
+                  <h3 className="text-sm font-bold text-[#0A1230] flex items-center gap-1.5">
                     <AlertTriangle size={14} className="text-[#E30613]" /> {t.priceAlerts}
                   </h3>
                   <div className="flex items-center gap-2">
@@ -193,7 +193,7 @@ function Shell() {
                     {unreadCount > 0 && (
                       <button
                         onClick={markAllAsRead}
-                        className="text-[10px] text-gray-500 hover:text-[#0E2841] flex items-center gap-1"
+                        className="text-[10px] text-gray-500 hover:text-[#0A1230] flex items-center gap-1"
                         title={t.markAllRead}
                         data-testid="button-mark-all-read"
                       >
@@ -241,7 +241,7 @@ function Shell() {
                               <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide">{typeLabel}</span>
                               <span className="text-[10px] text-gray-400 ml-auto">{formatRelativeTime(n.recordedAt, lang)}</span>
                             </div>
-                            <p className={`text-xs truncate ${read ? "font-medium text-gray-700" : "font-semibold text-[#0E2841]"}`}>
+                            <p className={`text-xs truncate ${read ? "font-medium text-gray-700" : "font-semibold text-[#0A1230]"}`}>
                               <span className="font-bold">{n.brand}</span> · {n.modelCode}
                               {categoryLabel ? <span className="text-gray-400"> · {categoryLabel}</span> : null}
                             </p>
@@ -283,8 +283,8 @@ function Shell() {
           </div>
         </div>
         <div className="flex items-center bg-white/10 rounded-full p-0.5">
-          <button onClick={() => setLang("tr")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "tr" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>TR</button>
-          <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>EN</button>
+          <button onClick={() => setLang("tr")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "tr" ? "bg-white text-[#0A1230]" : "text-white/60 hover:text-white"}`}>TR</button>
+          <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0A1230]" : "text-white/60 hover:text-white"}`}>EN</button>
         </div>
         <Link
           href="/demo/arcelik-fiyat-istihbarati/bayi"
@@ -317,7 +317,7 @@ function Shell() {
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] font-medium transition-colors ${
                     active
                       ? "bg-[#E30613]/5 text-[#E30613] border-l-[3px] border-[#E30613]"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-[#0E2841] border-l-[3px] border-transparent"
+                      : "text-gray-500 hover:bg-gray-50 hover:text-[#0A1230] border-l-[3px] border-transparent"
                   }`}
                   title={sidebarCollapsed ? label : undefined}
                 >
@@ -333,14 +333,14 @@ function Shell() {
             <button
               onClick={() => setChatOpen(true)}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] font-medium transition-colors border-l-[3px] border-transparent ${
-                chatOpen ? "text-[#F5A623] bg-[#F5A623]/5" : "text-gray-500 hover:bg-gray-50 hover:text-[#0E2841]"
+                chatOpen ? "text-[#C45BB8] bg-[#C45BB8]/5" : "text-gray-500 hover:bg-gray-50 hover:text-[#0A1230]"
               }`}
               title={sidebarCollapsed ? t.aiAssistant : undefined}
             >
               <Bot size={17} className="flex-shrink-0" />
               {!sidebarCollapsed && <span>{t.aiAssistant}</span>}
               {!sidebarCollapsed && (
-                <span className="ml-auto text-[9px] font-bold bg-[#F5A623] text-white px-1.5 py-0.5 rounded-full">AI</span>
+                <span className="ml-auto text-[9px] font-bold bg-[#C45BB8] text-white px-1.5 py-0.5 rounded-full">AI</span>
               )}
             </button>
           </div>
@@ -358,7 +358,7 @@ function Shell() {
             <button
               onClick={() => setFiltersOpen(!filtersOpen)}
               className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                filtersOpen ? "bg-[#0E2841] text-white" : "text-gray-500 hover:text-[#0E2841] hover:bg-gray-100"
+                filtersOpen ? "bg-[#0A1230] text-white" : "text-gray-500 hover:text-[#0A1230] hover:bg-gray-100"
               }`}
             >
               <Filter size={13} />

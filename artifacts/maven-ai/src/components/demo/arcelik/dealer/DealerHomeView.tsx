@@ -10,7 +10,7 @@ import { useDemoLang } from "../DemoLangContext";
 import { dealerHome } from "../demo-i18n";
 import { useArcelikData } from "@/hooks/useArcelikData";
 
-const TIER_COLORS: Record<string, string> = { gold: "#F5A623", silver: "#94A3B8", bronze: "#CD7F32" };
+const TIER_COLORS: Record<string, string> = { gold: "#C45BB8", silver: "#94A3B8", bronze: "#CD7F32" };
 const OPTIMAL_STOCK: Record<string, number> = { buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8 };
 
 const ANNOUNCEMENT_KEYS = [
@@ -23,7 +23,7 @@ function ComplianceRing({ score }: { score: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const offset = circ - (score / 100) * circ;
-  const color = score >= 85 ? "#16a34a" : score >= 70 ? "#F5A623" : "#ef4444";
+  const color = score >= 85 ? "#16a34a" : score >= 70 ? "#C45BB8" : "#ef4444";
   return (
     <div className="relative w-24 h-24 flex-shrink-0">
       <svg width="96" height="96" viewBox="0 0 96 96">
@@ -179,7 +179,7 @@ export default function DealerHomeView({ onNavigate }: { onNavigate: (v: DealerV
                   <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${sevColor}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <h4 className="text-xs font-semibold text-[#0E2841]">{task.title}</h4>
+                      <h4 className="text-xs font-semibold text-[#0A1230]">{task.title}</h4>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${task.priority === "high" ? "bg-red-50 text-red-600" : task.priority === "medium" ? "bg-amber-50 text-amber-600" : "bg-gray-100 text-gray-500"}`}>
                         {task.priority === "high" ? t.priorityHigh : task.priority === "medium" ? t.priorityMedium : t.priorityLow}
                       </span>

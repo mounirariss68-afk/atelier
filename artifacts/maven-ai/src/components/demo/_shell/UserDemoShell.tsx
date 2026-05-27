@@ -69,7 +69,7 @@ export default function UserDemoShell({
   fab,
   drawers,
   background = "#F4F6F8",
-  textColor = "#0E2841",
+  textColor = "#0A1230",
   height = "screen",
   testId,
   applyInterFont = true,

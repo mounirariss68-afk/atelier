@@ -93,7 +93,7 @@ export default function AiChat({
       className={`fixed top-0 bottom-0 w-[420px] bg-white shadow-2xl border-gray-200 z-50 flex flex-col ${isAr ? "left-0 border-r" : "right-0 border-l"}`}
     >
       <div className="flex-shrink-0 h-14 text-white flex items-center px-4 gap-3" style={{ background: BRAND_INK }}>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#156082" }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#5B7CFF" }}>
           <Sparkles size={16} />
         </div>
         <div className="flex-1 min-w-0">

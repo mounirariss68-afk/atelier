@@ -24,7 +24,7 @@ export default function LineageMapView({ focusProductId }: { focusProductId?: st
     if (blocked) return "#D9534F";
     if (kind === "source") return "#0284C7";
     if (kind === "transform") return "#F59E0B";
-    return "#196B24";
+    return "#8A5BD6";
   }
 
   return (
@@ -99,7 +99,7 @@ export default function LineageMapView({ focusProductId }: { focusProductId?: st
       <div className="flex items-center gap-4 text-[11px] text-gray-600 flex-wrap">
         <LegendDot color="#0284C7" label={t("legendSource", lineage)} />
         <LegendDot color="#F59E0B" label={t("legendTransform", lineage)} />
-        <LegendDot color="#196B24" label={t("legendSinkOk", lineage)} />
+        <LegendDot color="#8A5BD6" label={t("legendSinkOk", lineage)} />
         <LegendDot color="#D9534F" label={t("legendSinkBlocked", lineage)} />
         <span className="flex items-center gap-1">
           <span className="block w-6 h-px bg-gray-400" /> {t("legendEdge", lineage)}

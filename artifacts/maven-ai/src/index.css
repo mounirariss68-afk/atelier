@@ -55,13 +55,13 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* Maven AI brand colors (legacy — kept for non-pilot pages during phased rebrand) */
-  --color-navy: #0E2841;
-  --color-navy-light: #1a3a5c;
-  --color-teal: #156082;
-  --color-orange: #F5A623;
-  --color-blue-accent: #F5A623;
-  --color-green: #196B24;
+  /* Cognirise brand colors (legacy — kept for non-pilot pages during phased rebrand) */
+  --color-navy: #0A1230;
+  --color-navy-light: #1B2755;
+  --color-teal: #5B7CFF;
+  --color-orange: #C45BB8;
+  --color-blue-accent: #C45BB8;
+  --color-green: #8A5BD6;
   --color-light-gray: #E8E8E8;
 
   /* Cognirise brand tokens (new — pilot rollout) */
@@ -72,7 +72,7 @@
   --cog-magenta: #C45BB8;
   --cog-coral: #FF7B5A;
   --cog-coral-deep: #E96A48;
-  --cog-gold: #F5A623;
+  --cog-gold: #C45BB8;
   --cog-grad: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
   --cog-grad-diag: linear-gradient(135deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
 }
@@ -84,7 +84,7 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Maven AI Light Mode */
+  /* Cognirise Light Mode */
   --background: 0 0% 100%;
   --foreground: 210 60% 15%;
   --border: 210 20% 88%;
@@ -154,7 +154,7 @@
   body { @apply font-sans antialiased bg-background text-foreground; }
 }
 
-/* Maven AI custom utilities */
+/* Cognirise custom utilities */
 .bg-navy { background-color: #0A1230; }
 .bg-navy-light { background-color: #1B2755; }
 .bg-teal { background-color: #5B7CFF; }

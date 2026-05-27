@@ -16,7 +16,7 @@ const cellColor = (v: number) => {
   if (v >= 4.5) return "bg-emerald-600 text-white";
   if (v >= 3.8) return "bg-emerald-400 text-white";
   if (v >= 3.0) return "bg-amber-300 text-gray-800";
-  if (v >= 2.0) return "bg-[#F5A623] text-white";
+  if (v >= 2.0) return "bg-[#C45BB8] text-white";
   return "bg-red-500 text-white";
 };
 
@@ -44,7 +44,7 @@ export default function Heatmap({ dimensions, respondents, variance, lang }: Pro
         <tbody>
           {respondents.map((r, i) => (
             <tr key={i}>
-              <td className="text-sm font-medium text-[#0E2841] px-3 py-2 whitespace-nowrap">
+              <td className="text-sm font-medium text-[#0A1230] px-3 py-2 whitespace-nowrap">
                 {r.name}
                 <div className="text-xs text-gray-500 font-normal">{r.role}</div>
               </td>

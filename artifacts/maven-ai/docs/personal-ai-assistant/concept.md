@@ -1,6 +1,6 @@
-# Maven Personal Agent — concept document
+# Cognirise Personal Agent — concept document
 
-> Working name: **Maven Personal Agent**. Per-persona agent personalities: **Atlas** (Sales) and **Ember** (HR).
+> Working name: **Cognirise Personal Agent**. Per-persona agent personalities: **Atlas** (Sales) and **Ember** (HR).
 >
 > This document is the contract for the marketplace tool entry, the two demos (Cockpit and Mind), and the seed data underneath them. Read top-to-bottom in ~15 minutes.
 
@@ -10,7 +10,7 @@
 
 Most enterprise AI assistants today are smart chatbots wired to corporate data. They forget what you tell them when you switch tools. They forget you entirely when you switch jobs. They reason in a black box. And they pretend the human at work is unrelated to the human at home.
 
-The **Maven Personal Agent** rejects all four assumptions. It is an always-on AI agent for every employee that learns the job and the person, stores that knowledge in a **Personal Context Graph (PCG)** the **employee owns and can carry between employers**, and acts autonomously under a **glass-box trust model** with one-click undo on every decision. It is one agent for the whole person — drafting your offer letter and remembering your daughter's recital — with a strict privacy boundary between work scope and personal scope.
+The **Cognirise Personal Agent** rejects all four assumptions. It is an always-on AI agent for every employee that learns the job and the person, stores that knowledge in a **Personal Context Graph (PCG)** the **employee owns and can carry between employers**, and acts autonomously under a **glass-box trust model** with one-click undo on every decision. It is one agent for the whole person — drafting your offer letter and remembering your daughter's recital — with a strict privacy boundary between work scope and personal scope.
 
 Three killer angles, each a deliberate inversion of the prevailing market posture:
 
@@ -65,7 +65,7 @@ Independent writers and small startups have argued for years that AI memory shou
 Three live UI paradigms. Devin and Manus give the agent a workspace and let it work asynchronously (delegation). Cursor pairs the human and the agent at the same artefact (collaboration). Lindy chains tools through declarative workflows. Our **Cockpit** deliberately blends collaboration (left-pane chat) and delegation (centre workspace) on the same screen, so the same context drives both modes.
 
 ### Differentiation statement (one paragraph)
-Cedric, Amazon Q Business and Microsoft 365 Copilot Memory are smart chatbots whose memory belongs to the employer or the vendor; the employee re-onboards on every job change. Devin and Manus are excellent at delegation but treat memory as session-local. Lindy chains tools but has no concept of a personal graph at all. The Maven Personal Agent is the only design where (a) memory is a portable employee-owned graph, (b) every answer and every action is surfaced live with the exact graph nodes that grounded it, and (c) the same agent serves both the work and the personal life of the employee under a clean privacy boundary. The three killer angles are not features layered on a chatbot; they are the architecture.
+Cedric, Amazon Q Business and Microsoft 365 Copilot Memory are smart chatbots whose memory belongs to the employer or the vendor; the employee re-onboards on every job change. Devin and Manus are excellent at delegation but treat memory as session-local. Lindy chains tools but has no concept of a personal graph at all. The Cognirise Personal Agent is the only design where (a) memory is a portable employee-owned graph, (b) every answer and every action is surfaced live with the exact graph nodes that grounded it, and (c) the same agent serves both the work and the personal life of the employee under a clean privacy boundary. The three killer angles are not features layered on a chatbot; they are the architecture.
 
 ---
 
@@ -160,7 +160,7 @@ The two personas in section 5 are the **Sales — Senior AE** and **HR — HR Bu
 
 **Work-vs-personal scope** is a first-class field on every node. A node tagged `personal` is invisible to the employer in any aggregate view. The employee can re-tag a node at any time, including bulk re-tags before exporting the graph.
 
-**Portability model.** The PCG is exportable as JSON-LD (`@context: https://maven.ai/pcg/v1`) at any time. The exported payload includes every node, every edge, all provenance, and a manifest of the agent versions that wrote each node. A new employer that licenses Maven can import the **work-scope subset only** (the employee chooses what to share), and the graph curator merges nodes into the new employee's PCG with full provenance preserved.
+**Portability model.** The PCG is exportable as JSON-LD (`@context: https://cognirise.com/pcg/v1`) at any time. The exported payload includes every node, every edge, all provenance, and a manifest of the agent versions that wrote each node. A new employer that licenses Cognirise can import the **work-scope subset only** (the employee chooses what to share), and the graph curator merges nodes into the new employee's PCG with full provenance preserved.
 
 ---
 

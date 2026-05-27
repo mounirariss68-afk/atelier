@@ -3,8 +3,8 @@ import { motion } from "framer-motion";
 import { operatingModel } from "@/data/content";
 
 const ringConfig = [
-  { radius: 60, stroke: 0, fill: "#0E2841", labelColor: "#F5A623", textColor: "#FFFFFF" },
-  { radius: 110, stroke: 30, fill: "#156082", labelColor: "#FFFFFF", textColor: "#FFFFFF" },
+  { radius: 60, stroke: 0, fill: "#0A1230", labelColor: "#C45BB8", textColor: "#FFFFFF" },
+  { radius: 110, stroke: 30, fill: "#5B7CFF", labelColor: "#FFFFFF", textColor: "#FFFFFF" },
   { radius: 165, stroke: 30, fill: "#1f7aa5", labelColor: "#FFFFFF", textColor: "#FFFFFF" },
   { radius: 220, stroke: 30, fill: "#2d94c2", labelColor: "#FFFFFF", textColor: "#FFFFFF" },
 ];
@@ -23,8 +23,8 @@ export default function OperatingModelDiagram() {
           <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full">
             <defs>
               <radialGradient id="coreGradient" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#1a3a5c" />
-                <stop offset="100%" stopColor="#0E2841" />
+                <stop offset="0%" stopColor="#1B2755" />
+                <stop offset="100%" stopColor="#0A1230" />
               </radialGradient>
               <filter id="ringShadow" x="-50%" y="-50%" width="200%" height="200%">
                 <feDropShadow dx="0" dy="2" stdDeviation="6" floodColor="#000" floodOpacity="0.25" />
@@ -80,7 +80,7 @@ export default function OperatingModelDiagram() {
                 cursor: "pointer",
                 transformOrigin: `${center}px ${center}px`,
               }}
-              stroke={active === 0 ? "#F5A623" : "transparent"}
+              stroke={active === 0 ? "#C45BB8" : "transparent"}
               strokeWidth={active === 0 ? 3 : 0}
               onClick={() => setActive(0)}
               onMouseEnter={() => setActive(0)}
@@ -102,7 +102,7 @@ export default function OperatingModelDiagram() {
                     y={labelY}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    fill={isActive ? "#F5A623" : cfg.labelColor}
+                    fill={isActive ? "#C45BB8" : cfg.labelColor}
                     style={{
                       fontFamily: "'Anton', 'Impact', sans-serif",
                       fontSize: i === 0 ? 26 : 14,
@@ -117,14 +117,14 @@ export default function OperatingModelDiagram() {
                       x={center}
                       y={center + 20}
                       textAnchor="middle"
-                      fill="#F5A623"
+                      fill="#C45BB8"
                       style={{
                         fontFamily: "'Anton', 'Impact', sans-serif",
                         fontSize: 11,
                         letterSpacing: "0.3em",
                       }}
                     >
-                      MAVEN AI
+                      COGNIRISE
                     </text>
                   )}
                 </g>
@@ -145,7 +145,7 @@ export default function OperatingModelDiagram() {
               onMouseEnter={() => setActive(i)}
               className={`w-full text-left px-4 py-3 rounded-lg border transition-all flex items-center justify-between ${
                 active === i
-                  ? "border-[#F5A623] bg-[#F5A623]/10"
+                  ? "border-[#C45BB8] bg-[#C45BB8]/10"
                   : "border-white/10 bg-white/5 hover:border-white/30"
               }`}
             >
@@ -156,7 +156,7 @@ export default function OperatingModelDiagram() {
                 />
                 <span
                   className={`font-bold tracking-widest text-xs ${
-                    active === i ? "text-[#F5A623]" : "text-white"
+                    active === i ? "text-[#C45BB8]" : "text-white"
                   }`}
                 >
                   {ring.name}
@@ -164,7 +164,7 @@ export default function OperatingModelDiagram() {
               </div>
               <span
                 className={`text-[11px] font-semibold ${
-                  active === i ? "text-[#F5A623]" : "text-gray-400"
+                  active === i ? "text-[#C45BB8]" : "text-gray-400"
                 }`}
               >
                 {ring.headcount}
@@ -178,9 +178,9 @@ export default function OperatingModelDiagram() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="rounded-xl p-6 border border-[#F5A623]/30 bg-[#F5A623]/10"
+          className="rounded-xl p-6 border border-[#C45BB8]/30 bg-[#C45BB8]/10"
         >
-          <div className="text-[11px] font-bold tracking-[0.25em] text-[#F5A623] mb-2">
+          <div className="text-[11px] font-bold tracking-[0.25em] text-[#C45BB8] mb-2">
             {rings[active].name}
           </div>
           <p className="text-white text-sm leading-relaxed">{rings[active].description}</p>

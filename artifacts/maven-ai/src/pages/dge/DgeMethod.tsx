@@ -20,19 +20,19 @@ export default function DgeMethod() {
   const { lang, dir } = useLang();
   return (
     <div className="pt-20" dir={dir}>
-      <section className="bg-[#0E2841] py-16">
+      <section className="bg-[#0A1230] py-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link href="/marketplace/dge-effortless" className="inline-flex items-center gap-1 text-[#F5A623] text-xs font-bold mb-4">
+          <Link href="/marketplace/dge-effortless" className="inline-flex items-center gap-1 text-[#C45BB8] text-xs font-bold mb-4">
             <ArrowLeft size={12} /> {tStr({ en: "Back to DGE hub", ar: "العودة إلى مركز DGE" }, lang)}
           </Link>
-          <p className="text-[#F5A623] font-semibold text-xs uppercase tracking-widest">
+          <p className="text-[#C45BB8] font-semibold text-xs uppercase tracking-widest">
             {tStr({ en: "Method", ar: "المنهج" }, lang)}
           </p>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mt-3 mb-3">
             {tStr({ en: "HAPA + UX Authority", ar: "HAPA + صلاحية التجربة" }, lang)}{" "}
-            <span className="italic text-[#F5A623]">{tStr({ en: "— how every step is gated.", ar: "— كيف تُنظَّم كل خطوة." }, lang)}</span>
+            <span className="italic text-[#C45BB8]">{tStr({ en: "— how every step is gated.", ar: "— كيف تُنظَّم كل خطوة." }, lang)}</span>
           </h1>
-          <div className="border-l-4 border-[#F5A623] ps-4 max-w-[540px]">
+          <div className="border-l-4 border-[#C45BB8] ps-4 max-w-[540px]">
             <p className="text-base text-gray-200 leading-relaxed">
               {tStr({
                 en: "The DGE Behavioural Contract is a typed structure with three lists — may, mayOnlyWithHuman, mustNever. The runtime checks every action against the contract before it ever reaches a citizen surface, and the result lands in the audit timeline as outcome: ok | pending | authorised | blocked.",

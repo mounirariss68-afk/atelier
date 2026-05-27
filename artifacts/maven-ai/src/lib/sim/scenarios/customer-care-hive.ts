@@ -23,10 +23,10 @@ const customerCareScenario: Scenario = {
   trigger: { en: "Bilingual WhatsApp message about double-billing arrives at 10:42.", ar: "رسالة عميل ثنائية اللغة عن فاتورة مكرّرة الساعة 10:42." },
   agents: [
     { id: "orch", name: { en: "Hive Conductor", ar: "منسّق الخلية" }, role: { en: "Sequences resolution and decides hand-off.", ar: "يرتّب الحلّ ويقرر التسليم." }, kind: "orchestrator", color: "#5BA98A" },
-    { id: "intent", name: { en: "Intent Classifier", ar: "مصنّف النية" }, role: { en: "Classifies the issue + language + sentiment.", ar: "يصنّف القضيّة واللغة والمشاعر." }, kind: "specialist", color: "#156082" },
-    { id: "crm", name: { en: "CRM Retriever", ar: "مسترجِع CRM" }, role: { en: "Pulls customer history, plan, and entitlements.", ar: "يجلب التاريخ والباقة والاستحقاقات." }, kind: "retriever", color: "#F5A623" },
+    { id: "intent", name: { en: "Intent Classifier", ar: "مصنّف النية" }, role: { en: "Classifies the issue + language + sentiment.", ar: "يصنّف القضيّة واللغة والمشاعر." }, kind: "specialist", color: "#5B7CFF" },
+    { id: "crm", name: { en: "CRM Retriever", ar: "مسترجِع CRM" }, role: { en: "Pulls customer history, plan, and entitlements.", ar: "يجلب التاريخ والباقة والاستحقاقات." }, kind: "retriever", color: "#C45BB8" },
     { id: "drafter", name: { en: "Resolution Drafter", ar: "كاتب الحلّ" }, role: { en: "Drafts the bilingual reply and proposed action.", ar: "يصوغ الردّ ثنائي اللغة والإجراء." }, kind: "drafter", color: "#5C8CA8" },
-    { id: "qa", name: { en: "QA Critic", ar: "ناقد الجودة" }, role: { en: "Critiques tone, accuracy, regulator wording.", ar: "ينتقد النبرة والدقّة والصياغة." }, kind: "critic", color: "#196B24" },
+    { id: "qa", name: { en: "QA Critic", ar: "ناقد الجودة" }, role: { en: "Critiques tone, accuracy, regulator wording.", ar: "ينتقد النبرة والدقّة والصياغة." }, kind: "critic", color: "#8A5BD6" },
     { id: "telemetry", name: { en: "Cost Telemetry", ar: "قياس التكلفة" }, role: { en: "Aggregates cost-per-contact in real time.", ar: "يُجمّع تكلفة الاتصال لحظياً." }, kind: "monitor", color: "#D9534F" },
   ],
   tools: [

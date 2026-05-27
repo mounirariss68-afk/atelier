@@ -15,7 +15,7 @@ the agents.
 
 ## Top bar (fixed, 56px tall)
 
-- **Left**: Maven AI logo. Clickable → returns to
+- **Left**: Cognirise logo. Clickable → returns to
   `/marketplace/:slug` (the detail page).
 - **Center**: Tool name. To its right, a small chip:
   `live demo · illustrative data only`.

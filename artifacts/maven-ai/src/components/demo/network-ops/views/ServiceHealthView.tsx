@@ -45,7 +45,7 @@ export default function ServiceHealthView() {
 
               <div className="grid grid-cols-3 gap-2">
                 <Box label={t("sla", serviceHealth)} value={`${s.slaPct}%`} />
-                <Box label={t("current", serviceHealth)} value={`${s.currentPct}%`} accent={s.status === "ok" ? "#5BA98A" : s.status === "at-risk" ? "#F5A623" : "#D9534F"} />
+                <Box label={t("current", serviceHealth)} value={`${s.currentPct}%`} accent={s.status === "ok" ? "#5BA98A" : s.status === "at-risk" ? "#C45BB8" : "#D9534F"} />
                 <Box label={t("creditAtRisk", serviceHealth)} value={`SAR ${s.monthlyCreditAtRisk.toLocaleString(isAr ? "ar-SA" : "en-US")}`} />
               </div>
 
@@ -55,7 +55,7 @@ export default function ServiceHealthView() {
                     className="h-full"
                     style={{
                       width: `${headroom}%`,
-                      background: s.status === "ok" ? "#5BA98A" : s.status === "at-risk" ? "#F5A623" : "#D9534F",
+                      background: s.status === "ok" ? "#5BA98A" : s.status === "at-risk" ? "#C45BB8" : "#D9534F",
                     }}
                   />
                 </div>
@@ -90,7 +90,7 @@ function Box({ label, value, accent }: { label: string; value: string; accent?: 
   return (
     <div className="bg-gray-50 border border-gray-100 rounded-lg p-2.5">
       <p className="text-[9px] uppercase tracking-widest font-bold text-gray-500">{label}</p>
-      <p className="text-sm font-extrabold mt-1" style={{ color: accent ?? "#0E2841" }}>{value}</p>
+      <p className="text-sm font-extrabold mt-1" style={{ color: accent ?? "#0A1230" }}>{value}</p>
     </div>
   );
 }

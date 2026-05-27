@@ -49,7 +49,7 @@ export default function UvrPortfolio({ useCases, color }: Props) {
         return (
           <g key={uc.id}>
             <circle cx={x} cy={y} r={radius} fill={color + "44"} stroke={color} strokeWidth={2} />
-            <text x={x} y={y + 4} textAnchor="middle" fontWeight={700} fontSize={12} fill="#0E2841">
+            <text x={x} y={y + 4} textAnchor="middle" fontWeight={700} fontSize={12} fill="#0A1230">
               {i + 1}
             </text>
             <text x={x} y={y + radius + 14} textAnchor="middle" fontSize={11} fontWeight={600} fill="#374151">

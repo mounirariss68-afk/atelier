@@ -9,9 +9,9 @@ export default function AssessmentsIndex() {
   const t = (s: T) => tStr(s, lang);
   return (
     <div dir={dir} className="pt-20 bg-gradient-to-b from-white via-slate-50 to-white">
-      <section className="bg-[#0E2841] text-white">
+      <section className="bg-[#0A1230] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
-          <span className="inline-flex items-center gap-2 bg-[#E97132]/20 border border-[#E97132]/30 text-[#E97132] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-6">
+          <span className="inline-flex items-center gap-2 bg-[#C45BB8]/20 border border-[#C45BB8]/30 text-[#C45BB8] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-6">
             {t({ en: "Diagnostic Suite", ar: "حزمة التشخيص", tr: "Teşhis Paketi" })}
           </span>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight max-w-4xl">
@@ -59,7 +59,7 @@ export default function AssessmentsIndex() {
                   {a.estMinutes} {t({ en: "min", ar: "دقيقة", tr: "dk" })}
                 </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-[#0E2841] mb-2 leading-tight">
+              <h2 className="text-xl sm:text-2xl font-extrabold text-[#0A1230] mb-2 leading-tight">
                 {t(a.title)}
               </h2>
               <p className="text-sm text-gray-500 mb-3 italic">{t(a.subtitle)}</p>
@@ -92,10 +92,10 @@ export default function AssessmentsIndex() {
           ))}
         </div>
 
-        <div className="mt-16 bg-gradient-to-br from-[#0E2841] to-[#156082] rounded-3xl p-8 sm:p-12 text-white">
+        <div className="mt-16 bg-gradient-to-br from-[#0A1230] to-[#5B7CFF] rounded-3xl p-8 sm:p-12 text-white">
           <div className="grid md:grid-cols-[2fr,1fr] gap-8 items-center">
             <div>
-              <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#E97132] mb-3">
+              <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#C45BB8] mb-3">
                 {t({ en: "Reinvention Index", ar: "مؤشر إعادة الابتكار", tr: "Yeniden İcat İndeksi" })}
               </span>
               <h3 className="text-2xl sm:text-3xl font-extrabold mb-3">
@@ -115,7 +115,7 @@ export default function AssessmentsIndex() {
             </div>
             <Link
               href="/assessments/ari"
-              className="bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-6 py-4 rounded-xl text-center transition"
+              className="bg-[#C45BB8] hover:bg-[#A04A99] text-white font-bold px-6 py-4 rounded-xl text-center transition"
             >
               {t({ en: "Start with ARI →", ar: "ابدأ بـ ARI →", tr: "ARI ile başlayın →" })}
             </Link>

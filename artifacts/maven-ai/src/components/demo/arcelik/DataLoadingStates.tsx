@@ -85,7 +85,7 @@ function MapSkeleton() {
 export function DashboardSkeleton() {
   return (
     <div className="h-screen flex flex-col bg-[#F4F6F8]">
-      <header className="flex-shrink-0 h-14 bg-[#0E2841] flex items-center px-4 gap-3">
+      <header className="flex-shrink-0 h-14 bg-[#0A1230] flex items-center px-4 gap-3">
         <Shimmer className="h-5 w-20 rounded" />
         <div className="h-5 w-px bg-white/20" />
         <div className="flex-1 space-y-1">
@@ -139,7 +139,7 @@ export function DashboardSkeleton() {
 export function DealerPortalSkeleton() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      <header className="flex-shrink-0 h-14 bg-[#0E2841] flex items-center px-4 gap-4">
+      <header className="flex-shrink-0 h-14 bg-[#0A1230] flex items-center px-4 gap-4">
         <div className="flex items-center gap-2.5">
           <Shimmer className="w-8 h-8 rounded-lg" />
           <div className="space-y-1">
@@ -187,7 +187,7 @@ export function DealerPortalSkeleton() {
 
 export function DataErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0E2841]">
+    <div className="min-h-screen flex items-center justify-center bg-[#0A1230]">
       <div className="text-center space-y-5 max-w-sm px-6">
         <div className="mx-auto w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center">
           <WifiOff size={28} className="text-red-400" />
@@ -200,7 +200,7 @@ export function DataErrorState({ onRetry }: { onRetry: () => void }) {
         </div>
         <button
           onClick={onRetry}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#F5A623] text-[#0E2841] rounded-lg text-sm font-semibold hover:bg-[#e09520] transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C45BB8] text-[#0A1230] rounded-lg text-sm font-semibold hover:bg-[#e09520] transition-colors"
         >
           <RefreshCw size={14} />
           Try again

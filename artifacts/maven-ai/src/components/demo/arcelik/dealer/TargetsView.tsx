@@ -27,7 +27,7 @@ export default function TargetsView() {
   const quarterlyPct = Math.round((QUARTERLY_PROGRESS / QUARTERLY_TARGET) * 100);
 
   const THRESHOLDS = [
-    { units: 50, bonus: t.threshold1, color: "#F5A623" },
+    { units: 50, bonus: t.threshold1, color: "#C45BB8" },
     { units: 75, bonus: t.threshold2, color: "#16a34a" },
     { units: 100, bonus: t.threshold3, color: "#7c3aed" },
   ];
@@ -133,7 +133,7 @@ export default function TargetsView() {
             <h2 className="text-sm font-bold">{t.ranking}</h2>
           </div>
           <div className="text-center">
-            <p className="text-4xl font-bold text-[#0E2841]">{dealerRank}.</p>
+            <p className="text-4xl font-bold text-[#0A1230]">{dealerRank}.</p>
             <p className="text-sm text-gray-500 mt-1">{t.rankingAmong.replace("{0}", String(totalDealers))}</p>
             <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 rounded-full bg-green-50 text-green-700">
               <TrendingUp size={14} />

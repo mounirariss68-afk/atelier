@@ -21,7 +21,7 @@ export async function sendEmail(args: EmailArgs): Promise<{ ok: boolean; via: st
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: process.env["RESEND_FROM"] ?? "Maven AI <onboarding@resend.dev>",
+        from: process.env["RESEND_FROM"] ?? "Cognirise <onboarding@resend.dev>",
         to: [args.to],
         subject: args.subject,
         html: args.html,

@@ -55,7 +55,7 @@ export default function AuditLogView() {
             const isHuman = e.kind === "human-decision";
             return (
               <div key={e.id} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg">
-                <div className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-white" style={{ background: isHuman ? "#0E2841" : BRAND }}>
+                <div className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-white" style={{ background: isHuman ? "#0A1230" : BRAND }}>
                   {isHuman ? <User size={12} /> : <Bot size={12} />}
                 </div>
                 <div className="flex-1 min-w-0">

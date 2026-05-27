@@ -29,9 +29,9 @@ export interface AgentMeta {
 
 export const AGENTS: AgentMeta[] = [
   { id: "orch",    nameEn: "Negotiation Conductor",  nameAr: "منسّق التفاوض",     color: "#D9534F" },
-  { id: "spend",   nameEn: "Category Analyst",       nameAr: "محلّل الفئة",        color: "#156082" },
-  { id: "round",   nameEn: "Round Strategist",       nameAr: "خبير الجولات",       color: "#F5A623" },
-  { id: "drafter", nameEn: "Counter-bid Drafter",    nameAr: "كاتب العرض المضادّ", color: "#196B24" },
+  { id: "spend",   nameEn: "Category Analyst",       nameAr: "محلّل الفئة",        color: "#5B7CFF" },
+  { id: "round",   nameEn: "Round Strategist",       nameAr: "خبير الجولات",       color: "#C45BB8" },
+  { id: "drafter", nameEn: "Counter-bid Drafter",    nameAr: "كاتب العرض المضادّ", color: "#8A5BD6" },
   { id: "tco",     nameEn: "TCO Compiler",           nameAr: "مُجمِّع التكلفة الشاملة", color: "#5BA98A" },
   { id: "critic",  nameEn: "Award Critic",           nameAr: "ناقد الترسية",       color: "#8B5CF6" },
 ];

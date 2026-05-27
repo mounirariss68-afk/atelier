@@ -206,7 +206,7 @@ export default function CompetitorRadarView({ pendingNav, onPendingNavConsumed }
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-lg font-bold text-[#0E2841]">{t.title}</h2>
+        <h2 className="text-lg font-bold text-[#0A1230]">{t.title}</h2>
         <span className="text-xs text-gray-500">{t.selectBrands}</span>
         <div className="flex gap-2 ml-auto">
           {COMPETITOR_BRANDS.map((b) => (
@@ -233,7 +233,7 @@ export default function CompetitorRadarView({ pendingNav, onPendingNavConsumed }
           className="bg-white rounded-xl border border-gray-100 shadow-sm p-5"
         >
           <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-            <Shield size={16} className="text-[#0E2841]" />
+            <Shield size={16} className="text-[#0A1230]" />
             {t.competitionMap}
           </h3>
           <div className="h-[360px]">
@@ -309,8 +309,8 @@ export default function CompetitorRadarView({ pendingNav, onPendingNavConsumed }
                     aria-pressed={trendRange === opt.key}
                     className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
                       trendRange === opt.key
-                        ? "bg-[#0E2841] text-white shadow-sm"
-                        : "text-gray-600 hover:text-[#0E2841]"
+                        ? "bg-[#0A1230] text-white shadow-sm"
+                        : "text-gray-600 hover:text-[#0A1230]"
                     }`}
                   >
                     {opt.label}
@@ -390,7 +390,7 @@ export default function CompetitorRadarView({ pendingNav, onPendingNavConsumed }
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: BRAND_COLORS[b.name] || "#6B7280" }}>
                   {b.name.charAt(0)}
                 </div>
-                <span className="text-sm font-bold text-[#0E2841]">{b.name}</span>
+                <span className="text-sm font-bold text-[#0A1230]">{b.name}</span>
               </div>
               {b.threat === "high" && <AlertTriangle size={14} className="text-red-500" />}
               {b.threat === "medium" && <Eye size={14} className="text-amber-500" />}
@@ -405,11 +405,11 @@ export default function CompetitorRadarView({ pendingNav, onPendingNavConsumed }
             <div className="mt-2 space-y-1 text-xs text-gray-500">
               <div className="flex justify-between">
                 <span>{t.posMarketShare}</span>
-                <span className="font-semibold text-[#0E2841]">{b.positioning === "premium" ? "~8%" : b.positioning === "value" ? "~15%" : "~6%"}</span>
+                <span className="font-semibold text-[#0A1230]">{b.positioning === "premium" ? "~8%" : b.positioning === "value" ? "~15%" : "~6%"}</span>
               </div>
               <div className="flex justify-between">
                 <span>{t.tracked}</span>
-                <span className="font-semibold text-[#0E2841]">{b.priceCount} {t.trackedProducts}</span>
+                <span className="font-semibold text-[#0A1230]">{b.priceCount} {t.trackedProducts}</span>
               </div>
               <div className="flex justify-between">
                 <span>{t.avgPriceGap}</span>
@@ -419,7 +419,7 @@ export default function CompetitorRadarView({ pendingNav, onPendingNavConsumed }
               </div>
               <div className="flex justify-between">
                 <span>{t.categories}</span>
-                <span className="font-semibold text-[#0E2841]">{b.categoryCount}</span>
+                <span className="font-semibold text-[#0A1230]">{b.categoryCount}</span>
               </div>
               <div className="flex justify-between">
                 <span>{t.lastMove}</span>

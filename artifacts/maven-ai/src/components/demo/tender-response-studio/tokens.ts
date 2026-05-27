@@ -1,11 +1,11 @@
-// Bid Manager Studio — brand tokens (anchored on Scenario.accent #196B24).
+// Bid Manager Studio — brand tokens (anchored on Scenario.accent #8A5BD6).
 import { getDemoAccent } from "@workspace/maven-content";
 
-export const BRAND = getDemoAccent("tender-response-studio", "#196B24");
+export const BRAND = getDemoAccent("tender-response-studio", "#8A5BD6");
 export const BRAND_DARK = "#0F4416";
 export const BRAND_MUTED = "#E7F1E8";
-export const BRAND_INK = "#0E2841";
-export const NAVY = "#0E2841";
+export const BRAND_INK = "#0A1230";
+export const NAVY = "#0A1230";
 export const CANVAS = "#F4F6F8";
 export const SURFACE = "#FFFFFF";
 export const STROKE = "#E5E7EB";
@@ -19,4 +19,4 @@ export const SEM = {
   info: "#3B82F6",
 };
 
-export const CHART_COLORS = [BRAND, "#5C8CA8", "#F5A623", "#5BA98A", "#D9534F", "#156082"];
+export const CHART_COLORS = [BRAND, "#5C8CA8", "#C45BB8", "#5BA98A", "#D9534F", "#5B7CFF"];

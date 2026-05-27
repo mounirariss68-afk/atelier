@@ -57,7 +57,7 @@ export default function AuditLogTab({
       type="button"
       onClick={downloadAudit}
       disabled={liveCount === 0}
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0E2841] text-white text-xs font-bold hover:bg-[#156082] disabled:opacity-40 disabled:cursor-not-allowed"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0A1230] text-white text-xs font-bold hover:bg-[#5B7CFF] disabled:opacity-40 disabled:cursor-not-allowed"
       title={
         liveCount === 0
           ? tStr(
@@ -99,7 +99,7 @@ export default function AuditLogTab({
   const agentName = (id?: string) =>
     id ? scenario.agents.find((a) => a.id === id)?.name ?? { en: id, ar: id } : null;
   const agentColor = (id?: string) =>
-    (id && scenario.agents.find((a) => a.id === id)?.color) || "#156082";
+    (id && scenario.agents.find((a) => a.id === id)?.color) || "#5B7CFF";
 
   const totalForCount = liveCount + (previousRun?.entries.length ?? 0);
 
@@ -236,10 +236,10 @@ function Row({
           )}
           <span className="text-[10px] text-gray-400 font-mono">{ev.kind}</span>
           {ev.toolName && (
-            <span className="text-[10px] text-[#156082] font-mono">{ev.toolName}()</span>
+            <span className="text-[10px] text-[#5B7CFF] font-mono">{ev.toolName}()</span>
           )}
         </div>
-        <p className="text-sm text-[#0E2841] font-semibold">{tStr(ev.label, lang)}</p>
+        <p className="text-sm text-[#0A1230] font-semibold">{tStr(ev.label, lang)}</p>
         {ev.detail && (
           <p className="text-xs text-gray-600 mt-1 leading-relaxed">
             {tStr(ev.detail, lang)}

@@ -14,7 +14,7 @@ import type { Scenario } from "../types";
 const networkOpsScenario: Scenario = {
   slug: "network-ops-war-room",
   toolTitle: { en: "Network Ops War Room", ar: "غرفة عمليات الشبكة" },
-  accent: "#156082",
+  accent: "#5B7CFF",
   description: {
     en: "A NOC orchestrator triages a multi-cell incident: a Telemetry Watcher, a Topology Reasoner, a Mitigation Drafter, and a Customer-Impact Narrator coordinate to recommend the rollback, draft the EN/AR customer SMS, and stage the regulator filing — pausing twice for the NOC engineer and the regulator officer.",
     ar: "منسّق غرفة العمليات يفرز حادثاً متعدد الخلايا: مراقب القياس، ومحلّل الطوبولوجيا، وكاتب التخفيف، وكاتب أثر العملاء، يتعاونون لاقتراح التراجع وصياغة الرسائل وتجهيز الإيداع — مع توقفين بشريَّين.",
@@ -22,11 +22,11 @@ const networkOpsScenario: Scenario = {
   buyer: { en: "VP Network Operations", ar: "نائب رئيس عمليات الشبكة" },
   trigger: { en: "Fibre cut south of Sharjah at 14:03 — 84,310 subscribers degraded.", ar: "قطع ألياف جنوب الشارقة 14:03 — 84,310 مشتركاً متأثراً." },
   agents: [
-    { id: "orch", name: { en: "NOC Orchestrator", ar: "منسّق غرفة العمليات" }, role: { en: "Plans the triage and gates the action.", ar: "يخطّط الفرز ويراقب الإجراء." }, kind: "orchestrator", color: "#156082" },
+    { id: "orch", name: { en: "NOC Orchestrator", ar: "منسّق غرفة العمليات" }, role: { en: "Plans the triage and gates the action.", ar: "يخطّط الفرز ويراقب الإجراء." }, kind: "orchestrator", color: "#5B7CFF" },
     { id: "telemetry", name: { en: "Telemetry Watcher", ar: "مراقب القياس" }, role: { en: "Streams cell + transport metrics in real time.", ar: "يبثّ مقاييس الخلايا والنقل لحظياً." }, kind: "monitor", color: "#5C8CA8" },
-    { id: "topology", name: { en: "Topology Reasoner", ar: "محلّل الطوبولوجيا" }, role: { en: "Maps the fault to upstream / downstream blast radius.", ar: "يربط العطل بنطاق التأثير." }, kind: "specialist", color: "#F5A623" },
+    { id: "topology", name: { en: "Topology Reasoner", ar: "محلّل الطوبولوجيا" }, role: { en: "Maps the fault to upstream / downstream blast radius.", ar: "يربط العطل بنطاق التأثير." }, kind: "specialist", color: "#C45BB8" },
     { id: "mitigation", name: { en: "Mitigation Drafter", ar: "كاتب التخفيف" }, role: { en: "Drafts the rollback or load-shed plan.", ar: "يصوغ خطة التراجع أو توزيع الحمل." }, kind: "drafter", color: "#5BA98A" },
-    { id: "narrator", name: { en: "Customer-Impact Narrator", ar: "كاتب أثر العملاء" }, role: { en: "Quantifies user-facing impact and drafts EN/AR SMS.", ar: "يحسب الأثر ويصوغ الرسائل ثنائية اللغة." }, kind: "drafter", color: "#196B24" },
+    { id: "narrator", name: { en: "Customer-Impact Narrator", ar: "كاتب أثر العملاء" }, role: { en: "Quantifies user-facing impact and drafts EN/AR SMS.", ar: "يحسب الأثر ويصوغ الرسائل ثنائية اللغة." }, kind: "drafter", color: "#8A5BD6" },
     { id: "regulator", name: { en: "Regulator Filer", ar: "كاتب الإيداع التنظيمي" }, role: { en: "Drafts the TDRA / CST notification template.", ar: "يصوغ نموذج إخطار الجهة التنظيمية." }, kind: "drafter", color: "#D9534F" },
   ],
   tools: [
@@ -87,7 +87,7 @@ const networkOpsScenario: Scenario = {
   ],
   kpis: [
     { id: "mttd", label: { en: "Mean time to detect", ar: "زمن الاكتشاف" }, initial: "—" },
-    { id: "mttr", label: { en: "Mean time to mitigate", ar: "زمن التخفيف" }, initial: "—", source: { en: "Gartner AIOps benchmarks 2024 + Maven AI telco delivery telemetry.", ar: "مقاييس Gartner AIOps 2024 وقياسات تسليم Maven AI." } },
+    { id: "mttr", label: { en: "Mean time to mitigate", ar: "زمن التخفيف" }, initial: "—", source: { en: "Gartner AIOps benchmarks 2024 + Cognirise telco delivery telemetry.", ar: "مقاييس Gartner AIOps 2024 وقياسات تسليم Cognirise." } },
     { id: "users-impact", label: { en: "Users impacted", ar: "العملاء المتأثرون" }, initial: "—" },
     { id: "regulator-buffer", label: { en: "Buffer on regulator clock", ar: "هامش زمن المنظّم" }, initial: "—" },
   ],
@@ -99,7 +99,7 @@ const networkOpsScenario: Scenario = {
       preview: { en: "TX-NORTH-04 transport degradation suspected. Sharjah-South cells affected.", ar: "اشتباه تدهور نقل TX-NORTH-04. خلايا جنوب الشارقة متأثّرة." },
       receivedAt: "14:03",
       status: "new",
-      accent: "#156082",
+      accent: "#5B7CFF",
     },
   ],
   initialWorkspace: [],

@@ -165,7 +165,7 @@ export default function CampaignsView() {
 
       {completed.length > 0 && (
         <div>
-          <button onClick={() => setShowCompleted(!showCompleted)} className="flex items-center gap-2 text-sm font-bold text-gray-500 mb-3 hover:text-[#0E2841]">
+          <button onClick={() => setShowCompleted(!showCompleted)} className="flex items-center gap-2 text-sm font-bold text-gray-500 mb-3 hover:text-[#0A1230]">
             {showCompleted ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             {t.completed} ({completed.length})
           </button>

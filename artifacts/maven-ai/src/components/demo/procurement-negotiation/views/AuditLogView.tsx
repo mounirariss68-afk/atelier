@@ -22,13 +22,13 @@ export default function AuditLogView() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-[#0E2841]">{t.title[lang]}</h1>
+        <h1 className="text-2xl font-bold text-[#0A1230]">{t.title[lang]}</h1>
         <p className="text-sm text-gray-500 mt-1">{t.subtitle[lang]}</p>
       </header>
 
       <div className="flex gap-1.5">
         {(["all", "agents", "users"] as Filter[]).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filter === f ? "bg-[#0E2841] text-white border-[#0E2841]" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"}`}>
+          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${filter === f ? "bg-[#0A1230] text-white border-[#0A1230]" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"}`}>
             {f === "all" ? t.filterAll[lang] : f === "agents" ? t.filterAgents[lang] : t.filterUsers[lang]}
           </button>
         ))}
@@ -58,7 +58,7 @@ export default function AuditLogView() {
                       <div className="w-6 h-6 rounded-md flex items-center justify-center text-white" style={{ background: agent?.color ?? "#94a3b8" }}>
                         {a.actorKind === "agent" ? <Bot size={11} /> : <User size={11} />}
                       </div>
-                      <span className="font-semibold text-[#0E2841]">{isAr ? a.actorAr : a.actorEn}</span>
+                      <span className="font-semibold text-[#0A1230]">{isAr ? a.actorAr : a.actorEn}</span>
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-gray-700">{isAr ? a.eventAr : a.eventEn}</td>

@@ -7,7 +7,7 @@ export default function KpisTab({ state }: { state: SimState }) {
   return (
     <section className="space-y-4">
       <header>
-        <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841]">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-[#0A1230]">
           {tStr(
             {
               en: "Performance Metrics — April 2026",
@@ -51,7 +51,7 @@ function KpiCard({ kpi }: { kpi: KpiValue }) {
       const good =
         (direction === "up" && movement === "up") ||
         (direction === "down" && movement === "down");
-      color = good ? "#196B24" : "#D9534F";
+      color = good ? "#8A5BD6" : "#D9534F";
     }
   }
 
@@ -60,7 +60,7 @@ function KpiCard({ kpi }: { kpi: KpiValue }) {
       <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
         {tStr(k.label, lang)}
       </p>
-      <p className="text-3xl font-extrabold text-[#0E2841] tabular-nums">{k.value}</p>
+      <p className="text-3xl font-extrabold text-[#0A1230] tabular-nums">{k.value}</p>
       {k.delta && (
         <div
           className="mt-2 inline-flex items-center gap-1 text-xs font-bold w-fit"

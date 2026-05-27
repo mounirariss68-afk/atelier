@@ -1,5 +1,5 @@
 /**
- * Maven Personal Agent — seed data for the Cockpit and Mind demos.
+ * Cognirise Personal Agent — seed data for the Cockpit and Mind demos.
  *
  * Two personas: Sales (Mariam · Atlas) and HR (Yusuf · Ember).
  * Everything is illustrative sample data — no real PII, no real CRM/ATS hits.
@@ -591,9 +591,9 @@ const HR_LIVE_WORKDAY: LiveWorkdayEvent[] = [
 // ─── JSON-LD export samples ──────────────────────────────────────────────
 function exportPayloadFor(personaId: "sales" | "hr", nodes: PCGNode[], edges: PCGEdge[]): object {
   return {
-    "@context": "https://maven.ai/pcg/v1",
+    "@context": "https://cognirise.com/pcg/v1",
     "@type": "PersonalContextGraph",
-    employee: personaId === "sales" ? "mariam.al-hashimi@employee.maven.ai" : "yusuf.demir@employee.maven.ai",
+    employee: personaId === "sales" ? "mariam.al-hashimi@employee.cognirise.com" : "yusuf.demir@employee.cognirise.com",
     exportedAt: "2026-05-04T12:00:00Z",
     agentVersion: "atlas-1.4.2 / ember-1.4.2",
     portability: {

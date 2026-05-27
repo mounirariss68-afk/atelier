@@ -53,10 +53,10 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
   const AGENT_META: Record<ChatResponse["agent"], { key: string; icon: React.ReactNode; color: string }> = {
     "conductor":          { key: "roleConductor",        icon: <Bot size={14} />,             color: BRAND },
     "correlator":         { key: "roleCorrelator",       icon: <AlertTriangle size={14} />,   color: "#D9534F" },
-    "topology-mapper":    { key: "roleTopologyMapper",   icon: <MapIcon size={14} />,         color: "#F5A623" },
+    "topology-mapper":    { key: "roleTopologyMapper",   icon: <MapIcon size={14} />,         color: "#C45BB8" },
     "impact-translator":  { key: "roleImpactTranslator", icon: <Languages size={14} />,       color: "#5C8CA8" },
     "runbook-player":     { key: "roleRunbookPlayer",    icon: <Truck size={14} />,           color: "#5BA98A" },
-    "comms-drafter":      { key: "roleCommsDrafter",     icon: <MessageSquare size={14} />,   color: "#196B24" },
+    "comms-drafter":      { key: "roleCommsDrafter",     icon: <MessageSquare size={14} />,   color: "#8A5BD6" },
   };
   function agentBadge(agent: ChatResponse["agent"]) {
     const m = AGENT_META[agent] ?? AGENT_META.conductor;
@@ -233,7 +233,7 @@ export default function AiChat({ onClose }: { onClose: () => void }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             placeholder={t("placeholder", aiChat)}
-            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#156082]/20 focus:border-[#156082]"
+            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5B7CFF]/20 focus:border-[#5B7CFF]"
           />
           <button
             onClick={() => handleSend()}

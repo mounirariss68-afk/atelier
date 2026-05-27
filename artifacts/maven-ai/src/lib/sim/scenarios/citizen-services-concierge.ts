@@ -22,11 +22,11 @@ const citizenServicesScenario: Scenario = {
   trigger: { en: "Citizen messages on WhatsApp about a stuck commercial-permit renewal.", ar: "رسالة مواطن على واتساب حول تجديد رخصة تجارية متعثّر." },
   agents: [
     { id: "orch", name: { en: "Concierge Conductor", ar: "منسّق الكونسيرج" }, role: { en: "Plans the conversation and decides escalation.", ar: "يخطّط المحادثة ويقرر التصعيد." }, kind: "orchestrator", color: "#5BA98A" },
-    { id: "nlu", name: { en: "Dialect Tagger", ar: "مُصنّف اللهجة" }, role: { en: "Parses dialect-tolerant intent and entities.", ar: "يحلّل النوايا بدعم اللهجات." }, kind: "specialist", color: "#156082" },
-    { id: "policy", name: { en: "Policy Retriever", ar: "مسترجِع السياسات" }, role: { en: "Pulls the right service policy and citation.", ar: "يجلب السياسة الصحيحة والمراجع." }, kind: "retriever", color: "#F5A623" },
+    { id: "nlu", name: { en: "Dialect Tagger", ar: "مُصنّف اللهجة" }, role: { en: "Parses dialect-tolerant intent and entities.", ar: "يحلّل النوايا بدعم اللهجات." }, kind: "specialist", color: "#5B7CFF" },
+    { id: "policy", name: { en: "Policy Retriever", ar: "مسترجِع السياسات" }, role: { en: "Pulls the right service policy and citation.", ar: "يجلب السياسة الصحيحة والمراجع." }, kind: "retriever", color: "#C45BB8" },
     { id: "drafter", name: { en: "Response Drafter", ar: "كاتب الردّ" }, role: { en: "Drafts the bilingual reply in the citizen's dialect.", ar: "يصوغ الردّ ثنائي اللغة بلهجة المواطن." }, kind: "drafter", color: "#5C8CA8" },
     { id: "conf", name: { en: "Confidence Scorer", ar: "مُصنّف الثقة" }, role: { en: "Rates the answer; refuses below the 75% gate.", ar: "يصنّف الإجابة ويرفض دون عتبة 75%." }, kind: "scorer", color: "#D9534F" },
-    { id: "audit", name: { en: "Audit Packetiser", ar: "مُجمّع حزمة التدقيق" }, role: { en: "Compiles the full case file at close.", ar: "يجمع ملف القضيّة الكامل عند الإغلاق." }, kind: "compiler", color: "#196B24" },
+    { id: "audit", name: { en: "Audit Packetiser", ar: "مُجمّع حزمة التدقيق" }, role: { en: "Compiles the full case file at close.", ar: "يجمع ملف القضيّة الكامل عند الإغلاق." }, kind: "compiler", color: "#8A5BD6" },
   ],
   tools: [
     { name: "tag_dialect", description: { en: "Detects intent + dialect from inbound text.", ar: "يكتشف النية واللهجة من النصّ الوارد." } },
@@ -70,7 +70,7 @@ const citizenServicesScenario: Scenario = {
   ],
   kpis: [
     { id: "ar-quality", label: { en: "Arabic resolution score", ar: "جودة الحلّ بالعربية" }, initial: "—" },
-    { id: "deflection", label: { en: "Tier-1 deflection %", ar: "نسبة تحويل الطبقة الأولى" }, initial: "—", source: { en: "Maven AI public-sector benchmarks, 2025 — 4 ministry pilots.", ar: "مقاييس Maven AI للقطاع الحكومي 2025 — 4 تجارب وزارية." } },
+    { id: "deflection", label: { en: "Tier-1 deflection %", ar: "نسبة تحويل الطبقة الأولى" }, initial: "—", source: { en: "Cognirise public-sector benchmarks, 2025 — 4 ministry pilots.", ar: "مقاييس Cognirise للقطاع الحكومي 2025 — 4 تجارب وزارية." } },
     { id: "handoff-q", label: { en: "Hand-off context completeness", ar: "اكتمال سياق التسليم" }, initial: "—" },
     { id: "audit-time", label: { en: "Audit packet assembly", ar: "زمن تجميع حزمة التدقيق" }, initial: "—" },
   ],

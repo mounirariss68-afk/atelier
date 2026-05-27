@@ -98,7 +98,7 @@ function Sparkline({ data, color = "#6B7280" }: { data: number[]; color?: string
   );
 }
 
-const CAT_COLORS = ["#E30613", "#0E2841", "#F5A623", "#16a34a", "#7c3aed", "#0891b2", "#db2777"];
+const CAT_COLORS = ["#E30613", "#0A1230", "#C45BB8", "#16a34a", "#7c3aed", "#0891b2", "#db2777"];
 const COMPARISON_BRANDS = ["Vestel", "Bosch", "Samsung", "Profilo"];
 
 function marketplaceLabel(id: string, t: Record<string, string>): string {
@@ -481,11 +481,11 @@ export default function DashboardView() {
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{kpi.label}</span>
-                <div className="w-8 h-8 rounded-lg bg-[#0E2841]/5 flex items-center justify-center">
-                  <Icon size={16} className="text-[#0E2841]" />
+                <div className="w-8 h-8 rounded-lg bg-[#0A1230]/5 flex items-center justify-center">
+                  <Icon size={16} className="text-[#0A1230]" />
                 </div>
               </div>
-              <div className="text-2xl font-extrabold text-[#0E2841]">
+              <div className="text-2xl font-extrabold text-[#0A1230]">
                 <AnimatedCounter value={kpi.value} decimals={kpi.suffix === "%" ? 1 : kpi.id === "index" ? 2 : 0} />
                 {kpi.suffix}
               </div>
@@ -519,11 +519,11 @@ export default function DashboardView() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
-            className="bg-gradient-to-r from-[#0E2841] to-[#1a3a5c] rounded-xl p-4 text-white"
+            className="bg-gradient-to-r from-[#0A1230] to-[#1B2755] rounded-xl p-4 text-white"
           >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Brain size={16} className="text-[#F5A623]" />
+                <Brain size={16} className="text-[#C45BB8]" />
                 <h3 className="text-sm font-bold">{t.agentImpactTitle}</h3>
               </div>
               <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full">{t.agentImpactLive}</span>
@@ -531,7 +531,7 @@ export default function DashboardView() {
             <div className="grid grid-cols-4 gap-3">
               <div className="bg-white/10 rounded-lg p-2.5 text-center">
                 <p className="text-[10px] text-gray-300">{t.agentPending}</p>
-                <p className="text-lg font-extrabold text-[#F5A623]">{pending}</p>
+                <p className="text-lg font-extrabold text-[#C45BB8]">{pending}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-2.5 text-center">
                 <p className="text-[10px] text-gray-300">{t.agentApproved}</p>
@@ -606,9 +606,9 @@ export default function DashboardView() {
             </TurkeyMap>
             {hoveredCityData && (
               <div className="absolute top-4 right-4 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 shadow-lg w-52 pointer-events-none z-10">
-                <p className="text-xs font-bold text-[#0E2841] mb-1">{getCityName(hoveredCityData, lang)}</p>
+                <p className="text-xs font-bold text-[#0A1230] mb-1">{getCityName(hoveredCityData, lang)}</p>
                 <div className="space-y-1 text-[11px] text-gray-600">
-                  <div className="flex justify-between"><span>{t.tooltipMarketShare}</span><span className="font-bold text-[#0E2841]">%{hoveredCityData.marketSharePercent}</span></div>
+                  <div className="flex justify-between"><span>{t.tooltipMarketShare}</span><span className="font-bold text-[#0A1230]">%{hoveredCityData.marketSharePercent}</span></div>
                   <div className="flex justify-between"><span>{t.tooltipPriceIndex}</span><span className="font-bold">{hoveredCityData.avgPriceIndex}</span></div>
                   <div className="flex justify-between"><span>{t.tooltipDealerCount}</span><span className="font-bold">{hoveredCityData.dealerCount}</span></div>
                   <div className="flex justify-between"><span>{t.tooltipCampaigns}</span><span className="font-bold">{campaigns.filter((c) => c.targetCities.includes(hoveredCityData.id)).length}</span></div>
@@ -636,7 +636,7 @@ export default function DashboardView() {
         >
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="text-sm font-bold flex items-center gap-2">
-              <BarChart3 size={16} className="text-[#F5A623]" />
+              <BarChart3 size={16} className="text-[#C45BB8]" />
               {t.categoryChartTitle}
             </h3>
             <p className="text-[10px] text-gray-400 mt-0.5">{t.categoryChartHint}</p>
@@ -669,7 +669,7 @@ export default function DashboardView() {
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-sm font-bold flex items-center gap-2">
-              <BarChart3 size={16} className="text-[#0E2841]" />
+              <BarChart3 size={16} className="text-[#0A1230]" />
               {t.compareMarketplacesTitle}
             </h3>
             <p className="text-[10px] text-gray-400 mt-0.5">{t.compareMarketplacesHint}</p>
@@ -729,7 +729,7 @@ export default function DashboardView() {
                       name={mp}
                       fill={MARKETPLACE_HEX[mp]}
                       fillOpacity={isHighlight ? 1 : 0.25}
-                      stroke={selectedMarketplace === mp ? "#0E2841" : undefined}
+                      stroke={selectedMarketplace === mp ? "#0A1230" : undefined}
                       strokeWidth={selectedMarketplace === mp ? 1.5 : 0}
                       radius={[4, 4, 0, 0]}
                     />
@@ -751,7 +751,7 @@ export default function DashboardView() {
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-sm font-bold flex items-center gap-2">
-              <TrendingUp size={16} className="text-[#0E2841]" />
+              <TrendingUp size={16} className="text-[#0A1230]" />
               {t.priceTrendTitle}
             </h3>
             <p className="text-[10px] text-gray-400 mt-0.5">{t.priceTrendHint}</p>
@@ -861,8 +861,8 @@ export default function DashboardView() {
                     <th
                       key={col.key}
                       onClick={() => { setSortCol(col.key); setSortDir((prev) => sortCol === col.key ? (prev === "asc" ? "desc" : "asc") : "asc"); }}
-                      className={`${col.align === "left" ? "text-left" : "text-right"} px-4 py-3 text-[11px] font-semibold uppercase tracking-wide cursor-pointer hover:text-[#0E2841] select-none ${
-                        col.key === "tsfPrice" ? "text-[#E30613]" : sortCol === col.key ? "text-[#0E2841]" : "text-gray-500"
+                      className={`${col.align === "left" ? "text-left" : "text-right"} px-4 py-3 text-[11px] font-semibold uppercase tracking-wide cursor-pointer hover:text-[#0A1230] select-none ${
+                        col.key === "tsfPrice" ? "text-[#E30613]" : sortCol === col.key ? "text-[#0A1230]" : "text-gray-500"
                       }`}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -881,7 +881,7 @@ export default function DashboardView() {
                   return (
                     <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                       <td className="px-4 py-3">
-                        <div className="text-xs font-semibold text-[#0E2841]">{row.name}</div>
+                        <div className="text-xs font-semibold text-[#0A1230]">{row.name}</div>
                         <div className="text-[10px] text-gray-400">{row.category}</div>
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-xs font-bold text-[#E30613]">₺{row.tsfPrice.toLocaleString("tr-TR")}</td>
@@ -904,7 +904,7 @@ export default function DashboardView() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Sparkline data={sparkData} color="#0E2841" />
+                        <Sparkline data={sparkData} color="#0A1230" />
                       </td>
                     </tr>
                   );
@@ -934,7 +934,7 @@ export default function DashboardView() {
             >
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Package size={18} className="text-[#F5A623]" />
+                  <Package size={18} className="text-[#C45BB8]" />
                   <h3 className="text-lg font-bold">{getCategoryLabel(selectedCategory, lang)} — {t.productDetails}</h3>
                 </div>
                 <button onClick={() => setSelectedCategory(null)} className="p-1.5 hover:bg-gray-100 rounded-lg" aria-label={t.closeLabel}><X size={18} /></button>
@@ -954,7 +954,7 @@ export default function DashboardView() {
                     {categoryProducts.map((p) => (
                       <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                         <td className="px-4 py-2.5">
-                          <div className="text-xs font-semibold text-[#0E2841]">{getProductName(p, lang)}</div>
+                          <div className="text-xs font-semibold text-[#0A1230]">{getProductName(p, lang)}</div>
                           <div className="text-[10px] text-gray-400">{p.modelCode}</div>
                         </td>
                         <td className="px-4 py-2.5 text-right font-mono text-xs font-bold">₺{p.tsfPrice.toLocaleString("tr-TR")}</td>
@@ -1001,19 +1001,19 @@ export default function DashboardView() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-[10px] text-gray-500 uppercase">{t.marketShare}</p>
-                  <p className="text-xl font-extrabold text-[#0E2841]">%{selectedCity.marketSharePercent}</p>
+                  <p className="text-xl font-extrabold text-[#0A1230]">%{selectedCity.marketSharePercent}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-[10px] text-gray-500 uppercase">{t.cityPriceIndex}</p>
-                  <p className="text-xl font-extrabold text-[#0E2841]">{selectedCity.avgPriceIndex}</p>
+                  <p className="text-xl font-extrabold text-[#0A1230]">{selectedCity.avgPriceIndex}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-[10px] text-gray-500 uppercase">{t.cityDealerCount}</p>
-                  <p className="text-xl font-extrabold text-[#0E2841]">{selectedCity.dealerCount}</p>
+                  <p className="text-xl font-extrabold text-[#0A1230]">{selectedCity.dealerCount}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-[10px] text-gray-500 uppercase">{t.citySegment}</p>
-                  <p className="text-xl font-extrabold text-[#0E2841] capitalize">{selectedCity.populationTier === "tier-1" ? t.cityTier1 : selectedCity.populationTier === "tier-2" ? t.cityTier2 : t.cityTier3}</p>
+                  <p className="text-xl font-extrabold text-[#0A1230] capitalize">{selectedCity.populationTier === "tier-1" ? t.cityTier1 : selectedCity.populationTier === "tier-2" ? t.cityTier2 : t.cityTier3}</p>
                 </div>
               </div>
 
@@ -1031,7 +1031,7 @@ export default function DashboardView() {
                         <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
                           <div className="h-full rounded-full bg-[#E30613]" style={{ width: `${Math.min(100, Number(avgMargin) * cityWeight * 1.5)}%` }} />
                         </div>
-                        <span className="text-[10px] font-semibold w-12 text-right text-[#0E2841]">%{avgMargin}</span>
+                        <span className="text-[10px] font-semibold w-12 text-right text-[#0A1230]">%{avgMargin}</span>
                         <span className="text-[10px] text-gray-400 w-16 text-right">{compCount} {t.cityCompetitors}</span>
                       </div>
                     );
@@ -1075,7 +1075,7 @@ export default function DashboardView() {
                       <div key={d.id} className="flex items-center gap-2 text-xs">
                         <span className={`w-2 h-2 rounded-full ${d.tier === "gold" ? "bg-yellow-400" : d.tier === "silver" ? "bg-gray-400" : "bg-orange-400"}`} />
                         <span className="flex-1 text-gray-700">{d.storeName}</span>
-                        <span className="text-[10px] font-semibold text-[#0E2841]">{d.complianceScore}/100</span>
+                        <span className="text-[10px] font-semibold text-[#0A1230]">{d.complianceScore}/100</span>
                       </div>
                     ))}
                   </div>
@@ -1141,7 +1141,7 @@ export default function DashboardView() {
           <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${scrapeStatus.scheduler.running ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
-              <span className="text-xs font-semibold text-[#0E2841]">{t.autoScrapeActive}</span>
+              <span className="text-xs font-semibold text-[#0A1230]">{t.autoScrapeActive}</span>
               {scrapeStatus.scrapeHealth?.status === "healthy" && (
                 <span
                   className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"
@@ -1155,7 +1155,7 @@ export default function DashboardView() {
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Clock size={12} />
               <span>{t.lastUpdated}:</span>
-              <span className="font-medium text-[#0E2841]">
+              <span className="font-medium text-[#0A1230]">
                 {(scrapeStatus.products?.lastScraped ?? scrapeStatus.products?.lastUpdated)
                   ? new Date((scrapeStatus.products?.lastScraped ?? scrapeStatus.products?.lastUpdated)!).toLocaleDateString(lang === "tr" ? "tr-TR" : "en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
                   : t.never}
@@ -1164,7 +1164,7 @@ export default function DashboardView() {
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <RefreshCw size={12} />
               <span>{t.nextScheduled}:</span>
-              <span className="font-medium text-[#0E2841]">{formatCronSchedule(scrapeStatus.scheduler.cronExpression, lang)}</span>
+              <span className="font-medium text-[#0A1230]">{formatCronSchedule(scrapeStatus.scheduler.cronExpression, lang)}</span>
             </div>
             {(() => {
               const geoCounts = scrapeStatus.lastCompletedRun?.geoWarningCounts ?? null;
@@ -1215,8 +1215,8 @@ export default function DashboardView() {
       >
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-sm font-bold text-[#0E2841] flex items-center gap-2">
-              <DollarSign size={16} className="text-[#F5A623]" />
+            <h3 className="text-sm font-bold text-[#0A1230] flex items-center gap-2">
+              <DollarSign size={16} className="text-[#C45BB8]" />
               {t.marketplacePricesTitle}
             </h3>
             <p className="text-[11px] text-gray-500 mt-0.5">
@@ -1316,8 +1316,8 @@ export default function DashboardView() {
           onClick={() => setShowSources(!showSources)}
           className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
         >
-          <span className="flex items-center gap-2 text-sm font-bold text-[#0E2841]">
-            <BookOpen size={16} className="text-[#F5A623]" />
+          <span className="flex items-center gap-2 text-sm font-bold text-[#0A1230]">
+            <BookOpen size={16} className="text-[#C45BB8]" />
             {t.dataSourcesTitle}
           </span>
           <span className="flex items-center gap-2 text-xs text-gray-400">
@@ -1340,7 +1340,7 @@ export default function DashboardView() {
                   {DATA_SOURCES.map((src) => (
                     <div key={src.id} className="border border-gray-100 rounded-lg p-3 hover:border-blue-200 hover:bg-blue-50/30 transition-colors">
                       <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <span className="text-xs font-semibold text-[#0E2841] leading-tight">{srcName(src)}</span>
+                        <span className="text-xs font-semibold text-[#0A1230] leading-tight">{srcName(src)}</span>
                         {src.sourceUrl && (
                           <a href={src.sourceUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-blue-500 hover:text-blue-700" title={src.sourceUrl}>
                             <ExternalLink size={12} />

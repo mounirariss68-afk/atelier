@@ -47,7 +47,7 @@ const COPY = {
   message: { en: "Message *", ar: "الرسالة *", tr: "Mesaj *" },
   messagePh: { en: "Tell us about your AI challenge or what you'd like to explore...", ar: "حدثونا عن تحدي الذكاء الاصطناعي لديكم أو ما تودّون استكشافه...", tr: "AI zorluğunuzdan veya keşfetmek istediğiniz konudan bahsedin..." },
   sendMsg: { en: "Send message", ar: "إرسال الرسالة", tr: "Mesajı gönder" },
-  privacy: { en: "By submitting, you agree to Maven AI's privacy policy.", ar: "بإرسالكم النموذج، فإنكم توافقون على سياسة خصوصية Maven AI.", tr: "Göndererek Maven AI'nın gizlilik politikasını kabul etmiş olursunuz." },
+  privacy: { en: "By submitting, you agree to Cognirise's privacy policy.", ar: "بإرسالكم النموذج، فإنكم توافقون على سياسة خصوصية Cognirise.", tr: "Göndererek Cognirise'nın gizlilik politikasını kabul etmiş olursunuz." },
   officesTitle: { en: "Our offices", ar: "مكاتبنا", tr: "Ofislerimiz" },
   officesSub: { en: "Present across the GCC's four main business centers.", ar: "حضور في المراكز التجارية الأربعة الرئيسية في الخليج.", tr: "Körfez'in dört ana iş merkezinde mevcudiyet." },
   mainOffice: { en: "Main office", ar: "المكتب الرئيسي", tr: "Ana ofis" },
@@ -78,12 +78,12 @@ export default function Contact() {
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
-      <section className="bg-[#0E2841] py-20 relative overflow-hidden">
+      <section className="bg-[#0A1230] py-20 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #C45BB8 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">{tStr(COPY.eyebrow, lang)}</span>
+          <span className="text-[#C45BB8] font-semibold text-sm uppercase tracking-widest">{tStr(COPY.eyebrow, lang)}</span>
           <h1 className="text-5xl font-extrabold text-white mt-3 mb-5 max-w-2xl leading-tight">
             {tStr(COPY.heroTitle, lang)}
           </h1>
@@ -91,14 +91,14 @@ export default function Contact() {
             {tStr(COPY.heroPara, lang)}
           </p>
           <div className="mt-8 inline-flex items-center gap-3 bg-white/5 border border-white/15 rounded-2xl px-5 py-4">
-            <div className="w-10 h-10 rounded-lg bg-[#0F9ED5]/20 flex items-center justify-center flex-shrink-0">
-              <ArrowRight size={18} className="text-[#0F9ED5] rtl:-scale-x-100" />
+            <div className="w-10 h-10 rounded-lg bg-[#5B7CFF]/20 flex items-center justify-center flex-shrink-0">
+              <ArrowRight size={18} className="text-[#5B7CFF] rtl:-scale-x-100" />
             </div>
             <div className="text-sm text-white/85">
               <p className="font-semibold text-white">{tStr(COPY.diagPitchTitle, lang)}</p>
               <p>{tStr(COPY.diagPitchBody, lang)}</p>
             </div>
-            <Link href="/assessments" className="ml-2 bg-[#0F9ED5] hover:bg-[#0E8BB8] text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">
+            <Link href="/assessments" className="ml-2 bg-[#5B7CFF] hover:bg-[#0E8BB8] text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">
               {tStr(COPY.diagBtn, lang)}
             </Link>
           </div>
@@ -110,9 +110,9 @@ export default function Contact() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {[
-              { icon: Clock, color: "#156082", title: COPY.why1Title, desc: COPY.why1Desc },
-              { icon: Users, color: "#F5A623", title: COPY.why2Title, desc: COPY.why2Desc },
-              { icon: ArrowRight, color: "#F5A623", title: COPY.why3Title, desc: COPY.why3Desc },
+              { icon: Clock, color: "#5B7CFF", title: COPY.why1Title, desc: COPY.why1Desc },
+              { icon: Users, color: "#C45BB8", title: COPY.why2Title, desc: COPY.why2Desc },
+              { icon: ArrowRight, color: "#C45BB8", title: COPY.why3Title, desc: COPY.why3Desc },
             ].map((item, i) => {
               const Icon = item.icon;
               return (
@@ -121,7 +121,7 @@ export default function Contact() {
                     <Icon size={20} style={{ color: item.color }} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-[#0E2841] mb-1 text-sm">{tStr(item.title, lang)}</h3>
+                    <h3 className="font-bold text-[#0A1230] mb-1 text-sm">{tStr(item.title, lang)}</h3>
                     <p className="text-xs text-gray-500 leading-relaxed">{tStr(item.desc, lang)}</p>
                   </div>
                 </div>
@@ -138,7 +138,7 @@ export default function Contact() {
             {/* Form */}
             <div className="lg:col-span-7">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-                <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">{tStr(COPY.formTitle, lang)}</h2>
+                <h2 className="text-2xl font-extrabold text-[#0A1230] mb-2">{tStr(COPY.formTitle, lang)}</h2>
                 <p className="text-gray-500 text-sm mb-8">{tStr(COPY.formSub, lang)}</p>
 
                 {submitted ? (
@@ -150,7 +150,7 @@ export default function Contact() {
                     <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-5">
                       <CheckCircle size={32} className="text-green-600" />
                     </div>
-                    <h3 className="text-xl font-bold text-[#0E2841] mb-2">{tStr(COPY.sent, lang)}</h3>
+                    <h3 className="text-xl font-bold text-[#0A1230] mb-2">{tStr(COPY.sent, lang)}</h3>
                     <p className="text-gray-500">{tStr(COPY.sentBody, lang)}</p>
                   </motion.div>
                 ) : (
@@ -164,7 +164,7 @@ export default function Contact() {
                           value={form.name}
                           onChange={(e) => setForm({ ...form, name: e.target.value })}
                           placeholder={tStr(COPY.fullNamePh, lang)}
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#156082] focus:ring-1 focus:ring-[#156082] transition-colors"
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#5B7CFF] focus:ring-1 focus:ring-[#5B7CFF] transition-colors"
                         />
                       </div>
                       <div>
@@ -175,7 +175,7 @@ export default function Contact() {
                           value={form.company}
                           onChange={(e) => setForm({ ...form, company: e.target.value })}
                           placeholder={tStr(COPY.companyPh, lang)}
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#156082] focus:ring-1 focus:ring-[#156082] transition-colors"
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#5B7CFF] focus:ring-1 focus:ring-[#5B7CFF] transition-colors"
                         />
                       </div>
                     </div>
@@ -188,7 +188,7 @@ export default function Contact() {
                           value={form.email}
                           onChange={(e) => setForm({ ...form, email: e.target.value })}
                           placeholder="work@company.com"
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#156082] focus:ring-1 focus:ring-[#156082] transition-colors"
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#5B7CFF] focus:ring-1 focus:ring-[#5B7CFF] transition-colors"
                         />
                       </div>
                       <div>
@@ -198,7 +198,7 @@ export default function Contact() {
                           value={form.phone}
                           onChange={(e) => setForm({ ...form, phone: e.target.value })}
                           placeholder="+971 ..."
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#156082] focus:ring-1 focus:ring-[#156082] transition-colors"
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#5B7CFF] focus:ring-1 focus:ring-[#5B7CFF] transition-colors"
                         />
                       </div>
                     </div>
@@ -208,7 +208,7 @@ export default function Contact() {
                         required
                         value={form.interest}
                         onChange={(e) => setForm({ ...form, interest: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#156082] focus:ring-1 focus:ring-[#156082] transition-colors text-gray-700"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#5B7CFF] focus:ring-1 focus:ring-[#5B7CFF] transition-colors text-gray-700"
                       >
                         <option value="" disabled>{tStr(COPY.interestPh, lang)}</option>
                         {interestAreas.map((area) => <option key={area}>{area}</option>)}
@@ -222,12 +222,12 @@ export default function Contact() {
                         value={form.message}
                         onChange={(e) => setForm({ ...form, message: e.target.value })}
                         placeholder={tStr(COPY.messagePh, lang)}
-                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#156082] focus:ring-1 focus:ring-[#156082] transition-colors resize-none"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#5B7CFF] focus:ring-1 focus:ring-[#5B7CFF] transition-colors resize-none"
                       />
                     </div>
                     <button
                       type="submit"
-                      className="w-full flex items-center justify-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold py-3.5 rounded-xl transition-colors"
+                      className="w-full flex items-center justify-center gap-2 bg-[#C45BB8] hover:bg-[#A04A99] text-white font-bold py-3.5 rounded-xl transition-colors"
                     >
                       {tStr(COPY.sendMsg, lang)} <Send size={16} />
                     </button>
@@ -240,7 +240,7 @@ export default function Contact() {
             {/* Info */}
             <div className="lg:col-span-5 space-y-6">
               <div>
-                <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">{tStr(COPY.officesTitle, lang)}</h2>
+                <h2 className="text-2xl font-extrabold text-[#0A1230] mb-2">{tStr(COPY.officesTitle, lang)}</h2>
                 <p className="text-gray-500 text-sm">{tStr(COPY.officesSub, lang)}</p>
               </div>
 
@@ -250,28 +250,28 @@ export default function Contact() {
                   initial={{ opacity: 0, y: 15 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  className={`p-5 rounded-xl border ${office.primary ? "border-[#156082]/30 bg-[#156082]/5" : "border-gray-100 bg-white"}`}
+                  className={`p-5 rounded-xl border ${office.primary ? "border-[#5B7CFF]/30 bg-[#5B7CFF]/5" : "border-gray-100 bg-white"}`}
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <MapPin size={15} className="text-[#F5A623]" />
-                    <span className="font-bold text-[#0E2841]">{office.city}, {office.country}</span>
-                    {office.primary && <span className="text-xs font-semibold text-[#156082] bg-[#156082]/10 px-2 py-0.5 rounded-full">{tStr(COPY.mainOffice, lang)}</span>}
+                    <MapPin size={15} className="text-[#C45BB8]" />
+                    <span className="font-bold text-[#0A1230]">{office.city}, {office.country}</span>
+                    {office.primary && <span className="text-xs font-semibold text-[#5B7CFF] bg-[#5B7CFF]/10 px-2 py-0.5 rounded-full">{tStr(COPY.mainOffice, lang)}</span>}
                   </div>
                   <p className="text-sm text-gray-600 whitespace-pre-line pl-5 mb-1.5">{office.address}</p>
                   <div className="flex items-center gap-1.5 pl-5">
                     <Phone size={12} className="text-gray-400" />
-                    <a href={`tel:${office.phone.replace(/\s/g, "")}`} className="text-sm text-gray-500 hover:text-[#156082] transition-colors">{office.phone}</a>
+                    <a href={`tel:${office.phone.replace(/\s/g, "")}`} className="text-sm text-gray-500 hover:text-[#5B7CFF] transition-colors">{office.phone}</a>
                   </div>
                 </motion.div>
               ))}
 
               {/* Email */}
-              <div className="p-5 rounded-xl bg-[#0E2841] text-white">
+              <div className="p-5 rounded-xl bg-[#0A1230] text-white">
                 <div className="flex items-center gap-2 mb-2">
-                  <Mail size={15} className="text-[#F5A623]" />
+                  <Mail size={15} className="text-[#C45BB8]" />
                   <span className="font-bold">{tStr(COPY.emailDirect, lang)}</span>
                 </div>
-                <a href="mailto:info@maven-ai.com" className="text-[#F5A623] hover:text-white transition-colors text-sm">info@maven-ai.com</a>
+                <a href="mailto:info@cognirise.com" className="text-[#C45BB8] hover:text-white transition-colors text-sm">info@cognirise.com</a>
               </div>
             </div>
           </div>

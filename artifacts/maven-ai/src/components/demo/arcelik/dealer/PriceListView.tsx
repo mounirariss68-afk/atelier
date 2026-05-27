@@ -123,7 +123,7 @@ export default function PriceListView() {
           <button
             onClick={() => setActiveSub(null)}
             className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
-              activeSub === null ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              activeSub === null ? "bg-[#0A1230] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
             }`}
           >
             {t.subcategoryAll}
@@ -133,7 +133,7 @@ export default function PriceListView() {
               key={sub}
               onClick={() => setActiveSub(activeSub === sub ? null : sub)}
               className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
-                activeSub === sub ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                activeSub === sub ? "bg-[#0A1230] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
               }`}
             >
               {getSubcategoryLabel(sub, lang)}
@@ -147,7 +147,7 @@ export default function PriceListView() {
         <button
           onClick={() => setActiveTier(null)}
           className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
-            activeTier === null ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            activeTier === null ? "bg-[#0A1230] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
           }`}
         >
           {t.tierAll}
@@ -157,7 +157,7 @@ export default function PriceListView() {
             key={tier}
             onClick={() => setActiveTier(activeTier === tier ? null : tier)}
             className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-colors ${
-              activeTier === tier ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              activeTier === tier ? "bg-[#0A1230] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
             }`}
           >
             {getPriceTierLabel(tier, lang)}
@@ -193,7 +193,7 @@ export default function PriceListView() {
                     key={col.id}
                     onClick={() => ["name", "tsfPrice", "dealerCost", "margin", "specs"].includes(col.id) ? toggleSort(col.id) : undefined}
                     className={`px-4 py-3 text-[11px] font-semibold text-gray-500 text-left whitespace-nowrap ${
-                      ["name", "tsfPrice", "dealerCost", "margin", "specs"].includes(col.id) ? "cursor-pointer hover:text-[#0E2841]" : ""
+                      ["name", "tsfPrice", "dealerCost", "margin", "specs"].includes(col.id) ? "cursor-pointer hover:text-[#0A1230]" : ""
                     }`}
                   >
                     <span className="flex items-center gap-1">

@@ -16,17 +16,17 @@ export default function DgeHub() {
   const { lang, dir } = useLang();
   return (
     <div className="pt-20" dir={dir}>
-      <section className="bg-[#0E2841] py-20">
+      <section className="bg-[#0A1230] py-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-[#F5A623] font-semibold text-xs uppercase tracking-widest">
-            {tStr({ en: "DGE × Publicis Sapient × Maven AI", ar: "DGE × Publicis Sapient × Maven AI" }, lang)}
+          <p className="text-[#C45BB8] font-semibold text-xs uppercase tracking-widest">
+            {tStr({ en: "DGE × Publicis Sapient × Cognirise", ar: "DGE × Publicis Sapient × Cognirise" }, lang)}
           </p>
           <h1 className="text-3xl sm:text-5xl font-extrabold text-white mt-3 mb-2 leading-tight">
-            <span className="italic text-[#F5A623]">{tStr({ en: "DGE Effortless 2.0", ar: "DGE الجهد المنعدم 2.0" }, lang)}</span>
+            <span className="italic text-[#C45BB8]">{tStr({ en: "DGE Effortless 2.0", ar: "DGE الجهد المنعدم 2.0" }, lang)}</span>
             {" — "}
             {tStr({ en: "Agentic CX Demonstrator", ar: "عرض تجربة الذكاء الوكيلي" }, lang)}
           </h1>
-          <div className="border-l-4 border-[#F5A623] ps-4 max-w-[540px] mt-4">
+          <div className="border-l-4 border-[#C45BB8] ps-4 max-w-[540px] mt-4">
             <p className="text-base sm:text-lg text-gray-200 leading-relaxed">
               {tStr({
                 en: "Six self-contained agentic CX demos plug into one shared shell. Every consequential action is gated behind a labelled AUTHORIZE card naming the human committing to it. Every step is recorded against HAPA H1–H6 contracts and an immutable audit log.",
@@ -35,10 +35,10 @@ export default function DgeHub() {
             </p>
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/dge/about" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white text-sm font-bold underline underline-offset-4">
+            <Link href="/dge/about" className="inline-flex items-center gap-1.5 text-[#C45BB8] hover:text-white text-sm font-bold underline underline-offset-4">
               <Network size={14} /> {tStr({ en: "DGE Agent Ecosystem", ar: "منظومة وكلاء DGE" }, lang)}
             </Link>
-            <Link href="/dge/method" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white text-sm font-bold underline underline-offset-4">
+            <Link href="/dge/method" className="inline-flex items-center gap-1.5 text-[#C45BB8] hover:text-white text-sm font-bold underline underline-offset-4">
               <BookOpen size={14} /> {tStr({ en: "HAPA + Authority method", ar: "منهج HAPA والصلاحية" }, lang)}
             </Link>
           </div>

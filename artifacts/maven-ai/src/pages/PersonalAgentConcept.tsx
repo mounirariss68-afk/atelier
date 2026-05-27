@@ -1,5 +1,5 @@
 /**
- * Concept doc viewer for the Maven Personal Agent.
+ * Concept doc viewer for the Cognirise Personal Agent.
  *
  * The full 19-section concept doc lives at
  * `artifacts/maven-ai/docs/personal-ai-assistant/concept.md` so it is
@@ -27,9 +27,9 @@ const CONCEPT_BY_LANG: Record<Lang, string> = {
   tr: conceptMdTr,
 };
 const COPY = {
-  back: { en: "Back to Maven Personal Agent", ar: "العودة إلى مساعد Maven الشخصي", tr: "Maven Kişisel Ajan'a dön" },
+  back: { en: "Back to Cognirise Personal Agent", ar: "العودة إلى مساعد Cognirise الشخصي", tr: "Cognirise Kişisel Ajan'a dön" },
   badge: { en: "Concept doc", ar: "وثيقة المفهوم", tr: "Konsept belgesi" },
-  title: { en: "Maven Personal Agent — concept & research", ar: "مساعد Maven الشخصي — المفهوم والبحث", tr: "Maven Kişisel Ajan — konsept ve araştırma" },
+  title: { en: "Cognirise Personal Agent — concept & research", ar: "مساعد Cognirise الشخصي — المفهوم والبحث", tr: "Cognirise Kişisel Ajan — konsept ve araştırma" },
   blurb: {
     en: "The 19-section product brief behind the demo: the user it's for, the wedge against incumbents (Cedric, M365 Copilot Memory, ChatGPT Memory), the Personal Context Graph, the glass-box trust model, the autonomy ladder, the privacy-by-construction model, and the path from L1 to L4.",
     ar: "الموجز المكوّن من 19 قسماً وراء العرض: المستخدم المستهدف، الفارق عن المنافسين (Cedric وذاكرة M365 Copilot وذاكرة ChatGPT)، رسم السياق الشخصي، نموذج الثقة الشفّاف، سلّم الاستقلالية، الخصوصية بالتصميم، والمسار من L1 إلى L4.",
@@ -122,11 +122,11 @@ function renderMarkdown(md: string): React.ReactNode {
   return blocks.map((b, i) => {
     switch (b.kind) {
       case "h1":
-        return <h1 key={i} className="text-3xl md:text-4xl font-extrabold text-[#0E2841] mt-2 mb-5 leading-tight">{inline(b.lines[0])}</h1>;
+        return <h1 key={i} className="text-3xl md:text-4xl font-extrabold text-[#0A1230] mt-2 mb-5 leading-tight">{inline(b.lines[0])}</h1>;
       case "h2":
-        return <h2 key={i} className="text-xl md:text-2xl font-extrabold text-[#0E2841] mt-9 mb-3 leading-snug">{inline(b.lines[0])}</h2>;
+        return <h2 key={i} className="text-xl md:text-2xl font-extrabold text-[#0A1230] mt-9 mb-3 leading-snug">{inline(b.lines[0])}</h2>;
       case "h3":
-        return <h3 key={i} className="text-lg font-bold text-[#0E2841] mt-6 mb-2 leading-snug">{inline(b.lines[0])}</h3>;
+        return <h3 key={i} className="text-lg font-bold text-[#0A1230] mt-6 mb-2 leading-snug">{inline(b.lines[0])}</h3>;
       case "hr":
         return <hr key={i} className="my-6 border-gray-200" />;
       case "blockquote":
@@ -170,9 +170,9 @@ function inline(text: string): React.ReactNode {
     if (m.index > 0) out.push(rest.slice(0, m.index));
     const tok = m[0];
     if (tok.startsWith("`")) {
-      out.push(<code key={key++} className="px-1.5 py-0.5 rounded bg-gray-100 text-[0.92em] text-[#0E2841] font-mono">{tok.slice(1, -1)}</code>);
+      out.push(<code key={key++} className="px-1.5 py-0.5 rounded bg-gray-100 text-[0.92em] text-[#0A1230] font-mono">{tok.slice(1, -1)}</code>);
     } else if (tok.startsWith("**")) {
-      out.push(<strong key={key++} className="font-bold text-[#0E2841]">{tok.slice(2, -2)}</strong>);
+      out.push(<strong key={key++} className="font-bold text-[#0A1230]">{tok.slice(2, -2)}</strong>);
     } else if (tok.startsWith("*")) {
       out.push(<em key={key++}>{tok.slice(1, -1)}</em>);
     } else if (tok.startsWith("[")) {
@@ -180,7 +180,7 @@ function inline(text: string): React.ReactNode {
       if (linkMatch) {
         const [, label, href] = linkMatch;
         out.push(
-          <a key={key++} href={href} className="text-[#0F9ED5] underline hover:text-[#0E7BAF]" target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined}>
+          <a key={key++} href={href} className="text-[#5B7CFF] underline hover:text-[#0E7BAF]" target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined}>
             {label}
           </a>,
         );
@@ -217,7 +217,7 @@ export default function PersonalAgentConcept() {
   return (
     <div className="min-h-screen bg-white">
       {/* Hero */}
-      <section className="bg-gradient-to-br from-[#0E2841] via-[#091828] to-[#0E2841] text-white py-12">
+      <section className="bg-gradient-to-br from-[#0A1230] via-[#091828] to-[#0A1230] text-white py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link href="/marketplace/maven-personal-agent" className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-xs font-bold uppercase tracking-widest mb-4">
             <ArrowLeft size={12} className="rtl:rotate-180" />
@@ -233,7 +233,7 @@ export default function PersonalAgentConcept() {
             {tStr(COPY.blurb, lang)}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Link href="/demo/maven-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0E2841] font-bold text-xs hover:bg-[#c4b5fd]">
+            <Link href="/demo/maven-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]">
               <MessageSquare size={12} /> {tStr(COPY.openCockpit, lang)}
               <ExternalLink size={10} />
             </Link>
@@ -257,17 +257,17 @@ export default function PersonalAgentConcept() {
         {body}
 
         <hr className="my-10 border-gray-200" />
-        <div className="rounded-2xl bg-gradient-to-br from-[#a78bfa]/10 to-[#0F9ED5]/10 p-6 border border-[#a78bfa]/20">
+        <div className="rounded-2xl bg-gradient-to-br from-[#a78bfa]/10 to-[#5B7CFF]/10 p-6 border border-[#a78bfa]/20">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#a78bfa] mb-2">{tStr(COPY.outroKicker, lang)}</p>
-          <h3 className="text-xl font-extrabold text-[#0E2841] mb-2">{tStr(COPY.outroTitle, lang)}</h3>
+          <h3 className="text-xl font-extrabold text-[#0A1230] mb-2">{tStr(COPY.outroTitle, lang)}</h3>
           <p className="text-sm text-gray-700 leading-relaxed mb-4">
             {tStr(COPY.outroBody, lang)}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Link href="/demo/maven-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0E2841] font-bold text-xs hover:bg-[#c4b5fd]">
+            <Link href="/demo/maven-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]">
               <MessageSquare size={12} /> {tStr(COPY.openCockpit, lang)}
             </Link>
-            <Link href="/demo/maven-personal-agent/mind" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0E2841] text-white font-bold text-xs hover:bg-[#091828]">
+            <Link href="/demo/maven-personal-agent/mind" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0A1230] text-white font-bold text-xs hover:bg-[#091828]">
               <Brain size={12} /> {tStr(COPY.openMind, lang)}
             </Link>
           </div>

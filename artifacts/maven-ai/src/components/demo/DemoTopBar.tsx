@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import Logo from "@/components/Logo";
 
-const NAVY = "#0E2841";
+const NAVY = "#0A1230";
 const SEV_CRITICAL = "#E30613";
 const SEV_HIGH = "#F59E0B";
 const SEV_NEUTRAL = "#9CA3AF";
@@ -81,14 +81,14 @@ export interface DemoTopBarProps {
    *  active language so RTL chrome flips. Set false when the host already
    *  manages it (e.g. a parent provider). */
   manageDocumentDir?: boolean;
-  /** When true, hides the Maven AI logo and its trailing divider. Used by
+  /** When true, hides the Cognirise logo and its trailing divider. Used by
    *  demos that should read as a tenant-branded surface (e.g. Tasama agent
    *  ops). Other layout elements are unaffected. */
   hideLogo?: boolean;
 }
 
 /**
- * Standardised navy top bar shared by every Maven AI marketplace demo.
+ * Standardised navy top bar shared by every Cognirise marketplace demo.
  *
  * Layout (LTR; mirrored under RTL): back chevron → Maven logo → divider →
  * brand tag + platform title → optional action button → notifications bell
@@ -205,7 +205,7 @@ export default function DemoTopBar({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.96 }}
                 transition={{ duration: 0.12 }}
-                className={`absolute ${isAr ? "left-0" : "right-0"} top-12 w-[360px] bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden text-[#0E2841]`}
+                className={`absolute ${isAr ? "left-0" : "right-0"} top-12 w-[360px] bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden text-[#0A1230]`}
                 data-testid="panel-notifications"
               >
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">

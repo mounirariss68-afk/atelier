@@ -25,7 +25,7 @@ const PORTFOLIO = [
 const valueRealizationScenario: Scenario = {
   slug: "value-realization",
   toolTitle: { en: "Value Realization Tool", ar: "أداة تحقيق القيمة" },
-  accent: "#F5A623",
+  accent: "#C45BB8",
   description: {
     en: "A CFO-grade scoreboard for an enterprise AI portfolio. Watch four specialist agents, coordinated by an orchestrator, snapshot the book of work, score each initiative on the UVR rubric, name the leaking ones, and draft the board one-pager — pausing for the CFO before anything publishes.",
     ar: "لوحة قياس بمستوى المدير المالي لمحفظة ذكاء اصطناعي مؤسسية. شاهد أربعة وكلاء متخصصين بقيادة منسّق يلتقطون كتاب العمل، ويصنّفون كل مبادرة وفق منهج UVR، ويسمّون المبادرات المتسرّبة، ويصوغون صفحة المجلس — مع التوقف لطلب موافقة المدير المالي قبل أي نشر.",
@@ -41,14 +41,14 @@ const valueRealizationScenario: Scenario = {
       name: { en: "Portfolio Orchestrator", ar: "منسّق المحفظة" },
       role: { en: "Plans the run, dispatches specialists, gates the publish.", ar: "يخطّط الجولة ويوزّع المهام ويراقب النشر." },
       kind: "orchestrator",
-      color: "#F5A623",
+      color: "#C45BB8",
     },
     {
       id: "watcher",
       name: { en: "Portfolio Watcher", ar: "مراقب المحفظة" },
       role: { en: "Snapshots the book of work from ERP and project ledger.", ar: "يلتقط كتاب العمل من ERP وسجل المشاريع." },
       kind: "monitor",
-      color: "#156082",
+      color: "#5B7CFF",
     },
     {
       id: "scorer",
@@ -69,7 +69,7 @@ const valueRealizationScenario: Scenario = {
       name: { en: "CFO Narrator", ar: "كاتب ملخّص المدير المالي" },
       role: { en: "Drafts the printable board one-pager in CFO house style.", ar: "يصوغ صفحة المجلس بأسلوب المدير المالي." },
       kind: "drafter",
-      color: "#196B24",
+      color: "#8A5BD6",
     },
   ],
   tools: [
@@ -152,15 +152,15 @@ const valueRealizationScenario: Scenario = {
       label: { en: "Time to CFO readout", ar: "زمن إعداد إفادة المدير المالي" },
       initial: "—",
       source: {
-        en: "Maven AI delivery telemetry — 4 GCC pilots, 2025.",
-        ar: "قياسات تسليم Maven AI — 4 تجارب خليجية، 2025.",
+        en: "Cognirise delivery telemetry — 4 GCC pilots, 2025.",
+        ar: "قياسات تسليم Cognirise — 4 تجارب خليجية، 2025.",
       },
     },
   ],
   initialInbox: [
     {
       id: "kickoff",
-      source: { en: "scheduler@maven.ai", ar: "scheduler@maven.ai" },
+      source: { en: "scheduler@cognirise.com", ar: "scheduler@cognirise.com" },
       subject: { en: "Friday 17:00 — Weekly CFO read-out", ar: "الجمعة 17:00 — إفادة المدير المالي الأسبوعية" },
       preview: {
         en: "Run the value-realization workflow and prep a one-pager for Monday's board.",
@@ -168,7 +168,7 @@ const valueRealizationScenario: Scenario = {
       },
       receivedAt: "Fri 17:00",
       status: "new",
-      accent: "#F5A623",
+      accent: "#C45BB8",
     },
   ],
   initialWorkspace: [],

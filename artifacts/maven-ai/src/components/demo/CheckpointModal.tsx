@@ -35,13 +35,13 @@ export default function CheckpointModal({
             className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-4 bg-[#0E2841] flex items-center justify-between">
+            <div className="px-6 py-4 bg-[#0A1230] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#F5A623]/20 flex items-center justify-center">
-                  <UserCheck size={18} className="text-[#F5A623]" />
+                <div className="w-10 h-10 rounded-full bg-[#C45BB8]/20 flex items-center justify-center">
+                  <UserCheck size={18} className="text-[#C45BB8]" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8]">
                     {tStr({ en: "Human checkpoint", ar: "نقطة موافقة بشرية" }, lang)}
                   </p>
                   <p className="text-sm font-bold text-white">
@@ -60,12 +60,12 @@ export default function CheckpointModal({
             </div>
 
             <div className="p-6 space-y-5">
-              <h3 className="text-lg font-bold text-[#0E2841] leading-snug">
+              <h3 className="text-lg font-bold text-[#0A1230] leading-snug">
                 {tStr(checkpoint.question, lang)}
               </h3>
 
-              <div className="bg-[#F5A623]/10 border border-[#F5A623]/30 rounded-lg p-4 flex gap-3">
-                <Sparkles size={16} className="text-[#F5A623] flex-shrink-0 mt-0.5" />
+              <div className="bg-[#C45BB8]/10 border border-[#C45BB8]/30 rounded-lg p-4 flex gap-3">
+                <Sparkles size={16} className="text-[#C45BB8] flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-[#5A3000] leading-relaxed">
                   <p className="font-bold mb-1">
                     {tStr({ en: "Agent's reasoning", ar: "تفسير الوكيل" }, lang)}
@@ -82,15 +82,15 @@ export default function CheckpointModal({
                     onClick={() => onResolve(opt.id)}
                     className={`w-full text-left rtl:text-right px-4 py-3 rounded-lg border-2 transition-all flex items-center justify-between gap-3 ${
                       opt.recommended
-                        ? "border-[#156082] bg-[#156082]/5 hover:bg-[#156082]/10"
+                        ? "border-[#5B7CFF] bg-[#5B7CFF]/5 hover:bg-[#5B7CFF]/10"
                         : "border-gray-200 hover:border-gray-400 hover:bg-gray-50"
                     }`}
                   >
-                    <span className="text-sm font-semibold text-[#0E2841]">
+                    <span className="text-sm font-semibold text-[#0A1230]">
                       {tStr(opt.label, lang)}
                     </span>
                     {opt.recommended && (
-                      <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#156082] text-white flex-shrink-0">
+                      <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-[#5B7CFF] text-white flex-shrink-0">
                         {tStr({ en: "Recommended", ar: "موصى به" }, lang)}
                       </span>
                     )}

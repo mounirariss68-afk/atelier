@@ -19,10 +19,10 @@ import { useLang, tStr } from "@/lib/lang";
 import { useToast } from "@/hooks/use-toast";
 
 const STATUS_META = {
-  new: { icon: Mail, color: "#156082", label: { en: "New", ar: "جديد" } },
+  new: { icon: Mail, color: "#5B7CFF", label: { en: "New", ar: "جديد" } },
   "in-progress": {
     icon: Clock,
-    color: "#F5A623",
+    color: "#C45BB8",
     label: { en: "In progress", ar: "قيد المعالجة" },
   },
   "awaiting-human": {
@@ -32,7 +32,7 @@ const STATUS_META = {
   },
   resolved: {
     icon: CheckCircle2,
-    color: "#196B24",
+    color: "#8A5BD6",
     label: { en: "Resolved", ar: "مكتمل" },
   },
 } as const;
@@ -47,11 +47,11 @@ const SEVERITY_META: Record<
     icon: AlertCircle,
   },
   warning: {
-    color: "#F5A623",
+    color: "#C45BB8",
     label: { en: "Warning", ar: "تحذير" },
     icon: AlertTriangle,
   },
-  info: { color: "#156082", label: { en: "Info", ar: "معلومات" }, icon: Info },
+  info: { color: "#5B7CFF", label: { en: "Info", ar: "معلومات" }, icon: Info },
   new: { color: "#7C8A99", label: { en: "New", ar: "جديد" }, icon: Mail },
 };
 
@@ -133,7 +133,7 @@ function InboxRow({ item, scenario }: { item: InboxItem; scenario?: Scenario }) 
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-3 mb-1">
-          <p className="text-sm font-bold text-[#0E2841] truncate">
+          <p className="text-sm font-bold text-[#0A1230] truncate">
             {tStr(item.subject, lang)}
           </p>
           <span className="text-[10px] text-gray-400 flex-shrink-0">
@@ -179,7 +179,7 @@ function InboxRow({ item, scenario }: { item: InboxItem; scenario?: Scenario }) 
             <button
               type="button"
               onClick={handleAction}
-              className="ms-auto text-[11px] font-semibold text-[#156082] hover:text-white hover:bg-[#156082] inline-flex items-center gap-1 px-2.5 py-1 rounded border border-[#156082]/40 transition-colors md:opacity-0 md:group-hover:opacity-100"
+              className="ms-auto text-[11px] font-semibold text-[#5B7CFF] hover:text-white hover:bg-[#5B7CFF] inline-flex items-center gap-1 px-2.5 py-1 rounded border border-[#5B7CFF]/40 transition-colors md:opacity-0 md:group-hover:opacity-100"
             >
               {tStr(actionLabel, lang)}
               <ArrowRight size={12} className="rtl:rotate-180" />

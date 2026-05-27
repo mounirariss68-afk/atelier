@@ -68,7 +68,7 @@ export const PERSONA = {
 };
 
 export const BUSINESS_UNITS: BusinessUnit[] = [
-  { id: "bu-fs", name: { en: "Financial Services", ar: "الخدمات المالية" }, color: "#196B24" },
+  { id: "bu-fs", name: { en: "Financial Services", ar: "الخدمات المالية" }, color: "#8A5BD6" },
   { id: "bu-cust", name: { en: "Customer & Digital", ar: "العملاء والرقمي" }, color: "#3B82F6" },
   { id: "bu-ops", name: { en: "Operations & Supply", ar: "العمليات والإمداد" }, color: "#F59E0B" },
   { id: "bu-corp", name: { en: "Corporate Functions", ar: "الوظائف المؤسسية" }, color: "#8B5CF6" },

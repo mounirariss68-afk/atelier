@@ -103,19 +103,19 @@ export default function SimulatorView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
+        <h2 className="text-lg font-bold text-[#0A1230] flex items-center gap-2">
           <SlidersHorizontal size={20} /> {t.title}
         </h2>
         <div className="flex bg-gray-100 rounded-lg p-0.5 ml-auto">
           <button
             onClick={() => { setSimMode("product"); setPriceAdjust(0); setShowResults(false); }}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${simMode === "product" ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500"}`}
+            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${simMode === "product" ? "bg-white text-[#0A1230] shadow-sm" : "text-gray-500"}`}
           >
             {t.modeProduct}
           </button>
           <button
             onClick={() => { setSimMode("category"); setPriceAdjust(0); setShowResults(false); }}
-            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${simMode === "category" ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500"}`}
+            className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${simMode === "category" ? "bg-white text-[#0A1230] shadow-sm" : "text-gray-500"}`}
           >
             <Layers size={12} /> {t.modeCategory}
           </button>
@@ -248,7 +248,7 @@ export default function SimulatorView() {
               <span>+20%</span>
             </div>
 
-            <div className="mt-4 p-4 bg-gradient-to-r from-[#0E2841] to-[#1a3a5c] rounded-xl text-white text-center">
+            <div className="mt-4 p-4 bg-gradient-to-r from-[#0A1230] to-[#1B2755] rounded-xl text-white text-center">
               <p className="text-[10px] uppercase tracking-widest text-gray-400">{t.newPrice}</p>
               <p className="text-3xl font-extrabold">₺{newPrice.toLocaleString("tr-TR")}</p>
               <p className={`text-xs mt-1 ${marginDelta >= 0 ? "text-green-400" : "text-amber-400"}`}>
@@ -340,7 +340,7 @@ export default function SimulatorView() {
                 </button>
                 <button
                   onClick={() => toast({ title: t.toastSentToDealers, description: displayName })}
-                  className="flex-1 py-3 rounded-xl border-2 border-[#0E2841] text-[#0E2841] font-bold text-sm hover:bg-[#0E2841]/5 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 rounded-xl border-2 border-[#0A1230] text-[#0A1230] font-bold text-sm hover:bg-[#0A1230]/5 transition-colors flex items-center justify-center gap-2"
                 >
                   <Send size={16} /> {t.sendToDealers}
                 </button>
@@ -359,7 +359,7 @@ export default function SimulatorView() {
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mt-5">
                 <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
                   <Brain size={15} className="text-[#E30613]" />
-                  <h3 className="text-sm font-bold text-[#0E2841]">{t.agentScenarios}</h3>
+                  <h3 className="text-sm font-bold text-[#0A1230]">{t.agentScenarios}</h3>
                   <span className="text-[9px] font-bold bg-[#E30613] text-white px-1.5 py-0.5 rounded-full ml-auto">AI</span>
                 </div>
                 <div className="divide-y divide-gray-50">
@@ -388,7 +388,7 @@ export default function SimulatorView() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <h4 className="text-sm font-semibold text-[#0E2841] truncate">{rec.productName}</h4>
+                              <h4 className="text-sm font-semibold text-[#0A1230] truncate">{rec.productName}</h4>
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 ${rec.suggestedAdjustment > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                                 {rec.suggestedAdjustment > 0 ? "+" : ""}{rec.suggestedAdjustment}%
                               </span>

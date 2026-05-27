@@ -15,7 +15,7 @@ const types = ["All Types", "Report", "Research Report", "Perspective", "Opinion
 const COPY = {
   eyebrow: { en: "Insights", ar: "رؤى", tr: "İçgörüler" },
   heroTitle: { en: "Research, perspectives, and analysis.", ar: "أبحاث، وجهات نظر، وتحليل.", tr: "Araştırma, perspektif ve analiz." },
-  heroPara: { en: "Maven AI's team publishes original research and thought leadership on AI in the GCC — from governance frameworks to production deployment playbooks.", ar: "ينشر فريق Maven AI أبحاثاً أصلية وقيادة فكرية حول الذكاء الاصطناعي في الخليج — من أطر الحوكمة إلى أدلة النشر الإنتاجي.", tr: "Maven AI ekibi, Körfez'de AI üzerine özgün araştırmalar ve düşünce liderliği yayımlıyor — yönetişim çerçevelerinden üretim dağıtım kılavuzlarına kadar." },
+  heroPara: { en: "Cognirise's team publishes original research and thought leadership on AI in the GCC — from governance frameworks to production deployment playbooks.", ar: "ينشر فريق Cognirise أبحاثاً أصلية وقيادة فكرية حول الذكاء الاصطناعي في الخليج — من أطر الحوكمة إلى أدلة النشر الإنتاجي.", tr: "Cognirise ekibi, Körfez'de AI üzerine özgün araştırmalar ve düşünce liderliği yayımlıyor — yönetişim çerçevelerinden üretim dağıtım kılavuzlarına kadar." },
   featured: { en: "Featured", ar: "مميّز", tr: "Öne çıkan" },
   readNow: { en: "Read now", ar: "اقرأ الآن", tr: "Şimdi oku" },
   searchPlaceholder: { en: "Search insights...", ar: "ابحث في الرؤى...", tr: "İçgörülerde ara..." },
@@ -52,9 +52,9 @@ export default function Insights() {
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
-      <section className="bg-[#0E2841] py-20">
+      <section className="bg-[#0A1230] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">{tStr(COPY.eyebrow, lang)}</span>
+          <span className="text-[#C45BB8] font-semibold text-sm uppercase tracking-widest">{tStr(COPY.eyebrow, lang)}</span>
           <h1 className="text-5xl font-extrabold text-white mt-3 mb-4 max-w-3xl leading-tight">
             {tStr(COPY.heroTitle, lang)}
           </h1>
@@ -68,10 +68,10 @@ export default function Insights() {
       {featured && (
         <section className="py-12 bg-white border-b border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-xs font-bold text-[#F5A623] uppercase tracking-widest mb-5">{tStr(COPY.featured, lang)}</p>
+            <p className="text-xs font-bold text-[#C45BB8] uppercase tracking-widest mb-5">{tStr(COPY.featured, lang)}</p>
             <Link href={`/insights/${featured.slug}`}>
               <div className="group grid lg:grid-cols-5 gap-8 items-center report-card border border-gray-100 rounded-2xl overflow-hidden cursor-pointer hover:shadow-xl hover:border-transparent transition-all">
-                <div className="lg:col-span-2 h-72 lg:h-full bg-[#0E2841] relative overflow-hidden">
+                <div className="lg:col-span-2 h-72 lg:h-full bg-[#0A1230] relative overflow-hidden">
                   <img
                     src={featured.coverImage}
                     alt={insightTitle(featured, lang)}
@@ -82,19 +82,19 @@ export default function Insights() {
                 </div>
                 <div className="lg:col-span-3 p-8">
                   <div className="flex items-center gap-3 mb-4">
-                    <span className="text-xs font-bold px-3 py-1 rounded-full text-white" style={{ backgroundColor: categoryColors[featured.category] || "#156082" }}>
+                    <span className="text-xs font-bold px-3 py-1 rounded-full text-white" style={{ backgroundColor: categoryColors[featured.category] || "#5B7CFF" }}>
                       {insightTypeLabel(featured.type, lang)}
                     </span>
                     <span className="text-xs text-gray-400">{insightCategoryLabel(featured.category, lang)} · {insightDateLabel(featured.date, lang)}</span>
                   </div>
-                  <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4 group-hover:text-[#156082] transition-colors leading-snug">{insightTitle(featured, lang)}</h2>
+                  <h2 className="text-3xl font-extrabold text-[#0A1230] mb-4 group-hover:text-[#5B7CFF] transition-colors leading-snug">{insightTitle(featured, lang)}</h2>
                   <p className="text-gray-600 mb-6 leading-relaxed">{insightSummary(featured, lang)}</p>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-500">{featured.author}</p>
                       <p className="text-xs text-gray-400">{insightReadTimeLabel(featured, lang)}</p>
                     </div>
-                    <span className="inline-flex items-center gap-2 bg-[#0E2841] group-hover:bg-[#F5A623] text-white font-bold px-5 py-2.5 rounded-lg transition-colors text-sm">
+                    <span className="inline-flex items-center gap-2 bg-[#0A1230] group-hover:bg-[#C45BB8] text-white font-bold px-5 py-2.5 rounded-lg transition-colors text-sm">
                       {tStr(COPY.readNow, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                     </span>
                   </div>
@@ -116,8 +116,8 @@ export default function Insights() {
                   onClick={() => setActiveCategory(cat)}
                   className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
                     activeCategory === cat
-                      ? "bg-[#0E2841] text-white shadow-sm"
-                      : "bg-white border border-gray-200 text-gray-600 hover:border-[#0E2841] hover:text-[#0E2841]"
+                      ? "bg-[#0A1230] text-white shadow-sm"
+                      : "bg-white border border-gray-200 text-gray-600 hover:border-[#0A1230] hover:text-[#0A1230]"
                   }`}
                 >
                   {insightCategoryLabel(cat, lang)}
@@ -132,13 +132,13 @@ export default function Insights() {
                   placeholder={tStr(COPY.searchPlaceholder, lang)}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#156082] bg-white w-48"
+                  className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#5B7CFF] bg-white w-48"
                 />
               </div>
               <select
                 value={activeType}
                 onChange={(e) => setActiveType(e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#156082] bg-white text-gray-600"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#5B7CFF] bg-white text-gray-600"
               >
                 {types.map((tt) => <option key={tt} value={tt}>{insightTypeLabel(tt, lang)}</option>)}
               </select>
@@ -153,7 +153,7 @@ export default function Insights() {
           {filtered.length === 0 ? (
             <div className="text-center py-20">
               <p className="text-gray-400 text-lg">{tStr(COPY.noMatch, lang)}</p>
-              <button onClick={() => { setActiveCategory("All"); setActiveType("All Types"); setQuery(""); }} className="mt-4 text-[#156082] font-semibold hover:underline">
+              <button onClick={() => { setActiveCategory("All"); setActiveType("All Types"); setQuery(""); }} className="mt-4 text-[#5B7CFF] font-semibold hover:underline">
                 {tStr(COPY.clearFilters, lang)}
               </button>
             </div>
@@ -168,18 +168,18 @@ export default function Insights() {
                   className="report-card group bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm cursor-pointer hover:shadow-lg hover:border-transparent transition-all"
                 >
                   <Link href={`/insights/${insight.slug}`}>
-                    <div className="h-44 bg-[#0E2841] relative overflow-hidden">
+                    <div className="h-44 bg-[#0A1230] relative overflow-hidden">
                       <img
                         src={insight.coverImage}
                         alt={insightTitle(insight, lang)}
                         className="w-full h-full object-cover opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-500"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0E2841]/60 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#0A1230]/60 to-transparent" />
                       <div className="absolute bottom-3 left-3">
                         <span
                           className="text-xs font-bold px-2.5 py-1 rounded-full text-white"
-                          style={{ backgroundColor: categoryColors[insight.category] || "#156082" }}
+                          style={{ backgroundColor: categoryColors[insight.category] || "#5B7CFF" }}
                         >
                           {insightTypeLabel(insight.type, lang)}
                         </span>
@@ -187,17 +187,17 @@ export default function Insights() {
                     </div>
                     <div className="p-5">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-semibold" style={{ color: categoryColors[insight.category] || "#156082" }}>{insightCategoryLabel(insight.category, lang)}</span>
+                        <span className="text-xs font-semibold" style={{ color: categoryColors[insight.category] || "#5B7CFF" }}>{insightCategoryLabel(insight.category, lang)}</span>
                         <span className="text-gray-300 text-xs">·</span>
                         <span className="text-xs text-gray-400">{insightDateLabel(insight.date, lang)}</span>
                       </div>
-                      <h3 className="font-bold text-[#0E2841] text-sm leading-snug mb-2 group-hover:text-[#156082] transition-colors line-clamp-3">
+                      <h3 className="font-bold text-[#0A1230] text-sm leading-snug mb-2 group-hover:text-[#5B7CFF] transition-colors line-clamp-3">
                         {insightTitle(insight, lang)}
                       </h3>
                       <p className="text-xs text-gray-500 leading-relaxed mb-3 line-clamp-2">{insightSummary(insight, lang)}</p>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-400">{insightReadTimeLabel(insight, lang)}</span>
-                        <span className="text-xs font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
+                        <span className="text-xs font-semibold text-[#5B7CFF] group-hover:text-[#C45BB8] transition-colors flex items-center gap-1">
                           {tStr(COPY.read, lang)} <ArrowRight size={12} className="rtl:-scale-x-100" />
                         </span>
                       </div>

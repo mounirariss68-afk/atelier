@@ -4,7 +4,7 @@ import { getDemoAccent } from "@workspace/maven-content";
 export const BRAND = getDemoAccent("citizen-services-concierge", "#5BA98A");
 export const BRAND_INK = "#1F4F3F";
 export const BRAND_MUTED = "#E8F2EC";
-export const NAVY = "#0E2841";
+export const NAVY = "#0A1230";
 export const CANVAS = "#F4F6F8";
 
 export const SEVERITY = {

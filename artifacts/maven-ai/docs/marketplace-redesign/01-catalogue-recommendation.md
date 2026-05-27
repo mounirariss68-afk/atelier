@@ -92,5 +92,5 @@ The build task should:
   market.
 
 The visitor leaves with a tighter, more credible catalogue and a
-clearer message: Maven AI builds orchestrator-led agent systems for
+clearer message: Cognirise builds orchestrator-led agent systems for
 specific, named GCC enterprise problems.

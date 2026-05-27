@@ -12,12 +12,12 @@ export type RecStatus = "pending" | "approved" | "rejected" | "edited";
 export interface ConsoleAgent { id: string; name: BiText; role: BiText; color: string; }
 
 export const CONSOLE_AGENTS: ConsoleAgent[] = [
-  { id: "orch",    name: { en: "Programme Conductor", ar: "موصّل البرنامج" },   role: { en: "Plans the run, gates the pack.",                                  ar: "يخطّط الجولة ويراقب العبوة." },                                color: "#156082" },
+  { id: "orch",    name: { en: "Programme Conductor", ar: "موصّل البرنامج" },   role: { en: "Plans the run, gates the pack.",                                  ar: "يخطّط الجولة ويراقب العبوة." },                                color: "#5B7CFF" },
   { id: "watcher", name: { en: "Slip Detector",       ar: "كاشف التأخّر" },     role: { en: "Pulls Jira / MS Project / Confluence events.",                    ar: "يجلب أحداث جيرا والمشاريع وConfluence." },                       color: "#5C8CA8" },
-  { id: "raid",    name: { en: "Evidence Compiler",   ar: "مُجمِّع الأدلة" },   role: { en: "Tags events as risk / assumption / issue / dependency.",          ar: "يصنّف الأحداث كمخاطرة/افتراض/مشكلة/اعتمادية." },                color: "#F5A623" },
+  { id: "raid",    name: { en: "Evidence Compiler",   ar: "مُجمِّع الأدلة" },   role: { en: "Tags events as risk / assumption / issue / dependency.",          ar: "يصنّف الأحداث كمخاطرة/افتراض/مشكلة/اعتمادية." },                color: "#C45BB8" },
   { id: "critic",  name: { en: "Dependency Critic",   ar: "ناقد الاعتماديات" }, role: { en: "Walks the dependency graph and flags downstream cascade impact.", ar: "يمشي في خريطة الاعتماديات ويرصد التأثير المتسلسل." },             color: "#E30613" },
   { id: "etc",     name: { en: "Decision Drafter",    ar: "كاتب القرارات" },    role: { en: "Recomputes ETC and drafts the decision options pack.",            ar: "يعيد حساب التقدير ويصوغ خيارات القرار." },                       color: "#5BA98A" },
-  { id: "drafter", name: { en: "Memo Writer",         ar: "كاتب المذكّرات" },   role: { en: "Drafts the Steerco breach memo in house style.",                  ar: "يصوغ مذكّرات اللجنة بأسلوب المؤسسة." },                          color: "#196B24" },
+  { id: "drafter", name: { en: "Memo Writer",         ar: "كاتب المذكّرات" },   role: { en: "Drafts the Steerco breach memo in house style.",                  ar: "يصوغ مذكّرات اللجنة بأسلوب المؤسسة." },                          color: "#8A5BD6" },
 ];
 
 export function consoleAgentById(id: string): ConsoleAgent | undefined {

@@ -83,7 +83,7 @@ export default function AgentCockpit({ scenario, state }: AgentCockpitProps) {
     <div className="bg-[#0A1F33] rounded-xl overflow-hidden border border-white/5">
       <div className="px-5 py-3 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[#F5A623] animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-[#C45BB8] animate-pulse" />
           <p className="text-[11px] font-bold uppercase tracking-widest text-white">
             {tStr({ en: "Agent cockpit", ar: "قمرة الوكلاء" }, lang)}
           </p>
@@ -102,7 +102,7 @@ export default function AgentCockpit({ scenario, state }: AgentCockpitProps) {
           className="h-full transition-all duration-300"
           style={{
             width: `${progressPct}%`,
-            background: progressPct >= 100 ? "#196B24" : "#156082",
+            background: progressPct >= 100 ? "#8A5BD6" : "#5B7CFF",
           }}
         />
         <span className="absolute right-2 -top-[1px] text-[9px] text-gray-300 font-mono leading-none">
@@ -182,7 +182,7 @@ function AgentLegendCell({ agent }: { agent: AgentDef }) {
         minHeight: isOrchestrator ? 80 : 64,
         paddingInlineStart: 16 + indent,
         background: isOrchestrator ? "rgba(245, 166, 35, 0.06)" : undefined,
-        borderInlineStart: isOrchestrator ? "2px solid #F5A623" : undefined,
+        borderInlineStart: isOrchestrator ? "2px solid #C45BB8" : undefined,
       }}
     >
       <span
@@ -191,7 +191,7 @@ function AgentLegendCell({ agent }: { agent: AgentDef }) {
       />
       <div className="min-w-0 flex-1">
         {isOrchestrator && (
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#F5A623] mb-0.5">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-[#C45BB8] mb-0.5">
             {tStr({ en: "Orchestrator", ar: "المنسّق" }, lang)}
           </p>
         )}
@@ -224,9 +224,9 @@ function CheckpointLegendCell({ checkpoint }: { checkpoint: SimCheckpoint }) {
         borderBottom: "1px dashed rgba(245, 166, 35, 0.45)",
       }}
     >
-      <UserCheck size={14} className="text-[#F5A623] mt-1.5 flex-shrink-0" />
+      <UserCheck size={14} className="text-[#C45BB8] mt-1.5 flex-shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-[#F5A623]">
+        <p className="text-[9px] font-bold uppercase tracking-widest text-[#C45BB8]">
           {tStr({ en: "Human checkpoint", ar: "نقطة بشرية" }, lang)}
         </p>
         <p className="text-[11px] font-semibold text-white leading-tight break-words">
@@ -291,7 +291,7 @@ function CheckpointSwimlane({
       }}
     >
       {decisionEvents.length === 0 && !pending && (
-        <span className="text-[10px] text-[#F5A623]/60 italic">
+        <span className="text-[10px] text-[#C45BB8]/60 italic">
           {tStr({ en: "Awaiting trigger", ar: "بانتظار التفعيل" }, lang)}
         </span>
       )}
@@ -299,16 +299,16 @@ function CheckpointSwimlane({
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="px-3 py-1.5 rounded-lg border border-[#F5A623] bg-[#F5A623]/15"
+          className="px-3 py-1.5 rounded-lg border border-[#C45BB8] bg-[#C45BB8]/15"
         >
-          <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8]">
             {tStr({ en: "Awaiting decision", ar: "بانتظار القرار" }, lang)}
           </span>
         </motion.div>
       )}
       <AnimatePresence initial={false}>
         {decisionEvents.map((e) => (
-          <EventChip key={e.id} event={e} accent="#F5A623" />
+          <EventChip key={e.id} event={e} accent="#C45BB8" />
         ))}
       </AnimatePresence>
     </div>
@@ -352,8 +352,8 @@ function StatusLegend() {
   const { lang } = useLang();
   const items: Array<{ color: string; label: { en: string; ar: string } }> = [
     { color: "#7C8A99", label: { en: "Idle", ar: "خامل" } },
-    { color: "#F5A623", label: { en: "Active", ar: "نشط" } },
-    { color: "#196B24", label: { en: "Complete", ar: "مكتمل" } },
+    { color: "#C45BB8", label: { en: "Active", ar: "نشط" } },
+    { color: "#8A5BD6", label: { en: "Complete", ar: "مكتمل" } },
     { color: "#D9534F", label: { en: "Error", ar: "خطأ" } },
   ];
   return (
@@ -384,7 +384,7 @@ function ReadyToRunCard({
       className="border-s border-white/5 bg-[#091828] p-4 overflow-y-auto"
       style={{ maxHeight: 480 }}
     >
-      <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-2">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-2">
         {tStr({ en: "Ready to Run", ar: "جاهز للتشغيل" }, lang)}
       </p>
       <p className="text-sm font-bold text-white mb-3 leading-snug">

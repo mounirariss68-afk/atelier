@@ -190,7 +190,7 @@ function ConsoleInner() {
       fab={fab}
       drawers={drawers}
       background="#F4F6F8"
-      textColor="#0E2841"
+      textColor="#0A1230"
       applyInterFont={false}
       height="min"
     >

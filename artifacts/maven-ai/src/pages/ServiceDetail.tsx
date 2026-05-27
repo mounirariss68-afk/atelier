@@ -43,8 +43,8 @@ export default function ServiceDetail() {
     return (
       <div className="pt-20 min-h-screen flex items-center justify-center" dir={dir}>
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#0E2841] mb-4">{tStr(COPY.notFound, lang)}</h1>
-          <Link href="/services" className="text-[#156082] font-semibold hover:underline">{tStr(COPY.backLink, lang)}</Link>
+          <h1 className="text-2xl font-bold text-[#0A1230] mb-4">{tStr(COPY.notFound, lang)}</h1>
+          <Link href="/services" className="text-[#5B7CFF] font-semibold hover:underline">{tStr(COPY.backLink, lang)}</Link>
         </div>
       </div>
     );
@@ -57,9 +57,9 @@ export default function ServiceDetail() {
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
-      <section className="bg-[#0E2841] py-24 relative overflow-hidden">
+      <section className="bg-[#0A1230] py-24 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
-          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #C45BB8 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link href="/services" className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm mb-8 transition-colors">
@@ -106,10 +106,10 @@ export default function ServiceDetail() {
           <div className="grid lg:grid-cols-12 gap-12">
             <div className="lg:col-span-7">
               <div className="section-divider" />
-              <h2 className="text-3xl font-extrabold text-[#0E2841] mb-6">{tStr(COPY.overview, lang)}</h2>
+              <h2 className="text-3xl font-extrabold text-[#0A1230] mb-6">{tStr(COPY.overview, lang)}</h2>
               <p className="text-gray-600 text-lg leading-relaxed mb-10">{serviceDescription(service, lang)}</p>
 
-              <h3 className="text-xl font-bold text-[#0E2841] mb-5">{tStr(COPY.useCases, lang)}</h3>
+              <h3 className="text-xl font-bold text-[#0A1230] mb-5">{tStr(COPY.useCases, lang)}</h3>
               <div className="space-y-4">
                 {service.useCases.map((_uc, i) => (
                   <motion.div
@@ -130,7 +130,7 @@ export default function ServiceDetail() {
             <div className="lg:col-span-5 space-y-6">
               {/* Engagement model */}
               <div className="bg-[#F8F9FA] rounded-2xl p-7">
-                <h3 className="text-lg font-bold text-[#0E2841] mb-5 flex items-center gap-2">
+                <h3 className="text-lg font-bold text-[#0A1230] mb-5 flex items-center gap-2">
                   <Clock size={18} style={{ color: service.color }} /> {tStr(COPY.engagementModel, lang)}
                 </h3>
                 <div className="space-y-4">
@@ -144,7 +144,7 @@ export default function ServiceDetail() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-[#0E2841] text-sm">{serviceEngagementField(service, "phase", i, lang)}</span>
+                          <span className="font-bold text-[#0A1230] text-sm">{serviceEngagementField(service, "phase", i, lang)}</span>
                           <span className="text-xs text-gray-400 font-medium">{serviceEngagementField(service, "duration", i, lang)}</span>
                         </div>
                         <p className="text-xs text-gray-600 leading-relaxed">{serviceEngagementField(service, "description", i, lang)}</p>
@@ -157,22 +157,22 @@ export default function ServiceDetail() {
               {/* Related insight */}
               {relatedInsight && (
                 <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                  <div className="h-36 bg-[#0E2841] relative overflow-hidden">
+                  <div className="h-36 bg-[#0A1230] relative overflow-hidden">
                     <img
                       src={relatedInsight.coverImage}
                       alt={insightTitle(relatedInsight, lang)}
                       className="w-full h-full object-cover opacity-60"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E2841]/80 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0A1230]/80 to-transparent" />
                     <div className="absolute bottom-3 left-4">
-                      <span className="text-xs font-bold text-white bg-[#F5A623] px-2 py-0.5 rounded">{tStr(COPY.relatedReport, lang)}</span>
+                      <span className="text-xs font-bold text-white bg-[#C45BB8] px-2 py-0.5 rounded">{tStr(COPY.relatedReport, lang)}</span>
                     </div>
                   </div>
                   <div className="p-5">
-                    <h4 className="font-bold text-[#0E2841] mb-2 text-sm leading-snug">{insightTitle(relatedInsight, lang)}</h4>
+                    <h4 className="font-bold text-[#0A1230] mb-2 text-sm leading-snug">{insightTitle(relatedInsight, lang)}</h4>
                     <p className="text-xs text-gray-500 mb-3">{insightReadTimeLabel(relatedInsight, lang)} · {insightDateLabel(relatedInsight.date, lang)}</p>
-                    <Link href={`/insights/${relatedInsight.slug}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#156082] hover:text-[#F5A623] transition-colors">
+                    <Link href={`/insights/${relatedInsight.slug}`} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#5B7CFF] hover:text-[#C45BB8] transition-colors">
                       {tStr(COPY.readReport, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                     </Link>
                   </div>
@@ -186,13 +186,13 @@ export default function ServiceDetail() {
       {/* Diagnostic CTA */}
       <section className="py-12 bg-gray-50 border-t border-gray-100">
         <div className="max-w-5xl mx-auto px-4">
-          <div className="bg-white border-2 border-[#0F9ED5]/30 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="bg-white border-2 border-[#5B7CFF]/30 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-[#0F9ED5] mb-1">{tStr(COPY.diagEyebrow, lang)}</p>
-              <h3 className="text-xl font-extrabold text-[#0E2841]">{tStr(COPY.diagTitlePrefix, lang)} {sTitle.toLowerCase()} {tStr(COPY.diagTitleSuffix, lang)}</h3>
+              <p className="text-xs font-bold uppercase tracking-widest text-[#5B7CFF] mb-1">{tStr(COPY.diagEyebrow, lang)}</p>
+              <h3 className="text-xl font-extrabold text-[#0A1230]">{tStr(COPY.diagTitlePrefix, lang)} {sTitle.toLowerCase()} {tStr(COPY.diagTitleSuffix, lang)}</h3>
               <p className="text-sm text-gray-600 mt-1">{tStr(COPY.diagSub, lang)}</p>
             </div>
-            <Link href="/assessments" className="flex-shrink-0 bg-[#0F9ED5] hover:bg-[#0E8BB8] text-white font-bold px-6 py-3 rounded-xl whitespace-nowrap inline-flex items-center gap-2">
+            <Link href="/assessments" className="flex-shrink-0 bg-[#5B7CFF] hover:bg-[#0E8BB8] text-white font-bold px-6 py-3 rounded-xl whitespace-nowrap inline-flex items-center gap-2">
               {tStr(COPY.diagBtn, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
             </Link>
           </div>
@@ -204,7 +204,7 @@ export default function ServiceDetail() {
         <div className="max-w-3xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-extrabold text-white mb-4">{tStr(COPY.ctaTitlePrefix, lang)} {sTitle}{tStr(COPY.ctaTitleSuffix, lang)}</h2>
           <p className="text-white/80 mb-8 text-lg">{tStr(COPY.ctaPara, lang)}</p>
-          <Link href="/contact" className="inline-flex items-center gap-2 bg-white text-[#0E2841] font-bold px-8 py-4 rounded-xl hover:bg-gray-100 transition-colors">
+          <Link href="/contact" className="inline-flex items-center gap-2 bg-white text-[#0A1230] font-bold px-8 py-4 rounded-xl hover:bg-gray-100 transition-colors">
             {tStr(COPY.ctaBtn, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
           </Link>
         </div>

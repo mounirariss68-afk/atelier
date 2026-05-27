@@ -1,8 +1,8 @@
 # Marketplace Tool Requirements (Task #24)
 
-This document is the per-tool research spec for every Maven AI marketplace
+This document is the per-tool research spec for every Cognirise marketplace
 tool. Each section names market analogs the buyer is likely to know,
-states the gap in the previous Maven implementation, gives a feasibility
+states the gap in the previous Cognirise implementation, gives a feasibility
 verdict for the agentic rebuild, and lists the acceptance criteria the
 demo must satisfy. The flagship Value Realization Tracker (VRT) sets
 the bar; every other tool meets the same shape.

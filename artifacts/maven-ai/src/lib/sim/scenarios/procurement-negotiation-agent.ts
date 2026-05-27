@@ -22,9 +22,9 @@ const procurementScenario: Scenario = {
   trigger: { en: "Najm Logistics counter-offer arrives 4 days before deadline.", ar: "وصول عرض مضادّ من نجم لوجستيكس قبل 4 أيام من الموعد." },
   agents: [
     { id: "orch", name: { en: "Negotiation Orchestrator", ar: "منسّق التفاوض" }, role: { en: "Sequences the analysts and gates outbound replies.", ar: "يرتّب المحلّلين ويراقب الردود الصادرة." }, kind: "orchestrator", color: "#D9534F" },
-    { id: "spend", name: { en: "Spend Analyst", ar: "محلّل الإنفاق" }, role: { en: "Triangulates the offer against historical spend.", ar: "يقارن العرض بالإنفاق التاريخي." }, kind: "specialist", color: "#156082" },
-    { id: "risk", name: { en: "Supplier-Risk Scorer", ar: "مصنّف مخاطر المورد" }, role: { en: "Scores supplier risk: financial, geopolitical, ESG.", ar: "يصنّف المخاطر: مالية وجيوسياسية واستدامة." }, kind: "scorer", color: "#F5A623" },
-    { id: "counter", name: { en: "Counter-Offer Drafter", ar: "كاتب العرض المضادّ" }, role: { en: "Drafts the counter and a fall-back position.", ar: "يصوغ العرض المضادّ وموقفاً احتياطياً." }, kind: "drafter", color: "#196B24" },
+    { id: "spend", name: { en: "Spend Analyst", ar: "محلّل الإنفاق" }, role: { en: "Triangulates the offer against historical spend.", ar: "يقارن العرض بالإنفاق التاريخي." }, kind: "specialist", color: "#5B7CFF" },
+    { id: "risk", name: { en: "Supplier-Risk Scorer", ar: "مصنّف مخاطر المورد" }, role: { en: "Scores supplier risk: financial, geopolitical, ESG.", ar: "يصنّف المخاطر: مالية وجيوسياسية واستدامة." }, kind: "scorer", color: "#C45BB8" },
+    { id: "counter", name: { en: "Counter-Offer Drafter", ar: "كاتب العرض المضادّ" }, role: { en: "Drafts the counter and a fall-back position.", ar: "يصوغ العرض المضادّ وموقفاً احتياطياً." }, kind: "drafter", color: "#8A5BD6" },
     { id: "coach", name: { en: "Negotiation Coach", ar: "مدرّب التفاوض" }, role: { en: "Critiques the draft, names the BATNA risk.", ar: "ينتقد المسودّة ويسمّي مخاطرة البديل." }, kind: "critic", color: "#5BA98A" },
   ],
   tools: [

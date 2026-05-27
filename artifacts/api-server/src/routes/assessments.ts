@@ -203,14 +203,14 @@ router.post("/submissions/:publicId/email", async (req, res) => {
     profile.language === "ar"
       ? `تقرير ${def.title.ar} الخاص بـ ${profile.name}`
       : profile.language === "tr"
-        ? `${profile.name} için Maven AI ${def.code} raporu`
-        : `Your Maven AI ${def.code} report`;
+        ? `${profile.name} için Cognirise ${def.code} raporu`
+        : `Your Cognirise ${def.code} report`;
   const html =
     profile.language === "ar"
-      ? `<p>عزيزي ${profile.name},</p><p>تجدون تقرير ${def.title.ar} (${row.tier}, ${row.overallScore}/5).</p><p><a href="${url}">عرض التقرير الكامل</a></p><p>— شراكة Maven AI</p>`
+      ? `<p>عزيزي ${profile.name},</p><p>تجدون تقرير ${def.title.ar} (${row.tier}, ${row.overallScore}/5).</p><p><a href="${url}">عرض التقرير الكامل</a></p><p>— شراكة Cognirise</p>`
       : profile.language === "tr"
-        ? `<p>Merhaba ${profile.name},</p><p>${trTitle} raporunuz hazır (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">Tam raporu görüntüle</a></p><p>— Maven AI ortaklığı</p>`
-        : `<p>Hi ${profile.name},</p><p>Your ${def.title.en} report is ready (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">View the full report</a></p><p>— The Maven AI partnership</p>`;
+        ? `<p>Merhaba ${profile.name},</p><p>${trTitle} raporunuz hazır (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">Tam raporu görüntüle</a></p><p>— Cognirise ortaklığı</p>`
+        : `<p>Hi ${profile.name},</p><p>Your ${def.title.en} report is ready (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">View the full report</a></p><p>— The Cognirise partnership</p>`;
   const sent = await sendEmail({ to: profile.email, subject, html });
   res.json(sent);
 });
@@ -234,7 +234,7 @@ router.post("/book-call", async (req, res) => {
   }
   const [row] = await db.insert(callRequestsTable).values(parsed.data).returning();
   await sendEmail({
-    to: process.env["FOUNDERS_EMAIL"] ?? "info@maven-ai.com",
+    to: process.env["FOUNDERS_EMAIL"] ?? "info@cognirise.com",
     subject: `New 30-min readout request — ${row.company}`,
     html: `<p><b>${row.name}</b> (${row.email}) at <b>${row.company}</b> requested a readout.</p>
 <p>Submission: ${row.submissionPublicId ?? "—"}<br/>Preferred: ${row.preferredTime ?? "—"}</p>

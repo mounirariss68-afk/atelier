@@ -24,11 +24,11 @@ const knowledgeScenario: Scenario = {
   trigger: { en: "CFO asks: 'What is our exposure to the EGP move on receivables?'", ar: "سؤال المدير المالي عن التعرّض لانخفاض الجنيه المصري على الذمم." },
   agents: [
     { id: "orch", name: { en: "Concierge Conductor", ar: "منسّق الكونسيرج" }, role: { en: "Plans the query and gates the answer.", ar: "يخطّط الاستعلام ويراقب الإجابة." }, kind: "orchestrator", color: "#5C8CA8" },
-    { id: "perm", name: { en: "Permission Filter", ar: "فلتر الصلاحيات" }, role: { en: "Filters sources by the asker's persona ACLs.", ar: "يفلتر المصادر حسب صلاحيات السائل." }, kind: "specialist", color: "#156082" },
-    { id: "ret", name: { en: "Semantic Retriever", ar: "المسترجِع الدلالي" }, role: { en: "Pulls candidate passages from the visible set.", ar: "يجلب مقاطع مرشّحة من المسموح." }, kind: "retriever", color: "#F5A623" },
+    { id: "perm", name: { en: "Permission Filter", ar: "فلتر الصلاحيات" }, role: { en: "Filters sources by the asker's persona ACLs.", ar: "يفلتر المصادر حسب صلاحيات السائل." }, kind: "specialist", color: "#5B7CFF" },
+    { id: "ret", name: { en: "Semantic Retriever", ar: "المسترجِع الدلالي" }, role: { en: "Pulls candidate passages from the visible set.", ar: "يجلب مقاطع مرشّحة من المسموح." }, kind: "retriever", color: "#C45BB8" },
     { id: "draft", name: { en: "Grounded Drafter", ar: "كاتب مؤصّل" }, role: { en: "Composes a defensible answer from passages.", ar: "يصوغ إجابة قابلة للدفاع." }, kind: "drafter", color: "#5BA98A" },
     { id: "audit", name: { en: "Citation Auditor", ar: "مدقّق الاستشهاد" }, role: { en: "Verifies every claim cites a real visible passage.", ar: "يتحقّق أن كل ادعاء يستشهد بمقطع مرئي." }, kind: "critic", color: "#D9534F" },
-    { id: "conf", name: { en: "Confidence Scorer", ar: "مصنّف الثقة" }, role: { en: "Rates answer confidence; refuses below threshold.", ar: "يصنّف الثقة ويرفض دون العتبة." }, kind: "scorer", color: "#196B24" },
+    { id: "conf", name: { en: "Confidence Scorer", ar: "مصنّف الثقة" }, role: { en: "Rates answer confidence; refuses below threshold.", ar: "يصنّف الثقة ويرفض دون العتبة." }, kind: "scorer", color: "#8A5BD6" },
   ],
   tools: [
     { name: "filter_acl", description: { en: "Reduces source set to those visible to the asker.", ar: "يحدّ المصادر إلى المرئي للسائل." } },
@@ -74,7 +74,7 @@ const knowledgeScenario: Scenario = {
     { id: "groundedness", label: { en: "Grounded answer rate", ar: "معدّل الإجابة المؤصّلة" }, initial: "—" },
     { id: "refusal", label: { en: "Defensible refusal rate", ar: "معدّل الرفض المُبرّر" }, initial: "—" },
     { id: "ttv", label: { en: "Time to answer", ar: "زمن الإجابة" }, initial: "—" },
-    { id: "leaks", label: { en: "Permission leaks", ar: "تسريبات الصلاحيات" }, initial: "0", source: { en: "Glean public benchmarks + Maven AI deployments, 2025.", ar: "مقاييس Glean وعمليات نشر Maven AI 2025." } },
+    { id: "leaks", label: { en: "Permission leaks", ar: "تسريبات الصلاحيات" }, initial: "0", source: { en: "Glean public benchmarks + Cognirise deployments, 2025.", ar: "مقاييس Glean وعمليات نشر Cognirise 2025." } },
   ],
   initialInbox: [
     {

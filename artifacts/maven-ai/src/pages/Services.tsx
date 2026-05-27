@@ -49,9 +49,9 @@ export default function Services() {
   const { lang, dir } = useLang();
   return (
     <div className="pt-20" dir={dir}>
-      <section className="bg-[#0E2841] py-20">
+      <section className="bg-[#0A1230] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">
+          <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[#C45BB8] font-semibold text-sm uppercase tracking-widest">
             {tStr(COPY.eyebrow, lang)}
           </motion.span>
           <motion.h1
@@ -66,10 +66,10 @@ export default function Services() {
             {tStr(COPY.introA, lang)} {tStr(COPY.introB, lang)}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <Link href="/marketplace" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+            <Link href="/marketplace" className="inline-flex items-center gap-1.5 text-[#C45BB8] hover:text-white font-semibold underline underline-offset-4">
               <Package size={14} /> {tStr(COPY.marketplaceLink, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
             </Link>
-            <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+            <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1.5 text-[#C45BB8] hover:text-white font-semibold underline underline-offset-4">
               {tStr(COPY.povLink, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
             </Link>
           </div>
@@ -101,13 +101,13 @@ export default function Services() {
                       {tStr(COPY.buyer, lang)}: {serviceBuyer(service, lang)}
                     </span>
                   </div>
-                  <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">{serviceTitle(service, lang)}</h2>
-                  <p className="text-[#156082] font-semibold text-sm mb-4">{serviceTagline(service, lang)}</p>
+                  <h2 className="text-2xl font-extrabold text-[#0A1230] mb-2">{serviceTitle(service, lang)}</h2>
+                  <p className="text-[#5B7CFF] font-semibold text-sm mb-4">{serviceTagline(service, lang)}</p>
                   <p className="text-gray-600 leading-relaxed mb-6">{serviceDescription(service, lang)}</p>
                   <div className="grid grid-cols-3 gap-4 mb-7">
                     {service.stats.map((stat, j) => (
                       <div key={j} className="text-center p-3 bg-gray-50 rounded-lg">
-                        <div className="font-bold text-[#0E2841] text-sm">{stat.value}</div>
+                        <div className="font-bold text-[#0A1230] text-sm">{stat.value}</div>
                         <div className="text-xs text-gray-500 mt-0.5 leading-tight">{serviceStatLabel(service, j, lang)}</div>
                       </div>
                     ))}
@@ -129,9 +129,9 @@ export default function Services() {
       {/* CTA */}
       <section className="py-20 bg-[#F8F9FA]">
         <div className="max-w-3xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4">{tStr(COPY.ctaTitle, lang)}</h2>
+          <h2 className="text-3xl font-extrabold text-[#0A1230] mb-4">{tStr(COPY.ctaTitle, lang)}</h2>
           <p className="text-gray-600 mb-8">{tStr(COPY.ctaPara, lang)}</p>
-          <Link href="/contact" className="inline-flex items-center gap-2 bg-[#F5A623] text-white font-bold px-8 py-4 rounded-xl hover:bg-[#d4622a] transition-colors">
+          <Link href="/contact" className="inline-flex items-center gap-2 bg-[#C45BB8] text-white font-bold px-8 py-4 rounded-xl hover:bg-[#A04A99] transition-colors">
             {tStr(COPY.ctaButton, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
           </Link>
         </div>

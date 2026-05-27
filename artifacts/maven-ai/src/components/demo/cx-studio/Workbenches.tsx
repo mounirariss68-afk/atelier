@@ -10,7 +10,7 @@ import type { Agent, ScenarioId } from "./data";
 
 const ACCENT = "#0E7C7B";
 const CORAL = "#F5715A";
-const INK = "#0E2841";
+const INK = "#0A1230";
 
 function Bar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
@@ -100,7 +100,7 @@ export default function Workbench({ agent, scenarioId = "falcon-sme" }: { agent:
                   <td className="py-1.5 ps-2">{t(p.name)}</td>
                   {p.scores.map((s, si) => (
                     <td key={si} className="py-1.5 text-center">
-                      <span className="inline-flex items-center justify-center w-9 h-6 rounded text-white text-[10px] font-bold" style={{ background: s >= 75 ? "#16A34A" : s >= 60 ? "#F5A623" : CORAL }}>{s}</span>
+                      <span className="inline-flex items-center justify-center w-9 h-6 rounded text-white text-[10px] font-bold" style={{ background: s >= 75 ? "#16A34A" : s >= 60 ? "#C45BB8" : CORAL }}>{s}</span>
                     </td>
                   ))}
                 </tr>
@@ -133,7 +133,7 @@ export default function Workbench({ agent, scenarioId = "falcon-sme" }: { agent:
               <div className="col-span-3 font-bold">{t(s.stage)}</div>
               <div className="col-span-3 text-slate-500">{t(s.channel)}</div>
               <div className="col-span-4">
-                <Bar value={s.friction} max={100} color={s.friction > 60 ? CORAL : s.friction > 35 ? "#F5A623" : ACCENT} />
+                <Bar value={s.friction} max={100} color={s.friction > 60 ? CORAL : s.friction > 35 ? "#C45BB8" : ACCENT} />
               </div>
               <div className="col-span-2 text-end font-bold" style={{ color: s.nps < 0 ? CORAL : ACCENT }}>NPS {s.nps > 0 ? `+${s.nps}` : s.nps}</div>
             </div>
@@ -256,7 +256,7 @@ export default function Workbench({ agent, scenarioId = "falcon-sme" }: { agent:
     case "cost-waterfall": {
       const max = Math.max(...COST_WATERFALL.map((c) => Math.abs(c.value)));
       return (
-        <div className="space-y-1.5">{COST_WATERFALL.map((c, i) => { const pct = (Math.abs(c.value) / max) * 100; const color = c.type === "base" ? "#0E2841" : c.type === "down" ? ACCENT : CORAL; return (<div key={i} className="grid grid-cols-12 items-center gap-2 text-[12px]"><div className="col-span-5 font-bold">{t(c.label)}</div><div className="col-span-5 h-3 bg-slate-100 rounded"><div className="h-full rounded" style={{ width: `${pct}%`, background: color }} /></div><div className="col-span-2 text-end font-mono">{c.value > 0 && c.type !== "base" ? "+" : ""}{c.value.toLocaleString()}</div></div>); })}<div className="text-[11px] text-slate-500 text-end mt-2">{tStr({ en: "AED per onboarded SME", ar: "درهم لكل شركة صغيرة", tr: "Onboarded KOBİ başına AED" }, lang)}</div></div>
+        <div className="space-y-1.5">{COST_WATERFALL.map((c, i) => { const pct = (Math.abs(c.value) / max) * 100; const color = c.type === "base" ? "#0A1230" : c.type === "down" ? ACCENT : CORAL; return (<div key={i} className="grid grid-cols-12 items-center gap-2 text-[12px]"><div className="col-span-5 font-bold">{t(c.label)}</div><div className="col-span-5 h-3 bg-slate-100 rounded"><div className="h-full rounded" style={{ width: `${pct}%`, background: color }} /></div><div className="col-span-2 text-end font-mono">{c.value > 0 && c.type !== "base" ? "+" : ""}{c.value.toLocaleString()}</div></div>); })}<div className="text-[11px] text-slate-500 text-end mt-2">{tStr({ en: "AED per onboarded SME", ar: "درهم لكل شركة صغيرة", tr: "Onboarded KOBİ başına AED" }, lang)}</div></div>
       );
     }
 

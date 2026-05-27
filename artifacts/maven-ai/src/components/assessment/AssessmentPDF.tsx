@@ -36,11 +36,11 @@ interface PDFArgs {
 }
 
 const colors = {
-  navy: "#0E2841",
-  teal: "#156082",
-  orange: "#F5A623",
-  cyan: "#0F9ED5",
-  green: "#196B24",
+  navy: "#0A1230",
+  teal: "#5B7CFF",
+  orange: "#C45BB8",
+  cyan: "#5B7CFF",
+  green: "#8A5BD6",
   light: "#F8FAFC",
   border: "#E5E7EB",
   text: "#1F2937",
@@ -91,10 +91,10 @@ const styles = StyleSheet.create({
 
 const tierColor: Record<string, string> = {
   Nascent: "#B91C1C",
-  Emerging: "#D97706",
-  Established: "#0F9ED5",
-  Advanced: "#156082",
-  Leading: colors.green,
+  Emerging: "#8A5BD6",
+  Established: "#5B7CFF",
+  Advanced: "#C45BB8",
+  Leading: "#FF7B5A",
 };
 
 function PDFRadar({ def, result }: { def: AssessmentDefinition; result: ScoreResult }) {
@@ -143,8 +143,8 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.brand}>MAVEN AI</Text>
-            <Text style={styles.brandSub}>A Maven Insights Company</Text>
+            <Text style={styles.brand}>Cognirise</Text>
+            <Text style={styles.brandSub}>Intelligence that elevates</Text>
           </View>
           <Text style={styles.pageTag}>{def.code} · {t({ en: "Diagnostic Report", ar: "تقرير تشخيصي" })}</Text>
         </View>
@@ -161,15 +161,15 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
           </View>
         </View>
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© {new Date().getFullYear()} Maven AI · Boutique AI advisory & engineering</Text>
-          <Text style={styles.footerText}>maven-ai.com · 1</Text>
+          <Text style={styles.footerText}>© {new Date().getFullYear()} Cognirise · Intelligence that elevates · Boutique AI advisory & engineering</Text>
+          <Text style={styles.footerText}>cognirise.com · 1</Text>
         </View>
       </Page>
 
       {/* MATURITY AT A GLANCE */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>MAVEN AI</Text>
+          <Text style={styles.brand}>Cognirise</Text>
           <Text style={styles.pageTag}>{def.code} · {t({ en: "Maturity at a glance", ar: "النضج بنظرة" })}</Text>
         </View>
         <Text style={[styles.h1, dirStyle]}>{t({ en: "The headline", ar: "العنوان الرئيسي" })}</Text>
@@ -228,32 +228,32 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© {new Date().getFullYear()} Maven AI</Text>
-          <Text style={styles.footerText}>maven-ai.com · 2</Text>
+          <Text style={styles.footerText}>© {new Date().getFullYear()} Cognirise</Text>
+          <Text style={styles.footerText}>cognirise.com · 2</Text>
         </View>
       </Page>
 
       {/* EXEC MEMO */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>MAVEN AI</Text>
+          <Text style={styles.brand}>Cognirise</Text>
           <Text style={styles.pageTag}>{t({ en: "Executive memo", ar: "مذكرة تنفيذية" })}</Text>
         </View>
-        <Text style={[styles.h1, dirStyle]}>{t({ en: "From the Maven AI partnership", ar: "من شراكة Maven AI" })}</Text>
+        <Text style={[styles.h1, dirStyle]}>{t({ en: "From the Cognirise partnership", ar: "من شراكة Cognirise" })}</Text>
         <View style={styles.divider} />
         {memo.split("\n\n").map((para, i) => (
           <Text key={i} style={[styles.memoText, dirStyle]}>{para}</Text>
         ))}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© {new Date().getFullYear()} Maven AI</Text>
-          <Text style={styles.footerText}>maven-ai.com · 3</Text>
+          <Text style={styles.footerText}>© {new Date().getFullYear()} Cognirise</Text>
+          <Text style={styles.footerText}>cognirise.com · 3</Text>
         </View>
       </Page>
 
       {/* ANTI-PATTERNS + COST OF INACTION */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>MAVEN AI</Text>
+          <Text style={styles.brand}>Cognirise</Text>
           <Text style={styles.pageTag}>{t({ en: "Risks · Cost of inaction", ar: "المخاطر · كلفة التقاعس" })}</Text>
         </View>
         <Text style={[styles.h1, dirStyle]}>{t({ en: "Anti-patterns we detected", ar: "الأنماط المضادة التي اكتشفناها" })}</Text>
@@ -289,15 +289,15 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
         <Text style={[styles.small, { marginTop: 6 }]}>{t({ en: "Estimates calibrated to your tier and revenue band. Conservative.", ar: "تقديرات معايرة لمستواك ونطاق إيراداتك. متحفظة." })}</Text>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© {new Date().getFullYear()} Maven AI</Text>
-          <Text style={styles.footerText}>maven-ai.com · 4</Text>
+          <Text style={styles.footerText}>© {new Date().getFullYear()} Cognirise</Text>
+          <Text style={styles.footerText}>cognirise.com · 4</Text>
         </View>
       </Page>
 
       {/* RECOMMENDATIONS + ANTI-VENDOR + FOUNDERS */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>MAVEN AI</Text>
+          <Text style={styles.brand}>Cognirise</Text>
           <Text style={styles.pageTag}>{t({ en: "Plan · Honesty · Partners", ar: "الخطة · الصراحة · الشركاء" })}</Text>
         </View>
 
@@ -325,8 +325,6 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
           {[
             { name: "Mounir Aris", title: "Senior Partner — Strategy" },
             { name: "Gokhan Guney", title: "Senior Partner — Engineering" },
-            { name: "Alper Kulak", title: "Senior Partner — Data & Governance" },
-            { name: "Khalid Al Khudairi", title: "Senior Partner — KSA Markets" },
           ].map((f) => (
             <View key={f.name} style={styles.founderCard}>
               <Text style={styles.founderName}>{f.name}</Text>
@@ -336,12 +334,12 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
         </View>
 
         <Text style={[styles.small, { marginTop: 14 }]}>
-          {t({ en: "Schedule a 30-minute readout with one of the founders at maven-ai.com/contact", ar: "احجز جلسة 30 دقيقة مع أحد المؤسسين عبر maven-ai.com/contact" })}
+          {t({ en: "Schedule a 30-minute readout with one of the founders at cognirise.com/contact", ar: "احجز جلسة 30 دقيقة مع أحد المؤسسين عبر cognirise.com/contact" })}
         </Text>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© {new Date().getFullYear()} Maven AI · {publicId}</Text>
-          <Text style={styles.footerText}>maven-ai.com · 5</Text>
+          <Text style={styles.footerText}>© {new Date().getFullYear()} Cognirise · {publicId}</Text>
+          <Text style={styles.footerText}>cognirise.com · 5</Text>
         </View>
       </Page>
     </Document>

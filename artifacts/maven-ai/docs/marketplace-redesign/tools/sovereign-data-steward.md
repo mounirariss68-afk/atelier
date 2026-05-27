@@ -11,7 +11,7 @@
 - UAE PDPL and the SDAIA / NDMO data classification regime require
   data residency, processing-purpose, and retention controls per
   classification tier [R2, R5].
-- Maven advisory engagements show new data products take
+- Cognirise advisory engagements show new data products take
   **6–10 weeks** from request to approved-and-running today [M2].
 - Buyer quote (representative, GCC ministry CDO):
   *"I cannot ship a product that even *might* breach residency. So

@@ -39,7 +39,7 @@ export default function CounterBidComposerView() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-[#0E2841]">{t.title[lang]}</h1>
+        <h1 className="text-2xl font-bold text-[#0A1230]">{t.title[lang]}</h1>
         <p className="text-sm text-gray-500 mt-1">{t.subtitle[lang]}</p>
       </header>
 
@@ -57,7 +57,7 @@ export default function CounterBidComposerView() {
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase" style={{ background: `${a.color}1A`, color: a.color }}>{isAr ? a.nameAr : a.nameEn}</span>
                   {sStat === "sent" && <span className="text-[10px] font-bold text-emerald-700 ms-auto">✓</span>}
                 </div>
-                <p className="text-[12px] font-bold text-[#0E2841] line-clamp-2">{isAr ? d.subjectAr : d.subjectEn}</p>
+                <p className="text-[12px] font-bold text-[#0A1230] line-clamp-2">{isAr ? d.subjectAr : d.subjectEn}</p>
                 <p className="text-[11px] text-gray-500 mt-1">{isAr ? s.nameAr : s.nameEn}</p>
               </button>
             );
@@ -68,12 +68,12 @@ export default function CounterBidComposerView() {
         <section className="bg-white border border-gray-200 rounded-xl">
           <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
             <Sparkles size={14} style={{ color: agent.color }} />
-            <span className="text-[11px] text-gray-500">{t.draftedBy[lang]}: <span className="font-semibold text-[#0E2841]">{isAr ? agent.nameAr : agent.nameEn}</span></span>
+            <span className="text-[11px] text-gray-500">{t.draftedBy[lang]}: <span className="font-semibold text-[#0A1230]">{isAr ? agent.nameAr : agent.nameEn}</span></span>
           </div>
           <div className="px-5 py-4 space-y-3">
             <div>
               <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">{t.to[lang]}</label>
-              <div className="text-sm text-[#0E2841] font-semibold mt-1">{isAr ? sup.nameAr : sup.nameEn} · {sup.code}</div>
+              <div className="text-sm text-[#0A1230] font-semibold mt-1">{isAr ? sup.nameAr : sup.nameEn} · {sup.code}</div>
             </div>
             <div>
               <label className="text-[10px] uppercase tracking-wider font-bold text-gray-500">{t.subject[lang]}</label>

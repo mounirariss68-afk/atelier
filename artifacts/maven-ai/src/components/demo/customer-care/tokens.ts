@@ -1,9 +1,9 @@
 import { getDemoAccent } from "@workspace/maven-content";
 
-export const BRAND = getDemoAccent("customer-care-hive", "#0F9ED5");
+export const BRAND = getDemoAccent("customer-care-hive", "#5B7CFF");
 export const BRAND_DARK = "#0B7AA5";
 export const BRAND_MUTED = "#DCEFF8";
-export const BRAND_INK = "#0E2841";
+export const BRAND_INK = "#0A1230";
 export const ACCENT_AI = "#8B5CF6";
 export const ACCENT_AMBER = "#F59E0B";
 export const ACCENT_RED = "#E30613";

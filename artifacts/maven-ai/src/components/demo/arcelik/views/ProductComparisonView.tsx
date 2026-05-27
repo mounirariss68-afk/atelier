@@ -413,14 +413,14 @@ export default function ProductComparisonView({
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
+          <h2 className="text-lg font-bold text-[#0A1230] flex items-center gap-2">
             <GitCompareArrows size={20} /> {t.title}
           </h2>
           <p className="text-[11px] text-gray-500 mt-0.5">{t.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-gray-500">
-            <span className="font-bold text-[#0E2841]">{selectedItems.length}</span>/{MAX_SELECTED} {t.selected}
+            <span className="font-bold text-[#0A1230]">{selectedItems.length}</span>/{MAX_SELECTED} {t.selected}
           </span>
           {selectedItems.length > 0 && (
             <button
@@ -437,7 +437,7 @@ export default function ProductComparisonView({
         {/* Selector */}
         <aside className="bg-white rounded-xl border border-gray-200 p-3 flex flex-col h-[calc(100vh-220px)] min-h-[460px]">
           <div className="space-y-2 flex-shrink-0">
-            <p className="text-[12px] font-bold text-[#0E2841]">{t.selectorTitle}</p>
+            <p className="text-[12px] font-bold text-[#0A1230]">{t.selectorTitle}</p>
             <p className="text-[10px] text-gray-500 leading-snug">{t.selectorHint}</p>
 
             <div className="relative mt-2">
@@ -447,7 +447,7 @@ export default function ProductComparisonView({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t.searchPlaceholder}
-                className="w-full pl-7 pr-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0E2841]"
+                className="w-full pl-7 pr-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0A1230]"
               />
             </div>
 
@@ -458,7 +458,7 @@ export default function ProductComparisonView({
                   onClick={() => setFilterKind(k)}
                   className={`px-2 py-1 text-[10px] rounded-md font-medium transition-colors flex-1 ${
                     filterKind === k
-                      ? "bg-[#0E2841] text-white"
+                      ? "bg-[#0A1230] text-white"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
@@ -470,7 +470,7 @@ export default function ProductComparisonView({
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value as ProductCategory | "all")}
-              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0E2841]"
+              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0A1230]"
             >
               <option value="all">{t.filterAll}</option>
               {(Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((c) => (
@@ -483,7 +483,7 @@ export default function ProductComparisonView({
               onChange={(e) =>
                 setFilterTier(e.target.value as "all" | "entry" | "mid" | "premium")
               }
-              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0E2841]"
+              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0A1230]"
             >
               <option value="all">{t.filterTierAll}</option>
               {(["entry", "mid", "premium"] as const).map((tier) => (
@@ -496,7 +496,7 @@ export default function ProductComparisonView({
             <select
               value={filterBrand}
               onChange={(e) => setFilterBrand(e.target.value)}
-              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0E2841]"
+              className="w-full px-2 py-1.5 text-[11px] border border-gray-200 rounded-lg focus:outline-none focus:border-[#0A1230]"
             >
               <option value="all">{t.filterBrandAll}</option>
               {availableBrands.map((b) => (
@@ -535,7 +535,7 @@ export default function ProductComparisonView({
                   >
                     <span
                       className={`mt-0.5 w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 ${
-                        isSelected ? "bg-[#0E2841] border-[#0E2841]" : "border-gray-300"
+                        isSelected ? "bg-[#0A1230] border-[#0A1230]" : "border-gray-300"
                       }`}
                     >
                       {isSelected && <Check size={9} className="text-white" />}
@@ -553,7 +553,7 @@ export default function ProductComparisonView({
                           {getCategoryLabel(it.category, lang)}
                         </span>
                       </div>
-                      <p className="font-semibold text-[#0E2841] truncate mt-0.5">{it.name}</p>
+                      <p className="font-semibold text-[#0A1230] truncate mt-0.5">{it.name}</p>
                       <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5">
                         <span className="truncate">{it.modelCode}</span>
                         <span className="ml-auto font-semibold text-gray-700">{fmt(it.price)}</span>
@@ -574,7 +574,7 @@ export default function ProductComparisonView({
           {selectedItems.length === 0 && (
             <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
               <GitCompareArrows size={36} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-sm font-bold text-[#0E2841]">{t.emptyTitle}</p>
+              <p className="text-sm font-bold text-[#0A1230]">{t.emptyTitle}</p>
               <p className="text-[12px] text-gray-500 mt-1">{t.emptySubtitle}</p>
             </div>
           )}
@@ -589,7 +589,7 @@ export default function ProductComparisonView({
             <>
               {/* Overview cards */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <h3 className="text-sm font-bold text-[#0E2841] mb-3">{t.overviewTitle}</h3>
+                <h3 className="text-sm font-bold text-[#0A1230] mb-3">{t.overviewTitle}</h3>
                 <div
                   className="grid gap-3"
                   style={{ gridTemplateColumns: `repeat(${selectedItems.length}, minmax(0, 1fr))` }}
@@ -624,7 +624,7 @@ export default function ProductComparisonView({
                             {getCategoryLabel(it.category, lang)}
                           </span>
                         </div>
-                        <p className="font-bold text-[12px] text-[#0E2841] leading-tight pr-4">
+                        <p className="font-bold text-[12px] text-[#0A1230] leading-tight pr-4">
                           {it.name}
                         </p>
                         <p className="text-[10px] text-gray-500 mt-0.5">{it.brand} · {it.modelCode}</p>
@@ -634,7 +634,7 @@ export default function ProductComparisonView({
                             {it.subcategory ? getSubcategoryLabel(it.subcategory, lang) : t.notAvailable}
                           </span>
                         </p>
-                        <p className="text-lg font-bold text-[#0E2841] mt-2">{fmt(it.price)}</p>
+                        <p className="text-lg font-bold text-[#0A1230] mt-2">{fmt(it.price)}</p>
                         <div className="flex flex-wrap items-center gap-1 mt-1.5">
                           <span
                             className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
@@ -702,7 +702,7 @@ export default function ProductComparisonView({
 
               {/* Feature matrix */}
               <div className="bg-white rounded-xl border border-gray-200 p-4 overflow-x-auto">
-                <h3 className="text-sm font-bold text-[#0E2841] mb-3">{t.matrixTitle}</h3>
+                <h3 className="text-sm font-bold text-[#0A1230] mb-3">{t.matrixTitle}</h3>
                 <table className="w-full text-left">
                   <thead>
                     <tr className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
@@ -846,7 +846,7 @@ export default function ProductComparisonView({
               {/* Per-feature matrix: union of features as rows, check/dash per item */}
               {featureUnion.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-4 overflow-x-auto">
-                  <h3 className="text-sm font-bold text-[#0E2841]">{t.perFeatureMatrixTitle}</h3>
+                  <h3 className="text-sm font-bold text-[#0A1230]">{t.perFeatureMatrixTitle}</h3>
                   <p className="text-[10px] text-gray-500 mt-0.5 mb-3">{t.perFeatureMatrixHint}</p>
                   <table className="w-full text-left">
                     <thead>
@@ -872,7 +872,7 @@ export default function ProductComparisonView({
                           <tr key={feature}>
                             <td
                               className={`px-3 py-2 text-[11px] border-t border-gray-100 ${
-                                isUniqueAdvantage ? "font-semibold text-[#0E2841]" : "text-gray-700"
+                                isUniqueAdvantage ? "font-semibold text-[#0A1230]" : "text-gray-700"
                               }`}
                             >
                               {feature}
@@ -921,7 +921,7 @@ export default function ProductComparisonView({
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Price position bar chart */}
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <h3 className="text-sm font-bold text-[#0E2841] mb-1">{t.priceChartTitle}</h3>
+                  <h3 className="text-sm font-bold text-[#0A1230] mb-1">{t.priceChartTitle}</h3>
                   <p className="text-[10px] text-gray-500 mb-2">{t.versusAvg} ({fmt(Math.round(Object.values(categoryAvgPrices).reduce((s, x) => s + x, 0) / Math.max(1, Object.keys(categoryAvgPrices).length)))})</p>
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -943,7 +943,7 @@ export default function ProductComparisonView({
 
                 {/* Value score bar chart */}
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <h3 className="text-sm font-bold text-[#0E2841] mb-1">{t.valueTitle}</h3>
+                  <h3 className="text-sm font-bold text-[#0A1230] mb-1">{t.valueTitle}</h3>
                   <p className="text-[10px] text-gray-500 mb-2">{t.valueHint}</p>
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -965,7 +965,7 @@ export default function ProductComparisonView({
 
               {/* Price history overlay */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <h3 className="text-sm font-bold text-[#0E2841] mb-3">{t.historyTitle}</h3>
+                <h3 className="text-sm font-bold text-[#0A1230] mb-3">{t.historyTitle}</h3>
                 {hasMeaningfulHistory ? (
                   <div className="h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">

@@ -152,9 +152,9 @@ export default function Marketplace() {
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
-      <section className="bg-[#0E2841] py-20">
+      <section className="bg-[#0A1230] py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <span className="text-[#F5A623] font-semibold text-sm uppercase tracking-widest">
+          <span className="text-[#C45BB8] font-semibold text-sm uppercase tracking-widest">
             {tStr(COPY.eyebrow, lang)}
           </span>
           <h1 className="text-4xl sm:text-5xl font-extrabold text-white mt-3 mb-5 max-w-3xl leading-tight">
@@ -164,10 +164,10 @@ export default function Marketplace() {
             {tStr(COPY.intro, lang)}
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <Link href="/services" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+            <Link href="/services" className="inline-flex items-center gap-1.5 text-[#C45BB8] hover:text-white font-semibold underline underline-offset-4">
               {tStr(COPY.servicesLink, lang)} <ArrowRight size={14} />
             </Link>
-            <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1.5 text-[#F5A623] hover:text-white font-semibold underline underline-offset-4">
+            <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1.5 text-[#C45BB8] hover:text-white font-semibold underline underline-offset-4">
               {tStr(COPY.povLink, lang)} <ArrowRight size={14} />
             </Link>
           </div>
@@ -190,15 +190,15 @@ export default function Marketplace() {
                   onClick={() => setActiveClass(active ? "all" : c.id)}
                   className={`text-start p-4 rounded-xl border transition-all ${
                     active
-                      ? "border-[#0E2841] bg-[#0E2841] text-white shadow-sm"
-                      : "border-gray-200 bg-white hover:border-[#0E2841] hover:shadow-sm"
+                      ? "border-[#0A1230] bg-[#0A1230] text-white shadow-sm"
+                      : "border-gray-200 bg-white hover:border-[#0A1230] hover:shadow-sm"
                   }`}
                 >
                   <div className="flex items-baseline justify-between gap-2 mb-1">
-                    <span className={`text-sm font-bold ${active ? "text-white" : "text-[#0E2841]"}`}>
+                    <span className={`text-sm font-bold ${active ? "text-white" : "text-[#0A1230]"}`}>
                       {tStr(c.title, lang)}
                     </span>
-                    <span className={`text-xs font-semibold ${active ? "text-[#F5A623]" : "text-gray-400"}`}>
+                    <span className={`text-xs font-semibold ${active ? "text-[#C45BB8]" : "text-gray-400"}`}>
                       {count}
                     </span>
                   </div>
@@ -225,8 +225,8 @@ export default function Marketplace() {
                 onClick={() => setActiveIndustry(id)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                   activeIndustry === id
-                    ? "bg-[#0E2841] text-white"
-                    : "bg-white border border-gray-200 text-gray-600 hover:border-[#0E2841] hover:text-[#0E2841]"
+                    ? "bg-[#0A1230] text-white"
+                    : "bg-white border border-gray-200 text-gray-600 hover:border-[#0A1230] hover:text-[#0A1230]"
                 }`}
               >
                 {id === "all" ? tStr(COPY.all, lang) : industryTitle(id)}
@@ -247,8 +247,8 @@ export default function Marketplace() {
                   onClick={() => setActiveHorizontal(id as HorizontalFilter)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                     activeHorizontal === id
-                      ? "bg-[#F5A623] text-white"
-                      : "bg-white border border-gray-200 text-gray-600 hover:border-[#F5A623] hover:text-[#F5A623]"
+                      ? "bg-[#C45BB8] text-white"
+                      : "bg-white border border-gray-200 text-gray-600 hover:border-[#C45BB8] hover:text-[#C45BB8]"
                   }`}
                 >
                   {label}
@@ -257,7 +257,7 @@ export default function Marketplace() {
             })}
             <button
               onClick={reset}
-              className="ms-auto text-xs font-semibold text-gray-500 hover:text-[#0E2841] underline decoration-dotted"
+              className="ms-auto text-xs font-semibold text-gray-500 hover:text-[#0A1230] underline decoration-dotted"
             >
               {tStr(COPY.reset, lang)}
             </button>
@@ -276,7 +276,7 @@ export default function Marketplace() {
               <p className="text-gray-400 text-base">{tStr(COPY.empty, lang)}</p>
               <button
                 onClick={reset}
-                className="mt-4 text-[#156082] font-semibold hover:underline text-sm"
+                className="mt-4 text-[#5B7CFF] font-semibold hover:underline text-sm"
               >
                 {tStr(COPY.reset, lang)}
               </button>
@@ -374,7 +374,7 @@ function ToolCard({
         </div>
 
         <div>
-          <h3 className={`font-extrabold text-[#0E2841] mb-2 ${featured ? "text-2xl" : "text-lg"}`}>
+          <h3 className={`font-extrabold text-[#0A1230] mb-2 ${featured ? "text-2xl" : "text-lg"}`}>
             {tStr(tool.title, lang)}
           </h3>
           <p className={`text-gray-600 leading-relaxed ${featured ? "text-base" : "text-sm"}`}>
@@ -383,7 +383,7 @@ function ToolCard({
         </div>
 
         <div className="text-xs text-gray-500 leading-relaxed">
-          <span className="font-semibold text-[#0E2841]">{tStr(COPY.buyer, lang)}: </span>
+          <span className="font-semibold text-[#0A1230]">{tStr(COPY.buyer, lang)}: </span>
           {tStr(tool.buyer, lang)}
         </div>
 

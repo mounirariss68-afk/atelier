@@ -33,7 +33,7 @@ export default function PersonaSwitcher({ personaId, onPersona, otherVariant, ac
             <button
               key={p.id}
               onClick={() => onPersona(p.id)}
-              className={`px-3 py-1.5 rounded-full font-bold transition-colors ${active ? "text-[#0E2841]" : "text-white/80 hover:text-white"}`}
+              className={`px-3 py-1.5 rounded-full font-bold transition-colors ${active ? "text-[#0A1230]" : "text-white/80 hover:text-white"}`}
               style={active ? { background: accent } : undefined}
             >
               {p.agentName} · {tStr(p.role, lang).split(" · ")[0]}

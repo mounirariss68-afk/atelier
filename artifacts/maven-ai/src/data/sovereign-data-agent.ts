@@ -8,7 +8,7 @@ export type RecStatus = "pending" | "approved" | "rejected" | "edited";
 export interface ConsoleAgent { id: string; name: BiText; role: BiText; color: string; }
 
 export const CONSOLE_AGENTS: ConsoleAgent[] = sovereignDataScenario.agents.map((a) => ({
-  id: a.id, name: a.name, role: a.role, color: a.color ?? "#0E2841",
+  id: a.id, name: a.name, role: a.role, color: a.color ?? "#0A1230",
 }));
 
 export function consoleAgentById(id: string): ConsoleAgent | undefined {

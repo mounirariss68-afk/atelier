@@ -53,12 +53,28 @@ interface Props {
 export default function AssessmentWizard({ def, teamToken }: Props) {
   const { lang, dir } = useLang();
   const [, navigate] = useLocation();
-  const storageKey = `maven-ai-wizard-${def.slug}`;
+  const storageKey = `cognirise-wizard-${def.slug}`;
+  const legacyStorageKey = `maven-ai-wizard-${def.slug}`;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const legacy = window.localStorage.getItem(legacyStorageKey);
+      if (legacy && !window.localStorage.getItem(storageKey)) {
+        window.localStorage.setItem(storageKey, legacy);
+      }
+      if (legacy) {
+        window.localStorage.removeItem(legacyStorageKey);
+      }
+    } catch {}
+  }, [storageKey, legacyStorageKey]);
 
   const [step, setStep] = useState<Step>("intro");
   const [profile, setProfile] = useState<ProfileInput>(() => {
     if (typeof window !== "undefined") {
-      const raw = window.localStorage.getItem(storageKey);
+      const raw =
+        window.localStorage.getItem(storageKey) ??
+        window.localStorage.getItem(legacyStorageKey);
       if (raw) {
         try {
           const p = JSON.parse(raw);
@@ -82,7 +98,9 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
 
   const [answers, setAnswers] = useState<Record<string, string>>(() => {
     if (typeof window !== "undefined") {
-      const raw = window.localStorage.getItem(storageKey);
+      const raw =
+        window.localStorage.getItem(storageKey) ??
+        window.localStorage.getItem(legacyStorageKey);
       if (raw) {
         try {
           const p = JSON.parse(raw);
@@ -175,7 +193,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
   return (
     <div dir={dir} className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Top bar */}
-      <div className="bg-[#0E2841] text-white">
+      <div className="bg-[#0A1230] text-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span
@@ -183,7 +201,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               style={{ backgroundColor: def.brandColor }}
             />
             <div>
-              <p className="text-xs uppercase tracking-widest text-[#0F9ED5] font-semibold">
+              <p className="text-xs uppercase tracking-widest text-[#5B7CFF] font-semibold">
                 {def.code}
               </p>
               <h1 className="text-base font-bold leading-tight">
@@ -212,7 +230,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25 }}
             >
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0E2841] leading-tight">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0A1230] leading-tight">
                 {tStr(def.subtitle, lang)}
               </h2>
               <p className="mt-4 text-lg text-gray-600 leading-relaxed">
@@ -233,7 +251,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                 />
               </div>
               <div className="mt-8 flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                <ShieldCheck size={16} className="text-[#196B24]" />
+                <ShieldCheck size={16} className="text-[#8A5BD6]" />
                 <span>
                   {tStr(
                     {
@@ -246,7 +264,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               </div>
               <button
                 onClick={() => setStep("profile")}
-                className="mt-10 inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-7 py-3.5 rounded-xl text-base shadow-lg transition"
+                className="mt-10 inline-flex items-center gap-2 bg-[#C45BB8] hover:bg-[#A04A99] text-white font-bold px-7 py-3.5 rounded-xl text-base shadow-lg transition"
                 data-testid="button-start-assessment"
               >
                 {tStr(ui.common.intro, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
@@ -262,7 +280,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25 }}
             >
-              <h2 className="text-2xl sm:text-3xl font-bold text-[#0E2841]">
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#0A1230]">
                 {tStr(ui.common.profileTitle, lang)}
               </h2>
               <p className="mt-2 text-sm text-gray-500">
@@ -280,7 +298,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     type="text"
                     value={profile.name}
                     onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082]"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF]"
                     data-testid="input-profile-name"
                   />
                 </Field>
@@ -289,7 +307,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     type="email"
                     value={profile.email}
                     onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082]"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF]"
                     data-testid="input-profile-email"
                   />
                 </Field>
@@ -298,7 +316,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     type="text"
                     value={profile.company}
                     onChange={(e) => setProfile({ ...profile, company: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082]"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF]"
                     data-testid="input-profile-company"
                   />
                 </Field>
@@ -307,7 +325,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     type="text"
                     value={profile.role}
                     onChange={(e) => setProfile({ ...profile, role: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082]"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF]"
                     data-testid="input-profile-role"
                   />
                 </Field>
@@ -315,7 +333,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   <select
                     value={profile.industry}
                     onChange={(e) => setProfile({ ...profile, industry: e.target.value as ProfileInput["industry"] })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082] bg-white"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF] bg-white"
                     data-testid="select-profile-industry"
                   >
                     {INDUSTRIES.map((i) => (
@@ -329,7 +347,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   <select
                     value={profile.country}
                     onChange={(e) => setProfile({ ...profile, country: e.target.value as ProfileInput["country"] })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082] bg-white"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF] bg-white"
                     data-testid="select-profile-country"
                   >
                     {COUNTRIES.map((c) => (
@@ -343,7 +361,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   <select
                     value={profile.revenueBand}
                     onChange={(e) => setProfile({ ...profile, revenueBand: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082] bg-white"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF] bg-white"
                     data-testid="select-profile-revenue"
                   >
                     {REVENUE_BANDS.map((b) => (
@@ -357,7 +375,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   <select
                     value={profile.employeeCountBand}
                     onChange={(e) => setProfile({ ...profile, employeeCountBand: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#156082] bg-white"
+                    className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#5B7CFF] bg-white"
                     data-testid="select-profile-employees"
                   >
                     {EMP_BANDS.map((b) => (
@@ -380,7 +398,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               <div className="mt-8 flex items-center justify-between">
                 <button
                   onClick={() => setStep("intro")}
-                  className="inline-flex items-center gap-2 text-gray-600 hover:text-[#0E2841] font-medium px-4 py-2 transition"
+                  className="inline-flex items-center gap-2 text-gray-600 hover:text-[#0A1230] font-medium px-4 py-2 transition"
                 >
                   <ArrowLeft size={16} className="rtl:-scale-x-100" /> {tStr(ui.common.back, lang)}
                 </button>
@@ -390,7 +408,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     setStep("questions");
                     setQIndex(0);
                   }}
-                  className="inline-flex items-center gap-2 bg-[#156082] hover:bg-[#0F4D6B] disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl transition"
+                  className="inline-flex items-center gap-2 bg-[#5B7CFF] hover:bg-[#3A5BCC] disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl transition"
                   data-testid="button-profile-next"
                 >
                   {tStr(ui.common.next, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
@@ -434,7 +452,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               <p className="text-xs text-gray-400 mb-6">
                 {tStr(ui.common.questionOf, lang).replace("{n}", String(qIndex + 1)).replace("{total}", String(visibleQuestions.length))}
               </p>
-              <h2 className="text-xl sm:text-2xl font-bold text-[#0E2841] leading-snug">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#0A1230] leading-snug">
                 {tStr(currentQ.q.prompt, lang)}
               </h2>
               <div className="mt-6 space-y-3">
@@ -446,15 +464,15 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                       onClick={() => setQAnswer(currentQ.q.id, opt.id)}
                       className={`w-full text-left border rounded-xl px-5 py-4 transition group ${
                         selected
-                          ? "border-[#156082] bg-blue-50 shadow-md"
-                          : "border-gray-200 hover:border-[#156082] hover:bg-blue-50/30"
+                          ? "border-[#5B7CFF] bg-blue-50 shadow-md"
+                          : "border-gray-200 hover:border-[#5B7CFF] hover:bg-blue-50/30"
                       }`}
                       data-testid={`option-${currentQ.q.id}-${opt.id}`}
                     >
                       <div className="flex items-start gap-3">
                         <span
                           className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            selected ? "border-[#156082] bg-[#156082]" : "border-gray-300"
+                            selected ? "border-[#5B7CFF] bg-[#5B7CFF]" : "border-gray-300"
                           }`}
                         >
                           {selected && <CheckCircle2 size={14} className="text-white" />}
@@ -474,7 +492,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                     if (qIndex > 0) setQIndex(qIndex - 1);
                     else setStep("profile");
                   }}
-                  className="inline-flex items-center gap-2 text-gray-600 hover:text-[#0E2841] font-medium px-4 py-2"
+                  className="inline-flex items-center gap-2 text-gray-600 hover:text-[#0A1230] font-medium px-4 py-2"
                 >
                   <ArrowLeft size={16} className="rtl:-scale-x-100" /> {tStr(ui.common.back, lang)}
                 </button>
@@ -482,7 +500,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   <button
                     disabled={!activeAnswers[currentQ.q.id]}
                     onClick={() => setQIndex(qIndex + 1)}
-                    className="inline-flex items-center gap-2 bg-[#156082] hover:bg-[#0F4D6B] disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl"
+                    className="inline-flex items-center gap-2 bg-[#5B7CFF] hover:bg-[#3A5BCC] disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl"
                     data-testid="button-next-question"
                   >
                     {tStr(ui.common.next, lang)} <ChevronRight size={16} className="rtl:-scale-x-100" />
@@ -493,7 +511,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                       setActiveUC(activeUC + 1);
                       setQIndex(0);
                     }}
-                    className="inline-flex items-center gap-2 bg-[#156082] hover:bg-[#0F4D6B] text-white font-semibold px-6 py-3 rounded-xl"
+                    className="inline-flex items-center gap-2 bg-[#5B7CFF] hover:bg-[#3A5BCC] text-white font-semibold px-6 py-3 rounded-xl"
                   >
                     {tStr({ en: "Next use case", ar: "الحالة التالية", tr: "Sonraki kullanım senaryosu" }, lang)} <ChevronRight size={16} className="rtl:-scale-x-100" />
                   </button>
@@ -505,13 +523,13 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                         setActiveUC(useCases.length);
                         setQIndex(0);
                       }}
-                      className="inline-flex items-center gap-2 bg-white border-2 border-[#156082] text-[#156082] font-semibold px-5 py-3 rounded-xl"
+                      className="inline-flex items-center gap-2 bg-white border-2 border-[#5B7CFF] text-[#5B7CFF] font-semibold px-5 py-3 rounded-xl"
                     >
                       + {tStr({ en: "Add another use case", ar: "أضف حالة أخرى", tr: "Başka bir kullanım senaryosu ekle" }, lang)}
                     </button>
                     <button
                       onClick={submit}
-                      className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-6 py-3 rounded-xl shadow-lg"
+                      className="inline-flex items-center gap-2 bg-[#C45BB8] hover:bg-[#A04A99] text-white font-bold px-6 py-3 rounded-xl shadow-lg"
                       data-testid="button-submit-assessment"
                     >
                       <Sparkles size={16} /> {tStr(ui.common.submit, lang)}
@@ -521,7 +539,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
                   <button
                     disabled={!activeAnswers[currentQ.q.id]}
                     onClick={submit}
-                    className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] disabled:opacity-50 text-white font-bold px-6 py-3 rounded-xl shadow-lg"
+                    className="inline-flex items-center gap-2 bg-[#C45BB8] hover:bg-[#A04A99] disabled:opacity-50 text-white font-bold px-6 py-3 rounded-xl shadow-lg"
                     data-testid="button-submit-assessment"
                   >
                     <Sparkles size={16} /> {tStr(ui.common.submit, lang)}
@@ -538,8 +556,8 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
               animate={{ opacity: 1 }}
               className="text-center py-16"
             >
-              <Loader2 className="mx-auto animate-spin text-[#156082]" size={48} />
-              <h3 className="mt-6 text-xl font-bold text-[#0E2841]">
+              <Loader2 className="mx-auto animate-spin text-[#5B7CFF]" size={48} />
+              <h3 className="mt-6 text-xl font-bold text-[#0A1230]">
                 {tStr(ui.common.finalize, lang)}
               </h3>
               <p className="mt-2 text-sm text-gray-500">
@@ -557,7 +575,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="border rounded-xl p-4 bg-white">
       <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="text-2xl font-bold text-[#0E2841] mt-1">{value}</p>
+      <p className="text-2xl font-bold text-[#0A1230] mt-1">{value}</p>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { OBLIGATIONS } from "@/data/sovereign-data-seed";
 import { BRAND, BRAND_INK } from "../tokens";
 
 const FRAMEWORK_COLORS: Record<string, string> = {
-  PDPL: "#0E2841", NDMO: "#156082", SDAIA: "#196B24",
+  PDPL: "#0A1230", NDMO: "#5B7CFF", SDAIA: "#8A5BD6",
 };
 
 export default function ObligationsRegisterView() {

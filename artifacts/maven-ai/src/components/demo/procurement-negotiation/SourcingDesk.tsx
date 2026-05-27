@@ -119,7 +119,7 @@ function SourcingDeskInner() {
         <div className="h-px bg-gray-100 mx-3 my-2" />
         <button
           onClick={() => setChatOpen(true)}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-[#0E2841] transition-colors"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-[#0A1230] transition-colors"
           style={{ borderInlineStartWidth: 3, borderInlineStartColor: "transparent", borderInlineStartStyle: "solid" }}
         >
           <Bot size={17} className="flex-shrink-0" />
@@ -146,7 +146,7 @@ function SourcingDeskInner() {
       sidebar={sidebar}
       drawers={drawers}
       background="#F4F6F8"
-      textColor="#0E2841"
+      textColor="#0A1230"
       height="min"
       applyInterFont={false}
     >

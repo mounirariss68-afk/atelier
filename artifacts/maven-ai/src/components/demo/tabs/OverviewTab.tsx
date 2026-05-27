@@ -11,16 +11,16 @@ export default function OverviewTab({ scenario }: Props) {
   return (
     <div className="space-y-6">
       <section className="bg-white border border-gray-200 rounded-xl p-6">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-2">
           {tStr({ en: "What this demo shows", ar: "ماذا يعرض هذا العرض" }, lang)}
         </p>
         <p className="text-base text-gray-700 leading-relaxed">
           {tStr(scenario.description, lang)}
         </p>
         <div className="mt-4 pt-4 border-t border-gray-100 flex items-start gap-3">
-          <Sparkles size={16} className="text-[#156082] flex-shrink-0 mt-0.5" />
+          <Sparkles size={16} className="text-[#5B7CFF] flex-shrink-0 mt-0.5" />
           <p className="text-sm text-gray-600 leading-relaxed">
-            <span className="font-bold text-[#0E2841]">
+            <span className="font-bold text-[#0A1230]">
               {tStr({ en: "Trigger:", ar: "المحفّز:" }, lang)}
             </span>{" "}
             {tStr(scenario.trigger, lang)}
@@ -30,7 +30,7 @@ export default function OverviewTab({ scenario }: Props) {
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card
-          icon={<Users size={16} className="text-[#156082]" />}
+          icon={<Users size={16} className="text-[#5B7CFF]" />}
           title={{ en: "Agent cast", ar: "فريق الوكلاء" }}
           count={scenario.agents.length}
         >
@@ -42,7 +42,7 @@ export default function OverviewTab({ scenario }: Props) {
                   style={{ background: a.color }}
                 />
                 <div>
-                  <span className="font-bold text-[#0E2841]">{tStr(a.name, lang)}</span>
+                  <span className="font-bold text-[#0A1230]">{tStr(a.name, lang)}</span>
                   <span className="text-gray-500"> — {tStr(a.role, lang)}</span>
                 </div>
               </li>
@@ -51,14 +51,14 @@ export default function OverviewTab({ scenario }: Props) {
         </Card>
 
         <Card
-          icon={<Wrench size={16} className="text-[#156082]" />}
+          icon={<Wrench size={16} className="text-[#5B7CFF]" />}
           title={{ en: "Tools the agents call", ar: "الأدوات التي يستدعيها الوكلاء" }}
           count={scenario.tools.length}
         >
           <ul className="space-y-2">
             {scenario.tools.map((t) => (
               <li key={t.name} className="text-sm">
-                <code className="font-mono font-bold text-[#156082]">{t.name}()</code>
+                <code className="font-mono font-bold text-[#5B7CFF]">{t.name}()</code>
                 <span className="text-gray-500"> — {tStr(t.description, lang)}</span>
               </li>
             ))}
@@ -66,14 +66,14 @@ export default function OverviewTab({ scenario }: Props) {
         </Card>
 
         <Card
-          icon={<GitBranch size={16} className="text-[#156082]" />}
+          icon={<GitBranch size={16} className="text-[#5B7CFF]" />}
           title={{ en: "Autonomous workflows", ar: "سير عمل ذاتي" }}
           count={scenario.workflows.length}
         >
           <ul className="space-y-3">
             {scenario.workflows.map((w) => (
               <li key={w.id}>
-                <p className="text-sm font-bold text-[#0E2841]">{tStr(w.name, lang)}</p>
+                <p className="text-sm font-bold text-[#0A1230]">{tStr(w.name, lang)}</p>
                 <p className="text-xs text-gray-500 leading-snug">
                   {tStr(w.description, lang)}
                 </p>
@@ -83,7 +83,7 @@ export default function OverviewTab({ scenario }: Props) {
         </Card>
 
         <Card
-          icon={<Target size={16} className="text-[#156082]" />}
+          icon={<Target size={16} className="text-[#5B7CFF]" />}
           title={{ en: "Performance Metrics", ar: "مؤشرات الأداء" }}
           count={scenario.kpis.length}
         >
@@ -91,7 +91,7 @@ export default function OverviewTab({ scenario }: Props) {
             {scenario.kpis.map((k) => (
               <li key={k.id} className="flex justify-between gap-3 text-sm">
                 <span className="text-gray-600">{tStr(k.label, lang)}</span>
-                <span className="font-bold font-mono text-[#0E2841]">{k.initial}</span>
+                <span className="font-bold font-mono text-[#0A1230]">{k.initial}</span>
               </li>
             ))}
           </ul>
@@ -118,7 +118,7 @@ function Card({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {icon}
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841]">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#0A1230]">
             {tStr(title, lang)}
           </p>
         </div>

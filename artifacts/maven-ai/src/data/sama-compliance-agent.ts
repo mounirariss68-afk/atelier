@@ -37,7 +37,7 @@ function agentMeta(id: string) {
   const a = samaScenario.agents.find((x) => x.id === id);
   return {
     name: a?.name ?? { en: id, ar: id },
-    color: a?.color ?? "#0E2841",
+    color: a?.color ?? "#0A1230",
   };
 }
 

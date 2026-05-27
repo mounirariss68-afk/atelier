@@ -12,19 +12,19 @@ export default function DgeAbout() {
   const { lang, dir } = useLang();
   return (
     <div className="pt-20" dir={dir}>
-      <section className="bg-[#0E2841] py-16">
+      <section className="bg-[#0A1230] py-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link href="/marketplace/dge-effortless" className="inline-flex items-center gap-1 text-[#F5A623] text-xs font-bold mb-4">
+          <Link href="/marketplace/dge-effortless" className="inline-flex items-center gap-1 text-[#C45BB8] text-xs font-bold mb-4">
             <ArrowLeft size={12} /> {tStr({ en: "Back to DGE hub", ar: "العودة إلى مركز DGE" }, lang)}
           </Link>
-          <p className="text-[#F5A623] font-semibold text-xs uppercase tracking-widest">
+          <p className="text-[#C45BB8] font-semibold text-xs uppercase tracking-widest">
             {tStr({ en: "DGE Agent Ecosystem", ar: "منظومة وكلاء DGE" }, lang)}
           </p>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white mt-3 mb-3">
             {tStr({ en: "Eight Agentic Factories", ar: "ثماني مصانع ذكاء وكيلي" }, lang)}{" "}
-            <span className="italic text-[#F5A623]">{tStr({ en: "— one shared shell.", ar: "— هيكل مشترك واحد." }, lang)}</span>
+            <span className="italic text-[#C45BB8]">{tStr({ en: "— one shared shell.", ar: "— هيكل مشترك واحد." }, lang)}</span>
           </h1>
-          <div className="border-l-4 border-[#F5A623] ps-4 max-w-[540px]">
+          <div className="border-l-4 border-[#C45BB8] ps-4 max-w-[540px]">
             <p className="text-base text-gray-200 leading-relaxed">
               {tStr({
                 en: "Every factory is a small team of named sentinels with a single promise. They share the DGE CX Hub system of record, the HAPA H1–H6 contract, and a sovereign Falcon-Arabic LLM running on Azure UAE-North via Core42.",

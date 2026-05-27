@@ -135,7 +135,7 @@ export default function Navbar() {
             <Link href="/marketplace" className={`nav-link text-sm font-medium transition-colors ${isActive("/marketplace") ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.marketplace)}
             </Link>
-            <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#C45BB8]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.diagnostics)}
             </Link>
           </nav>

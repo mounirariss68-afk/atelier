@@ -413,11 +413,11 @@ export interface Sme {
 }
 
 export const SMES: Sme[] = [
-  { id: "sme-khalid", name: { en: "Khalid Al-Mansouri", ar: "خالد المنصوري" }, role: { en: "Head of Bid Management", ar: "رئيس إدارة العطاءات" }, initials: "KM", color: "#196B24", load: 9 },
+  { id: "sme-khalid", name: { en: "Khalid Al-Mansouri", ar: "خالد المنصوري" }, role: { en: "Head of Bid Management", ar: "رئيس إدارة العطاءات" }, initials: "KM", color: "#8A5BD6", load: 9 },
   { id: "sme-noura", name: { en: "Noura Al-Salem", ar: "نورة السالم" }, role: { en: "Security & Compliance SME", ar: "خبير الأمن والامتثال" }, initials: "NS", color: "#5C8CA8", load: 6 },
   { id: "sme-faisal", name: { en: "Faisal Al-Otaibi", ar: "فيصل العتيبي" }, role: { en: "Solution Architect SME", ar: "خبير معمارية الحلول" }, initials: "FA", color: "#5BA98A", load: 11 },
-  { id: "sme-laila", name: { en: "Laila Hadid", ar: "ليلى حديد" }, role: { en: "Past-performance & Refs SME", ar: "خبير السوابق والمراجع" }, initials: "LH", color: "#F5A623", load: 4 },
-  { id: "sme-omar", name: { en: "Omar Al-Faraj", ar: "عمر الفرج" }, role: { en: "Pricing & Commercial SME", ar: "خبير التسعير" }, initials: "OF", color: "#156082", load: 5 },
+  { id: "sme-laila", name: { en: "Laila Hadid", ar: "ليلى حديد" }, role: { en: "Past-performance & Refs SME", ar: "خبير السوابق والمراجع" }, initials: "LH", color: "#C45BB8", load: 4 },
+  { id: "sme-omar", name: { en: "Omar Al-Faraj", ar: "عمر الفرج" }, role: { en: "Pricing & Commercial SME", ar: "خبير التسعير" }, initials: "OF", color: "#5B7CFF", load: 5 },
   { id: "sme-rana", name: { en: "Rana Khoury", ar: "رنا خوري" }, role: { en: "Legal SME", ar: "خبير قانوني" }, initials: "RK", color: "#D9534F", load: 3 },
 ];
 

@@ -16,7 +16,7 @@ export interface DemoLangToggleProps {
 
 /** Bilingual EN/AR toggle. Multiple visual variants cover the demos' styles. */
 export default function DemoLangToggle({
-  lang, setLang, variant = "sidebar-icon", accent = "#156082", ink = "#0E2841", collapsed = false, surface = "white",
+  lang, setLang, variant = "sidebar-icon", accent = "#5B7CFF", ink = "#0A1230", collapsed = false, surface = "white",
 }: DemoLangToggleProps) {
   const flip = () => setLang(lang === "en" ? "ar" : "en");
 

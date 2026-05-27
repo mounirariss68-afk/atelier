@@ -43,8 +43,8 @@ export default function CatalogueView({ onOpenProduct, onOpenView }: Props) {
   const tiles = [
     { icon: <Database size={16} />, label: t("kpiActive", catalogue), value: String(kpis.active), sub: t("kpiActiveSub", catalogue), tone: BRAND },
     { icon: <ClipboardCheck size={16} />, label: t("kpiPending", catalogue), value: String(kpis.pending), sub: t("kpiPendingSub", catalogue), tone: "#F59E0B" },
-    { icon: <Activity size={16} />, label: t("kpiLineage", catalogue), value: `${kpis.lineageAvg}%`, sub: t("kpiLineageSub", catalogue), tone: "#156082" },
-    { icon: <ShieldCheck size={16} />, label: t("kpiPdpl", catalogue), value: `${kpis.pdplPass}/${kpis.pdplTotal}`, sub: t("kpiPdplSub", catalogue), tone: "#196B24" },
+    { icon: <Activity size={16} />, label: t("kpiLineage", catalogue), value: `${kpis.lineageAvg}%`, sub: t("kpiLineageSub", catalogue), tone: "#5B7CFF" },
+    { icon: <ShieldCheck size={16} />, label: t("kpiPdpl", catalogue), value: `${kpis.pdplPass}/${kpis.pdplTotal}`, sub: t("kpiPdplSub", catalogue), tone: "#8A5BD6" },
     { icon: <Ban size={16} />, label: t("kpiBlocked", catalogue), value: String(kpis.blockedSinks), sub: t("kpiBlockedSub", catalogue), tone: "#D9534F" },
   ];
 
@@ -179,7 +179,7 @@ export default function CatalogueView({ onOpenProduct, onOpenView }: Props) {
               <div key={s.n} className={`bg-white border rounded-lg p-2 text-center ${i === 5 ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
                 <p className="text-[9px] uppercase font-bold text-gray-500">{s.n}</p>
                 <p className="text-[10px] font-semibold mt-0.5" style={{ color: BRAND_INK }}>{s.label}</p>
-                <p className="text-[9px] mt-0.5" style={{ color: i === 5 ? "#B45309" : "#196B24" }}>{i === 5 ? (lang === "ar" ? "بانتظار" : "pending") : "✓"}</p>
+                <p className="text-[9px] mt-0.5" style={{ color: i === 5 ? "#B45309" : "#8A5BD6" }}>{i === 5 ? (lang === "ar" ? "بانتظار" : "pending") : "✓"}</p>
               </div>
             ))}
           </div>

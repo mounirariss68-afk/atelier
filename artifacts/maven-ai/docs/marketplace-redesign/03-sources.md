@@ -73,20 +73,20 @@ exact numbers cannot be sourced, ranges are used and labelled
   windows, and qualification structures used in the Tender
   Response Studio.
 
-## Maven AI advisory benchmarks
+## Cognirise advisory benchmarks
 
-Where no public number exists, Maven AI uses internal advisory
+Where no public number exists, Cognirise uses internal advisory
 benchmarks from its own engagements with GCC operators, banks, and
-ministries. These are labelled "M-AI advisory benchmark" inline so
+ministries. These are labelled "Cognirise advisory benchmark" inline so
 the visitor can see they are internal estimates, not vendor claims.
 
-- **M1.** Maven AI advisory benchmark, *GCC tender response cycle
+- **M1.** Cognirise advisory benchmark, *GCC tender response cycle
   time and win-rate baselines* (internal; aggregated across 12
   operator and ministry engagements, 2023–2025).
-- **M2.** Maven AI advisory benchmark, *Programme leakage and value
+- **M2.** Cognirise advisory benchmark, *Programme leakage and value
   realisation in GCC megaprojects* (internal; aggregated across 8
   programmes, 2022–2025).
-- **M3.** Maven AI advisory benchmark, *Citizen-services bilingual
+- **M3.** Cognirise advisory benchmark, *Citizen-services bilingual
   case-mix and dialect coverage* (internal; aggregated across 5
   ministry contact-centre engagements, 2023–2025).
 
@@ -94,7 +94,7 @@ the visitor can see they are internal estimates, not vendor claims.
 
 - KPIs cite their source inline like `[S1]`, `[V2]`, `[R1]`.
 - Multiple sources are joined: `[S2, V3]`.
-- Maven advisory benchmarks are cited like `[M1]` and the UI must
-  surface them with the "M-AI advisory benchmark" label.
+- Cognirise advisory benchmarks are cited like `[M1]` and the UI must
+  surface them with the "Cognirise advisory benchmark" label.
 - Where a KPI is illustrative, the value is shown as a range
   (e.g. `25–35%`) and chipped with "illustrative".

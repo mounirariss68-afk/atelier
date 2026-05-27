@@ -16,7 +16,7 @@ export interface DemoPersonaPillProps {
 
 /** Round avatar + name + role used in the topbar/header of every demo. */
 export default function DemoPersonaPill({
-  initials, name, role, bg = "#156082", fg = "#FFFFFF", ink = "#0E2841", surface = "white", hideMetaOnSmall = true,
+  initials, name, role, bg = "#5B7CFF", fg = "#FFFFFF", ink = "#0A1230", surface = "white", hideMetaOnSmall = true,
 }: DemoPersonaPillProps) {
   if (surface === "navy") {
     return (

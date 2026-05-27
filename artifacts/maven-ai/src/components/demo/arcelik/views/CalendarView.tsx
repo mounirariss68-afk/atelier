@@ -88,7 +88,7 @@ export default function CalendarView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
+        <h2 className="text-lg font-bold text-[#0A1230] flex items-center gap-2">
           <CalendarRange size={20} /> {t.title}
         </h2>
         <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ export default function CalendarView() {
                     >
                       <div className="px-4 py-2.5 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: BRAND_COLORS[entry.brand] || "#6B7280" }} />
-                        <span className="text-xs font-medium text-[#0E2841] truncate">{getCalendarEntryName(entry, lang)}</span>
+                        <span className="text-xs font-medium text-[#0A1230] truncate">{getCalendarEntryName(entry, lang)}</span>
                         {entry.type === "confirmed" ? (
                           <CheckCircle2 size={11} className="text-green-500 flex-shrink-0" />
                         ) : (
@@ -277,7 +277,7 @@ export default function CalendarView() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-gray-50 rounded-xl p-3">
                     <p className="text-[10px] text-gray-500 uppercase">{t.detailBrand}</p>
-                    <p className="text-sm font-bold text-[#0E2841]">{selectedEntry.brand}</p>
+                    <p className="text-sm font-bold text-[#0A1230]">{selectedEntry.brand}</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3">
                     <p className="text-[10px] text-gray-500 uppercase">{t.detailStatus}</p>
@@ -291,11 +291,11 @@ export default function CalendarView() {
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3">
                     <p className="text-[10px] text-gray-500 uppercase">{t.detailStart}</p>
-                    <p className="text-sm font-bold text-[#0E2841]">{MONTHS[selectedEntry.startMonth - 1]} 2026</p>
+                    <p className="text-sm font-bold text-[#0A1230]">{MONTHS[selectedEntry.startMonth - 1]} 2026</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-3">
                     <p className="text-[10px] text-gray-500 uppercase">{t.detailEnd}</p>
-                    <p className="text-sm font-bold text-[#0E2841]">{MONTHS[selectedEntry.endMonth - 1]} 2026</p>
+                    <p className="text-sm font-bold text-[#0A1230]">{MONTHS[selectedEntry.endMonth - 1]} 2026</p>
                   </div>
                 </div>
 

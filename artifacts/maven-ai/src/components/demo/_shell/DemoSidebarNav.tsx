@@ -82,7 +82,7 @@ export default function DemoSidebarNav<K extends string = string>({
                     ? { background: variant === "fill" ? "rgba(255,255,255,0.25)" : `${accent}33`, color: variant === "fill" ? "white" : accent }
                     : n.badgeTone === "new"
                       ? { background: "#10B981", color: "white" }
-                      : { background: "#F5A623", color: "white" }
+                      : { background: "#C45BB8", color: "white" }
                 }
               >
                 {n.badge}

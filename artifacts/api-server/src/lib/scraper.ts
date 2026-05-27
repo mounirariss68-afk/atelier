@@ -3423,7 +3423,7 @@ export async function runPriceScrape(
         `;
         sendEmail({
           to: alertEmail,
-          subject: `[Maven AI] ${summary}`,
+          subject: `[Cognirise] ${summary}`,
           html,
         }).catch((err) => {
           logger.warn({ err, runId }, "Failed to send scrape health alert email");

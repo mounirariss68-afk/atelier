@@ -13,7 +13,7 @@ import type { Scenario } from "../types";
 const tenderScenario: Scenario = {
   slug: "tender-response-studio",
   toolTitle: { en: "Tender Response Studio", ar: "استوديو الاستجابة للمناقصات" },
-  accent: "#196B24",
+  accent: "#8A5BD6",
   description: {
     en: "A bid-conductor orchestrates RFP intake, qualifier, parallel section drafters, pricing modeller, partner outreach, legal reviewer, and packet compiler — pausing at three named human checkpoints (bid/no-bid, pricing sign-off, legal release).",
     ar: "منسّق العطاء يدير الاستلام والمُقيّم وكتّاب الأقسام بالتوازي ومحاكي التسعير وتواصل الشركاء والمراجع القانوني ومُجمّع الحزمة — مع ثلاث نقاط موافقة بشرية.",
@@ -21,14 +21,14 @@ const tenderScenario: Scenario = {
   buyer: { en: "Head of Bid Management", ar: "رئيس إدارة العطاءات" },
   trigger: { en: "Etimad-style 220-page mega-tender lands 14 days before submission.", ar: "وصول مناقصة كبرى 220 صفحة قبل 14 يوماً من التقديم." },
   agents: [
-    { id: "orch", name: { en: "Bid Conductor", ar: "منسّق العطاء" }, role: { en: "Plans the response and gates every checkpoint.", ar: "يخطّط الاستجابة ويراقب النقاط." }, kind: "orchestrator", color: "#196B24" },
-    { id: "ingest", name: { en: "RFP Ingestor", ar: "محلّل كرّاسة الشروط" }, role: { en: "Parses the RFP into a requirement matrix.", ar: "يحلّل كرّاسة الشروط إلى مصفوفة." }, kind: "retriever", color: "#156082" },
-    { id: "qualifier", name: { en: "Qualifier", ar: "المُقيّم" }, role: { en: "Recommends bid or no-bid with rationale.", ar: "يوصي بقرار التقديم." }, kind: "scorer", color: "#F5A623" },
+    { id: "orch", name: { en: "Bid Conductor", ar: "منسّق العطاء" }, role: { en: "Plans the response and gates every checkpoint.", ar: "يخطّط الاستجابة ويراقب النقاط." }, kind: "orchestrator", color: "#8A5BD6" },
+    { id: "ingest", name: { en: "RFP Ingestor", ar: "محلّل كرّاسة الشروط" }, role: { en: "Parses the RFP into a requirement matrix.", ar: "يحلّل كرّاسة الشروط إلى مصفوفة." }, kind: "retriever", color: "#5B7CFF" },
+    { id: "qualifier", name: { en: "Qualifier", ar: "المُقيّم" }, role: { en: "Recommends bid or no-bid with rationale.", ar: "يوصي بقرار التقديم." }, kind: "scorer", color: "#C45BB8" },
     { id: "drafter", name: { en: "Section Drafters (×5)", ar: "كتّاب الأقسام (×5)" }, role: { en: "Parallel lanes draft each section from precedent.", ar: "مسارات متوازية تصوغ الأقسام." }, kind: "drafter", color: "#5BA98A" },
     { id: "pricing", name: { en: "Pricing Modeller", ar: "محاكي التسعير" }, role: { en: "Builds 3 scenarios with margin sensitivity.", ar: "يبني 3 سيناريوهات مع حساسية الهامش." }, kind: "scorer", color: "#5C8CA8" },
-    { id: "partner", name: { en: "Partner Outreach", ar: "تواصل الشركاء" }, role: { en: "Drafts and chases LoS letters from required partners.", ar: "يصوغ ويتابع رسائل دعم الشركاء." }, kind: "drafter", color: "#F5A623" },
+    { id: "partner", name: { en: "Partner Outreach", ar: "تواصل الشركاء" }, role: { en: "Drafts and chases LoS letters from required partners.", ar: "يصوغ ويتابع رسائل دعم الشركاء." }, kind: "drafter", color: "#C45BB8" },
     { id: "legal", name: { en: "Legal Reviewer", ar: "المراجع القانوني" }, role: { en: "Red-teams every clause against the library.", ar: "يراجع كل بند مقابل المكتبة." }, kind: "critic", color: "#D9534F" },
-    { id: "compiler", name: { en: "Packet Compiler", ar: "مُجمّع الحزمة" }, role: { en: "Stitches the final submission packet.", ar: "يجمع حزمة التقديم." }, kind: "compiler", color: "#0E2841" },
+    { id: "compiler", name: { en: "Packet Compiler", ar: "مُجمّع الحزمة" }, role: { en: "Stitches the final submission packet.", ar: "يجمع حزمة التقديم." }, kind: "compiler", color: "#0A1230" },
   ],
   tools: [
     { name: "parse_rfp", description: { en: "Parses RFP PDF into sections, deadlines, requirements.", ar: "يحلّل كرّاسة الشروط إلى أقسام ومتطلبات." } },
@@ -114,7 +114,7 @@ const tenderScenario: Scenario = {
       preview: { en: "Mandatory requirements (18), evaluation criteria (6), partner LoS required (3), security: SAMA + NCA-ECC.", ar: "متطلبات إلزامية 18، معايير 6، شركاء 3، أمن: ساما + NCA-ECC." },
       receivedAt: "Day 0 · 08:30",
       status: "new",
-      accent: "#196B24",
+      accent: "#8A5BD6",
     },
   ],
   initialWorkspace: [],

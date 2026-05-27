@@ -2,12 +2,12 @@ import type { AgentCast } from "@workspace/maven-content";
 import { useLang, tStr } from "@/lib/lang";
 
 const KIND_COLORS: Record<string, string> = {
-  planner: "#F5A623",
+  planner: "#C45BB8",
   monitor: "#5C8CA8",
-  retriever: "#156082",
+  retriever: "#5B7CFF",
   classifier: "#5BA98A",
   scorer: "#5BA98A",
-  drafter: "#196B24",
+  drafter: "#8A5BD6",
   critic: "#D9534F",
   router: "#5C8CA8",
   compiler: "#5BA98A",
@@ -36,7 +36,7 @@ export default function AgentTopologyDiagram({
 
   return (
     <div className="bg-[#0A1F33] rounded-2xl p-6 border border-white/5">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-4">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-4">
         {tStr({ en: "Agent topology", ar: "طوبولوجيا الوكلاء" }, lang)}
       </p>
 
@@ -72,9 +72,9 @@ export default function AgentTopologyDiagram({
             {humans.map((h) => (
               <div
                 key={h.id}
-                className="px-4 py-3 rounded-lg border-2 border-dashed border-[#F5A623]/50 bg-[#F5A623]/10 text-center max-w-xs"
+                className="px-4 py-3 rounded-lg border-2 border-dashed border-[#C45BB8]/50 bg-[#C45BB8]/10 text-center max-w-xs"
               >
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-1">
                   {tStr({ en: "Human checkpoint", ar: "نقطة موافقة بشرية" }, lang)}
                 </p>
                 <p className="text-sm font-bold text-white">{tStr(h.name, lang)}</p>

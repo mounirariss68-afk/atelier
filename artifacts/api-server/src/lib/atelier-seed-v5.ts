@@ -756,7 +756,7 @@ const IP_OSS = [
 const IP_DEMOS = [
   { id: "de_001", name: "Arçelik · Pricing Intelligence", url: "demo.aico.com/arcelik", owner: "Aisha M.", lastDeployAt: "2026-05-10", shows: "Margin simulator, bundle optimiser, dealer portal — full demo path.", uptime30d: 0.998, scriptDrift: 0, freshness: "fresh" },
   { id: "de_002", name: "Atelier · Employee Portal", url: "demo.aico.com/atelier", owner: "Hamza R.", lastDeployAt: "2026-05-13", shows: "Full-firm Atelier walkthrough including v4 Comms Indexer.", uptime30d: 0.991, scriptDrift: 1, freshness: "fresh" },
-  { id: "de_003", name: "Maven AI · public marketing", url: "maven.ai", owner: "Mounir", lastDeployAt: "2026-04-22", shows: "Public-facing brand site with case index.", uptime30d: 1.0, scriptDrift: 0, freshness: "fresh" },
+  { id: "de_003", name: "Cognirise · public marketing", url: "cognirise.com", owner: "Mounir", lastDeployAt: "2026-04-22", shows: "Public-facing brand site with case index.", uptime30d: 1.0, scriptDrift: 0, freshness: "fresh" },
   { id: "de_004", name: "Pricing Strategist · standalone POV", url: "demo.aico.com/pricing-pov", owner: "Aisha M.", lastDeployAt: "2026-02-18", shows: "Pricing Strategist agent in isolation with sample mandate.", uptime30d: 0.967, scriptDrift: 3, freshness: "stale" },
   { id: "de_005", name: "Win-Loss Library · sample", url: "demo.aico.com/winloss-sample", owner: "Mounir", lastDeployAt: "2025-11-04", shows: "Win-Loss debrief flow with 6 sample debriefs.", uptime30d: 0.882, scriptDrift: 5, freshness: "broken" },
 ];

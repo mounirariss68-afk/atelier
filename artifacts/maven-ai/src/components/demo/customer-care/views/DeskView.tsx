@@ -256,7 +256,7 @@ export default function DeskView() {
         )}
 
         {active && active.id === FOCUS_CONV_ID && (
-          <Card title={t.qaTitle} icon={ShieldCheck} accent="#196B24">
+          <Card title={t.qaTitle} icon={ShieldCheck} accent="#8A5BD6">
             <div className="space-y-1.5 text-[12px]">
               <Stat label={t.qaScore} value="94/100" highlight />
               <Stat label={t.qaTone} value="98" />

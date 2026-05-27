@@ -62,7 +62,7 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 // "Why we built it this way" — three killer angles strip rendered on the
-// Maven Personal Agent detail page only. Lives at module scope so the JSX
+// Cognirise Personal Agent detail page only. Lives at module scope so the JSX
 // inside the component stays scannable.
 const PERSONAL_AGENT_ANGLES: {
   icon: LucideIcon;
@@ -118,7 +118,7 @@ const COPY = {
   },
   launchCta: { en: "Launch demo", ar: "ابدأ العرض", tr: "Demoyu başlat" },
   ctaPartner: { en: "Talk to a partner about this tool", ar: "تحدّث مع شريك حول هذه الأداة", tr: "Bu araç hakkında bir ortakla konuşun" },
-  ctaService: { en: "Related Maven AI service", ar: "خدمة Maven AI المرتبطة", tr: "İlgili Maven AI hizmeti" },
+  ctaService: { en: "Related Cognirise service", ar: "خدمة Cognirise المرتبطة", tr: "İlgili Cognirise hizmeti" },
   ctaAssessment: { en: "Run the related diagnostic", ar: "شغّل التشخيص المرتبط", tr: "İlgili teşhisi çalıştırın" },
   comingSoonNote: {
     en: "An interactive scenario for this tool is being scripted as part of the agentic marketplace redesign. The detail below — agent topology, data model, screens — is the canonical brief our delivery teams use when scoping it.",
@@ -175,7 +175,7 @@ export default function MarketplaceDetail() {
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
-      <section className="bg-[#0E2841] py-16 sm:py-20">
+      <section className="bg-[#0A1230] py-16 sm:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link
             href="/marketplace"
@@ -204,7 +204,7 @@ export default function MarketplaceDetail() {
                 )}
                 <span
                   className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${
-                    isLive ? "bg-white text-[#0E2841]" : "bg-white/10 text-gray-300"
+                    isLive ? "bg-white text-[#0A1230]" : "bg-white/10 text-gray-300"
                   }`}
                 >
                   {isLive ? tStr(COPY.liveBadge, lang) : tStr(COPY.comingSoonBadge, lang)}
@@ -223,7 +223,7 @@ export default function MarketplaceDetail() {
           {hasScenario && !tool.demoVariants?.length && (
             <Link
               href={`/demo/${tool.slug}`}
-              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-sm hover:bg-[#FFC15E] transition-colors"
+              className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#C45BB8] text-[#0A1230] font-bold text-sm hover:bg-[#FFC15E] transition-colors"
             >
               <Play size={14} fill="currentColor" />
               {tStr(COPY.launchCta, lang)}
@@ -238,7 +238,7 @@ export default function MarketplaceDetail() {
                   <Link
                     key={v.id}
                     href={`/demo/${tool.slug}/${v.route}`}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-sm hover:bg-[#FFC15E] transition-colors"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#C45BB8] text-[#0A1230] font-bold text-sm hover:bg-[#FFC15E] transition-colors"
                   >
                     <VIcon size={14} />
                     {tStr(v.label, lang)}
@@ -250,13 +250,13 @@ export default function MarketplaceDetail() {
 
           <div className="grid sm:grid-cols-3 gap-4 mt-8 pt-8 border-t border-white/10">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-1">
                 {tStr(COPY.buyer, lang)}
               </p>
               <p className="text-sm text-white">{tStr(tool.buyer, lang)}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-1">
                 {tStr(COPY.industriesLabel, lang)}
               </p>
               <p className="text-sm text-white">
@@ -264,7 +264,7 @@ export default function MarketplaceDetail() {
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-1">
                 {tStr(COPY.horizontalsLabel, lang)}
               </p>
               <p className="text-sm text-white">
@@ -309,7 +309,7 @@ export default function MarketplaceDetail() {
               Conditional because the three killer angles only make sense for
               a tool whose differentiator is its memory/trust model. */}
           {tool.slug === "maven-personal-agent" && (
-            <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-8 rounded-2xl bg-gradient-to-br from-[#a78bfa]/10 via-white to-[#0F9ED5]/5 border border-[#a78bfa]/20">
+            <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-8 rounded-2xl bg-gradient-to-br from-[#a78bfa]/10 via-white to-[#5B7CFF]/5 border border-[#a78bfa]/20">
               <div className="flex items-start gap-3 mb-5">
                 <div className="w-9 h-9 rounded-lg bg-[#a78bfa]/15 flex items-center justify-center flex-shrink-0">
                   <Sparkles size={16} className="text-[#a78bfa]" />
@@ -350,7 +350,7 @@ export default function MarketplaceDetail() {
                           {tStr(a.badge, lang)}
                         </span>
                       </div>
-                      <h4 className="text-base font-extrabold text-[#0E2841] mb-2 leading-snug">
+                      <h4 className="text-base font-extrabold text-[#0A1230] mb-2 leading-snug">
                         {tStr(a.title, lang)}
                       </h4>
                       <p className="text-sm text-gray-700 leading-relaxed">
@@ -363,7 +363,7 @@ export default function MarketplaceDetail() {
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   href="/personal-agent/concept"
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#0E2841] text-white font-bold text-xs hover:bg-[#091828]"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#0A1230] text-white font-bold text-xs hover:bg-[#091828]"
                 >
                   <BookOpen size={12} />
                   {tStr({ en: "Read the concept & research doc", ar: "اقرأ وثيقة المفهوم والبحث", tr: "Konsept ve araştırma belgesini okuyun" }, lang)}
@@ -371,14 +371,14 @@ export default function MarketplaceDetail() {
                 </Link>
                 <Link
                   href="/demo/maven-personal-agent/cockpit"
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#a78bfa] text-[#0E2841] font-bold text-xs hover:bg-[#c4b5fd]"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]"
                 >
                   <MessageSquare size={12} />
                   {tStr({ en: "Open the Cockpit", ar: "افتح القمرة", tr: "Kokpit'i aç" }, lang)}
                 </Link>
                 <Link
                   href="/demo/maven-personal-agent/mind"
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#0E2841]/30 text-[#0E2841] font-bold text-xs hover:bg-[#0E2841] hover:text-white"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#0A1230]/30 text-[#0A1230] font-bold text-xs hover:bg-[#0A1230] hover:text-white"
                 >
                   <Brain size={12} />
                   {tStr({ en: "Open the Mind", ar: "افتح العقل", tr: "Zihni aç" }, lang)}
@@ -394,11 +394,11 @@ export default function MarketplaceDetail() {
         <section className="py-14 bg-[#091828]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-start gap-3 mb-5">
-              <div className="w-9 h-9 rounded-lg bg-[#F5A623]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Network size={16} className="text-[#F5A623]" />
+              <div className="w-9 h-9 rounded-lg bg-[#C45BB8]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Network size={16} className="text-[#C45BB8]" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-1">
                   {tStr(COPY.topologyTitle, lang)}
                 </p>
                 <p className="text-base text-gray-200 leading-relaxed max-w-3xl">
@@ -440,7 +440,7 @@ export default function MarketplaceDetail() {
                     >
                       {i + 1}
                     </span>
-                    <h3 className="font-bold text-[#0E2841]">{tStr(s.title, lang)}</h3>
+                    <h3 className="font-bold text-[#0A1230]">{tStr(s.title, lang)}</h3>
                   </div>
                   <p className="text-sm text-gray-600 leading-relaxed">
                     {tStr(s.caption, lang)}
@@ -457,11 +457,11 @@ export default function MarketplaceDetail() {
         <section className="py-14 bg-white border-t border-gray-100">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-start gap-3 mb-8">
-              <div className="w-9 h-9 rounded-lg bg-[#156082]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Zap size={16} className="text-[#156082]" />
+              <div className="w-9 h-9 rounded-lg bg-[#5B7CFF]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Zap size={16} className="text-[#5B7CFF]" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#156082] mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#5B7CFF] mb-1">
                   {tStr(COPY.workflowsTitle, lang)}
                 </p>
                 <p className="text-base text-gray-700 leading-relaxed max-w-3xl">
@@ -476,7 +476,7 @@ export default function MarketplaceDetail() {
                   className="border border-gray-200 rounded-2xl p-6 bg-[#FBFCFD] flex flex-col gap-4"
                 >
                   <div>
-                    <h3 className="text-lg font-bold text-[#0E2841] mb-1">
+                    <h3 className="text-lg font-bold text-[#0A1230] mb-1">
                       {tStr(wf.name, lang)}
                     </h3>
                     <p className="text-sm text-gray-600 leading-relaxed">
@@ -484,7 +484,7 @@ export default function MarketplaceDetail() {
                     </p>
                   </div>
                   <div className="text-xs text-gray-700 bg-white border border-gray-100 rounded-lg px-3 py-2">
-                    <span className="font-bold uppercase tracking-widest text-[10px] text-[#F5A623] me-2">
+                    <span className="font-bold uppercase tracking-widest text-[10px] text-[#C45BB8] me-2">
                       {tStr(COPY.workflowTrigger, lang)}:
                     </span>
                     {tStr(wf.trigger, lang)}
@@ -503,7 +503,7 @@ export default function MarketplaceDetail() {
                             {i + 1}
                           </span>
                           <span className="text-sm text-gray-800 leading-snug">
-                            <span className="font-bold text-[#0E2841]">
+                            <span className="font-bold text-[#0A1230]">
                               {s.kind === "checkpoint"
                                 ? tStr(
                                     s.human ?? { en: "Human checkpoint", ar: "نقطة بشرية", tr: "İnsan kontrol noktası" },
@@ -529,11 +529,11 @@ export default function MarketplaceDetail() {
         <section className="py-14 bg-[#F8F9FA] border-y border-gray-100">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-start gap-3 mb-8">
-              <div className="w-9 h-9 rounded-lg bg-[#196B24]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Target size={16} className="text-[#196B24]" />
+              <div className="w-9 h-9 rounded-lg bg-[#8A5BD6]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Target size={16} className="text-[#8A5BD6]" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#196B24] mb-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-[#8A5BD6] mb-1">
                   {tStr(COPY.kpisTitle, lang)}
                 </p>
                 <p className="text-base text-gray-700 leading-relaxed max-w-3xl">
@@ -543,7 +543,7 @@ export default function MarketplaceDetail() {
             </div>
             <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-[#0E2841] text-white">
+                <thead className="bg-[#0A1230] text-white">
                   <tr>
                     <th className="text-start rtl:text-right px-5 py-3 font-bold text-xs uppercase tracking-widest">
                       {tStr({ en: "Metric", ar: "المؤشر", tr: "Metrik" }, lang)}
@@ -562,7 +562,7 @@ export default function MarketplaceDetail() {
                       key={k.id}
                       className={i % 2 === 0 ? "bg-white" : "bg-[#FBFCFD]"}
                     >
-                      <td className="px-5 py-4 font-semibold text-[#0E2841] align-top">
+                      <td className="px-5 py-4 font-semibold text-[#0A1230] align-top">
                         {tStr(k.label, lang)}
                       </td>
                       <td className="px-5 py-4 align-top">
@@ -597,9 +597,9 @@ export default function MarketplaceDetail() {
           <div className="grid md:grid-cols-3 gap-6">
             {(
               [
-                { label: COPY.inputs, items: tool.dataModel.inputs, color: "#156082" },
+                { label: COPY.inputs, items: tool.dataModel.inputs, color: "#5B7CFF" },
                 { label: COPY.internal, items: tool.dataModel.internal, color: tool.accent },
-                { label: COPY.outputs, items: tool.dataModel.outputs, color: "#196B24" },
+                { label: COPY.outputs, items: tool.dataModel.outputs, color: "#8A5BD6" },
               ] as const
             ).map((col) => (
               <div key={col.label.en} className="rounded-2xl border border-gray-100 p-6">
@@ -630,9 +630,9 @@ export default function MarketplaceDetail() {
 
       {/* Launch CTA — single demo */}
       {hasScenario && !tool.demoVariants?.length && (
-        <section className="py-16 bg-gradient-to-br from-[#0E2841] to-[#156082]">
+        <section className="py-16 bg-gradient-to-br from-[#0A1230] to-[#5B7CFF]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-3">
               {tStr({ en: "Try it now", ar: "جرّبها الآن", tr: "Şimdi deneyin" }, lang)}
             </p>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-4">
@@ -643,7 +643,7 @@ export default function MarketplaceDetail() {
             </p>
             <Link
               href={`/demo/${tool.slug}`}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#F5A623] text-[#0E2841] font-bold text-base hover:bg-[#FFC15E] transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-[#C45BB8] text-[#0A1230] font-bold text-base hover:bg-[#FFC15E] transition-colors"
             >
               <Play size={16} fill="currentColor" />
               {tStr(COPY.launchCta, lang)}
@@ -654,10 +654,10 @@ export default function MarketplaceDetail() {
 
       {/* Launch CTA — multi-variant demos */}
       {tool.demoVariants && tool.demoVariants.length > 0 && (
-        <section className="py-16 bg-gradient-to-br from-[#0E2841] to-[#156082]">
+        <section className="py-16 bg-gradient-to-br from-[#0A1230] to-[#5B7CFF]">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-10">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623] mb-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8] mb-3">
                 {tStr({ en: "Choose your experience", ar: "اختر تجربتك", tr: "Deneyiminizi seçin" }, lang)}
               </p>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-3">
@@ -680,13 +680,13 @@ export default function MarketplaceDetail() {
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: tool.accent }}>
                         <VIcon size={20} className="text-white" />
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8]">
                         {tStr(v.audience, lang)}
                       </span>
                     </div>
                     <h3 className="text-lg font-bold text-white">{tStr(v.label, lang)}</h3>
                     <p className="text-sm text-gray-300 leading-relaxed flex-1">{tStr(v.description, lang)}</p>
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#F5A623] mt-2 group-hover:gap-3 transition-all">
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#C45BB8] mt-2 group-hover:gap-3 transition-all">
                       <Play size={12} fill="currentColor" />
                       {tStr({ en: "Launch demo", ar: "ابدأ العرض", tr: "Demoyu başlat" }, lang)}
                     </span>
@@ -705,11 +705,11 @@ export default function MarketplaceDetail() {
             href={`/contact?topic=${tool.slug}`}
             className="group p-6 bg-[#F8F9FA] hover:bg-[#EAEEF1] border border-gray-200 rounded-2xl transition-colors flex flex-col gap-2"
           >
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8]">
               {tStr({ en: "Engage", ar: "ابدأ" }, lang)}
             </span>
-            <span className="text-lg font-bold text-[#0E2841]">{tStr(COPY.ctaPartner, lang)}</span>
-            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#156082] mt-2">
+            <span className="text-lg font-bold text-[#0A1230]">{tStr(COPY.ctaPartner, lang)}</span>
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#5B7CFF] mt-2">
               {tStr({ en: "Open contact form", ar: "افتح نموذج التواصل" }, lang)}
               <ArrowRight size={14} className="rtl:rotate-180" />
             </span>
@@ -720,11 +720,11 @@ export default function MarketplaceDetail() {
               href={`/services/${relatedService.slug}`}
               className="group p-6 bg-[#F8F9FA] hover:bg-[#EAEEF1] border border-gray-200 rounded-2xl transition-colors flex flex-col gap-2"
             >
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8]">
                 {tStr(COPY.ctaService, lang)}
               </span>
-              <span className="text-lg font-bold text-[#0E2841]">{relatedService.title}</span>
-              <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#156082] mt-2">
+              <span className="text-lg font-bold text-[#0A1230]">{relatedService.title}</span>
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-[#5B7CFF] mt-2">
                 {tStr({ en: "Read service brief", ar: "اقرأ موجز الخدمة" }, lang)}
                 <ArrowRight size={14} className="rtl:rotate-180" />
               </span>
@@ -734,11 +734,11 @@ export default function MarketplaceDetail() {
               href="/services"
               className="group p-6 bg-[#F8F9FA] hover:bg-[#EAEEF1] border border-gray-200 rounded-2xl transition-colors flex flex-col gap-2"
             >
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[#F5A623]">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#C45BB8]">
                 {tStr({ en: "Services", ar: "الخدمات" }, lang)}
               </span>
-              <span className="text-lg font-bold text-[#0E2841]">
-                {tStr({ en: "Explore Maven AI services", ar: "استعرض خدمات Maven AI" }, lang)}
+              <span className="text-lg font-bold text-[#0A1230]">
+                {tStr({ en: "Explore Cognirise services", ar: "استعرض خدمات Cognirise" }, lang)}
               </span>
             </Link>
           )}
@@ -746,7 +746,7 @@ export default function MarketplaceDetail() {
           {relatedAssessment && (
             <Link
               href={`/assessments/${relatedAssessment.slug}`}
-              className="group p-6 bg-[#F5A623] hover:bg-[#FFC15E] rounded-2xl transition-colors flex flex-col gap-2 sm:col-span-2"
+              className="group p-6 bg-[#C45BB8] hover:bg-[#FFC15E] rounded-2xl transition-colors flex flex-col gap-2 sm:col-span-2"
             >
               <span className="text-[10px] font-bold uppercase tracking-widest text-white/80">
                 {tStr(COPY.ctaAssessment, lang)}

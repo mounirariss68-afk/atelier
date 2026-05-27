@@ -1,8 +1,8 @@
 import { getDemoAccent } from "@workspace/maven-content";
 
-export const BRAND = getDemoAccent("network-ops-war-room", "#156082");
+export const BRAND = getDemoAccent("network-ops-war-room", "#5B7CFF");
 export const BRAND_DARK = "#0E4B66";
-export const ACCENT_AMBER = "#F5A623";
+export const ACCENT_AMBER = "#C45BB8";
 export const ACCENT_RED = "#D9534F";
 export const ACCENT_GREEN = "#5BA98A";
 export const ACCENT_GREY = "#5C8CA8";

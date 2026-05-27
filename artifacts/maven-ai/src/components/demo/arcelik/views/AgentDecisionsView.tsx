@@ -88,7 +88,7 @@ function ReasoningTrace({ reasoning }: { reasoning: AgentRecommendation["reasoni
       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
         <Brain size={11} /> {t.reasoningChain}
       </p>
-      <div className="relative pl-4 border-l-2 border-[#0E2841]/20 space-y-3">
+      <div className="relative pl-4 border-l-2 border-[#0A1230]/20 space-y-3">
         {reasoning.map((step, i) => (
           <motion.div
             key={i}
@@ -97,11 +97,11 @@ function ReasoningTrace({ reasoning }: { reasoning: AgentRecommendation["reasoni
             transition={{ delay: i * 0.08 }}
             className="relative"
           >
-            <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-[#0E2841] border-2 border-white" />
+            <div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-[#0A1230] border-2 border-white" />
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-[10px] font-bold text-[#E30613] mb-0.5">{step.source}</p>
               <p className="text-[11px] text-gray-600 mb-1">{step.observation}</p>
-              <p className="text-[11px] font-semibold text-[#0E2841]">→ {step.conclusion}</p>
+              <p className="text-[11px] font-semibold text-[#0A1230]">→ {step.conclusion}</p>
             </div>
           </motion.div>
         ))}
@@ -141,23 +141,23 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
               <ConfidenceBadge value={rec.confidence} />
               <span className="text-[10px] text-gray-400 ml-auto flex items-center gap-0.5"><Clock size={10} />{timeAgo(rec.createdAt)}</span>
             </div>
-            <h4 className="text-sm font-bold text-[#0E2841] mb-1">{rec.title}</h4>
+            <h4 className="text-sm font-bold text-[#0A1230] mb-1">{rec.title}</h4>
             <p className="text-xs text-gray-600">{rec.summary}</p>
 
             <div className="grid grid-cols-3 gap-2 mt-3">
               <div className="bg-gray-50 rounded-lg p-2 text-center">
                 <DollarSign size={12} className="mx-auto text-gray-400 mb-0.5" />
-                <p className="text-xs font-bold text-[#0E2841]">{rec.impact.revenue}</p>
+                <p className="text-xs font-bold text-[#0A1230]">{rec.impact.revenue}</p>
                 <p className="text-[9px] text-gray-400">{t.revenue}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-2 text-center">
                 <BarChart3 size={12} className="mx-auto text-gray-400 mb-0.5" />
-                <p className="text-xs font-bold text-[#0E2841]">{rec.impact.margin}</p>
+                <p className="text-xs font-bold text-[#0A1230]">{rec.impact.margin}</p>
                 <p className="text-[9px] text-gray-400">{t.margin}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-2 text-center">
                 <TrendingUp size={12} className="mx-auto text-gray-400 mb-0.5" />
-                <p className="text-xs font-bold text-[#0E2841]">{rec.impact.share}</p>
+                <p className="text-xs font-bold text-[#0A1230]">{rec.impact.share}</p>
                 <p className="text-[9px] text-gray-400">{t.marketShareLabel}</p>
               </div>
             </div>
@@ -170,9 +170,9 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
               </div>
             )}
 
-            <div className="mt-3 p-3 bg-[#0E2841]/5 rounded-lg">
-              <p className="text-[10px] font-bold text-[#0E2841] mb-0.5 flex items-center gap-1"><Zap size={10} /> {t.suggestedAction}</p>
-              <p className="text-xs text-[#0E2841]">{rec.recommendedAction}</p>
+            <div className="mt-3 p-3 bg-[#0A1230]/5 rounded-lg">
+              <p className="text-[10px] font-bold text-[#0A1230] mb-0.5 flex items-center gap-1"><Zap size={10} /> {t.suggestedAction}</p>
+              <p className="text-xs text-[#0A1230]">{rec.recommendedAction}</p>
             </div>
 
             {expanded && (
@@ -230,7 +230,7 @@ function RecommendationCard({ rec, onApprove, onReject, onModify }: {
       <div className="border-t border-gray-100 px-4 py-2.5 flex items-center justify-between bg-gray-50/50">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-gray-500 hover:text-[#0E2841] font-medium flex items-center gap-1"
+          className="text-xs text-gray-500 hover:text-[#0A1230] font-medium flex items-center gap-1"
         >
           <Brain size={12} />
           {expanded ? t.hideAnalysis : t.showReasoning}
@@ -317,14 +317,14 @@ function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[entry.role]}`}>{roleLabels[entry.role]}</span>
                 <span className="text-[10px] text-gray-400 ml-auto flex items-center gap-0.5"><Clock size={10} /> {timeAgo(entry.timestamp)}</span>
               </div>
-              <h4 className="text-sm font-bold text-[#0E2841] mb-1">{entry.recommendationTitle}</h4>
+              <h4 className="text-sm font-bold text-[#0A1230] mb-1">{entry.recommendationTitle}</h4>
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-full bg-[#0E2841] flex items-center justify-center text-[8px] font-bold text-white">{entry.decidedBy.split(" ").map((n) => n[0]).join("")}</div>
+                <div className="w-6 h-6 rounded-full bg-[#0A1230] flex items-center justify-center text-[8px] font-bold text-white">{entry.decidedBy.split(" ").map((n) => n[0]).join("")}</div>
                 <span className="text-xs text-gray-600 font-medium">{entry.decidedBy}</span>
               </div>
               <div className="bg-gray-50 rounded-lg p-3 mb-3">
                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t.histRationale}</p>
-                <p className="text-xs text-[#0E2841]">{entry.rationale}</p>
+                <p className="text-xs text-[#0A1230]">{entry.rationale}</p>
               </div>
               {entry.modificationNote && (
                 <div className="bg-blue-50 rounded-lg p-3 mb-3 border border-blue-100">
@@ -334,19 +334,19 @@ function DecisionHistoryPanel({ entries }: { entries: AgentDecisionLog[] }) {
               )}
               <div className="grid grid-cols-4 gap-2">
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.revenue}</p>
+                  <p className="text-xs font-bold text-[#0A1230]">{entry.simulatedOutcome.revenue}</p>
                   <p className="text-[9px] text-gray-400">{t.histRevenueImpact}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.margin}</p>
+                  <p className="text-xs font-bold text-[#0A1230]">{entry.simulatedOutcome.margin}</p>
                   <p className="text-[9px] text-gray-400">{t.histMarginImpact}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.share}</p>
+                  <p className="text-xs font-bold text-[#0A1230]">{entry.simulatedOutcome.share}</p>
                   <p className="text-[9px] text-gray-400">{t.histShareImpact}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-xs font-bold text-[#0E2841]">{entry.simulatedOutcome.timeframe}</p>
+                  <p className="text-xs font-bold text-[#0A1230]">{entry.simulatedOutcome.timeframe}</p>
                   <p className="text-[9px] text-gray-400">{t.histDuration}</p>
                 </div>
               </div>
@@ -377,7 +377,7 @@ function TaskQueue({ tasks }: { tasks: AgentTask[] }) {
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEV_COLORS[task.priority]}`}>{sevLabels[task.priority]}</span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ROLE_COLORS[task.assigneeRole]}`}>{task.assignee}</span>
               </div>
-              <h4 className="text-sm font-semibold text-[#0E2841]">{task.title}</h4>
+              <h4 className="text-sm font-semibold text-[#0A1230]">{task.title}</h4>
               <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>
               <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400">
                 <span className="flex items-center gap-1"><Clock size={10} /> {t.taskDeadline} {task.deadline}</span>
@@ -411,7 +411,7 @@ function AlertTimeline({ alerts }: { alerts: AgentAlert[] }) {
               <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{alert.category}</span>
               <span className="text-[10px] text-gray-400 ml-auto">{timeAgo(alert.timestamp)}</span>
             </div>
-            <h4 className="text-sm font-semibold text-[#0E2841]">{alert.title}</h4>
+            <h4 className="text-sm font-semibold text-[#0A1230]">{alert.title}</h4>
             <p className="text-xs text-gray-500 mt-0.5">{alert.detail}</p>
           </div>
         </motion.div>
@@ -454,9 +454,9 @@ function PlaybookView({ playbooks }: { playbooks: AgentPlaybook[] }) {
             onClick={() => setExpanded(expanded === pb.id ? null : pb.id)}
             className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-gray-50/50 transition-colors"
           >
-            <Zap size={16} className="text-[#F5A623] flex-shrink-0" />
+            <Zap size={16} className="text-[#C45BB8] flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-bold text-[#0E2841]">{pb.name}</h4>
+              <h4 className="text-sm font-bold text-[#0A1230]">{pb.name}</h4>
               <p className="text-[11px] text-gray-500">{pb.trigger}</p>
             </div>
             <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${statusColors[pb.status]}`}>{statusLabels[pb.status]}</span>
@@ -484,7 +484,7 @@ function PlaybookView({ playbooks }: { playbooks: AgentPlaybook[] }) {
                               <StepIcon size={11} className={step.status === "completed" ? "text-green-600" : step.status === "running" ? "text-amber-600" : "text-gray-400"} />
                               <span className="text-[10px] font-bold text-gray-500">{step.agent}</span>
                             </div>
-                            <p className="text-xs text-[#0E2841] font-medium">{step.action}</p>
+                            <p className="text-xs text-[#0A1230] font-medium">{step.action}</p>
                             {step.output && (
                               <p className="text-[11px] text-gray-500 mt-1 italic">{step.output}</p>
                             )}
@@ -538,21 +538,21 @@ function SpecializedAgentsPanel({ agents }: { agents: SpecializedAgent[] }) {
             <Bot size={14} className="text-green-500" />
             <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statActiveAgents}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">{activeCount}<span className="text-sm font-medium text-gray-400">/{agents.length}</span></p>
+          <p className="text-2xl font-extrabold text-[#0A1230]">{activeCount}<span className="text-sm font-medium text-gray-400">/{agents.length}</span></p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <Shield size={14} className="text-blue-500" />
             <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.agentConfidenceAvg}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">%{avgAccuracy}</p>
+          <p className="text-2xl font-extrabold text-[#0A1230]">%{avgAccuracy}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <Activity size={14} className="text-purple-500" />
             <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.agentTotalActions}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">{totalActions}</p>
+          <p className="text-2xl font-extrabold text-[#0A1230]">{totalActions}</p>
         </div>
       </div>
 
@@ -575,21 +575,21 @@ function SpecializedAgentsPanel({ agents }: { agents: SpecializedAgent[] }) {
                     <Icon size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-bold text-[#0E2841] truncate">{lang === "tr" ? agent.name : agent.nameEn}</h4>
+                    <h4 className="text-sm font-bold text-[#0A1230] truncate">{lang === "tr" ? agent.name : agent.nameEn}</h4>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <div className={`w-2 h-2 rounded-full ${sc.dot}`} />
                       <span className={`text-[10px] font-bold ${sc.text}`}>{statusLabels[agent.status]}</span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-extrabold text-[#0E2841]">%{agent.accuracy}</p>
+                    <p className="text-lg font-extrabold text-[#0A1230]">%{agent.accuracy}</p>
                     <p className="text-[9px] text-gray-400">{t.agentAccuracy}</p>
                   </div>
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-2.5 mb-3">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{t.agentLastAction}</p>
-                  <p className="text-[11px] text-[#0E2841] leading-snug">{lang === "tr" ? agent.lastAction : agent.lastActionEn}</p>
+                  <p className="text-[11px] text-[#0A1230] leading-snug">{lang === "tr" ? agent.lastAction : agent.lastActionEn}</p>
                   <p className="text-[10px] text-gray-400 mt-1">{timeAgo(agent.lastActionTime)}</p>
                 </div>
 
@@ -607,7 +607,7 @@ function SpecializedAgentsPanel({ agents }: { agents: SpecializedAgent[] }) {
                     <AlertTriangle size={10} className="text-amber-500" /> {agent.alertsRaised} {lang === "tr" ? "uyarı" : "alerts"}
                   </span>
                   <span className="flex items-center gap-1 text-gray-500 ml-auto">
-                    <Zap size={10} className="text-[#F5A623]" /> {agent.actionsToday} {t.agentActionsToday.toLowerCase()}
+                    <Zap size={10} className="text-[#C45BB8]" /> {agent.actionsToday} {t.agentActionsToday.toLowerCase()}
                   </span>
                 </div>
               </div>
@@ -658,7 +658,7 @@ function ActivityLog({ entries }: { entries: AgentActivityEntry[] }) {
                 <span className="text-[10px] text-gray-300">•</span>
                 <span className="text-[10px] text-gray-400">{timeAgo(entry.timestamp)}</span>
               </div>
-              <p className="text-xs font-semibold text-[#0E2841]">{entry.action}</p>
+              <p className="text-xs font-semibold text-[#0A1230]">{entry.action}</p>
               <p className="text-[11px] text-gray-500">{entry.detail}</p>
             </div>
           </motion.div>
@@ -909,7 +909,7 @@ export default function AgentDecisionsView() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-[#0E2841] flex items-center gap-2">
+        <h2 className="text-lg font-bold text-[#0A1230] flex items-center gap-2">
           <Brain size={20} className="text-[#E30613]" /> {t.headerTitle}
         </h2>
         {criticalCount > 0 && (
@@ -926,7 +926,7 @@ export default function AgentDecisionsView() {
               key={tab.id}
               onClick={() => setSubTab(tab.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                subTab === tab.id ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500 hover:text-gray-700"
+                subTab === tab.id ? "bg-white text-[#0A1230] shadow-sm" : "text-gray-500 hover:text-gray-700"
               }`}
             >
               <tab.icon size={13} /> {tab.label}
@@ -950,7 +950,7 @@ export default function AgentDecisionsView() {
                   key={r}
                   onClick={() => setRoleFilter(r)}
                   className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                    roleFilter === r ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    roleFilter === r ? "bg-[#0A1230] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
                   {r === "all" ? t.filterAll : roleLabels[r]}
@@ -987,16 +987,16 @@ export default function AgentDecisionsView() {
       </div>
 
       {subTab === "recommendations" && (
-        <div className="bg-gradient-to-br from-[#0E2841] to-[#1a3a5c] rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-br from-[#0A1230] to-[#1B2755] rounded-xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                <FlaskConical size={18} className="text-[#F5A623]" />
+                <FlaskConical size={18} className="text-[#C45BB8]" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
                   {t.aiAgentsLab}
-                  <Sparkles size={12} className="text-[#F5A623]" />
+                  <Sparkles size={12} className="text-[#C45BB8]" />
                 </h3>
                 <p className="text-[11px] text-blue-100/80 max-w-xl">{t.aiAgentsLabDesc}</p>
               </div>
@@ -1029,7 +1029,7 @@ export default function AgentDecisionsView() {
                 >
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center">
-                      <Icon size={14} className="text-[#F5A623]" />
+                      <Icon size={14} className="text-[#C45BB8]" />
                     </div>
                     <p className="text-xs font-bold text-white flex-1 leading-tight">
                       {agentLabelFor(at)}
@@ -1086,7 +1086,7 @@ export default function AgentDecisionsView() {
                 key={chip.id}
                 onClick={() => setAgentFilter(chip.id)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors flex items-center gap-1.5 ${
-                  active ? "bg-[#0E2841] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  active ? "bg-[#0A1230] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
                 {chip.label}
@@ -1109,28 +1109,28 @@ export default function AgentDecisionsView() {
             <Brain size={14} className="text-[#E30613]" />
             <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statPending}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">{pendingCount}</p>
+          <p className="text-2xl font-extrabold text-[#0A1230]">{pendingCount}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <ListTodo size={14} className="text-blue-500" />
             <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statOpenTask}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">{tasks.filter((tk) => tk.status === "open").length}</p>
+          <p className="text-2xl font-extrabold text-[#0A1230]">{tasks.filter((tk) => tk.status === "open").length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
-            <Zap size={14} className="text-[#F5A623]" />
+            <Zap size={14} className="text-[#C45BB8]" />
             <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statActivePlaybook}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">{PLAYBOOKS.filter((p) => p.status !== "completed").length}</p>
+          <p className="text-2xl font-extrabold text-[#0A1230]">{PLAYBOOKS.filter((p) => p.status !== "completed").length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3.5">
           <div className="flex items-center gap-2 mb-1">
             <Activity size={14} className="text-purple-500" />
             <span className="text-[10px] font-semibold text-gray-500 uppercase">{t.statLast24h}</span>
           </div>
-          <p className="text-2xl font-extrabold text-[#0E2841]">{activityLog.length}</p>
+          <p className="text-2xl font-extrabold text-[#0A1230]">{activityLog.length}</p>
         </div>
       </div>
 

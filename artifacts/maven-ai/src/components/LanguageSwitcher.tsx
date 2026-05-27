@@ -88,13 +88,13 @@ export default function LanguageSwitcher({ variant = "navbar", className = "" }:
                     }}
                     className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                       isActive
-                        ? "bg-[#F5A623]/10 text-[#0E2841]"
+                        ? "bg-[#C45BB8]/10 text-[#0A1230]"
                         : "text-gray-700 hover:bg-gray-50"
                     }`}
                     data-testid={`button-lang-${o.value}`}
                   >
                     <span>{o.abbr}</span>
-                    {isActive && <Check size={12} className="text-[#F5A623]" />}
+                    {isActive && <Check size={12} className="text-[#C45BB8]" />}
                   </button>
                 </li>
               );

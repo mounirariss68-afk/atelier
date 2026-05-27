@@ -42,7 +42,7 @@ export default function IncidentWorkspaceView({ initialIncidentId, onOpenApprova
               <button
                 key={inc.id}
                 onClick={() => setSelId(inc.id)}
-                className={`w-full text-start p-3 rounded-xl border transition-colors ${isSel ? "border-[#156082] bg-[#156082]/5" : "border-gray-100 hover:border-gray-300 bg-white"}`}
+                className={`w-full text-start p-3 rounded-xl border transition-colors ${isSel ? "border-[#5B7CFF] bg-[#5B7CFF]/5" : "border-gray-100 hover:border-gray-300 bg-white"}`}
               >
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold ${SEV_BG[inc.severity]}`}>
@@ -228,12 +228,12 @@ function TimelineRow({ timeline, isAr, t }: { timeline: IncidentTimelineEntry[];
                   className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold ${
                     done ? "" : active ? "ring-2 ring-amber-300" : "bg-gray-200 text-gray-400"
                   }`}
-                  style={{ background: done ? BRAND : active ? "#F5A623" : undefined }}
+                  style={{ background: done ? BRAND : active ? "#C45BB8" : undefined }}
                 >
                   {done ? <CheckCircle2 size={14} /> : active ? <Loader2 size={14} className="animate-spin" /> : i + 1}
                 </div>
                 {i < PHASE_ORDER.length - 1 && (
-                  <div className={`w-px h-1 ${done ? "bg-[#156082]" : "bg-gray-200"} mt-0.5`} />
+                  <div className={`w-px h-1 ${done ? "bg-[#5B7CFF]" : "bg-gray-200"} mt-0.5`} />
                 )}
               </div>
               <div className="flex-1 min-w-0 pt-0.5">
@@ -388,7 +388,7 @@ function CommsDraftCard({ isAr, t, onOpenApprovals }: { isAr: boolean; t: Return
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
       <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2 flex items-center gap-1.5">
-        <MessageSquare size={11} className="text-[#196B24]" />
+        <MessageSquare size={11} className="text-[#8A5BD6]" />
         {isAr ? "مسوّدة تواصل العملاء" : "Customer comms draft"}
         <span className="ms-auto text-[10px] text-gray-400 font-normal">
           {isAr ? "من كاتب التواصل" : "from Comms Drafter"}

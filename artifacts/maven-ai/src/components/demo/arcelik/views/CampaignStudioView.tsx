@@ -45,7 +45,7 @@ function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLa
               <Sparkles size={18} className="text-[#E30613]" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-[#0E2841]">{getCampaignField(campaign, "name", lang)}</h4>
+              <h4 className="text-sm font-bold text-[#0A1230]">{getCampaignField(campaign, "name", lang)}</h4>
               <p className="text-[11px] text-gray-500">{getCampaignField(campaign, "targetSegment", lang)}</p>
             </div>
           </div>
@@ -63,7 +63,7 @@ function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLa
           </div>
           <div className="bg-gray-50 rounded-lg p-2">
             <p className="text-[10px] text-gray-500 flex items-center gap-1"><DollarSign size={10} /> {t.revenue}</p>
-            <p className="text-sm font-bold text-[#0E2841]">{campaign.projectedImpact.revenueDelta}</p>
+            <p className="text-sm font-bold text-[#0A1230]">{campaign.projectedImpact.revenueDelta}</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-2">
             <p className="text-[10px] text-gray-500 flex items-center gap-1"><Target size={10} /> {t.marginImpact}</p>
@@ -96,7 +96,7 @@ function CampaignCard({ campaign, onLaunch }: { campaign: CampaignTemplate; onLa
       </div>
 
       <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between bg-gray-50/50">
-        <button onClick={() => setExpanded(!expanded)} className="text-xs text-gray-500 hover:text-[#0E2841] font-medium flex items-center gap-1">
+        <button onClick={() => setExpanded(!expanded)} className="text-xs text-gray-500 hover:text-[#0A1230] font-medium flex items-center gap-1">
           {expanded ? t.collapse : t.details}
           <ChevronRight size={12} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
         </button>
@@ -156,7 +156,7 @@ function CampaignBuilder() {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-5">
       <h3 className="text-sm font-bold flex items-center gap-2">
-        <Edit3 size={16} className="text-[#F5A623]" />
+        <Edit3 size={16} className="text-[#C45BB8]" />
         {t.builderTitle}
       </h3>
 
@@ -317,7 +317,7 @@ function CampaignBuilder() {
         </div>
 
         <div className="space-y-4">
-          <div className="bg-gradient-to-br from-[#0E2841] to-[#1a3a5c] rounded-xl p-5 text-white">
+          <div className="bg-gradient-to-br from-[#0A1230] to-[#1B2755] rounded-xl p-5 text-white">
             <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-3">{t.estimatedImpact}</p>
             <div className="space-y-3">
               <div className="flex justify-between items-center">
@@ -353,7 +353,7 @@ function CampaignBuilder() {
               }, 2000);
             }}
             disabled={aiOptimizing}
-            className="w-full py-2.5 rounded-xl border-2 border-[#F5A623] text-[#F5A623] font-bold text-sm hover:bg-[#F5A623]/5 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full py-2.5 rounded-xl border-2 border-[#C45BB8] text-[#C45BB8] font-bold text-sm hover:bg-[#C45BB8]/5 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
             <Sparkles size={16} className={aiOptimizing ? "animate-spin" : ""} />
             {aiOptimizing ? t.optimizing : t.optimizeAI}
@@ -390,7 +390,7 @@ export default function CampaignStudioView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <h2 className="text-lg font-bold text-[#0E2841]">{t.title}</h2>
+        <h2 className="text-lg font-bold text-[#0A1230]">{t.title}</h2>
         <div className="flex bg-gray-100 rounded-lg p-0.5">
           {([
             { id: "suggested" as Tab, label: t.tabAI, icon: Sparkles },
@@ -401,7 +401,7 @@ export default function CampaignStudioView() {
               key={tb.id}
               onClick={() => setTab(tb.id)}
               className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                tab === tb.id ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500 hover:text-gray-700"
+                tab === tb.id ? "bg-white text-[#0A1230] shadow-sm" : "text-gray-500 hover:text-gray-700"
               }`}
             >
               <tb.icon size={13} /> {tb.label}
@@ -415,7 +415,7 @@ export default function CampaignStudioView() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-5">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
               <Brain size={15} className="text-[#E30613]" />
-              <h3 className="text-sm font-bold text-[#0E2841]">{t.agentSuggestions}</h3>
+              <h3 className="text-sm font-bold text-[#0A1230]">{t.agentSuggestions}</h3>
               <span className="text-[9px] font-bold bg-[#E30613] text-white px-1.5 py-0.5 rounded-full ml-1">AI</span>
               <span className="text-[10px] text-gray-400 ml-auto">{t.autonomousResults}</span>
             </div>
@@ -427,7 +427,7 @@ export default function CampaignStudioView() {
                       <Sparkles size={14} className="text-purple-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[#0E2841] mb-0.5">{s.suggestion}</p>
+                      <p className="text-sm font-semibold text-[#0A1230] mb-0.5">{s.suggestion}</p>
                       <p className="text-xs text-gray-500 mb-1.5">{s.reasoning}</p>
                       <div className="flex items-center gap-3 text-[10px]">
                         <span className="text-green-600 font-bold">{s.impact}</span>
@@ -469,7 +469,7 @@ export default function CampaignStudioView() {
                     <CheckCircle2 size={16} className="text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[#0E2841]">{t[h.nameKey]}</p>
+                    <p className="text-sm font-semibold text-[#0A1230]">{t[h.nameKey]}</p>
                     <p className="text-[11px] text-gray-500 flex items-center gap-1"><Calendar size={10} /> {t[h.datesKey]}</p>
                   </div>
                   <div className="text-right">

@@ -99,7 +99,7 @@ function OrderStepper({ currentStep, steps }: { currentStep: number; steps: stri
             } ${active ? "ring-2 ring-[#E30613]/30" : ""}`}>
               {done ? "✓" : i + 1}
             </div>
-            <span className={`text-[9px] whitespace-nowrap ${done ? "text-[#0E2841] font-semibold" : "text-gray-400"}`}>{label}</span>
+            <span className={`text-[9px] whitespace-nowrap ${done ? "text-[#0A1230] font-semibold" : "text-gray-400"}`}>{label}</span>
             {i < steps.length - 1 && <div className={`flex-1 h-px ${done ? "bg-[#E30613]" : "bg-gray-200"}`} />}
           </div>
         );
@@ -247,7 +247,7 @@ export default function StockOrdersView() {
             <div key={order.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <p className="text-xs font-bold text-[#0E2841]">{order.id}</p>
+                  <p className="text-xs font-bold text-[#0A1230]">{order.id}</p>
                   <p className="text-[11px] text-gray-400">{t[order.dateKey]}</p>
                 </div>
                 <div className="text-right">

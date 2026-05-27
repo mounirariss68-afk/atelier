@@ -66,26 +66,26 @@ export default function EventWorkspaceView() {
           <ChevronRight size={11} className={isAr ? "rotate-180" : ""} />
           <span>{isAr ? event.categoryAr : event.categoryEn}</span>
         </div>
-        <h1 className="text-2xl font-bold text-[#0E2841]">{t.title[lang]}</h1>
+        <h1 className="text-2xl font-bold text-[#0A1230]">{t.title[lang]}</h1>
         <p className="text-sm text-gray-500 mt-1">{t.subtitle[lang]}</p>
       </header>
 
       {/* Faisal's morning callout */}
       <div className="rounded-xl p-4 border-l-[3px]" style={{ background: BRAND_MUTED, borderLeftColor: BRAND }}>
         <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: BRAND }}>{t.storyHeader[lang]}</p>
-        <p className="text-sm text-[#0E2841] mt-1">{t.storyBody[lang]}</p>
+        <p className="text-sm text-[#0A1230] mt-1">{t.storyBody[lang]}</p>
       </div>
 
       {/* Bid matrix */}
       <section className="bg-white border border-gray-200 rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-sm font-bold text-[#0E2841]">{t.bidMatrix[lang]}</h2>
+            <h2 className="text-sm font-bold text-[#0A1230]">{t.bidMatrix[lang]}</h2>
             <p className="text-xs text-gray-500 mt-0.5">{t.bidMatrixSub[lang]}</p>
           </div>
           <div className="flex bg-gray-100 rounded-full p-0.5 text-[11px] font-semibold">
-            <button onClick={() => setCostView("price")} className={`px-3 py-1 rounded-full transition-colors ${costView === "price" ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500"}`}>{t.viewPrice[lang]}</button>
-            <button onClick={() => setCostView("tco")} className={`px-3 py-1 rounded-full transition-colors ${costView === "tco" ? "bg-white text-[#0E2841] shadow-sm" : "text-gray-500"}`}>{t.viewTco[lang]}</button>
+            <button onClick={() => setCostView("price")} className={`px-3 py-1 rounded-full transition-colors ${costView === "price" ? "bg-white text-[#0A1230] shadow-sm" : "text-gray-500"}`}>{t.viewPrice[lang]}</button>
+            <button onClick={() => setCostView("tco")} className={`px-3 py-1 rounded-full transition-colors ${costView === "tco" ? "bg-white text-[#0A1230] shadow-sm" : "text-gray-500"}`}>{t.viewTco[lang]}</button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -96,7 +96,7 @@ export default function EventWorkspaceView() {
       {/* Round timeline + Allocation slider */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <section className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="text-sm font-bold text-[#0E2841]">{t.roundTimeline[lang]}</h2>
+          <h2 className="text-sm font-bold text-[#0A1230]">{t.roundTimeline[lang]}</h2>
           <p className="text-xs text-gray-500 mt-0.5 mb-4">{t.roundTimelineSub[lang]}</p>
           <div className="h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -114,7 +114,7 @@ export default function EventWorkspaceView() {
             {rounds.map((r) => (
               <div key={r.round} className="bg-gray-50 rounded-lg p-2">
                 <div className="text-[10px] text-gray-400 uppercase tracking-wider">{t.round[lang]} {r.round}</div>
-                <div className="text-sm font-bold text-[#0E2841]">{r.savingsPct.toFixed(1)}%</div>
+                <div className="text-sm font-bold text-[#0A1230]">{r.savingsPct.toFixed(1)}%</div>
                 <div className="text-[10px] text-gray-500">{r.participating} {t.participating[lang]}</div>
               </div>
             ))}
@@ -122,25 +122,25 @@ export default function EventWorkspaceView() {
         </section>
 
         <section className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="text-sm font-bold text-[#0E2841]">{t.allocation[lang]}</h2>
+          <h2 className="text-sm font-bold text-[#0A1230]">{t.allocation[lang]}</h2>
           <p className="text-xs text-gray-500 mt-0.5 mb-4">{t.allocationSub[lang]}</p>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[12px]">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-sm" style={{ background: BRAND }} />
-                  <span className="font-bold text-[#0E2841]">{isAr ? supplierA.nameAr : supplierA.nameEn}</span>
+                  <span className="font-bold text-[#0A1230]">{isAr ? supplierA.nameAr : supplierA.nameEn}</span>
                   <span className="text-gray-400">{splitA}%</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-gray-400">{100 - splitA}%</span>
-                  <span className="font-bold text-[#0E2841]">{isAr ? supplierB.nameAr : supplierB.nameEn}</span>
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[#156082]" />
+                  <span className="font-bold text-[#0A1230]">{isAr ? supplierB.nameAr : supplierB.nameEn}</span>
+                  <span className="w-2.5 h-2.5 rounded-sm bg-[#5B7CFF]" />
                 </div>
               </div>
               <div className="relative h-3 rounded-full overflow-hidden bg-gray-100">
                 <div className="h-full" style={{ width: `${splitA}%`, background: BRAND }} />
-                <div className="absolute top-0 h-full bg-[#156082]" style={{ ...(isAr ? { right: `${splitA}%`, width: `${100 - splitA}%` } : { left: `${splitA}%`, width: `${100 - splitA}%` }) }} />
+                <div className="absolute top-0 h-full bg-[#5B7CFF]" style={{ ...(isAr ? { right: `${splitA}%`, width: `${100 - splitA}%` } : { left: `${splitA}%`, width: `${100 - splitA}%` }) }} />
               </div>
               <input type="range" min={0} max={100} step={5} value={splitA} onChange={(e) => setSplitA(Number(e.target.value))} className="w-full mt-2 accent-[#D9534F]" />
             </div>
@@ -160,8 +160,8 @@ export default function EventWorkspaceView() {
         <div className="flex items-start gap-3">
           <FileText size={18} style={{ color: signed ? SEMANTIC.good : BRAND }} />
           <div className="flex-1">
-            <h2 className="text-sm font-bold text-[#0E2841]">{t.awardMemo[lang]}</h2>
-            <p className="text-[12px] font-bold text-[#0E2841] mt-2">{memo.headline}</p>
+            <h2 className="text-sm font-bold text-[#0A1230]">{t.awardMemo[lang]}</h2>
+            <p className="text-[12px] font-bold text-[#0A1230] mt-2">{memo.headline}</p>
             <ul className="text-[12px] text-gray-700 list-disc list-inside mt-1.5 space-y-1">
               {memo.bullets.map((b, i) => <li key={i}>{b}</li>)}
             </ul>
@@ -186,7 +186,7 @@ export default function EventWorkspaceView() {
 }
 
 function Tile({ label, value, highlight }: { label: string; value: string; highlight?: "good" | "warn" }) {
-  const color = highlight === "good" ? SEMANTIC.good : highlight === "warn" ? SEMANTIC.warn : "#0E2841";
+  const color = highlight === "good" ? SEMANTIC.good : highlight === "warn" ? SEMANTIC.warn : "#0A1230";
   return (
     <div className="bg-gray-50 rounded-lg p-2.5">
       <div className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</div>
@@ -242,7 +242,7 @@ function BidMatrix({ items, suppliers, costView, isAr }: { items: LineItem[]; su
         {items.map((it) => (
           <tr key={it.id} className="border-t border-gray-100">
             <td className={`px-2 py-1.5 sticky ${isAr ? "right-0" : "left-0"} bg-white z-10 font-mono text-gray-700 whitespace-nowrap`}>
-              <div className="text-[10px] font-bold text-[#0E2841]">{it.code}</div>
+              <div className="text-[10px] font-bold text-[#0A1230]">{it.code}</div>
               <div className="text-[9px] text-gray-400 line-clamp-1 max-w-[180px]">{isAr ? it.descriptionAr : it.descriptionEn}</div>
             </td>
             {suppliers.map((s) => {
@@ -264,7 +264,7 @@ function BidMatrix({ items, suppliers, costView, isAr }: { items: LineItem[]; su
                 <td key={s.id} className={`px-2 py-1.5 text-center font-mono ${isBest ? "outline outline-2 outline-offset-[-2px]" : ""}`}
                     style={{ background: bg, outlineColor: isBest ? BRAND : undefined }}
                     title={`${cellValue.toLocaleString()} (${pct.toFixed(1)}%)${costView === "tco" ? " · TCO" : ""}`}>
-                  <div className="text-[11px] font-semibold text-[#0E2841]">{Math.round(cellValue).toLocaleString()}</div>
+                  <div className="text-[11px] font-semibold text-[#0A1230]">{Math.round(cellValue).toLocaleString()}</div>
                   <div className={`text-[9px] ${pct < 0 ? "text-emerald-700" : pct > 0 ? "text-amber-700" : "text-gray-400"}`}>{pct >= 0 ? "+" : ""}{pct.toFixed(1)}%</div>
                 </td>
               );

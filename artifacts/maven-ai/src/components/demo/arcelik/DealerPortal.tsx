@@ -22,7 +22,7 @@ export type DealerViewId = "home" | "prices" | "campaigns" | "targets" | "stock"
 export const OPTIMAL_STOCK: Record<string, number> = {
   buzdolabi: 15, camasir: 12, bulasik: 10, firin: 8, klima: 10, "kucuk-ev": 30, "tv-elektronik": 8,
 };
-export const TIER_COLORS: Record<string, string> = { gold: "#F5A623", silver: "#94A3B8", bronze: "#CD7F32" };
+export const TIER_COLORS: Record<string, string> = { gold: "#C45BB8", silver: "#94A3B8", bronze: "#CD7F32" };
 
 const NAV_ITEMS: { id: DealerViewId; labelKey: "navHome" | "navPrices" | "navCampaigns" | "navTargets" | "navStock" | "navAnnouncements"; icon: typeof Home }[] = [
   { id: "home", labelKey: "navHome", icon: Home },
@@ -82,8 +82,8 @@ function DealerPortalInner() {
   const notifCount = lowStockCount + 2;
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 text-[#0E2841]">
-      <header className="flex-shrink-0 h-14 bg-[#0E2841] text-white flex items-center px-4 gap-4 z-30 relative">
+    <div className="h-screen flex flex-col bg-gray-50 text-[#0A1230]">
+      <header className="flex-shrink-0 h-14 bg-[#0A1230] text-white flex items-center px-4 gap-4 z-30 relative">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-[#E30613] flex items-center justify-center text-white font-bold text-sm">A</div>
           <div className="hidden sm:block leading-tight">
@@ -116,8 +116,8 @@ function DealerPortalInner() {
             <MessageCircle size={18} />
           </button>
           <div className="flex items-center bg-white/10 rounded-full p-0.5">
-            <button onClick={() => setLang("tr")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "tr" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>TR</button>
-            <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0E2841]" : "text-white/60 hover:text-white"}`}>EN</button>
+            <button onClick={() => setLang("tr")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "tr" ? "bg-white text-[#0A1230]" : "text-white/60 hover:text-white"}`}>TR</button>
+            <button onClick={() => setLang("en")} className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${lang === "en" ? "bg-white text-[#0A1230]" : "text-white/60 hover:text-white"}`}>EN</button>
           </div>
           <Link
             href="/demo/arcelik-fiyat-istihbarati/dashboard"
@@ -141,7 +141,7 @@ function DealerPortalInner() {
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="absolute top-12 right-16 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 text-[#0E2841] overflow-hidden"
+                className="absolute top-12 right-16 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 text-[#0A1230] overflow-hidden"
               >
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                   <p className="text-sm font-bold">{t.notifications}</p>
@@ -176,7 +176,7 @@ function DealerPortalInner() {
                 key={item.id}
                 onClick={() => setView(item.id)}
                 className={`px-4 py-3.5 flex items-center gap-3 text-[13px] font-medium border-l-[3px] transition-colors ${
-                  active ? "border-[#E30613] text-[#E30613] bg-red-50/60" : "border-transparent text-gray-500 hover:text-[#0E2841] hover:bg-gray-50"
+                  active ? "border-[#E30613] text-[#E30613] bg-red-50/60" : "border-transparent text-gray-500 hover:text-[#0A1230] hover:bg-gray-50"
                 }`}
               >
                 <Icon size={18} />

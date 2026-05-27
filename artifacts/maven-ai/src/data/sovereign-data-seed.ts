@@ -141,8 +141,8 @@ export function fmtFreshness(min: number, lang: "en" | "ar"): string {
 export function classificationColor(c: Classification): string {
   if (c === "restricted") return "#D9534F";
   if (c === "sensitive") return "#F59E0B";
-  if (c === "internal") return "#156082";
-  return "#196B24";
+  if (c === "internal") return "#5B7CFF";
+  return "#8A5BD6";
 }
 
 export function statusColor(s: ProductStatus): string {
@@ -150,7 +150,7 @@ export function statusColor(s: ProductStatus): string {
   if (s === "pending") return "#F59E0B";
   if (s === "draft") return "#5C8CA8";
   if (s === "deprecated") return "#9CA3AF";
-  return "#196B24";
+  return "#8A5BD6";
 }
 
 // Lineage graph for the active product (Citizen Sentiment Dashboard)

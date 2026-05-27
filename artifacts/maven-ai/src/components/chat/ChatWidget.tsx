@@ -86,7 +86,22 @@ const STARTERS_TR = [
   "Egemen on-prem AI'ya yaklaşımınız nedir?",
 ];
 
-const SESSION_KEY = "maven-ai-chat-open";
+const SESSION_KEY = "cognirise-chat-open";
+const LEGACY_SESSION_KEY = "maven-ai-chat-open";
+
+if (typeof window !== "undefined") {
+  try {
+    const legacy = window.sessionStorage.getItem(LEGACY_SESSION_KEY);
+    if (legacy !== null) {
+      if (window.sessionStorage.getItem(SESSION_KEY) === null) {
+        window.sessionStorage.setItem(SESSION_KEY, legacy);
+      }
+      window.sessionStorage.removeItem(LEGACY_SESSION_KEY);
+    }
+  } catch {
+    // ignore storage access errors
+  }
+}
 
 export default function ChatWidget() {
   const { lang, dir } = useLang();

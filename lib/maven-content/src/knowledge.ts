@@ -1,7 +1,7 @@
 import type { AgentCast } from "./agentCasts";
 
 /**
- * Maven AI knowledge base — used by:
+ * Cognirise knowledge base — used by:
  *  - the chat assistant on the server (system-prompt grounding)
  *  - the chat widget on the client (suggestion cards / linking)
  *
@@ -135,7 +135,7 @@ export interface MarketplaceToolEntry {
   accent: string;
   /** Lucide icon name (resolved on the client). */
   icon: string;
-  /** Relevant Maven AI service slug, used for cross-linking on the detail page. */
+  /** Relevant Cognirise service slug, used for cross-linking on the detail page. */
   relatedService?: string;
   /** Relevant assessment slug, used for cross-linking on the detail page. */
   relatedAssessment?: AssessmentEntry["slug"];
@@ -436,20 +436,6 @@ export const founders: FounderEntry[] = [
     location: "Riyadh, KSA",
     summary:
       "15+ years in enterprise AI engineering. Expert in agentic AI platforms, LLM orchestration, and sovereign on-prem AI.",
-  },
-  {
-    name: "Alper Kulak",
-    title: "Senior Partner",
-    location: "Dubai, UAE",
-    summary:
-      "Data platform and AI governance expert. 15+ years building data foundations for GCC telecoms, banks, and government.",
-  },
-  {
-    name: "Khalid Al Khudairi",
-    title: "Senior Partner",
-    location: "Riyadh, KSA",
-    summary:
-      "KSA Vision 2030 advisor with deep PIF and government relationships. 12+ years in AI adoption and organisational transformation.",
   },
 ];
 
@@ -2065,12 +2051,12 @@ export function getDemoAccent(slug: string, fallback = "#156082"): string {
 
 export const firmFacts = {
   positioning:
-    "Maven AI is a boutique GCC AI advisory and engineering firm — sister firm to Maven Insights (~200 consultant bench). We exist to close the gap between enterprise AI ambition and production outcomes.",
+    "Cognirise is a boutique GCC AI advisory and engineering firm — sister firm to Maven Insights (~200 consultant bench). We exist to close the gap between enterprise AI ambition and production outcomes.",
   offices: "4 GCC offices (Dubai, Riyadh and partner presence across the Gulf).",
   promise:
     "Senior partners on every call, every deliverable. 90-day MVP commitment from kickoff to production. Sovereign on-prem capable for national security environments.",
   pricing:
-    "Engagement-based, scoped per programme. Maven AI does not publish day rates publicly. Use the diagnostics or book a 30-minute readout to discuss scope.",
+    "Engagement-based, scoped per programme. Cognirise does not publish day rates publicly. Use the diagnostics or book a 30-minute readout to discuss scope.",
   contact:
     "Use the Contact page or book a 30-minute partner readout from any assessment results page. Founders' email is reserved for shortlisted scope conversations.",
 };
@@ -2129,7 +2115,7 @@ export function buildKnownLinks(): KnownLink[] {
     });
   }
   out.push({ kind: "page", href: "/marketplace", label: "Marketplace — all demo tools" });
-  out.push({ kind: "page", href: "/about", label: "About Maven AI (founders, story, operating model)" });
+  out.push({ kind: "page", href: "/about", label: "About Cognirise (founders, story, operating model)" });
   out.push({ kind: "page", href: "/contact", label: "Contact / book a 30-minute readout" });
   out.push({ kind: "page", href: "/insights", label: "All insights" });
   out.push({ kind: "page", href: "/assessments", label: "All diagnostic assessments" });

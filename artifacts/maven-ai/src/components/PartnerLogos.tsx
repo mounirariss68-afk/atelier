@@ -40,12 +40,12 @@ interface PartnerLogosProps {
 
 export default function PartnerLogos({ variant = "light", showHeading = true }: PartnerLogosProps) {
   const isDark = variant === "dark";
-  const bgClass = isDark ? "bg-[#0E2841]" : "bg-white";
-  const headingColor = isDark ? "text-white" : "text-[#0E2841]";
+  const bgClass = isDark ? "bg-[#0A1230]" : "bg-white";
+  const headingColor = isDark ? "text-white" : "text-[#0A1230]";
   const subColor = isDark ? "text-gray-400" : "text-gray-600";
-  const eyebrowColor = isDark ? "text-[#F5A623]" : "text-[#F5A623]";
+  const eyebrowColor = isDark ? "text-[#C45BB8]" : "text-[#C45BB8]";
   const logoColor = isDark ? "text-gray-300" : "text-gray-500";
-  const logoHover = isDark ? "hover:text-white" : "hover:text-[#0E2841]";
+  const logoHover = isDark ? "hover:text-white" : "hover:text-[#0A1230]";
   const tileBg = isDark ? "bg-white/5" : "bg-gray-50/60";
 
   return (

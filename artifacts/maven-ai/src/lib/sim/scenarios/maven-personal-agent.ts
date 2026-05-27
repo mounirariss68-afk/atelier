@@ -1,5 +1,5 @@
 /**
- * Maven Personal Agent — scenario for the Marketplace detail page.
+ * Cognirise Personal Agent — scenario for the Marketplace detail page.
  *
  * The Personal Agent has its own purpose-built demos (Cockpit and Mind),
  * dispatched by Demo.tsx before the scenario engine is consulted. This
@@ -12,7 +12,7 @@ import type { Scenario } from "../types";
 
 const personalAgent: Scenario = {
   slug: "maven-personal-agent",
-  toolTitle: { en: "Maven Personal Agent", ar: "مساعد Maven الشخصي" },
+  toolTitle: { en: "Cognirise Personal Agent", ar: "مساعد Cognirise الشخصي" },
   accent: "#a78bfa",
   description: {
     en: "An always-on per-employee AI agent. Learns the job and the person, stores it in an employee-owned Personal Context Graph, and acts autonomously under a glass-box trust model.",

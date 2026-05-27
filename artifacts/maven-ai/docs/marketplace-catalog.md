@@ -1,10 +1,10 @@
-# Maven AI Marketplace — Demo Catalog
+# Cognirise Marketplace — Demo Catalog
 
 _Internal research brief that defines the demo taxonomy and the set of tools the public Marketplace exposes._
 
 ## Why a marketplace
 
-The Marketplace is the part of the Maven AI website that lets buyers _click into a working agent_, not just read a deck. It exists because:
+The Marketplace is the part of the Cognirise website that lets buyers _click into a working agent_, not just read a deck. It exists because:
 
 - **MIT NANDA finds 95% of enterprise GenAI pilots deliver no measurable P&L impact.** The buyer's question is no longer "can this work?" but "show me what _good_ looks like." The Marketplace is our answer.
 - Each tool is positioned around a **named buyer** (CFO, CIO, COO, CDO, Head of Programmes, Head of Supply Chain) and a **realised value claim** they can verify in the demo itself.
@@ -32,7 +32,7 @@ For each demo: `slug` · class · industries · horizontals · buyer · status �
 - **Industries:** all · **Horizontals:** PMO, FP&A
 - Portfolio dashboard for an AI initiative book of work. Shows realised vs expected value, value-at-risk, ROI gauge, time-to-value, and a leakage callout that explains _which_ initiatives are bleeding value and why.
 - Editable in the browser — every initiative card opens a drawer with sliders for expected $, realised $, confidence, status, and risk drivers. Charts re-render live.
-- "Reset to sample" restores the canonical Maven demo book of work. "Print summary" opens a print-styled CFO-ready one-pager.
+- "Reset to sample" restores the canonical Cognirise demo book of work. "Print summary" opens a print-styled CFO-ready one-pager.
 
 ### 2. Programme Health Copilot — `programme-health-copilot`
 - **Class:** PMO / Delivery Copilot · **Buyer:** Head of EPMO · **Status:** `coming-soon`
@@ -112,7 +112,7 @@ Every Marketplace tool has the same detail-page shape so the buyer can compare a
 ## Filter axes on the index
 
 - **Class** — the eight classes above.
-- **Industry** — the seven Maven AI industries (Public Sector, Telecom, Financial Services, Energy & Commodities, Retail & Consumer, Travel & Hospitality, Automotive).
+- **Industry** — the seven Cognirise industries (Public Sector, Telecom, Financial Services, Energy & Commodities, Retail & Consumer, Travel & Hospitality, Automotive).
 - **Horizontal** — PMO, Supply Chain, FP&A.
 
 The index supports query-string deep-linking so the Industry pages can link in: e.g. `/marketplace?industry=telecom`.

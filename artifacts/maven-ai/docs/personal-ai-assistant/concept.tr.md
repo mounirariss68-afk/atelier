@@ -1,6 +1,6 @@
-# Maven Kişisel Ajan — konsept belgesi
+# Cognirise Kişisel Ajan — konsept belgesi
 
-> Çalışma adı: **Maven Kişisel Ajan**. Persona başına ajan kişilikleri: **Atlas** (Satış) ve **Ember** (İK).
+> Çalışma adı: **Cognirise Kişisel Ajan**. Persona başına ajan kişilikleri: **Atlas** (Satış) ve **Ember** (İK).
 >
 > Bu belge, marketplace aracı girişi, iki demo (Cockpit ve Mind) ve altlarındaki seed verileri için sözleşmedir. Yukarıdan aşağıya yaklaşık 15 dakikada okunur.
 
@@ -10,7 +10,7 @@
 
 Bugün kurumsal AI asistanlarının çoğu, kurumsal verilere bağlı akıllı sohbet botlarıdır. Araç değiştirdiğinizde söylediklerinizi unuturlar. İş değiştirdiğinizde sizi tamamen unuturlar. Kara kutuda akıl yürütürler. Ve işteki insanın evdeki insanla ilgisi yokmuş gibi davranırlar.
 
-**Maven Kişisel Ajan**, bu dört varsayımı da reddeder. İşi ve kişiyi öğrenen, bu bilgiyi **çalışanın sahip olduğu ve işverenler arasında taşıyabildiği bir Kişisel Bağlam Grafiğinde (PCG)** depolayan ve **cam-kutu güven modeli** altında her karar için tek tıkla geri alma ile özerk hareket eden, her çalışan için her zaman açık bir AI ajanıdır. Tek bir ajan, bütün kişi için — teklif mektubunuzu yazıp aynı zamanda kızınızın resitalini hatırlayarak — iş kapsamı ile kişisel kapsam arasında katı bir gizlilik sınırıyla.
+**Cognirise Kişisel Ajan**, bu dört varsayımı da reddeder. İşi ve kişiyi öğrenen, bu bilgiyi **çalışanın sahip olduğu ve işverenler arasında taşıyabildiği bir Kişisel Bağlam Grafiğinde (PCG)** depolayan ve **cam-kutu güven modeli** altında her karar için tek tıkla geri alma ile özerk hareket eden, her çalışan için her zaman açık bir AI ajanıdır. Tek bir ajan, bütün kişi için — teklif mektubunuzu yazıp aynı zamanda kızınızın resitalini hatırlayarak — iş kapsamı ile kişisel kapsam arasında katı bir gizlilik sınırıyla.
 
 Üç öldürücü açı, her biri hâkim pazar duruşunun bilinçli bir tersine çevrilmesidir:
 
@@ -65,7 +65,7 @@ Bağımsız yazarlar ve küçük girişimler yıllardır AI belleğinin kullanı
 Üç canlı UI paradigması. Devin ve Manus ajana bir çalışma alanı verir ve eşzamansız çalışmasına izin verir (delegasyon). Cursor insanı ve ajanı aynı eserde eşleştirir (işbirliği). Lindy araçları bildirimsel iş akışları aracılığıyla zincirler. **Cockpitimiz** kasıtlı olarak işbirliğini (sol panel sohbeti) ve delegasyonu (merkez çalışma alanı) aynı ekranda harmanlar, böylece aynı bağlam her iki modu da yönlendirir.
 
 ### Farklılaşma ifadesi (tek paragraf)
-Cedric, Amazon Q Business ve Microsoft 365 Copilot Memory, belleği işverene veya satıcıya ait olan akıllı sohbet botlarıdır; çalışan her iş değişikliğinde yeniden eğitilir. Devin ve Manus delegasyonda mükemmeldir ancak belleği oturum-yerel olarak ele alır. Lindy araçları zincirler ancak hiçbir kişisel grafik kavramı yoktur. Maven Kişisel Ajan, (a) belleğin taşınabilir bir çalışana-ait grafik olduğu, (b) her cevap ve her eylemin onu temellendiren tam grafik düğümleriyle canlı yüzeylendiği ve (c) aynı ajanın temiz bir gizlilik sınırı altında çalışanın hem işine hem de kişisel hayatına hizmet ettiği tek tasarımdır. Üç öldürücü açı, bir sohbet botunun üzerine katmanlanmış özellikler değildir; mimarinin kendisidir.
+Cedric, Amazon Q Business ve Microsoft 365 Copilot Memory, belleği işverene veya satıcıya ait olan akıllı sohbet botlarıdır; çalışan her iş değişikliğinde yeniden eğitilir. Devin ve Manus delegasyonda mükemmeldir ancak belleği oturum-yerel olarak ele alır. Lindy araçları zincirler ancak hiçbir kişisel grafik kavramı yoktur. Cognirise Kişisel Ajan, (a) belleğin taşınabilir bir çalışana-ait grafik olduğu, (b) her cevap ve her eylemin onu temellendiren tam grafik düğümleriyle canlı yüzeylendiği ve (c) aynı ajanın temiz bir gizlilik sınırı altında çalışanın hem işine hem de kişisel hayatına hizmet ettiği tek tasarımdır. Üç öldürücü açı, bir sohbet botunun üzerine katmanlanmış özellikler değildir; mimarinin kendisidir.
 
 ---
 
@@ -160,7 +160,7 @@ Bölüm 5'teki iki persona, yukarıdaki **Satış — Kıdemli AE** ve **İK —
 
 **İş-vs-kişisel kapsam** her düğümdeki birinci sınıf bir alandır. `personal` etiketli bir düğüm, herhangi bir toplam görünümde işverene görünmez. Çalışan bir düğümü herhangi bir zamanda yeniden etiketleyebilir, grafiği dışa aktarmadan önce toplu yeniden etiketleme dahil.
 
-**Taşınabilirlik modeli.** PCG, herhangi bir zamanda JSON-LD (`@context: https://maven.ai/pcg/v1`) olarak dışa aktarılabilir. Dışa aktarılan yük, her düğüm, her kenar, tüm kaynaklar ve her düğümü yazan ajan sürümlerinin manifestosunu içerir. Maven lisanslayan yeni bir işveren yalnızca **iş-kapsamı alt kümesini** içe aktarabilir (çalışan neyi paylaşacağını seçer) ve grafik küratörü düğümleri yeni çalışanın PCG'sine tam kaynaklar korunarak birleştirir.
+**Taşınabilirlik modeli.** PCG, herhangi bir zamanda JSON-LD (`@context: https://cognirise.com/pcg/v1`) olarak dışa aktarılabilir. Dışa aktarılan yük, her düğüm, her kenar, tüm kaynaklar ve her düğümü yazan ajan sürümlerinin manifestosunu içerir. Cognirise lisanslayan yeni bir işveren yalnızca **iş-kapsamı alt kümesini** içe aktarabilir (çalışan neyi paylaşacağını seçer) ve grafik küratörü düğümleri yeni çalışanın PCG'sine tam kaynaklar korunarak birleştirir.
 
 ---
 

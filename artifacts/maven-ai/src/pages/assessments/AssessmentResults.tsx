@@ -33,9 +33,9 @@ import AssessmentPDF from "@/components/assessment/AssessmentPDF";
 const TIER_COLORS: Record<string, string> = {
   Nascent: "#B91C1C",
   Emerging: "#D97706",
-  Established: "#0F9ED5",
-  Advanced: "#156082",
-  Leading: "#196B24",
+  Established: "#5B7CFF",
+  Advanced: "#5B7CFF",
+  Leading: "#8A5BD6",
 };
 
 export default function AssessmentResults() {
@@ -84,13 +84,13 @@ export default function AssessmentResults() {
   if (!data) {
     return (
       <div className="pt-32 text-center">
-        <Loader2 className="mx-auto animate-spin text-[#156082]" size={48} />
+        <Loader2 className="mx-auto animate-spin text-[#5B7CFF]" size={48} />
       </div>
     );
   }
 
   const result = data.result as ScoreResult;
-  const tierColor = TIER_COLORS[result.tier] ?? "#156082";
+  const tierColor = TIER_COLORS[result.tier] ?? "#5B7CFF";
   const interp = TIER_INTERPRETATION[result.tier];
   const radarDims = def.dimensions.map((d) => ({ id: d.id, label: tStr(d.title, lang) }));
   const peerAverages = result.peerBenchmark;
@@ -166,7 +166,7 @@ export default function AssessmentResults() {
               <span className="text-xs text-gray-400">·</span>
               <span className="text-xs text-gray-500">{formatDate(new Date(data.createdAt), lang)}</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-[#0E2841] leading-tight">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-[#0A1230] leading-tight">
               {t({ en: "Your", ar: "تقريرك في", tr: "Sizin" })} {def.code} {t({ en: "report", ar: "", tr: "raporunuz" })}
             </h1>
             <p className="mt-2 text-lg text-gray-600 max-w-2xl">{t(def.subtitle)}</p>
@@ -181,11 +181,11 @@ export default function AssessmentResults() {
                 </div>
               </div>
               <div className="text-center sm:text-left">
-                <div className="border-l-4 pl-5 py-2" style={{ borderColor: "#196B24" }}>
+                <div className="border-l-4 pl-5 py-2" style={{ borderColor: "#8A5BD6" }}>
                   <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mb-1">
                     {t(ui.results.sovereignSubScore)}
                   </p>
-                  <p className="text-4xl font-extrabold text-[#196B24]">
+                  <p className="text-4xl font-extrabold text-[#8A5BD6]">
                     {fmtScore(result.sovereignSubScore.score)} <span className="text-base text-gray-400">/ 5</span>
                   </p>
                   <p className="text-sm text-gray-600 mt-2 leading-relaxed">{sovereignSummary || t({ en: "No sovereign-flagged answers yet.", ar: "لا توجد إجابات سيادية بعد.", tr: "Henüz egemenlikle ilgili işaretlenmiş yanıt yok." })}</p>
@@ -197,7 +197,7 @@ export default function AssessmentResults() {
               <button
                 onClick={downloadPdf}
                 disabled={downloading}
-                className="inline-flex items-center gap-2 bg-[#0E2841] hover:bg-[#1a3a5c] text-white font-semibold px-5 py-3 rounded-xl transition"
+                className="inline-flex items-center gap-2 bg-[#0A1230] hover:bg-[#1B2755] text-white font-semibold px-5 py-3 rounded-xl transition"
                 data-testid="button-download-pdf"
               >
                 {downloading ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
@@ -206,7 +206,7 @@ export default function AssessmentResults() {
               <button
                 onClick={sendEmail}
                 disabled={emailing || emailSent}
-                className="inline-flex items-center gap-2 bg-white border-2 border-[#156082] text-[#156082] font-semibold px-5 py-3 rounded-xl hover:bg-blue-50 transition"
+                className="inline-flex items-center gap-2 bg-white border-2 border-[#5B7CFF] text-[#5B7CFF] font-semibold px-5 py-3 rounded-xl hover:bg-blue-50 transition"
                 data-testid="button-email-report"
               >
                 {emailing ? <Loader2 className="animate-spin" size={16} /> : <Mail size={16} />}
@@ -214,7 +214,7 @@ export default function AssessmentResults() {
               </button>
               <button
                 onClick={() => setShowBooking(true)}
-                className="inline-flex items-center gap-2 bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-5 py-3 rounded-xl transition shadow-lg"
+                className="inline-flex items-center gap-2 bg-[#C45BB8] hover:bg-[#A04A99] text-white font-bold px-5 py-3 rounded-xl transition shadow-lg"
                 data-testid="button-book-call"
               >
                 <Calendar size={16} /> {t(ui.results.bookCall)}
@@ -226,12 +226,12 @@ export default function AssessmentResults() {
         {/* Memo */}
         <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
           <div className="flex items-center gap-3 mb-2">
-            <Sparkles className="text-[#E97132]" size={20} />
-            <h2 className="text-xs font-bold uppercase tracking-widest text-[#E97132]">
+            <Sparkles className="text-[#C45BB8]" size={20} />
+            <h2 className="text-xs font-bold uppercase tracking-widest text-[#C45BB8]">
               {t(ui.results.memoTitle)}
             </h2>
           </div>
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-[#0E2841] mb-6">
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-[#0A1230] mb-6">
             {t(ui.results.fromThePartnership)}
           </h3>
           {data.memo ? (
@@ -252,7 +252,7 @@ export default function AssessmentResults() {
 
         {/* Radar / breakdown */}
         <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
-          <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">
+          <h2 className="text-2xl font-extrabold text-[#0A1230] mb-2">
             {t(ui.results.radarTitle)}
           </h2>
           <p className="text-sm text-gray-500 mb-8">
@@ -268,7 +268,7 @@ export default function AssessmentResults() {
                 return (
                   <div key={d.id} className="border rounded-xl p-3">
                     <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-sm font-semibold text-[#0E2841]">{t(d.title)}</p>
+                      <p className="text-sm font-semibold text-[#0A1230]">{t(d.title)}</p>
                       <p className="text-sm font-bold" style={{ color: def.brandColor }}>{fmtScore(v)}</p>
                     </div>
                     <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -291,7 +291,7 @@ export default function AssessmentResults() {
         {/* UVR portfolio */}
         {def.slug === "uvr" && result.useCases && result.useCases.length > 0 && (
           <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
-            <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">
+            <h2 className="text-2xl font-extrabold text-[#0A1230] mb-2">
               {t({ en: "Use case portfolio (Value × Readiness)", ar: "محفظة حالات الاستخدام (القيمة × الجاهزية)", tr: "Kullanım senaryosu portföyü (Değer × Hazırlık)" })}
             </h2>
             <p className="text-sm text-gray-500 mb-6">
@@ -301,9 +301,9 @@ export default function AssessmentResults() {
             <div className="mt-6 grid sm:grid-cols-2 gap-3">
               {result.useCases.map((uc, i) => (
                 <div key={uc.id} className="border rounded-xl p-3 flex items-start gap-3">
-                  <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#0E2841] text-white text-sm font-bold flex items-center justify-center">{i + 1}</span>
+                  <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#0A1230] text-white text-sm font-bold flex items-center justify-center">{i + 1}</span>
                   <div>
-                    <p className="font-semibold text-[#0E2841]">{uc.name || `${t({ en: "Use case", ar: "حالة استخدام", tr: "Kullanım senaryosu" })} ${i + 1}`}</p>
+                    <p className="font-semibold text-[#0A1230]">{uc.name || `${t({ en: "Use case", ar: "حالة استخدام", tr: "Kullanım senaryosu" })} ${i + 1}`}</p>
                     <p className="text-xs text-gray-500">
                       {uc.quadrant} · V {fmtScore(uc.valueScore)} · R {fmtScore(uc.readinessScore)} · E {fmtScore(uc.effort)}
                     </p>
@@ -349,7 +349,7 @@ export default function AssessmentResults() {
         {/* Anti-patterns */}
         {result.antiPatterns.length > 0 && (
           <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
-            <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">
+            <h2 className="text-2xl font-extrabold text-[#0A1230] mb-2">
               {t(ui.results.antiPatternsTitle)}
             </h2>
             <p className="text-sm text-gray-500 mb-6">
@@ -359,7 +359,7 @@ export default function AssessmentResults() {
               {result.antiPatterns.map((ap, i) => (
                 <div key={i} className="border-2 border-red-100 bg-red-50/40 rounded-2xl p-5">
                   <p className="text-xs font-bold uppercase tracking-widest text-red-700 mb-2">⚠ {t({ en: "Anti-pattern", ar: "نمط مضاد", tr: "Anti-örüntü" })}</p>
-                  <h3 className="text-lg font-bold text-[#0E2841] mb-2">{t(ap.label)}</h3>
+                  <h3 className="text-lg font-bold text-[#0A1230] mb-2">{t(ap.label)}</h3>
                   <p className="text-sm text-gray-600 mb-3">{t(ap.description)}</p>
                   <p className="text-xs font-bold uppercase tracking-widest text-emerald-700 mt-3">{t({ en: "What to do", ar: "ماذا تفعل", tr: "Ne yapmalı" })}</p>
                   <p className="text-sm text-gray-800 leading-relaxed">{t(ap.fix)}</p>
@@ -370,16 +370,16 @@ export default function AssessmentResults() {
         )}
 
         {/* Cost of inaction */}
-        <section className="mt-8 bg-gradient-to-br from-[#0E2841] to-[#156082] rounded-3xl text-white p-8 sm:p-12">
-          <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">
+        <section className="mt-8 bg-gradient-to-br from-[#0A1230] to-[#5B7CFF] rounded-3xl text-white p-8 sm:p-12">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#C45BB8] mb-2">
             {t(ui.results.costOfInactionTitle)}
           </p>
           <h2 className="text-2xl sm:text-3xl font-extrabold mb-6">
             {t({ en: "What standing still costs you in the next 12 months", ar: "ما تكلفه التقاعس عليكم خلال 12 شهراً", tr: "Yerinde durmanın size önümüzdeki 12 ay içinde maliyeti" })}
           </h2>
           <div className="grid sm:grid-cols-3 gap-6">
-            <CoIBlock label={t({ en: "EBIT lift forfeited", ar: "أرباح ضائعة", tr: "Vazgeçilen FAVÖK artışı" })} value={`$${fmtScore(result.costOfInaction.ebitDeltaUsd / 1_000_000)}M`} accent="#0F9ED5" />
-            <CoIBlock label={t({ en: "Avoidable cost", ar: "كلفة قابلة للتجنب", tr: "Önlenebilir maliyet" })} value={`$${fmtScore(result.costOfInaction.costDeltaUsd / 1_000_000)}M`} accent="#E97132" />
+            <CoIBlock label={t({ en: "EBIT lift forfeited", ar: "أرباح ضائعة", tr: "Vazgeçilen FAVÖK artışı" })} value={`$${fmtScore(result.costOfInaction.ebitDeltaUsd / 1_000_000)}M`} accent="#5B7CFF" />
+            <CoIBlock label={t({ en: "Avoidable cost", ar: "كلفة قابلة للتجنب", tr: "Önlenebilir maliyet" })} value={`$${fmtScore(result.costOfInaction.costDeltaUsd / 1_000_000)}M`} accent="#C45BB8" />
             <CoIBlock label={t({ en: "Productivity recovered", ar: "إنتاجية مسترجعة", tr: "Geri kazanılan üretkenlik" })} value={`${fmtScore(productivityFte)} FTE`} accent="#FFFFFF" />
           </div>
           <p className="text-xs text-gray-300 mt-4 italic">
@@ -389,13 +389,13 @@ export default function AssessmentResults() {
 
         {/* Plans */}
         <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
-          <h2 className="text-2xl font-extrabold text-[#0E2841] mb-6">
+          <h2 className="text-2xl font-extrabold text-[#0A1230] mb-6">
             {t(ui.results.recommendationsTitle)}
           </h2>
           <div className="grid lg:grid-cols-3 gap-6">
-            <RecCol title={t({ en: "Quick wins (90 days)", ar: "مكاسب سريعة (90 يوماً)", tr: "Hızlı kazanımlar (90 gün)" })} items={result.recommendations.quickWins90d.map((r) => t(r))} accent="#0F9ED5" />
-            <RecCol title={t({ en: "Strategic moves (6–12 months)", ar: "تحركات استراتيجية (6–12 شهر)", tr: "Stratejik hamleler (6–12 ay)" })} items={result.recommendations.strategic12m.map((r) => t(r))} accent="#156082" />
-            <RecCol title={t({ en: "6-month roadmap", ar: "خارطة طريق 6 أشهر", tr: "6 aylık yol haritası" })} items={sovereignSpecific.map((r) => t(r))} accent="#196B24" />
+            <RecCol title={t({ en: "Quick wins (90 days)", ar: "مكاسب سريعة (90 يوماً)", tr: "Hızlı kazanımlar (90 gün)" })} items={result.recommendations.quickWins90d.map((r) => t(r))} accent="#5B7CFF" />
+            <RecCol title={t({ en: "Strategic moves (6–12 months)", ar: "تحركات استراتيجية (6–12 شهر)", tr: "Stratejik hamleler (6–12 ay)" })} items={result.recommendations.strategic12m.map((r) => t(r))} accent="#5B7CFF" />
+            <RecCol title={t({ en: "6-month roadmap", ar: "خارطة طريق 6 أشهر", tr: "6 aylık yol haritası" })} items={sovereignSpecific.map((r) => t(r))} accent="#8A5BD6" />
           </div>
         </section>
 
@@ -407,17 +407,17 @@ export default function AssessmentResults() {
           <p className="text-lg sm:text-xl text-amber-900 leading-relaxed">
             "{antiVendorMessage}"
           </p>
-          <p className="text-xs text-amber-700 mt-4 font-semibold">— {t({ en: "The Maven AI partnership", ar: "شراكة Maven AI", tr: "Maven AI ortaklığı" })}</p>
+          <p className="text-xs text-amber-700 mt-4 font-semibold">— {t({ en: "The Cognirise partnership", ar: "شراكة Cognirise", tr: "Cognirise ortaklığı" })}</p>
         </section>
 
         {/* Team */}
         <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-[#0F9ED5] mb-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#5B7CFF] mb-2">
                 {t(ui.results.alignmentMode)}
               </p>
-              <h2 className="text-2xl font-extrabold text-[#0E2841] mb-2">
+              <h2 className="text-2xl font-extrabold text-[#0A1230] mb-2">
                 {t({ en: "Run this assessment with your full leadership team", ar: "شغّل هذا التقييم مع فريق القيادة كاملاً", tr: "Bu değerlendirmeyi tüm liderlik ekibinizle birlikte yürütün" })}
               </h2>
               <p className="text-gray-600 max-w-2xl">
@@ -430,7 +430,7 @@ export default function AssessmentResults() {
             </div>
             <button
               onClick={handleTeam}
-              className="inline-flex items-center gap-2 bg-[#0F9ED5] hover:bg-[#0d8bb8] text-white font-bold px-5 py-3 rounded-xl"
+              className="inline-flex items-center gap-2 bg-[#5B7CFF] hover:bg-[#3A5BCC] text-white font-bold px-5 py-3 rounded-xl"
               data-testid="button-create-team-link"
             >
               <Users size={16} /> {t({ en: "Create team link", ar: "أنشئ رابط الفريق", tr: "Ekip bağlantısı oluştur" })}
@@ -445,7 +445,7 @@ export default function AssessmentResults() {
                 <input readOnly value={teamLink} className="flex-1 bg-white border rounded-lg px-3 py-2 text-sm" />
                 <button
                   onClick={() => navigator.clipboard.writeText(teamLink)}
-                  className="bg-[#0E2841] text-white px-4 py-2 rounded-lg text-sm font-semibold"
+                  className="bg-[#0A1230] text-white px-4 py-2 rounded-lg text-sm font-semibold"
                 >
                   {t({ en: "Copy", ar: "نسخ", tr: "Kopyala" })}
                 </button>
@@ -457,7 +457,7 @@ export default function AssessmentResults() {
               )}
               {heatmap && heatmap.ready && heatmap.dimensions && heatmap.respondents && heatmap.variance && (
                 <div className="mt-6">
-                  <h4 className="text-lg font-bold text-[#0E2841] mb-3">{t({ en: "Stakeholder alignment", ar: "مواءمة أصحاب المصلحة", tr: "Paydaş hizalaması" })}</h4>
+                  <h4 className="text-lg font-bold text-[#0A1230] mb-3">{t({ en: "Stakeholder alignment", ar: "مواءمة أصحاب المصلحة", tr: "Paydaş hizalaması" })}</h4>
                   <Heatmap dimensions={heatmap.dimensions} respondents={heatmap.respondents} variance={heatmap.variance} lang={assessmentLang} />
                 </div>
               )}
@@ -466,15 +466,13 @@ export default function AssessmentResults() {
         </section>
 
         {/* Founders strip */}
-        <section className="mt-8 bg-[#0E2841] text-white rounded-3xl p-8 sm:p-12">
-          <p className="text-xs font-bold uppercase tracking-widest text-[#0F9ED5] mb-2">{t({ en: "Signed by the partnership", ar: "موقعة من الشركاء", tr: "Ortaklık tarafından imzalandı" })}</p>
-          <h2 className="text-2xl font-extrabold mb-6">{t({ en: "The four founders behind this report", ar: "المؤسسون الأربعة وراء هذا التقرير", tr: "Bu raporun arkasındaki dört kurucu" })}</h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <section className="mt-8 bg-[#0A1230] text-white rounded-3xl p-8 sm:p-12">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#5B7CFF] mb-2">{t({ en: "Signed by the partnership", ar: "موقعة من الشركاء", tr: "Ortaklık tarafından imzalandı" })}</p>
+          <h2 className="text-2xl font-extrabold mb-6">{t({ en: "The founders behind this report", ar: "المؤسسون وراء هذا التقرير", tr: "Bu raporun arkasındaki kurucular" })}</h2>
+          <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
             {[
               { name: "Mounir Aris", title: { en: "Strategy", ar: "الاستراتيجية", tr: "Strateji" }, img: "/images/founder-mounir.png" },
               { name: "Gokhan Guney", title: { en: "Engineering", ar: "الهندسة", tr: "Mühendislik" }, img: "/images/founder-gokhan.png" },
-              { name: "Alper Kulak", title: { en: "Data & Governance", ar: "البيانات والحوكمة", tr: "Veri ve Yönetişim" }, img: "/images/founder-alper.png" },
-              { name: "Khalid Al Khudairi", title: { en: "KSA Markets", ar: "أسواق المملكة العربية السعودية", tr: "Suudi Arabistan Pazarları" }, img: "/images/founder-khalid.png" },
             ].map((f) => (
               <div key={f.name} className="bg-white/5 rounded-2xl p-4 text-center">
                 <img src={f.img} alt={f.name} className="w-20 h-20 rounded-full object-cover mx-auto mb-2" />
@@ -487,23 +485,23 @@ export default function AssessmentResults() {
 
         {/* Certificate */}
         <section className="mt-8 bg-gradient-to-br from-amber-50 to-white border border-amber-200 rounded-3xl p-8 sm:p-12 text-center">
-          <ShieldCheck className="mx-auto text-[#196B24]" size={36} />
-          <p className="text-xs font-bold uppercase tracking-widest text-[#196B24] mt-3">
+          <ShieldCheck className="mx-auto text-[#8A5BD6]" size={36} />
+          <p className="text-xs font-bold uppercase tracking-widest text-[#8A5BD6] mt-3">
             {t({ en: "Verified diagnostic", ar: "تشخيص موثّق", tr: "Doğrulanmış teşhis" })}
           </p>
-          <p className="text-lg text-[#0E2841] mt-2">
+          <p className="text-lg text-[#0A1230] mt-2">
             {t({ en: "Reference", ar: "المرجع", tr: "Referans" })}: <span className="font-mono">{data.publicId}</span>
           </p>
-          <p className="text-sm text-gray-600 mt-1">{t({ en: "Issued by Maven AI · Boutique GCC AI advisory & engineering", ar: "صادر عن Maven AI · استشارات وهندسة AI الخليج", tr: "Maven AI tarafından düzenlendi · Butik Körfez AI danışmanlık ve mühendislik" })}</p>
+          <p className="text-sm text-gray-600 mt-1">{t({ en: "Issued by Cognirise · Boutique GCC AI advisory & engineering", ar: "صادر عن Cognirise · استشارات وهندسة AI الخليج", tr: "Cognirise tarafından düzenlendi · Butik Körfez AI danışmanlık ve mühendislik" })}</p>
         </section>
 
         {/* Reinvention CTA (for ARI/MVI/DAFI) */}
         {(def.slug === "ari" || def.slug === "mvi" || def.slug === "dafi") && (
-          <section className="mt-8 bg-white border-2 border-dashed border-[#156082] rounded-3xl p-8 sm:p-12">
-            <p className="text-xs font-bold uppercase tracking-widest text-[#156082] mb-2">
+          <section className="mt-8 bg-white border-2 border-dashed border-[#5B7CFF] rounded-3xl p-8 sm:p-12">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#5B7CFF] mb-2">
               {t({ en: "Reinvention Index", ar: "مؤشر إعادة الابتكار", tr: "Yeniden Keşif Endeksi" })}
             </p>
-            <h2 className="text-2xl font-extrabold text-[#0E2841] mb-3">
+            <h2 className="text-2xl font-extrabold text-[#0A1230] mb-3">
               {t({ en: "Complete the other two assessments to unlock your composite Reinvention Index", ar: "أكمل التقييمين الآخرين لفتح مؤشر إعادة الابتكار", tr: "Bileşik Yeniden Keşif Endeksinizi açmak için diğer iki değerlendirmeyi tamamlayın" })}
             </h2>
             <div className="flex flex-wrap gap-3 mt-4">
@@ -512,7 +510,7 @@ export default function AssessmentResults() {
                 .map((s) => {
                   const other = getAssessment(s);
                   return (
-                    <Link key={s} href={`/assessments/${s}`} className="inline-flex items-center gap-2 bg-[#156082] hover:bg-[#0F4D6B] text-white font-semibold px-5 py-3 rounded-xl">
+                    <Link key={s} href={`/assessments/${s}`} className="inline-flex items-center gap-2 bg-[#5B7CFF] hover:bg-[#3A5BCC] text-white font-semibold px-5 py-3 rounded-xl">
                       {other.code}: {tStr(other.title, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                     </Link>
                   );
@@ -619,15 +617,15 @@ function BookingModal({
         {done ? (
           <div className="text-center py-6">
             <BadgeCheck className="mx-auto text-emerald-600" size={48} />
-            <h3 className="text-2xl font-bold text-[#0E2841] mt-4">{t({ en: "Got it.", ar: "تم.", tr: "Anlaşıldı." })}</h3>
+            <h3 className="text-2xl font-bold text-[#0A1230] mt-4">{t({ en: "Got it.", ar: "تم.", tr: "Anlaşıldı." })}</h3>
             <p className="text-gray-600 mt-2">{t({ en: "One of the founders will reach out within 24 hours.", ar: "سيتواصل أحد المؤسسين خلال 24 ساعة.", tr: "Kuruculardan biri 24 saat içinde sizinle iletişime geçecek." })}</p>
-            <button onClick={onClose} className="mt-6 bg-[#0E2841] text-white font-semibold px-5 py-2.5 rounded-lg">
+            <button onClick={onClose} className="mt-6 bg-[#0A1230] text-white font-semibold px-5 py-2.5 rounded-lg">
               {t({ en: "Close", ar: "إغلاق", tr: "Kapat" })}
             </button>
           </div>
         ) : (
           <>
-            <h3 className="text-2xl font-extrabold text-[#0E2841] mb-1">{t({ en: "Book a 30-min readout", ar: "احجز جلسة 30 دقيقة", tr: "30 dakikalık bir okuma seansı ayırtın" })}</h3>
+            <h3 className="text-2xl font-extrabold text-[#0A1230] mb-1">{t({ en: "Book a 30-min readout", ar: "احجز جلسة 30 دقيقة", tr: "30 dakikalık bir okuma seansı ayırtın" })}</h3>
             <p className="text-sm text-gray-500 mb-5">{t({ en: "A founder will walk you through your report. No sales pitch.", ar: "سيشرح أحد المؤسسين تقريركم. بدون عروض بيع.", tr: "Bir kurucu raporunuzu size baştan sona anlatacak. Satış konuşması yok." })}</p>
             <div className="space-y-3">
               <input className="w-full border rounded-lg px-3 py-2.5" value={name} onChange={(e) => setName(e.target.value)} placeholder={t({ en: "Name", ar: "الاسم", tr: "Ad" })} />
@@ -638,7 +636,7 @@ function BookingModal({
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={onClose} className="px-4 py-2 text-gray-600 font-semibold">{t({ en: "Cancel", ar: "إلغاء", tr: "İptal" })}</button>
-              <button onClick={submit} disabled={submitting} className="bg-[#E97132] hover:bg-[#d4622a] text-white font-bold px-5 py-2.5 rounded-lg inline-flex items-center gap-2">
+              <button onClick={submit} disabled={submitting} className="bg-[#C45BB8] hover:bg-[#A04A99] text-white font-bold px-5 py-2.5 rounded-lg inline-flex items-center gap-2">
                 {submitting && <Loader2 className="animate-spin" size={14} />}
                 {t({ en: "Request the call", ar: "اطلب المكالمة", tr: "Aramayı talep et" })}
               </button>

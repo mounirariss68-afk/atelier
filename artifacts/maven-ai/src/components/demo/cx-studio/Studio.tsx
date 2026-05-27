@@ -15,7 +15,7 @@ import Workbench from "./Workbenches";
 
 const ACCENT = "#0E7C7B";
 const CORAL = "#F5715A";
-const INK = "#0E2841";
+const INK = "#0A1230";
 
 type View =
   | { kind: "mission" }
@@ -97,7 +97,7 @@ function CxStudioInner() {
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white" style={{ background: ACCENT }}><Network size={16} /></div>
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: ACCENT }}>Maven AI</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: ACCENT }}>Cognirise</div>
               <div className="text-sm font-bold leading-tight">{tStr({ en: "Agentic CX Studio", ar: "استوديو تجربة العميل", tr: "Ajansal CX Stüdyosu" }, lang)}</div>
             </div>
           </div>

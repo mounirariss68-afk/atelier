@@ -13,7 +13,7 @@ doing anything — there is no orchestrator, no autonomous decisions,
 no tool calls, no handoffs, no human-in-the-loop checkpoints firing
 in real time. The marketplace must show two things instead:
 
-1. **Deployable assets** — Maven AI ships a tight catalogue of named,
+1. **Deployable assets** — Cognirise ships a tight catalogue of named,
    scoped agentic products with clear buyers, KPIs and references.
 2. **A genuinely agentic approach** — orchestrator agents delegate to
    specialists, specialists call tools and other agents, decisions
@@ -52,7 +52,7 @@ demo. Structure (top → bottom):
 2. **Problem** — 2–3 short paragraphs naming the GCC-grounded pain
    with realistic before-state numbers and a quote-style buyer
    sentence. Uses sourced benchmarks, not invented stats.
-3. **Solution narrative** — How Maven AI solves it. Short, plain.
+3. **Solution narrative** — How Cognirise solves it. Short, plain.
 4. **Agent architecture** — A named **orchestrator** at the top, the
    specialists below, the tools / systems / MCPs each specialist
    calls, the shared memory, and the human checkpoints. Rendered as
@@ -76,7 +76,7 @@ route renders inside its **own layout** that hides the main site's
 navbar, footer, and chat widget. The shell is:
 
 - **Top bar** (fixed):
-  - Left: Maven AI logo (clickable → exits demo back to detail page).
+  - Left: Cognirise logo (clickable → exits demo back to detail page).
   - Center: tool name + a small "live demo · illustrative data"
     badge.
   - Right: language switcher, "Exit demo" button, "Reset" button.

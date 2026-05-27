@@ -23,7 +23,7 @@ const WORKSTREAMS = [
 const programmeWarRoomScenario: Scenario = {
   slug: "programme-war-room",
   toolTitle: { en: "Programme War Room", ar: "غرفة عمليات البرنامج" },
-  accent: "#156082",
+  accent: "#5B7CFF",
   description: {
     en: "An EPMO orchestrator coordinates a Watcher (Jira/Project), a RAID Classifier, an ETC Re-baseliner, and a Steering Drafter to produce a defensible weekly steering pack — without committing the steering committee in writing.",
     ar: "منسّق مكتب البرامج يقود مراقباً (جيرا/المشاريع)، ومصنّف RAID، ومعيد معايرة التقدير، وكاتب عبوة التوجيه لإصدار عبوة أسبوعية قابلة للدفاع دون إلزام لجنة التوجيه كتابياً.",
@@ -34,11 +34,11 @@ const programmeWarRoomScenario: Scenario = {
     ar: "الأحد 18:00 — يحتاج مكتب البرامج مسوّدة عبوة التوجيه على مكتبه يوم الإثنين.",
   },
   agents: [
-    { id: "orch", name: { en: "EPMO Orchestrator", ar: "منسّق مكتب البرامج" }, role: { en: "Plans the run, gates the pack.", ar: "يخطّط الجولة ويراقب العبوة." }, kind: "orchestrator", color: "#156082" },
+    { id: "orch", name: { en: "EPMO Orchestrator", ar: "منسّق مكتب البرامج" }, role: { en: "Plans the run, gates the pack.", ar: "يخطّط الجولة ويراقب العبوة." }, kind: "orchestrator", color: "#5B7CFF" },
     { id: "watcher", name: { en: "Programme Watcher", ar: "مراقب البرنامج" }, role: { en: "Pulls Jira / MS Project / Confluence events.", ar: "يجلب أحداث جيرا والمشاريع وConfluence." }, kind: "monitor", color: "#5C8CA8" },
-    { id: "raid", name: { en: "RAID Classifier", ar: "مصنّف RAID" }, role: { en: "Tags events as risk / assumption / issue / dependency.", ar: "يصنّف الأحداث كمخاطرة/افتراض/مشكلة/اعتمادية." }, kind: "specialist", color: "#F5A623" },
+    { id: "raid", name: { en: "RAID Classifier", ar: "مصنّف RAID" }, role: { en: "Tags events as risk / assumption / issue / dependency.", ar: "يصنّف الأحداث كمخاطرة/افتراض/مشكلة/اعتمادية." }, kind: "specialist", color: "#C45BB8" },
     { id: "etc", name: { en: "ETC Re-baseliner", ar: "معيد معايرة التقدير" }, role: { en: "Recomputes estimate-to-complete and forecast cone.", ar: "يعيد حساب التقدير حتى الإكمال." }, kind: "scorer", color: "#5BA98A" },
-    { id: "drafter", name: { en: "Steering Drafter", ar: "كاتب عبوة التوجيه" }, role: { en: "Drafts the weekly steering pack in house style.", ar: "يصوغ عبوة التوجيه بأسلوب المؤسسة." }, kind: "drafter", color: "#196B24" },
+    { id: "drafter", name: { en: "Steering Drafter", ar: "كاتب عبوة التوجيه" }, role: { en: "Drafts the weekly steering pack in house style.", ar: "يصوغ عبوة التوجيه بأسلوب المؤسسة." }, kind: "drafter", color: "#8A5BD6" },
   ],
   tools: [
     { name: "pull_workstreams", description: { en: "Polls every workstream feed (Jira, MS Project, Confluence) for delta.", ar: "يجلب تغيّرات كل مسار من جيرا والمشاريع وConfluence." } },
@@ -93,17 +93,17 @@ const programmeWarRoomScenario: Scenario = {
     { id: "events", label: { en: "Programme events processed", ar: "أحداث البرنامج المُعالَجة" }, initial: "0" },
     { id: "raid", label: { en: "RAID items reclassified", ar: "بنود RAID المُعاد تصنيفها" }, initial: "0" },
     { id: "drift", label: { en: "ETC drift detected (weeks)", ar: "انزياح التقدير (أسابيع)" }, initial: "—" },
-    { id: "time-saved", label: { en: "PMO hours saved / week", ar: "ساعات PMO الموفّرة" }, initial: "—", source: { en: "Maven AI delivery telemetry — 6 EPMO pilots, 2025.", ar: "قياسات تسليم Maven AI — 6 تجارب EPMO، 2025." } },
+    { id: "time-saved", label: { en: "PMO hours saved / week", ar: "ساعات PMO الموفّرة" }, initial: "—", source: { en: "Cognirise delivery telemetry — 6 EPMO pilots, 2025.", ar: "قياسات تسليم Cognirise — 6 تجارب EPMO، 2025." } },
   ],
   initialInbox: [
     {
       id: "kickoff",
-      source: { en: "scheduler@maven.ai", ar: "scheduler@maven.ai" },
+      source: { en: "scheduler@cognirise.com", ar: "scheduler@cognirise.com" },
       subject: { en: "Sunday 18:00 — Weekly steering pack", ar: "الأحد 18:00 — عبوة التوجيه الأسبوعية" },
       preview: { en: "Run the weekly-steering workflow and prep the Monday pack.", ar: "تشغيل سير عمل التوجيه الأسبوعي وتحضير عبوة الإثنين." },
       receivedAt: "Sun 18:00",
       status: "new",
-      accent: "#156082",
+      accent: "#5B7CFF",
     },
   ],
   initialWorkspace: [],

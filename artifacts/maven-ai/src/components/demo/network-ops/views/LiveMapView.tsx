@@ -41,7 +41,7 @@ export default function LiveMapView({ onOpenIncident }: { onOpenIncident?: (id: 
   const KPI_TILES = [
     { label: t("kpiP1", liveMap), value: k.p1, sub: t("kpiP2", liveMap) + ` ${k.p2} · ` + t("kpiP3", liveMap) + ` ${k.p3}`, icon: <AlertTriangle size={16} />, accent: "#D9534F" },
     { label: t("kpiMttr", liveMap), value: `${k.mttrMin} min`, sub: `${k.mttrDeltaPct}% ${isAr ? "مقارنة بالسابق" : "vs prior"}`, icon: <Clock size={16} />, accent: BRAND },
-    { label: t("kpiSla", liveMap), value: k.slaAtRisk, sub: `${isAr ? "من" : "of"} 4`, icon: <ShieldAlert size={16} />, accent: "#F5A623" },
+    { label: t("kpiSla", liveMap), value: k.slaAtRisk, sub: `${isAr ? "من" : "of"} 4`, icon: <ShieldAlert size={16} />, accent: "#C45BB8" },
     { label: t("kpiCustomers", liveMap), value: k.customersImpacted.toLocaleString(isAr ? "ar-SA" : "en-US"), sub: t("impacted", liveMap), icon: <Users size={16} />, accent: BRAND },
     { label: t("kpiDecisions", liveMap), value: k.decisionsWaiting, sub: isAr ? "في قائمة الموافقات" : "in approvals", icon: <Inbox size={16} />, accent: "#5BA98A" },
   ];
@@ -108,7 +108,7 @@ export default function LiveMapView({ onOpenIncident }: { onOpenIncident?: (id: 
             <div className="grid grid-cols-2 gap-2">
               {SERVICES.map((s) => {
                 const pct = Math.max(0, Math.min(100, ((s.currentPct - 99) / (100 - 99)) * 100));
-                const barColor = s.status === "breached" ? "#D9534F" : s.status === "at-risk" ? "#F5A623" : "#5BA98A";
+                const barColor = s.status === "breached" ? "#D9534F" : s.status === "at-risk" ? "#C45BB8" : "#5BA98A";
                 return (
                   <div key={s.id} className="rounded-lg border border-gray-100 p-2 bg-gray-50/40">
                     <p className="text-[10px] font-bold text-gray-900 leading-snug truncate">{isAr ? s.name.ar : s.name.en}</p>

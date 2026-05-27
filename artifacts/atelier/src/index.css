@@ -209,7 +209,7 @@
     background: var(--gold);
   }
 
-  /* Maven-style 48×3 gold section divider — used to introduce major sections. */
+  /* Cognirise-style 48×3 gold section divider — used to introduce major sections. */
   .section-divider {
     display: block;
     width: 48px;
@@ -259,7 +259,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
   }
-  /* Add hover-lift to interactive cards (Maven-inspired). */
+  /* Add hover-lift to interactive cards (Cognirise-inspired). */
   .card-hover {
     transition: transform 200ms var(--ease), box-shadow 200ms var(--ease), border-color 200ms var(--ease);
   }

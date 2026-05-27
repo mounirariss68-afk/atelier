@@ -48,8 +48,8 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
     return (
       <section className="bg-white border border-gray-200 rounded-xl overflow-hidden lg:col-span-2">
         <div className="px-4 py-3 border-b border-gray-100 bg-[#F8F9FA] flex items-center gap-2">
-          <Users size={14} className="text-[#156082]" />
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841]">
+          <Users size={14} className="text-[#5B7CFF]" />
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#0A1230]">
             {tStr(widget.title, lang)}
           </p>
         </div>
@@ -70,8 +70,8 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
   return (
     <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 bg-[#F8F9FA] flex items-center gap-2">
-        <Icon size={14} className="text-[#156082]" />
-        <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841] flex-1">
+        <Icon size={14} className="text-[#5B7CFF]" />
+        <p className="text-[11px] font-bold uppercase tracking-widest text-[#0A1230] flex-1">
           {tStr(widget.title, lang)}
         </p>
         {widget.id === "pending-changes" && widget.kind === "table" && (
@@ -88,7 +88,7 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
                 ),
               })
             }
-            className="text-[10px] font-bold uppercase tracking-widest text-[#196B24] hover:bg-[#196B24]/10 px-2.5 py-1 rounded border border-[#196B24]/40"
+            className="text-[10px] font-bold uppercase tracking-widest text-[#8A5BD6] hover:bg-[#8A5BD6]/10 px-2.5 py-1 rounded border border-[#8A5BD6]/40"
           >
             {tStr(
               {
@@ -118,7 +118,7 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
                       <td
                         key={j}
                         className={`px-2 py-1.5 border-b border-gray-100 ${
-                          i === 0 ? "font-bold text-[#0E2841]" : "text-gray-700"
+                          i === 0 ? "font-bold text-[#0A1230]" : "text-gray-700"
                         }`}
                       >
                         {tStr(c, lang)}
@@ -145,7 +145,7 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
                                 description: tStr(row[0] ?? { en: "Item", ar: "عنصر" }, lang),
                               })
                             }
-                            className="text-[11px] font-semibold text-[#156082] hover:text-[#0E2841] inline-flex items-center gap-1 hover:underline"
+                            className="text-[11px] font-semibold text-[#5B7CFF] hover:text-[#0A1230] inline-flex items-center gap-1 hover:underline"
                           >
                             {tStr({ en: "Review", ar: "مراجعة" }, lang)}
                             <ArrowRight size={11} className="rtl:rotate-180" />
@@ -169,7 +169,7 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
                   {tStr(row[0] ?? { en: "", ar: "" }, lang)}
                 </p>
-                <p className="text-lg font-bold text-[#0E2841] mt-1">
+                <p className="text-lg font-bold text-[#0A1230] mt-1">
                   {tStr(row[1] ?? { en: "—", ar: "—" }, lang)}
                 </p>
                 {row[2] && (
@@ -185,7 +185,7 @@ function Widget({ widget }: { widget: WorkspaceWidget }) {
           <ul className="space-y-2">
             {widget.rows.map((row, i) => (
               <li key={i} className="flex gap-2 items-start text-sm text-gray-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#156082] mt-2 flex-shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#5B7CFF] mt-2 flex-shrink-0" />
                 <span>{row.map((c) => tStr(c, lang)).join(" — ")}</span>
               </li>
             ))}
@@ -209,11 +209,11 @@ function ClientStatusCard({
   const { lang } = useLang();
   return (
     <div className="rounded-lg border border-gray-200 p-4 bg-white">
-      <p className="text-sm font-bold text-[#0E2841] leading-snug">
+      <p className="text-sm font-bold text-[#0A1230] leading-snug">
         {name ? tStr(name, lang) : "—"}
       </p>
       <div className="mt-3 flex items-baseline gap-2">
-        <p className="text-2xl font-extrabold text-[#0E2841] tabular-nums">
+        <p className="text-2xl font-extrabold text-[#0A1230] tabular-nums">
           {count ? tStr(count, lang) : "0"}
         </p>
         <p className="text-[10px] uppercase tracking-widest text-gray-500">

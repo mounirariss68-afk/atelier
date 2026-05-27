@@ -43,7 +43,7 @@ export const SQUADS: Squad[] = [
       ar: "يخصّص القنوات، يصمّم التجربة، ويدرّب الصف الأمامي.",
       tr: "Kanal tahsis eder, pilotu tasarlar, ön safları koçlar.",
     },
-    color: "#0F9ED5",
+    color: "#5B7CFF",
   },
   {
     id: "outcomes",
@@ -63,7 +63,7 @@ export const SQUADS: Squad[] = [
       ar: "يجعل التصميم آمناً للنشر، عادلاً لكل اللهجات، ومتبنّى عبر الشبكة.",
       tr: "Yeniden tasarımı güvenle dağıtılabilir, tüm lehçelere adil ve ağ genelinde benimsenen kılar.",
     },
-    color: "#0E2841",
+    color: "#0A1230",
   },
 ];
 

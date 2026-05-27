@@ -1,5 +1,5 @@
 /**
- * Maven Personal Agent — Mind demo.
+ * Cognirise Personal Agent — Mind demo.
  *
  * Inline-SVG personal context graph with:
  *   - Category-cluster layout (deterministic — no physics deps).
@@ -202,7 +202,7 @@ export default function Mind() {
           </Link>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: accent }}>
-              <Brain size={14} className="text-[#0E2841]" />
+              <Brain size={14} className="text-[#0A1230]" />
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
@@ -220,7 +220,7 @@ export default function Mind() {
             />
             <button
               onClick={() => setExportOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-emerald-400/90 text-[#0E2841] text-xs font-bold hover:bg-emerald-300"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-emerald-400/90 text-[#0A1230] text-xs font-bold hover:bg-emerald-300"
             >
               <Download size={12} />
               {tStr(COPY.export, lang)}
@@ -240,7 +240,7 @@ export default function Mind() {
                 <button
                   key={s}
                   onClick={() => setScope(s)}
-                  className={`px-3 py-1 rounded-full font-bold ${scope === s ? "bg-white text-[#0E2841]" : "text-white/70 hover:text-white"}`}
+                  className={`px-3 py-1 rounded-full font-bold ${scope === s ? "bg-white text-[#0A1230]" : "text-white/70 hover:text-white"}`}
                 >
                   {tStr(labelMap[s], lang)}
                 </button>
