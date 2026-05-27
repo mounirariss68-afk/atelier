@@ -12,7 +12,7 @@ const COPY = {
   notFound: { en: "Article not found", ar: "المقال غير موجود", tr: "Makale bulunamadı" },
   backInsights: { en: "Back to Insights", ar: "العودة إلى الرؤى", tr: "İçgörülere dön" },
   aboutAuthor: { en: "About the author", ar: "عن المؤلف", tr: "Yazar hakkında" },
-  authorOrg: { en: "Maven AI Research & Advisory", ar: "أبحاث واستشارات Maven AI", tr: "Maven AI Araştırma ve Danışmanlık" },
+  authorOrg: { en: "Cognirise Research & Advisory", ar: "أبحاث واستشارات Cognirise", tr: "Cognirise Araştırma ve Danışmanlık" },
   keyTakeaways: { en: "Key takeaways", ar: "النقاط الرئيسية", tr: "Temel çıkarımlar" },
   takeaway1: { en: "Senior-led delivery closes the pilot-to-production gap", ar: "القيادة العليا للتنفيذ تسد الفجوة بين النموذج الأولي والإنتاج", tr: "Kıdemli liderliğindeki teslimat, pilottan üretime geçiş açığını kapatır" },
   takeaway2: { en: "Data governance is the prerequisite for trustworthy AI", ar: "حوكمة البيانات شرط مسبق للذكاء الاصطناعي الموثوق", tr: "Veri yönetişimi, güvenilir AI'nın ön koşuludur" },
@@ -32,15 +32,15 @@ export default function InsightDetail() {
     return (
       <div className="pt-20 min-h-screen flex items-center justify-center" dir={dir}>
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#0E2841] mb-4">{tStr(COPY.notFound, lang)}</h1>
-          <Link href="/insights" className="text-[#156082] font-semibold hover:underline">{tStr(COPY.backInsights, lang)}</Link>
+          <h1 className="text-2xl font-bold text-[#0A1230] mb-4">{tStr(COPY.notFound, lang)}</h1>
+          <Link href="/insights" className="text-[#5B7CFF] font-semibold hover:underline">{tStr(COPY.backInsights, lang)}</Link>
         </div>
       </div>
     );
   }
 
   const related = insights.filter((i) => i.id !== insight.id && (i.category === insight.category || i.tags.some((t) => insight.tags.includes(t)))).slice(0, 3);
-  const catColor = categoryColors[insight.category] || "#156082";
+  const catColor = categoryColors[insight.category] || "#5B7CFF";
 
   const localizedTitle = insightTitle(insight, lang);
   const localizedSummary = insightSummary(insight, lang);
@@ -49,7 +49,7 @@ export default function InsightDetail() {
   return (
     <div className="pt-20" dir={dir}>
       {/* Hero */}
-      <section className="bg-[#0E2841] py-16 relative overflow-hidden">
+      <section className="bg-[#0A1230] py-16 relative overflow-hidden">
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link href="/insights" className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm mb-8 transition-colors">
             <ArrowLeft size={14} className="rtl:-scale-x-100" /> {tStr(COPY.backInsights, lang)}
@@ -80,7 +80,7 @@ export default function InsightDetail() {
               </div>
             </div>
             <div className="lg:col-span-4">
-              <div className="rounded-xl overflow-hidden h-52 bg-[#156082] relative">
+              <div className="rounded-xl overflow-hidden h-52 bg-[#5B7CFF] relative">
                 <img
                   src={insight.coverImage}
                   alt={localizedTitle}
@@ -119,13 +119,13 @@ export default function InsightDetail() {
             <aside className="lg:col-span-4 space-y-6">
               {/* About the author */}
               <div className="bg-[#F8F9FA] rounded-xl p-6">
-                <h3 className="font-bold text-[#0E2841] mb-4 text-sm uppercase tracking-wider">{tStr(COPY.aboutAuthor, lang)}</h3>
+                <h3 className="font-bold text-[#0A1230] mb-4 text-sm uppercase tracking-wider">{tStr(COPY.aboutAuthor, lang)}</h3>
                 <p className="text-sm text-gray-600 leading-relaxed">{insight.author}</p>
                 <p className="text-xs text-gray-400 mt-2">{tStr(COPY.authorOrg, lang)}</p>
               </div>
 
               {/* Key takeaways */}
-              <div className="bg-[#0E2841] rounded-xl p-6 text-white">
+              <div className="bg-[#0A1230] rounded-xl p-6 text-white">
                 <h3 className="font-bold mb-4 text-sm uppercase tracking-wider text-[#F5A623]">{tStr(COPY.keyTakeaways, lang)}</h3>
                 <ul className="space-y-3">
                   {[COPY.takeaway1, COPY.takeaway2, COPY.takeaway3].map((point, i) => (
@@ -139,9 +139,9 @@ export default function InsightDetail() {
 
               {/* CTA */}
               <div className="border border-gray-200 rounded-xl p-6">
-                <h3 className="font-bold text-[#0E2841] mb-2 text-sm">{tStr(COPY.talkTeam, lang)}</h3>
+                <h3 className="font-bold text-[#0A1230] mb-2 text-sm">{tStr(COPY.talkTeam, lang)}</h3>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">{tStr(COPY.talkPara, lang)}</p>
-                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#F5A623] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#d4622a] transition-colors">
+                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#F5A623] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#FF7B5A] transition-colors">
                   {tStr(COPY.scheduleCall, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                 </Link>
               </div>
@@ -154,7 +154,7 @@ export default function InsightDetail() {
       {related.length > 0 && (
         <section className="py-16 bg-[#F8F9FA]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-2xl font-extrabold text-[#0E2841] mb-8">{tStr(COPY.related, lang)}</h2>
+            <h2 className="text-2xl font-extrabold text-[#0A1230] mb-8">{tStr(COPY.related, lang)}</h2>
             <div className="grid sm:grid-cols-3 gap-6">
               {related.map((rel, i) => (
                 <motion.div
@@ -166,12 +166,12 @@ export default function InsightDetail() {
                   className="report-card group bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm cursor-pointer"
                 >
                   <Link href={`/insights/${rel.slug}`}>
-                    <div className="h-36 bg-[#0E2841] relative overflow-hidden">
+                    <div className="h-36 bg-[#0A1230] relative overflow-hidden">
                       <img src={rel.coverImage} alt={insightTitle(rel, lang)} className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     </div>
                     <div className="p-5">
-                      <span className="text-xs font-semibold" style={{ color: categoryColors[rel.category] || "#156082" }}>{insightCategoryLabel(rel.category, lang)}</span>
-                      <h3 className="font-bold text-[#0E2841] text-sm mt-1.5 mb-2 leading-snug group-hover:text-[#156082] transition-colors line-clamp-2">{insightTitle(rel, lang)}</h3>
+                      <span className="text-xs font-semibold" style={{ color: categoryColors[rel.category] || "#5B7CFF" }}>{insightCategoryLabel(rel.category, lang)}</span>
+                      <h3 className="font-bold text-[#0A1230] text-sm mt-1.5 mb-2 leading-snug group-hover:text-[#5B7CFF] transition-colors line-clamp-2">{insightTitle(rel, lang)}</h3>
                       <span className="text-xs text-gray-400">{insightReadTimeLabel(rel, lang)}</span>
                     </div>
                   </Link>

@@ -65,26 +65,26 @@ export default function Navbar() {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "bg-[#0E2841]/98 shadow-xl backdrop-blur-sm" : "bg-[#0E2841]"
+        scrolled ? "bg-[#0A1230]/98 shadow-xl backdrop-blur-sm" : "bg-[#0A1230]"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <Link href="/" className="flex items-center group" aria-label="Maven AI">
+          <Link href="/" className="flex items-center group" aria-label="Cognirise">
             <Logo size="md" />
           </Link>
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-8">
-            <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.home)}
             </Link>
-            <Link href="/about" className={`nav-link text-sm font-medium transition-colors ${isActive("/about") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/about" className={`nav-link text-sm font-medium transition-colors ${isActive("/about") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.about)}
             </Link>
 
             <div className="relative" onMouseEnter={() => setServicesOpen(true)} onMouseLeave={() => setServicesOpen(false)}>
-              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/services") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/services") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
                 {t(NAV.services)} <ChevronDown size={14} className={`transition-transform ${servicesOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
@@ -108,7 +108,7 @@ export default function Navbar() {
             </div>
 
             <div className="relative" onMouseEnter={() => setInsightsOpen(true)} onMouseLeave={() => setInsightsOpen(false)}>
-              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/insights") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/insights") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
                 {t(NAV.insights)} <ChevronDown size={14} className={`transition-transform ${insightsOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
@@ -129,10 +129,10 @@ export default function Navbar() {
               </AnimatePresence>
             </div>
 
-            <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.industries)}
             </Link>
-            <Link href="/marketplace" className={`nav-link text-sm font-medium transition-colors ${isActive("/marketplace") ? "text-[#F5A623]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/marketplace" className={`nav-link text-sm font-medium transition-colors ${isActive("/marketplace") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.marketplace)}
             </Link>
             <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
@@ -146,10 +146,10 @@ export default function Navbar() {
             <a href={ATELIER_SIGN_IN} className="text-gray-300 hover:text-white text-sm font-medium transition-colors" data-testid="link-atelier-signin">
               {t(NAV.signIn)}
             </a>
-            <Link href="/assessments" className="border border-[#0F9ED5] text-[#0F9ED5] hover:bg-[#0F9ED5] hover:text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors">
+            <Link href="/assessments" className="border border-[#5B7CFF] text-[#5B7CFF] hover:bg-[#5B7CFF] hover:text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors">
               {t(NAV.freeAssessment)}
             </Link>
-            <Link href="/contact" className="bg-[#F5A623] hover:bg-[#d4622a] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+            <Link href="/contact" className="bg-[#FF7B5A] hover:bg-[#E96A48] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
               {t(NAV.talkToUs)}
             </Link>
           </div>
@@ -162,7 +162,7 @@ export default function Navbar() {
 
       <AnimatePresence>
         {mobileOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="lg:hidden bg-[#0E2841] border-t border-white/10 overflow-hidden">
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="lg:hidden bg-[#0A1230] border-t border-white/10 overflow-hidden">
             <div className="px-4 py-4 space-y-1">
               <div className="pb-3 mb-2 border-b border-white/10 flex justify-center">
                 <LanguageSwitcher variant="mobile" />
@@ -183,10 +183,10 @@ export default function Navbar() {
               <Link href="/marketplace" className="block py-3 text-white font-medium border-b border-white/10">{t(NAV.marketplace)}</Link>
               <Link href="/assessments" className="block py-3 text-white font-medium border-b border-white/10">{t(NAV.diagnostics)}</Link>
               <div className="pt-3 space-y-2">
-                <Link href="/assessments" className="block text-center border border-[#0F9ED5] text-[#0F9ED5] font-semibold py-3 rounded-lg">
+                <Link href="/assessments" className="block text-center border border-[#5B7CFF] text-[#5B7CFF] font-semibold py-3 rounded-lg">
                   {t(NAV.freeAssessment)}
                 </Link>
-                <Link href="/contact" className="block text-center bg-[#F5A623] text-white font-semibold py-3 rounded-lg">
+                <Link href="/contact" className="block text-center bg-[#FF7B5A] text-white font-semibold py-3 rounded-lg">
                   {t(NAV.talkToUs)}
                 </Link>
                 <a href={ATELIER_SIGN_IN} className="block text-center text-gray-300 hover:text-white text-sm font-medium py-2">

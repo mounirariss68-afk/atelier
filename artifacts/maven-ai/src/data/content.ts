@@ -607,12 +607,12 @@ export const insights = [
       type: "Report",
       date: "Updated May 2026",
       readTime: "16 min read",
-      author: "Maven AI Research & Advisory",
+      author: "Cognirise Research & Advisory",
       coverImage: "/images/report-1.png",
       summary: "MIT NANDA finds ~95% of enterprise GenAI pilots deliver no measurable P&L impact and BCG places only 26% of firms past pilots. We synthesise the published research and set out the four-layer architecture and GCC implementation sequence that close the gap.",
       featured: true,
       tags: ["Agentic AI", "Enterprise", "GCC", "Production"],
-      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Maven analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
+      content: `<aside class="maven-note" role="note"><strong>Sourcing &amp; methodology note.</strong> Numeric ranges, timelines and operational benchmarks in this report represent <em>Cognirise analyst observations</em> drawn from advisory engagements across GCC enterprises during 2024-2026, unless an inline citation links to a specific page, press release or regulator filing. Industry comparisons are framed as ranges rather than point estimates and should be read as a planning aid, not a universal industry fact. See the <a href="#sources">Sources &amp; Citations</a> section below for the public, page-level references underpinning the named statistics.</aside>
   
   <h2>Thesis</h2>
   <p>The pilot-to-production gap in enterprise GenAI is now well documented, and it is not closing on its own. MIT NANDA's <em>State of AI in Business 2025</em> reports that roughly 95% of enterprise GenAI pilots deliver no measurable P&L impact, and that fewer than ~5% of integrated systems generate meaningful value (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>). BCG's 2024 <em>Where's the Value in AI?</em> places only 26% of companies past pilots and just 4% at the elite frontier (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>). The bottleneck is not the model. It is the layered work — value framing, governed data, agent design, change management — that turns a working demo into work the enterprise actually trusts.</p>
@@ -634,27 +634,27 @@ export const insights = [
   <h2>What DORA 2025 Adds: AI as an Amplifier</h2>
   <p>Google's <em>2025 DORA State of AI-Assisted Software Development</em> brings the most useful new framing to this debate. Across more than 5,000 respondents, DORA finds that 90% of professionals now use AI in their daily work and over 80% report productivity gains — but it also reports a key 2025 shift: <strong>AI now improves software delivery throughput and increases delivery instability</strong> at the same time, meaning underlying systems have not yet evolved to safely manage AI-accelerated work (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, p.3-4</a>). DORA's core conclusion is that AI is an amplifier — magnifying the strengths of high-performing organisations and the dysfunctions of struggling ones — and that seven foundational capabilities determine which side a team lands on: clear and communicated AI policy, healthy data ecosystem, quality internal platform, user-centric focus, value stream management, small-batch work, and version-controlled artefacts (<a href="https://services.google.com/fh/files/misc/state-of-ai-assisted-software-development-2025.pdf" target="_blank" rel="noopener noreferrer">DORA, 2025, AI Capabilities Model</a>). The four-layer architecture below is, in effect, the GCC-shaped operationalisation of those seven capabilities.</p>
   <h2>A Four-Layer Architecture</h2>
-  <p>Maven AI's framework is a deliberate response to those four failure modes. None of the layers is novel on its own; the discipline is treating all four as in-scope from day one rather than retrofitting the missing ones after a pilot stalls.</p>
+  <p>Cognirise's framework is a deliberate response to those four failure modes. None of the layers is novel on its own; the discipline is treating all four as in-scope from day one rather than retrofitting the missing ones after a pilot stalls.</p>
   <figure>
-  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="r1d1-t r1d1-d"><title id="r1d1-t">Maven four-layer architecture vs Tier-1 budget mix</title><desc id="r1d1-d">For each of the four agentic layers, the chart pairs the failure mode it neutralises with the share of programme budget Maven allocates versus a typical Tier-1 consultancy.</desc>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="r1d1-t r1d1-d"><title id="r1d1-t">Cognirise four-layer architecture vs Tier-1 budget mix</title><desc id="r1d1-d">For each of the four agentic layers, the chart pairs the failure mode it neutralises with the share of programme budget Cognirise allocates versus a typical Tier-1 consultancy.</desc>
   <rect width="700" height="280" fill="#F8FAFC"/>
-  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Layer · failure mode reversed</text>
-  <text x="430" y="22" font-size="12" font-weight="700" fill="#0E2841">Share of programme budget</text><text x="430" y="38" font-size="10" fill="#475569">Maven (filled) vs Tier-1 typical (outline)</text>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0A1230">Layer · failure mode reversed</text>
+  <text x="430" y="22" font-size="12" font-weight="700" fill="#0A1230">Share of programme budget</text><text x="430" y="38" font-size="10" fill="#475569">Cognirise (filled) vs Tier-1 typical (outline)</text>
   <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">L0 · Value Case</text><text x="32" y="86" fill="#fff" font-size="10">"No measurable outcome" → quantified before/after</text>
   <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="540" y="70" font-size="10" fill="#0E2841" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
-  <rect x="20" y="104" width="380" height="44" fill="#156082" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">L1 · Data & Foundations</text><text x="32" y="140" fill="#fff" font-size="10">"Data not agent-ready" → lineage, masters, retrieval</text>
-  <rect x="430" y="112" width="160" height="14" fill="#156082"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="600" y="124" font-size="10" fill="#0E2841" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
+  <text x="540" y="70" font-size="10" fill="#0A1230" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
+  <rect x="20" y="104" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">L1 · Data & Foundations</text><text x="32" y="140" fill="#fff" font-size="10">"Data not agent-ready" → lineage, masters, retrieval</text>
+  <rect x="430" y="112" width="160" height="14" fill="#5B7CFF"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="600" y="124" font-size="10" fill="#0A1230" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
   <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">L2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot can't scale" → production agents, sovereign-fit</text>
   <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="618" y="178" font-size="10" fill="#0E2841" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
-  <rect x="20" y="212" width="380" height="44" fill="#0E2841" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">L3 · Change & Adoption</text><text x="32" y="248" fill="#fff" font-size="10">"Adoption stalls" → role redesign, training, comms</text>
-  <rect x="430" y="220" width="125" height="14" fill="#0E2841"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="565" y="232" font-size="10" fill="#0E2841" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
+  <text x="618" y="178" font-size="10" fill="#0A1230" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
+  <rect x="20" y="212" width="380" height="44" fill="#0A1230" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">L3 · Change & Adoption</text><text x="32" y="248" fill="#fff" font-size="10">"Adoption stalls" → role redesign, training, comms</text>
+  <rect x="430" y="220" width="125" height="14" fill="#0A1230"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="565" y="232" font-size="10" fill="#0A1230" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
   <text x="20" y="272" font-size="10" fill="#475569" font-style="italic">Wrapper: governance · observability · audit · regulator-grade controls</text>
   </svg>
-  <figcaption>Figure 1 — The four-layer architecture, with each layer paired to the failure mode it reverses and to the budget share Maven allocates versus a typical Tier-1 plan. The diagnostic difference: Maven roughly doubles spend on Value Case (L0) and Change & Adoption (L3), the two layers Tier-1 firms underfund and that McKinsey identifies as the largest drivers of pilot-to-production failure.</figcaption>
+  <figcaption>Figure 1 — The four-layer architecture, with each layer paired to the failure mode it reverses and to the budget share Cognirise allocates versus a typical Tier-1 plan. The diagnostic difference: Cognirise roughly doubles spend on Value Case (L0) and Change & Adoption (L3), the two layers Tier-1 firms underfund and that McKinsey identifies as the largest drivers of pilot-to-production failure.</figcaption>
   </figure>
   <h3>Layer 0 — Value Case</h3>
   <p>Outcome-led shaping. Specific decisions and actions the agent will own, with measurable before/after metrics. If the value case cannot be quantified, the engagement does not advance.</p>
@@ -669,8 +669,8 @@ export const insights = [
   <figure>
   <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-2 svg-d-2"><title id="svg-t-2">26-week GCC implementation sequence with go/no-go gates</title><desc id="svg-d-2">Gantt-style timeline of the five phases from value case through change and launch, with three critical go/no-go decision gates marked in amber.</desc>
   <rect width="700" height="240" fill="#F8FAFC"/>
-  <text x="20" y="20" font-size="11" font-weight="700" fill="#0E2841">Critical path · five phases · three go/no-go gates</text>
-  <line x1="40" y1="180" x2="660" y2="180" stroke="#0E2841" stroke-width="1.5"/>
+  <text x="20" y="20" font-size="11" font-weight="700" fill="#0A1230">Critical path · five phases · three go/no-go gates</text>
+  <line x1="40" y1="180" x2="660" y2="180" stroke="#0A1230" stroke-width="1.5"/>
   <g font-size="9" fill="#94A3B8">
   <line x1="40" y1="40" x2="40" y2="180" stroke="#E2E8F0"/><text x="40" y="200" text-anchor="middle">W1</text>
   <line x1="160" y1="40" x2="160" y2="180" stroke="#E2E8F0"/><text x="160" y="200" text-anchor="middle">W6</text>
@@ -680,9 +680,9 @@ export const insights = [
   <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
   </g>
   <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Value case · W1–3</text>
-  <rect x="112" y="76" width="168" height="20" fill="#156082" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Data readiness · W4–10</text>
+  <rect x="112" y="76" width="168" height="20" fill="#5B7CFF" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Data readiness · W4–10</text>
   <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototype · W9–14</text>
-  <rect x="328" y="132" width="216" height="20" fill="#0E2841" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Production hardening · W13–22</text>
+  <rect x="328" y="132" width="216" height="20" fill="#0A1230" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Production hardening · W13–22</text>
   <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">Change & launch · W20–26</text>
   <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">Gate 1: ROI signed</text>
   <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">Gate 2: Pilot proven</text>
@@ -720,13 +720,13 @@ export const insights = [
 <li><strong>Government, public services, sovereign wealth funds.</strong> Data sovereignty, Arabic-language model requirements, and audit-grade transparency shift weight toward Layer 1 (often requiring on-prem or GCC-hosted infrastructure) and Layer 0 (value case alignment with national strategy). Engagement duration: 32–40 weeks.</li>
 </ul>
 
-<p>The common error is treating "production AI" as a binary gate. It is not. Each sector has a different definition of production readiness, and the layer sequence should reflect that. A financial institution's go-live gate includes regulatory pre-approval; an operational manufacturing facility's gate includes failure-mode testing at scale. Maven's framework remains unchanged; the checkpoints within it are sector-shaped.</p>
+<p>The common error is treating "production AI" as a binary gate. It is not. Each sector has a different definition of production readiness, and the layer sequence should reflect that. A financial institution's go-live gate includes regulatory pre-approval; an operational manufacturing facility's gate includes failure-mode testing at scale. Cognirise's framework remains unchanged; the checkpoints within it are sector-shaped.</p>
 
 <h2>Vendor Selection and Platform Alignment</h2>
 
 <p>The choice of agentic platform (Layer 2) is downstream of Layers 0 and 1, not upstream. This is the inversion that most technology-first teams miss. Many organizations select a platform first (Microsoft Copilot Studio, LangGraph, AWS Bedrock Agents) and then attempt to fit their value case and data architecture to the platform's constraints. The result is a mismatch between what the organization actually needs and what the platform was designed to optimize for.</p>
 
-<p>Maven's approach is outcome-first: define the value case (Layer 0) and assess data readiness (Layer 1), then evaluate platforms against a set of production-specific criteria:</p>
+<p>Cognirise's approach is outcome-first: define the value case (Layer 0) and assess data readiness (Layer 1), then evaluate platforms against a set of production-specific criteria:</p>
 
 <ol>
 <li><strong>Observability and audit trails.</strong> Can the platform generate regulator-grade logs of every decision, every retrieval, every action taken by the agent? SAMA and CBUAE require this explicitly for material decisions. Platforms like LangGraph and LangChain offer this natively through their telemetry APIs; others require custom instrumentation.</li>
@@ -744,7 +744,7 @@ export const insights = [
 
 <p>Observability in agentic systems is materially harder than observability in traditional ML systems. A batch classification model has one decision point per input; an agent has dozens. An agent may retrieve context, refine its understanding, consult multiple tools, iterate its reasoning, and then act — all within a single user request. Without end-to-end observability, you cannot see where the agent went wrong, why it took that action, or whether it is drifting from its design intent.</p>
 
-<p>Maven's observability stack for production agentic AI includes:</p>
+<p>Cognirise's observability stack for production agentic AI includes:</p>
 
 <ul>
 <li><strong>Action telemetry.</strong> Every tool invocation, every retrieval, every decision logged with timestamp, input, output, and confidence. This is the source of truth for auditing and debugging.</li>
@@ -761,7 +761,7 @@ export const insights = [
 
 <h2>The 90/180/365 Day Value Realization Cadence</h2>
 
-<p>A common mistake is defining success as "the agent is live." In reality, production agents are only valuable if they are adopted, trusted, and continuously improved. Maven structures the post-launch period into three value gates:</p>
+<p>A common mistake is defining success as "the agent is live." In reality, production agents are only valuable if they are adopted, trusted, and continuously improved. Cognirise structures the post-launch period into three value gates:</p>
 
 <p><strong>Day 90 checkpoint — Adoption and baseline trust.</strong> Is the agent being used? Are users reporting it as helpful or are they working around it? At 90 days, you should see adoption rates above 60% in the intended user base and positive Net Promoter Score (NPS) among early adopters. If adoption is flat or negative, the issue is usually Layer 3 (change management) or Layer 0 (the value case was misaligned with actual user needs). Do not invest in improvements until you understand why adoption is flat.</p>
 
@@ -786,7 +786,7 @@ export const insights = [
   <li>Central Bank of the UAE. <a href="https://www.centralbank.ae/" target="_blank" rel="noopener noreferrer">centralbank.ae</a></li>
   </ol>
       `,
-      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Maven</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
+      contentAr: `<aside class="maven-note" role="note"><strong>ملاحظة المصادر والمنهجية.</strong> النطاقات الرقمية والجداول الزمنية والمعايير التشغيلية في هذا التقرير تمثل <em>ملاحظات محللي Cognirise</em> المستخلصة من مهام استشارية لدى مؤسسات في دول مجلس التعاون الخليجي خلال 2024-2026، ما لم يُحَل اقتباس داخل النص إلى صفحة محددة أو بيان صحفي أو وثيقة تنظيمية. المقارنات القطاعية تُقدَّم كنطاقات وليس تقديرات نقطية، وينبغي قراءتها كأداة تخطيط لا كحقيقة صناعية شاملة. راجع قسم <a href="#sources">المصادر والمراجع</a> أدناه للحصول على المراجع العامة على مستوى الصفحة التي تستند إليها الإحصاءات المُسمّاة.</aside>
   
   <h2>الأطروحة</h2>
   <p>الفجوة بين النماذج التجريبية والإنتاج في تطبيقات الذكاء الاصطناعي التوليدي بالمؤسسات وثّقت جيداً الآن، وهي لا تغلق من تلقاء نفسها. تقرير ميت ناندا <em>حالة الذكاء الاصطناعي في الأعمال 2025</em> يُفيد بأن تقريباً 95% من النماذج التجريبية للذكاء الاصطناعي التوليدي بالمؤسسات لا تحقق تأثيراً قابلاً للقياس على الربح والخسارة، وأن أقل من ~5% من الأنظمة المدمجة تولد قيمة حقيقية (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">ميت ناندا، 2025</a>). يضع تقرير بي سي جي 2024 <em>أين تكمن القيمة في الذكاء الاصطناعي؟</em> فقط 26% من الشركات بعد المرحلة التجريبية و 4% فقط في الحدود النخبوية (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">بي سي جي، 2024</a>). الاختناق ليس في النموذج. بل هو العمل الطبقي - تحديد القيمة، البيانات المُحكومة، تصميم الوكيل، إدارة التغيير - الذي يحول عرضاً توضيحياً فعالاً إلى عمل تثق به المؤسسة فعلاً.</p>
@@ -806,7 +806,7 @@ export const insights = [
   <li><strong>عدم تطابق البنية.</strong> نماذج أولية بدرجة عرض توضيحي لا يمكن ملاحظتها أو تقييمها أو توسيع نطاقها أو ترقيتها.</li>
   </ul>
   <h2>بنية ذات أربع طبقات</h2>
-  <p>إطار عمل Maven AI هو رد متعمد على أنماط الفشل الأربعة تلك. لا شيء من الطبقات جديد من تلقاء نفسه؛ الانضباط هو التعامل مع الأربعة جميعاً كضمن الإطاق من اليوم الأول بدلاً من تثبيت الناقصة منها بعد توقف النموذج التجريبي.</p>
+  <p>إطار عمل Cognirise هو رد متعمد على أنماط الفشل الأربعة تلك. لا شيء من الطبقات جديد من تلقاء نفسه؛ الانضباط هو التعامل مع الأربعة جميعاً كضمن الإطاق من اليوم الأول بدلاً من تثبيت الناقصة منها بعد توقف النموذج التجريبي.</p>
   <h3>الطبقة 0 - حالة القيمة</h3>
   <p>تشكيل موجه بالنتائج. القرارات والإجراءات المحددة التي سيملكها الوكيل، مع مقاييس قبل وبعد قابلة للقياس. إذا لم يتمكن من تحديد كمي لحالة القيمة، فإن المشاركة لا تتقدم.</p>
   <h3>الطبقة 1 - أسس البيانات والذكاء الاصطناعي</h3>
@@ -848,13 +848,13 @@ export const insights = [
 </ul>
 
 
-<p>الخطأ الشائع هو معاملة "الذكاء الاصطناعي الإنتاجي" كبوابة ثنائية. إنه ليس كذلك. لكل قطاع تعريف مختلف لجاهزية الإنتاج، والتسلسل الطبقي يجب أن يعكس ذلك. بوابة الانطلاق الحي لمؤسسة مالية تشمل الموافقة المسبقة التنظيمية؛ بوابة منشأة تصنيع تشغيلية تشمل اختبار أنماط الفشل بالحجم الكامل. إطار عمل Maven يبقى دون تغيير؛ نقاط التفتيش داخله مشكّلة حسب القطاع.</p>
+<p>الخطأ الشائع هو معاملة "الذكاء الاصطناعي الإنتاجي" كبوابة ثنائية. إنه ليس كذلك. لكل قطاع تعريف مختلف لجاهزية الإنتاج، والتسلسل الطبقي يجب أن يعكس ذلك. بوابة الانطلاق الحي لمؤسسة مالية تشمل الموافقة المسبقة التنظيمية؛ بوابة منشأة تصنيع تشغيلية تشمل اختبار أنماط الفشل بالحجم الكامل. إطار عمل Cognirise يبقى دون تغيير؛ نقاط التفتيش داخله مشكّلة حسب القطاع.</p>
 
 <h2>اختيار الموردين والمحاذاة مع المنصة</h2>
 
 <p>اختيار منصة الوكيل الفاعل (الطبقة 2) يأتي لاحقاً للطبقات 0 و 1، وليس مسبقاً. هذا هو الانعكاس الذي تفتقده معظم الفرق الموجهة بالتكنولوجيا. تختار العديد من المنظمات منصة أولاً (Microsoft Copilot Studio أو LangGraph أو AWS Bedrock Agents) ثم تحاول تناسب حالة القيمة ومعمارية البيانات مع قيود المنصة. والنتيجة هي عدم توافق بين ما تحتاجه المنظمة فعلاً وما صممت له المنصة للتحسين.</p>
 
-<p>نهج Maven هو موجَّه بالنتائج: حدد حالة القيمة (الطبقة 0) وقيِّم جاهزية البيانات (الطبقة 1)، ثم قيِّم المنصات مقابل مجموعة من معايير الإنتاج المحددة:</p>
+<p>نهج Cognirise هو موجَّه بالنتائج: حدد حالة القيمة (الطبقة 0) وقيِّم جاهزية البيانات (الطبقة 1)، ثم قيِّم المنصات مقابل مجموعة من معايير الإنتاج المحددة:</p>
 
 <ol>
 <li><strong>القابلية للمراقبة وتدقيق المسارات.</strong> هل يمكن للمنصة إنشاء سجلات بمستوى منظِّم لكل قرار وكل عملية استرجاع وكل إجراء يتخذه الوكيل؟ SAMA و CBUAE يتطلبان هذا بشكل صريح للقرارات الجوهرية. المنصات مثل LangGraph و LangChain توفر هذا بشكل أصلي عبر واجهات برمجة التطبيقات الخاصة بهما للقياس البعدي؛ الآخرون يتطلبون أدوات مخصصة.</li>
@@ -872,7 +872,7 @@ export const insights = [
 
 <p>القابلية للمراقبة في الأنظمة الفاعلة أصعب بشكل جوهري من القابلية للمراقبة في أنظمة التعلم الآلي التقليدية. نموذج التصنيف الدفعي له نقطة قرار واحدة لكل مدخل؛ الوكيل لديه العشرات. قد يسترجع الوكيل السياق ويصقل فهمه ويستشير أدوات متعددة ويكرر تفكيره ثم يتصرف — كل هذا ضمن طلب مستخدم واحد. بدون قابلية مراقبة من البداية إلى النهاية، لا يمكنك أن ترى أين ذهب الوكيل بشكل خاطئ أو لماذا اتخذ هذا الإجراء أو ما إذا كان يتحول عن نيته التصميمية.</p>
 
-<p>مكدس القابلية للمراقبة الخاص بـ Maven لذكاء اصطناعي فاعل في الإنتاج يشمل:</p>
+<p>مكدس القابلية للمراقبة الخاص بـ Cognirise لذكاء اصطناعي فاعل في الإنتاج يشمل:</p>
 
 
 <ul>
@@ -890,7 +890,7 @@ export const insights = [
 
 <h2>سقم إدراك القيمة 90/180/365 يوماً</h2>
 
-<p>الخطأ الشائع هو تعريف النجاح بأنه "الوكيل مباشر." في الواقع، وكلاء الإنتاج لا يكونون قيّمين إلا إذا تم تبنيهم والثقة بهم والتحسين المستمر. يهيكل Maven فترة ما بعد الانطلاق إلى ثلاث بوابات قيمة:</p>
+<p>الخطأ الشائع هو تعريف النجاح بأنه "الوكيل مباشر." في الواقع، وكلاء الإنتاج لا يكونون قيّمين إلا إذا تم تبنيهم والثقة بهم والتحسين المستمر. يهيكل Cognirise فترة ما بعد الانطلاق إلى ثلاث بوابات قيمة:</p>
 
 <p><strong>نقطة تفتيش اليوم 90 — التبني والثقة الأساسية.</strong> هل يتم استخدام الوكيل؟ هل يبلغ المستخدمون عنه على أنه مفيد أم أنهم يعملون حوله؟ في اليوم 90، يجب أن تشهد معدلات تبني فوق 60% في قاعدة المستخدمين المقصودة وصافي نقاط ترويج إيجابية (NPS) بين المتبنين الأوائل. إذا كان التبني مسطحاً أو سلبياً، فالمشكلة عادة ما تكون الطبقة 3 (إدارة التغيير) أو الطبقة 0 (لم تكن حالة القيمة محاذاة مع احتياجات المستخدمين الفعلية). لا تستثمر في التحسينات حتى تفهم لماذا التبني مسطح.</p>
 
@@ -902,32 +902,32 @@ export const insights = [
 
   
   <figure>
-  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-3 svg-d-3"><title id="svg-t-3">معمارية Maven الرباعية الطبقات مقابل توزيع ميزانية الفئة الأولى</title><desc id="svg-d-3">لكل طبقة من الطبقات الأربع للوكلاء، يربط الرسم بين وضع الفشل الذي تعالجه ونسبة الميزانية التي تخصصها Maven مقارنةً باستشاري الفئة الأولى التقليدي.</desc>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-3 svg-d-3"><title id="svg-t-3">معمارية Cognirise الرباعية الطبقات مقابل توزيع ميزانية الفئة الأولى</title><desc id="svg-d-3">لكل طبقة من الطبقات الأربع للوكلاء، يربط الرسم بين وضع الفشل الذي تعالجه ونسبة الميزانية التي تخصصها Cognirise مقارنةً باستشاري الفئة الأولى التقليدي.</desc>
   <rect width="700" height="280" fill="#F8FAFC"/>
-  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">الطبقة · وضع الفشل المُعالَج</text>
-  <text x="430" y="22" font-size="12" font-weight="700" fill="#0E2841">حصة ميزانية البرنامج</text><text x="430" y="38" font-size="10" fill="#475569">Maven (ممتلئ) مقابل الفئة الأولى التقليدي (محيط)</text>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0A1230">الطبقة · وضع الفشل المُعالَج</text>
+  <text x="430" y="22" font-size="12" font-weight="700" fill="#0A1230">حصة ميزانية البرنامج</text><text x="430" y="38" font-size="10" fill="#475569">Cognirise (ممتلئ) مقابل الفئة الأولى التقليدي (محيط)</text>
   <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">الطبقة 0 · حالة القيمة</text><text x="32" y="86" fill="#fff" font-size="10">"لا نتيجة قابلة للقياس" ← قبل/بعد مُكمَّم</text>
   <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="540" y="70" font-size="10" fill="#0E2841" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (الفئة الأولى)</text>
-  <rect x="20" y="104" width="380" height="44" fill="#156082" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">الطبقة 1 · أسس البيانات</text><text x="32" y="140" fill="#fff" font-size="10">"البيانات غير جاهزة للوكيل" ← نسب البيانات والاسترجاع</text>
-  <rect x="430" y="112" width="160" height="14" fill="#156082"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="600" y="124" font-size="10" fill="#0E2841" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
+  <text x="540" y="70" font-size="10" fill="#0A1230" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (الفئة الأولى)</text>
+  <rect x="20" y="104" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">الطبقة 1 · أسس البيانات</text><text x="32" y="140" fill="#fff" font-size="10">"البيانات غير جاهزة للوكيل" ← نسب البيانات والاسترجاع</text>
+  <rect x="430" y="112" width="160" height="14" fill="#5B7CFF"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="600" y="124" font-size="10" fill="#0A1230" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
   <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">الطبقة 2 · الذكاء الوكيل</text><text x="32" y="194" fill="#fff" font-size="10">"التجربة لا تتوسع" ← وكلاء إنتاج · ملاءمة سيادية</text>
   <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="618" y="178" font-size="10" fill="#0E2841" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
-  <rect x="20" y="212" width="380" height="44" fill="#0E2841" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">الطبقة 3 · التغيير والتبني</text><text x="32" y="248" fill="#fff" font-size="10">"التبني يتعثر" ← إعادة تصميم الأدوار · تدريب</text>
-  <rect x="430" y="220" width="125" height="14" fill="#0E2841"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="565" y="232" font-size="10" fill="#0E2841" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
+  <text x="618" y="178" font-size="10" fill="#0A1230" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
+  <rect x="20" y="212" width="380" height="44" fill="#0A1230" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">الطبقة 3 · التغيير والتبني</text><text x="32" y="248" fill="#fff" font-size="10">"التبني يتعثر" ← إعادة تصميم الأدوار · تدريب</text>
+  <rect x="430" y="220" width="125" height="14" fill="#0A1230"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="565" y="232" font-size="10" fill="#0A1230" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
   <text x="20" y="272" font-size="10" fill="#475569" font-style="italic">إطار شامل: حوكمة · مراقبة · سجلات تدقيق · ضوابط بدرجة تنظيمية</text>
   </svg>
-  <figcaption>الشكل 1 — المعمارية الرباعية الطبقات، مع ربط كل طبقة بوضع الفشل الذي تعالجه وحصة الميزانية التي تخصصها Maven مقارنةً بخطة استشاري الفئة الأولى التقليدية. الفارق التشخيصي: تضاعف Maven تقريباً الإنفاق على حالة القيمة (L0) والتغيير والتبني (L3)، وهما الطبقتان اللتان تُنقص الفئة الأولى تمويلهما، وتحدّدهما ماكينزي بوصفهما المحرّكين الأكبرين لفشل الانتقال من التجربة إلى الإنتاج.</figcaption>
+  <figcaption>الشكل 1 — المعمارية الرباعية الطبقات، مع ربط كل طبقة بوضع الفشل الذي تعالجه وحصة الميزانية التي تخصصها Cognirise مقارنةً بخطة استشاري الفئة الأولى التقليدية. الفارق التشخيصي: تضاعف Cognirise تقريباً الإنفاق على حالة القيمة (L0) والتغيير والتبني (L3)، وهما الطبقتان اللتان تُنقص الفئة الأولى تمويلهما، وتحدّدهما ماكينزي بوصفهما المحرّكين الأكبرين لفشل الانتقال من التجربة إلى الإنتاج.</figcaption>
   </figure>
   
   <figure>
   <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-4 svg-d-4"><title id="svg-t-4">تسلسل تنفيذ GCC لمدة 26 أسبوعاً مع بوابات قرار</title><desc id="svg-d-4">جدول زمني على طراز Gantt للمراحل الخمس من حالة القيمة وحتى التغيير والإطلاق، مع ثلاث بوابات قرار حاسمة بلون كهرماني.</desc>
   <rect width="700" height="240" fill="#F8FAFC"/>
-  <text x="20" y="20" font-size="11" font-weight="700" fill="#0E2841">المسار الحرج · خمس مراحل · ثلاث بوابات قرار</text>
-  <line x1="40" y1="180" x2="660" y2="180" stroke="#0E2841" stroke-width="1.5"/>
+  <text x="20" y="20" font-size="11" font-weight="700" fill="#0A1230">المسار الحرج · خمس مراحل · ثلاث بوابات قرار</text>
+  <line x1="40" y1="180" x2="660" y2="180" stroke="#0A1230" stroke-width="1.5"/>
   <g font-size="9" fill="#94A3B8">
   <line x1="40" y1="40" x2="40" y2="180" stroke="#E2E8F0"/><text x="40" y="200" text-anchor="middle">W1</text>
   <line x1="160" y1="40" x2="160" y2="180" stroke="#E2E8F0"/><text x="160" y="200" text-anchor="middle">W6</text>
@@ -937,9 +937,9 @@ export const insights = [
   <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
   </g>
   <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">حالة القيمة · أ1–3</text>
-  <rect x="112" y="76" width="168" height="20" fill="#156082" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">جاهزية البيانات · أ4–10</text>
+  <rect x="112" y="76" width="168" height="20" fill="#5B7CFF" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">جاهزية البيانات · أ4–10</text>
   <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">النموذج الأولي · أ9–14</text>
-  <rect x="328" y="132" width="216" height="20" fill="#0E2841" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">تصلب الإنتاج · أ13–22</text>
+  <rect x="328" y="132" width="216" height="20" fill="#0A1230" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">تصلب الإنتاج · أ13–22</text>
   <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">التغيير والإطلاق · أ20–26</text>
   <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">بوابة 1: عائد الاستثمار موقّع</text>
   <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">بوابة 2: التجربة مُثبتة</text>
@@ -964,7 +964,7 @@ export const insights = [
   </ol>
       
 `,
-      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Maven analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
+      contentTr: `<aside class="maven-note" role="note"><strong>Kaynak ve metodoloji notu.</strong> Bu rapordaki sayısal aralıklar, zaman çizelgeleri ve operasyonel kıyaslamalar, satır içi bir alıntı belirli bir sayfaya, basın bültenine veya düzenleyici dosyaya bağlanmadığı sürece 2024-2026 döneminde GCC işletmeleriyle yürütülen danışmanlık projelerinden elde edilen <em>Cognirise analist gözlemlerini</em> temsil eder. Sektörel karşılaştırmalar nokta tahminleri yerine aralıklar olarak sunulur ve evrensel bir sektör gerçeği değil, planlama yardımcısı olarak okunmalıdır. Adlandırılmış istatistiklerin dayandığı sayfa düzeyinde kamuya açık referanslar için aşağıdaki <a href="#sources">Kaynaklar ve Referanslar</a> bölümüne bakın.</aside>
   
   <h2>Tez</h2>
   <p>Kurumsal GenAI'deki pilot-üretim boşluğu artık iyi belgelenmiştir ve kendi başına kapanmamaktadır. MIT NANDA'nın <em>İş Dünyasında AI Durumu 2025</em> raporuna göre, kurumsal GenAI pilot projelerinin kabaca %95'i ölçülebilir bir kâr/zarar etkisi sağlamaz ve entegre sistemlerin %5'ten azı anlamlı değer üretir (<a href="https://nanda.media.mit.edu/ai_report_2025.pdf" target="_blank" rel="noopener noreferrer">MIT NANDA, 2025</a>). BCG'nin 2024 <em>AI'de Değer Nerede?</em> raporu, şirketlerin yalnızca %26'sinin pilot aşamasının ötesine geçtiğini ve %4'ünün de elit sınırda olduğunu göstermektedir (<a href="https://www.bcg.com/publications/2024/wheres-value-in-ai" target="_blank" rel="noopener noreferrer">BCG, 2024</a>). Sorun model değildir. Sorun, çalışan bir demoyu kurumun gerçekten güvendiği işe dönüştüren katmanlı çalışmadır: değer belirleme, yönetilen veri, ajan tasarımı ve değişim yönetimi.</p>
@@ -984,7 +984,7 @@ export const insights = [
   <li><strong>Mimari uyumsuzluk.</strong> Gözlemlenemeyen, değerlendirilemeyen, ölçeklendirilemeyen veya yükseltilemeyecek demo seviyesi prototipler.</li>
   </ul>
   <h2>Dört Katmanlı Bir Mimari</h2>
-  <p>Maven AI'nin çerçevesi bu dört başarısızlık moduna kasıtlı bir yanıttır. Katmanların hiçbiri kendi başına yenidir; disiplin, pilot projenin takılması sonra eksik olanları onarıyor olmak yerine, dördünü de birinci günden itibaren kapsam içinde tutmaktır.</p>
+  <p>Cognirise'nin çerçevesi bu dört başarısızlık moduna kasıtlı bir yanıttır. Katmanların hiçbiri kendi başına yenidir; disiplin, pilot projenin takılması sonra eksik olanları onarıyor olmak yerine, dördünü de birinci günden itibaren kapsam içinde tutmaktır.</p>
   <h3>Katman 0 — Değer Vakası</h3>
   <p>Sonuç yönelimli şekillendirme. Ajanın sahibi olacağı spesifik kararlar ve eylemler, ölçülebilir öncesi/sonrası metriklerle. Değer vakası nicelendirilmezse, katılım ilerlemez.</p>
   <h3>Katman 1 — Veri ve AI Temelleri</h3>
@@ -1025,13 +1025,13 @@ export const insights = [
 <li><strong>Hükümet, kamu hizmetleri, egemen servet fonları.</strong> Veri egemenliği, Arapça dil modeli gereksinimleri ve denetim niteliğinde şeffaflık, ağırlığı Katman 1'e (genellikle şirket içi veya GCC tarafından barındırılan altyapı gerektiren) ve Katman 0'a (değer çalışmasının ulusal stratejiye uyumlanması) doğru kaymaktadır. Katılım süresi: 32-40 hafta.</li>
 </ul>
 
-<p>Yaygın hata, "üretim yapay zekası"nı ikili bir kapı olarak görmektir. Değildir. Her sektörün üretim hazırlığının farklı bir tanımı vardır ve katman sırası bunu yansıtmalıdır. Bir finansal kurumun canlı yayın kapısı düzenleyici ön onayını içermektedir; bir operasyonel üretim tesisinin kapısı ölçekte arıza modu testini içermektedir. Maven'in çerçevesi değişmeden kalır; içindeki kontrol noktaları sektöre göre şekillenir.</p>
+<p>Yaygın hata, "üretim yapay zekası"nı ikili bir kapı olarak görmektir. Değildir. Her sektörün üretim hazırlığının farklı bir tanımı vardır ve katman sırası bunu yansıtmalıdır. Bir finansal kurumun canlı yayın kapısı düzenleyici ön onayını içermektedir; bir operasyonel üretim tesisinin kapısı ölçekte arıza modu testini içermektedir. Cognirise'in çerçevesi değişmeden kalır; içindeki kontrol noktaları sektöre göre şekillenir.</p>
 
 <h2>Satıcı Seçimi ve Platform Uyumluluğu</h2>
 
 <p>Agentic platform seçimi (Katman 2), Katman 0 ve 1 kaynağı değil, aşağı akış konu olur. Bu, çoğu teknoloji-merkezli ekibin kaçırdığı inversiyondur. Birçok kuruluş önce bir platform seçer (Microsoft Copilot Studio, LangGraph, AWS Bedrock Agents) ve ardından değer çalışmasını ve veri mimarisini platformun kısıtlamalarına uydurmaya çalışır. Sonuç, kuruluşun gerçekten ihtiyaç duyduğu ile platformun optimize etmek için tasarlandığı arasında bir uyumsuzluktur.</p>
 
-<p>Maven'in yaklaşımı sonuç-odak: değer çalışmasını tanımlayın (Katman 0) ve veri hazırlığını değerlendirin (Katman 1), ardından platformları bir dizi üretime özgü kriter karşısında değerlendirin:</p>
+<p>Cognirise'in yaklaşımı sonuç-odak: değer çalışmasını tanımlayın (Katman 0) ve veri hazırlığını değerlendirin (Katman 1), ardından platformları bir dizi üretime özgü kriter karşısında değerlendirin:</p>
 
 <ol>
 <li><strong>Gözlemlenebilirlik ve denetim izleri.</strong> Platform, her karar, her geri alma, ajan tarafından alınan her eylem için düzenleyici niteliğinde loglar oluşturabilir mi? SAMA ve CBUAE bunu maddi kararlar için açıkça talep etmektedir. LangGraph ve LangChain gibi platformlar bunu telemetri API'leri aracılığıyla yerel olarak sunmaktadır; diğerleri özel enstrümantasyon gerektirir.</li>
@@ -1049,7 +1049,7 @@ export const insights = [
 
 <p>Agentic sistemlerde gözlemlenebilirlik, geleneksel ML sistemlerinde gözlemlenebilirlikten maddi olarak daha zordur. Bir toplu sınıflandırma modelinin giriş başına bir karar noktası vardır; bir ajanın onlarcası vardır. Bir ajan bağlam alabilir, anlayışını hassaslaştırabilir, birden fazla araça danışabilir, akıl yürütmesini yineleyebilir ve ardından hareket edebilir — hepsi tek bir kullanıcı isteğinde. Uçtan uca gözlemlenebilirlik olmadan, ajanın neresinde hata yaptığını, neden bu eylemi aldığını veya tasarım amacından sürüklenmekte olup olmadığını göremezsiniz.</p>
 
-<p>Üretim agentic yapay zeka için Maven'in gözlemlenebilirlik yığını şunları içerir:</p>
+<p>Üretim agentic yapay zeka için Cognirise'in gözlemlenebilirlik yığını şunları içerir:</p>
 
 <ul>
 <li><strong>Eylem telemetrisi.</strong> Her araç çağırma, her geri alma, her karar zaman damgası, giriş, çıkış ve güven ile günlüğe kaydedilmiştir. Bu, denetim ve hata ayıklama için gerçeğin kaynağıdır.</li>
@@ -1065,7 +1065,7 @@ export const insights = [
 
 <h2>90/180/365 Gün Değer Gerçekleştirme Temposu</h2>
 
-<p>Yaygın bir hata, başarıyı "ajan canlı yayında" olarak tanımlamaktır. Gerçekte, üretim ajanları yalnızca benimsenirse, güvenilirse ve sürekli iyileştirilirse değerlidir. Maven, canlı yayın sonrası dönemin üç değer kapısına yapılandırılır:</p>
+<p>Yaygın bir hata, başarıyı "ajan canlı yayında" olarak tanımlamaktır. Gerçekte, üretim ajanları yalnızca benimsenirse, güvenilirse ve sürekli iyileştirilirse değerlidir. Cognirise, canlı yayın sonrası dönemin üç değer kapısına yapılandırılır:</p>
 
 <p><strong>90. gün kontrol noktası — Benimseme ve temel güven.</strong> Ajan kullanılıyor mu? Kullanıcılar bunu faydalı olarak bildiriyor mu yoksa bunu aşıyor mu? 90 günde, amaçlanan kullanıcı tabanında %60'ın üzerinde benimseme oranları ve erken benimseyenler arasında pozitif Net Promoter Skoru (NPS) görmelisiniz. Benimseme düz veya negatif ise, sorun genellikle Katman 3'tür (değişim yönetimi) veya Katman 0'dır (değer çalışması gerçek kullanıcı ihtiyaçlarıyla uyumlanmadı). Benimsemenin neden düz olduğunu anlayana kadar iyileştirmelere yatırım yapmayın.</p>
 
@@ -1077,32 +1077,32 @@ export const insights = [
 
   
   <figure>
-  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-5 svg-d-5"><title id="svg-t-5">Maven dört katmanlı mimarisi vs Tier-1 bütçe dağılımı</title><desc id="svg-d-5">Dört agentic katmanın her biri için, çizim katmanın etkisizleştirdiği başarısızlık modunu Maven'in tipik bir Tier-1 danışmanlığa kıyasla bu katmana ayırdığı program bütçesi payıyla eşleştirir.</desc>
+  <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-5 svg-d-5"><title id="svg-t-5">Cognirise dört katmanlı mimarisi vs Tier-1 bütçe dağılımı</title><desc id="svg-d-5">Dört agentic katmanın her biri için, çizim katmanın etkisizleştirdiği başarısızlık modunu Cognirise'in tipik bir Tier-1 danışmanlığa kıyasla bu katmana ayırdığı program bütçesi payıyla eşleştirir.</desc>
   <rect width="700" height="280" fill="#F8FAFC"/>
-  <text x="20" y="22" font-size="12" font-weight="700" fill="#0E2841">Katman · tersine çevrilen başarısızlık</text>
-  <text x="430" y="22" font-size="12" font-weight="700" fill="#0E2841">Program bütçesi payı</text><text x="430" y="38" font-size="10" fill="#475569">Maven (dolu) vs Tier-1 tipik (kontur)</text>
+  <text x="20" y="22" font-size="12" font-weight="700" fill="#0A1230">Katman · tersine çevrilen başarısızlık</text>
+  <text x="430" y="22" font-size="12" font-weight="700" fill="#0A1230">Program bütçesi payı</text><text x="430" y="38" font-size="10" fill="#475569">Cognirise (dolu) vs Tier-1 tipik (kontur)</text>
   <rect x="20" y="50" width="380" height="44" fill="#F5A623" rx="4"/><text x="32" y="68" fill="#fff" font-size="12" font-weight="700">K0 · Değer Durumu</text><text x="32" y="86" fill="#fff" font-size="10">"Ölçülebilir sonuç yok" → nicelendirilmiş öncesi/sonrası</text>
   <rect x="430" y="58" width="100" height="14" fill="#F5A623"/><rect x="430" y="76" width="20" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="540" y="70" font-size="10" fill="#0E2841" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
-  <rect x="20" y="104" width="380" height="44" fill="#156082" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">K1 · Veri & Temeller</text><text x="32" y="140" fill="#fff" font-size="10">"Veri ajan için hazır değil" → soyağacı, getirme</text>
-  <rect x="430" y="112" width="160" height="14" fill="#156082"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="600" y="124" font-size="10" fill="#0E2841" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
+  <text x="540" y="70" font-size="10" fill="#0A1230" font-weight="700">10%</text><text x="540" y="88" font-size="10" fill="#64748B">2% (Tier-1)</text>
+  <rect x="20" y="104" width="380" height="44" fill="#5B7CFF" rx="4"/><text x="32" y="122" fill="#fff" font-size="12" font-weight="700">K1 · Veri & Temeller</text><text x="32" y="140" fill="#fff" font-size="10">"Veri ajan için hazır değil" → soyağacı, getirme</text>
+  <rect x="430" y="112" width="160" height="14" fill="#5B7CFF"/><rect x="430" y="130" width="135" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="600" y="124" font-size="10" fill="#0A1230" font-weight="700">30%</text><text x="600" y="142" font-size="10" fill="#64748B">25%</text>
   <rect x="20" y="158" width="380" height="44" fill="#1A4F7A" rx="4"/><text x="32" y="176" fill="#fff" font-size="12" font-weight="700">K2 · Agentic AI</text><text x="32" y="194" fill="#fff" font-size="10">"Pilot ölçeklenemiyor" → üretim ajanları · egemenlik uyumu</text>
   <rect x="430" y="166" width="180" height="14" fill="#1A4F7A"/><rect x="430" y="184" width="240" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="618" y="178" font-size="10" fill="#0E2841" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
-  <rect x="20" y="212" width="380" height="44" fill="#0E2841" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">K3 · Değişim & Benimseme</text><text x="32" y="248" fill="#fff" font-size="10">"Benimseme tıkanıyor" → rol tasarımı · eğitim · iletişim</text>
-  <rect x="430" y="220" width="125" height="14" fill="#0E2841"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
-  <text x="565" y="232" font-size="10" fill="#0E2841" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
+  <text x="618" y="178" font-size="10" fill="#0A1230" font-weight="700">35%</text><text x="618" y="196" font-size="10" fill="#64748B">60%</text>
+  <rect x="20" y="212" width="380" height="44" fill="#0A1230" rx="4"/><text x="32" y="230" fill="#fff" font-size="12" font-weight="700">K3 · Değişim & Benimseme</text><text x="32" y="248" fill="#fff" font-size="10">"Benimseme tıkanıyor" → rol tasarımı · eğitim · iletişim</text>
+  <rect x="430" y="220" width="125" height="14" fill="#0A1230"/><rect x="430" y="238" width="65" height="14" fill="none" stroke="#94A3B8" stroke-width="1.5"/>
+  <text x="565" y="232" font-size="10" fill="#0A1230" font-weight="700">25%</text><text x="565" y="250" font-size="10" fill="#64748B">13%</text>
   <text x="20" y="272" font-size="10" fill="#475569" font-style="italic">Sarmalayan: yönetişim · gözlemlenebilirlik · denetim · düzenleyici-sınıf kontroller</text>
   </svg>
-  <figcaption>Şekil 1 — Dört katmanlı mimari, her katmanın tersine çevirdiği başarısızlık modu ve Maven'in tipik bir Tier-1 plana kıyasla ayırdığı bütçe payı ile eşleştirilmiş. Tanısal fark: Maven, Değer Durumu (K0) ve Değişim & Benimseme (K3) için harcamayı kabaca iki katına çıkarır — bunlar Tier-1 firmaların yetersiz finanse ettiği ve McKinsey'nin pilot-üretim başarısızlığının en büyük itici güçleri olarak tanımladığı iki katmandır.</figcaption>
+  <figcaption>Şekil 1 — Dört katmanlı mimari, her katmanın tersine çevirdiği başarısızlık modu ve Cognirise'in tipik bir Tier-1 plana kıyasla ayırdığı bütçe payı ile eşleştirilmiş. Tanısal fark: Cognirise, Değer Durumu (K0) ve Değişim & Benimseme (K3) için harcamayı kabaca iki katına çıkarır — bunlar Tier-1 firmaların yetersiz finanse ettiği ve McKinsey'nin pilot-üretim başarısızlığının en büyük itici güçleri olarak tanımladığı iki katmandır.</figcaption>
   </figure>
   
   <figure>
   <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" aria-labelledby="svg-t-6 svg-d-6"><title id="svg-t-6">Karar kapılı 26 haftalık GCC uygulama sırası</title><desc id="svg-d-6">Değer durumundan değişim ve başlatmaya kadar beş aşamanın Gantt tarzı zaman çizelgesi, kehribar renkli üç kritik git/gitme kapısı ile.</desc>
   <rect width="700" height="240" fill="#F8FAFC"/>
-  <text x="20" y="20" font-size="11" font-weight="700" fill="#0E2841">Kritik yol · beş aşama · üç git/gitme kapısı</text>
-  <line x1="40" y1="180" x2="660" y2="180" stroke="#0E2841" stroke-width="1.5"/>
+  <text x="20" y="20" font-size="11" font-weight="700" fill="#0A1230">Kritik yol · beş aşama · üç git/gitme kapısı</text>
+  <line x1="40" y1="180" x2="660" y2="180" stroke="#0A1230" stroke-width="1.5"/>
   <g font-size="9" fill="#94A3B8">
   <line x1="40" y1="40" x2="40" y2="180" stroke="#E2E8F0"/><text x="40" y="200" text-anchor="middle">W1</text>
   <line x1="160" y1="40" x2="160" y2="180" stroke="#E2E8F0"/><text x="160" y="200" text-anchor="middle">W6</text>
@@ -1112,9 +1112,9 @@ export const insights = [
   <line x1="660" y1="40" x2="660" y2="180" stroke="#E2E8F0"/><text x="660" y="200" text-anchor="middle">W26</text>
   </g>
   <rect x="40" y="48" width="72" height="20" fill="#F5A623" rx="2"/><text x="46" y="62" font-size="10" fill="#fff" font-weight="700">Değer durumu · H1–3</text>
-  <rect x="112" y="76" width="168" height="20" fill="#156082" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Veri hazırlığı · H4–10</text>
+  <rect x="112" y="76" width="168" height="20" fill="#5B7CFF" rx="2"/><text x="118" y="90" font-size="10" fill="#fff" font-weight="700">Veri hazırlığı · H4–10</text>
   <rect x="232" y="104" width="120" height="20" fill="#1A4F7A" rx="2"/><text x="238" y="118" font-size="10" fill="#fff" font-weight="700">Prototip · H9–14</text>
-  <rect x="328" y="132" width="216" height="20" fill="#0E2841" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Üretim sertleştirme · H13–22</text>
+  <rect x="328" y="132" width="216" height="20" fill="#0A1230" rx="2"/><text x="334" y="146" font-size="10" fill="#fff" font-weight="700">Üretim sertleştirme · H13–22</text>
   <rect x="496" y="160" width="164" height="20" fill="#7C3AED" rx="2"/><text x="502" y="174" font-size="10" fill="#fff" font-weight="700">Değişim & başlatma · H20–26</text>
   <g><line x1="112" y1="44" x2="112" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="115" y="42" font-size="9" font-weight="700" fill="#F5A623">Kapı 1: ROI imzalı</text>
   <line x1="328" y1="44" x2="328" y2="180" stroke="#F5A623" stroke-dasharray="3 3" stroke-width="1.5"/><text x="331" y="42" font-size="9" font-weight="700" fill="#F5A623">Kapı 2: Pilot kanıtlandı</text>

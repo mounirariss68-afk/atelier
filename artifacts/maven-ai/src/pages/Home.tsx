@@ -14,17 +14,17 @@ import TwoPathsDiagram from "@/components/TwoPathsDiagram";
 import { useLang, tStr, formatNumber } from "@/lib/lang";
 
 const HOME_COPY = {
-  heroBadge: { en: "A Maven Insights Company", ar: "شركة من مجموعة Maven Insights", tr: "Bir Maven Insights Şirketi" },
+  heroBadge: { en: "Intelligence that elevates", ar: "ذكاء يرتقي", tr: "Yükselten zekâ" },
   heroLine1: { en: "From AI ambition", ar: "من طموح الذكاء الاصطناعي", tr: "AI hırsından" },
   heroLine2: { en: "to AI in production.", ar: "إلى الذكاء الاصطناعي في الإنتاج.", tr: "üretime AI'ya." },
   heroPara: {
-    en: "Maven AI is a boutique AI advisory and engineering firm built for outcomes. We close the gap between enterprise AI ambition and enterprise AI in production — with senior delivery, lean economics, and an agentic-native practice.",
-    ar: "Maven AI شركة استشارات وهندسة ذكاء اصطناعي بوتيكية مبنية لتحقيق النتائج. نسد الفجوة بين طموح الذكاء الاصطناعي في المؤسسات وتطبيقه الفعلي في الإنتاج — بفرق قيادية، واقتصاديات مرنة، وممارسة وكيلية أصيلة.",
-    tr: "Maven AI, sonuç odaklı butik bir AI danışmanlık ve mühendislik firmasıdır. Kurumsal AI hırsı ile kurumsal AI üretimi arasındaki açığı kapatıyoruz — kıdemli teslimat, yalın ekonomi ve agentic-native bir pratikle.",
+    en: "Cognirise is a boutique AI advisory and engineering firm built for outcomes. We close the gap between enterprise AI ambition and enterprise AI in production — with senior delivery, lean economics, and an agentic-native practice.",
+    ar: "Cognirise شركة استشارات وهندسة ذكاء اصطناعي بوتيكية مبنية لتحقيق النتائج. نسد الفجوة بين طموح الذكاء الاصطناعي في المؤسسات وتطبيقه الفعلي في الإنتاج — بفرق قيادية، واقتصاديات مرنة، وممارسة وكيلية أصيلة.",
+    tr: "Cognirise, sonuç odaklı butik bir AI danışmanlık ve mühendislik firmasıdır. Kurumsal AI hırsı ile kurumsal AI üretimi arasındaki açığı kapatıyoruz — kıdemli teslimat, yalın ekonomi ve agentic-native bir pratikle.",
   },
   heroCtaPrimary: { en: "Take a free 12-min diagnostic", ar: "ابدأ تشخيصاً مجانياً مدته 12 دقيقة", tr: "Ücretsiz 12 dakikalık teşhis alın" },
   heroCtaSecondary: { en: "Start the conversation", ar: "ابدأ المحادثة", tr: "Görüşmeyi başlatın" },
-  diagEyebrow: { en: "Maven AI Diagnostic Suite · Free · ~12 min", ar: "مجموعة تشخيص Maven AI · مجاناً · ~12 دقيقة", tr: "Maven AI Teşhis Paketi · Ücretsiz · ~12 dk" },
+  diagEyebrow: { en: "Cognirise Diagnostic Suite · Free · ~12 min", ar: "مجموعة تشخيص Cognirise · مجاناً · ~12 دقيقة", tr: "Cognirise Teşhis Paketi · Ücretsiz · ~12 dk" },
   diagTitle: { en: "Where does your AI program actually stand against the GCC peer band?", ar: "أين يقف برنامج الذكاء الاصطناعي لديكم فعلياً مقابل أقرانكم في الخليج؟", tr: "AI programınız aslında Körfez emsalleriyle karşılaştırıldığında nerede duruyor?" },
   diagSub: { en: "Four diagnostics — Agentic Readiness, Model & Value, Data & Governance, Use Case Value — produce a sovereign-aware score, an executive memo, and a branded board pack.", ar: "أربعة تشخيصات — الجاهزية الوكيلية، النموذج والقيمة، البيانات والحوكمة، قيمة حالات الاستخدام — تنتج درجة سيادية، مذكرة تنفيذية، وحزمة مجلس بعلامتكم.", tr: "Dört teşhis — Agentic Hazırlık, Model & Değer, Veri & Yönetişim, Kullanım Senaryosu Değeri — egemenlik bilinçli bir skor, yönetici notu ve markalı bir yönetim paketi üretir." },
   diagStartAri: { en: "Start ARI →", ar: "ابدأ ARI ←", tr: "ARI'ya başla →" },
@@ -46,7 +46,7 @@ const HOME_COPY = {
   gapItem3Desc: { en: "AI exposes data debt instantly. Big-4 sells strategy, hyperscalers sell tools. No one delivers the operating activation that makes agents trustworthy.", ar: "الذكاء الاصطناعي يكشف دين البيانات فوراً. الشركات الأربع الكبرى تبيع الاستراتيجية، والـ hyperscalers يبيعون الأدوات. لا أحد يقدم التفعيل التشغيلي الذي يجعل الوكلاء جديرين بالثقة.", tr: "AI, veri borcunu anında ortaya çıkarır. Big-4 strateji satar, hiper ölçekleyiciler araç satar. Ajanları güvenilir kılan operasyonel aktivasyonu kimse teslim etmez." },
   gapItem4Title: { en: "Adoption gap", ar: "فجوة التبني", tr: "Benimseme açığı" },
   gapItem4Desc: { en: "BCG finds only 26% of companies have moved past AI pilots to generate any value at scale — and just 4% sit at the elite frontier. The bottleneck is delivery, not models.", ar: "تجد BCG أن 26% فقط من الشركات تجاوزت مرحلة التجارب لتحقيق أي قيمة على نطاق واسع — وفقط 4% في المقدمة النخبوية. الاختناق في التنفيذ، لا النماذج.", tr: "BCG, şirketlerin yalnızca %26'sının AI pilotlarını geçerek ölçekte değer ürettiğini ve sadece %4'ünün elit cephede olduğunu buluyor. Darboğaz modeller değil, teslimattır." },
-  diffTitle: { en: "How Maven AI is different", ar: "ما الذي يميز Maven AI", tr: "Maven AI'nın farkı nedir" },
+  diffTitle: { en: "How Cognirise is different", ar: "ما الذي يميز Cognirise", tr: "Cognirise'nın farkı nedir" },
   diffItem1Title: { en: "Production-led", ar: "مدفوع بالإنتاج", tr: "Üretim öncülüğünde" },
   diffItem1Desc: { en: "We deliver AI in production, not AI in PowerPoint. Measured outcomes, not advisory.", ar: "نوصل الذكاء الاصطناعي إلى الإنتاج، لا إلى عروض PowerPoint. نتائج مقاسة، لا مجرد استشارة.", tr: "AI'yı üretime teslim ederiz, PowerPoint'e değil. Ölçülen sonuçlar, danışmanlık değil." },
   diffItem2Title: { en: "Boutique by design", ar: "بوتيكية بالتصميم", tr: "Tasarımı gereği butik" },
@@ -62,7 +62,7 @@ const HOME_COPY = {
   servicesSub: { en: "Built for what clients actually need to ship.", ar: "مبنية حول ما يحتاجه العملاء فعلاً للإطلاق.", tr: "Müşterilerin gerçekten ürün çıkarmak için ihtiyaç duyduğu şey için tasarlandı." },
   learnMore: { en: "Learn more", ar: "اعرف المزيد", tr: "Daha fazla bilgi" },
   featuredTitle: { en: "Featured insights", ar: "أبرز الرؤى", tr: "Öne çıkan içgörüler" },
-  featuredSub: { en: "Research, perspectives, and analysis from the Maven AI team.", ar: "أبحاث ومنظورات وتحليلات من فريق Maven AI.", tr: "Maven AI ekibinden araştırma, bakış açıları ve analizler." },
+  featuredSub: { en: "Research, perspectives, and analysis from the Cognirise team.", ar: "أبحاث ومنظورات وتحليلات من فريق Cognirise.", tr: "Cognirise ekibinden araştırma, bakış açıları ve analizler." },
   allInsights: { en: "All insights", ar: "كل الرؤى", tr: "Tüm içgörüler" },
   read: { en: "Read", ar: "اقرأ", tr: "Oku" },
   founderQuote: {
@@ -92,14 +92,6 @@ const HOME_COPY = {
   vrRow5: { en: "Hospitality revenue", ar: "إيرادات الضيافة", tr: "Konaklama geliri" },
   vrRealRate: { en: "Realization rate", ar: "معدل التحقيق", tr: "Gerçekleştirme oranı" },
   vrAtRisk: { en: "Value at risk", ar: "قيمة معرضة للخطر", tr: "Risk altındaki değer" },
-  sisterEyebrow: { en: "A sister company", ar: "شركة شقيقة", tr: "Bir kardeş şirket" },
-  sisterTitle: { en: "Maven AI is backed by 200+ consultants at Maven Insights", ar: "Maven AI مدعومة بأكثر من 200 استشاري في Maven Insights", tr: "Maven AI, Maven Insights'taki 200+ danışman tarafından desteklenmektedir" },
-  sisterPara: {
-    en: "Maven Insights is a leading consulting firm with offices in Dubai, Riyadh, Abu Dhabi, Doha, and Ankara. Maven AI was founded as a dedicated AI delivery practice, leveraging Maven Insights' bench, client relationships, and regional presence.",
-    ar: "Maven Insights شركة استشارات رائدة بمكاتب في دبي والرياض وأبوظبي والدوحة وأنقرة. تأسست Maven AI كممارسة مخصصة لتسليم الذكاء الاصطناعي، مستفيدةً من فريق Maven Insights وعلاقات العملاء والحضور الإقليمي.",
-    tr: "Maven Insights; Dubai, Riyad, Abu Dabi, Doha ve Ankara'da ofisleri bulunan lider bir danışmanlık firmasıdır. Maven AI, Maven Insights'ın ekibinden, müşteri ilişkilerinden ve bölgesel varlığından yararlanan özel bir AI teslimat pratiği olarak kuruldu.",
-  },
-  sisterCta: { en: "Visit Maven Insights", ar: "زيارة Maven Insights", tr: "Maven Insights'ı ziyaret edin" },
   ctaTitle: { en: "Ready to move AI from the slide to production?", ar: "هل أنتم مستعدون لنقل الذكاء الاصطناعي من الشريحة إلى الإنتاج؟", tr: "AI'yı slayttan üretime taşımaya hazır mısınız?" },
   ctaPara: { en: "Three-day scope. Three-week prototype. 90-day MVP. Let's talk about where to start.", ar: "نطاق في ثلاثة أيام. نموذج أولي في ثلاثة أسابيع. منتج أولي في 90 يوماً. لنتحدث عن نقطة البداية.", tr: "Üç günlük kapsam. Üç haftalık prototip. 90 günlük MVP. Nereden başlayacağımızı konuşalım." },
   ctaPrimary: { en: "Start the conversation", ar: "ابدأ المحادثة", tr: "Görüşmeyi başlatın" },
@@ -114,9 +106,9 @@ const TWO_PATHS_COPY = {
     tr: "Sonuçlara giden iki yol — proje öncülüğünde ve varlık öncülüğünde.",
   },
   introA: {
-    en: "Maven works two rails to the same destination.",
-    ar: "تعمل مافن على مسارين للوصول إلى نفس الوجهة.",
-    tr: "Maven aynı hedefe iki rayda çalışır.",
+    en: "Cognirise works two rails to the same destination.",
+    ar: "تعمل Cognirise على مسارين للوصول إلى نفس الوجهة.",
+    tr: "Cognirise aynı hedefe iki rayda çalışır.",
   },
   introProject: {
     en: "Project-led engagements when the problem is bespoke and the operating model has to change.",
@@ -211,25 +203,25 @@ export default function Home() {
   return (
     <div className="pt-20">
       {/* ── HERO ── */}
-      <section className="relative min-h-[88vh] bg-[#0E2841] flex items-center overflow-hidden">
+      <section className="relative min-h-[88vh] bg-[#0A1230] flex items-center overflow-hidden">
         {/* Animated background grid */}
         <div className="absolute inset-0 opacity-10">
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: `linear-gradient(rgba(15,158,213,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(15,158,213,0.4) 1px, transparent 1px)`,
+              backgroundImage: `linear-gradient(rgba(91,124,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(91,124,255,0.4) 1px, transparent 1px)`,
               backgroundSize: "60px 60px",
             }}
           />
         </div>
         {/* Radial glow */}
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-[#156082]/30 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-[#F5A623]/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-[#5B7CFF]/30 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 left-1/3 w-64 h-64 bg-[#8A5BD6]/25 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="max-w-4xl">
             <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={0}>
-              <span className="inline-flex items-center gap-2 bg-[#F5A623]/20 border border-[#F5A623]/30 text-[#F5A623] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-8">
+              <span className="inline-flex items-center gap-2 bg-[#FF7B5A]/15 border border-[#FF7B5A]/30 text-[#FF7B5A] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-8">
                 {tStr(HOME_COPY.heroBadge, lang)}
               </span>
             </motion.div>
@@ -243,7 +235,7 @@ export default function Home() {
             >
               {tStr(HOME_COPY.heroLine1, lang)}
               <br />
-              <span className="text-[#F5A623]">{tStr(HOME_COPY.heroLine2, lang)}</span>
+              <span style={{ backgroundImage: "linear-gradient(90deg,#5B7CFF 0%,#8A5BD6 35%,#C45BB8 65%,#FF7B5A 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{tStr(HOME_COPY.heroLine2, lang)}</span>
             </motion.h1>
 
             <motion.p
@@ -265,7 +257,7 @@ export default function Home() {
             >
               <Link
                 href="/assessments"
-                className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
+                className="inline-flex items-center gap-2 bg-[#FF7B5A] hover:bg-[#E96A48] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
               >
                 {tStr(HOME_COPY.heroCtaPrimary, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
               </Link>
@@ -667,7 +659,7 @@ export default function Home() {
       </section>
 
       {/* ── FOUNDER QUOTE ── */}
-      <section className="py-24 bg-[#0E2841] relative overflow-hidden">
+      <section className="py-24 bg-[#0A1230] relative overflow-hidden">
         <div className="absolute inset-0 opacity-5">
           <div className="absolute inset-0" style={{ backgroundImage: `radial-gradient(circle, #F5A623 1px, transparent 1px)`, backgroundSize: "40px 40px" }} />
         </div>
@@ -821,29 +813,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── MAVEN INSIGHTS BANNER ── */}
-      <section className="py-16 bg-white border-b border-gray-100">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-4">{tStr(HOME_COPY.sisterEyebrow, lang)}</p>
-          <h2 className="text-3xl font-extrabold text-[#0E2841] mb-4">
-            {tStr(HOME_COPY.sisterTitle, lang)}
-          </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto mb-8">
-            {tStr(HOME_COPY.sisterPara, lang)}
-          </p>
-          <a
-            href="https://www.maveninsights.com"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 border border-[#156082] text-[#156082] font-semibold px-6 py-3 rounded-xl hover:bg-[#156082] hover:text-white transition-colors"
-          >
-            {tStr(HOME_COPY.sisterCta, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
-          </a>
-        </div>
-      </section>
-
       {/* ── CTA ── */}
-      <section className="py-24 bg-gradient-to-br from-[#0E2841] to-[#156082]">
+      <section className="py-24 bg-gradient-to-br from-[#0A1230] via-[#8A5BD6] to-[#FF7B5A]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -858,7 +829,7 @@ export default function Home() {
               {tStr(HOME_COPY.ctaPara, lang)}
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/contact" className="inline-flex items-center gap-2 bg-[#F5A623] hover:bg-[#d4622a] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg">
+              <Link href="/contact" className="inline-flex items-center gap-2 bg-white hover:bg-gray-100 text-[#0A1230] font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg">
                 {tStr(HOME_COPY.ctaPrimary, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
               </Link>
               <Link href="/insights" className="inline-flex items-center gap-2 border border-white/30 hover:border-white text-white font-semibold px-8 py-4 rounded-xl text-base transition-colors">

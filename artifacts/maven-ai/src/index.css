@@ -55,7 +55,7 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* Maven AI brand colors */
+  /* Maven AI brand colors (legacy — kept for non-pilot pages during phased rebrand) */
   --color-navy: #0E2841;
   --color-navy-light: #1a3a5c;
   --color-teal: #156082;
@@ -63,6 +63,18 @@
   --color-blue-accent: #F5A623;
   --color-green: #196B24;
   --color-light-gray: #E8E8E8;
+
+  /* Cognirise brand tokens (new — pilot rollout) */
+  --cog-navy: #0A1230;
+  --cog-navy-deep: #070B22;
+  --cog-blue: #5B7CFF;
+  --cog-purple: #8A5BD6;
+  --cog-magenta: #C45BB8;
+  --cog-coral: #FF7B5A;
+  --cog-coral-deep: #E96A48;
+  --cog-gold: #F5A623;
+  --cog-grad: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
+  --cog-grad-diag: linear-gradient(135deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
 }
 
 :root {

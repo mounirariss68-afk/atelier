@@ -48,9 +48,9 @@ const offices: { city: T; country: T; address: T; phone: string }[] = [
 
 const F: Record<string, T> = {
   brandBlurb: {
-    en: "A boutique AI advisory and engineering services firm. We take clients from AI ambition to AI in production — with senior delivery, lean economics, and an agentic-native practice.",
-    ar: "شركة استشارات وهندسة ذكاء اصطناعي بوتيك. نأخذ العملاء من طموح الذكاء الاصطناعي إلى الذكاء الاصطناعي في الإنتاج — بفريق كبار الخبراء، واقتصاديات رشيقة، وممارسة وكيلية الأصل.",
-    tr: "Butik bir AI danışmanlık ve mühendislik hizmetleri firması. Müşterilerimizi AI hedefinden üretimdeki AI'ya götürürüz — kıdemli ekip, yalın ekonomi ve ajansal-doğal uygulamayla.",
+    en: "Cognirise is a boutique AI advisory and engineering services firm — intelligence that elevates. We take clients from AI ambition to AI in production with senior delivery, lean economics, and an agentic-native practice.",
+    ar: "Cognirise شركة استشارات وهندسة ذكاء اصطناعي بوتيك — ذكاء يرتقي. نأخذ العملاء من طموح الذكاء الاصطناعي إلى الذكاء الاصطناعي في الإنتاج بفريق كبار الخبراء، واقتصاديات رشيقة، وممارسة وكيلية الأصل.",
+    tr: "Cognirise, butik bir AI danışmanlık ve mühendislik firmasıdır — yükselten zekâ. Müşterilerimizi AI hedefinden üretimdeki AI'ya götürürüz — kıdemli ekip, yalın ekonomi ve ajansal-doğal uygulamayla.",
   },
   company: { en: "Company", ar: "الشركة", tr: "Şirket" },
   services: { en: "Services", ar: "الخدمات", tr: "Hizmetler" },
@@ -59,16 +59,15 @@ const F: Record<string, T> = {
   industries: { en: "Industries", ar: "القطاعات", tr: "Sektörler" },
   contact: { en: "Contact", ar: "تواصل", tr: "İletişim" },
   ourOffices: { en: "Our Offices", ar: "مكاتبنا", tr: "Ofislerimiz" },
-  allRights: { en: "All rights reserved. A sister company of Maven Insights & Solutions.", ar: "جميع الحقوق محفوظة. شركة شقيقة لـ Maven Insights & Solutions.", tr: "Tüm hakları saklıdır. Maven Insights & Solutions'ın kardeş şirketidir." },
+  allRights: { en: "All rights reserved.", ar: "جميع الحقوق محفوظة.", tr: "Tüm hakları saklıdır." },
   privacy: { en: "Privacy Policy", ar: "سياسة الخصوصية", tr: "Gizlilik Politikası" },
   terms: { en: "Terms of Use", ar: "شروط الاستخدام", tr: "Kullanım Şartları" },
   emailUs: { en: "Email us directly", ar: "راسلنا مباشرة", tr: "Doğrudan e-posta gönderin" },
   // company links
-  aboutMaven: { en: "About Maven AI", ar: "عن Maven AI", tr: "Maven AI Hakkında" },
+  aboutMaven: { en: "About Cognirise", ar: "عن Cognirise", tr: "Cognirise Hakkında" },
   ourFounders: { en: "Our Founders", ar: "مؤسسونا", tr: "Kurucularımız" },
   howWeWork: { en: "How We Work", ar: "كيف نعمل", tr: "Nasıl Çalışırız" },
   contactUs: { en: "Contact Us", ar: "تواصل معنا", tr: "Bize Ulaşın" },
-  mavenInsights: { en: "Maven Insights ↗", ar: "Maven Insights ↗", tr: "Maven Insights ↗" },
   forEmployees: { en: "For employees ↗", ar: "للموظفين ↗", tr: "Çalışanlar için ↗" },
   // services
   agenticAI: { en: "Agentic AI", ar: "الذكاء الوكيل", tr: "Ajansal AI" },
@@ -107,7 +106,6 @@ export default function Footer() {
     { href: "/about#founders", label: F.ourFounders, external: false },
     { href: "/about#operating-model", label: F.howWeWork, external: false },
     { href: "/contact", label: F.contactUs, external: false },
-    { href: "https://www.maveninsights.com", label: F.mavenInsights, external: true },
     { href: "/atelier/sign-in", label: F.forEmployees, external: true },
   ];
   const serviceLinks = [
@@ -142,16 +140,16 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="bg-[#0E2841] text-white">
+    <footer className="bg-[#0A1230] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           <div className="lg:col-span-4">
             <div className="mb-5"><Logo size="md" /></div>
             <p className="text-gray-400 text-sm leading-relaxed mb-6 max-w-sm">{t(F.brandBlurb)}</p>
             <div className="flex items-center gap-3">
-              <a href="https://linkedin.com/company/maven-ai" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-lg bg-white/10 hover:bg-[#156082] flex items-center justify-center transition-colors"><Linkedin size={16} /></a>
-              <a href="https://twitter.com/MavenAI" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-lg bg-white/10 hover:bg-[#156082] flex items-center justify-center transition-colors"><Twitter size={16} /></a>
-              <a href="mailto:info@maven-ai.com" className="w-9 h-9 rounded-lg bg-white/10 hover:bg-[#156082] flex items-center justify-center transition-colors"><Mail size={16} /></a>
+              <a href="https://linkedin.com/company/cognirise" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-lg bg-white/10 hover:bg-[#8A5BD6] flex items-center justify-center transition-colors"><Linkedin size={16} /></a>
+              <a href="https://twitter.com/Cognirise" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-lg bg-white/10 hover:bg-[#8A5BD6] flex items-center justify-center transition-colors"><Twitter size={16} /></a>
+              <a href="mailto:info@cognirise.com" className="w-9 h-9 rounded-lg bg-white/10 hover:bg-[#8A5BD6] flex items-center justify-center transition-colors"><Mail size={16} /></a>
             </div>
           </div>
 
@@ -165,11 +163,11 @@ export default function Footer() {
             <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">{t(F.contact)}</h3>
             <div className="space-y-4">
               <div className="flex items-start gap-2">
-                <Mail size={14} className="text-[#F5A623] mt-0.5 flex-shrink-0" />
-                <a href="mailto:info@maven-ai.com" className="text-gray-400 text-sm hover:text-white transition-colors">info@maven-ai.com</a>
+                <Mail size={14} className="text-[#FF7B5A] mt-0.5 flex-shrink-0" />
+                <a href="mailto:info@cognirise.com" className="text-gray-400 text-sm hover:text-white transition-colors">info@cognirise.com</a>
               </div>
               <div className="flex items-start gap-2">
-                <MapPin size={14} className="text-[#F5A623] mt-0.5 flex-shrink-0" />
+                <MapPin size={14} className="text-[#FF7B5A] mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-gray-400 text-sm">{t(offices[0].city)} · {t(offices[1].city)}</p>
                   <p className="text-gray-400 text-sm">{t(offices[2].city)} · {t(offices[3].city)}</p>
@@ -185,7 +183,7 @@ export default function Footer() {
             {offices.map((office) => (
               <div key={office.city.en}>
                 <div className="flex items-center gap-2 mb-2">
-                  <MapPin size={12} className="text-[#F5A623]" />
+                  <MapPin size={12} className="text-[#FF7B5A]" />
                   <span className="text-white font-semibold text-sm">{t(office.city)}, {t(office.country)}</span>
                 </div>
                 <p className="text-gray-500 text-xs leading-relaxed whitespace-pre-line">{t(office.address)}</p>
@@ -201,7 +199,7 @@ export default function Footer() {
 
       <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-gray-500 text-xs">© {new Date().getFullYear()} Maven AI. {t(F.allRights)}</p>
+          <p className="text-gray-500 text-xs">© {new Date().getFullYear()} Cognirise. {t(F.allRights)}</p>
           <div className="flex items-center gap-5">
             <a href="#" className="text-gray-500 text-xs hover:text-gray-300 transition-colors">{t(F.privacy)}</a>
             <a href="#" className="text-gray-500 text-xs hover:text-gray-300 transition-colors">{t(F.terms)}</a>

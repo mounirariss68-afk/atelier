@@ -1,4 +1,4 @@
-import logoSrc from "@/assets/maven-ai-logo.png";
+import logoSrc from "@/assets/cognirise-logo.png";
 import { useLang, tStr } from "@/lib/lang";
 
 interface LogoProps {
@@ -15,14 +15,14 @@ const heights = {
 export default function Logo({ size = "md", className = "" }: LogoProps) {
   const h = heights[size];
   const { lang } = useLang();
-  const alt = tStr({ en: "Maven AI", ar: "Maven AI · مافن للذكاء الاصطناعي", tr: "Maven AI" }, lang);
+  const alt = tStr({ en: "Cognirise", ar: "Cognirise · كوجنيرايز", tr: "Cognirise" }, lang);
 
   return (
     <img
       src={logoSrc}
       alt={alt}
       height={h}
-      style={{ height: h, width: "auto", mixBlendMode: "screen" }}
+      style={{ height: h, width: "auto" }}
       className={`select-none ${className}`}
       draggable={false}
     />
