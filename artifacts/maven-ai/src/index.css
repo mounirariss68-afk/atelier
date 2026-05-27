@@ -155,22 +155,22 @@
 }
 
 /* Maven AI custom utilities */
-.bg-navy { background-color: #0E2841; }
-.bg-navy-light { background-color: #1a3a5c; }
-.bg-teal { background-color: #156082; }
-.bg-orange { background-color: #F5A623; }
-.bg-blue-accent { background-color: #F5A623; }
-.bg-green-accent { background-color: #196B24; }
-.text-navy { color: #0E2841; }
-.text-teal { color: #156082; }
-.text-orange { color: #F5A623; }
-.text-blue-accent { color: #F5A623; }
-.border-navy { border-color: #0E2841; }
-.border-teal { border-color: #156082; }
-.border-orange { border-color: #F5A623; }
+.bg-navy { background-color: #0A1230; }
+.bg-navy-light { background-color: #1B2755; }
+.bg-teal { background-color: #5B7CFF; }
+.bg-orange { background-color: #C45BB8; }
+.bg-blue-accent { background-color: #5B7CFF; }
+.bg-green-accent { background-color: #8A5BD6; }
+.text-navy { color: #0A1230; }
+.text-teal { color: #5B7CFF; }
+.text-orange { color: #C45BB8; }
+.text-blue-accent { color: #5B7CFF; }
+.border-navy { border-color: #0A1230; }
+.border-teal { border-color: #5B7CFF; }
+.border-orange { border-color: #C45BB8; }
 
-.gradient-navy { background: linear-gradient(135deg, #0E2841 0%, #156082 100%); }
-.gradient-hero { background: linear-gradient(135deg, #0E2841 0%, #0d2035 40%, #1a3550 100%); }
+.gradient-navy { background: linear-gradient(135deg, #0A1230 0%, #5B7CFF 100%); }
+.gradient-hero { background: linear-gradient(135deg, #0A1230 0%, #1B2755 40%, #0A1230 100%); }
 
 /* Animated underline for links */
 .nav-link {
@@ -183,7 +183,7 @@
   left: 0;
   width: 0;
   height: 2px;
-  background-color: #F5A623;
+  background: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
   transition: width 0.3s ease;
 }
 .nav-link:hover::after { width: 100%; }
@@ -192,7 +192,8 @@
 .section-divider {
   width: 48px;
   height: 3px;
-  background-color: #F5A623;
+  background: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
+  border-radius: 2px;
   margin-bottom: 1.5rem;
 }
 
@@ -255,16 +256,16 @@
 }
 
 /* Prose styles for article content */
-.article-content h2 { color: #0E2841; font-weight: 700; font-size: 1.5rem; margin-top: 2rem; margin-bottom: 0.75rem; }
-.article-content h3 { color: #156082; font-weight: 600; font-size: 1.2rem; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.article-content h2 { color: #0A1230; font-weight: 700; font-size: 1.5rem; margin-top: 2rem; margin-bottom: 0.75rem; }
+.article-content h3 { color: #5B7CFF; font-weight: 600; font-size: 1.2rem; margin-top: 1.5rem; margin-bottom: 0.5rem; }
 .article-content p { margin-bottom: 1rem; line-height: 1.75; color: #374151; }
 .article-content ul { margin-bottom: 1rem; padding-left: 1.5rem; }
 .article-content ul li { margin-bottom: 0.5rem; color: #374151; }
-.article-content blockquote { border-left: 4px solid #F5A623; padding-left: 1.5rem; margin: 2rem 0; font-style: italic; color: #0E2841; font-size: 1.1rem; font-weight: 500; }
+.article-content blockquote { border-left: 4px solid #C45BB8; padding-left: 1.5rem; margin: 2rem 0; font-style: italic; color: #0A1230; font-size: 1.1rem; font-weight: 500; }
 .article-content ol { margin-bottom: 1rem; padding-left: 1.5rem; list-style-type: decimal; }
 .article-content ol li { margin-bottom: 0.5rem; color: #374151; }
-.article-content a { color: #156082; text-decoration: underline; text-underline-offset: 2px; }
-.article-content a:hover { color: #0E2841; }
+.article-content a { color: #5B7CFF; text-decoration: underline; text-underline-offset: 2px; }
+.article-content a:hover { color: #0A1230; }
 .article-content .sources-list { margin-top: 0.75rem; font-size: 0.95rem; }
 .article-content .sources-list li { margin-bottom: 0.5rem; line-height: 1.6; }
 
@@ -307,26 +308,26 @@
 [dir="rtl"] .article-content th,
 [dir="rtl"] .article-content td { text-align: right; }
 .article-content th {
-  background: #0E2841;
+  background: #0A1230;
   color: #fff;
   font-weight: 600;
 }
 .article-content tr:nth-child(even) td { background: #F8FAFC; }
 .article-content .maven-note {
-  background: #FFF7ED;
-  border-left: 4px solid #F5A623;
+  background: #FDF4FB;
+  border-left: 4px solid #C45BB8;
   padding: 0.75rem 1rem;
   margin: 1.25rem 0;
   font-size: 0.92rem;
-  color: #7C2D12;
+  color: #0A1230;
   border-radius: 0.25rem;
 }
 [dir="rtl"] .article-content .maven-note {
   border-left: none;
-  border-right: 4px solid #F5A623;
+  border-right: 4px solid #C45BB8;
 }
 .article-content h4 {
-  color: #0E2841;
+  color: #0A1230;
   font-weight: 600;
   font-size: 1.05rem;
   margin-top: 1.25rem;

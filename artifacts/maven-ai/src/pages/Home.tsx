@@ -279,7 +279,7 @@ export default function Home() {
       <section className="bg-gradient-to-r from-[#0A1230] via-[#1B2755] to-[#0A1230] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">{tStr(HOME_COPY.diagEyebrow, lang)}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#C45BB8] mb-2">{tStr(HOME_COPY.diagEyebrow, lang)}</p>
             <p className="text-2xl font-extrabold leading-tight">{tStr(HOME_COPY.diagTitle, lang)}</p>
             <p className="text-sm text-white/80 mt-2">{tStr(HOME_COPY.diagSub, lang)}</p>
           </div>
