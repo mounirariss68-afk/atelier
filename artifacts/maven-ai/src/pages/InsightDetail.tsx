@@ -141,7 +141,7 @@ export default function InsightDetail() {
               <div className="border border-gray-200 rounded-xl p-6">
                 <h3 className="font-bold text-[#0A1230] mb-2 text-sm">{tStr(COPY.talkTeam, lang)}</h3>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">{tStr(COPY.talkPara, lang)}</p>
-                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#F5A623] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#FF7B5A] transition-colors">
+                <Link href="/contact" className="inline-flex items-center gap-1.5 bg-[#F5A623] text-white text-sm font-bold px-4 py-2.5 rounded-lg hover:bg-[#e69a1f] transition-colors">
                   {tStr(COPY.scheduleCall, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                 </Link>
               </div>

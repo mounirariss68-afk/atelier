@@ -76,15 +76,15 @@ export default function Navbar() {
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-8">
-            <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.home)}
             </Link>
-            <Link href="/about" className={`nav-link text-sm font-medium transition-colors ${isActive("/about") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/about" className={`nav-link text-sm font-medium transition-colors ${isActive("/about") ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.about)}
             </Link>
 
             <div className="relative" onMouseEnter={() => setServicesOpen(true)} onMouseLeave={() => setServicesOpen(false)}>
-              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/services") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
+              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/services") ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
                 {t(NAV.services)} <ChevronDown size={14} className={`transition-transform ${servicesOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
@@ -92,12 +92,12 @@ export default function Navbar() {
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.15 }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden">
                     <div className="py-2">
                       {SERVICE_LINKS.map((link) => (
-                        <Link key={link.href} href={link.href} className="block px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#156082] transition-colors font-medium">
+                        <Link key={link.href} href={link.href} className="block px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#5B7CFF] transition-colors font-medium">
                           {t(link.label)}
                         </Link>
                       ))}
                       <div className="border-t border-gray-100 mt-1 pt-1">
-                        <Link href="/services" className="block px-5 py-3 text-sm text-[#156082] font-semibold hover:bg-blue-50 transition-colors">
+                        <Link href="/services" className="block px-5 py-3 text-sm text-[#5B7CFF] font-semibold hover:bg-blue-50 transition-colors">
                           {t(NAV.allServices)}
                         </Link>
                       </div>
@@ -108,18 +108,18 @@ export default function Navbar() {
             </div>
 
             <div className="relative" onMouseEnter={() => setInsightsOpen(true)} onMouseLeave={() => setInsightsOpen(false)}>
-              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/insights") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
+              <button className={`nav-link text-sm font-medium transition-colors flex items-center gap-1 ${isActive("/insights") ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
                 {t(NAV.insights)} <ChevronDown size={14} className={`transition-transform ${insightsOpen ? "rotate-180" : ""}`} />
               </button>
               <AnimatePresence>
                 {insightsOpen && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.15 }} className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden">
                     <div className="py-2">
-                      <Link href="/insights" className="block px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#156082] transition-colors font-medium">
+                      <Link href="/insights" className="block px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-[#5B7CFF] transition-colors font-medium">
                         {t(NAV.allInsights)}
                       </Link>
                       {INSIGHT_LINKS.map((link) => (
-                        <Link key={link.href} href={link.href} className="block px-5 py-3 text-sm text-gray-600 hover:bg-gray-50 hover:text-[#156082] transition-colors">
+                        <Link key={link.href} href={link.href} className="block px-5 py-3 text-sm text-gray-600 hover:bg-gray-50 hover:text-[#5B7CFF] transition-colors">
                           {t(link.label)}
                         </Link>
                       ))}
@@ -129,10 +129,10 @@ export default function Navbar() {
               </AnimatePresence>
             </div>
 
-            <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/industries" className={`nav-link text-sm font-medium transition-colors ${isActive("/industries") ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.industries)}
             </Link>
-            <Link href="/marketplace" className={`nav-link text-sm font-medium transition-colors ${isActive("/marketplace") ? "text-[#FF7B5A]" : "text-gray-200 hover:text-white"}`}>
+            <Link href="/marketplace" className={`nav-link text-sm font-medium transition-colors ${isActive("/marketplace") ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.marketplace)}
             </Link>
             <Link href="/assessments" className={`nav-link text-sm font-medium transition-colors ${isActive("/assessments") ? "text-[#E97132]" : "text-gray-200 hover:text-white"}`}>
@@ -149,7 +149,7 @@ export default function Navbar() {
             <Link href="/assessments" className="border border-[#5B7CFF] text-[#5B7CFF] hover:bg-[#5B7CFF] hover:text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors">
               {t(NAV.freeAssessment)}
             </Link>
-            <Link href="/contact" className="bg-[#FF7B5A] hover:bg-[#E96A48] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+            <Link href="/contact" className="bg-[#5B7CFF] hover:bg-[#4A6BE6] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
               {t(NAV.talkToUs)}
             </Link>
           </div>
@@ -186,7 +186,7 @@ export default function Navbar() {
                 <Link href="/assessments" className="block text-center border border-[#5B7CFF] text-[#5B7CFF] font-semibold py-3 rounded-lg">
                   {t(NAV.freeAssessment)}
                 </Link>
-                <Link href="/contact" className="block text-center bg-[#FF7B5A] text-white font-semibold py-3 rounded-lg">
+                <Link href="/contact" className="block text-center bg-[#5B7CFF] text-white font-semibold py-3 rounded-lg">
                   {t(NAV.talkToUs)}
                 </Link>
                 <a href={ATELIER_SIGN_IN} className="block text-center text-gray-300 hover:text-white text-sm font-medium py-2">

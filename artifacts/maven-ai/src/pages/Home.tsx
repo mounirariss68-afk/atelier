@@ -221,7 +221,7 @@ export default function Home() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
           <div className="max-w-4xl">
             <motion.div initial="hidden" animate="visible" variants={fadeUp} custom={0}>
-              <span className="inline-flex items-center gap-2 bg-[#FF7B5A]/15 border border-[#FF7B5A]/30 text-[#FF7B5A] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-8">
+              <span className="inline-flex items-center gap-2 bg-[#5B7CFF]/15 border border-[#5B7CFF]/30 text-[#5B7CFF] text-xs font-semibold px-4 py-2 rounded-full uppercase tracking-wider mb-8">
                 {tStr(HOME_COPY.heroBadge, lang)}
               </span>
             </motion.div>
@@ -235,7 +235,7 @@ export default function Home() {
             >
               {tStr(HOME_COPY.heroLine1, lang)}
               <br />
-              <span style={{ backgroundImage: "linear-gradient(90deg,#5B7CFF 0%,#8A5BD6 35%,#C45BB8 65%,#FF7B5A 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{tStr(HOME_COPY.heroLine2, lang)}</span>
+              <span style={{ backgroundImage: "linear-gradient(90deg,#5B7CFF 0%,#8A5BD6 35%,#C45BB8 65%,#5B7CFF 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{tStr(HOME_COPY.heroLine2, lang)}</span>
             </motion.h1>
 
             <motion.p
@@ -257,7 +257,7 @@ export default function Home() {
             >
               <Link
                 href="/assessments"
-                className="inline-flex items-center gap-2 bg-[#FF7B5A] hover:bg-[#E96A48] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
+                className="inline-flex items-center gap-2 bg-[#5B7CFF] hover:bg-[#4A6BE6] text-white font-bold px-8 py-4 rounded-xl text-base transition-colors shadow-lg"
               >
                 {tStr(HOME_COPY.heroCtaPrimary, lang)} <ArrowRight size={18} className="rtl:-scale-x-100" />
               </Link>
@@ -276,7 +276,7 @@ export default function Home() {
       </section>
 
       {/* ── DIAGNOSTIC SUITE BANNER ── */}
-      <section className="bg-gradient-to-r from-[#0F9ED5] via-[#156082] to-[#0E2841] text-white">
+      <section className="bg-gradient-to-r from-[#0A1230] via-[#1B2755] to-[#0A1230] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-[#E97132] mb-2">{tStr(HOME_COPY.diagEyebrow, lang)}</p>
@@ -284,7 +284,7 @@ export default function Home() {
             <p className="text-sm text-white/80 mt-2">{tStr(HOME_COPY.diagSub, lang)}</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0">
-            <Link href="/assessments/ari" className="bg-white text-[#0E2841] font-bold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-gray-100">{tStr(HOME_COPY.diagStartAri, lang)}</Link>
+            <Link href="/assessments/ari" className="bg-white text-[#0A1230] font-bold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-gray-100">{tStr(HOME_COPY.diagStartAri, lang)}</Link>
             <Link href="/assessments" className="border border-white/40 text-white font-semibold px-5 py-3 rounded-lg whitespace-nowrap hover:bg-white/10">{tStr(HOME_COPY.diagAllFour, lang)}</Link>
           </div>
         </div>
@@ -306,7 +306,7 @@ export default function Home() {
                 transition={{ delay: i * 0.08, duration: 0.5 }}
                 className="text-center md:text-left md:px-2"
               >
-                <div className="text-5xl font-extrabold text-[#0E2841] mb-2 leading-none">
+                <div className="text-5xl font-extrabold text-[#0A1230] mb-2 leading-none">
                   <AnimatedCounter value={stat.value} />
                 </div>
                 <div className="text-sm text-gray-700 font-medium leading-snug mb-2">
@@ -318,7 +318,7 @@ export default function Home() {
                     href={stat.source.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+                    className="underline decoration-gray-300 hover:decoration-[#0A1230] hover:text-[#0A1230] transition-colors"
                   >
                     {stat.source.name} ({stat.source.year})
                     <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
@@ -341,9 +341,9 @@ export default function Home() {
             className="text-center mb-16"
           >
             <div className="section-divider mx-auto" />
-            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5">{tStr(HOME_COPY.gapTitle, lang)}</h2>
+            <h2 className="text-4xl font-extrabold text-[#0A1230] mb-5">{tStr(HOME_COPY.gapTitle, lang)}</h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              {tStr(HOME_COPY.gapParaPart1, lang)} <em>{tStr(HOME_COPY.gapParaPart2, lang)}</em> {tStr(HOME_COPY.gapParaPart3, lang)} <span className="font-semibold text-[#0E2841]">{tStr(HOME_COPY.gapParaPart4, lang)}</span> {tStr(HOME_COPY.gapParaPart5, lang)}
+              {tStr(HOME_COPY.gapParaPart1, lang)} <em>{tStr(HOME_COPY.gapParaPart2, lang)}</em> {tStr(HOME_COPY.gapParaPart3, lang)} <span className="font-semibold text-[#0A1230]">{tStr(HOME_COPY.gapParaPart4, lang)}</span> {tStr(HOME_COPY.gapParaPart5, lang)}
             </p>
             <p className="text-xs text-gray-500 mt-4">
               {tStr(HOME_COPY.sourceLabel, lang)}:{" "}
@@ -351,7 +351,7 @@ export default function Home() {
                 href="https://nanda.media.mit.edu/ai_report_2025.pdf"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+                className="underline decoration-gray-300 hover:decoration-[#0A1230] hover:text-[#0A1230] transition-colors"
               >
                 {tStr(HOME_COPY.gapMitSource, lang)}
                 <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
@@ -377,7 +377,7 @@ export default function Home() {
                 >
                   <span className="text-[#F5A623] font-black text-xl leading-none mt-0.5 w-8 flex-shrink-0">{item.num}</span>
                   <div>
-                    <h3 className="font-bold text-[#0E2841] mb-1">{item.title}</h3>
+                    <h3 className="font-bold text-[#0A1230] mb-1">{item.title}</h3>
                     <p className="text-sm text-gray-600 leading-relaxed">{item.desc}</p>
                     {item.source && (
                       <p className="text-[11px] text-gray-400 mt-1.5">
@@ -386,7 +386,7 @@ export default function Home() {
                           href={item.source.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+                          className="underline decoration-gray-300 hover:decoration-[#0A1230] hover:text-[#0A1230] transition-colors"
                         >
                           {item.source.name} ({item.source.year})
                           <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
@@ -403,7 +403,7 @@ export default function Home() {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
-              className="bg-[#0E2841] rounded-2xl p-10 text-white"
+              className="bg-[#0A1230] rounded-2xl p-10 text-white"
             >
               <h3 className="text-2xl font-bold mb-8">{tStr(HOME_COPY.diffTitle, lang)}</h3>
               <div className="space-y-6">
@@ -442,15 +442,15 @@ export default function Home() {
             className="text-center max-w-3xl mx-auto mb-12"
           >
             <div className="section-divider mx-auto" />
-            <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white bg-[#0E2841] mb-4">
+            <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white bg-[#0A1230] mb-4">
               {tStr(TWO_PATHS_COPY.eyebrow, lang)}
             </span>
-            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5 leading-tight">
+            <h2 className="text-4xl font-extrabold text-[#0A1230] mb-5 leading-tight">
               {tStr(TWO_PATHS_COPY.title, lang)}
             </h2>
             <p className="text-lg text-gray-600 leading-relaxed">
               {tStr(TWO_PATHS_COPY.introA, lang)}{" "}
-              <strong className="text-[#156082]">{tStr(TWO_PATHS_COPY.introProject, lang)}</strong>{" "}
+              <strong className="text-[#5B7CFF]">{tStr(TWO_PATHS_COPY.introProject, lang)}</strong>{" "}
               <strong className="text-[#F5A623]">{tStr(TWO_PATHS_COPY.introAsset, lang)}</strong>{" "}
               {tStr(TWO_PATHS_COPY.introBlend, lang)}
             </p>
@@ -467,7 +467,7 @@ export default function Home() {
 
           {/* Decision lens — five factors */}
           <div className="mt-14 max-w-5xl mx-auto">
-            <p className="text-xs font-bold uppercase tracking-widest text-[#0E2841] mb-4 text-center">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#0A1230] mb-4 text-center">
               {tStr(TWO_PATHS_COPY.framework, lang)}
             </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -480,12 +480,12 @@ export default function Home() {
                   transition={{ delay: i * 0.06, duration: 0.4 }}
                   className="bg-white rounded-lg border border-gray-100 p-4 shadow-sm"
                 >
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#0E2841] mb-3 leading-snug">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#0A1230] mb-3 leading-snug">
                     {tStr(f.label, lang)}
                   </p>
                   <div className="space-y-2">
                     <div className="flex items-start gap-2">
-                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#156082] flex-shrink-0" />
+                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-[#5B7CFF] flex-shrink-0" />
                       <span className="text-xs text-gray-700 leading-snug">{tStr(f.project, lang)}</span>
                     </div>
                     <div className="flex items-start gap-2">
@@ -501,11 +501,11 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-5 mt-12 max-w-5xl mx-auto">
             <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <Briefcase size={16} className="text-[#156082]" />
-                <span className="text-xs font-bold uppercase tracking-widest text-[#156082]">{tStr(TWO_PATHS_COPY.cardProject, lang)}</span>
+                <Briefcase size={16} className="text-[#5B7CFF]" />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#5B7CFF]">{tStr(TWO_PATHS_COPY.cardProject, lang)}</span>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardProjectDesc, lang)}</p>
-              <Link href="/services" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#156082] hover:text-[#0E2841]">
+              <Link href="/services" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#5B7CFF] hover:text-[#0A1230]">
                 {tStr(TWO_PATHS_COPY.ctaServices, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>
@@ -525,7 +525,7 @@ export default function Home() {
                 <span className="text-xs font-bold uppercase tracking-widest text-[#196B24]">{tStr(TWO_PATHS_COPY.cardBlended, lang)}</span>
               </div>
               <p className="text-sm text-gray-700 leading-relaxed">{tStr(TWO_PATHS_COPY.cardBlendedDesc, lang)}</p>
-              <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#196B24] hover:text-[#0E2841]">
+              <Link href="/insights/two-paths-to-outcomes" className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-[#196B24] hover:text-[#0A1230]">
                 {tStr(TWO_PATHS_COPY.ctaPov, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
               </Link>
             </div>
@@ -544,7 +544,7 @@ export default function Home() {
             className="mb-14"
           >
             <div className="section-divider" />
-            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-4">{tStr(HOME_COPY.servicesTitle, lang)}</h2>
+            <h2 className="text-4xl font-extrabold text-[#0A1230] mb-4">{tStr(HOME_COPY.servicesTitle, lang)}</h2>
             <p className="text-lg text-gray-600 max-w-xl">{tStr(HOME_COPY.servicesSub, lang)}</p>
           </motion.div>
 
@@ -569,11 +569,11 @@ export default function Home() {
                   <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: service.color }}>
                     {serviceBuyer(service, lang)}
                   </div>
-                  <h3 className="text-lg font-bold text-[#0E2841] mb-3 leading-snug">{serviceTitle(service, lang)}</h3>
+                  <h3 className="text-lg font-bold text-[#0A1230] mb-3 leading-snug">{serviceTitle(service, lang)}</h3>
                   <p className="text-sm text-gray-600 leading-relaxed mb-5">{serviceDescription(service, lang)}</p>
                   <Link
                     href={`/services/${service.slug}`}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-[#5B7CFF] group-hover:text-[#F5A623] transition-colors"
                   >
                     {tStr(HOME_COPY.learnMore, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                   </Link>
@@ -593,10 +593,10 @@ export default function Home() {
           <div className="flex items-end justify-between mb-14">
             <div>
               <div className="section-divider" />
-              <h2 className="text-4xl font-extrabold text-[#0E2841] mb-2">{tStr(HOME_COPY.featuredTitle, lang)}</h2>
+              <h2 className="text-4xl font-extrabold text-[#0A1230] mb-2">{tStr(HOME_COPY.featuredTitle, lang)}</h2>
               <p className="text-gray-600">{tStr(HOME_COPY.featuredSub, lang)}</p>
             </div>
-            <Link href="/insights" className="hidden sm:inline-flex items-center gap-2 text-[#156082] font-semibold text-sm hover:text-[#F5A623] transition-colors">
+            <Link href="/insights" className="hidden sm:inline-flex items-center gap-2 text-[#5B7CFF] font-semibold text-sm hover:text-[#F5A623] transition-colors">
               {tStr(HOME_COPY.allInsights, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
             </Link>
           </div>
@@ -612,7 +612,7 @@ export default function Home() {
                 className="report-card group bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm cursor-pointer"
               >
                 <Link href={`/insights/${insight.slug}`}>
-                  <div className="h-52 overflow-hidden bg-[#0E2841] relative">
+                  <div className="h-52 overflow-hidden bg-[#0A1230] relative">
                     <img
                       src={insight.coverImage}
                       alt={insightTitle(insight, lang)}
@@ -621,7 +621,7 @@ export default function Home() {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0E2841]/80 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0A1230]/80 to-transparent" />
                     <div className="absolute bottom-4 left-4">
                       <span
                         className="text-xs font-bold px-3 py-1 rounded-full"
@@ -636,17 +636,17 @@ export default function Home() {
                   </div>
                   <div className="p-6">
                     <div className="flex items-center gap-2 mb-3">
-                      <span className="text-xs font-semibold text-[#156082]">{insightCategoryLabel(insight.category, lang)}</span>
+                      <span className="text-xs font-semibold text-[#5B7CFF]">{insightCategoryLabel(insight.category, lang)}</span>
                       <span className="text-gray-300">·</span>
                       <span className="text-xs text-gray-400">{insightDateLabel(insight.date, lang)}</span>
                     </div>
-                    <h3 className="font-bold text-[#0E2841] text-lg leading-snug mb-3 group-hover:text-[#156082] transition-colors">
+                    <h3 className="font-bold text-[#0A1230] text-lg leading-snug mb-3 group-hover:text-[#5B7CFF] transition-colors">
                       {insightTitle(insight, lang)}
                     </h3>
                     <p className="text-sm text-gray-600 leading-relaxed mb-4">{insightSummary(insight, lang)}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-400">{insightReadTimeLabel(insight, lang)}</span>
-                      <span className="text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
+                      <span className="text-sm font-semibold text-[#5B7CFF] group-hover:text-[#F5A623] transition-colors flex items-center gap-1">
                         {tStr(HOME_COPY.read, lang)} <ArrowRight size={13} className="rtl:-scale-x-100" />
                       </span>
                     </div>
@@ -669,7 +669,7 @@ export default function Home() {
             "{tStr(HOME_COPY.founderQuote, lang)}"
           </blockquote>
           <div className="flex items-center justify-center gap-4">
-            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#156082] border-2 border-[#F5A623]">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-[#5B7CFF] border-2 border-[#F5A623]">
               <img
                 src={mounirHeadshot}
                 alt="Mounir Aris"
@@ -695,7 +695,7 @@ export default function Home() {
             className="mb-14"
           >
             <div className="section-divider" />
-            <h2 className="text-4xl font-extrabold text-[#0E2841] mb-4">{tStr(HOME_COPY.industriesTitle, lang)}</h2>
+            <h2 className="text-4xl font-extrabold text-[#0A1230] mb-4">{tStr(HOME_COPY.industriesTitle, lang)}</h2>
             <p className="text-lg text-gray-600 max-w-xl">{tStr(HOME_COPY.industriesSub, lang)}</p>
           </motion.div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -716,15 +716,15 @@ export default function Home() {
                     href={ind.heroStatSource.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 underline decoration-gray-300 hover:decoration-[#0E2841] hover:text-[#0E2841] transition-colors"
+                    className="text-gray-400 underline decoration-gray-300 hover:decoration-[#0A1230] hover:text-[#0A1230] transition-colors"
                   >
                     {ind.heroStatSource.name} ({ind.heroStatSource.year})
                     <ExternalLink size={9} className="inline ml-0.5 -mt-0.5" />
                   </a>
                 </p>
-                <h3 className="text-xl font-bold text-[#0E2841] mb-3">{industryTitle(ind, lang)}</h3>
+                <h3 className="text-xl font-bold text-[#0A1230] mb-3">{industryTitle(ind, lang)}</h3>
                 <p className="text-sm text-gray-600 leading-relaxed mb-6 flex-1">{industrySubtitle(ind, lang)}</p>
-                <Link href={`/industries#${ind.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#156082] group-hover:text-[#F5A623] transition-colors">
+                <Link href={`/industries#${ind.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-[#5B7CFF] group-hover:text-[#F5A623] transition-colors">
                   {tStr(HOME_COPY.explore, lang)} <ArrowRight size={14} className="rtl:-scale-x-100" />
                 </Link>
               </motion.div>
@@ -739,10 +739,10 @@ export default function Home() {
           <div className="grid lg:grid-cols-12 gap-10 items-center">
             <div className="lg:col-span-7">
               <div className="section-divider" />
-              <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white bg-[#0F9ED5] mb-4">
+              <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white bg-[#5B7CFF] mb-4">
                 {tStr(HOME_COPY.mpBadge, lang)}
               </span>
-              <h2 className="text-4xl font-extrabold text-[#0E2841] mb-5 max-w-2xl leading-tight">
+              <h2 className="text-4xl font-extrabold text-[#0A1230] mb-5 max-w-2xl leading-tight">
                 {tStr(HOME_COPY.mpTitle, lang)}
               </h2>
               <p className="text-lg text-gray-600 max-w-2xl leading-relaxed mb-6">
@@ -751,13 +751,13 @@ export default function Home() {
               <div className="flex flex-wrap items-center gap-3">
                 <Link
                   href="/marketplace/value-realization"
-                  className="inline-flex items-center gap-2 bg-[#0E2841] hover:bg-[#156082] text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
+                  className="inline-flex items-center gap-2 bg-[#0A1230] hover:bg-[#5B7CFF] text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
                 >
                   {tStr(HOME_COPY.mpCtaTool, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
                 </Link>
                 <Link
                   href="/marketplace"
-                  className="inline-flex items-center gap-2 border border-[#0E2841] text-[#0E2841] hover:bg-[#0E2841] hover:text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
+                  className="inline-flex items-center gap-2 border border-[#0A1230] text-[#0A1230] hover:bg-[#0A1230] hover:text-white font-bold px-6 py-3.5 rounded-xl transition-colors"
                 >
                   {tStr(HOME_COPY.mpCtaBrowse, lang)}
                 </Link>
@@ -766,7 +766,7 @@ export default function Home() {
             <div className="lg:col-span-5">
               <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#0F9ED5]">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#5B7CFF]">
                     {tStr(HOME_COPY.vrEyebrow, lang)}
                   </span>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
@@ -777,7 +777,7 @@ export default function Home() {
                   { label: tStr(HOME_COPY.vrRow1, lang), expected: 4.2, realized: 3.35, color: "#196B24" },
                   { label: tStr(HOME_COPY.vrRow2, lang), expected: 6.8, realized: 4.6, color: "#196B24" },
                   { label: tStr(HOME_COPY.vrRow3, lang), expected: 9.5, realized: 5.2, color: "#F5A623" },
-                  { label: tStr(HOME_COPY.vrRow4, lang), expected: 3.1, realized: 1.4, color: "#0F9ED5" },
+                  { label: tStr(HOME_COPY.vrRow4, lang), expected: 3.1, realized: 1.4, color: "#5B7CFF" },
                   { label: tStr(HOME_COPY.vrRow5, lang), expected: 5.4, realized: 0.0, color: "#B91C1C" },
                 ].map((row) => {
                   const max = 9.5;
@@ -794,7 +794,7 @@ export default function Home() {
                       <div className="relative h-2.5 rounded-full bg-gray-100 overflow-hidden">
                         <div
                           className="absolute inset-y-0 start-0 rounded-full"
-                          style={{ width: `${expW}%`, background: "#0E284122" }}
+                          style={{ width: `${expW}%`, background: "#0A123022" }}
                         />
                         <div
                           className="absolute inset-y-0 start-0 rounded-full"
@@ -805,7 +805,7 @@ export default function Home() {
                   );
                 })}
                 <p className="text-[11px] text-gray-500 leading-relaxed pt-2 border-t border-gray-100">
-                  {tStr(HOME_COPY.vrRealRate, lang)} <span className="font-bold text-[#0E2841]">{formatNumber(49, lang)}%</span> · {tStr(HOME_COPY.vrAtRisk, lang)} <span className="font-bold text-[#B91C1C]">AED {formatNumber(9.7, lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M</span>
+                  {tStr(HOME_COPY.vrRealRate, lang)} <span className="font-bold text-[#0A1230]">{formatNumber(49, lang)}%</span> · {tStr(HOME_COPY.vrAtRisk, lang)} <span className="font-bold text-[#B91C1C]">AED {formatNumber(9.7, lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M</span>
                 </p>
               </div>
             </div>
@@ -814,7 +814,7 @@ export default function Home() {
       </section>
 
       {/* ── CTA ── */}
-      <section className="py-24 bg-gradient-to-br from-[#0A1230] via-[#8A5BD6] to-[#FF7B5A]">
+      <section className="py-24 bg-gradient-to-br from-[#0A1230] via-[#8A5BD6] to-[#5B7CFF]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}

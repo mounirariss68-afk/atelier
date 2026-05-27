@@ -163,11 +163,11 @@ export default function Footer() {
             <h3 className="text-white font-semibold text-sm uppercase tracking-widest mb-5">{t(F.contact)}</h3>
             <div className="space-y-4">
               <div className="flex items-start gap-2">
-                <Mail size={14} className="text-[#FF7B5A] mt-0.5 flex-shrink-0" />
+                <Mail size={14} className="text-[#5B7CFF] mt-0.5 flex-shrink-0" />
                 <a href="mailto:info@cognirise.com" className="text-gray-400 text-sm hover:text-white transition-colors">info@cognirise.com</a>
               </div>
               <div className="flex items-start gap-2">
-                <MapPin size={14} className="text-[#FF7B5A] mt-0.5 flex-shrink-0" />
+                <MapPin size={14} className="text-[#5B7CFF] mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-gray-400 text-sm">{t(offices[0].city)} · {t(offices[1].city)}</p>
                   <p className="text-gray-400 text-sm">{t(offices[2].city)} · {t(offices[3].city)}</p>
@@ -183,7 +183,7 @@ export default function Footer() {
             {offices.map((office) => (
               <div key={office.city.en}>
                 <div className="flex items-center gap-2 mb-2">
-                  <MapPin size={12} className="text-[#FF7B5A]" />
+                  <MapPin size={12} className="text-[#5B7CFF]" />
                   <span className="text-white font-semibold text-sm">{t(office.city)}, {t(office.country)}</span>
                 </div>
                 <p className="text-gray-500 text-xs leading-relaxed whitespace-pre-line">{t(office.address)}</p>
