@@ -2,10 +2,10 @@ import { motion } from "framer-motion";
 import { Briefcase, Package } from "lucide-react";
 import { useLang, tStr } from "@/lib/lang";
 
-const PROJECT_COLOR = "#156082";
-const ASSET_COLOR = "#F5A623";
-const OUTCOME_COLOR = "#196B24";
-const NAVY = "#0E2841";
+const PROJECT_COLOR = "#5B7CFF";
+const ASSET_COLOR = "#C45BB8";
+const OUTCOME_COLOR = "#8A5BD6";
+const NAVY = "#0A1230";
 
 const PROJECT_STEPS = [
   { en: "Scope", ar: "النطاق", tr: "Kapsam" },
@@ -62,7 +62,7 @@ export default function TwoPathsDiagram() {
             <stop offset="100%" stopColor={ASSET_COLOR} />
           </linearGradient>
           <radialGradient id="outcomeGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#22a437" />
+            <stop offset="0%" stopColor="#A77BE0" />
             <stop offset="100%" stopColor={OUTCOME_COLOR} />
           </radialGradient>
           <filter id="tpShadow" x="-50%" y="-50%" width="200%" height="200%">

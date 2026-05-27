@@ -235,7 +235,7 @@ export default function Home() {
             >
               {tStr(HOME_COPY.heroLine1, lang)}
               <br />
-              <span style={{ backgroundImage: "linear-gradient(90deg,#5B7CFF 0%,#8A5BD6 35%,#C45BB8 65%,#5B7CFF 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{tStr(HOME_COPY.heroLine2, lang)}</span>
+              <span style={{ backgroundImage: "linear-gradient(90deg,#5B7CFF 0%,#8A5BD6 30%,#C45BB8 60%,#FF7B5A 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{tStr(HOME_COPY.heroLine2, lang)}</span>
             </motion.h1>
 
             <motion.p
