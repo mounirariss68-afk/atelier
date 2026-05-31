@@ -102,6 +102,12 @@ uri = "file://artifacts/maven-ai/public/images/report-industry-automotive.png"
 type = "image"
 title = "report cover automotive"
 
+[[generated]]
+id = "CbwtamSAi3WkQXqamRpii"
+uri = "file://artifacts/maven-ai/public/images/riser-bot.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "5x0h6JPvS_fK_80uoaR6h"
 uri = "file://.local/deliverables/arcelik-demo-video-script.md"

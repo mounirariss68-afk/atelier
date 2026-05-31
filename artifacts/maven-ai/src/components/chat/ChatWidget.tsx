@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { MessageCircle, Send, X, RotateCcw, RefreshCw, Sparkles } from "lucide-react";
+import { Send, X, RotateCcw, RefreshCw } from "lucide-react";
+
+const riserBot = `${import.meta.env.BASE_URL}images/riser-bot.png`;
 import { useLang, tStr } from "@/lib/lang";
 import { useChatStream } from "@/hooks/useChatStream";
 
@@ -27,8 +29,8 @@ function renderInline(text: string): ReactNode[] {
 }
 
 const T = {
-  open: { en: "Ask Cognirise", ar: "اسأل Cognirise", tr: "Cognirise'ya sorun" },
-  title: { en: "Ask Cognirise", ar: "اسأل Cognirise", tr: "Cognirise'a sorun" },
+  open: { en: "Ask Riser", ar: "اسأل Riser", tr: "Riser'a sorun" },
+  title: { en: "Ask Riser", ar: "اسأل Riser", tr: "Riser'a sorun" },
   subtitle: {
     en: "About our services, assessments, or how we work.",
     ar: "عن خدماتنا، تشخيصاتنا، أو طريقة عملنا.",
@@ -45,9 +47,9 @@ const T = {
   thinking: { en: "Thinking…", ar: "يفكر…", tr: "Düşünüyor…" },
   starters: { en: "Try asking…", ar: "جرّب أن تسأل…", tr: "Şunu sormayı deneyin…" },
   disclaimer: {
-    en: "AI assistant — answers grounded in Cognirise's published material. For specifics, book a 30-minute readout.",
-    ar: "مساعد ذكاء اصطناعي — إجاباته مستندة إلى محتوى Cognirise المنشور. للتفاصيل احجز قراءة 30 دقيقة.",
-    tr: "AI asistanı — yanıtlar Cognirise'nın yayımlanmış içeriğine dayanır. Ayrıntılar için 30 dakikalık bir görüşme planlayın.",
+    en: "Riser is an AI assistant — answers grounded in Cognirise's published material. For specifics, book a 30-minute readout.",
+    ar: "Riser مساعد ذكاء اصطناعي — إجاباته مستندة إلى محتوى Cognirise المنشور. للتفاصيل احجز قراءة 30 دقيقة.",
+    tr: "Riser bir AI asistanıdır — yanıtlar Cognirise'nın yayımlanmış içeriğine dayanır. Ayrıntılar için 30 dakikalık bir görüşme planlayın.",
   },
   retry: { en: "Try again", ar: "حاول مرة أخرى", tr: "Tekrar deneyin" },
   charLimitHint: {
@@ -61,9 +63,9 @@ const T = {
     tr: "Mesaj uzunluğu sınırına yaklaşıyorsunuz.",
   },
   emptyIntro: {
-    en: "Ask me about Cognirise's services, assessments, the industries we serve, or how we work. I'll answer from what the firm has published.",
-    ar: "اسألني عن خدمات Cognirise، التشخيصات، الصناعات التي نخدمها، أو كيف نعمل. سأجيب بناءً على ما نشرته الشركة.",
-    tr: "Cognirise'nın hizmetleri, teşhisleri, hizmet verdiğimiz sektörler veya nasıl çalıştığımız hakkında bana soru sorabilirsiniz. Firmanın yayımladığı içeriğe göre cevap vereceğim.",
+    en: "Hi, I'm Riser. Ask me about Cognirise's services, assessments, the industries we serve, or how we work. I'll answer from what the firm has published.",
+    ar: "مرحباً، أنا Riser. اسألني عن خدمات Cognirise، التشخيصات، الصناعات التي نخدمها، أو كيف نعمل. سأجيب بناءً على ما نشرته الشركة.",
+    tr: "Merhaba, ben Riser. Cognirise'nın hizmetleri, teşhisleri, hizmet verdiğimiz sektörler veya nasıl çalıştığımız hakkında bana soru sorabilirsiniz. Firmanın yayımladığı içeriğe göre cevap vereceğim.",
   },
 } as const;
 
@@ -178,9 +180,13 @@ export default function ChatWidget() {
             />
             <span
               aria-hidden
-              className="relative inline-flex items-center justify-center w-5 h-5 font-black text-[15px] leading-none tracking-tight"
+              className="relative inline-flex items-center justify-center w-6 h-6"
             >
-              C
+              <img
+                src={riserBot}
+                alt="Riser"
+                className="w-6 h-6 object-contain drop-shadow-sm"
+              />
             </span>
             <span className="relative hidden sm:inline text-sm">{t(T.open)}</span>
           </motion.button>
@@ -206,8 +212,12 @@ export default function ChatWidget() {
             {/* Header */}
             <div className="bg-[#0A1230] text-white px-5 py-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-[#C45BB8]/15 border border-[#C45BB8]/30 flex items-center justify-center">
-                  <Sparkles size={16} className="text-[#C45BB8]" />
+                <div className="w-9 h-9 rounded-full bg-white/10 border border-[#C45BB8]/40 flex items-center justify-center overflow-hidden">
+                  <img
+                    src={riserBot}
+                    alt="Riser"
+                    className="w-8 h-8 object-contain"
+                  />
                 </div>
                 <div>
                   <div className="font-bold text-sm leading-tight">{t(T.title)}</div>

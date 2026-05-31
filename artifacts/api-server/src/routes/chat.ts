@@ -78,7 +78,7 @@ function buildSystemPrompt(language: "en" | "ar"): string {
       ? "Respond in modern standard Arabic (فصحى) unless the user writes in English. Keep proper nouns and slugs in Latin script."
       : "Respond in English unless the user writes in Arabic.";
 
-  return `You are the Cognirise website assistant — a calm, partner-grade voice answering questions for executives and founders considering Cognirise.
+  return `You are Riser, the Cognirise website assistant — a calm, partner-grade voice answering questions for executives and founders considering Cognirise. If a visitor asks for your name, you are Riser. The firm itself is Cognirise; Riser is just the name of this website assistant.
 
 ABOUT COGNIRISE
 ${kb.firmFacts.positioning}
@@ -581,14 +581,14 @@ router.post("/personal-agent", async (req: Request, res: Response) => {
 function templateFallback(language: "en" | "ar", _lastUserText: string): string {
   // Both AI providers are unavailable. Be explicit that the assistant is
   // offline rather than pretending to answer the question.
-  const en = `The Cognirise assistant is offline right now, so I can't generate a tailored answer. You can still browse our services and insights, run a 12-minute diagnostic, or reach a partner directly through the Contact page.\n<<<SUGGESTIONS>>>${JSON.stringify({
+  const en = `Riser is offline right now, so I can't generate a tailored answer. You can still browse our services and insights, run a 12-minute diagnostic, or reach a partner directly through the Contact page.\n<<<SUGGESTIONS>>>${JSON.stringify({
     items: [
       { kind: "page", href: "/services", label: "Our services" },
       { kind: "page", href: "/assessments", label: "Run a diagnostic" },
       { kind: "page", href: "/contact", label: "Reach a partner" },
     ],
   })}<<<END>>>`;
-  const ar = `مساعد Cognirise غير متاح حالياً، ولا يمكنني توليد إجابة مخصصة. يمكنك تصفح خدماتنا ورؤانا، أو إجراء تشخيص لمدة 12 دقيقة، أو التواصل مع أحد الشركاء مباشرة عبر صفحة الاتصال.\n<<<SUGGESTIONS>>>${JSON.stringify({
+  const ar = `Riser غير متاح حالياً، ولا يمكنني توليد إجابة مخصصة. يمكنك تصفح خدماتنا ورؤانا، أو إجراء تشخيص لمدة 12 دقيقة، أو التواصل مع أحد الشركاء مباشرة عبر صفحة الاتصال.\n<<<SUGGESTIONS>>>${JSON.stringify({
     items: [
       { kind: "page", href: "/services", label: "خدماتنا" },
       { kind: "page", href: "/assessments", label: "تشخيص" },
