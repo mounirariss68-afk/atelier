@@ -1,1 +1,1 @@
-- [Brand rename (EN/AR/TR)](brand-rename-trilingual.md) — Latin search misses Arabic مافن/all-caps/Turkish genitive; keep new brand Latin inside Arabic; regen api from openapi spec.
+- [Logo-on-navy background removal](logo-bg-removal.md) — AI bg-removal fails on logo-on-dark-card art (keeps whole card); color-key the near-uniform navy with ImageMagick instead.
