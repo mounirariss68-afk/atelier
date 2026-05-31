@@ -11,7 +11,7 @@ import { PwrDataProvider, usePwrData } from "@/hooks/useProgrammeWarRoomData";
 import { shell } from "./programme-i18n";
 import { BRAND, BRAND_INK } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import PortfolioView from "./views/PortfolioView";
 import ProgrammeDetailView from "./views/ProgrammeDetailView";
 import ApprovalsView from "./views/ApprovalsView";

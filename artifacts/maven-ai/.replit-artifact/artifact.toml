@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Maven AI"
+title = "Cognirise"
 version = "1.0.0"
 id = "artifacts/maven-ai"
 router = "path"

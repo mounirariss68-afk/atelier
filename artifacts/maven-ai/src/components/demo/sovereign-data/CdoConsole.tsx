@@ -10,7 +10,7 @@ import { SdsDataProvider, useSdsData } from "@/hooks/useSovereignDataData";
 import { shell } from "./sovereign-i18n";
 import { BRAND, BRAND_INK } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import CatalogueView from "./views/CatalogueView";
 import ProductDetailView from "./views/ProductDetailView";
 import ApprovalsView from "./views/ApprovalsView";

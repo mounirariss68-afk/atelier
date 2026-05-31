@@ -16,7 +16,7 @@
       "path": "./lib/api-zod"
     },
     {
-      "path": "./lib/maven-content"
+      "path": "./lib/cognirise-content"
     },
     {
       "path": "./lib/integrations-anthropic-ai"

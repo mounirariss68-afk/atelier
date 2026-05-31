@@ -1,4 +1,4 @@
-import type { AgentCast } from "@workspace/maven-content";
+import type { AgentCast } from "@workspace/cognirise-content";
 import { useLang, tStr } from "@/lib/lang";
 
 const KIND_COLORS: Record<string, string> = {

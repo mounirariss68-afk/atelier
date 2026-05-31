@@ -1,5 +1,5 @@
 // Bid Manager Studio — brand tokens (anchored on Scenario.accent #8A5BD6).
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 
 export const BRAND = getDemoAccent("tender-response-studio", "#8A5BD6");
 export const BRAND_DARK = "#0F4416";

@@ -3,7 +3,7 @@
 // the platform navy so the surface evokes Workiva / MetricStream rather
 // than a "marketing demo".
 
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 
 export const BRAND = getDemoAccent("sama-compliance-sentinel", "#0A1230");
 export const BRAND_DARK = "#0A1F33";

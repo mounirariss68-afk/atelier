@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Phone, Mail, Send, CheckCircle, Clock, Users, ArrowRight } from "lucide-react";
-import { services as sharedServices } from "@workspace/maven-content";
+import { services as sharedServices } from "@workspace/cognirise-content";
 import { useLang, tStr } from "@/lib/lang";
 
 const offices = [

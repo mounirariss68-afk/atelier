@@ -1,4 +1,4 @@
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 
 export const BRAND = getDemoAccent("customer-care-hive", "#5B7CFF");
 export const BRAND_DARK = "#0B7AA5";

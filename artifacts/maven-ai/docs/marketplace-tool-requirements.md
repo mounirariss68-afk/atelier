@@ -15,7 +15,7 @@ Every demo must:
    click targets) that drives derived metrics, charts, callouts and
    draft artefacts (memos, work orders, packs) in real time.
 2. Carry a named cast of 3–6 agents and at least one human checkpoint
-   in `lib/maven-content/src/agentCasts.ts`. Edges and `flowOrder`
+   in `lib/cognirise-content/src/agentCasts.ts`. Edges and `flowOrder`
    reference real agent / checkpoint ids.
 3. Expose a "How does this work?" button that opens `AgentExplainer`,
    which renders an inline SVG topology diagram (RTL-aware), a

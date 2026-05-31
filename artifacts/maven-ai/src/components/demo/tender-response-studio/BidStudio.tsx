@@ -11,7 +11,7 @@ import { useTenderDemoLang, useTenderDemoT, TenderDemoLangProvider } from "./Dem
 import { shell } from "./tender-i18n";
 import { BRAND, BRAND_DARK, BRAND_MUTED, NAVY, CANVAS } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import { generateAlerts } from "@/data/tender-response-agent";
 import PipelineView from "./views/PipelineView";
 import TenderWorkspaceView from "./views/TenderWorkspaceView";

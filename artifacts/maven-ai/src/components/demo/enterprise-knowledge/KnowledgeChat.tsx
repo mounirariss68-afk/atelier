@@ -9,7 +9,7 @@ import { EkcDataProvider, useEkcData } from "@/hooks/useEnterpriseKnowledgeData"
 import { shell } from "./knowledge-i18n";
 import { BRAND, BRAND_INK } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import ChatView from "./views/ChatView";
 import SourceLibraryView from "./views/SourceLibraryView";
 import ApprovalsView from "./views/ApprovalsView";

@@ -10,7 +10,7 @@ import { SamaDemoLangProvider, useSamaDemoLang } from "./DemoLangContext";
 import { shell, kpis, useTrFactory } from "./sama-i18n";
 import { BRAND, BRAND_INK } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import { generateAlerts, generateRecommendations, type Severity } from "@/data/sama-compliance-agent";
 import { formatAed, relativeTime } from "@/data/sama-compliance-seed";
 import ObligationsRegisterView from "./views/ObligationsRegisterView";

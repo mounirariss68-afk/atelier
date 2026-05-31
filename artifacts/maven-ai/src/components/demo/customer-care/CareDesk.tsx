@@ -10,7 +10,7 @@ import { CareToastProvider } from "./ToastContext";
 import { shell, tDict } from "./care-i18n";
 import { BRAND, BRAND_DARK } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import { AiChat } from "./AiChat";
 import DeskView from "./views/DeskView";
 import MyQueueView from "./views/MyQueueView";

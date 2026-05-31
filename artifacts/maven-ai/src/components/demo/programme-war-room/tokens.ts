@@ -1,4 +1,4 @@
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 
 export const BRAND = getDemoAccent("programme-war-room", "#5B7CFF");
 export const BRAND_INK = "#0A1230";

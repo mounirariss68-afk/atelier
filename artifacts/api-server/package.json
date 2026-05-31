@@ -30,7 +30,7 @@
     "@workspace/assessments": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/integrations-anthropic-ai": "workspace:*",
-    "@workspace/maven-content": "workspace:*",
+    "@workspace/cognirise-content": "workspace:*",
     "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2",

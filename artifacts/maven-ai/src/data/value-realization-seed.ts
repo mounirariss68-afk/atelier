@@ -5,7 +5,7 @@
  * (CFO + Head of Transformation, UAE conglomerate). Currency: AED.
  *
  * The first 6 entries are the canonical book-of-work also referenced by
- * `lib/maven-content/src/knowledge.ts:samplePortfolio` (we re-encode them
+ * `lib/cognirise-content/src/knowledge.ts:samplePortfolio` (we re-encode them
  * here in AED so the cockpit story stays consistent). The remaining 18
  * pad the portfolio out so a CFO would actually scroll.
  */

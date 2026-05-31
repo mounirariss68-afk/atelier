@@ -1,4 +1,4 @@
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 
 export const BRAND = getDemoAccent("procurement-negotiation-agent", "#D9534F");
 export const BRAND_DARK = "#A53C39";

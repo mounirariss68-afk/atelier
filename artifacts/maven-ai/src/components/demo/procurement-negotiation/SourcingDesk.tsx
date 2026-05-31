@@ -10,7 +10,7 @@ import { ProcurementDataProvider, useProcurementData } from "@/hooks/useProcurem
 import { shell as t } from "./procurement-i18n";
 import { BRAND } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import EventsView from "./views/EventsView";
 import EventWorkspaceView from "./views/EventWorkspaceView";
 import ApprovalsView from "./views/ApprovalsView";

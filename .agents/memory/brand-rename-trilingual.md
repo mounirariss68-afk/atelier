@@ -21,9 +21,12 @@ and structural "Maven Insights" framing. Always run `rg 'مافن'` (and any oth
 **How to apply:** run `Maven AI`→brand BEFORE `Maven`→brand (else you get "Brand AI"); handle two-word
 entity names ("Maven Insights", `مافن إنسايتس`) as manual rewrites first so they don't become "Brand Insights".
 
-## Excluded-from-rename identifiers (this repo)
-Package names `@workspace/maven-ai` / `@workspace/maven-content`, directories `artifacts/maven-ai/` /
-`lib/maven-content/`, the `maven-ai` repo/dir token in seed data, preview path, workflow IDs, and
-path strings in tsconfig*/pnpm-lock/post-merge.sh are renamed separately by the user — leave them.
+## Project-level naming state (this repo)
+The content library is now `@workspace/cognirise-content` (folder `lib/cognirise-content/`); the old
+`@workspace/maven-content` / `lib/maven-content/` are fully gone — imports, tsconfig refs, package deps,
+post-merge.sh filter, and pnpm-lock all updated in lockstep. The web artifact's registered **title** is
+now "Cognirise" but its package name `@workspace/maven-ai` and folder `artifacts/maven-ai/` are
+DELIBERATELY KEPT (renaming the root artifact dir/preview path would break links — out of scope).
+So `rg maven-ai` still legitimately hits the package/dir tokens; only `maven-content` was eliminated.
 Generated files (`lib/api-zod`, `lib/api-client-react`) are regenerated from `lib/api-spec/openapi.yaml`
 via `pnpm --filter @workspace/api-spec run codegen` — edit the spec, never the generated `api.ts`.

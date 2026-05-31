@@ -1,4 +1,4 @@
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 
 export const BRAND = getDemoAccent("sovereign-data-steward", "#0A1230");
 export const BRAND_INK = "#0A1230";

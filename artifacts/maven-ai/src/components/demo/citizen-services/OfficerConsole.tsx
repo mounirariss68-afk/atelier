@@ -11,7 +11,7 @@ import { useCitizenServicesData } from "@/hooks/useCitizenServicesData";
 import { tt } from "@/data/citizen-services-seed";
 import { BRAND, NAVY, CANVAS, SEVERITY } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import AiChat from "./AiChat";
 import MyQueueView from "./views/MyQueueView";
 import CaseWorkspaceView from "./views/CaseWorkspaceView";

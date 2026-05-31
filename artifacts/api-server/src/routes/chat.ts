@@ -9,7 +9,7 @@ import {
   buildKnownLinks,
   getAgentCast,
   type KnownLink,
-} from "@workspace/maven-content";
+} from "@workspace/cognirise-content";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();

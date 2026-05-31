@@ -19,7 +19,7 @@ import { useScenarioEngine } from "@/lib/sim/engine";
 import { useLang, tStr } from "@/lib/lang";
 import type { Scenario } from "@/lib/sim/types";
 import DemoTopBar from "./DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import AgentCockpit from "./AgentCockpit";
 import CheckpointModal from "./CheckpointModal";
 import OverviewTab from "./tabs/OverviewTab";

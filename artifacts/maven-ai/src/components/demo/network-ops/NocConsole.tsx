@@ -9,7 +9,7 @@ import { NocDemoLangProvider, useNocDemoLang, useNocDemoT } from "./DemoLangCont
 import { shell } from "./noc-i18n";
 import { BRAND, BRAND_DARK } from "./tokens";
 import DemoTopBar from "../DemoTopBar";
-import { getDemoAccent } from "@workspace/maven-content";
+import { getDemoAccent } from "@workspace/cognirise-content";
 import LiveMapView from "./views/LiveMapView";
 import IncidentWorkspaceView from "./views/IncidentWorkspaceView";
 import ApprovalsView from "./views/ApprovalsView";

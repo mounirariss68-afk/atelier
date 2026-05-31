@@ -1,5 +1,5 @@
 // Long-form marketing copy. Structural identifiers (slugs, ids, titles)
-// live in `@workspace/maven-content`; the assertions at the bottom of
+// live in `@workspace/cognirise-content`; the assertions at the bottom of
 // this file catch drift at module load.
 import {
   services as sharedServices,
@@ -11,7 +11,7 @@ import {
   marketplaceHorizontals as sharedMarketplaceHorizontals,
   marketplaceAgentCasts as sharedAgentCasts,
   homepageStats,
-} from "@workspace/maven-content";
+} from "@workspace/cognirise-content";
 
 export {
   sharedServices as servicesIndex,
@@ -63,14 +63,14 @@ function assertSharedAlignment(
   for (const k of shared) {
     if (!local.has(k)) {
       throw new Error(
-        `[content.ts] ${kind} "${k}" exists in @workspace/maven-content but not in the local marketing copy. Update one or the other so the chat allow-list stays in sync.`,
+        `[content.ts] ${kind} "${k}" exists in @workspace/cognirise-content but not in the local marketing copy. Update one or the other so the chat allow-list stays in sync.`,
       );
     }
   }
   for (const k of local) {
     if (!shared.has(k)) {
       throw new Error(
-        `[content.ts] ${kind} "${k}" exists locally but not in @workspace/maven-content. Add it to lib/maven-content/src/knowledge.ts so the chat assistant can link to it.`,
+        `[content.ts] ${kind} "${k}" exists locally but not in @workspace/cognirise-content. Add it to lib/cognirise-content/src/knowledge.ts so the chat assistant can link to it.`,
       );
     }
   }
@@ -420,7 +420,7 @@ export function founderExpertiseList(f: LocalizedRecord, lang: InsightLang): str
 }
 
 // Localized homepage stat label. homepageStats entries get *Ar / *Tr labels
-// merged in below so the canonical EN data in @workspace/maven-content stays
+// merged in below so the canonical EN data in @workspace/cognirise-content stays
 // the single source of truth for the chat KB.
 export function homepageStatLabel(s: { label: string; labelAr?: string; labelTr?: string }, lang: InsightLang): string {
   if (lang === "ar") return s.labelAr ?? s.label;
@@ -8095,7 +8095,7 @@ export const industries = [
 
 // Canonical, source-cited homepage hero stats — drawn from the same body of
 // published GCC AI research the industries pages cite. The numbers live in
-// `@workspace/maven-content` so the chat assistant can reference them too.
+// `@workspace/cognirise-content` so the chat assistant can reference them too.
 // We overlay AR / TR translations for the human-readable `label` here so the
 // canonical EN data stays the single source of truth for the chat KB while
 // the website renders the active language.
@@ -8626,7 +8626,7 @@ assertSharedAlignment("service slug", services.map((s) => s.slug), sharedService
 assertSharedAlignment("industry id", industries.map((i) => i.id), sharedIndustries.map((i) => i.id));
 assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsights.map((i) => i.slug));
 
-// Marketplace tools live entirely in @workspace/maven-content. The checks
+// Marketplace tools live entirely in @workspace/cognirise-content. The checks
 // below verify the catalogue stays internally consistent against the OTHER
 // shared collections (services, assessments, industries) so a typo in
 // knowledge.ts can never break a Marketplace cross-link silently.
@@ -8678,7 +8678,7 @@ assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsight
     const cast = sharedAgentCasts[t.slug];
     if (!cast) {
       throw new Error(
-        `[content.ts] Marketplace tool "${t.slug}" has no agentCast in lib/maven-content/src/agentCasts.ts. Every tool needs one so the explainer modal renders.`,
+        `[content.ts] Marketplace tool "${t.slug}" has no agentCast in lib/cognirise-content/src/agentCasts.ts. Every tool needs one so the explainer modal renders.`,
       );
     }
     if (cast.agents.length < 3) {
@@ -8731,7 +8731,7 @@ assertSharedAlignment("insight slug", insights.map((i) => i.slug), sharedInsight
   for (const castSlug of Object.keys(sharedAgentCasts)) {
     if (!toolSlugSet.has(castSlug)) {
       throw new Error(
-        `[content.ts] Agent cast slug "${castSlug}" in lib/maven-content/src/agentCasts.ts has no matching marketplace tool. Either add the tool or remove the cast.`,
+        `[content.ts] Agent cast slug "${castSlug}" in lib/cognirise-content/src/agentCasts.ts has no matching marketplace tool. Either add the tool or remove the cast.`,
       );
     }
   }
