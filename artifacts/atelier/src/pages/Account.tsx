@@ -655,13 +655,13 @@ function DecisionMakersGraph({
       positions.set(c.id, { x: step * (i + 1), y: 40 + depthIdx * ROW_H });
     });
   });
-  // Mirror DISPOSITION_TONE per PRD §6.2: gold for champion/supporter,
-  // mute for neutral/unknown, danger for skeptic/blocker.
+  // Mirror DISPOSITION_TONE per PRD §6.2: Cognirise accent for
+  // champion/supporter, mute for neutral/unknown, danger for skeptic/blocker.
   const dispositionFill: Record<string, string> = {
-    champion: "#9C6A1F",
-    supporter: "#7A5316",
-    neutral: "#1E2A47",
-    unknown: "#1E2A47",
+    champion: "#C45BB8",
+    supporter: "#8A5BD6",
+    neutral: "#1B2755",
+    unknown: "#1B2755",
     skeptic: "#7B1F1F",
     blocker: "#7B1F1F",
   };
@@ -680,7 +680,7 @@ function DecisionMakersGraph({
           const b = positions.get(r.toContactId);
           if (!a || !b) return null;
           const stroke =
-            r.type === "blocks" ? "#a83232" : r.type === "partners_with" ? "#E89E2C" : "#3a4a6e";
+            r.type === "blocks" ? "#a83232" : r.type === "partners_with" ? "#C45BB8" : "#3a4a6e";
           const dash = r.type === "partners_with" ? "4 3" : undefined;
           return (
             <line
@@ -712,17 +712,17 @@ function DecisionMakersGraph({
                 width={NODE_W}
                 height={NODE_H}
                 rx={6}
-                fill={dispositionFill[c.disposition] ?? "#1E2A47"}
-                stroke={isSel ? "#E89E2C" : "#2c3a5c"}
+                fill={dispositionFill[c.disposition] ?? "#1B2755"}
+                stroke={isSel ? "#C45BB8" : "#2c3a5c"}
                 strokeWidth={isSel ? 2 : 1}
               />
-              <text x={NODE_W / 2} y={22} textAnchor="middle" fontSize={11} fontWeight={600} fill="#F5EBD6">
+              <text x={NODE_W / 2} y={22} textAnchor="middle" fontSize={11} fontWeight={600} fill="#EEF1FA">
                 {c.fullName.length > 22 ? c.fullName.slice(0, 20) + "…" : c.fullName}
               </text>
-              <text x={NODE_W / 2} y={38} textAnchor="middle" fontSize={9} fill="#C9C2B0" fontFamily="monospace">
+              <text x={NODE_W / 2} y={38} textAnchor="middle" fontSize={9} fill="#9BA8C9" fontFamily="monospace">
                 {(c.title ?? "—").slice(0, 24)}
               </text>
-              <text x={NODE_W / 2} y={50} textAnchor="middle" fontSize={9} fill="#E89E2C" fontFamily="monospace">
+              <text x={NODE_W / 2} y={50} textAnchor="middle" fontSize={9} fill="#C45BB8" fontFamily="monospace">
                 infl {c.influenceScore}/5
               </text>
             </g>
@@ -730,13 +730,13 @@ function DecisionMakersGraph({
         })}
       </svg>
       <div className="flex flex-wrap gap-3 mt-2 text-[10px] font-mono text-text-mute">
-        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#9C6A1F] mr-1" />champion</span>
-        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#7A5316] mr-1" />supporter</span>
-        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#1E2A47] mr-1" />neutral</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#C45BB8] mr-1" />champion</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#8A5BD6] mr-1" />supporter</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-[#1B2755] mr-1" />neutral</span>
         <span><span className="inline-block w-2 h-2 rounded-sm bg-[#7B1F1F] mr-1" />skeptic / blocker</span>
         <span><span className="inline-block w-3 h-px bg-[#3a4a6e] mr-1 align-middle" />reports_to</span>
         <span><span className="inline-block w-3 h-px bg-[#a83232] mr-1 align-middle" />blocks</span>
-        <span><span className="inline-block w-3 h-px border-t border-dashed border-[#E89E2C] mr-1 align-middle" />partners_with</span>
+        <span><span className="inline-block w-3 h-px border-t border-dashed border-[#C45BB8] mr-1 align-middle" />partners_with</span>
       </div>
     </Card>
   );

@@ -110,11 +110,11 @@ export interface ChartPalette {
 }
 
 const DARK_PALETTE: ChartPalette = {
-  axis: "#8FA3C0",
+  axis: "#9BA8C9",
   grid: "rgba(255, 255, 255, 0.08)",
-  tooltipBg: "#15294A",
+  tooltipBg: "#141C42",
   tooltipBorder: "rgba(255, 255, 255, 0.13)",
-  tooltipText: "#F1EEE6",
+  tooltipText: "#EEF1FA",
   success: "#34d399",
   warn: "#fbbf24",
   warnSoft: "rgba(251, 191, 36, 0.40)",
@@ -123,11 +123,11 @@ const DARK_PALETTE: ChartPalette = {
 };
 
 const LIGHT_PALETTE: ChartPalette = {
-  axis: "#4A5B78",
-  grid: "rgba(14, 31, 61, 0.10)",
+  axis: "#4A5675",
+  grid: "rgba(10, 18, 48, 0.10)",
   tooltipBg: "#FFFFFF",
-  tooltipBorder: "rgba(14, 31, 61, 0.15)",
-  tooltipText: "#0E1F3D",
+  tooltipBorder: "rgba(10, 18, 48, 0.15)",
+  tooltipText: "#0A1230",
   success: "#15803D",
   warn: "#B45309",
   warnSoft: "rgba(180, 83, 9, 0.32)",

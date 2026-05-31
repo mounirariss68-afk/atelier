@@ -3,48 +3,55 @@
 @plugin "@tailwindcss/typography";
 
 /* ============================================================
-   THE ATELIER — Brand system
-   Internal employee portal: deep navy + gold, warm cream text,
-   Manrope body, Fraunces italic accent, JetBrains Mono telemetry.
+   THE ATELIER — Cognirise brand system
+   Internal employee portal: deep Cognirise navy + the Cognirise
+   blue→purple→magenta→coral accent, cool near-white text,
+   Plus Jakarta Sans throughout.
 
    Theming (Task #497): every color is a CSS variable so the entire
    app can switch between dark mode (default, navy) and light mode
-   (warm parchment with deep-navy text) by setting `data-theme`
+   (cool off-white with deep-navy text) by setting `data-theme`
    on <html>. The TopNav and `.page-hero` band stay navy in both
    themes via "dark island" scoped overrides so the brand identity
    carries over.
+
+   NB: the `--gold*` token names are retained for stability, but
+   their resolved values are now the Cognirise magenta accent.
    ============================================================ */
 
 :root,
 [data-theme="dark"] {
-  --bg:           #0E1F3D;
-  --bg-deep:      #091428;
-  --bg-elevate:   #15294A;
-  --bg-elevate-2: #1D3559;
-  --border:       #243F66;
+  --bg:           #0A1230;
+  --bg-deep:      #070B22;
+  --bg-elevate:   #141C42;
+  --bg-elevate-2: #1B2755;
+  --border:       #2A3566;
   --border-soft:  rgba(255, 255, 255, 0.06);
-  --text:         #F1EEE6;
-  --text-mute:    #8FA3C0;
-  --text-faint:   #5E708A;
-  --gold:         #E89E2C;
-  --gold-soft:    #F4BC65;
-  --gold-deep:    #B47817;
+  --text:         #EEF1FA;
+  --text-mute:    #9BA8C9;
+  --text-faint:   #5E6A8C;
+  --gold:         #C45BB8;
+  --gold-soft:    #FF7B5A;
+  --gold-deep:    #8A5BD6;
   --success:      #4ADE80;
-  --warn:         #F4BC65;
+  --warn:         #FBBF24;
   --danger:       #F87171;
+
+  /* Cognirise signature accent gradient (blue→purple→magenta→coral). */
+  --cog-grad: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
 
   /* Compositional tokens that used to be hard-coded rgba() values. */
   --grid-line:           rgba(255, 255, 255, 0.025);
   --shadow:              0 30px 60px -20px rgba(0, 0, 0, 0.5);
   --shadow-lift:         0 18px 36px -18px rgba(0, 0, 0, 0.6);
   --shadow-card-hover:   0 24px 44px -20px rgba(0, 0, 0, 0.7);
-  --gold-tint-08:        rgba(232, 158, 44, 0.08);
-  --gold-tint-25:        rgba(232, 158, 44, 0.25);
-  --gold-tint-30:        rgba(232, 158, 44, 0.30);
-  --gold-tint-35:        rgba(232, 158, 44, 0.35);
-  --gold-tint-45:        rgba(232, 158, 44, 0.45);
+  --gold-tint-08:        rgba(196, 91, 184, 0.10);
+  --gold-tint-25:        rgba(196, 91, 184, 0.25);
+  --gold-tint-30:        rgba(196, 91, 184, 0.30);
+  --gold-tint-35:        rgba(196, 91, 184, 0.35);
+  --gold-tint-45:        rgba(196, 91, 184, 0.45);
   --success-tint-40:     rgba(74, 222, 128, 0.40);
-  --warn-tint-40:        rgba(244, 188, 101, 0.40);
+  --warn-tint-40:        rgba(251, 191, 36, 0.40);
   --danger-tint-40:      rgba(248, 113, 113, 0.40);
 
   --radius:       4px;
@@ -52,42 +59,42 @@
   --container:    1240px;
   --ease:         cubic-bezier(0.22, 1, 0.36, 1);
 
-  --font-sans: 'Manrope', system-ui, -apple-system, sans-serif;
-  --font-serif: 'Fraunces', Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Plus Jakarta Sans', Georgia, serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
 /* ----- Light theme -----
-   Warm parchment base, deep-navy text, slate muted, hairline neutral
-   borders, retuned gold for AA contrast on light surfaces. The
-   navy TopNav + page-hero brand band is preserved by re-declaring
-   dark tokens inside their scoped "dark islands" below. */
+   Cool off-white base, deep Cognirise-navy text, slate muted, hairline
+   neutral borders, a deepened Cognirise magenta for AA contrast on light
+   surfaces. The navy TopNav + page-hero brand band is preserved by
+   re-declaring dark tokens inside their scoped "dark islands" below. */
 [data-theme="light"] {
-  --bg:           #F7F3EA;
-  --bg-deep:      #EFE9D9;
+  --bg:           #F6F7FB;
+  --bg-deep:      #ECEFF7;
   --bg-elevate:   #FFFFFF;
-  --bg-elevate-2: #F2ECDB;
-  --border:       #D9CFB6;
-  --border-soft:  rgba(14, 31, 61, 0.08);
-  --text:         #0E1F3D;
-  --text-mute:    #4A5B78;
-  --text-faint:   #8B96AD;
-  --gold:         #B47817;
-  --gold-soft:    #D89A2C;
-  --gold-deep:    #8B5A0F;
+  --bg-elevate-2: #F1F3FA;
+  --border:       #D8DEEC;
+  --border-soft:  rgba(10, 18, 48, 0.08);
+  --text:         #0A1230;
+  --text-mute:    #4A5675;
+  --text-faint:   #8A93AD;
+  --gold:         #A6348F;
+  --gold-soft:    #C45BB8;
+  --gold-deep:    #7A2E6E;
   --success:      #15803D;
   --warn:         #B45309;
   --danger:       #B91C1C;
 
-  --grid-line:           rgba(14, 31, 61, 0.04);
-  --shadow:              0 24px 48px -20px rgba(14, 31, 61, 0.18);
-  --shadow-lift:         0 14px 28px -16px rgba(14, 31, 61, 0.16);
-  --shadow-card-hover:   0 22px 40px -22px rgba(14, 31, 61, 0.22);
-  --gold-tint-08:        rgba(180, 120, 23, 0.10);
-  --gold-tint-25:        rgba(180, 120, 23, 0.28);
-  --gold-tint-30:        rgba(180, 120, 23, 0.34);
-  --gold-tint-35:        rgba(180, 120, 23, 0.38);
-  --gold-tint-45:        rgba(180, 120, 23, 0.50);
+  --grid-line:           rgba(10, 18, 48, 0.04);
+  --shadow:              0 24px 48px -20px rgba(10, 18, 48, 0.18);
+  --shadow-lift:         0 14px 28px -16px rgba(10, 18, 48, 0.16);
+  --shadow-card-hover:   0 22px 40px -22px rgba(10, 18, 48, 0.22);
+  --gold-tint-08:        rgba(166, 52, 143, 0.10);
+  --gold-tint-25:        rgba(166, 52, 143, 0.26);
+  --gold-tint-30:        rgba(166, 52, 143, 0.32);
+  --gold-tint-35:        rgba(166, 52, 143, 0.36);
+  --gold-tint-45:        rgba(166, 52, 143, 0.48);
   --success-tint-40:     rgba(21, 128, 61, 0.32);
   --warn-tint-40:        rgba(180, 83, 9, 0.32);
   --danger-tint-40:      rgba(185, 28, 28, 0.32);
@@ -182,7 +189,7 @@
    ============================================================ */
 
 @layer components {
-  /* Eyebrow: JetBrains Mono uppercase 11px with a 24px gold leading rule */
+  /* Eyebrow: mono uppercase 11px with a 24px accent leading rule */
   .eyebrow {
     display: inline-flex;
     align-items: center;
@@ -209,12 +216,12 @@
     background: var(--gold);
   }
 
-  /* Cognirise-style 48×3 gold section divider — used to introduce major sections. */
+  /* Cognirise-style 48×3 gradient section divider — used to introduce major sections. */
   .section-divider {
     display: block;
     width: 48px;
     height: 3px;
-    background: var(--gold);
+    background: var(--cog-grad);
     border-radius: 2px;
   }
 
@@ -417,23 +424,23 @@
 
 [data-theme="light"] .page-hero,
 [data-theme="light"] .atelier-topnav {
-  --bg:           #0E1F3D;
-  --bg-deep:      #091428;
-  --bg-elevate:   #15294A;
-  --bg-elevate-2: #1D3559;
-  --border:       #243F66;
+  --bg:           #0A1230;
+  --bg-deep:      #070B22;
+  --bg-elevate:   #141C42;
+  --bg-elevate-2: #1B2755;
+  --border:       #2A3566;
   --border-soft:  rgba(255, 255, 255, 0.06);
-  --text:         #F1EEE6;
-  --text-mute:    #8FA3C0;
-  --text-faint:   #5E708A;
-  --gold:         #E89E2C;
-  --gold-soft:    #F4BC65;
-  --gold-deep:    #B47817;
-  --gold-tint-08: rgba(232, 158, 44, 0.08);
-  --gold-tint-25: rgba(232, 158, 44, 0.25);
-  --gold-tint-30: rgba(232, 158, 44, 0.30);
-  --gold-tint-35: rgba(232, 158, 44, 0.35);
-  --gold-tint-45: rgba(232, 158, 44, 0.45);
+  --text:         #EEF1FA;
+  --text-mute:    #9BA8C9;
+  --text-faint:   #5E6A8C;
+  --gold:         #C45BB8;
+  --gold-soft:    #FF7B5A;
+  --gold-deep:    #8A5BD6;
+  --gold-tint-08: rgba(196, 91, 184, 0.10);
+  --gold-tint-25: rgba(196, 91, 184, 0.25);
+  --gold-tint-30: rgba(196, 91, 184, 0.30);
+  --gold-tint-35: rgba(196, 91, 184, 0.35);
+  --gold-tint-45: rgba(196, 91, 184, 0.45);
   background: var(--bg);
   color: var(--text);
 }

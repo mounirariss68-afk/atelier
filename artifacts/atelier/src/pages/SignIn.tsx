@@ -3,7 +3,7 @@ import { Card, SectionHead, PillButton } from "@/components/ui/primitives";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { FIRM_NAME } from "@/lib/firm";
+import Logo from "@/components/ui/Logo";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SignIn() {
@@ -27,7 +27,9 @@ export default function SignIn() {
     <div className="flex-1 flex flex-col items-center justify-center py-20 px-4">
       <div className="w-full max-w-md space-y-12">
         <div className="text-center space-y-6">
-          <div className="font-mono text-sm tracking-[0.2em] text-gold uppercase">{FIRM_NAME}</div>
+          <div className="flex justify-center">
+            <Logo variant="mark" size="lg" />
+          </div>
           <SectionHead 
             headline={<>Sign in to <em className="accent">The Atelier</em></>}
             lede="Select a persona to enter the workspace."
