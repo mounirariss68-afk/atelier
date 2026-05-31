@@ -6,10 +6,10 @@ import { services as sharedServices } from "@workspace/maven-content";
 import { useLang, tStr } from "@/lib/lang";
 
 const offices = [
-  { city: "Dubai", country: "UAE", address: "Jumeirah Lakes Towers, Cluster Y\nSwiss Tower 3402, 34th Floor", phone: "+971 4 561 3707", primary: true },
-  { city: "Riyadh", country: "KSA", address: "4288, Anas Bin Malik\n6745 Al Malqa District", phone: "+966 11 257 1940", primary: true },
-  { city: "Abu Dhabi", country: "UAE", address: "Block B Offices\nMusaffah, M40, 91", phone: "+971 5 259 91055", primary: false },
-  { city: "Doha", country: "Qatar", address: "Office 241-3, Floor 2\nRegus, No. 67", phone: "+974 442 31111", primary: false },
+  { city: "Abu Dhabi", country: "UAE", phone: "+971 5 259 91055", primary: false },
+  { city: "Dubai", country: "UAE", phone: "+971 4 561 3707", primary: true },
+  { city: "Riyadh", country: "KSA", phone: "+966 11 257 1940", primary: true },
+  { city: "Istanbul", country: "Türkiye", phone: "+90 212 970 1940", primary: false },
 ];
 
 const SERVICE_INTERESTS = sharedServices.map((s) => s.title);
@@ -49,7 +49,7 @@ const COPY = {
   sendMsg: { en: "Send message", ar: "إرسال الرسالة", tr: "Mesajı gönder" },
   privacy: { en: "By submitting, you agree to Cognirise's privacy policy.", ar: "بإرسالكم النموذج، فإنكم توافقون على سياسة خصوصية Cognirise.", tr: "Göndererek Cognirise'nın gizlilik politikasını kabul etmiş olursunuz." },
   officesTitle: { en: "Our offices", ar: "مكاتبنا", tr: "Ofislerimiz" },
-  officesSub: { en: "Present across the GCC's four main business centers.", ar: "حضور في المراكز التجارية الأربعة الرئيسية في الخليج.", tr: "Körfez'in dört ana iş merkezinde mevcudiyet." },
+  officesSub: { en: "Present across MENAT's key business centers — Abu Dhabi, Dubai, Riyadh, and Istanbul.", ar: "حضور في أبرز المراكز التجارية بالشرق الأوسط وشمال أفريقيا وتركيا — أبوظبي ودبي والرياض وإسطنبول.", tr: "MENAT'ın önemli iş merkezlerinde mevcudiyet — Abu Dabi, Dubai, Riyad ve İstanbul." },
   mainOffice: { en: "Main office", ar: "المكتب الرئيسي", tr: "Ana ofis" },
   emailDirect: { en: "Email us directly", ar: "راسلونا مباشرةً", tr: "Doğrudan bize e-posta gönderin" },
 };
@@ -257,7 +257,6 @@ export default function Contact() {
                     <span className="font-bold text-[#0A1230]">{office.city}, {office.country}</span>
                     {office.primary && <span className="text-xs font-semibold text-[#5B7CFF] bg-[#5B7CFF]/10 px-2 py-0.5 rounded-full">{tStr(COPY.mainOffice, lang)}</span>}
                   </div>
-                  <p className="text-sm text-gray-600 whitespace-pre-line pl-5 mb-1.5">{office.address}</p>
                   <div className="flex items-center gap-1.5 pl-5">
                     <Phone size={12} className="text-gray-400" />
                     <a href={`tel:${office.phone.replace(/\s/g, "")}`} className="text-sm text-gray-500 hover:text-[#5B7CFF] transition-colors">{office.phone}</a>

@@ -492,7 +492,7 @@ export default function AssessmentResults() {
           <p className="text-lg text-[#0A1230] mt-2">
             {t({ en: "Reference", ar: "المرجع", tr: "Referans" })}: <span className="font-mono">{data.publicId}</span>
           </p>
-          <p className="text-sm text-gray-600 mt-1">{t({ en: "Issued by Cognirise · Boutique GCC AI advisory & engineering", ar: "صادر عن Cognirise · استشارات وهندسة AI الخليج", tr: "Cognirise tarafından düzenlendi · Butik Körfez AI danışmanlık ve mühendislik" })}</p>
+          <p className="text-sm text-gray-600 mt-1">{t({ en: "Issued by Cognirise · Boutique MENAT AI advisory & engineering", ar: "صادر عن Cognirise · استشارات وهندسة AI لمنطقة الشرق الأوسط وشمال أفريقيا وتركيا", tr: "Cognirise tarafından düzenlendi · Butik MENAT AI danışmanlık ve mühendislik" })}</p>
         </section>
 
         {/* Reinvention CTA (for ARI/MVI/DAFI) */}

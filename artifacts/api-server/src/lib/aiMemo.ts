@@ -12,7 +12,7 @@ interface MemoArgs {
 
 function buildSystemPrompt(args: MemoArgs): string {
   const { def, profile, result } = args;
-  return `You are writing a 1-page executive memo signed by the two founders of Cognirise — a boutique GCC AI advisory and engineering firm.
+  return `You are writing a 1-page executive memo signed by the two founders of Cognirise — a boutique MENAT AI advisory and engineering firm operating across the Middle East, North Africa, and Türkiye.
 
 Tone: senior, McKinsey-grade, direct, candid. No fluff. No bullet-list filler. Numbers where possible. Speak like a partner who has run 20 of these engagements.
 

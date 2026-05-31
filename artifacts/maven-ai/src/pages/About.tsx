@@ -23,9 +23,9 @@ const HERO_PARA = {
 const STORY_TITLE = { en: "Why we built Cognirise", ar: "لماذا أسسنا Cognirise", tr: "Cognirise'ı neden kurduk" };
 const STORY_PARAS = [
   {
-    en: "Across the GCC, the AI opportunity is undeniable. National AI strategies, sovereign fund mandates, progressive regulatory frameworks — the region has created the conditions for AI-led transformation at an extraordinary scale.",
-    ar: "عبر دول الخليج، فرصة الذكاء الاصطناعي لا يمكن إنكارها. الاستراتيجيات الوطنية للذكاء الاصطناعي، تفويضات الصناديق السيادية، الأطر التنظيمية التقدمية — هيّأت المنطقة الظروف لتحوّل قائم على الذكاء الاصطناعي بنطاق استثنائي.",
-    tr: "Körfez genelinde, AI fırsatı yadsınamaz. Ulusal AI stratejileri, egemen fon mandatları, ilerici düzenleyici çerçeveler — bölge, olağanüstü ölçekte AI öncülüğünde dönüşüm için koşulları yarattı.",
+    en: "Across MENAT, the AI opportunity is undeniable. National AI strategies, sovereign fund mandates, progressive regulatory frameworks — the region has created the conditions for AI-led transformation at an extraordinary scale.",
+    ar: "عبر الشرق الأوسط وشمال أفريقيا وتركيا، فرصة الذكاء الاصطناعي لا يمكن إنكارها. الاستراتيجيات الوطنية للذكاء الاصطناعي، تفويضات الصناديق السيادية، الأطر التنظيمية التقدمية — هيّأت المنطقة الظروف لتحوّل قائم على الذكاء الاصطناعي بنطاق استثنائي.",
+    tr: "MENAT genelinde, AI fırsatı yadsınamaz. Ulusal AI stratejileri, egemen fon mandatları, ilerici düzenleyici çerçeveler — bölge, olağanüstü ölçekte AI öncülüğünde dönüşüm için koşulları yarattı.",
   },
   {
     en: "What the region was missing was a delivery partner built for this moment. Not the large Tier-1 firms, whose pyramid models and partner economics make true production delivery structurally difficult. Not the pure-play technology vendors, who sell tools without the strategic and change management capability to make those tools work inside complex organizations.",
@@ -33,9 +33,9 @@ const STORY_PARAS = [
     tr: "Bölgenin eksik olduğu şey, bu an için inşa edilmiş bir teslimat ortağıydı. Piramit modelleri ve ortak ekonomileri gerçek üretim teslimini yapısal olarak zorlaştıran büyük Tier-1 firmaları değil. Bu araçların karmaşık kuruluşlarda çalışmasını sağlayacak stratejik ve değişim yönetimi yeteneğine sahip olmadan araç satan saf teknoloji satıcıları da değil.",
   },
   {
-    en: "Cognirise was founded by two partners with a combined three decades of consulting, engineering, and AI delivery experience across the GCC and globally. We built the firm around four structural choices that, together, make us better at this specific work: production-led delivery, boutique design, agentic-native capability, and platform-agnostic economics.",
-    ar: "تأسست Cognirise على يد شريكَين بخبرة مجمّعة تمتد لثلاثة عقود في الاستشارات والهندسة وتسليم الذكاء الاصطناعي عبر دول الخليج وعالمياً. بنينا الشركة حول أربعة خيارات هيكلية تجعلنا، مجتمعة، أفضل في هذا العمل المحدد: تسليم بقيادة الإنتاج، تصميم بوتيك، قدرة وكيلية أصلية، واقتصاديات مستقلة عن المنصات.",
-    tr: "Cognirise, Körfez'de ve küresel olarak danışmanlık, mühendislik ve AI teslimatı alanında toplam üç on yıllık deneyime sahip iki ortak tarafından kuruldu. Firmayı, birlikte bu özel işte bizi daha iyi kılan dört yapısal seçim etrafında inşa ettik: üretim öncülüğünde teslimat, butik tasarım, ajansal-yerli kapasite ve platform-bağımsız ekonomi.",
+    en: "Cognirise was founded by two partners with a combined three decades of consulting, engineering, and AI delivery experience across MENAT and globally. We built the firm around four structural choices that, together, make us better at this specific work: production-led delivery, boutique design, agentic-native capability, and platform-agnostic economics.",
+    ar: "تأسست Cognirise على يد شريكَين بخبرة مجمّعة تمتد لثلاثة عقود في الاستشارات والهندسة وتسليم الذكاء الاصطناعي عبر الشرق الأوسط وشمال أفريقيا وتركيا وعالمياً. بنينا الشركة حول أربعة خيارات هيكلية تجعلنا، مجتمعة، أفضل في هذا العمل المحدد: تسليم بقيادة الإنتاج، تصميم بوتيك، قدرة وكيلية أصلية، واقتصاديات مستقلة عن المنصات.",
+    tr: "Cognirise, MENAT genelinde ve küresel olarak danışmanlık, mühendislik ve AI teslimatı alanında toplam üç on yıllık deneyime sahip iki ortak tarafından kuruldu. Firmayı, birlikte bu özel işte bizi daha iyi kılan dört yapısal seçim etrafında inşa ettik: üretim öncülüğünde teslimat, butik tasarım, ajansal-yerli kapasite ve platform-bağımsız ekonomi.",
   },
   {
     en: "We are a sister company of Maven Insights, one of the GCC's leading management consulting firms, giving us access to a 200+ consultant bench, deep regional client relationships, and the change management and organizational capability that pure AI firms typically lack.",
@@ -55,11 +55,11 @@ const STAT_CARDS = [
   },
   {
     num: "4",
-    title: { en: "GCC offices", ar: "مكاتب في دول الخليج", tr: "Körfez ofisi" },
+    title: { en: "MENAT offices", ar: "مكاتب في الشرق الأوسط وشمال أفريقيا وتركيا", tr: "MENAT ofisleri" },
     desc: {
-      en: "Day-one presence in Dubai, Riyadh, Abu Dhabi, and Doha — the markets where GCC AI is being built.",
-      ar: "حضور من اليوم الأول في دبي والرياض وأبوظبي والدوحة — الأسواق التي يُبنى فيها الذكاء الاصطناعي الخليجي.",
-      tr: "Dubai, Riyad, Abu Dabi ve Doha'da ilk günden itibaren varlık — Körfez AI'ının inşa edildiği pazarlar.",
+      en: "Day-one presence in Abu Dhabi, Dubai, Riyadh, and Istanbul — across the Middle East, North Africa, and Türkiye.",
+      ar: "حضور من اليوم الأول في أبوظبي ودبي والرياض وإسطنبول — عبر الشرق الأوسط وشمال أفريقيا وتركيا.",
+      tr: "Abu Dabi, Dubai, Riyad ve İstanbul'da ilk günden itibaren varlık — Orta Doğu, Kuzey Afrika ve Türkiye genelinde.",
     },
   },
 ];
@@ -78,9 +78,9 @@ const THESIS_CARDS = [
 ];
 const FOUNDERS_TITLE = { en: "Our founding team", ar: "فريقنا المؤسس", tr: "Kurucu ekibimiz" };
 const FOUNDERS_INTRO = {
-  en: "Two partners. Complementary disciplines. One shared conviction: GCC organizations deserve a delivery partner built for this moment.",
-  ar: "شريكان. تخصصات متكاملة. قناعة واحدة مشتركة: تستحق المؤسسات الخليجية شريك تنفيذ مُصمّماً لهذه اللحظة.",
-  tr: "İki ortak. Tamamlayıcı disiplinler. Tek ortak kanaat: Körfez kuruluşları bu an için inşa edilmiş bir teslimat ortağını hak ediyor.",
+  en: "Two partners. Complementary disciplines. One shared conviction: MENAT organizations deserve a delivery partner built for this moment.",
+  ar: "شريكان. تخصصات متكاملة. قناعة واحدة مشتركة: تستحق مؤسسات الشرق الأوسط وشمال أفريقيا وتركيا شريك تنفيذ مُصمّماً لهذه اللحظة.",
+  tr: "İki ortak. Tamamlayıcı disiplinler. Tek ortak kanaat: MENAT kuruluşları bu an için inşa edilmiş bir teslimat ortağını hak ediyor.",
 };
 const OPMODEL_TITLE = { en: "Our operating model", ar: "نموذج تشغيلنا", tr: "Operasyon modelimiz" };
 const OPMODEL_INTRO = {

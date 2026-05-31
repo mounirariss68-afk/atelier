@@ -232,9 +232,9 @@ export const industries: IndustryEntry[] = [
   { id: "telecom", title: "Telecommunications", subtitle: "From legacy infrastructure to AI-native operations" },
   { id: "financial-services", title: "Financial Services", subtitle: "AI-grade governance for the region's most demanding regulators" },
   { id: "energy-commodities", title: "Energy & Commodities", subtitle: "Powering the energy transition with production AI" },
-  { id: "retail-consumer", title: "Retail & Consumer Products", subtitle: "From dukan to D2C — AI-native retail for the GCC consumer" },
-  { id: "travel-hospitality", title: "Travel & Hospitality", subtitle: "AI for the GCC's tourism megaprojects and global hospitality brands" },
-  { id: "automotive", title: "Automotive", subtitle: "Building the GCC's mobility future, from EV mandates to autonomous" },
+  { id: "retail-consumer", title: "Retail & Consumer Products", subtitle: "From dukan to D2C — AI-native retail for the MENAT consumer" },
+  { id: "travel-hospitality", title: "Travel & Hospitality", subtitle: "AI for MENAT's tourism megaprojects and global hospitality brands" },
+  { id: "automotive", title: "Automotive", subtitle: "Building MENAT's mobility future, from EV mandates to autonomous" },
 ];
 
 export const insights: InsightEntry[] = [
@@ -2051,8 +2051,8 @@ export function getDemoAccent(slug: string, fallback = "#156082"): string {
 
 export const firmFacts = {
   positioning:
-    "Cognirise is a boutique GCC AI advisory and engineering firm — sister firm to Maven Insights (~200 consultant bench). We exist to close the gap between enterprise AI ambition and production outcomes.",
-  offices: "4 GCC offices (Dubai, Riyadh and partner presence across the Gulf).",
+    "Cognirise is a boutique MENAT AI advisory and engineering firm — operating across the Middle East, North Africa, and Türkiye, and a sister firm to Maven Insights (~200 consultant bench). We exist to close the gap between enterprise AI ambition and production outcomes.",
+  offices: "Four offices across MENAT — Abu Dhabi, Dubai, Riyadh, and Istanbul. No street addresses are published.",
   promise:
     "Senior partners on every call, every deliverable. 90-day MVP commitment from kickoff to production. Sovereign on-prem capable for national security environments.",
   pricing:

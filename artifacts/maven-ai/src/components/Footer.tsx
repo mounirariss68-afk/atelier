@@ -3,46 +3,26 @@ import { Linkedin, Twitter, Mail, MapPin, Phone } from "lucide-react";
 import Logo from "./Logo";
 import { useLang, tStr, type T } from "@/lib/lang";
 
-const offices: { city: T; country: T; address: T; phone: string }[] = [
+const offices: { city: T; country: T; phone: string }[] = [
+  {
+    city: { en: "Abu Dhabi", ar: "أبو ظبي", tr: "Abu Dabi" },
+    country: { en: "UAE", ar: "الإمارات", tr: "BAE" },
+    phone: "+971 5 259 91055",
+  },
   {
     city: { en: "Dubai", ar: "دبي", tr: "Dubai" },
     country: { en: "UAE", ar: "الإمارات", tr: "BAE" },
-    address: {
-      en: "Jumeirah Lakes Towers, Cluster Y\nSwiss Tower 3402, 34th Floor",
-      ar: "أبراج بحيرات جميرا، مجموعة Y\nبرج سويس 3402، الطابق 34",
-      tr: "Jumeirah Lakes Towers, Küme Y\nSwiss Tower 3402, 34. Kat",
-    },
     phone: "+971 4 561 3707",
   },
   {
     city: { en: "Riyadh", ar: "الرياض", tr: "Riyad" },
     country: { en: "KSA", ar: "السعودية", tr: "S. Arabistan" },
-    address: {
-      en: "4288, Anas Bin Malik\n6745 Al Malqa District",
-      ar: "4288، أنس بن مالك\n6745 حي الملقا",
-      tr: "4288, Anas Bin Malik\n6745 Al Malqa Bölgesi",
-    },
     phone: "+966 11 257 1940",
   },
   {
-    city: { en: "Abu Dhabi", ar: "أبو ظبي", tr: "Abu Dabi" },
-    country: { en: "UAE", ar: "الإمارات", tr: "BAE" },
-    address: {
-      en: "Block B Offices\nMusaffah, M40, 91",
-      ar: "مكاتب البلوك B\nمصفح، M40، 91",
-      tr: "Blok B Ofisleri\nMusaffah, M40, 91",
-    },
-    phone: "+971 5 259 91055",
-  },
-  {
-    city: { en: "Doha", ar: "الدوحة", tr: "Doha" },
-    country: { en: "Qatar", ar: "قطر", tr: "Katar" },
-    address: {
-      en: "Office 241-3, Floor 2\nRegus, No. 67",
-      ar: "مكتب 241-3، الطابق 2\nريجوس، رقم 67",
-      tr: "Ofis 241-3, 2. Kat\nRegus, No. 67",
-    },
-    phone: "+974 442 31111",
+    city: { en: "Istanbul", ar: "إسطنبول", tr: "İstanbul" },
+    country: { en: "Türkiye", ar: "تركيا", tr: "Türkiye" },
+    phone: "+90 212 970 1940",
   },
 ];
 
@@ -186,7 +166,6 @@ export default function Footer() {
                   <MapPin size={12} className="text-[#5B7CFF]" />
                   <span className="text-white font-semibold text-sm">{t(office.city)}, {t(office.country)}</span>
                 </div>
-                <p className="text-gray-500 text-xs leading-relaxed whitespace-pre-line">{t(office.address)}</p>
                 <div className="flex items-center gap-1 mt-1.5">
                   <Phone size={10} className="text-gray-500" />
                   <p className="text-gray-500 text-xs">{office.phone}</p>
