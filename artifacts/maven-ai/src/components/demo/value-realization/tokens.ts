@@ -1,5 +1,5 @@
 // Brand tokens for the CFO Benefits Cockpit. Accent comes from
-// `marketplaceTools["value-realization"].accent` (#C45BB8 — Maven amber)
+// `marketplaceTools["value-realization"].accent` (#C45BB8 — Cognirise amber)
 // in `lib/maven-content/src/knowledge.ts`. Per the shared design language
 // doc, every hex used by this surface flows through this module so future
 // restyles are one-line changes.

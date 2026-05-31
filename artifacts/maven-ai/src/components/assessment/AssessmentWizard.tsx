@@ -54,7 +54,7 @@ export default function AssessmentWizard({ def, teamToken }: Props) {
   const { lang, dir } = useLang();
   const [, navigate] = useLocation();
   const storageKey = `cognirise-wizard-${def.slug}`;
-  const legacyStorageKey = `maven-ai-wizard-${def.slug}`;
+  const legacyStorageKey = `cognirise-wizard-${def.slug}`;
 
   useEffect(() => {
     if (typeof window === "undefined") return;

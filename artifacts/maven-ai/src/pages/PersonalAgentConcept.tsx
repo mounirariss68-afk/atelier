@@ -208,7 +208,7 @@ export default function PersonalAgentConcept() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `maven-personal-agent-concept-${lang}-${new Date().toISOString().slice(0, 10)}.md`;
+    a.download = `cognirise-personal-agent-concept-${lang}-${new Date().toISOString().slice(0, 10)}.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -219,7 +219,7 @@ export default function PersonalAgentConcept() {
       {/* Hero */}
       <section className="bg-gradient-to-br from-[#0A1230] via-[#091828] to-[#0A1230] text-white py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link href="/marketplace/maven-personal-agent" className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-xs font-bold uppercase tracking-widest mb-4">
+          <Link href="/marketplace/cognirise-personal-agent" className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-xs font-bold uppercase tracking-widest mb-4">
             <ArrowLeft size={12} className="rtl:rotate-180" />
             {tStr(COPY.back, lang)}
           </Link>
@@ -233,11 +233,11 @@ export default function PersonalAgentConcept() {
             {tStr(COPY.blurb, lang)}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Link href="/demo/maven-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]">
+            <Link href="/demo/cognirise-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]">
               <MessageSquare size={12} /> {tStr(COPY.openCockpit, lang)}
               <ExternalLink size={10} />
             </Link>
-            <Link href="/demo/maven-personal-agent/mind" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 text-white font-bold text-xs hover:bg-white/20">
+            <Link href="/demo/cognirise-personal-agent/mind" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 text-white font-bold text-xs hover:bg-white/20">
               <Brain size={12} /> {tStr(COPY.openMind, lang)}
               <ExternalLink size={10} />
             </Link>
@@ -264,10 +264,10 @@ export default function PersonalAgentConcept() {
             {tStr(COPY.outroBody, lang)}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Link href="/demo/maven-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]">
+            <Link href="/demo/cognirise-personal-agent/cockpit" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]">
               <MessageSquare size={12} /> {tStr(COPY.openCockpit, lang)}
             </Link>
-            <Link href="/demo/maven-personal-agent/mind" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0A1230] text-white font-bold text-xs hover:bg-[#091828]">
+            <Link href="/demo/cognirise-personal-agent/mind" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0A1230] text-white font-bold text-xs hover:bg-[#091828]">
               <Brain size={12} /> {tStr(COPY.openMind, lang)}
             </Link>
           </div>

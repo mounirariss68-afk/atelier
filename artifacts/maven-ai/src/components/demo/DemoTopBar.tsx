@@ -90,7 +90,7 @@ export interface DemoTopBarProps {
 /**
  * Standardised navy top bar shared by every Cognirise marketplace demo.
  *
- * Layout (LTR; mirrored under RTL): back chevron → Maven logo → divider →
+ * Layout (LTR; mirrored under RTL): back chevron → Cognirise logo → divider →
  * brand tag + platform title → optional action button → notifications bell
  * with dropdown → EN/AR pill → optional switch-view button → persona block.
  */

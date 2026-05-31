@@ -89,7 +89,7 @@ const STARTERS_TR = [
 ];
 
 const SESSION_KEY = "cognirise-chat-open";
-const LEGACY_SESSION_KEY = "maven-ai-chat-open";
+const LEGACY_SESSION_KEY = "cognirise-chat-open";
 
 if (typeof window !== "undefined") {
   try {

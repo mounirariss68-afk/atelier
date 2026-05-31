@@ -14,7 +14,7 @@ const LangContext = createContext<LangContextValue>({
   dir: "ltr",
 });
 
-const KEY = "maven-ai-lang";
+const KEY = "cognirise-lang";
 
 function isLang(v: unknown): v is Lang {
   return v === "en" || v === "ar" || v === "tr";

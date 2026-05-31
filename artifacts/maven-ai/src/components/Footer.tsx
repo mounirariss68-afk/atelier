@@ -44,7 +44,7 @@ const F: Record<string, T> = {
   terms: { en: "Terms of Use", ar: "شروط الاستخدام", tr: "Kullanım Şartları" },
   emailUs: { en: "Email us directly", ar: "راسلنا مباشرة", tr: "Doğrudan e-posta gönderin" },
   // company links
-  aboutMaven: { en: "About Cognirise", ar: "عن Cognirise", tr: "Cognirise Hakkında" },
+  aboutCognirise: { en: "About Cognirise", ar: "عن Cognirise", tr: "Cognirise Hakkında" },
   ourFounders: { en: "Our Founders", ar: "مؤسسونا", tr: "Kurucularımız" },
   howWeWork: { en: "How We Work", ar: "كيف نعمل", tr: "Nasıl Çalışırız" },
   contactUs: { en: "Contact Us", ar: "تواصل معنا", tr: "Bize Ulaşın" },
@@ -82,7 +82,7 @@ export default function Footer() {
   const t = (s: T) => tStr(s, lang);
 
   const companyLinks = [
-    { href: "/about", label: F.aboutMaven, external: false },
+    { href: "/about", label: F.aboutCognirise, external: false },
     { href: "/about#founders", label: F.ourFounders, external: false },
     { href: "/about#operating-model", label: F.howWeWork, external: false },
     { href: "/contact", label: F.contactUs, external: false },

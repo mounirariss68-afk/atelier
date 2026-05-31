@@ -313,7 +313,7 @@
   font-weight: 600;
 }
 .article-content tr:nth-child(even) td { background: #F8FAFC; }
-.article-content .maven-note {
+.article-content .source-note {
   background: #FDF4FB;
   border-left: 4px solid #C45BB8;
   padding: 0.75rem 1rem;
@@ -322,7 +322,7 @@
   color: #0A1230;
   border-radius: 0.25rem;
 }
-[dir="rtl"] .article-content .maven-note {
+[dir="rtl"] .article-content .source-note {
   border-left: none;
   border-right: 4px solid #C45BB8;
 }

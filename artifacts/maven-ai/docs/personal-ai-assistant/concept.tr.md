@@ -319,5 +319,5 @@ Bu belgedeki her karar bir seed-veri satırına eşlenir, böylece demolar konse
 | Çalışana ait, sonsuza dek ücretsiz kişisel kapsam | Marketplace detay konsept belgesi ve fiyatlandırma şeridi | yukarıdaki bölüm 18 |
 | Yönetici gözlemlenebilirliği yalnızca toplam | Konsept belgesi; demoda inşa edilmedi (kapsam dışı) | yukarıdaki bölüm 13 |
 | Cam-kutu ilkesi | Cockpit Bağlam-kullanılan şeridi + her makbuz | `Cockpit.tsx` şerit oluşturma |
-| Beş alt-ajan kadroda adlandırılır | Marketplace detay "Bu nasıl çalışır?" modal'ı | `agentCasts.ts → maven-personal-agent` |
+| Beş alt-ajan kadroda adlandırılır | Marketplace detay "Bu nasıl çalışır?" modal'ı | `agentCasts.ts → cognirise-personal-agent` |
 | Konsept belgesi sözleşmedir | Marketplace detay "Konsept & araştırma" bağlantısı | `/personal-agent/concept` rotası |

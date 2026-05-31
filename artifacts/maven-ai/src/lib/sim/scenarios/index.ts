@@ -19,7 +19,7 @@ import sovereignData from "./sovereign-data-steward";
 import knowledgeConcierge from "./enterprise-knowledge-concierge";
 import tenderResponse from "./tender-response-studio";
 import arcelikTeknik from "./arcelik-fiyat-istihbarati";
-import personalAgent from "./maven-personal-agent";
+import personalAgent from "./cognirise-personal-agent";
 import tasamaPayrollHub from "./tasama-payroll-hub";
 
 const SCENARIOS: Record<string, Scenario> = {
@@ -40,7 +40,7 @@ const SCENARIOS: Record<string, Scenario> = {
   "enterprise-knowledge-concierge": knowledgeConcierge,
   "arcelik-fiyat-istihbarati": arcelikTeknik,
   "arcelik-fiyat-istihbarati/teknik": arcelikTeknik,
-  "maven-personal-agent": personalAgent,
+  "cognirise-personal-agent": personalAgent,
   "tasama-payroll-hub": tasamaPayrollHub,
   "tasama-payroll-hub/teknik": tasamaPayrollHub,
 };

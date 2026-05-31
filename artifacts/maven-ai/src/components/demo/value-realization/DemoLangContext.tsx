@@ -11,7 +11,7 @@ interface DemoLangContextValue {
 /**
  * The CFO Benefits Cockpit speaks EN + AR only, but the marketplace
  * scenarios it sits next to (e.g. /demo/value-realization/teknik) all
- * read from the workspace-wide `useLang()` (`maven-ai-lang` in
+ * read from the workspace-wide `useLang()` (`cognirise-lang` in
  * localStorage). To round-trip language across the switch-view button,
  * this provider intentionally delegates to that global store. The
  * provider stays so consumers keep a single import surface and so a

@@ -17,7 +17,7 @@ const DEMO_SLUGS = [
 
 async function gotoEN(page: Page, path: string) {
   await page.addInitScript(() => {
-    try { window.localStorage.setItem("maven-ai-lang", "en"); } catch {}
+    try { window.localStorage.setItem("cognirise-lang", "en"); } catch {}
   });
   await page.goto(path, { waitUntil: "domcontentloaded" });
 }

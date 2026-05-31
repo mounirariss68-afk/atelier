@@ -196,7 +196,7 @@ export default function Mind() {
     <div className="min-h-screen bg-[#0B1828] text-white flex flex-col" dir={lang === "ar" ? "rtl" : "ltr"}>
       <header className="border-b border-white/10 bg-[#091828]">
         <div className="max-w-[1500px] mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <Link href="/marketplace/maven-personal-agent" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white/70 hover:text-white text-xs">
+          <Link href="/marketplace/cognirise-personal-agent" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-white/70 hover:text-white text-xs">
             <ArrowLeft size={12} className="rtl:rotate-180" />
             {tStr(COPY.back, lang)}
           </Link>

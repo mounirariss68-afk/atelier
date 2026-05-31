@@ -59,9 +59,9 @@ const VARIANTS = {
 const SCRIPTS = {
   situation: `Türkiye'de beyaz eşya pazarı her hafta yeniden kuruluyor. Hepsiburada'dan Trendyol'a, Akakçe'den n11'e kadar her platformda binlerce fiyat gün içinde oynuyor durmadan. Ve her pazartesi sabahı ekipleriniz aynı soruyla başlıyor güne, bugün rakipler nerede.`,
   complication: `Sorun şu, bir analist oturup veriyi toparlayana kadar rakip çoktan kampanyaya girmiş oluyor. Sonuç ortada, marj eriyor, bayilerin telefonu susmuyor, kararlar hep bir adım geriden geliyor. Açıkçası fiyatlandırma artık ekipten hızlı.`,
-  resolution1: `İşte tam burada Maven AI işin içine giriyor. Pazartesi sabahı saat altıyı çeyrek geçiyor, siz daha kahveyi almadan Fiyat İzleme Ajanı gece olanları çoktan görmüş. Vestel İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş, bildirim ekranınızda hazır bekliyor.`,
+  resolution1: `İşte tam burada Cognirise işin içine giriyor. Pazartesi sabahı saat altıyı çeyrek geçiyor, siz daha kahveyi almadan Fiyat İzleme Ajanı gece olanları çoktan görmüş. Vestel İstanbul'da buzdolabı fiyatlarını yüzde yedi düşürmüş, bildirim ekranınızda hazır bekliyor.`,
   resolution2: `Altı uzman ajan var ve hepsi tek bir orkestra gibi çalışıyor. Talebi tahmin ediyor, rakibi okuyor, kampanyayı kuruyor, bayiyle konuşuyor, hepsi saniyeler içinde. Siz onayla dediğinizde üç bin bayiye yeni liste anında düşüyor, POS görselleri kendiliğinden güncelleniyor.`,
-  closing: `Beş günlük döngü iki saate indi. Yirmi şehir, üç bin bayi, tek bir karar odası. Maven AI, Arçelik için fiyat istihbaratı.`,
+  closing: `Beş günlük döngü iki saate indi. Yirmi şehir, üç bin bayi, tek bir karar odası. Cognirise, Arçelik için fiyat istihbaratı.`,
 };
 
 // Generation strategy used: produce both VARIANTS per scene, measure

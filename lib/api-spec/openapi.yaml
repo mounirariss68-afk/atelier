@@ -32,7 +32,7 @@ paths:
     post:
       operationId: chat
       tags: [chat]
-      summary: Stream a reply from the Maven AI assistant
+      summary: Stream a reply from the Cognirise assistant
       description: |
         Streams an assistant reply as Server-Sent Events. Each `data:` payload is a
         `ChatStreamEvent` JSON object. The stream ends with an event of type `done`

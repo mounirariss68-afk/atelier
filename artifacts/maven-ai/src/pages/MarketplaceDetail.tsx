@@ -308,7 +308,7 @@ export default function MarketplaceDetail() {
           {/* Personal-agent-only: "Why we built it this way" + concept doc link.
               Conditional because the three killer angles only make sense for
               a tool whose differentiator is its memory/trust model. */}
-          {tool.slug === "maven-personal-agent" && (
+          {tool.slug === "cognirise-personal-agent" && (
             <div className="mt-12 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-8 rounded-2xl bg-gradient-to-br from-[#a78bfa]/10 via-white to-[#5B7CFF]/5 border border-[#a78bfa]/20">
               <div className="flex items-start gap-3 mb-5">
                 <div className="w-9 h-9 rounded-lg bg-[#a78bfa]/15 flex items-center justify-center flex-shrink-0">
@@ -370,14 +370,14 @@ export default function MarketplaceDetail() {
                   <ArrowRight size={12} className="rtl:rotate-180" />
                 </Link>
                 <Link
-                  href="/demo/maven-personal-agent/cockpit"
+                  href="/demo/cognirise-personal-agent/cockpit"
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[#a78bfa] text-[#0A1230] font-bold text-xs hover:bg-[#c4b5fd]"
                 >
                   <MessageSquare size={12} />
                   {tStr({ en: "Open the Cockpit", ar: "افتح القمرة", tr: "Kokpit'i aç" }, lang)}
                 </Link>
                 <Link
-                  href="/demo/maven-personal-agent/mind"
+                  href="/demo/cognirise-personal-agent/mind"
                   className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#0A1230]/30 text-[#0A1230] font-bold text-xs hover:bg-[#0A1230] hover:text-white"
                 >
                   <Brain size={12} />

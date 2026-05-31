@@ -319,5 +319,5 @@ Every decision in this document maps to a seed-data row, so the demos are audita
 | Employee-owned, free-forever personal scope | Concept doc and pricing strip on marketplace detail | section 18 above |
 | Manager observability is aggregate-only | Concept doc; not built in demo (out of scope) | section 13 above |
 | Glass-box principle | Cockpit Context-used rail + every receipt | `Cockpit.tsx` rail rendering |
-| Five sub-agents named in cast | Marketplace detail "How does this work?" modal | `agentCasts.ts → maven-personal-agent` |
+| Five sub-agents named in cast | Marketplace detail "How does this work?" modal | `agentCasts.ts → cognirise-personal-agent` |
 | Concept doc is the contract | Marketplace detail "Concept & research" link | `/personal-agent/concept` route |

@@ -20,7 +20,7 @@ export const HealthCheckResponse = zod.object({
 `ChatStreamEvent` JSON object. The stream ends with an event of type `done`
 whose `suggestions` field contains optional follow-up links.
 
- * @summary Stream a reply from the Maven AI assistant
+ * @summary Stream a reply from the Cognirise assistant
  */
 export const chatBodyMessagesItemContentMax = 4000;
 

@@ -120,7 +120,7 @@ export default function AssessmentResults() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Maven-AI-${def.code}-${data.profile.company.replace(/\s+/g, "-")}.pdf`;
+      a.download = `Cognirise-${def.code}-${data.profile.company.replace(/\s+/g, "-")}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {

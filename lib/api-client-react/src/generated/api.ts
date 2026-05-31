@@ -213,7 +213,7 @@ export function useHealthCheck<
 `ChatStreamEvent` JSON object. The stream ends with an event of type `done`
 whose `suggestions` field contains optional follow-up links.
 
- * @summary Stream a reply from the Maven AI assistant
+ * @summary Stream a reply from the Cognirise assistant
  */
 export const getChatUrl = () => {
   return `/api/chat`;
@@ -274,7 +274,7 @@ export type ChatMutationBody = BodyType<ChatRequest>;
 export type ChatMutationError = ErrorType<ChatError>;
 
 /**
- * @summary Stream a reply from the Maven AI assistant
+ * @summary Stream a reply from the Cognirise assistant
  */
 export const useChat = <
   TError = ErrorType<ChatError>,

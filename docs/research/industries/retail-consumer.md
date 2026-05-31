@@ -1,5 +1,5 @@
 # Retail & Consumer — AI & Agentic Transformation Dossier
-_Last updated: 2026-05. Owner: Maven Research. Status: draft for Parts 2–4._
+_Last updated: 2026-05. Owner: Cognirise Research. Status: draft for Parts 2–4._
 _Time horizon: short-term = 2026–2027 · medium-term = 2027–2028 · long-term = 2029–2030._
 
 ---
@@ -126,17 +126,17 @@ Retail and consumer goods entered 2024 as an industry running dozens of fragment
 
 ---
 
-## 8. Implications for Maven's positioning
+## 8. Implications for Cognirise's positioning
 
-- **Maven should position agentic commerce architecture design as its primary retail go-to-market offer, not generic GenAI strategy.** The inflection identified in §1 — from pilot to agentic production — means retailers no longer need persuasion that AI matters; they need expert help designing agent-to-agent commerce guardrails, buyer-agent integration, and the "thin agent, fat guardrail" patterns described in §5.1. Maven's differentiation is translating the 2025 collapse-and-rebuild lessons (§1, §2 Trend 2) into tested architectural blueprints before competitors do.
+- **Cognirise should position agentic commerce architecture design as its primary retail go-to-market offer, not generic GenAI strategy.** The inflection identified in §1 — from pilot to agentic production — means retailers no longer need persuasion that AI matters; they need expert help designing agent-to-agent commerce guardrails, buyer-agent integration, and the "thin agent, fat guardrail" patterns described in §5.1. Cognirise's differentiation is translating the 2025 collapse-and-rebuild lessons (§1, §2 Trend 2) into tested architectural blueprints before competitors do.
 
-- **The data and identity foundation gap (§3, §4) is Maven's near-term advisory entry point.** Because unified customer identity is a prerequisite for all agentic personalisation ROI, retailers that have not resolved this problem cannot extract value from their agent investments. Maven can offer a structured data-readiness diagnostic — grounded in the IDC and McKinsey evidence base (§4) — as a low-cost, high-trust engagement that naturally expands into transformation programme design.
+- **The data and identity foundation gap (§3, §4) is Cognirise's near-term advisory entry point.** Because unified customer identity is a prerequisite for all agentic personalisation ROI, retailers that have not resolved this problem cannot extract value from their agent investments. Cognirise can offer a structured data-readiness diagnostic — grounded in the IDC and McKinsey evidence base (§4) — as a low-cost, high-trust engagement that naturally expands into transformation programme design.
 
-- **Maven must develop MENA-specific retail AI capability to serve Gulf clients credibly.** The Arabic-language agent tuning pattern (§5.7), combined with the regulatory patchwork challenge (§3), means that global frameworks imported without localisation will fail in the Noon/Almarai/Carrefour MAF market. This is an underserved gap: most global consultancies are applying Western retail AI playbooks without adaptation. Maven's MENA positioning should be built around this localisation depth.
+- **Cognirise must develop MENA-specific retail AI capability to serve Gulf clients credibly.** The Arabic-language agent tuning pattern (§5.7), combined with the regulatory patchwork challenge (§3), means that global frameworks imported without localisation will fail in the Noon/Almarai/Carrefour MAF market. This is an underserved gap: most global consultancies are applying Western retail AI playbooks without adaptation. Cognirise's MENA positioning should be built around this localisation depth.
 
-- **Agent governance and model risk (§3, §4) are a fast-growing service line that retail has not yet institutionalised.** Just as financial services built MRM infrastructure post-2008, retail is now being pushed toward formal agent governance by the EU AI Act (§3) and the reputational cost of public agent failures. Maven can import governance frameworks adapted from financial services, repackaged for retail risk profiles — a cross-sector capability arbitrage that is directly supported by the regulatory evidence in §3.
+- **Agent governance and model risk (§3, §4) are a fast-growing service line that retail has not yet institutionalised.** Just as financial services built MRM infrastructure post-2008, retail is now being pushed toward formal agent governance by the EU AI Act (§3) and the reputational cost of public agent failures. Cognirise can import governance frameworks adapted from financial services, repackaged for retail risk profiles — a cross-sector capability arbitrage that is directly supported by the regulatory evidence in §3.
 
-- **The energy and FinOps challenge (§3, §4, §7) creates a new consulting surface around inference cost architecture.** Retailers running agentic workloads at holiday-peak scale are encountering AI FinOps problems they have no internal expertise to solve. Maven can package inference cost optimisation (tiered model selection, edge inference for store ops, quantisation strategy) as a near-term ROI story — directly addressing the compute cost multiplier finding in §7 and the board-level conversation identified in §4.
+- **The energy and FinOps challenge (§3, §4, §7) creates a new consulting surface around inference cost architecture.** Retailers running agentic workloads at holiday-peak scale are encountering AI FinOps problems they have no internal expertise to solve. Cognirise can package inference cost optimisation (tiered model selection, edge inference for store ops, quantisation strategy) as a near-term ROI story — directly addressing the compute cost multiplier finding in §7 and the board-level conversation identified in §4.
 
 ---
 

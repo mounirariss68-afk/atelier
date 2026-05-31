@@ -83,7 +83,7 @@ const sovereignDataScenario: Scenario = {
     },
   ],
   kpis: [
-    { id: "ttp", label: { en: "Time to first approved product", ar: "زمن أول منتج معتمد" }, initial: "—", source: { en: "Maven advisory engagements, 3 GCC sovereign pilots, 2025.", ar: "تجارب Maven الاستشارية، 3 برامج خليجية، 2025." } },
+    { id: "ttp", label: { en: "Time to first approved product", ar: "زمن أول منتج معتمد" }, initial: "—", source: { en: "Cognirise advisory engagements, 3 GCC sovereign pilots, 2025.", ar: "تجارب Cognirise الاستشارية، 3 برامج خليجية، 2025." } },
     { id: "lineage-cov", label: { en: "Lineage coverage", ar: "تغطية النسب" }, initial: "—" },
     { id: "pdpl-pass", label: { en: "PDPL controls passed", ar: "ضوابط PDPL المُجتازة" }, initial: "—" },
     { id: "blocked-sinks", label: { en: "Blocked sinks named", ar: "المصبّات المحجوبة المُسمّاة" }, initial: "—" },

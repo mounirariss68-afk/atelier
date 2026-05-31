@@ -32,7 +32,7 @@ export interface UseChatStreamResult {
 }
 
 const MAX_HISTORY = 24;
-const TRANSCRIPT_KEY = "maven-ai-chat-transcript";
+const TRANSCRIPT_KEY = "cognirise-chat-transcript";
 const TRANSCRIPT_VERSION = 1;
 
 interface PersistedTranscript {

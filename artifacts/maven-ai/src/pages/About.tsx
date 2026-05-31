@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { Link } from "wouter";
-import { ArrowRight, Linkedin, MapPin, Quote } from "lucide-react";
+import { Linkedin, MapPin, Quote } from "lucide-react";
 import {
   founders,
   founderTitleStr, founderLocationStr, founderBioStr, founderQuoteStr, founderExpertiseList,
@@ -38,19 +38,19 @@ const STORY_PARAS = [
     tr: "Cognirise, MENAT genelinde ve küresel olarak danışmanlık, mühendislik ve AI teslimatı alanında toplam üç on yıllık deneyime sahip iki ortak tarafından kuruldu. Firmayı, birlikte bu özel işte bizi daha iyi kılan dört yapısal seçim etrafında inşa ettik: üretim öncülüğünde teslimat, butik tasarım, ajansal-yerli kapasite ve platform-bağımsız ekonomi.",
   },
   {
-    en: "We are a sister company of Maven Insights, one of the GCC's leading management consulting firms, giving us access to a 200+ consultant bench, deep regional client relationships, and the change management and organizational capability that pure AI firms typically lack.",
-    ar: "نحن شركة شقيقة لـ Maven Insights، إحدى شركات الاستشارات الإدارية الرائدة في الخليج، مما يمنحنا الوصول إلى أكثر من 200 مستشار، وعلاقات عملاء إقليمية عميقة، وقدرة إدارة التغيير والتنظيم التي تفتقر إليها عادةً شركات الذكاء الاصطناعي البحتة.",
-    tr: "Körfez'in önde gelen yönetim danışmanlığı firmalarından biri olan Maven Insights'ın kardeş şirketiyiz; bu bize 200+ danışmanlık ekibine, derin bölgesel müşteri ilişkilerine ve saf AI firmalarının genellikle sahip olmadığı değişim yönetimi ve organizasyon yeteneğine erişim sağlıyor.",
+    en: "Between them, the founding partners bring over four decades of delivery experience inside the institutions that define the region — national telecom operators, tier-one banks, sovereign wealth vehicles, and the government bodies driving MENAT's digital agendas. Cognirise is built on that hands-on track record: the people who led these programmes are the people who deliver for our clients now — no pyramid, no hand-off to juniors.",
+    ar: "يجمع الشريكان المؤسسان بينهما أكثر من أربعة عقود من خبرة التنفيذ داخل المؤسسات التي تُشكّل ملامح المنطقة — مشغّلو الاتصالات الوطنيون، والبنوك من الفئة الأولى، وأذرع الثروة السيادية، والجهات الحكومية التي تقود الأجندات الرقمية في الشرق الأوسط وشمال أفريقيا وتركيا. تأسست Cognirise على هذا السجل العملي: فمن قادوا تلك البرامج هم أنفسهم من ينفّذون لعملائنا اليوم — دون هرمية ودون إحالة إلى المبتدئين.",
+    tr: "Kurucu ortaklar bir arada, bölgeye damga vuran kurumların içinde kırk yılı aşkın teslimat deneyimi taşıyor — ulusal telekom operatörleri, birinci kademe bankalar, egemen varlık araçları ve MENAT'ın dijital gündemini yürüten kamu kurumları. Cognirise bu uygulamalı sicil üzerine kuruludur: bu programları yöneten kişiler, bugün müşterilerimiz için işi yapan kişilerdir — piramit yok, yeni başlayanlara devir yok.",
   },
 ];
 const STAT_CARDS = [
   {
-    num: "200+",
-    title: { en: "Consultants available", ar: "مستشار متاح", tr: "Hazır danışman" },
+    num: "40+",
+    title: { en: "Years of combined delivery", ar: "سنة من الخبرة المجمّعة", tr: "Yıllık birikmiş teslimat" },
     desc: {
-      en: "Immediate access to Maven Insights' bench of advisory, PMO, change management, and domain specialists.",
-      ar: "وصول فوري إلى فريق Maven Insights من متخصصي الاستشارات وإدارة المشاريع وإدارة التغيير والخبراء المتخصصين.",
-      tr: "Maven Insights'ın danışmanlık, PMO, değişim yönetimi ve alan uzmanlarından oluşan ekibine anında erişim.",
+      en: "The founding partners have personally led AI, data, and transformation programmes inside the region's leading telecoms, tier-one banks, and government bodies.",
+      ar: "قاد الشريكان المؤسسان شخصياً برامج للذكاء الاصطناعي والبيانات والتحول داخل كبرى شركات الاتصالات والبنوك من الفئة الأولى والجهات الحكومية في المنطقة.",
+      tr: "Kurucu ortaklar; bölgenin önde gelen telekom şirketleri, birinci kademe bankaları ve kamu kurumları içinde yapay zekâ, veri ve dönüşüm programlarını bizzat yönetti.",
     },
   },
   {
@@ -88,13 +88,24 @@ const OPMODEL_INTRO = {
   ar: "نواة صغيرة تستفيد من أربع حلقات من القدرات — رشيقة بالتصميم. كل دولار إيرادات يتطلب جزءاً يسيراً من عدد موظفي شركات الفئة الأولى.",
   tr: "Dört yetenek halkasını kullanan küçük bir çekirdek — tasarım gereği yalın. Her dolarlık gelir, Tier-1'in personel sayısının çok küçük bir kısmını gerektirir.",
 };
-const SISTER_TITLE = { en: "Backed by Maven Insights", ar: "بدعم من Maven Insights", tr: "Maven Insights tarafından destekleniyor" };
-const SISTER_PARA = {
-  en: "Maven Insights is a leading management consulting firm with offices across the GCC. Cognirise was founded as a dedicated AI delivery practice, with direct access to Maven Insights' consulting bench, regional client relationships, and change management expertise. Together, we offer the most complete AI-to-production capability in the region.",
-  ar: "Maven Insights شركة استشارات إدارية رائدة لها مكاتب في جميع أنحاء دول الخليج. تأسست Cognirise كممارسة مخصصة لتسليم الذكاء الاصطناعي، مع وصول مباشر إلى فريق استشارات Maven Insights وعلاقات العملاء الإقليمية وخبرة إدارة التغيير. معاً، نقدم القدرة الأكثر اكتمالاً لنقل الذكاء الاصطناعي إلى الإنتاج في المنطقة.",
-  tr: "Maven Insights, Körfez genelinde ofisleri olan önde gelen bir yönetim danışmanlığı firmasıdır. Cognirise, Maven Insights'ın danışmanlık ekibine, bölgesel müşteri ilişkilerine ve değişim yönetimi uzmanlığına doğrudan erişimle, özel bir AI teslimat pratiği olarak kuruldu. Birlikte, bölgedeki en eksiksiz AI'dan üretime kapasiteyi sunuyoruz.",
+const REFERENCES_TITLE = { en: "Where our partners have delivered", ar: "أين نفّذ شركاؤنا", tr: "Ortaklarımız nerede teslimat yaptı" };
+const REFERENCES_INTRO = {
+  en: "Cognirise's credibility is personal. Before founding the firm, our partners led and advised programmes inside many of the region's most demanding institutions. A selection of where they have personally worked:",
+  ar: "مصداقية Cognirise شخصية. قبل تأسيس الشركة، قاد شركاؤنا برامج وقدّموا الاستشارات داخل العديد من أكثر مؤسسات المنطقة تطلّباً. وفيما يلي مجموعة مختارة من الجهات التي عملوا بها شخصياً:",
+  tr: "Cognirise'ın güvenilirliği kişiseldir. Firmayı kurmadan önce ortaklarımız, bölgenin en zorlu kurumlarının birçoğunda programlar yönetti ve danışmanlık yaptı. Bizzat çalıştıkları yerlerden bir seçki:",
 };
-const SISTER_CTA = { en: "Learn about Maven Insights", ar: "تعرّف على Maven Insights", tr: "Maven Insights hakkında bilgi edinin" };
+const REFERENCES_NOTE = {
+  en: "These reflect the founding partners' personal engagement histories prior to Cognirise, not corporate client relationships of the firm.",
+  ar: "تعكس هذه القائمة السجلات المهنية الشخصية للشريكين المؤسسين قبل Cognirise، وليست علاقات عملاء مؤسسية للشركة.",
+  tr: "Bunlar, kurucu ortakların Cognirise öncesi kişisel görev geçmişlerini yansıtır; firmanın kurumsal müşteri ilişkilerini değil.",
+};
+const REFERENCE_GROUPS = [
+  { label: { en: "Telecom", ar: "الاتصالات", tr: "Telekom" }, names: ["STC", "Etisalat", "Ooredoo", "Türk Telekom"] },
+  { label: { en: "Banking", ar: "البنوك", tr: "Bankacılık" }, names: ["İşbank", "Yapı Kredi", "Akbank", "ADCB", "ADIB", "Al Rajhi Bank", "SNB", "Bank AlBilad"] },
+  { label: { en: "Government", ar: "الحكومة", tr: "Kamu" }, names: ["Dubai Municipality", "Dubai Land Department", "RTA", "Abu Dhabi DMT", "Abu Dhabi Department of Energy", "Abu Dhabi Department of Community Development", "UAE Prime Minister's Office", "UAE Ministry of Culture", "KSA HRSD", "KSA Ministry of Health", "KSA Ministry of Economy & Planning", "National Center of Government Resources", "PIF"] },
+  { label: { en: "Family Holdings", ar: "المجموعات العائلية", tr: "Aile Holdingleri" }, names: ["Doğuş Group", "Boyner Group"] },
+  { label: { en: "Retail", ar: "التجزئة", tr: "Perakende" }, names: ["Beymen", "LC Waikiki"] },
+];
 
 const TWO_PATHS_PARAGRAPH = {
   en: "Practically, that conviction shows up as two paths to outcomes. A project-led path for bespoke transformation, AI-driven SDLC, and data & governance foundations — and an asset-led path through our Marketplace of productized agents when the problem is shared across the industry and time-to-value matters more than custom IP. Most engagements blend the two; the decision framework is published in our Two Paths POV.",
@@ -300,17 +311,36 @@ export default function About() {
         </div>
       </section>
 
-      {/* Sister Company */}
+      {/* Personal references */}
       <section className="py-20 bg-[#F8F9FA]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="section-divider mx-auto" />
-          <h2 className="text-3xl font-extrabold text-[#0A1230] mb-5">{tStr(SISTER_TITLE, lang)}</h2>
-          <p className="text-gray-600 max-w-2xl mx-auto mb-8 leading-relaxed">
-            {tStr(SISTER_PARA, lang)}
+          <h2 className="text-3xl font-extrabold text-[#0A1230] mb-5">{tStr(REFERENCES_TITLE, lang)}</h2>
+          <p className="text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed">
+            {tStr(REFERENCES_INTRO, lang)}
           </p>
-          <a href="https://www.maveninsights.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 border border-[#5B7CFF] text-[#5B7CFF] font-semibold px-7 py-3.5 rounded-xl hover:bg-[#5B7CFF] hover:text-white transition-colors">
-            {tStr(SISTER_CTA, lang)} <ArrowRight size={16} className="rtl:-scale-x-100" />
-          </a>
+          <div className="space-y-6 text-left">
+            {REFERENCE_GROUPS.map((group, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.06, duration: 0.4 }}
+                className="bg-white rounded-xl p-5 border border-gray-100"
+              >
+                <h3 className="text-xs font-bold uppercase tracking-widest text-[#5B7CFF] mb-3">{tStr(group.label, lang)}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {group.names.map((name) => (
+                    <span key={name} className="text-xs font-semibold px-3 py-1.5 bg-[#F8F9FA] border border-gray-200 rounded-full text-gray-700">{name}</span>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 max-w-2xl mx-auto mt-8 italic leading-relaxed">
+            {tStr(REFERENCES_NOTE, lang)}
+          </p>
         </div>
       </section>
     </div>

@@ -101,7 +101,7 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
       {
         id: "uvr-scorer",
         name: { en: "UVR Scorer", ar: "مصنّف UVR" },
-        role: { en: "Scores each initiative against Maven's UVR rubric — value, feasibility, governance fit.", ar: "يصنّف كل مبادرة وفق منهج UVR — القيمة والجدوى وتوافق الحوكمة." },
+        role: { en: "Scores each initiative against Cognirise's UVR rubric — value, feasibility, governance fit.", ar: "يصنّف كل مبادرة وفق منهج UVR — القيمة والجدوى وتوافق الحوكمة." },
         kind: "scorer",
         reads: [{ en: "Initiative snapshot, UVR rubric", ar: "لقطة المبادرة، منهج UVR" }],
         writes: [{ en: "Per-initiative UVR scores", ar: "درجات UVR لكل مبادرة" }],
@@ -1131,8 +1131,8 @@ export const marketplaceAgentCasts: Record<string, AgentCast> = {
       ar: "يُعد نظام الرواتب في السعودية والإمارات والامتثال للتأمينات ومُدد مجالاً عالي المخاطر حيث تُعد الدقة وقابلية التدقيق البشري أمراً غير قابل للتفاوض. تقسيم المنطق إلى 10 وكلاء متخصصين (ذكاء الوثائق، الحساب، التأمينات، مُدد، إلخ) يضمن أن كل جزء من الآلة التنظيمية قابل للتدقيق، ومراقب من حيث الانحراف، وتحت رقابة السلطة البشرية المناسبة — مما يعكس تنظيم مركز الخدمات المشتركة الاحترافي.",
     },
   },
-  // ─── 12. Maven Personal Agent (Workforce / Personal Agent) ─────────────
-  "maven-personal-agent": {
+  // ─── 12. Cognirise Personal Agent (Workforce / Personal Agent) ─────────────
+  "cognirise-personal-agent": {
     agents: [
       {
         id: "personal-planner",

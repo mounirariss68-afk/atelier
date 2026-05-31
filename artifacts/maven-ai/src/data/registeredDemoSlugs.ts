@@ -24,7 +24,7 @@ export const REGISTERED_DEMO_SLUGS: readonly string[] = [
   "enterprise-knowledge-concierge",
   "arcelik-fiyat-istihbarati",
   "tasama-payroll-hub",
-  "maven-personal-agent",
+  "cognirise-personal-agent",
   "dge-catalogue-channel",
   "dge-complaint-recovery",
   "dge-effortless-qr",

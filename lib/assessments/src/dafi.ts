@@ -308,7 +308,7 @@ export const dafi: AssessmentDefinition = {
       Nascent: {
         quickWins90d: [{ en: "Standardize a fairness suite for high-risk models gating production.", ar: "توحيد مجموعة إنصاف للنماذج عالية المخاطر كبوابة.", tr: "Üretime kapı görevi gören yüksek riskli modeller için bir adalet paketi standartlaştırın." }],
         roadmap6m: [{ en: "Add explainability + monitoring across the model lifecycle.", ar: "إضافة تفسير + مراقبة عبر دورة حياة النموذج.", tr: "Model yaşam döngüsü boyunca açıklanabilirlik + izleme ekleyin." }],
-        strategic12m: [{ en: "Publish a Maven AI Verified responsible-AI report annually.", ar: "نشر تقرير Maven AI Verified للذكاء المسؤول سنوياً.", tr: "Yıllık olarak bir Maven AI Verified sorumlu-AI raporu yayımlayın." }],
+        strategic12m: [{ en: "Publish a Cognirise Verified responsible-AI report annually.", ar: "نشر تقرير Cognirise Verified للذكاء المسؤول سنوياً.", tr: "Yıllık olarak bir Cognirise Verified sorumlu-AI raporu yayımlayın." }],
       },
     },
     literacy: {

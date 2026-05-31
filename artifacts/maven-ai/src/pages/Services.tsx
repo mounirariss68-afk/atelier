@@ -28,9 +28,9 @@ const COPY = {
     tr: "Hizmetler — sonuçlara giden proje öncülüğündeki yol.",
   },
   introA: {
-    en: "This is Maven's project-led path: custom transformation engagements when the problem is bespoke, the sponsor is senior, and the operating model has to change. Four value propositions, each a stand-alone offer, often blended together.",
-    ar: "هذا هو مسار مافن القائم على المشاريع: ارتباطات تحول مخصصة عندما تكون المشكلة فريدة والراعي على المستوى التنفيذي ويجب تغيير نموذج التشغيل. أربعة عروض قيمة، كل منها مستقل، وغالباً ما تُدمج معاً.",
-    tr: "Bu, Maven'in proje öncülüğündeki yoludur: sorun kendine özgü olduğunda, sponsor üst düzey olduğunda ve operasyon modelinin değişmesi gerektiğinde özel dönüşüm çalışmaları. Her biri bağımsız bir teklif olan ve sıkça birlikte sunulan dört değer önermesi.",
+    en: "This is Cognirise's project-led path: custom transformation engagements when the problem is bespoke, the sponsor is senior, and the operating model has to change. Four value propositions, each a stand-alone offer, often blended together.",
+    ar: "هذا هو مسار Cognirise القائم على المشاريع: ارتباطات تحول مخصصة عندما تكون المشكلة فريدة والراعي على المستوى التنفيذي ويجب تغيير نموذج التشغيل. أربعة عروض قيمة، كل منها مستقل، وغالباً ما تُدمج معاً.",
+    tr: "Bu, Cognirise'nin proje öncülüğündeki yoludur: sorun kendine özgü olduğunda, sponsor üst düzey olduğunda ve operasyon modelinin değişmesi gerektiğinde özel dönüşüm çalışmaları. Her biri bağımsız bir teklif olan ve sıkça birlikte sunulan dört değer önermesi.",
   },
   introB: {
     en: "When the problem is shared across the industry and configuration beats invention, start with the asset-led Marketplace instead — most engagements blend the two.",

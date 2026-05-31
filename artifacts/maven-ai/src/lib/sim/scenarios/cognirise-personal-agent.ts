@@ -11,7 +11,7 @@
 import type { Scenario } from "../types";
 
 const personalAgent: Scenario = {
-  slug: "maven-personal-agent",
+  slug: "cognirise-personal-agent",
   toolTitle: { en: "Cognirise Personal Agent", ar: "مساعد Cognirise الشخصي" },
   accent: "#a78bfa",
   description: {

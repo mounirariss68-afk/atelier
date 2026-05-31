@@ -158,7 +158,7 @@ export function Scene4() {
           animate={phase >= 2 ? { scale: 1 } : { scale: 0 }}
           transition={{ duration: 0.6, type: 'spring', damping: 12 }}
         >
-          <span className="text-[#0B1B2E] font-bold text-sm tracking-wider">MAVEN</span>
+          <span className="text-[#0B1B2E] font-bold text-sm tracking-wider">COGNIRISE</span>
         </motion.div>
 
         {/* Agent nodes */}

@@ -19,7 +19,7 @@ export function Scene5() {
       <div className="absolute inset-0 opacity-[0.35]">
         <img src={marketplaceImg} alt="" className="w-full h-full object-cover filter blur-xl" />
       </div>
-      {/* Maven amber radial highlight behind lockup */}
+      {/* Cognirise amber radial highlight behind lockup */}
       <div
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[60vw] h-[60vw] rounded-full pointer-events-none"
         style={{ background: 'radial-gradient(circle, rgba(245,166,35,0.22), transparent 60%)' }}
@@ -49,10 +49,10 @@ export function Scene5() {
         >
           <div className="text-2xl font-bold tracking-tight text-white flex items-center">
             <span className="w-9 h-9 rounded bg-[#F5A623] inline-block mr-3" />
-            MAVEN AI
+            COGNIRISE
           </div>
           <div className="text-slate-300 text-base">
-            MENAT işletmeleri için ajan zekası · maven-ai.com
+            MENAT işletmeleri için ajan zekası · cognirise.com
           </div>
         </motion.div>
 

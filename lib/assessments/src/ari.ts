@@ -403,7 +403,7 @@ export const ari: AssessmentDefinition = {
           { en: "Stand up an enterprise agentic value tracker reviewed by the executive committee monthly.", ar: "تأسيس متابع قيمة وكيلي مؤسسي تراجعه اللجنة التنفيذية شهرياً.", tr: "Yürütme komitesi tarafından aylık olarak gözden geçirilen kurumsal bir ajansal değer izleyici kurun." },
         ],
         strategic12m: [
-          { en: "Position the firm as a regional agentic reference; pursue published case studies and Maven AI Verified status.", ar: "تموضع الشركة كمرجع وكيلي إقليمي؛ السعي لدراسات حالة منشورة وشهادة Maven AI Verified.", tr: "Firmayı bölgesel bir ajansal referans olarak konumlandırın; yayımlanmış vaka çalışmaları ve Maven AI Verified statüsünün peşinden gidin." },
+          { en: "Position the firm as a regional agentic reference; pursue published case studies and Cognirise Verified status.", ar: "تموضع الشركة كمرجع وكيلي إقليمي؛ السعي لدراسات حالة منشورة وشهادة Cognirise Verified.", tr: "Firmayı bölgesel bir ajansal referans olarak konumlandırın; yayımlanmış vaka çalışmaları ve Cognirise Verified statüsünün peşinden gidin." },
         ],
       },
     },
@@ -523,7 +523,7 @@ export const ari: AssessmentDefinition = {
           { en: "Wire SDAIA / PDPL controls into the policy engine.", ar: "ربط ضوابط SDAIA / PDPL داخل محرك السياسات.", tr: "SDAIA / PDPL kontrollerini politika motoruna bağlayın." },
         ],
         strategic12m: [
-          { en: "Publish a Maven AI Verified responsible-AI report to clients and regulators.", ar: "نشر تقرير Maven AI Verified للذكاء الاصطناعي المسؤول للعملاء والمنظمين.", tr: "Müşterilere ve düzenleyicilere bir Maven AI Verified sorumlu-AI raporu yayımlayın." },
+          { en: "Publish a Cognirise Verified responsible-AI report to clients and regulators.", ar: "نشر تقرير Cognirise Verified للذكاء الاصطناعي المسؤول للعملاء والمنظمين.", tr: "Müşterilere ve düzenleyicilere bir Cognirise Verified sorumlu-AI raporu yayımlayın." },
         ],
       },
     },

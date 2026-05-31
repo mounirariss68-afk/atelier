@@ -101,7 +101,7 @@ const tenderScenario: Scenario = {
     },
   ],
   kpis: [
-    { id: "win-rate", label: { en: "Bid win rate", ar: "معدّل الفوز" }, initial: "—", source: { en: "Maven advisory benchmarks, GCC bid teams, 2025.", ar: "مقاييس Maven الاستشارية للفِرق الخليجية 2025." } },
+    { id: "win-rate", label: { en: "Bid win rate", ar: "معدّل الفوز" }, initial: "—", source: { en: "Cognirise advisory benchmarks, GCC bid teams, 2025.", ar: "مقاييس Cognirise الاستشارية للفِرق الخليجية 2025." } },
     { id: "cycle", label: { en: "RFP-to-submit cycle", ar: "زمن الاستلام إلى التقديم" }, initial: "—" },
     { id: "no-bid", label: { en: "Defensible no-bid rate", ar: "معدّل الانسحاب المبرّر" }, initial: "—" },
     { id: "los", label: { en: "Partner LoS turnaround", ar: "زمن رسائل الشركاء" }, initial: "—" },

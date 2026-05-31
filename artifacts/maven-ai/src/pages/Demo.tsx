@@ -106,10 +106,10 @@ export default function Demo() {
     return <BidStudio />;
   }
 
-  if (slug === "maven-personal-agent" && variant === "cockpit") {
+  if (slug === "cognirise-personal-agent" && variant === "cockpit") {
     return <Cockpit />;
   }
-  if (slug === "maven-personal-agent" && variant === "mind") {
+  if (slug === "cognirise-personal-agent" && variant === "mind") {
     return <Mind />;
   }
 

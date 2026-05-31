@@ -6,7 +6,7 @@ const DEMO_PATH = `/demo/${SLUG}`;
 async function gotoDemoEN(page: Page) {
   await page.addInitScript(() => {
     try {
-      window.localStorage.setItem("maven-ai-lang", "en");
+      window.localStorage.setItem("cognirise-lang", "en");
     } catch {
       /* noop */
     }

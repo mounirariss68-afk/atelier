@@ -3179,7 +3179,7 @@ export async function runTimeSteward(args: {
     }
 
     // 5) Agent runs triggered BY this user inside the window — these are
-    //    work the employee performed via an agent (Maven, pricing, etc.).
+    //    work the employee performed via an agent (Cognirise, pricing, etc.).
     const agentRunHits = userId
       ? await db
           .select({

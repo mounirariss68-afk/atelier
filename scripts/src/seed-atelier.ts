@@ -187,7 +187,7 @@ const ACCOUNTS = [
     country: "KSA",
     sector: "Shared Services / BPO",
     notes:
-      "Saudi shared-services operator. Anchor account for Agentic BPO program; Maven AI marketplace pilot already in production.",
+      "Saudi shared-services operator. Anchor account for Agentic BPO program; Cognirise marketplace pilot already in production.",
   },
   {
     id: "acc_dubai_municipality",
@@ -1273,7 +1273,7 @@ const ENGAGEMENTS = [
     engagementLeadId: "p_layla_haddad",
     charter: {
       objectives: [
-        "Stand up the Maven AI marketplace as Tasama's primary agentic operations channel",
+        "Stand up the Cognirise marketplace as Tasama's primary agentic operations channel",
         "Reduce mean handle time for top-3 shared services by 40% within 90 days",
         "Embed an Agent Architect cadence so every new process candidate is evaluated weekly",
       ],
@@ -1405,13 +1405,13 @@ const ASSETS = [
     promotedByUserId: "p_mounir_ariss",
   },
   {
-    id: "ast_maven_ai_brand",
+    id: "ast_cognirise_brand",
     kind: "framework",
-    title: "Maven AI website — brand reference",
+    title: "Cognirise website — brand reference",
     abstract:
-      "Live Maven AI marketplace site. Brand voice, layout, and componentry reference for every external deliverable.",
+      "Live Cognirise marketplace site. Brand voice, layout, and componentry reference for every external deliverable.",
     provenance: "Public site · brand canonical",
-    tags: ["brand", "maven-ai", "reference"],
+    tags: ["brand", "cognirise", "reference"],
     bodyOrFileUrl: null,
     promotedFromEngagementId: null,
     promotedByUserId: null,

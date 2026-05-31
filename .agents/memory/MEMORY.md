@@ -1,0 +1,1 @@
+- [Brand rename (EN/AR/TR)](brand-rename-trilingual.md) — Latin search misses Arabic مافن/all-caps/Turkish genitive; keep new brand Latin inside Arabic; regen api from openapi spec.

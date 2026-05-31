@@ -51,7 +51,7 @@ export default function PersonaSwitcher({ personaId, onPersona, otherVariant, ac
       </button>
       {otherVariant && (
         <Link
-          href={`/demo/maven-personal-agent/${otherVariant.route}`}
+          href={`/demo/cognirise-personal-agent/${otherVariant.route}`}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/20 text-white text-xs font-bold hover:bg-white/10"
         >
           {tStr(otherVariant.label, lang)} →

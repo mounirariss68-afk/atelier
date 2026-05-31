@@ -1,8 +1,8 @@
 /**
  * DGE Effortless 2.0 — marketplace hub landing.
- * Six numbered demo cards in the Maven brand grid (eyebrow → italic gold
+ * Six numbered demo cards in the Cognirise brand grid (eyebrow → italic gold
  * accent → 540px lede with gold left rule), each linking to its
- * /demo/dge-<slug> route. Maven brand chrome stays — the moment a user
+ * /demo/dge-<slug> route. Cognirise brand chrome stays — the moment a user
  * clicks into a demo, the TAMM/ADGE theme takes over.
  */
 import { Link } from "wouter";

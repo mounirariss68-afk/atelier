@@ -5,7 +5,7 @@
 > (implementation) agent task references this document. New agent code that
 > deviates from this contract should be rejected at review.
 
-This standard is **Atelier-only** for now. Other artifacts (Maven AI demos,
+This standard is **Atelier-only** for now. Other artifacts (Cognirise demos,
 etc.) may adopt it later; the contract is intentionally portable.
 
 ---

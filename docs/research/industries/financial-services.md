@@ -1,5 +1,5 @@
 # Financial Services — AI & Agentic Transformation Dossier
-_Last updated: 2026-05. Owner: Maven Research. Status: draft for Parts 2–4._
+_Last updated: 2026-05. Owner: Cognirise Research. Status: draft for Parts 2–4._
 _Time horizon: short-term = 2026–2027 · medium-term = 2027–2028 · long-term = 2029–2030._
 
 ---
@@ -133,17 +133,17 @@ Financial services entered 2026 as one of the most advanced—and most heavily s
 
 ---
 
-## 8. Implications for Maven's positioning
+## 8. Implications for Cognirise's positioning
 
-- **Agent governance tooling is the highest-urgency product/service gap in the market, directly following from §3's agent auditability challenge and §5's "Thin Agent, Rich Tool" pattern.** Tier-1 banks are deploying agents at scale but lack mature platforms for logging, auditing, and governing agent actions in ways that satisfy FSB, OCC, and EU AI Act requirements. Maven should position any agentic deployment offering around an explicit governance layer—audit trails, escalation tiering, and MRM-compatible documentation—rather than leading with raw capability.
+- **Agent governance tooling is the highest-urgency product/service gap in the market, directly following from §3's agent auditability challenge and §5's "Thin Agent, Rich Tool" pattern.** Tier-1 banks are deploying agents at scale but lack mature platforms for logging, auditing, and governing agent actions in ways that satisfy FSB, OCC, and EU AI Act requirements. Cognirise should position any agentic deployment offering around an explicit governance layer—audit trails, escalation tiering, and MRM-compatible documentation—rather than leading with raw capability.
 
-- **EU AI Act conformity support for Annex III use cases is a near-term revenue opportunity with a defined regulatory deadline, directly following from §2's regulatory trend and §4's compliance priority.** Financial institutions facing active conformity assessment for credit scoring and insurance underwriting models need structured support for documentation, bias testing, and human-oversight design. Maven can differentiate by combining regulatory expertise with technical implementation rather than treating these as separate workstreams.
+- **EU AI Act conformity support for Annex III use cases is a near-term revenue opportunity with a defined regulatory deadline, directly following from §2's regulatory trend and §4's compliance priority.** Financial institutions facing active conformity assessment for credit scoring and insurance underwriting models need structured support for documentation, bias testing, and human-oversight design. Cognirise can differentiate by combining regulatory expertise with technical implementation rather than treating these as separate workstreams.
 
-- **Data modernisation must be scoped as a prerequisite, not a parallel track, when engaging financial services clients on agentic transformation—directly following from §3's legacy data challenge and §4's data platform priority.** Clients who lack real-time, permissioned data access will not achieve reliable agent performance regardless of model quality. Maven's discovery and scoping engagements should include a data-readiness assessment as a mandatory gate before agent architecture design begins.
+- **Data modernisation must be scoped as a prerequisite, not a parallel track, when engaging financial services clients on agentic transformation—directly following from §3's legacy data challenge and §4's data platform priority.** Clients who lack real-time, permissioned data access will not achieve reliable agent performance regardless of model quality. Cognirise's discovery and scoping engagements should include a data-readiness assessment as a mandatory gate before agent architecture design begins.
 
-- **MENA financial services represents an underserved high-growth segment, following from §1's observation on GCC banks' accelerated adoption and §6's Emirates NBD case.** Gulf banks are investing heavily, operate under relatively modernised infrastructure, and face sovereign data-residency requirements that global system integrators often under-address. Maven should develop MENA-specific regulatory fluency (Saudi SAMA AI guidelines, UAE CBUAE frameworks) as a differentiator in this segment.
+- **MENA financial services represents an underserved high-growth segment, following from §1's observation on GCC banks' accelerated adoption and §6's Emirates NBD case.** Gulf banks are investing heavily, operate under relatively modernised infrastructure, and face sovereign data-residency requirements that global system integrators often under-address. Cognirise should develop MENA-specific regulatory fluency (Saudi SAMA AI guidelines, UAE CBUAE frameworks) as a differentiator in this segment.
 
-- **The Klarna partial-reversal case (§6) is a teachable moment that Maven should embed in client advisory frameworks.** Full automation of customer-facing financial interactions carries brand and regulatory risk that pure efficiency framing misses. Maven's agentic transformation engagements should include a structured human-automation boundary design phase, helping clients define where agents act, where they recommend, and where humans must lead—directly addressing the change management and agent governance challenges in §3.
+- **The Klarna partial-reversal case (§6) is a teachable moment that Cognirise should embed in client advisory frameworks.** Full automation of customer-facing financial interactions carries brand and regulatory risk that pure efficiency framing misses. Cognirise's agentic transformation engagements should include a structured human-automation boundary design phase, helping clients define where agents act, where they recommend, and where humans must lead—directly addressing the change management and agent governance challenges in §3.
 
 ---
 

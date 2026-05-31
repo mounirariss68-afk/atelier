@@ -312,11 +312,11 @@ export const insights: InsightEntry[] = [
     category: "Agentic AI",
     type: "Perspective",
     summary:
-      "Maven's POV on how clients should choose between custom transformation engagements (project-led) and productized agents from the Marketplace (asset-led) — with a decision framework drawn from BCG, MIT, McKinsey, Gartner and EY research, and the blending patterns most engagements actually follow.",
+      "Cognirise's POV on how clients should choose between custom transformation engagements (project-led) and productized agents from the Marketplace (asset-led) — with a decision framework drawn from BCG, MIT, McKinsey, Gartner and EY research, and the blending patterns most engagements actually follow.",
     summaryAr:
-      "وجهة نظر مافن حول كيفية اختيار العملاء بين ارتباطات التحول المخصصة (القائمة على المشاريع) والوكلاء الجاهزين من السوق (القائمة على الأصول) — مع إطار قرار مستمد من أبحاث BCG وMIT وMcKinsey وGartner وEY، وأنماط الدمج التي تتبعها معظم الارتباطات فعلياً.",
+      "وجهة نظر Cognirise حول كيفية اختيار العملاء بين ارتباطات التحول المخصصة (القائمة على المشاريع) والوكلاء الجاهزين من السوق (القائمة على الأصول) — مع إطار قرار مستمد من أبحاث BCG وMIT وMcKinsey وGartner وEY، وأنماط الدمج التي تتبعها معظم الارتباطات فعلياً.",
     summaryTr:
-      "Müşterilerin özel dönüşüm çalışmaları (proje öncülüğünde) ile Marketplace'ten ürünleştirilmiş ajanlar (varlık öncülüğünde) arasında nasıl seçim yapması gerektiğine dair Maven'in bakış açısı — BCG, MIT, McKinsey, Gartner ve EY araştırmalarından alınan bir karar çerçevesi ve çoğu çalışmanın gerçekte izlediği harmanlama desenleri ile.",
+      "Müşterilerin özel dönüşüm çalışmaları (proje öncülüğünde) ile Marketplace'ten ürünleştirilmiş ajanlar (varlık öncülüğünde) arasında nasıl seçim yapması gerektiğine dair Cognirise'nin bakış açısı — BCG, MIT, McKinsey, Gartner ve EY araştırmalarından alınan bir karar çerçevesi ve çoğu çalışmanın gerçekte izlediği harmanlama desenleri ile.",
   },
   // === BEGIN industry insight reports (Task #200) ===
   {
@@ -447,7 +447,7 @@ export interface HomepageStat {
 
 /**
  * Canonical homepage hero stats. Each is a real, sourced figure from the
- * published GCC AI research that Maven Insights tracks — the same body of
+ * published GCC AI research that Cognirise tracks — the same body of
  * evidence cited across the industries pages — so the home page carries the
  * same evidentiary weight as the rest of the site.
  */
@@ -615,12 +615,12 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
         ar: "تجيب أداة تحقيق القيمة على السؤال الذي يطرحه كل مدير مالي على محفظة الذكاء الاصطناعي: هل أحصل على الدولارات التي وُعدت بها؟ تتعقّب الأداة القيمة المتوقعة والقيمة المحققة والقيمة المعرضة للخطر لكل مبادرة في كتاب العمل، ثم تجمّع الصورة في لوحة قياس واحدة يستطيع المدير المالي الدفاع عنها في اجتماع مجلس الإدارة.",
       },
       {
-        en: "Every initiative card opens a drawer. Drag the realised-value slider, change the status, edit the risk drivers — the charts and the leakage callout re-render live. The Reset to sample button restores the canonical Maven demo book of work so you can hand the tool to a colleague without losing the demo state.",
+        en: "Every initiative card opens a drawer. Drag the realised-value slider, change the status, edit the risk drivers — the charts and the leakage callout re-render live. The Reset to sample button restores the canonical Cognirise demo book of work so you can hand the tool to a colleague without losing the demo state.",
         ar: "تفتح كل بطاقة مبادرة درجاً. اسحب شريط القيمة المحققة، وغيّر الحالة، وعدّل عوامل المخاطرة — وتُعاد رسم المخططات ومؤشر التسرّب فوراً. يستعيد زر «إعادة تعيين إلى العيّنة» كتاب العمل التجريبي القياسي حتى يمكنك تسليم الأداة لزميل دون أن تفقد حالة العرض.",
       },
       {
-        en: "Built on Maven Insights' UVR scoring engine. The same value-realisation lens we use inside our delivery engagements, exposed in the browser so you can pressure-test it against your own portfolio before booking a partner readout.",
-        ar: "مبنية على محرك تصنيف UVR من Maven Insights. هي العدسة نفسها التي نستخدمها داخل ارتباطات التسليم، مكشوفة في المتصفّح لتختبرها على محفظتك قبل حجز جلسة مع شريك.",
+        en: "Built on Cognirise's UVR scoring engine. The same value-realisation lens we use inside our delivery engagements, exposed in the browser so you can pressure-test it against your own portfolio before booking a partner readout.",
+        ar: "مبنية على محرك تصنيف UVR من Cognirise. هي العدسة نفسها التي نستخدمها داخل ارتباطات التسليم، مكشوفة في المتصفّح لتختبرها على محفظتك قبل حجز جلسة مع شريك.",
       },
     ],
     screens: [
@@ -1775,17 +1775,17 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
         },
       ],
     },
-  // ── Maven Personal Agent ────────────────────────────────────────────────
+  // ── Cognirise Personal Agent ────────────────────────────────────────────────
     // Per-employee AI agent with an employee-owned Personal Context Graph.
     // Two killer demos: the Cockpit (chat + workspace + glass-box) and
     // the Mind (interactive PCG visualisation with time scrubber).
     {
-      id: "maven-personal-agent",
-      slug: "maven-personal-agent",
+      id: "cognirise-personal-agent",
+      slug: "cognirise-personal-agent",
       title: {
-        en: "Maven Personal Agent",
-        ar: "مساعد Maven الشخصي",
-        tr: "Maven Kişisel Ajan",
+        en: "Cognirise Personal Agent",
+        ar: "مساعد Cognirise الشخصي",
+        tr: "Cognirise Kişisel Ajan",
       },
       class: "personal-agent",
       industries: ["financial-services", "telecom", "retail-consumer", "public-sector"],
@@ -1914,7 +1914,7 @@ const marketplaceToolsBase: Omit<MarketplaceToolEntry, "agentCast">[] = [
       { en: "Each demo runs from an offline canonical trace (/dge-traces/<slug>.json) so a meeting room with no internet is meeting-room-safe. Open the hub to launch any of the six demos: Catalogue & Channel Sentinel, Complaint Recovery & Root-Cause Engine, Effortless QR Feedback & Effortless Makers, Red Team Rapid-Response Console, Service Redesign Co-Pilot, and Spokes Review Agent.", ar: "يعمل كل عرض من مسار قياسي دون اتصال (/dge-traces/<slug>.json) كي تكون قاعة الاجتماع آمنة بلا إنترنت. افتح المركز لإطلاق أيٍّ من العروض الستة: حارس الكتالوج والقناة، محرّك استرداد الشكاوى والسبب الجذري، ملاحظات QR وصنّاع التجربة، كونسول الاستجابة السريعة، مساعد إعادة تصميم الخدمات، ووكيل مراجعة الجهات الفرعية." },
     ],
     screens: [
-      { title: { en: "DGE Effortless 2.0 hub", ar: "مركز DGE الجهد المنعدم 2.0" }, caption: { en: "Six numbered demo cards in the Maven brand grid, each linking to its TAMM/ADGE shell.", ar: "ستة عروض مرقّمة في شبكة Maven، كل واحد يرتبط بهيكل TAMM/ADGE." } },
+      { title: { en: "DGE Effortless 2.0 hub", ar: "مركز DGE الجهد المنعدم 2.0" }, caption: { en: "Six numbered demo cards in the Cognirise brand grid, each linking to its TAMM/ADGE shell.", ar: "ستة عروض مرقّمة في شبكة Cognirise، كل واحد يرتبط بهيكل TAMM/ADGE." } },
       { title: { en: "Shared agentic shell", ar: "الهيكل الوكيلي المشترك" }, caption: { en: "Citizen / Operator / Governance tabs with Agent Activity Stream, HAPA chips, AUTHORIZE card, audit timeline, persona switcher, EN ⇄ عربي.", ar: "ألسنة المواطن / المشغّل / الحوكمة مع تدفّق نشاط الوكلاء وعقود HAPA وبطاقة الاعتماد وسجل التدقيق ومحوِّل الأدوار وزرّ اللغة." } },
       { title: { en: "Behavioural contracts in action", ar: "العقود السلوكية في العمل" }, caption: { en: "Forbidden attempts (e.g. push uncited fee, bulk-close complaints) are blocked and recorded as outcome: blocked under HAPA H3 + H4.", ar: "المحاولات المحظورة (دفع رسم بلا استشهاد، إغلاق دفعة) تُحجب وتُسجَّل كـ outcome: blocked تحت H3 و H4." } },
     ],
@@ -2051,7 +2051,7 @@ export function getDemoAccent(slug: string, fallback = "#156082"): string {
 
 export const firmFacts = {
   positioning:
-    "Cognirise is a boutique MENAT AI advisory and engineering firm — operating across the Middle East, North Africa, and Türkiye, and a sister firm to Maven Insights (~200 consultant bench). We exist to close the gap between enterprise AI ambition and production outcomes.",
+    "Cognirise is a boutique MENAT AI advisory and engineering firm — operating across the Middle East, North Africa, and Türkiye, founded by partners with decades of hands-on delivery inside the region's leading telecoms, tier-one banks, and government bodies. We exist to close the gap between enterprise AI ambition and production outcomes.",
   offices: "Four offices across MENAT — Abu Dhabi, Dubai, Riyadh, and Istanbul. No street addresses are published.",
   promise:
     "Senior partners on every call, every deliverable. 90-day MVP commitment from kickoff to production. Sovereign on-prem capable for national security environments.",
@@ -2087,7 +2087,7 @@ export interface KnownLink {
 }
 
 /** Allow-list every link the chat widget is permitted to surface.
- * Important: every href here MUST resolve to a real route in the maven-ai app.
+ * Important: every href here MUST resolve to a real route in the Cognirise web app.
  *  - Industries use in-page anchors (`/industries#<id>`), not subroutes.
  *  - High-intent contact CTAs use `?topic=<slug>` to prefill the form.
  *  - There is no `/founders` page; founders live on `/about`.
