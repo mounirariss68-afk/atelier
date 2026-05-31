@@ -113,3 +113,9 @@ id = "5x0h6JPvS_fK_80uoaR6h"
 uri = "file://.local/deliverables/arcelik-demo-video-script.md"
 type = "text"
 title = "Arçelik Demo Video Script (Situation → Complication → Resolution)"
+
+[[outputs]]
+id = "ayNC0QlBKRSI64-N04oTL"
+uri = "file://dist/report-covers.zip"
+type = "unspecified"
+title = "All 16 report cover images (Cognirise)"
