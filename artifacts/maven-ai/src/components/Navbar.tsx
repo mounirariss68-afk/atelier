@@ -75,7 +75,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Nav */}
-          <nav className="hidden lg:flex items-center gap-8">
+          <nav className="hidden lg:flex items-center gap-8 ml-8 xl:ml-12">
             <Link href="/" className={`nav-link text-sm font-medium transition-colors ${location === "/" ? "text-[#5B7CFF]" : "text-gray-200 hover:text-white"}`}>
               {t(NAV.home)}
             </Link>
