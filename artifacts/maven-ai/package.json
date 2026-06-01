@@ -11,6 +11,7 @@
     "verify:e2e": "node ../../.local/verify/run-e2e.mjs",
     "verify:pdfs": "tsx scripts/render-pdf.tsx",
     "verify:all": "pnpm verify:e2e && pnpm verify:pdfs",
+    "test:assets": "tsx tests/assets/logo-asset.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

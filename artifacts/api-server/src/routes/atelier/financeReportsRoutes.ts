@@ -30,30 +30,18 @@
  * Persona gating mirrors financeEntitiesRoutes: recruiter is denied,
  * everyone else can read.
  */
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { Router, type IRouter, type Request, type Response } from "express";
 import PDFDocument from "pdfkit";
 import { atelierUsers } from "@workspace/db";
 import { ENTITIES_SEED } from "./financeEntitiesRoutes";
+import { loadBoardPackLogo } from "../../lib/atelier-board-pack-logo.js";
 
 const router: IRouter = Router();
 
 /** Navy-wordmark Cognirise logo for the white/printed board pack. Loaded once
- *  from the sibling atelier artifact's public assets; resolves relative to the
- *  bundled output (artifacts/api-server/dist) so it survives the esbuild build.
+ *  from the sibling atelier artifact's public assets (see the loader module).
  *  Falls back to null (text-only header) if the asset can't be read. */
-const BOARD_PACK_LOGO: Buffer | null = (() => {
-  try {
-    return readFileSync(
-      fileURLToPath(
-        new URL("../../atelier/public/cognirise-logo-light.png", import.meta.url),
-      ),
-    );
-  } catch {
-    return null;
-  }
-})();
+const BOARD_PACK_LOGO: Buffer | null = loadBoardPackLogo();
 type Me = typeof atelierUsers.$inferSelect;
 
 function ensurePersona(req: Request, res: Response): Me | null {
