@@ -1,12 +1,16 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { Document, Page, Text, View, StyleSheet, Svg, Path, Polygon, Line, Circle, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Svg, Path, Polygon, Line, Circle, Font, Image } from "@react-pdf/renderer";
 import type { AssessmentDefinition, ScoreResult } from "@workspace/assessments";
 import { tStr } from "@/lib/lang";
 
 const ARABIC_FONT = "Tajawal";
 const isBrowser = typeof window !== "undefined";
 const baseUrl: string = isBrowser ? (import.meta.env.BASE_URL ?? "/") : "/";
+// Navy-wordmark logo for the white/printed report surface.
+const logoLightSrc: string = isBrowser
+  ? `${baseUrl}images/cognirise-logo-light.png`.replace(/\/+/g, "/")
+  : new URL("../../../public/images/cognirise-logo-light.png", import.meta.url).pathname;
 const arabicRegularSrc = isBrowser
   ? `${baseUrl}fonts/Tajawal-Regular.ttf`.replace(/\/+/g, "/")
   : new URL("../../../public/fonts/Tajawal-Regular.ttf", import.meta.url).pathname;
@@ -51,6 +55,7 @@ const styles = StyleSheet.create({
   page: { paddingTop: 48, paddingHorizontal: 48, paddingBottom: 64, fontFamily: "Helvetica", fontSize: 10, color: colors.text, lineHeight: 1.5 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 28 },
   brand: { fontSize: 14, fontWeight: 700, color: colors.navy },
+  brandLogo: { height: 18, width: 68 },
   brandSub: { fontSize: 7, color: colors.cyan, letterSpacing: 1, textTransform: "uppercase", marginTop: 2 },
   pageTag: { fontSize: 8, color: colors.muted, textTransform: "uppercase", letterSpacing: 1 },
   cover: { paddingTop: 180 },
@@ -143,7 +148,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.brand}>Cognirise</Text>
+            <Image src={logoLightSrc} style={styles.brandLogo} />
             <Text style={styles.brandSub}>Intelligence that elevates</Text>
           </View>
           <Text style={styles.pageTag}>{def.code} · {t({ en: "Diagnostic Report", ar: "تقرير تشخيصي" })}</Text>
@@ -169,7 +174,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       {/* MATURITY AT A GLANCE */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>Cognirise</Text>
+          <Image src={logoLightSrc} style={styles.brandLogo} />
           <Text style={styles.pageTag}>{def.code} · {t({ en: "Maturity at a glance", ar: "النضج بنظرة" })}</Text>
         </View>
         <Text style={[styles.h1, dirStyle]}>{t({ en: "The headline", ar: "العنوان الرئيسي" })}</Text>
@@ -236,7 +241,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       {/* EXEC MEMO */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>Cognirise</Text>
+          <Image src={logoLightSrc} style={styles.brandLogo} />
           <Text style={styles.pageTag}>{t({ en: "Executive memo", ar: "مذكرة تنفيذية" })}</Text>
         </View>
         <Text style={[styles.h1, dirStyle]}>{t({ en: "From the Cognirise partnership", ar: "من شراكة Cognirise" })}</Text>
@@ -253,7 +258,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       {/* ANTI-PATTERNS + COST OF INACTION */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>Cognirise</Text>
+          <Image src={logoLightSrc} style={styles.brandLogo} />
           <Text style={styles.pageTag}>{t({ en: "Risks · Cost of inaction", ar: "المخاطر · كلفة التقاعس" })}</Text>
         </View>
         <Text style={[styles.h1, dirStyle]}>{t({ en: "Anti-patterns we detected", ar: "الأنماط المضادة التي اكتشفناها" })}</Text>
@@ -297,7 +302,7 @@ export function AssessmentPDF({ def, result, profile, memo, lang, publicId }: PD
       {/* RECOMMENDATIONS + ANTI-VENDOR + FOUNDERS */}
       <Page size="A4" style={pageStyle}>
         <View style={styles.header}>
-          <Text style={styles.brand}>Cognirise</Text>
+          <Image src={logoLightSrc} style={styles.brandLogo} />
           <Text style={styles.pageTag}>{t({ en: "Plan · Honesty · Partners", ar: "الخطة · الصراحة · الشركاء" })}</Text>
         </View>
 

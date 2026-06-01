@@ -30,12 +30,30 @@
  * Persona gating mirrors financeEntitiesRoutes: recruiter is denied,
  * everyone else can read.
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { Router, type IRouter, type Request, type Response } from "express";
 import PDFDocument from "pdfkit";
 import { atelierUsers } from "@workspace/db";
 import { ENTITIES_SEED } from "./financeEntitiesRoutes";
 
 const router: IRouter = Router();
+
+/** Navy-wordmark Cognirise logo for the white/printed board pack. Loaded once
+ *  from the sibling atelier artifact's public assets; resolves relative to the
+ *  bundled output (artifacts/api-server/dist) so it survives the esbuild build.
+ *  Falls back to null (text-only header) if the asset can't be read. */
+const BOARD_PACK_LOGO: Buffer | null = (() => {
+  try {
+    return readFileSync(
+      fileURLToPath(
+        new URL("../../atelier/public/cognirise-logo-light.png", import.meta.url),
+      ),
+    );
+  } catch {
+    return null;
+  }
+})();
 type Me = typeof atelierUsers.$inferSelect;
 
 function ensurePersona(req: Request, res: Response): Me | null {
@@ -1198,7 +1216,11 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   const fmt = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
   const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
-  doc.fontSize(20).text("AICo Group — Board Pack", { align: "left" });
+  if (BOARD_PACK_LOGO) {
+    doc.image(BOARD_PACK_LOGO, { width: 120 });
+    doc.moveDown(0.8);
+  }
+  doc.fillColor("#000").fontSize(20).text("AICo Group — Board Pack", { align: "left" });
   doc.fontSize(12).fillColor("#666").text(`Period: ${period.label} · Presentation currency: GBP`);
   doc.moveDown(0.5);
   doc.fillColor("#000").fontSize(11).text(`Generated ${new Date().toISOString().slice(0, 10)} for ${me.name} (${me.role})`);

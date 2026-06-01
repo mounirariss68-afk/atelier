@@ -1,1 +1,2 @@
 - [Logo-on-navy background removal](logo-bg-removal.md) — AI bg-removal fails on logo-on-dark-card art (keeps whole card); color-key the near-uniform navy with ImageMagick instead.
+- [api-server sibling assets](api-server-sibling-assets.md) — read static files in bundled api-server via `new URL("../../<artifact>/public/x", import.meta.url)`; atelier frontend has no always-light surface so navy logo only fits server PDFs.

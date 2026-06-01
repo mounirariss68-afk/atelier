@@ -29,6 +29,7 @@ import Radar from "@/components/assessment/Radar";
 import UvrPortfolio from "@/components/assessment/UvrPortfolio";
 import Heatmap from "@/components/assessment/Heatmap";
 import AssessmentPDF from "@/components/assessment/AssessmentPDF";
+import Logo from "@/components/Logo";
 
 const TIER_COLORS: Record<string, string> = {
   Nascent: "#B91C1C",
@@ -225,6 +226,12 @@ export default function AssessmentResults() {
 
         {/* Memo */}
         <section className="mt-8 bg-white rounded-3xl shadow-lg border border-gray-100 p-8 sm:p-12">
+          <div className="flex items-center justify-between gap-4 mb-6 pb-6 border-b border-gray-100">
+            <Logo variant="light" size="sm" />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              {t({ en: "Executive memo", ar: "مذكرة تنفيذية", tr: "Yönetici notu" })}
+            </span>
+          </div>
           <div className="flex items-center gap-3 mb-2">
             <Sparkles className="text-[#C45BB8]" size={20} />
             <h2 className="text-xs font-bold uppercase tracking-widest text-[#C45BB8]">
