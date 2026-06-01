@@ -2,11 +2,12 @@ import { mkdirSync, createWriteStream, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import PDFDocument from "pdfkit";
-import { Document, Packer, Paragraph, HeadingLevel, TextRun } from "docx";
+import { Document, Packer, Paragraph, HeadingLevel, TextRun, ImageRun } from "docx";
 import {
   PROPOSAL_SPINE,
   buildProposalBlocks,
   renderProposalHtml,
+  COGNIRISE_PROPOSAL_LOGO,
   type FirmProfileLite,
   type ProposalBlock,
   type ProposalSectionBlock,
@@ -101,6 +102,10 @@ export async function generateProposalDocs(
     stream.on("finish", () => resolve());
     stream.on("error", reject);
     doc.pipe(stream);
+    if (COGNIRISE_PROPOSAL_LOGO) {
+      doc.image(COGNIRISE_PROPOSAL_LOGO, { width: 130 });
+      doc.moveDown(0.8);
+    }
     doc.fontSize(20).text(input.title, { underline: false });
     doc.moveDown(0.3);
     if (input.recipient) {
@@ -127,9 +132,23 @@ export async function generateProposalDocs(
   });
 
   // ---- DOCX (docx) — projected from the same shared block model. ----
-  const children: Paragraph[] = [
+  const children: Paragraph[] = [];
+  if (COGNIRISE_PROPOSAL_LOGO) {
+    children.push(
+      new Paragraph({
+        children: [
+          new ImageRun({
+            type: "png",
+            data: COGNIRISE_PROPOSAL_LOGO,
+            transformation: { width: 170, height: 45 },
+          }),
+        ],
+      }),
+    );
+  }
+  children.push(
     new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(input.title)] }),
-  ];
+  );
   if (input.recipient) {
     children.push(
       new Paragraph({

@@ -13,6 +13,30 @@
 // PDF and DOCX exports in `proposal-docs.ts` walk the *same* block list,
 // so they cannot drift from what a recipient sees in Salon.
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+/** Navy-wordmark Cognirise logo for the light/printed proposal surfaces
+ *  (HTML cover, PDF cover, DOCX header). Loaded once from the sibling
+ *  atelier artifact's public assets; resolves relative to the bundled
+ *  output (artifacts/api-server/dist) so it survives the esbuild build.
+ *  Falls back to null (text-only header) if the asset can't be read. */
+export const COGNIRISE_PROPOSAL_LOGO: Buffer | null = (() => {
+  try {
+    return readFileSync(
+      fileURLToPath(
+        new URL("../../atelier/public/cognirise-logo-light.png", import.meta.url),
+      ),
+    );
+  } catch {
+    return null;
+  }
+})();
+
+const COGNIRISE_PROPOSAL_LOGO_DATA_URI: string | null = COGNIRISE_PROPOSAL_LOGO
+  ? `data:image/png;base64,${COGNIRISE_PROPOSAL_LOGO.toString("base64")}`
+  : null;
+
 export interface ProposalSpineEntry {
   /** Stable section key persisted in atelier_proposal_sections.section_id. */
   id: string;
@@ -331,9 +355,13 @@ function renderCoverHtml(section: ProposalSectionBlock, profile: FirmProfileLite
   const title = titleHeading && titleHeading.kind === "heading" ? titleHeading.text : "";
   const recipientPara = rest.find((b) => b.kind === "paragraph" && (b as { text: string }).text.startsWith("Prepared for"));
   const meta = rest.find((b) => b !== recipientPara);
+  const logoHtml = COGNIRISE_PROPOSAL_LOGO_DATA_URI
+    ? `<img class="cover-logo" src="${COGNIRISE_PROPOSAL_LOGO_DATA_URI}" alt="Cognirise" />`
+    : "";
   return `
     <section class="cover snap" id="sec-cover" aria-label="Cover">
       <div class="cover-inner">
+        ${logoHtml}
         <div class="brand">${escapeHtml(brand && brand.kind === "paragraph" ? brand.text : (profile?.firmName ?? "AICo"))}</div>
         <div class="cover-tagline">${escapeHtml(tagline && tagline.kind === "paragraph" ? tagline.text : "")}</div>
         <h1 class="cover-title">${escapeHtml(title)}</h1>
@@ -430,6 +458,7 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
     border-bottom: 1px solid var(--rule); position: relative; }
   section.cover { background: linear-gradient(180deg, #fbfaf6 0%, var(--soft) 100%); }
   .cover-inner { max-width: 720px; margin: 0 auto; padding-top: 60px; }
+  .cover-logo { display: block; height: 44px; width: auto; margin-bottom: 36px; }
   .cover .brand { font-family: ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.18em;
     text-transform: uppercase; font-size: 11px; color: var(--gold); margin-bottom: 32px; }
   .cover-tagline { font-style: italic; color: var(--mute); margin-bottom: 16px; }
