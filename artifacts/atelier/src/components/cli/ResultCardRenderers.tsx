@@ -15,7 +15,25 @@
  */
 
 import * as React from "react";
-import { ExternalLink } from "lucide-react";
+import {
+  ExternalLink,
+  Building2,
+  User,
+  Target,
+  FileText,
+  FileCheck2,
+  ClipboardCheck,
+  CalendarClock,
+  Package,
+  AlertTriangle,
+  Lightbulb,
+  Receipt,
+  Clock,
+  UserCheck,
+  Map as MapIcon,
+  Inbox,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CliCapability, CliLocale } from "./types";
 
@@ -86,6 +104,233 @@ const SEV_DOT: Record<string, string> = {
   complete: "bg-success",
   success: "bg-success",
 };
+
+/* ───────────── Task #539 — unified value formatting ───────────── */
+
+const MONEY_SYMBOL: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+};
+
+/** Currency-aware money formatter. Known symbols hug the number;
+ * everything else (AED, SAR, …) gets an ISO-code suffix. Large values
+ * collapse to k/M so cards stay compact. */
+function fmtMoney(n: number, currency?: string | null): string {
+  const cur = (currency ?? "USD").toUpperCase();
+  const sym = MONEY_SYMBOL[cur];
+  const abs = Math.abs(n);
+  let body: string;
+  if (abs >= 1_000_000) body = `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  else if (abs >= 1_000) body = `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  else body = `${Math.round(n * 100) / 100}`;
+  return sym ? `${sym}${body}` : `${body} ${cur}`;
+}
+
+/** Percent formatter for values already on a 0–100 scale. */
+function fmtPct(n: number): string {
+  return `${Number.isInteger(n) ? n : n.toFixed(1)}%`;
+}
+
+function looksLikeDate(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}([T ]|$)/.test(s.trim());
+}
+
+/** Absolute date formatter (e.g. "19 Jun 2026"). Falls back to the raw
+ * string when it isn't parseable so we never show "Invalid Date". */
+function fmtDate(iso: string, locale: CliLocale): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  try {
+    return new Intl.DateTimeFormat(locale === "ar" ? "ar" : "en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(t));
+  } catch {
+    return iso;
+  }
+}
+
+/* ───────────── Task #539 — shared card primitives ───────────── */
+
+const STATUS_TONE: Record<string, "success" | "danger" | "warning" | "mute"> = {
+  approved: "success",
+  approve: "success",
+  active: "success",
+  complete: "success",
+  completed: "success",
+  created: "success",
+  accepted: "success",
+  won: "success",
+  dispatched: "success",
+  success: "success",
+  green: "success",
+  champion: "success",
+  supporter: "success",
+  rejected: "danger",
+  reject: "danger",
+  blocker: "danger",
+  lost: "danger",
+  red: "danger",
+  error: "danger",
+  blocked: "danger",
+  pending: "warning",
+  submitted: "warning",
+  amber: "warning",
+  skeptic: "warning",
+  draft: "mute",
+  neutral: "mute",
+  unknown: "mute",
+};
+
+function StatusPill({ value }: { value: string }) {
+  const tone = STATUS_TONE[value.toLowerCase()] ?? "mute";
+  const cls =
+    tone === "success"
+      ? "border-success/30 bg-success/10 text-success"
+      : tone === "danger"
+        ? "border-danger/30 bg-danger/10 text-danger"
+        : tone === "warning"
+          ? "border-warning/30 bg-warning/10 text-warning"
+          : "border-border-soft bg-bg-deep text-text-mute";
+  return (
+    <span
+      className={cn(
+        "px-1.5 py-0.5 rounded border text-[10px] font-mono uppercase tracking-wider whitespace-nowrap",
+        cls,
+      )}
+      data-testid="cli-status-pill"
+    >
+      {humanLabel(value)}
+    </span>
+  );
+}
+
+function OpenLink({ href, locale }: { href: string; locale: CliLocale }) {
+  return (
+    <a
+      href={href}
+      className="text-[11px] inline-flex items-center gap-1 text-text-mute hover:text-gold shrink-0"
+      data-testid="cli-open-link"
+    >
+      {locale === "ar" ? "افتح" : "Open"}
+      <ExternalLink className="w-3 h-3" />
+    </a>
+  );
+}
+
+/** Renders the first `initial` children and reveals the rest behind a
+ * "show more" toggle. `as` controls the wrapper element so the same
+ * affordance works for bullet lists (ul) and attribute grids (dl). */
+function ShowMoreList<T>({
+  items,
+  initial,
+  locale,
+  render,
+  as = "ul",
+  className,
+}: {
+  items: T[];
+  initial: number;
+  locale: CliLocale;
+  render: (item: T, index: number) => React.ReactNode;
+  as?: "ul" | "dl" | "div";
+  className?: string;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const shown = expanded ? items : items.slice(0, initial);
+  const Wrap = as;
+  const hidden = items.length - initial;
+  return (
+    <div>
+      <Wrap className={className}>{shown.map(render)}</Wrap>
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-1 text-[10px] font-mono text-gold hover:underline"
+          data-testid="cli-show-more"
+        >
+          {expanded
+            ? locale === "ar"
+              ? "عرض أقل"
+              : "Show less"
+            : locale === "ar"
+              ? `عرض ${hidden} المزيد`
+              : `Show ${hidden} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({
+  icon: Icon = Inbox,
+  title,
+  hint,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-1 py-4 text-center"
+      data-testid="cli-empty-state"
+    >
+      <Icon className="w-5 h-5 text-text-faint" aria-hidden />
+      <div className="text-xs text-text-mute">{title}</div>
+      {hint && <div className="text-[10px] text-text-faint">{hint}</div>}
+    </div>
+  );
+}
+
+/** Lightweight shimmer used while a card's payload is still resolving. */
+function CardSkeleton() {
+  return (
+    <div className="space-y-2 animate-pulse" data-testid="cli-card-skeleton">
+      <div className="h-3 w-1/3 rounded bg-border-soft" />
+      <div className="h-3 w-2/3 rounded bg-border-soft" />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="h-8 rounded bg-border-soft" />
+        <div className="h-8 rounded bg-border-soft" />
+      </div>
+    </div>
+  );
+}
+
+/** Two-column attribute grid with a built-in show-more affordance. */
+function FieldGrid({
+  rows,
+  locale,
+  initial = 6,
+}: {
+  rows: Array<{ label: string; value: React.ReactNode }>;
+  locale: CliLocale;
+  initial?: number;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <ShowMoreList
+      items={rows}
+      initial={initial}
+      locale={locale}
+      as="dl"
+      className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]"
+      render={(r, i) => (
+        <React.Fragment key={`${r.label}-${i}`}>
+          <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px] self-center">
+            {r.label}
+          </dt>
+          <dd className="text-text truncate" title={typeof r.value === "string" ? r.value : undefined}>
+            {r.value}
+          </dd>
+        </React.Fragment>
+      )}
+    />
+  );
+}
 
 /* ─────────────────────────── dispatcher ─────────────────────────── */
 
@@ -243,9 +488,335 @@ function ShapeBody({
       return <RenewalCard data={data} locale={locale} />;
     case "agent_run":
       return <AgentRunCard data={data} locale={locale} />;
+    // Task #539 — CRM result cards (previously fell through to raw JSON).
+    case "account_card":
+    case "contact_card":
+    case "opportunity_card":
+    case "charter_card":
+    case "section_card":
+    case "proposal_card":
+    case "qualifier_card":
+    case "meeting_card":
+    case "deliverable_card":
+    case "raid_item":
+    case "raid_batch":
+    case "pov_card":
+    case "expense_card":
+    case "expense_batch":
+    case "timesheet_card":
+    case "profile_update_decision":
+    case "cartographer_run":
+      return <CrmEntityCard shape={shape} data={data} locale={locale} />;
+    case "qualification_rubric":
+      return <QualificationRubric data={data} locale={locale} />;
     default:
       return <FallbackJson data={data} />;
   }
+}
+
+/* ─────────────── Task #539 — CRM entity cards ─────────────── */
+
+interface CrmMeta {
+  en: string;
+  ar: string;
+  Icon: LucideIcon;
+}
+
+const CRM_META: Record<string, CrmMeta> = {
+  account_card: { en: "Account", ar: "حساب", Icon: Building2 },
+  contact_card: { en: "Contact", ar: "جهة اتصال", Icon: User },
+  opportunity_card: { en: "Opportunity", ar: "فرصة", Icon: Target },
+  charter_card: { en: "Charter", ar: "ميثاق", Icon: FileCheck2 },
+  section_card: { en: "Proposal section", ar: "قسم العرض", Icon: FileText },
+  proposal_card: { en: "Proposal", ar: "عرض", Icon: FileText },
+  qualifier_card: { en: "Qualification", ar: "تأهيل", Icon: ClipboardCheck },
+  meeting_card: { en: "Meeting", ar: "اجتماع", Icon: CalendarClock },
+  deliverable_card: { en: "Deliverable", ar: "مُخرَج", Icon: Package },
+  raid_item: { en: "RAID item", ar: "عنصر RAID", Icon: AlertTriangle },
+  raid_batch: { en: "RAID items", ar: "عناصر RAID", Icon: AlertTriangle },
+  pov_card: { en: "Point of view", ar: "وجهة نظر", Icon: Lightbulb },
+  expense_card: { en: "Expense", ar: "مصروف", Icon: Receipt },
+  expense_batch: { en: "Expenses", ar: "مصروفات", Icon: Receipt },
+  timesheet_card: { en: "Timesheet", ar: "جدول زمني", Icon: Clock },
+  profile_update_decision: { en: "Profile update", ar: "تحديث الملف", Icon: UserCheck },
+  cartographer_run: { en: "Cartographer", ar: "رسم الخرائط", Icon: MapIcon },
+};
+
+// Keys consumed by the header/footer chrome — excluded from the
+// auto-generated attribute grid so they don't render twice.
+const CRM_SKIP_KEYS = new Set([
+  "id",
+  "name",
+  "title",
+  "label",
+  "merchant",
+  "href",
+  "navigateTo",
+  "shape",
+  "status",
+  "decision",
+  "disposition",
+  "count",
+  "createdCount",
+  "ids",
+  "attachmentIds",
+  "preview",
+  "missingFields",
+  "dispatched",
+  "currency",
+]);
+
+const CRM_ID_KEYS = [
+  "id",
+  "contactId",
+  "opportunityId",
+  "accountId",
+  "versionId",
+  "weekId",
+  "raidId",
+  "updateId",
+  "sectionId",
+  "engagementId",
+] as const;
+
+function crmFormatField(key: string, value: unknown, currency: string | null, locale: CliLocale): React.ReactNode {
+  const n = asNum(value);
+  if (n != null) {
+    if (/amount|dealsize|deal_size|value|total|price|cost|budget|fee/i.test(key)) {
+      return fmtMoney(n, currency);
+    }
+    if (/pct|percent|probability/i.test(key)) return fmtPct(n);
+    return fmtNum(n);
+  }
+  const s = asStr(value);
+  if (looksLikeDate(s)) return fmtDate(s, locale);
+  return s;
+}
+
+function CrmEntityCard({
+  shape,
+  data,
+  locale,
+}: {
+  shape: string;
+  data: Json;
+  locale: CliLocale;
+}) {
+  const ar = locale === "ar";
+  const meta = CRM_META[shape] ?? {
+    en: humanLabel(shape.replace(/_card$/, "")),
+    ar: humanLabel(shape.replace(/_card$/, "")),
+    Icon: FileText,
+  };
+  const Icon = meta.Icon;
+  const kindLabel = ar ? meta.ar : meta.en;
+
+  const title =
+    asStr(data.name) || asStr(data.title) || asStr(data.merchant) || asStr(data.label);
+  let id = "";
+  for (const k of CRM_ID_KEYS) {
+    if (data[k]) {
+      id = asStr(data[k]);
+      break;
+    }
+  }
+
+  const nav = asObj(data.navigateTo);
+  const href = asStr(data.href) || asStr(nav.path);
+  const currency = asStr(data.currency) || null;
+
+  // Status pill — prefer explicit status, then a decision/disposition,
+  // then a dispatched flag (Cartographer).
+  let status = asStr(data.status) || asStr(data.decision) || asStr(data.disposition);
+  if (!status && data.dispatched === true) status = "dispatched";
+
+  // Batch count (raid_batch / expense_batch).
+  const count = asNum(data.count) ?? asNum(data.createdCount);
+
+  // Special-case stage transitions so "from → to" reads as one row.
+  const fromStage = asStr(data.fromStage) || asStr(data.from);
+  const toStage = asStr(data.toStage) || asStr(data.to);
+
+  const rows: Array<{ label: string; value: React.ReactNode }> = [];
+  if (fromStage && toStage) {
+    rows.push({
+      label: ar ? "المرحلة" : "Stage",
+      value: (
+        <span className="font-mono text-[11px]">
+          {humanLabel(fromStage)} <span className="text-text-faint">→</span>{" "}
+          <span className="text-gold">{humanLabel(toStage)}</span>
+        </span>
+      ),
+    });
+  }
+  for (const [k, v] of Object.entries(data)) {
+    if (CRM_SKIP_KEYS.has(k)) continue;
+    if (k === "fromStage" || k === "toStage" || k === "from" || k === "to") continue;
+    if (v == null || v === "") continue;
+    if (typeof v === "object") continue; // arrays/objects handled elsewhere
+    rows.push({ label: humanLabel(k), value: crmFormatField(k, v, currency, locale) });
+  }
+
+  // Money summary for single-expense cards (amount + currency).
+  const amount = asNum(data.amount);
+  const hasBody = title || id || rows.length > 0 || status || count != null || amount != null;
+
+  if (!hasBody) {
+    return (
+      <EmptyState
+        icon={Icon}
+        title={ar ? `لا توجد تفاصيل ${kindLabel}` : `No ${meta.en.toLowerCase()} details`}
+      />
+    );
+  }
+
+  return (
+    <div data-testid="cli-crm-card" data-crm-shape={shape}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0">
+          <Icon className="w-4 h-4 text-gold mt-0.5 shrink-0" aria-hidden />
+          <div className="min-w-0">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+              {kindLabel}
+            </div>
+            <div className="text-sm font-semibold truncate" title={title || undefined}>
+              {title ||
+                (amount != null
+                  ? fmtMoney(amount, currency)
+                  : count != null
+                    ? ar
+                      ? `${count} عنصر`
+                      : `${count} item${count === 1 ? "" : "s"}`
+                    : kindLabel)}
+            </div>
+            {id && (
+              <div className="text-[11px] font-mono text-text-faint truncate" title={id}>
+                {id}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {status && <StatusPill value={status} />}
+          {href && <OpenLink href={href} locale={locale} />}
+        </div>
+      </div>
+
+      {title && amount != null && (
+        <div className="mt-1.5 font-display text-lg">{fmtMoney(amount, currency)}</div>
+      )}
+
+      {count != null && (
+        <div className="mt-1.5 text-[11px] font-mono text-text-mute">
+          {ar
+            ? `${count} عنصر تم إنشاؤها`
+            : `${count} item${count === 1 ? "" : "s"} created`}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="mt-2">
+          <FieldGrid rows={rows} locale={locale} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────── Task #539 — qualification rubric ─────────────── */
+
+function QualificationRubric({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const overall = asNum(data.overallScore);
+  const dims = asArr(data.dimensions).map(asObj);
+  const summary = asStr(data.summary);
+
+  if (dims.length === 0 && overall == null && !summary) {
+    return (
+      <EmptyState
+        icon={ClipboardCheck}
+        title={ar ? "لا يوجد تقييم تأهيل" : "No qualification scored yet"}
+        hint={ar ? "أرفق مستنداً لتسجيله." : "Attach a document to score it."}
+      />
+    );
+  }
+
+  // Detect the score scale from the values present (0–5, 0–10, or 0–100).
+  const allScores = [
+    ...dims.map((d) => asNum(d.score) ?? 0),
+    overall ?? 0,
+  ];
+  const peak = Math.max(...allScores, 0);
+  const scale = peak <= 5 ? 5 : peak <= 10 ? 10 : 100;
+
+  return (
+    <div className="space-y-3" data-testid="cli-qualification-rubric">
+      {overall != null && (
+        <div className="flex items-baseline justify-between">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+            {ar ? "النتيجة الإجمالية" : "Overall score"}
+          </span>
+          <span className="font-display text-xl text-text">
+            {overall}
+            <span className="text-text-faint text-sm"> / {scale}</span>
+          </span>
+        </div>
+      )}
+
+      {dims.length > 0 && (
+        <ShowMoreList
+          items={dims}
+          initial={6}
+          locale={locale}
+          as="div"
+          className="space-y-2"
+          render={(d, i) => {
+            const name = asStr(d.name) || `Dimension ${i + 1}`;
+            const score = asNum(d.score);
+            const evidence = asStr(d.evidence);
+            const pctWidth = score != null ? Math.max(2, Math.min(100, (score / scale) * 100)) : 0;
+            const tone =
+              score == null
+                ? "bg-border"
+                : score / scale >= 0.66
+                  ? "bg-success"
+                  : score / scale >= 0.33
+                    ? "bg-warning"
+                    : "bg-danger";
+            return (
+              <div key={i}>
+                <div className="flex items-baseline justify-between text-[11px]">
+                  <span className="text-text truncate">{name}</span>
+                  {score != null && (
+                    <span className="font-mono text-text-mute shrink-0 ms-2">
+                      {score} / {scale}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 h-1.5 rounded-full bg-bg-deep overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full", tone)}
+                    style={{ width: `${pctWidth}%` }}
+                  />
+                </div>
+                {evidence && (
+                  <div className="mt-1 text-[11px] text-text-mute leading-relaxed">
+                    {evidence}
+                  </div>
+                )}
+              </div>
+            );
+          }}
+        />
+      )}
+
+      {summary && (
+        <div className="border-t border-border-soft pt-2 text-xs text-text leading-relaxed">
+          {summary}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─────────── Task #492 — prefill_from_specialist (agent_run) ─────────── */
@@ -1253,10 +1824,25 @@ function TimeSeries({ data, locale }: { data: Json; locale: CliLocale }) {
 
 function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
   const name = asStr(data.name) || asStr(data.label) || asStr(data.id);
-  const href = asStr(data.href);
-  const skip = new Set(["id", "name", "label", "href", "weeks", "events"]);
+  const nav = asObj(data.navigateTo);
+  const href = asStr(data.href) || asStr(nav.path);
+  const currency = asStr(data.currency) || null;
+  // Task #539 — `navigateTo`/`shape`/`kind` are chrome, not attributes;
+  // surfacing them in the grid produced "[object Object]" rows.
+  const skip = new Set([
+    "id",
+    "name",
+    "label",
+    "href",
+    "weeks",
+    "events",
+    "navigateTo",
+    "shape",
+    "currency",
+  ]);
+  const kind = asStr(data.kind);
   const rows = Object.entries(data).filter(
-    ([k, v]) => !skip.has(k) && v != null && v !== "",
+    ([k, v]) => !skip.has(k) && k !== "kind" && v != null && v !== "",
   );
   // utilization.person ships a `weeks` array — render a tiny sparkline.
   const weeks = asArr(data.weeks) as Json[];
@@ -1266,62 +1852,49 @@ function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
     <div data-testid="entity-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-sm font-semibold truncate">{name || "—"}</div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-sm font-semibold truncate">{name || "—"}</span>
+            {kind && (
+              <span className="shrink-0 text-[10px] font-mono uppercase tracking-wider text-text-faint border border-border-soft rounded px-1 py-px">
+                {humanLabel(kind)}
+              </span>
+            )}
+          </div>
           {data.id != null && (
             <div className="text-[11px] font-mono text-text-faint truncate">
               {asStr(data.id)}
             </div>
           )}
         </div>
-        {href && (
-          <a
-            href={href}
-            className="text-[11px] inline-flex items-center gap-1 text-text-mute hover:text-gold shrink-0"
-            data-testid="entity-href"
-          >
-            {locale === "ar" ? "افتح" : "Open"}
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        )}
+        {href && <OpenLink href={href} locale={locale} />}
       </div>
       {rows.length > 0 && (
-        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
-          {rows.slice(0, 8).map(([k, v]) => {
-            if (Array.isArray(v)) {
-              return (
-                <React.Fragment key={k}>
-                  <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
-                    {humanLabel(k)}
-                  </dt>
-                  <dd className="text-text">
-                    {v.length === 0 ? "—" : `${v.length}`}
-                  </dd>
-                </React.Fragment>
-              );
-            }
-            const n = asNum(v);
-            const isUsd = /usd|amount|value/i.test(k);
-            const isPct = /pct|percent|%/i.test(k);
-            const display =
-              n != null
-                ? isUsd
-                  ? fmtUsd(n)
-                  : isPct
-                    ? `${n.toFixed(1)}%`
-                    : fmtNum(n)
-                : asStr(v);
-            return (
-              <React.Fragment key={k}>
-                <dt className="text-text-faint font-mono uppercase tracking-wider text-[10px]">
-                  {humanLabel(k)}
-                </dt>
-                <dd className="text-text truncate" title={display}>
-                  {display}
-                </dd>
-              </React.Fragment>
-            );
-          })}
-        </dl>
+        <div className="mt-2">
+          <FieldGrid
+            locale={locale}
+            initial={8}
+            rows={rows.map(([k, v]) => {
+              if (Array.isArray(v)) {
+                return { label: humanLabel(k), value: v.length === 0 ? "—" : `${v.length}` };
+              }
+              const n = asNum(v);
+              const isUsd = /usd|amount|value|deal|price|cost|budget|fee/i.test(k);
+              const isPct = /pct|percent|%|probability/i.test(k);
+              const s = asStr(v);
+              const display =
+                n != null
+                  ? isUsd
+                    ? fmtMoney(n, currency)
+                    : isPct
+                      ? fmtPct(n)
+                      : fmtNum(n)
+                  : looksLikeDate(s)
+                    ? fmtDate(s, locale)
+                    : s;
+              return { label: humanLabel(k), value: display };
+            })}
+          />
+        </div>
       )}
       {weeks.length > 0 && (
         <div className="mt-2">

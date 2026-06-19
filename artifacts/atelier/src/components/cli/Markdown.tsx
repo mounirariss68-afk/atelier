@@ -1,14 +1,25 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+interface ListItem {
+  text: string;
+  child?: ListNode;
+}
+interface ListNode {
+  ordered: boolean;
+  items: ListItem[];
+}
+
 type Block =
   | { kind: "p"; text: string }
-  | { kind: "ul"; items: string[] }
-  | { kind: "ol"; items: string[] }
+  | { kind: "h"; level: number; text: string }
+  | { kind: "list"; node: ListNode }
   | { kind: "table"; header: string[]; align: ("left" | "right" | "center")[]; rows: string[][] };
 
 const TABLE_SEP_RE = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/;
 const TABLE_ROW_RE = /^\s*\|.*\|\s*$/;
+const HEADING_RE = /^(#{1,6})\s+(.*)$/;
+const LIST_ITEM_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
 
 function splitRow(line: string): string[] {
   let s = line.trim();
@@ -45,6 +56,14 @@ function parseBlocks(src: string): Block[] {
       i++;
       continue;
     }
+    // Heading (# … ######)
+    const hm = line.match(HEADING_RE);
+    if (hm) {
+      flushPara();
+      blocks.push({ kind: "h", level: hm[1].length, text: hm[2].trim() });
+      i++;
+      continue;
+    }
     // Table?
     if (TABLE_ROW_RE.test(line) && i + 1 < lines.length && TABLE_SEP_RE.test(lines[i + 1])) {
       flushPara();
@@ -59,26 +78,12 @@ function parseBlocks(src: string): Block[] {
       blocks.push({ kind: "table", header, align, rows });
       continue;
     }
-    // Bullet list
-    if (/^\s*[-*]\s+/.test(line)) {
+    // List (bullet or numbered, with nesting via indentation)
+    if (LIST_ITEM_RE.test(line)) {
       flushPara();
-      const items: string[] = [];
-      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*[-*]\s+/, ""));
-        i++;
-      }
-      blocks.push({ kind: "ul", items });
-      continue;
-    }
-    // Numbered list
-    if (/^\s*\d+\.\s+/.test(line)) {
-      flushPara();
-      const items: string[] = [];
-      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*\d+\.\s+/, ""));
-        i++;
-      }
-      blocks.push({ kind: "ol", items });
+      const { node, next } = parseList(lines, i);
+      blocks.push({ kind: "list", node });
+      i = next;
       continue;
     }
     buf.push(line.trim());
@@ -86,6 +91,54 @@ function parseBlocks(src: string): Block[] {
   }
   flushPara();
   return blocks;
+}
+
+interface FlatEntry {
+  indent: number;
+  ordered: boolean;
+  text: string;
+}
+
+/** Consume a contiguous run of list lines and build a nested tree from
+ * their leading indentation (tabs count as two spaces). */
+function parseList(lines: string[], start: number): { node: ListNode; next: number } {
+  const flat: FlatEntry[] = [];
+  let i = start;
+  while (i < lines.length) {
+    const m = lines[i].match(LIST_ITEM_RE);
+    if (!m) break;
+    flat.push({
+      indent: m[1].replace(/\t/g, "  ").length,
+      ordered: /\d/.test(m[2]),
+      text: m[3].trim(),
+    });
+    i++;
+  }
+  const { node } = buildTree(flat, 0, flat[0]?.indent ?? 0);
+  return { node, next: i };
+}
+
+function buildTree(
+  flat: FlatEntry[],
+  pos: number,
+  baseIndent: number,
+): { node: ListNode; pos: number } {
+  const items: ListItem[] = [];
+  const ordered = flat[pos]?.ordered ?? false;
+  while (pos < flat.length && flat[pos].indent >= baseIndent) {
+    const e = flat[pos];
+    if (e.indent > baseIndent) {
+      // Deeper — attach as a child of the previous sibling.
+      const sub = buildTree(flat, pos, e.indent);
+      if (items.length > 0) items[items.length - 1].child = sub.node;
+      else items.push({ text: "", child: sub.node });
+      pos = sub.pos;
+    } else {
+      items.push({ text: e.text });
+      pos++;
+    }
+  }
+  return { node: { ordered, items }, pos };
 }
 
 function renderInline(text: string, keyBase: string): React.ReactNode[] {
@@ -138,6 +191,38 @@ const ALIGN_CLASS: Record<string, string> = {
   center: "text-center",
 };
 
+const HEADING_CLASS: Record<number, string> = {
+  1: "text-sm font-semibold text-text mt-1",
+  2: "text-[13px] font-semibold text-text mt-1",
+  3: "text-xs font-semibold text-text",
+  4: "text-[11px] font-semibold uppercase tracking-wider text-text-mute",
+  5: "text-[11px] font-semibold uppercase tracking-wider text-text-faint",
+  6: "text-[10px] font-semibold uppercase tracking-wider text-text-faint",
+};
+
+function MdHeading({ level, text, keyBase }: { level: number; text: string; keyBase: string }) {
+  const Tag = `h${Math.min(level, 6)}` as React.ElementType;
+  return (
+    <Tag className={HEADING_CLASS[level] ?? HEADING_CLASS[6]}>
+      {renderInline(text, keyBase)}
+    </Tag>
+  );
+}
+
+function MdList({ node, keyBase }: { node: ListNode; keyBase: string }) {
+  const Tag = node.ordered ? "ol" : "ul";
+  return (
+    <Tag className={cn(node.ordered ? "list-decimal" : "list-disc", "ms-5 space-y-0.5")}>
+      {node.items.map((it, j) => (
+        <li key={j}>
+          {it.text && renderInline(it.text, `${keyBase}-${j}`)}
+          {it.child && <MdList node={it.child} keyBase={`${keyBase}-${j}c`} />}
+        </li>
+      ))}
+    </Tag>
+  );
+}
+
 export function Markdown({
   text,
   className,
@@ -161,22 +246,10 @@ export function Markdown({
               {renderInline(b.text, `p${i}`)}
             </p>
           );
-        if (b.kind === "ul")
-          return (
-            <ul key={i} className="list-disc ms-5 space-y-0.5">
-              {b.items.map((it, j) => (
-                <li key={j}>{renderInline(it, `ul${i}-${j}`)}</li>
-              ))}
-            </ul>
-          );
-        if (b.kind === "ol")
-          return (
-            <ol key={i} className="list-decimal ms-5 space-y-0.5">
-              {b.items.map((it, j) => (
-                <li key={j}>{renderInline(it, `ol${i}-${j}`)}</li>
-              ))}
-            </ol>
-          );
+        if (b.kind === "h")
+          return <MdHeading key={i} level={b.level} text={b.text} keyBase={`h${i}`} />;
+        if (b.kind === "list")
+          return <MdList key={i} node={b.node} keyBase={`l${i}`} />;
         return (
           <div key={i} className="overflow-x-auto">
             <table className="w-full text-[11px] border-collapse">
