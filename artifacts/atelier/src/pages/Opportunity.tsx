@@ -3,8 +3,12 @@ import {
   useAtelierGetOpportunity,
   useAtelierGetMe,
   useAtelierGetStageHistory,
+  useAtelierArchiveOpportunity,
   getAtelierGetOpportunityQueryKey,
   getAtelierGetStageHistoryQueryKey,
+  getAtelierListOpportunitiesQueryKey,
+  getAtelierListAuditQueryKey,
+  getAtelierGetPipelineForecastQueryKey,
   type SalesStage,
 } from "@workspace/api-client-react";
 import {
@@ -30,8 +34,22 @@ import { CommercialsTab } from "@/components/tabs/CommercialsTab";
 import { PrototypeButton } from "@/components/tabs/PrototypeButton";
 import { QualifierSheet } from "@/components/QualifierSheet";
 import { StageTransitionDialog } from "@/components/StageTransitionDialog";
+import { OpportunityEditDialog } from "@/components/OpportunityEditDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { SALES_STAGE_LABEL, STALLED_THRESHOLD_DAYS, stageTone } from "@/lib/sales-stages";
-import { FileText, FilePlus2, Mic, Telescope, Folder, ArrowRight, AlertTriangle } from "lucide-react";
+import { FileText, FilePlus2, Mic, Telescope, Folder, ArrowRight, AlertTriangle, Pencil, Archive } from "lucide-react";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -62,6 +80,27 @@ export default function Opportunity() {
   const [activeTab, setActiveTab] = React.useState<TabId>("brief");
   const [qualifierOpen, setQualifierOpen] = React.useState(false);
   const [moveOpen, setMoveOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [archiveOpen, setArchiveOpen] = React.useState(false);
+
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [, navigate] = useLocation();
+  const archive = useAtelierArchiveOpportunity();
+
+  async function handleArchive() {
+    try {
+      await archive.mutateAsync({ oppId, data: {} });
+      qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
+      qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
+      qc.invalidateQueries({ queryKey: getAtelierGetPipelineForecastQueryKey() });
+      toast({ title: "Opportunity archived", description: "Removed from the active pipeline." });
+      setArchiveOpen(false);
+      navigate("/pipeline");
+    } catch (err: unknown) {
+      toast({ title: "Could not archive", description: String(err), variant: "destructive" });
+    }
+  }
 
   if (isLoading) return <div className="container-atelier py-12"><Skeleton className="h-64 bg-bg-elevate" /></div>;
   if (isError || !opp) return <div className="container-atelier py-12 text-danger">Failed to load opportunity.</div>;
@@ -162,14 +201,28 @@ export default function Opportunity() {
               </span>
             </PillButton>
           </div>
-          {/* Secondary references row — research + scoring. */}
-          <div className="flex flex-wrap gap-2">
+          {/* Secondary references row — research + lifecycle controls. */}
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => setActiveTab("research")}
               className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-gold transition-colors"
             >
               <Telescope className="w-3.5 h-3.5" /> Research account
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-gold transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setArchiveOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-danger transition-colors"
+            >
+              <Archive className="w-3.5 h-3.5" /> Archive
             </button>
           </div>
         </div>
@@ -195,18 +248,50 @@ export default function Opportunity() {
           {activeTab === "meetings" && <MeetingsTab oppId={opp.id} personaName={personaName} />}
           {activeTab === "proposal" && <ProposalTab oppId={opp.id} />}
           {activeTab === "commercials" && <CommercialsTab oppId={opp.id} />}
-          {activeTab === "artifacts" && (
-            <div className="rounded-lg border border-dashed border-border bg-bg-elevate/40 p-12 text-center">
-              <Folder className="w-8 h-8 text-gold/60 mx-auto mb-3" />
-              <h3 className="text-lg font-semibold text-text mb-1">Artifacts</h3>
-              <p className="text-text-mute text-sm max-w-xl mx-auto">
-                Proposals, decks, prototypes and exports linked to <span className="font-mono text-text">{opp.name}</span> live here. Use
-                {" "}<span className="text-gold font-mono">Build proposal</span> or <span className="text-gold font-mono">Prototype</span> from the
-                toolbar to spin up a new artifact, or drag-drop assets to attach existing ones.
-              </p>
-              <p className="text-xs text-text-faint mt-4 font-mono">No artifacts attached yet.</p>
-            </div>
-          )}
+          {activeTab === "artifacts" && (() => {
+            const evidence = (Array.isArray(history) ? history : []).flatMap((t) =>
+              (t.evidenceArtifactIds ?? []).map((artId) => ({
+                artId,
+                stage: t.toStage,
+                at: t.createdAt,
+                by: t.transitionedByName ?? null,
+              })),
+            );
+            if (evidence.length === 0) {
+              return (
+                <div className="rounded-lg border border-dashed border-border bg-bg-elevate/40 p-12 text-center">
+                  <Folder className="w-8 h-8 text-gold/60 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-text mb-1">Artifacts</h3>
+                  <p className="text-text-mute text-sm max-w-xl mx-auto">
+                    Evidence and artifacts attached to stage transitions on{" "}
+                    <span className="font-mono text-text">{opp.name}</span> appear here. Attach
+                    references from the <span className="text-gold font-mono">Move stage</span> dialog.
+                  </p>
+                  <p className="text-xs text-text-faint mt-4 font-mono">No artifacts attached yet.</p>
+                </div>
+              );
+            }
+            return (
+              <div className="rounded-lg border border-border-soft bg-bg-elevate/40 overflow-hidden">
+                <div className="px-4 py-3 border-b border-border-soft flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-gold/70" />
+                  <h3 className="text-sm font-semibold text-text">Stage-transition evidence</h3>
+                  <span className="text-xs text-text-faint font-mono">· {evidence.length}</span>
+                </div>
+                <ul className="divide-y divide-border-soft">
+                  {evidence.map((e, i) => (
+                    <li key={`${e.artId}-${i}`} className="px-4 py-3 flex items-center justify-between gap-3 text-sm">
+                      <span className="font-mono text-text truncate">{e.artId}</span>
+                      <span className="text-xs text-text-faint font-mono shrink-0">
+                        {SALES_STAGE_LABEL[e.stage]} · {new Date(e.at).toLocaleDateString()}
+                        {e.by ? ` · ${e.by}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
           {activeTab === "audit" && <AuditTab entityType="opportunity" entityId={opp.id} />}
         </div>
       </div>
@@ -219,6 +304,32 @@ export default function Opportunity() {
         open={moveOpen}
         onOpenChange={setMoveOpen}
       />
+      <OpportunityEditDialog opp={opp} open={editOpen} onOpenChange={setEditOpen} />
+      <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <AlertDialogContent className="bg-bg-elevate border-border text-text">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this opportunity?</AlertDialogTitle>
+            <AlertDialogDescription className="text-text-mute">
+              <span className="font-mono text-text">{opp.name}</span> will be removed from the
+              active pipeline and forecast. This is a soft delete — it stays in the audit trail and
+              can be restored by an admin.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleArchive();
+              }}
+              disabled={archive.isPending}
+              className="bg-danger text-white hover:bg-danger/90"
+            >
+              {archive.isPending ? "Archiving…" : "Archive"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

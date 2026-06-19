@@ -319,6 +319,33 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
   subStatus: zod.string().nullish(),
   runnerEnteredAt: zod.coerce.date().nullish(),
   contractSignedAt: zod.coerce.date().nullish(),
+  qualificationRubric: zod
+    .union([
+      zod.object({
+        composite: zod.number(),
+        band: zod.enum(["pursue", "watch", "decline"]),
+        dimensions: zod.array(
+          zod.object({
+            key: zod.enum([
+              "strategicFit",
+              "clientQuality",
+              "dealEconomics",
+              "winProbability",
+              "deliverability",
+              "riskInverted",
+            ]),
+            score: zod.number(),
+            weight: zod.number(),
+            rationale: zod.string(),
+            chunkIds: zod.array(zod.string()),
+          }),
+        ),
+        attachmentIds: zod.array(zod.string()),
+        generatedAt: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
   createdAt: zod.coerce.date(),
 });
 export const AtelierListOpportunitiesResponse = zod.array(
@@ -452,7 +479,206 @@ export const AtelierGetOpportunityResponse = zod.object({
   subStatus: zod.string().nullish(),
   runnerEnteredAt: zod.coerce.date().nullish(),
   contractSignedAt: zod.coerce.date().nullish(),
+  qualificationRubric: zod
+    .union([
+      zod.object({
+        composite: zod.number(),
+        band: zod.enum(["pursue", "watch", "decline"]),
+        dimensions: zod.array(
+          zod.object({
+            key: zod.enum([
+              "strategicFit",
+              "clientQuality",
+              "dealEconomics",
+              "winProbability",
+              "deliverability",
+              "riskInverted",
+            ]),
+            score: zod.number(),
+            weight: zod.number(),
+            rationale: zod.string(),
+            chunkIds: zod.array(zod.string()),
+          }),
+        ),
+        attachmentIds: zod.array(zod.string()),
+        generatedAt: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Edit an opportunity's core details
+ */
+export const AtelierUpdateOpportunityParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierUpdateOpportunityBodyDealSizeUsdMin = 0;
+
+export const atelierUpdateOpportunityBodyProbabilityPctMin = 0;
+export const atelierUpdateOpportunityBodyProbabilityPctMax = 100;
+
+export const AtelierUpdateOpportunityBody = zod
+  .object({
+    name: zod.string().min(1).optional(),
+    dealSizeUsd: zod
+      .number()
+      .min(atelierUpdateOpportunityBodyDealSizeUsdMin)
+      .optional(),
+    probabilityPct: zod
+      .number()
+      .min(atelierUpdateOpportunityBodyProbabilityPctMin)
+      .max(atelierUpdateOpportunityBodyProbabilityPctMax)
+      .optional(),
+    nextMilestone: zod.string().nullish(),
+    nextMilestoneDate: zod.string().nullish(),
+    buyerPersona: zod.string().nullish(),
+    offeringAnchor: zod.string().nullish(),
+    partnerOwnerId: zod.string().optional(),
+    engagementLeadId: zod.string().optional(),
+  })
+  .describe(
+    "Task #540 — partial edit of an opportunity's core details. All fields\noptional; only supplied fields are updated.\n",
+  );
+
+export const AtelierUpdateOpportunityResponse = zod.object({
+  id: zod.string(),
+  slug: zod.string(),
+  name: zod.string(),
+  accountId: zod.string(),
+  accountName: zod.string(),
+  plmStage: zod.enum([
+    "identify",
+    "shape",
+    "pursue",
+    "mobilize",
+    "deliver",
+    "compound",
+    "won",
+    "lost",
+    "no_go",
+    "closed",
+  ]),
+  salesStage: zod
+    .enum([
+      "suspect",
+      "prospect",
+      "convert",
+      "runner",
+      "contract",
+      "lost",
+      "no_decision",
+      "withdrawn",
+    ])
+    .optional()
+    .describe(
+      "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+    ),
+  buyerPersona: zod.string().nullish(),
+  offeringAnchor: zod.string().nullish(),
+  partnerOwnerName: zod.string(),
+  engagementLeadName: zod.string(),
+  dealSizeUsd: zod.number(),
+  probabilityPct: zod.number(),
+  weightedValueUsd: zod.number(),
+  daysInStage: zod.number(),
+  nextMilestone: zod.string(),
+  nextMilestoneDate: zod.string().nullish(),
+  sourceLead: zod.string(),
+  stalled: zod.boolean().optional(),
+  subStatus: zod.string().nullish(),
+  runnerEnteredAt: zod.coerce.date().nullish(),
+  contractSignedAt: zod.coerce.date().nullish(),
+  qualificationRubric: zod
+    .union([
+      zod.object({
+        composite: zod.number(),
+        band: zod.enum(["pursue", "watch", "decline"]),
+        dimensions: zod.array(
+          zod.object({
+            key: zod.enum([
+              "strategicFit",
+              "clientQuality",
+              "dealEconomics",
+              "winProbability",
+              "deliverability",
+              "riskInverted",
+            ]),
+            score: zod.number(),
+            weight: zod.number(),
+            rationale: zod.string(),
+            chunkIds: zod.array(zod.string()),
+          }),
+        ),
+        attachmentIds: zod.array(zod.string()),
+        generatedAt: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Soft-delete (archive) an opportunity
+ */
+export const AtelierArchiveOpportunityParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierArchiveOpportunityBodyRationaleDefault = ``;
+
+export const AtelierArchiveOpportunityBody = zod.object({
+  rationale: zod
+    .string()
+    .default(atelierArchiveOpportunityBodyRationaleDefault),
+});
+
+export const AtelierArchiveOpportunityResponse = zod.object({
+  ok: zod.boolean(),
+  id: zod.string(),
+});
+
+/**
+ * @summary Score + persist the structured weighted qualification rubric from attached RFPs
+ */
+export const AtelierScoreQualificationRubricParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const atelierScoreQualificationRubricBodyOfferingAnchorsDefault = [];
+
+export const AtelierScoreQualificationRubricBody = zod.object({
+  attachmentIds: zod.array(zod.string()).min(1),
+  offeringAnchors: zod
+    .array(zod.string())
+    .default(atelierScoreQualificationRubricBodyOfferingAnchorsDefault),
+});
+
+export const AtelierScoreQualificationRubricResponse = zod.object({
+  composite: zod.number(),
+  band: zod.enum(["pursue", "watch", "decline"]),
+  dimensions: zod.array(
+    zod.object({
+      key: zod.enum([
+        "strategicFit",
+        "clientQuality",
+        "dealEconomics",
+        "winProbability",
+        "deliverability",
+        "riskInverted",
+      ]),
+      score: zod.number(),
+      weight: zod.number(),
+      rationale: zod.string(),
+      chunkIds: zod.array(zod.string()),
+    }),
+  ),
+  attachmentIds: zod.array(zod.string()),
+  generatedAt: zod.string(),
 });
 
 /**
@@ -530,6 +756,33 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
   subStatus: zod.string().nullish(),
   runnerEnteredAt: zod.coerce.date().nullish(),
   contractSignedAt: zod.coerce.date().nullish(),
+  qualificationRubric: zod
+    .union([
+      zod.object({
+        composite: zod.number(),
+        band: zod.enum(["pursue", "watch", "decline"]),
+        dimensions: zod.array(
+          zod.object({
+            key: zod.enum([
+              "strategicFit",
+              "clientQuality",
+              "dealEconomics",
+              "winProbability",
+              "deliverability",
+              "riskInverted",
+            ]),
+            score: zod.number(),
+            weight: zod.number(),
+            rationale: zod.string(),
+            chunkIds: zod.array(zod.string()),
+          }),
+        ),
+        attachmentIds: zod.array(zod.string()),
+        generatedAt: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -625,6 +878,33 @@ export const AtelierCreateStageTransitionResponse = zod.object({
     subStatus: zod.string().nullish(),
     runnerEnteredAt: zod.coerce.date().nullish(),
     contractSignedAt: zod.coerce.date().nullish(),
+    qualificationRubric: zod
+      .union([
+        zod.object({
+          composite: zod.number(),
+          band: zod.enum(["pursue", "watch", "decline"]),
+          dimensions: zod.array(
+            zod.object({
+              key: zod.enum([
+                "strategicFit",
+                "clientQuality",
+                "dealEconomics",
+                "winProbability",
+                "deliverability",
+                "riskInverted",
+              ]),
+              score: zod.number(),
+              weight: zod.number(),
+              rationale: zod.string(),
+              chunkIds: zod.array(zod.string()),
+            }),
+          ),
+          attachmentIds: zod.array(zod.string()),
+          generatedAt: zod.string(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
     createdAt: zod.coerce.date(),
   }),
   transition: zod.object({
@@ -823,6 +1103,33 @@ export const AtelierGetQualifierResponse = zod.object({
       ts: zod.coerce.date(),
     })
     .nullish(),
+  rubric: zod
+    .union([
+      zod.object({
+        composite: zod.number(),
+        band: zod.enum(["pursue", "watch", "decline"]),
+        dimensions: zod.array(
+          zod.object({
+            key: zod.enum([
+              "strategicFit",
+              "clientQuality",
+              "dealEconomics",
+              "winProbability",
+              "deliverability",
+              "riskInverted",
+            ]),
+            score: zod.number(),
+            weight: zod.number(),
+            rationale: zod.string(),
+            chunkIds: zod.array(zod.string()),
+          }),
+        ),
+        attachmentIds: zod.array(zod.string()),
+        generatedAt: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const AtelierSubmitQualifierParams = zod.object({
@@ -860,6 +1167,33 @@ export const AtelierSubmitQualifierResponse = zod.object({
       ts: zod.coerce.date(),
     })
     .nullish(),
+  rubric: zod
+    .union([
+      zod.object({
+        composite: zod.number(),
+        band: zod.enum(["pursue", "watch", "decline"]),
+        dimensions: zod.array(
+          zod.object({
+            key: zod.enum([
+              "strategicFit",
+              "clientQuality",
+              "dealEconomics",
+              "winProbability",
+              "deliverability",
+              "riskInverted",
+            ]),
+            score: zod.number(),
+            weight: zod.number(),
+            rationale: zod.string(),
+            chunkIds: zod.array(zod.string()),
+          }),
+        ),
+        attachmentIds: zod.array(zod.string()),
+        generatedAt: zod.string(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 export const AtelierGetBriefParams = zod.object({

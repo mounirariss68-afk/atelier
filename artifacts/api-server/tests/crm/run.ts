@@ -335,6 +335,72 @@ async function main(): Promise<void> {
           .where(eq(atelierOpportunities.id, oppId));
         check("opportunity plmStage persisted as 'shape'", moved?.stage === "shape", `got ${moved?.stage}`);
       }
+
+      // ---- Task #540: edit core fields (PATCH /opportunities/:oppId) ----
+      if (oppId) {
+        const edit = await api("PATCH", `/opportunities/${oppId}`, PERSONA.fp, {
+          dealSizeUsd: 525000,
+          probabilityPct: 40,
+          nextMilestone: "SOW review",
+        });
+        check("PATCH /opportunities/:id (edit fields) \u2192 200", edit.status === 200, `status=${edit.status}`);
+        const [edited] = await db
+          .select({ deal: atelierOpportunities.dealSizeHypothesis, prob: atelierOpportunities.probabilityPct, nm: atelierOpportunities.nextMilestone })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.id, oppId));
+        check(
+          "opportunity edit persisted dealSizeHypothesis 525000 + probabilityPct 40 + nextMilestone",
+          Number(edited?.deal) === 525000 && Number(edited?.prob) === 40 && edited?.nm === "SOW review",
+          `deal=${edited?.deal} prob=${edited?.prob} nm=${edited?.nm}`,
+        );
+
+        const editBlank = await api("PATCH", `/opportunities/${oppId}`, PERSONA.fp, { name: "   " });
+        check("PATCH /opportunities/:id blank name \u2192 400 name-required", editBlank.status === 400 && editBlank.body?.error === "name-required", `status=${editBlank.status}`);
+
+        const editBadOwner = await api("PATCH", `/opportunities/${oppId}`, PERSONA.fp, { partnerOwnerId: `usr_missing_${STAMP}` });
+        check("PATCH /opportunities/:id unknown partner owner \u2192 400 invalid-partner-owner", editBadOwner.status === 400 && editBadOwner.body?.error === "invalid-partner-owner", `status=${editBadOwner.status}`);
+
+        const editMissing = await api("PATCH", `/opportunities/opp_missing_${STAMP}`, PERSONA.fp, { probabilityPct: 10 });
+        check("PATCH /opportunities/:id missing \u2192 404 opportunity-not-found", editMissing.status === 404 && editMissing.body?.error === "opportunity-not-found", `status=${editMissing.status}`);
+
+        // ---- Task #540: structured qualification rubric guards ----
+        const rubMissing = await api("POST", `/opportunities/opp_missing_${STAMP}/qualification-rubric`, PERSONA.fp, { attachmentIds: ["att_x"] });
+        check("POST rubric on missing opp \u2192 404 opportunity-not-found", rubMissing.status === 404 && rubMissing.body?.error === "opportunity-not-found", `status=${rubMissing.status}`);
+
+        const rubBad = await api("POST", `/opportunities/${oppId}/qualification-rubric`, PERSONA.fp, {});
+        check("POST rubric empty body \u2192 400 invalid-body", rubBad.status === 400 && rubBad.body?.error === "invalid-body", `status=${rubBad.status}`);
+
+        const rubNoChunks = await api("POST", `/opportunities/${oppId}/qualification-rubric`, PERSONA.fp, { attachmentIds: [`att_none_${STAMP}`] });
+        check("POST rubric with unknown attachments \u2192 422 no-chunks", rubNoChunks.status === 422 && rubNoChunks.body?.error === "no-chunks", `status=${rubNoChunks.status}`);
+      }
+
+      // ---- Task #540: archive (soft-delete) over REST ----
+      {
+        const archName = uniq("ArchOpp");
+        await api("POST", "/opportunities", PERSONA.fp, { name: archName, description: "to be archived", accountId: ACC });
+        const [archRow] = await db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.name, archName));
+        const archId = archRow?.id ?? "";
+        if (archId) created.opps.add(archId);
+        check("archive: seed opportunity created", !!archId);
+        if (archId) {
+          const arch = await api("POST", `/opportunities/${archId}/archive`, PERSONA.fp, { rationale: "duplicate pursuit" });
+          check("POST /opportunities/:id/archive \u2192 200 ok", arch.status === 200 && arch.body?.ok === true, `status=${arch.status}`);
+          const [archived] = await db
+            .select({ d: atelierOpportunities.deletedAt })
+            .from(atelierOpportunities)
+            .where(eq(atelierOpportunities.id, archId));
+          check("opportunity archive soft-deleted (deletedAt set)", !!archived?.d, `deletedAt=${archived?.d}`);
+
+          const afterArch = await api("PATCH", `/opportunities/${archId}`, PERSONA.fp, { probabilityPct: 5 });
+          check("PATCH on archived opp \u2192 404 (drops off active set)", afterArch.status === 404, `status=${afterArch.status}`);
+        }
+
+        const archMissing = await api("POST", `/opportunities/opp_missing_${STAMP}/archive`, PERSONA.fp, {});
+        check("POST archive on missing opp \u2192 404 opportunity-not-found", archMissing.status === 404 && archMissing.body?.error === "opportunity-not-found", `status=${archMissing.status}`);
+      }
     }
 
     // =====================================================================
@@ -428,6 +494,55 @@ async function main(): Promise<void> {
             .from(atelierOpportunities)
             .where(eq(atelierOpportunities.id, id));
           check("capability parity: dealSizeUsd \u2192 dealSizeHypothesis (333000)", Number(r?.deal) === 333000, `got ${r?.deal}`);
+        }
+      }
+
+      // opportunity_edit + opportunity_archive (Task #540): two-phase confirm + DB parity.
+      const oppEditCap = catalog.findByToolName("opportunity_edit");
+      const oppArchiveCap = catalog.findByToolName("opportunity_archive");
+      check("capability opportunity_edit registered", !!oppEditCap);
+      check("capability opportunity_archive registered", !!oppArchiveCap);
+      if (oppCap && oppEditCap && oppArchiveCap) {
+        // Seed a throwaway opp to edit then archive (isolated from rows other groups assert against).
+        const seed = await oppCap.run({ name: uniq("CapEditOpp"), accountId: ACC, dealSizeUsd: 100000, confirm: true }, ctx);
+        const seedId = (seed.data as any)?.id as string | undefined;
+        check("opportunity edit/archive: seed opp created", seed.ok === true && !!seedId, JSON.stringify(seed).slice(0, 120));
+        if (seedId) {
+          created.opps.add(seedId);
+
+          // edit — phase 1 (no confirm) → ok:true + confirmation envelope
+          const editP1 = await oppEditCap.run({ opportunityId: seedId, probabilityPct: 55, dealSizeUsd: 250000 }, ctx);
+          check("opportunity_edit phase1 \u2192 confirmation envelope", editP1.ok === true && !!editP1.confirmation, JSON.stringify(editP1).slice(0, 120));
+
+          // edit — no editable fields → invalid
+          const editNoop = await oppEditCap.run({ opportunityId: seedId, confirm: true }, ctx);
+          check("opportunity_edit with no editable fields \u2192 ok:false", editNoop.ok === false, JSON.stringify(editNoop).slice(0, 120));
+
+          // edit — phase 2 (confirm) → ok + persisted
+          const editP2 = await oppEditCap.run({ opportunityId: seedId, probabilityPct: 55, dealSizeUsd: 250000, confirm: true }, ctx);
+          check("opportunity_edit phase2 (confirm) \u2192 ok", editP2.ok === true, JSON.stringify(editP2).slice(0, 120));
+          const [er] = await db
+            .select({ deal: atelierOpportunities.dealSizeHypothesis, prob: atelierOpportunities.probabilityPct })
+            .from(atelierOpportunities)
+            .where(eq(atelierOpportunities.id, seedId));
+          check("opportunity_edit persisted dealSizeHypothesis 250000 + probabilityPct 55", Number(er?.deal) === 250000 && Number(er?.prob) === 55, `deal=${er?.deal} prob=${er?.prob}`);
+
+          // archive — phase 1 (no confirm) → ok:true + confirmation envelope
+          const archP1 = await oppArchiveCap.run({ opportunityId: seedId }, ctx);
+          check("opportunity_archive phase1 \u2192 confirmation envelope", archP1.ok === true && !!archP1.confirmation, JSON.stringify(archP1).slice(0, 120));
+
+          // archive — phase 2 (confirm) → ok + soft-deleted
+          const archP2 = await oppArchiveCap.run({ opportunityId: seedId, rationale: "superseded", confirm: true }, ctx);
+          check("opportunity_archive phase2 (confirm) \u2192 ok", archP2.ok === true, JSON.stringify(archP2).slice(0, 120));
+          const [ar] = await db
+            .select({ d: atelierOpportunities.deletedAt })
+            .from(atelierOpportunities)
+            .where(eq(atelierOpportunities.id, seedId));
+          check("opportunity_archive soft-deleted (deletedAt set)", !!ar?.d, `deletedAt=${ar?.d}`);
+
+          // archive — already archived → not_found (drops off active set)
+          const archGone = await oppArchiveCap.run({ opportunityId: seedId, confirm: true }, ctx);
+          check("opportunity_archive on archived opp \u2192 ok:false not_found", archGone.ok === false && (archGone as any).errorCode === "not_found", JSON.stringify(archGone).slice(0, 120));
         }
       }
 

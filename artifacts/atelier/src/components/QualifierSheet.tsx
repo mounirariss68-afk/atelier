@@ -14,10 +14,28 @@ import {
   useAtelierGetQualifier,
   useAtelierSubmitQualifier,
   useAtelierGetBrief,
+  useAtelierScoreQualificationRubric,
   getAtelierGetQualifierQueryKey,
   getAtelierGetBriefQueryKey,
+  getAtelierGetOpportunityQueryKey,
+  type QualificationRubric,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+
+const RUBRIC_DIMENSION_LABEL: Record<string, string> = {
+  strategicFit: "Strategic fit",
+  clientQuality: "Client quality",
+  dealEconomics: "Deal economics",
+  winProbability: "Win probability",
+  deliverability: "Deliverability",
+  riskInverted: "Risk (inverted)",
+};
+
+const BAND_TONE: Record<string, string> = {
+  pursue: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10",
+  watch: "text-amber border-amber/40 bg-amber/10",
+  decline: "text-danger border-danger/40 bg-danger/10",
+};
 
 const FIELDS: { key: "client" | "competition" | "capability" | "capacity" | "contract"; label: string; hint: string }[] = [
   { key: "client", label: "Client", hint: "Who is the buyer? What outcome do they need?" },
@@ -45,9 +63,13 @@ export function QualifierSheet({ oppId, open, onOpenChange, onCommitted, prefill
     query: { enabled: open && !!oppId && prefillFromBrief, queryKey: getAtelierGetBriefQueryKey(oppId) },
   });
   const submit = useAtelierSubmitQualifier();
+  const scoreRubric = useAtelierScoreQualificationRubric();
 
   const [vals, setVals] = React.useState<Record<string, string>>({});
   const [rationale, setRationale] = React.useState("");
+  const [attachmentIds, setAttachmentIds] = React.useState("");
+  const [localRubric, setLocalRubric] = React.useState<QualificationRubric | null>(null);
+  const rubric = localRubric ?? qualifier?.rubric ?? null;
 
   React.useEffect(() => {
     if (!open) return;
@@ -63,7 +85,36 @@ export function QualifierSheet({ oppId, open, onOpenChange, onCommitted, prefill
     }
   }, [open, qualifier, briefEnv]);
 
+  React.useEffect(() => {
+    if (!open) {
+      setLocalRubric(null);
+      setAttachmentIds("");
+    }
+  }, [open]);
+
   const allFilled = FIELDS.every((f) => (vals[f.key] ?? "").trim().length >= 10);
+
+  async function runRubric() {
+    const ids = attachmentIds.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    if (ids.length === 0) {
+      toast({ title: "Add at least one RFP attachment id", description: "Paste the ingested attachment id(s) to score.", variant: "destructive" });
+      return;
+    }
+    try {
+      const result = await scoreRubric.mutateAsync({ oppId, data: { attachmentIds: ids } });
+      setLocalRubric(result);
+      qc.invalidateQueries({ queryKey: getAtelierGetQualifierQueryKey(oppId) });
+      qc.invalidateQueries({ queryKey: getAtelierGetOpportunityQueryKey(oppId) });
+      toast({ title: `Rubric scored · ${result.band}`, description: `Composite ${result.composite}/100.` });
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast({
+        title: "Could not score rubric",
+        description: status === 422 ? "No extractable text found in those attachments." : String(err),
+        variant: "destructive",
+      });
+    }
+  }
 
   async function commit(decision: "go" | "no_go") {
     if (!allFilled) {
@@ -121,6 +172,58 @@ export function QualifierSheet({ oppId, open, onOpenChange, onCommitted, prefill
               />
             </div>
           ))}
+
+          {/* Structured, weighted rubric — Task #540. Scores ingested RFP
+              attachments across six weighted dimensions into a composite + band. */}
+          <div className="grid gap-3 pt-3 border-t border-border-soft">
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-text font-medium">
+                Structured rubric
+                <span className="ml-2 text-xs text-text-faint font-mono">
+                  Weighted 6-dimension score from the RFP
+                </span>
+              </Label>
+              {rubric && (
+                <span className={`text-xs font-mono uppercase tracking-wider rounded border px-2 py-0.5 ${BAND_TONE[rubric.band] ?? "text-text-mute border-border"}`}>
+                  {rubric.band} · {rubric.composite}/100
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={attachmentIds}
+                onChange={(e) => setAttachmentIds(e.target.value)}
+                placeholder="RFP attachment id(s) — comma or space separated"
+                className="flex-1 bg-bg-deep border border-border rounded px-3 py-2 text-sm text-text font-mono"
+              />
+              <PillButton variant="ghost" onClick={runRubric} disabled={scoreRubric.isPending}>
+                {scoreRubric.isPending ? "Scoring…" : "Score rubric"}
+              </PillButton>
+            </div>
+            {rubric ? (
+              <div className="rounded-md border border-border-soft bg-bg-deep/60 divide-y divide-border-soft">
+                {rubric.dimensions.map((d) => (
+                  <div key={d.key} className="flex items-start justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-sm text-text">
+                        {RUBRIC_DIMENSION_LABEL[d.key] ?? d.key}
+                        <span className="ml-2 text-[10px] font-mono text-text-faint">w{d.weight}</span>
+                      </div>
+                      {d.rationale && (
+                        <div className="text-[11px] text-text-mute truncate">{d.rationale}</div>
+                      )}
+                    </div>
+                    <span className="font-mono text-sm text-gold shrink-0">{d.score}/5</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-text-faint font-mono">
+                Not scored yet. Paste the ingested RFP attachment id(s) and score to compute the weighted band.
+              </p>
+            )}
+          </div>
+
           <div className="grid gap-2 pt-2 border-t border-border-soft">
             <Label htmlFor="q-rationale" className="text-text-mute">Decision rationale (required for no-go)</Label>
             <Textarea

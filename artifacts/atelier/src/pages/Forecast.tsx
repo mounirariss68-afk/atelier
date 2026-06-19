@@ -28,11 +28,19 @@ function fmtUsd(n: number): string {
 export default function Forecast() {
   const [by, setBy] = React.useState<string>("partner");
   const [data, setData] = React.useState<{ rows: ForecastRow[]; totals: { count: number; weightedValueUsd: number; rawValueUsd: number } } | null>(null);
+  const [error, setError] = React.useState(false);
   React.useEffect(() => {
     setData(null);
+    setError(false);
+    let alive = true;
     fetch(`/api/atelier/forecast?by=${by}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then(setData);
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((j) => { if (alive) setData(j); })
+      .catch(() => { if (alive) setError(true); });
+    return () => { alive = false; };
   }, [by]);
   return (
     <div className="p-6 md:p-10 space-y-6 max-w-6xl">
@@ -55,7 +63,20 @@ export default function Forecast() {
         ))}
       </div>
       {!data ? (
-        <Skeleton className="h-32 bg-bg-elevate" />
+        error ? (
+          <Card className="p-8 text-center border-danger/40">
+            <div className="text-danger font-medium">Couldn't load the forecast.</div>
+            <button
+              type="button"
+              onClick={() => setBy((b) => b)}
+              className="mt-3 px-3 py-1 rounded text-sm font-mono bg-bg-elevate text-text-mute hover:text-text"
+            >
+              Retry
+            </button>
+          </Card>
+        ) : (
+          <Skeleton className="h-32 bg-bg-elevate" />
+        )
       ) : (
         <>
           <Card className="p-4">
@@ -98,6 +119,9 @@ export default function Forecast() {
                     </td>
                   </tr>
                 ))}
+                {data.rows.length === 0 && (
+                  <tr><td colSpan={5} className="p-6 text-center text-text-faint text-sm italic">No data for this grouping.</td></tr>
+                )}
               </tbody>
             </table>
           </Card>

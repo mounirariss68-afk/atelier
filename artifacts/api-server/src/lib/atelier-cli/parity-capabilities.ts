@@ -623,6 +623,195 @@ defineCapability({
 });
 
 defineCapability({
+  id: "opportunity.update",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "opportunity",
+  toolName: "opportunity_edit",
+  description:
+    "Edit an opportunity's core details (name, deal size, probability %, next milestone + date, buyer persona, offering anchor).",
+  slashAliases: { en: ["/edit-opportunity", "/edit-opp"], fr: ["/modifier-opportunité"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      opportunityId: { type: "string" },
+      name: { type: "string", minLength: 1 },
+      dealSizeUsd: { type: "number", minimum: 0 },
+      probabilityPct: { type: "number", minimum: 0, maximum: 100 },
+      nextMilestone: { type: "string" },
+      nextMilestoneDate: { type: ["string", "null"] },
+      buyerPersona: { type: ["string", "null"] },
+      offeringAnchor: { type: ["string", "null"] },
+      confirm: { type: "boolean" },
+    },
+    required: ["opportunityId"],
+  },
+  isWrite: true,
+  irreversible: false,
+  requiredRoles: [...ALL_BUT_OBSERVER],
+  surfaceOn: ["opportunity_workspace"],
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  resultCard: "opportunity_card",
+  async run(input, ctx) {
+    const opportunityId = String(input.opportunityId ?? "");
+    if (!opportunityId) return denyInvalid("opportunityId required");
+    const [opp] = await db
+      .select()
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.id, opportunityId),
+          eq(atelierOpportunities.orgId, ctx.persona.orgId),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      );
+    if (!opp) return { ok: false, errorCode: "not_found", errorMessage: "opportunity not found" };
+
+    // Build the typed patch from only the supplied fields.
+    const patch: Partial<typeof atelierOpportunities.$inferInsert> = {};
+    const changed: string[] = [];
+    if (typeof input.name === "string" && input.name.trim()) {
+      patch.name = input.name.trim();
+      changed.push("name");
+    }
+    if (typeof input.dealSizeUsd === "number") {
+      patch.dealSizeHypothesis = input.dealSizeUsd;
+      changed.push("dealSizeUsd");
+    }
+    if (typeof input.probabilityPct === "number") {
+      patch.probabilityPct = input.probabilityPct;
+      changed.push("probabilityPct");
+    }
+    if (typeof input.nextMilestone === "string" && input.nextMilestone.trim()) {
+      patch.nextMilestone = input.nextMilestone.trim();
+      changed.push("nextMilestone");
+    }
+    if (input.nextMilestoneDate !== undefined) {
+      patch.nextMilestoneDate =
+        typeof input.nextMilestoneDate === "string" && input.nextMilestoneDate.trim()
+          ? input.nextMilestoneDate.trim()
+          : null;
+      changed.push("nextMilestoneDate");
+    }
+    if (input.buyerPersona !== undefined) {
+      patch.buyerPersona =
+        typeof input.buyerPersona === "string" ? input.buyerPersona : null;
+      changed.push("buyerPersona");
+    }
+    if (input.offeringAnchor !== undefined) {
+      patch.offeringAnchor =
+        typeof input.offeringAnchor === "string" ? input.offeringAnchor : null;
+      changed.push("offeringAnchor");
+    }
+    if (changed.length === 0) return denyInvalid("no editable fields supplied");
+
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: { preview: { id: opp.id, changed, ...patch } },
+        confirmation: {
+          summary: `Edit ${changed.join(", ")} on "${opp.name}".`,
+          diff: { update: { table: "atelier_opportunities", id: opp.id, ...patch } },
+          pending: { tool: "opportunity_edit", input: { ...input, confirm: true } },
+        },
+      };
+    }
+    await db
+      .update(atelierOpportunities)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(atelierOpportunities.id, opp.id));
+    await recordAudit(
+      ctx,
+      "opportunity",
+      opp.id,
+      "opportunity.update.cli",
+      { changed, ...patch },
+      `${ctx.persona.name} edited ${changed.join(", ")} on "${opp.name}" via CLI.`,
+    );
+    return {
+      ok: true,
+      data: {
+        id: opp.id,
+        changed,
+        navigateTo: { path: `/opportunities/${opp.id}`, when: "on_commit" as const },
+      },
+    };
+  },
+});
+
+defineCapability({
+  id: "opportunity.archive",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "opportunity",
+  toolName: "opportunity_archive",
+  description: "Archive (soft-delete) an opportunity so it drops off the pipeline and forecast.",
+  slashAliases: { en: ["/archive-opportunity", "/archive-opp"], fr: ["/archiver-opportunité"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      opportunityId: { type: "string" },
+      rationale: { type: "string" },
+      confirm: { type: "boolean" },
+    },
+    required: ["opportunityId"],
+  },
+  isWrite: true,
+  irreversible: false,
+  requiredRoles: [...ALL_BUT_OBSERVER],
+  surfaceOn: ["opportunity_workspace"],
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  resultCard: "opportunity_card",
+  async run(input, ctx) {
+    const opportunityId = String(input.opportunityId ?? "");
+    if (!opportunityId) return denyInvalid("opportunityId required");
+    const [opp] = await db
+      .select()
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.id, opportunityId),
+          eq(atelierOpportunities.orgId, ctx.persona.orgId),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      );
+    if (!opp) return { ok: false, errorCode: "not_found", errorMessage: "opportunity not found" };
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: { preview: { id: opp.id, name: opp.name } },
+        confirmation: {
+          summary: `Archive "${opp.name}". It will drop off the pipeline + forecast.`,
+          diff: { update: { table: "atelier_opportunities", id: opp.id, deletedAt: "now" } },
+          pending: { tool: "opportunity_archive", input: { opportunityId, rationale: input.rationale ?? null, confirm: true } },
+        },
+      };
+    }
+    await db
+      .update(atelierOpportunities)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(atelierOpportunities.id, opp.id));
+    await recordAudit(
+      ctx,
+      "opportunity",
+      opp.id,
+      "opportunity.archive.cli",
+      { rationale: input.rationale ?? null },
+      `${ctx.persona.name} archived "${opp.name}" via CLI.`,
+    );
+    // Archived opportunity no longer has a workspace — land on the pipeline.
+    return {
+      ok: true,
+      data: {
+        id: opp.id,
+        archived: true,
+        navigateTo: { path: `/pipeline`, when: "on_commit" as const },
+      },
+    };
+  },
+});
+
+defineCapability({
   id: "opportunity.draft_pov",
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "opportunity",

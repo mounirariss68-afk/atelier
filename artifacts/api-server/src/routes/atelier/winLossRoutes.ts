@@ -31,6 +31,16 @@ import {
   runWinLossInterviewer,
   runThemeCurator,
 } from "../../lib/atelier-agents/runner.js";
+import { withRls } from "./rls";
+
+// Either the pooled db handle or a transaction-scoped executor bound by
+// withRls(). Both expose the .select()/.update()/.insert() surface the
+// debrief handlers use, so loadDebrief and the read/edit handlers can run
+// under the RLS GUCs (defense-in-depth; primary org isolation is already
+// enforced by the RLS policies themselves).
+type TxOrDb =
+  | typeof db
+  | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -45,8 +55,8 @@ function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferS
 
 const router: IRouter = Router();
 
-async function loadDebrief(oppId: string) {
-  const [row] = await db
+async function loadDebrief(oppId: string, exec: TxOrDb = db) {
+  const [row] = await exec
     .select()
     .from(atelierWinLossDebriefs)
     .where(
@@ -64,7 +74,7 @@ async function loadDebrief(oppId: string) {
 router.get("/opportunities/:oppId/win-loss", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const debrief = await loadDebrief(req.params.oppId);
+  const debrief = await withRls(req, (tx) => loadDebrief(req.params.oppId, tx));
   res.json({ debrief });
 });
 
@@ -72,74 +82,83 @@ router.get("/opportunities/:oppId/win-loss", async (req, res) => {
 router.patch("/opportunities/:oppId/win-loss/seller", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const debrief = await loadDebrief(req.params.oppId);
-  if (!debrief) {
-    res.status(404).json({ error: "debrief-not-found" });
-    return;
-  }
   const body = req.body as {
     sellerPerceivedReasons?: string[];
     sellerNotes?: string | null;
   };
-  const [updated] = await db
-    .update(atelierWinLossDebriefs)
-    .set({
-      sellerPerceivedReasons: body.sellerPerceivedReasons ?? debrief.sellerPerceivedReasons,
-      sellerNotes: body.sellerNotes ?? debrief.sellerNotes,
-      updatedAt: new Date(),
-    })
-    .where(eq(atelierWinLossDebriefs.id, debrief.id))
-    .returning();
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "opportunity",
-    entityId: req.params.oppId,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "winloss.seller_updated",
-    payload: { debriefId: debrief.id, reasonCount: (body.sellerPerceivedReasons ?? []).length },
-    payloadSummary: `${me.name} updated seller view on Win/Loss debrief`,
+  const result = await withRls(req, async (tx) => {
+    const debrief = await loadDebrief(req.params.oppId, tx);
+    if (!debrief) return { notFound: true } as const;
+    const [updated] = await tx
+      .update(atelierWinLossDebriefs)
+      .set({
+        sellerPerceivedReasons: body.sellerPerceivedReasons ?? debrief.sellerPerceivedReasons,
+        sellerNotes: body.sellerNotes ?? debrief.sellerNotes,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierWinLossDebriefs.id, debrief.id))
+      .returning();
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "opportunity",
+      entityId: req.params.oppId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "winloss.seller_updated",
+      payload: { debriefId: debrief.id, reasonCount: (body.sellerPerceivedReasons ?? []).length },
+      payloadSummary: `${me.name} updated seller view on Win/Loss debrief`,
+    });
+    return { updated } as const;
   });
-  res.json({ debrief: updated });
+  if ("notFound" in result) {
+    res.status(404).json({ error: "debrief-not-found" });
+    return;
+  }
+  res.json({ debrief: result.updated });
 });
 
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/opportunities/:oppId/win-loss/transcript", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const debrief = await loadDebrief(req.params.oppId);
-  if (!debrief) {
-    res.status(404).json({ error: "debrief-not-found" });
-    return;
-  }
   const body = req.body as { transcript?: string; uploadedAt?: string };
   if (!body.transcript || body.transcript.trim().length < 20) {
     res.status(400).json({ error: "transcript-too-short" });
     return;
   }
-  const [updated] = await db
-    .update(atelierWinLossDebriefs)
-    .set({
-      buyerTranscript: body.transcript,
-      buyerTranscriptUploadedAt: new Date(),
-      status: debrief.status === "pending" ? "ingested" : debrief.status,
-      updatedAt: new Date(),
-    })
-    .where(eq(atelierWinLossDebriefs.id, debrief.id))
-    .returning();
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "opportunity",
-    entityId: req.params.oppId,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "winloss.transcript_uploaded",
-    payload: { debriefId: debrief.id, chars: body.transcript.length },
-    payloadSummary: `${me.name} uploaded ${body.transcript.length}-char buyer transcript`,
+  const transcript = body.transcript;
+  const result = await withRls(req, async (tx) => {
+    const debrief = await loadDebrief(req.params.oppId, tx);
+    if (!debrief) return { notFound: true } as const;
+    const [updated] = await tx
+      .update(atelierWinLossDebriefs)
+      .set({
+        buyerTranscript: transcript,
+        buyerTranscriptUploadedAt: new Date(),
+        status: debrief.status === "pending" ? "ingested" : debrief.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierWinLossDebriefs.id, debrief.id))
+      .returning();
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "opportunity",
+      entityId: req.params.oppId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "winloss.transcript_uploaded",
+      payload: { debriefId: debrief.id, chars: transcript.length },
+      payloadSummary: `${me.name} uploaded ${transcript.length}-char buyer transcript`,
+    });
+    return { updated } as const;
   });
-  res.json({ debrief: updated });
+  if ("notFound" in result) {
+    res.status(404).json({ error: "debrief-not-found" });
+    return;
+  }
+  res.json({ debrief: result.updated });
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -464,20 +483,23 @@ router.post("/opportunities/:oppId/win-loss/override", async (req, res) => {
 router.get("/win-loss/debriefs", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  const rows = await db
-    .select()
-    .from(atelierWinLossDebriefs)
-    .where(isNull(atelierWinLossDebriefs.deletedAt))
-    .orderBy(desc(atelierWinLossDebriefs.createdAt))
-    .limit(100);
-  // Decorate with opportunity name + account.
-  const oppIds = [...new Set(rows.map((r) => r.opportunityId))];
-  const opps = oppIds.length
-    ? await db
-        .select()
-        .from(atelierOpportunities)
-        .where(inArray(atelierOpportunities.id, oppIds))
-    : [];
+  const { rows, opps } = await withRls(req, async (tx) => {
+    const rows = await tx
+      .select()
+      .from(atelierWinLossDebriefs)
+      .where(isNull(atelierWinLossDebriefs.deletedAt))
+      .orderBy(desc(atelierWinLossDebriefs.createdAt))
+      .limit(100);
+    // Decorate with opportunity name + account.
+    const oppIds = [...new Set(rows.map((r) => r.opportunityId))];
+    const opps = oppIds.length
+      ? await tx
+          .select()
+          .from(atelierOpportunities)
+          .where(inArray(atelierOpportunities.id, oppIds))
+      : [];
+    return { rows, opps };
+  });
   const oppMap = new Map(opps.map((o) => [o.id, o]));
   const items = rows.map((r) => {
     const o = oppMap.get(r.opportunityId);
@@ -700,28 +722,32 @@ router.patch("/opportunities/:oppId/win-loss/status", async (req, res) => {
     res.status(400).json({ error: "invalid-status", allowed: [...DEBRIEF_LIFECYCLE] });
     return;
   }
-  const debrief = await loadDebrief(req.params.oppId);
-  if (!debrief) {
+  const result = await withRls(req, async (tx) => {
+    const debrief = await loadDebrief(req.params.oppId, tx);
+    if (!debrief) return { notFound: true } as const;
+    const [updated] = await tx
+      .update(atelierWinLossDebriefs)
+      .set({ status: next, updatedAt: new Date() })
+      .where(eq(atelierWinLossDebriefs.id, debrief.id))
+      .returning();
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "opportunity",
+      entityId: req.params.oppId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "winloss.status_changed",
+      payload: { from: debrief.status, to: next, debriefId: debrief.id },
+      payloadSummary: `${me.name} moved Win/Loss debrief ${debrief.status} → ${next}`,
+    });
+    return { updated } as const;
+  });
+  if ("notFound" in result) {
     res.status(404).json({ error: "debrief-not-found" });
     return;
   }
-  const [updated] = await db
-    .update(atelierWinLossDebriefs)
-    .set({ status: next, updatedAt: new Date() })
-    .where(eq(atelierWinLossDebriefs.id, debrief.id))
-    .returning();
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "opportunity",
-    entityId: req.params.oppId,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "winloss.status_changed",
-    payload: { from: debrief.status, to: next, debriefId: debrief.id },
-    payloadSummary: `${me.name} moved Win/Loss debrief ${debrief.status} → ${next}`,
-  });
-  res.json({ debrief: updated });
+  res.json({ debrief: result.updated });
 });
 
 // Path aliases — task spec uses both /win-loss/ and /winloss/. Mount the

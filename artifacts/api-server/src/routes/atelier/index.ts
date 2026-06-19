@@ -573,6 +573,8 @@ async function buildOpportunityWire(
       salesStage !== "lost" &&
       salesStage !== "no_decision" &&
       salesStage !== "withdrawn",
+    // Task #540 — structured weighted qualification rubric (null until scored).
+    qualificationRubric: o.qualificationRubric ?? null,
     createdAt: o.createdAt.toISOString(),
   };
 }

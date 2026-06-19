@@ -41,6 +41,18 @@ function quarterKey(d: Date): string {
   return `${y} Q${q}`;
 }
 
+// Resolve the quarter bucket for an opportunity. A malformed or empty
+// nextMilestoneDate (e.g. "TBD", "", or a non-ISO string) parses to an
+// Invalid Date whose getFullYear()/getMonth() are NaN — that produced a
+// bogus "NaN QNaN" bucket. Guard with isNaN and fall back to "Unscheduled"
+// so the forecast roll-up stays clean and crash-free.
+function quarterBucketForOpp(nextMilestoneDate: string | null): string {
+  if (!nextMilestoneDate) return "Unscheduled";
+  const d = new Date(nextMilestoneDate);
+  if (Number.isNaN(d.getTime())) return "Unscheduled";
+  return quarterKey(d);
+}
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
   const me = ensurePersona(req, res);
@@ -95,9 +107,7 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
     } else if (by === "stage") {
       bump(o.salesStage, o.salesStage, o);
     } else if (by === "quarter") {
-      const q = o.nextMilestoneDate
-        ? quarterKey(new Date(o.nextMilestoneDate))
-        : quarterKey(new Date());
+      const q = quarterBucketForOpp(o.nextMilestoneDate);
       bump(q, q, o);
     } else {
       res.status(400).json({ error: "invalid-by" });
@@ -146,9 +156,7 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
     else if (by === "sector") priorBump(acctMap.get(o.accountId)?.sector ?? "unknown", o);
     else if (by === "stage") priorBump(o.salesStage, o);
     else if (by === "quarter") {
-      const q = o.nextMilestoneDate
-        ? quarterKey(new Date(o.nextMilestoneDate))
-        : quarterKey(new Date());
+      const q = quarterBucketForOpp(o.nextMilestoneDate);
       priorBump(q, o);
     }
   }

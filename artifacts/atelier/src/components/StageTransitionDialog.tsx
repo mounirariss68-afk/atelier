@@ -59,6 +59,7 @@ export function StageTransitionDialog({
   const [prob, setProb] = React.useState<number>(SALES_STAGE_DEFAULT_PROB[toStage]);
   const [milestone, setMilestone] = React.useState("");
   const [milestoneDate, setMilestoneDate] = React.useState("");
+  const [evidence, setEvidence] = React.useState("");
   const [override, setOverride] = React.useState(false);
   const [subStatus, setSubStatus] = React.useState<string>("");
   // Convert→Runner gate fields.
@@ -79,6 +80,7 @@ export function StageTransitionDialog({
       setProb(SALES_STAGE_DEFAULT_PROB[initial]);
       setMilestone("");
       setMilestoneDate("");
+      setEvidence("");
       setOverride(false);
       setSubStatus("");
       setDecider("");
@@ -149,13 +151,22 @@ export function StageTransitionDialog({
       }
     }
 
+    const evidenceArtifactIds = Array.from(
+      new Set([
+        ...evidence.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean),
+        ...(isRunnerToContract && signedInstrumentFileId.trim()
+          ? [signedInstrumentFileId.trim()]
+          : []),
+      ]),
+    );
+
     try {
       await transition.mutateAsync({
         oppId,
         data: {
           toStage,
           rationaleText: rationale.trim(),
-          evidenceArtifactIds: [],
+          evidenceArtifactIds,
           newProbabilityPct: prob,
           nextMilestone: milestone.trim() || null,
           nextMilestoneDate: milestoneDate.trim() || null,
@@ -320,6 +331,22 @@ export function StageTransitionDialog({
               </div>
             </div>
           )}
+
+          <div className="grid gap-2">
+            <Label htmlFor="t-evidence" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+              Evidence artifact IDs (optional)
+            </Label>
+            <Textarea
+              id="t-evidence"
+              value={evidence}
+              onChange={(e) => setEvidence(e.target.value)}
+              placeholder="art_… one per line, or comma-separated"
+              className="bg-bg-deep border-border-soft text-text font-mono text-xs min-h-[56px]"
+            />
+            <p className="text-[10px] text-text-faint">
+              References attached here are recorded on the transition and surface in the opportunity's Artifacts tab.
+            </p>
+          </div>
 
           {isSuspectToProspect && (
             <div className="rounded border border-gold/40 bg-gold/5 p-3 text-xs text-text-mute">

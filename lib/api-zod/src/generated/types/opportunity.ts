@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PlmStage } from "./plmStage";
+import type { QualificationRubric } from "./qualificationRubric";
 import type { SalesStage } from "./salesStage";
 
 export interface Opportunity {
@@ -37,5 +38,6 @@ export interface Opportunity {
   runnerEnteredAt?: Date | null;
   /** @nullable */
   contractSignedAt?: Date | null;
+  qualificationRubric?: QualificationRubric | null;
   createdAt: Date;
 }

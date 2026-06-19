@@ -42,6 +42,8 @@ import {
 } from "../../lib/atelier-agents/pipeline.js";
 import { atelierEngagements, atelierCharterVersions } from "@workspace/db";
 import { runCharterArchitect } from "../../lib/atelier-agents/runner.js";
+import { scoreRubric } from "../../lib/atelier-cli/qualification-rubric.js";
+import { loadAllChunks } from "../../lib/atelier-cli/attachment-capabilities.js";
 import {
   AtelierCreateOpportunityBody,
   AtelierUpdateOpportunityStageBody,
@@ -52,6 +54,9 @@ import {
   AtelierSubmitMeetingBody,
   AtelierRecordAgentDecisionBody,
   AtelierCreateStageTransitionBody,
+  AtelierUpdateOpportunityBody,
+  AtelierArchiveOpportunityBody,
+  AtelierScoreQualificationRubricBody,
   AtelierGetPipelineForecastResponse,
   AtelierGetStageHistoryResponse,
 } from "@workspace/api-zod";
@@ -137,6 +142,8 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     subStatus: o.subStatus ?? null,
     runnerEnteredAt: o.runnerEnteredAt?.toISOString() ?? null,
     contractSignedAt: o.contractSignedAt?.toISOString() ?? null,
+    // Task #540 — structured weighted qualification rubric (null until scored).
+    qualificationRubric: o.qualificationRubric ?? null,
     createdAt: o.createdAt.toISOString(),
   };
 }
@@ -331,6 +338,228 @@ router.post("/opportunities", async (req, res) => {
   });
 });
 
+// =============================================================
+// Edit opportunity core details (Task #540)
+// =============================================================
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/opportunities/:oppId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const opp = await loadOpp(req.params.oppId);
+  if (!opp || opp.orgId !== me.orgId) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const parsed = AtelierUpdateOpportunityBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const input = parsed.data;
+
+  // Resolve any supplied owner references to existing, active users so we never
+  // persist a dangling FK. Unsupplied owners are left untouched.
+  async function resolveOwner(userId: string): Promise<string | null> {
+    const [u] = await db
+      .select()
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, userId), isNull(atelierUsers.deletedAt)));
+    return u ? u.id : null;
+  }
+
+  const patch: Partial<typeof atelierOpportunities.$inferInsert> = {};
+  const changed: string[] = [];
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    if (!name) {
+      res.status(400).json({ error: "name-required" });
+      return;
+    }
+    patch.name = name;
+    patch.slug = slugify(name);
+    changed.push("name");
+  }
+  if (input.dealSizeUsd !== undefined) {
+    patch.dealSizeHypothesis = input.dealSizeUsd;
+    changed.push("dealSizeUsd");
+  }
+  if (input.probabilityPct !== undefined) {
+    patch.probabilityPct = input.probabilityPct;
+    changed.push("probabilityPct");
+  }
+  if (input.nextMilestone !== undefined) {
+    const nm = (input.nextMilestone ?? "").trim();
+    if (!nm) {
+      res.status(400).json({ error: "next-milestone-required" });
+      return;
+    }
+    patch.nextMilestone = nm;
+    changed.push("nextMilestone");
+  }
+  if (input.nextMilestoneDate !== undefined) {
+    patch.nextMilestoneDate = (input.nextMilestoneDate ?? "").trim() || null;
+    changed.push("nextMilestoneDate");
+  }
+  if (input.buyerPersona !== undefined) {
+    patch.buyerPersona = input.buyerPersona;
+    changed.push("buyerPersona");
+  }
+  if (input.offeringAnchor !== undefined) {
+    patch.offeringAnchor = input.offeringAnchor;
+    changed.push("offeringAnchor");
+  }
+  if (input.partnerOwnerId !== undefined) {
+    const resolved = await resolveOwner(input.partnerOwnerId);
+    if (!resolved) {
+      res.status(400).json({ error: "invalid-partner-owner" });
+      return;
+    }
+    patch.partnerOwnerId = resolved;
+    changed.push("partnerOwnerId");
+  }
+  if (input.engagementLeadId !== undefined) {
+    const resolved = await resolveOwner(input.engagementLeadId);
+    if (!resolved) {
+      res.status(400).json({ error: "invalid-engagement-lead" });
+      return;
+    }
+    patch.engagementLeadId = resolved;
+    changed.push("engagementLeadId");
+  }
+
+  if (changed.length === 0) {
+    res.json(await buildOppWire(opp));
+    return;
+  }
+
+  patch.updatedAt = new Date();
+  const [updated] = await db
+    .update(atelierOpportunities)
+    .set(patch)
+    .where(eq(atelierOpportunities.id, opp.id))
+    .returning();
+
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: opp.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "opportunity.update",
+    payload: { changed, ...patch, updatedAt: undefined },
+    payloadSummary: `${me.name} edited ${changed.join(", ")} on "${updated.name}".`,
+  });
+
+  res.json(await buildOppWire(updated));
+});
+
+// =============================================================
+// Archive (soft-delete) opportunity (Task #540)
+// =============================================================
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/opportunities/:oppId/archive", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const opp = await loadOpp(req.params.oppId);
+  if (!opp || opp.orgId !== me.orgId) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const parsed = AtelierArchiveOpportunityBody.safeParse(req.body ?? {});
+  const rationale = parsed.success ? (parsed.data.rationale ?? "") : "";
+
+  await db
+    .update(atelierOpportunities)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(eq(atelierOpportunities.id, opp.id));
+
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: opp.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "opportunity.archive",
+    payload: { rationale },
+    payloadSummary: `${me.name} archived "${opp.name}"${rationale ? ` — "${rationale.slice(0, 100)}"` : ""}.`,
+  });
+
+  res.json({ ok: true, id: opp.id });
+});
+
+// =============================================================
+// Score + persist structured qualification rubric (Task #540)
+// =============================================================
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/opportunities/:oppId/qualification-rubric", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const opp = await loadOpp(req.params.oppId);
+  if (!opp || opp.orgId !== me.orgId) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const parsed = AtelierScoreQualificationRubricBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const { attachmentIds, offeringAnchors } = parsed.data;
+
+  const chunks = await loadAllChunks(attachmentIds, me.orgId);
+  if (chunks.length === 0) {
+    res.status(422).json({ error: "no-chunks" });
+    return;
+  }
+
+  const [acct] = await db
+    .select()
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, opp.accountId));
+
+  // Caller-supplied anchors take precedence; otherwise fall back to the
+  // opportunity's own offering anchor so the strategic-fit dimension has signal.
+  const anchors =
+    offeringAnchors && offeringAnchors.length > 0
+      ? offeringAnchors
+      : opp.offeringAnchor
+        ? [opp.offeringAnchor]
+        : [];
+
+  const rubric = scoreRubric({
+    attachmentIds,
+    chunks,
+    offeringAnchors: anchors,
+    accountCountry: acct?.country,
+    accountSector: acct?.sector,
+  });
+
+  await db
+    .update(atelierOpportunities)
+    .set({ qualificationRubric: rubric, updatedAt: new Date() })
+    .where(eq(atelierOpportunities.id, opp.id));
+
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "opportunity",
+    entityId: opp.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "opportunity.qualification_rubric",
+    payload: {
+      composite: rubric.composite,
+      band: rubric.band,
+      attachmentIds: rubric.attachmentIds,
+    },
+    payloadSummary: `${me.name} scored "${opp.name}" — ${rubric.band} (${rubric.composite}).`,
+  });
+
+  res.json(rubric);
+});
+
 async function persistBriefAndFacts(
   oppId: string,
   runId: string,
@@ -453,6 +682,8 @@ router.get("/opportunities/:oppId/qualifier", async (req, res) => {
       contract: opp.qualify5c?.contract ?? "",
     },
     decision: opp.goNoGoDecision ?? null,
+    // Task #540 — surface the structured weighted rubric alongside the 5C.
+    rubric: opp.qualificationRubric ?? null,
   });
 });
 

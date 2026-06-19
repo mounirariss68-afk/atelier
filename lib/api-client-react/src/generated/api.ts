@@ -31,6 +31,8 @@ import type {
   AtelierAgentsUsageCounts200Item,
   AtelierAnalyzeProcessInput,
   AtelierAnalyzeProcessResponse,
+  AtelierArchiveOpportunityInput,
+  AtelierArchivedOpportunity,
   AtelierArtifact,
   AtelierArtifactInput,
   AtelierAsset,
@@ -94,6 +96,7 @@ import type {
   AtelierProposalSendResponse,
   AtelierPrototype,
   AtelierQbrCanvas,
+  AtelierQualificationRubricInput,
   AtelierQualifier,
   AtelierQualifierInput,
   AtelierRaidItem,
@@ -112,6 +115,7 @@ import type {
   AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierUpdateOpportunityInput,
   AtelierWhitespaceCanvas,
   AuditEvent,
   ChatError,
@@ -121,6 +125,7 @@ import type {
   Opportunity,
   OpportunityStageTransition,
   PipelineForecastSummary,
+  QualificationRubric,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1027,6 +1032,279 @@ export function useAtelierGetOpportunity<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Edit an opportunity's core details
+ */
+export const getAtelierUpdateOpportunityUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}`;
+};
+
+export const atelierUpdateOpportunity = async (
+  oppId: string,
+  atelierUpdateOpportunityInput: AtelierUpdateOpportunityInput,
+  options?: RequestInit,
+): Promise<Opportunity> => {
+  return customFetch<Opportunity>(getAtelierUpdateOpportunityUrl(oppId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierUpdateOpportunityInput),
+  });
+};
+
+export const getAtelierUpdateOpportunityMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateOpportunity>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierUpdateOpportunityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateOpportunity>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierUpdateOpportunityInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateOpportunity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateOpportunity>>,
+    { oppId: string; data: BodyType<AtelierUpdateOpportunityInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierUpdateOpportunity(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateOpportunityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateOpportunity>>
+>;
+export type AtelierUpdateOpportunityMutationBody =
+  BodyType<AtelierUpdateOpportunityInput>;
+export type AtelierUpdateOpportunityMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Edit an opportunity's core details
+ */
+export const useAtelierUpdateOpportunity = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateOpportunity>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierUpdateOpportunityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateOpportunity>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierUpdateOpportunityInput> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateOpportunityMutationOptions(options));
+};
+
+/**
+ * @summary Soft-delete (archive) an opportunity
+ */
+export const getAtelierArchiveOpportunityUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/archive`;
+};
+
+export const atelierArchiveOpportunity = async (
+  oppId: string,
+  atelierArchiveOpportunityInput?: AtelierArchiveOpportunityInput,
+  options?: RequestInit,
+): Promise<AtelierArchivedOpportunity> => {
+  return customFetch<AtelierArchivedOpportunity>(
+    getAtelierArchiveOpportunityUrl(oppId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierArchiveOpportunityInput),
+    },
+  );
+};
+
+export const getAtelierArchiveOpportunityMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveOpportunity>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierArchiveOpportunityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchiveOpportunity>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierArchiveOpportunityInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierArchiveOpportunity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchiveOpportunity>>,
+    { oppId: string; data: BodyType<AtelierArchiveOpportunityInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierArchiveOpportunity(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchiveOpportunityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchiveOpportunity>>
+>;
+export type AtelierArchiveOpportunityMutationBody =
+  BodyType<AtelierArchiveOpportunityInput>;
+export type AtelierArchiveOpportunityMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Soft-delete (archive) an opportunity
+ */
+export const useAtelierArchiveOpportunity = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveOpportunity>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierArchiveOpportunityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchiveOpportunity>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierArchiveOpportunityInput> },
+  TContext
+> => {
+  return useMutation(getAtelierArchiveOpportunityMutationOptions(options));
+};
+
+/**
+ * @summary Score + persist the structured weighted qualification rubric from attached RFPs
+ */
+export const getAtelierScoreQualificationRubricUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/qualification-rubric`;
+};
+
+export const atelierScoreQualificationRubric = async (
+  oppId: string,
+  atelierQualificationRubricInput: AtelierQualificationRubricInput,
+  options?: RequestInit,
+): Promise<QualificationRubric> => {
+  return customFetch<QualificationRubric>(
+    getAtelierScoreQualificationRubricUrl(oppId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierQualificationRubricInput),
+    },
+  );
+};
+
+export const getAtelierScoreQualificationRubricMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierScoreQualificationRubric>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierQualificationRubricInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierScoreQualificationRubric>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierQualificationRubricInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierScoreQualificationRubric"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierScoreQualificationRubric>>,
+    { oppId: string; data: BodyType<AtelierQualificationRubricInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierScoreQualificationRubric(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierScoreQualificationRubricMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierScoreQualificationRubric>>
+>;
+export type AtelierScoreQualificationRubricMutationBody =
+  BodyType<AtelierQualificationRubricInput>;
+export type AtelierScoreQualificationRubricMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Score + persist the structured weighted qualification rubric from attached RFPs
+ */
+export const useAtelierScoreQualificationRubric = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierScoreQualificationRubric>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierQualificationRubricInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierScoreQualificationRubric>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierQualificationRubricInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierScoreQualificationRubricMutationOptions(options),
+  );
+};
 
 /**
  * @summary Move opportunity to a new PLM stage (5C gate enforced for `pursue`)

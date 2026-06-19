@@ -113,7 +113,7 @@ function rid(prefix: string): string {
     .slice(2, 8)}`;
 }
 
-async function loadAllChunks(
+export async function loadAllChunks(
   attachmentIds: string[],
   orgId: string,
 ): Promise<RubricChunk[]> {

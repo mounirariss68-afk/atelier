@@ -7,10 +7,12 @@
  */
 import type { AtelierFiveC } from "./atelierFiveC";
 import type { AtelierQualifierDecision } from "./atelierQualifierDecision";
+import type { QualificationRubric } from "./qualificationRubric";
 
 export interface AtelierQualifier {
   oppId: string;
   fiveC: AtelierFiveC;
   /** @nullable */
   decision?: AtelierQualifierDecision;
+  rubric?: QualificationRubric | null;
 }

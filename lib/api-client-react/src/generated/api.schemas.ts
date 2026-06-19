@@ -725,6 +725,43 @@ export interface Account {
   notes?: string | null;
 }
 
+export type QualificationRubricBand =
+  (typeof QualificationRubricBand)[keyof typeof QualificationRubricBand];
+
+export const QualificationRubricBand = {
+  pursue: "pursue",
+  watch: "watch",
+  decline: "decline",
+} as const;
+
+export type QualificationRubricDimensionKey =
+  (typeof QualificationRubricDimensionKey)[keyof typeof QualificationRubricDimensionKey];
+
+export const QualificationRubricDimensionKey = {
+  strategicFit: "strategicFit",
+  clientQuality: "clientQuality",
+  dealEconomics: "dealEconomics",
+  winProbability: "winProbability",
+  deliverability: "deliverability",
+  riskInverted: "riskInverted",
+} as const;
+
+export interface QualificationRubricDimension {
+  key: QualificationRubricDimensionKey;
+  score: number;
+  weight: number;
+  rationale: string;
+  chunkIds: string[];
+}
+
+export interface QualificationRubric {
+  composite: number;
+  band: QualificationRubricBand;
+  dimensions: QualificationRubricDimension[];
+  attachmentIds: string[];
+  generatedAt: string;
+}
+
 export interface Opportunity {
   id: string;
   slug: string;
@@ -754,6 +791,7 @@ export interface Opportunity {
   runnerEnteredAt?: string | null;
   /** @nullable */
   contractSignedAt?: string | null;
+  qualificationRubric?: QualificationRubric | null;
   createdAt: string;
 }
 
@@ -1140,6 +1178,7 @@ export interface AtelierQualifier {
   fiveC: AtelierFiveC;
   /** @nullable */
   decision?: AtelierQualifierDecision;
+  rubric?: QualificationRubric | null;
 }
 
 export type AtelierQualifierInputDecision =
@@ -1154,6 +1193,48 @@ export interface AtelierQualifierInput {
   fiveC: AtelierFiveC;
   decision: AtelierQualifierInputDecision;
   rationale?: string;
+}
+
+/**
+ * Task #540 — partial edit of an opportunity's core details. All fields
+optional; only supplied fields are updated.
+
+ */
+export interface AtelierUpdateOpportunityInput {
+  /** @minLength 1 */
+  name?: string;
+  /** @minimum 0 */
+  dealSizeUsd?: number;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  probabilityPct?: number;
+  /** @nullable */
+  nextMilestone?: string | null;
+  /** @nullable */
+  nextMilestoneDate?: string | null;
+  /** @nullable */
+  buyerPersona?: string | null;
+  /** @nullable */
+  offeringAnchor?: string | null;
+  partnerOwnerId?: string;
+  engagementLeadId?: string;
+}
+
+export interface AtelierArchiveOpportunityInput {
+  rationale?: string;
+}
+
+export interface AtelierArchivedOpportunity {
+  ok: boolean;
+  id: string;
+}
+
+export interface AtelierQualificationRubricInput {
+  /** @minItems 1 */
+  attachmentIds: string[];
+  offeringAnchors?: string[];
 }
 
 export interface AtelierFact {

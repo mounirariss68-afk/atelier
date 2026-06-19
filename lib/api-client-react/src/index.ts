@@ -73,6 +73,16 @@ export {
   getAtelierUpdateOpportunityStageUrl,
   getAtelierUpdateOpportunityStageMutationOptions,
   useAtelierUpdateOpportunityStage,
+  // ---- Task #540: opportunity edit / archive / structured rubric ----
+  getAtelierUpdateOpportunityUrl,
+  getAtelierUpdateOpportunityMutationOptions,
+  useAtelierUpdateOpportunity,
+  getAtelierArchiveOpportunityUrl,
+  getAtelierArchiveOpportunityMutationOptions,
+  useAtelierArchiveOpportunity,
+  getAtelierScoreQualificationRubricUrl,
+  getAtelierScoreQualificationRubricMutationOptions,
+  useAtelierScoreQualificationRubric,
   // ---- Task #239: v2 Opportunities & Pipeline Forecaster ----
   getAtelierCreateStageTransitionUrl,
   getAtelierCreateStageTransitionMutationOptions,

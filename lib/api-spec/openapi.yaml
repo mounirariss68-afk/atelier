@@ -209,6 +209,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+    patch:
+      operationId: atelierUpdateOpportunity
+      tags: [atelier]
+      summary: Edit an opportunity's core details
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierUpdateOpportunityInput"
+      responses:
+        "200":
+          description: Updated opportunity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Opportunity"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/opportunities/{oppId}/archive:
+    post:
+      operationId: atelierArchiveOpportunity
+      tags: [atelier]
+      summary: Soft-delete (archive) an opportunity
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierArchiveOpportunityInput"
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierArchivedOpportunity"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/opportunities/{oppId}/qualification-rubric:
+    post:
+      operationId: atelierScoreQualificationRubric
+      tags: [atelier]
+      summary: Score + persist the structured weighted qualification rubric from attached RFPs
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierQualificationRubricInput"
+      responses:
+        "200":
+          description: Persisted rubric
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualificationRubric"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "422":
+          description: No extracted chunks for the supplied attachments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/opportunities/{oppId}/stage:
     patch:
       operationId: atelierUpdateOpportunityStage
@@ -2509,6 +2601,11 @@ components:
         subStatus: { type: ["string", "null"] }
         runnerEnteredAt: { type: ["string", "null"], format: date-time }
         contractSignedAt: { type: ["string", "null"], format: date-time }
+        # Task #540 — structured weighted qualification rubric (null until scored).
+        qualificationRubric:
+          oneOf:
+            - $ref: "#/components/schemas/QualificationRubric"
+            - type: "null"
         createdAt: { type: string, format: date-time }
 
     OpportunityStageTransition:
@@ -2820,6 +2917,11 @@ components:
             decider: { type: string }
             rationale: { type: string }
             ts: { type: string, format: date-time }
+        # Task #540 — structured weighted rubric surfaced alongside the 5C.
+        rubric:
+          oneOf:
+            - $ref: "#/components/schemas/QualificationRubric"
+            - type: "null"
 
     AtelierQualifierInput:
       type: object
@@ -2828,6 +2930,81 @@ components:
         fiveC: { $ref: "#/components/schemas/AtelierFiveC" }
         decision: { type: string, enum: [go, no_go] }
         rationale: { type: string, default: "" }
+
+    AtelierUpdateOpportunityInput:
+      type: object
+      description: |
+        Task #540 — partial edit of an opportunity's core details. All fields
+        optional; only supplied fields are updated.
+      properties:
+        name: { type: string, minLength: 1 }
+        dealSizeUsd: { type: number, minimum: 0 }
+        probabilityPct: { type: number, minimum: 0, maximum: 100 }
+        nextMilestone: { type: ["string", "null"] }
+        nextMilestoneDate: { type: ["string", "null"] }
+        buyerPersona: { type: ["string", "null"] }
+        offeringAnchor: { type: ["string", "null"] }
+        partnerOwnerId: { type: string }
+        engagementLeadId: { type: string }
+
+    AtelierArchiveOpportunityInput:
+      type: object
+      properties:
+        rationale: { type: string, default: "" }
+
+    AtelierArchivedOpportunity:
+      type: object
+      required: [ok, id]
+      properties:
+        ok: { type: boolean }
+        id: { type: string }
+
+    AtelierQualificationRubricInput:
+      type: object
+      required: [attachmentIds]
+      properties:
+        attachmentIds:
+          type: array
+          items: { type: string }
+          minItems: 1
+        offeringAnchors:
+          type: array
+          items: { type: string }
+          default: []
+
+    QualificationRubricDimension:
+      type: object
+      required: [key, score, weight, rationale, chunkIds]
+      properties:
+        key:
+          type: string
+          enum:
+            - strategicFit
+            - clientQuality
+            - dealEconomics
+            - winProbability
+            - deliverability
+            - riskInverted
+        score: { type: number }
+        weight: { type: number }
+        rationale: { type: string }
+        chunkIds:
+          type: array
+          items: { type: string }
+
+    QualificationRubric:
+      type: object
+      required: [composite, band, dimensions, attachmentIds, generatedAt]
+      properties:
+        composite: { type: number }
+        band: { type: string, enum: [pursue, watch, decline] }
+        dimensions:
+          type: array
+          items: { $ref: "#/components/schemas/QualificationRubricDimension" }
+        attachmentIds:
+          type: array
+          items: { type: string }
+        generatedAt: { type: string }
 
     AtelierFact:
       type: object
