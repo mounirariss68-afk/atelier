@@ -20,6 +20,10 @@ author = "agent"
 task = "workflow.run"
 args = "Generate dossiers"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-crm"
+
 [[workflows.workflow]]
 name = "Generate dossiers"
 author = "agent"
@@ -30,6 +34,17 @@ args = "bash .local/scripts/run-all.sh"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "test-crm"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run test:crm"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"
