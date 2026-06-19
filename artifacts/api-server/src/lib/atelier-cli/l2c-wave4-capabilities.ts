@@ -28,6 +28,7 @@ import {
   atelierPeriodCloseLock,
 } from "@workspace/db";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
+import { computeNrrDeltaPct } from "../atelier-math.js";
 import { parseBankStatement } from "../bank-parsers/index.js";
 import {
   runCashApplicationMatcher,
@@ -417,7 +418,7 @@ defineCapability({
     const id = rid("ren");
     const cur = i.currentArrUsd ?? 0;
     const proposed = i.proposedArrUsd ?? cur;
-    const nrr = cur > 0 ? Math.round(((proposed - cur) / cur) * 1000) / 10 : 0;
+    const nrr = computeNrrDeltaPct(cur, proposed);
     await db.insert(atelierRenewal).values({
       id, orgId: ctx.persona.orgId, engagementId: i.engagementId ?? null,
       contractId: i.contractId ?? null, accountId: i.accountId ?? null,

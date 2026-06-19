@@ -1393,6 +1393,30 @@ defineCapability({
       };
     }
 
+    // Engagement create/update is intentionally omitted from
+    // write-dispatch.ts: standing up (or amending) an engagement runs
+    // through the charter flow rather than a generic write. Instead of
+    // the opaque `unsupported_dispatch` error, hand the user the exact
+    // tool to use so they are not left guessing.
+    if (kind === "engagement" && (verb === "create" || verb === "update")) {
+      return {
+        ok: false,
+        errorCode: "use_charter_flow",
+        errorMessage:
+          `Engagements are not created or amended through propose_write. ` +
+          `Use engagement_open_charter to ${verb === "create" ? "stand up a new engagement" : "amend an existing engagement"}.`,
+        data: {
+          stage: "failed",
+          verb,
+          kind,
+          targetId,
+          payload,
+          route,
+          useTool: "engagement_open_charter",
+        },
+      };
+    }
+
     // Task #411 — no in-process dispatcher mapping exists for this
     // (verb, kind). Reviewer round-3 requires a hard failure here
     // (the previous "dispatched" no-op silently dropped writes the

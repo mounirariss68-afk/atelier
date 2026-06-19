@@ -843,6 +843,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierRaidItem" }
+    delete:
+      operationId: atelierDeleteRaidItem
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: engId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: raidId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
 
   # ---- Hypothesis tree -------------------------------------------
   /atelier/engagements/{engId}/hypothesis-tree:
@@ -913,6 +928,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierDeliverableDetail" }
+    delete:
+      operationId: atelierDeleteDeliverable
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: delId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
   /atelier/deliverables/{delId}/draft:
     post:
       operationId: atelierDraftDeliverable

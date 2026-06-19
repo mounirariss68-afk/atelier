@@ -447,21 +447,31 @@ function raidWire(r: typeof atelierRaidItems.$inferSelect, ownerName: string | n
     ownerUserId: r.ownerId,
     ownerName,
     description: r.description,
-    // `mitigation` is exposed on the wire for the UI but not yet persisted —
-    // a follow-up will add a column. For now we surface a stable null.
-    mitigation: null as string | null,
+    mitigation: r.mitigation ?? null,
     targetDate: r.dueDate,
     createdAt: r.createdAt.toISOString(),
   };
 }
 
-async function withOwner(rows: (typeof atelierRaidItems.$inferSelect)[]) {
+async function withOwner(
+  rows: (typeof atelierRaidItems.$inferSelect)[],
+  orgId: string,
+) {
   const userIds = Array.from(new Set(rows.map((r) => r.ownerId).filter((x): x is string => !!x)));
+  // Scope the owner lookup to exactly the referenced user ids AND the
+  // caller's org — never select every user in the system (over-fetch)
+  // or risk surfacing a name from another org.
   const users = userIds.length
     ? await db
         .select()
         .from(atelierUsers)
-        .where(and(isNull(atelierUsers.deletedAt)))
+        .where(
+          and(
+            inArray(atelierUsers.id, userIds),
+            eq(atelierUsers.orgId, orgId),
+            isNull(atelierUsers.deletedAt),
+          ),
+        )
     : [];
   const byId = new Map(users.map((u) => [u.id, u.name]));
   return rows.map((r) => raidWire(r, r.ownerId ? byId.get(r.ownerId) ?? null : null));
@@ -481,7 +491,7 @@ router.get("/engagements/:engId/raid", async (req, res) => {
     .from(atelierRaidItems)
     .where(and(eq(atelierRaidItems.engagementId, eng.id), isNull(atelierRaidItems.deletedAt)))
     .orderBy(desc(atelierRaidItems.createdAt));
-  res.json(await withOwner(rows));
+  res.json(await withOwner(rows, me.orgId));
 });
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -506,6 +516,7 @@ router.post("/engagements/:engId/raid", async (req, res) => {
       status: "open",
       ownerId: parsed.data.ownerUserId ?? null,
       description: parsed.data.description,
+      mitigation: parsed.data.mitigation ?? null,
       dueDate: parsed.data.targetDate ?? null,
       createdByUserId: me.id,
     })
@@ -545,8 +556,7 @@ router.patch("/engagements/:engId/raid/:raidId", async (req, res) => {
   const patch: Partial<typeof atelierRaidItems.$inferInsert> = { updatedAt: new Date() };
   if (parsed.data.severity) patch.severity = parsed.data.severity;
   if (parsed.data.status) patch.status = parsed.data.status;
-  // `mitigation` is part of the wire contract but not persisted yet — accept
-  // and ignore the value so the route stays forward-compatible.
+  if (parsed.data.mitigation !== undefined) patch.mitigation = parsed.data.mitigation;
   if (parsed.data.targetDate !== undefined) patch.dueDate = parsed.data.targetDate;
   const [row] = await db
     .update(atelierRaidItems)
@@ -562,6 +572,36 @@ router.patch("/engagements/:engId/raid/:raidId", async (req, res) => {
     summary: `RAID item ${existing.id} updated`,
   });
   res.json(raidWire(row, null));
+});
+
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/engagements/:engId/raid/:raidId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  // ACL gate first so an unauthorized persona cannot probe RAID-id
+  // existence via DELETE.
+  if (!(await ensureEngAccess(res, me, req.params.engId))) return;
+  const [existing] = await db
+    .select()
+    .from(atelierRaidItems)
+    .where(and(eq(atelierRaidItems.id, req.params.raidId), isNull(atelierRaidItems.deletedAt)));
+  if (!existing || existing.engagementId !== req.params.engId) {
+    res.status(404).json({ error: "raid-not-found" });
+    return;
+  }
+  await db
+    .update(atelierRaidItems)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(eq(atelierRaidItems.id, existing.id));
+  await audit({
+    entityType: "engagement",
+    entityId: existing.engagementId,
+    actor: me,
+    action: "raid.delete",
+    payload: { id: existing.id, kind: existing.kind },
+    summary: `RAID item ${existing.id} deleted`,
+  });
+  res.status(204).end();
 });
 
 // =============================================================
@@ -594,9 +634,7 @@ function versionWire(v: typeof atelierDeliverableVersions.$inferSelect) {
     deliverableId: v.deliverableId,
     versionNumber: v.versionNumber,
     body: v.body ?? "",
-    // `notes` is exposed on the wire schema for future UX (re-draft notes) but
-    // not yet persisted; surface a stable null.
-    notes: null as string | null,
+    notes: v.notes ?? null,
     createdAt: v.createdAt.toISOString(),
   };
 }
@@ -716,6 +754,40 @@ router.get("/deliverables/:delId", async (req, res) => {
 });
 
 // @cli-skip: pending Task #340 read-parity migration
+router.delete("/deliverables/:delId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [row] = await db
+    .select()
+    .from(atelierDeliverables)
+    .where(and(eq(atelierDeliverables.id, req.params.delId), isNull(atelierDeliverables.deletedAt)));
+  if (!row) {
+    res.status(404).json({ error: "deliverable-not-found" });
+    return;
+  }
+  if (!(await ensureEngAccess(res, me, row.engagementId))) return;
+  // A sent deliverable is a client-facing record of authority — block
+  // deletion so the audit trail stays intact.
+  if (row.sentAt) {
+    res.status(409).json({ error: "deliverable-sent", reason: "Sent deliverables cannot be deleted." });
+    return;
+  }
+  await db
+    .update(atelierDeliverables)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(eq(atelierDeliverables.id, row.id));
+  await audit({
+    entityType: "deliverable",
+    entityId: row.id,
+    actor: me,
+    action: "deliverable.delete",
+    payload: { id: row.id, name: row.name },
+    summary: `${me.name} deleted deliverable "${row.name}"`,
+  });
+  res.status(204).end();
+});
+
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/deliverables/:delId/draft", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -761,6 +833,7 @@ router.post("/deliverables/:delId/draft", async (req, res) => {
       deliverableId: del.id,
       versionNumber: next,
       body,
+      notes: parsed.data.notes ? parsed.data.notes : null,
       createdByUserId: me.id,
     })
     .returning();

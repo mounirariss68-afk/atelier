@@ -5,7 +5,6 @@ import {
   PageHero,
   PlmPill,
   MonoChip,
-  Card,
   BackLink,
   TabNav,
   TabNavItem,
@@ -22,7 +21,6 @@ import { ArtifactsTab } from "@/components/tabs/ArtifactsTab";
 import { AgentsTab } from "@/components/tabs/AgentsTab";
 import { ProcessesTab } from "@/components/tabs/ProcessesTab";
 import { FinancialsTab } from "@/components/tabs/FinancialsTab";
-import { Code } from "lucide-react";
 
 const TABS = [
   { id: 'charter', label: 'Charter' },
@@ -31,7 +29,6 @@ const TABS = [
   { id: 'financials', label: 'Financials' },
   { id: 'agents', label: 'Agents' },
   { id: 'processes', label: 'Processes' },
-  { id: 'meetings', label: 'Meetings' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'audit', label: 'Audit Trail' }
 ];
@@ -150,15 +147,6 @@ export default function Engagement() {
           {activeTab === 'agents' && <AgentsTab engId={eng.id} />}
           {activeTab === 'audit' && <AuditTab entityType="engagement" entityId={eng.id} />}
           {activeTab === 'processes' && <ProcessesTab engId={eng.id} />}
-          {activeTab === 'meetings' && (
-            <Card className="p-12 flex flex-col items-center justify-center text-center border-dashed">
-              <div className="w-12 h-12 bg-bg-elevate-2 rounded-full flex items-center justify-center mb-4 text-gold">
-                <Code className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-semibold text-text mb-2">Workspace Module: {TABS.find(t => t.id === activeTab)?.label}</h3>
-              <p className="text-text-mute max-w-md">This tab ships in a later workstream. Foundation registers it in the navigation shell.</p>
-            </Card>
-          )}
         </div>
       </div>
     </div>

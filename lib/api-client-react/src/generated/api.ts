@@ -3627,6 +3627,85 @@ export const useAtelierUpdateRaidItem = <
   return useMutation(getAtelierUpdateRaidItemMutationOptions(options));
 };
 
+export const getAtelierDeleteRaidItemUrl = (engId: string, raidId: string) => {
+  return `/api/atelier/engagements/${engId}/raid/${raidId}`;
+};
+
+export const atelierDeleteRaidItem = async (
+  engId: string,
+  raidId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAtelierDeleteRaidItemUrl(engId, raidId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteRaidItemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteRaidItem>>,
+    TError,
+    { engId: string; raidId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteRaidItem>>,
+  TError,
+  { engId: string; raidId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteRaidItem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteRaidItem>>,
+    { engId: string; raidId: string }
+  > = (props) => {
+    const { engId, raidId } = props ?? {};
+
+    return atelierDeleteRaidItem(engId, raidId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteRaidItemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteRaidItem>>
+>;
+
+export type AtelierDeleteRaidItemMutationError = ErrorType<unknown>;
+
+export const useAtelierDeleteRaidItem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteRaidItem>>,
+    TError,
+    { engId: string; raidId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteRaidItem>>,
+  TError,
+  { engId: string; raidId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteRaidItemMutationOptions(options));
+};
+
 export const getAtelierGetHypothesisTreeUrl = (engId: string) => {
   return `/api/atelier/engagements/${engId}/hypothesis-tree`;
 };
@@ -3966,6 +4045,84 @@ export function useAtelierGetDeliverable<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+export const getAtelierDeleteDeliverableUrl = (delId: string) => {
+  return `/api/atelier/deliverables/${delId}`;
+};
+
+export const atelierDeleteDeliverable = async (
+  delId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAtelierDeleteDeliverableUrl(delId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteDeliverableMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteDeliverable>>,
+    TError,
+    { delId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteDeliverable>>,
+  TError,
+  { delId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteDeliverable"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteDeliverable>>,
+    { delId: string }
+  > = (props) => {
+    const { delId } = props ?? {};
+
+    return atelierDeleteDeliverable(delId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteDeliverableMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteDeliverable>>
+>;
+
+export type AtelierDeleteDeliverableMutationError = ErrorType<unknown>;
+
+export const useAtelierDeleteDeliverable = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteDeliverable>>,
+    TError,
+    { delId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteDeliverable>>,
+  TError,
+  { delId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteDeliverableMutationOptions(options));
+};
 
 /**
  * @summary Append a new version (scaffolds from hypothesis tree if no body)

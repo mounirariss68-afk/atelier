@@ -25,6 +25,7 @@ import {
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
+import { computeNrrDeltaPct } from "../../lib/atelier-math.js";
 
 const router: IRouter = Router();
 
@@ -91,7 +92,7 @@ router.post("/", async (req, res) => {
   const id = rid("ren");
   const cur = b.currentArrUsd ?? 0;
   const proposed = b.proposedArrUsd ?? cur;
-  const nrr = cur > 0 ? Math.round(((proposed - cur) / cur) * 1000) / 10 : 0;
+  const nrr = computeNrrDeltaPct(cur, proposed);
   await db.insert(atelierRenewal).values({
     id, orgId: me.orgId, engagementId: b.engagementId ?? null,
     contractId: b.contractId ?? null, accountId: b.accountId ?? null,
@@ -116,7 +117,7 @@ router.post("/:id/risk", async (req, res) => {
     .where(and(eq(atelierRenewal.id, id), eq(atelierRenewal.orgId, me.orgId)));
   if (!r) return res.status(404).json({ error: "not_found" });
   const proposed = b.proposedArrUsd ?? r.proposedArrUsd;
-  const nrr = r.currentArrUsd > 0 ? Math.round(((proposed - r.currentArrUsd) / r.currentArrUsd) * 1000) / 10 : 0;
+  const nrr = computeNrrDeltaPct(r.currentArrUsd, proposed);
   await db.update(atelierRenewal).set({
     riskTier: b.riskTier ?? r.riskTier, proposedArrUsd: proposed,
     expansionTargetUsd: b.expansionTargetUsd ?? r.expansionTargetUsd,
@@ -208,7 +209,9 @@ router.post("/auto-open", async (req, res) => {
     await db.insert(atelierRenewal).values({
       id, orgId: me.orgId, contractId: c.id, engagementId: c.engagementId ?? null,
       accountId: c.counterpartyId, currentArrUsd: c.contractValueUsd,
-      proposedArrUsd: c.contractValueUsd, renewalDueAt: c.termEnd,
+      proposedArrUsd: c.contractValueUsd,
+      nrrDeltaPct: computeNrrDeltaPct(c.contractValueUsd, c.contractValueUsd),
+      renewalDueAt: c.termEnd,
       riskTier: "amber", status: "open", autoOpenedAt: new Date(),
       partnerOwnerId: me.id, createdByUserId: me.id,
       rationaleText: `Auto-opened T-${horizonDays}d by Renewal Watchdog.`,

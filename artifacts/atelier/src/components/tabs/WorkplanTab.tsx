@@ -3,6 +3,7 @@ import {
   useAtelierListRaid,
   useAtelierCreateRaidItem,
   useAtelierUpdateRaidItem,
+  useAtelierDeleteRaidItem,
   getAtelierListRaidQueryKey,
   getAtelierGetEngagementQueryKey,
   getAtelierListAuditQueryKey,
@@ -24,6 +25,7 @@ export function WorkplanTab({ engId }: { engId: string }) {
   const { data: items, isLoading } = useAtelierListRaid(engId);
   const create = useAtelierCreateRaidItem();
   const update = useAtelierUpdateRaidItem();
+  const remove = useAtelierDeleteRaidItem();
 
   const [showForm, setShowForm] = React.useState(false);
   const [kind, setKind] = React.useState<Kind>("risk");
@@ -39,18 +41,36 @@ export function WorkplanTab({ engId }: { engId: string }) {
 
   async function onCreate() {
     if (!description.trim()) return;
-    await create.mutateAsync({ engId, data: { kind, severity, description, mitigation: mitigation || null } });
-    setDescription("");
-    setMitigation("");
-    setShowForm(false);
-    inv();
-    toast({ title: "RAID item added" });
+    try {
+      await create.mutateAsync({ engId, data: { kind, severity, description, mitigation: mitigation || null } });
+      setDescription("");
+      setMitigation("");
+      setShowForm(false);
+      inv();
+      toast({ title: "RAID item added" });
+    } catch {
+      toast({ title: "Could not add RAID item", description: "Please try again.", variant: "destructive" });
+    }
   }
 
   async function onClose(id: string) {
-    await update.mutateAsync({ engId, raidId: id, data: { status: "closed" } });
-    inv();
-    toast({ title: "RAID item closed" });
+    try {
+      await update.mutateAsync({ engId, raidId: id, data: { status: "closed" } });
+      inv();
+      toast({ title: "RAID item closed" });
+    } catch {
+      toast({ title: "Could not close RAID item", description: "Please try again.", variant: "destructive" });
+    }
+  }
+
+  async function onDelete(id: string) {
+    try {
+      await remove.mutateAsync({ engId, raidId: id });
+      inv();
+      toast({ title: "RAID item deleted" });
+    } catch {
+      toast({ title: "Could not delete RAID item", description: "Please try again.", variant: "destructive" });
+    }
   }
 
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
@@ -161,16 +181,24 @@ export function WorkplanTab({ engId }: { engId: string }) {
                 {it.mitigation && (
                   <div className="text-xs text-text-mute italic">Mitigation: {it.mitigation}</div>
                 )}
-                {it.status !== "closed" && (
-                  <div className="pt-1">
+                <div className="pt-1 flex items-center gap-4">
+                  {it.status !== "closed" && (
                     <button
                       onClick={() => onClose(it.id)}
                       className="text-xs font-mono text-text-mute hover:text-gold"
                     >
                       Close →
                     </button>
-                  </div>
-                )}
+                  )}
+                  <button
+                    onClick={() => onDelete(it.id)}
+                    disabled={remove.isPending}
+                    className="text-xs font-mono text-text-mute hover:text-red disabled:opacity-50"
+                    data-testid={`btn-delete-raid-${it.id}`}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </Card>

@@ -1920,6 +1920,11 @@ export const AtelierUpdateRaidItemResponse = zod.object({
   createdAt: zod.coerce.date(),
 });
 
+export const AtelierDeleteRaidItemParams = zod.object({
+  engId: zod.coerce.string(),
+  raidId: zod.coerce.string(),
+});
+
 export const AtelierGetHypothesisTreeParams = zod.object({
   engId: zod.coerce.string(),
 });
@@ -2048,6 +2053,10 @@ export const AtelierGetDeliverableResponse = zod.object({
   evidenceCoveragePct: zod.number().nullish(),
   offHypothesisSections: zod.array(zod.string()).optional(),
   criticRunId: zod.string().nullish(),
+});
+
+export const AtelierDeleteDeliverableParams = zod.object({
+  delId: zod.coerce.string(),
 });
 
 /**

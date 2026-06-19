@@ -1473,7 +1473,11 @@ defineCapability({
     if (input.confirm !== true) {
       return { ok: true, data: { preview: { raidId, kind: r.kind, severity: r.severity } }, confirmation: { summary: `Close ${r.severity} ${r.kind}: ${r.description.slice(0, 100)}.`, diff: { update: { table: "atelier_raid_items", id: raidId, status: "closed" } }, pending: { tool: "raid_close", input: { ...input, confirm: true } } } };
     }
-    await db.update(atelierRaidItems).set({ status: "closed", updatedAt: new Date() }).where(eq(atelierRaidItems.id, raidId));
+    const closePatch: Partial<typeof atelierRaidItems.$inferInsert> = { status: "closed", updatedAt: new Date() };
+    if (input.mitigation !== undefined && input.mitigation !== null) {
+      closePatch.mitigation = String(input.mitigation);
+    }
+    await db.update(atelierRaidItems).set(closePatch).where(eq(atelierRaidItems.id, raidId));
     await recordAudit(ctx, "raid_item", raidId, "raid.close.cli", { raidId, mitigation: input.mitigation ?? null }, `${ctx.persona.name} closed RAID item ${raidId}.`);
     // Task #499 — closing a RAID lands on its engagement workspace.
     return {

@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   useAtelierListDeliverables,
   useAtelierCreateDeliverable,
+  useAtelierDeleteDeliverable,
   getAtelierListDeliverablesQueryKey,
   getAtelierListAuditQueryKey,
 } from "@workspace/api-client-react";
@@ -11,26 +12,50 @@ import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { DeliverableAcceptancesSection } from "@/components/tabs/DeliverableAcceptancesSection";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Trash2 } from "lucide-react";
 
 export function DeliverablesTab({ engId }: { engId: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: items, isLoading } = useAtelierListDeliverables(engId);
   const create = useAtelierCreateDeliverable();
+  const remove = useAtelierDeleteDeliverable();
   const [showForm, setShowForm] = React.useState(false);
   const [name, setName] = React.useState("Diagnostic Memo");
 
-  async function onCreate() {
-    if (!name.trim()) return;
-    const res = await create.mutateAsync({
-      engId,
-      data: { type: "diagnostic_memo", name },
-    });
+  function inv() {
     qc.invalidateQueries({ queryKey: getAtelierListDeliverablesQueryKey(engId) });
     qc.invalidateQueries({ queryKey: getAtelierListAuditQueryKey() });
-    setShowForm(false);
-    toast({ title: "Deliverable created", description: res.name });
+  }
+
+  async function onCreate() {
+    if (!name.trim()) return;
+    try {
+      const res = await create.mutateAsync({
+        engId,
+        data: { type: "diagnostic_memo", name },
+      });
+      inv();
+      setShowForm(false);
+      toast({ title: "Deliverable created", description: res.name });
+    } catch {
+      toast({ title: "Could not create deliverable", description: "Please try again.", variant: "destructive" });
+    }
+  }
+
+  async function onDelete(delId: string, delName: string) {
+    try {
+      await remove.mutateAsync({ delId });
+      inv();
+      toast({ title: "Deliverable deleted", description: delName });
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast({
+        title: "Could not delete deliverable",
+        description: status === 409 ? "Sent deliverables cannot be deleted." : "Please try again.",
+        variant: "destructive",
+      });
+    }
   }
 
   if (isLoading) return <Skeleton className="h-64 bg-bg-elevate" />;
@@ -86,15 +111,32 @@ export function DeliverablesTab({ engId }: { engId: string }) {
                   <div className="font-semibold text-text">{d.name}</div>
                   <div className="text-xs font-mono text-text-mute mt-0.5">{d.type}</div>
                 </div>
-                <MonoChip
-                  tone={
-                    d.status === "sent" ? "green" :
-                    d.status === "approved" ? "gold" :
-                    d.status === "in_review" ? "amber" : "default"
-                  }
-                >
-                  {d.status}
-                </MonoChip>
+                <div className="flex items-center gap-2">
+                  <MonoChip
+                    tone={
+                      d.status === "sent" ? "green" :
+                      d.status === "approved" ? "gold" :
+                      d.status === "in_review" ? "amber" : "default"
+                    }
+                  >
+                    {d.status}
+                  </MonoChip>
+                  {d.status !== "sent" && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void onDelete(d.id, d.name);
+                      }}
+                      disabled={remove.isPending}
+                      className="text-text-mute hover:text-red disabled:opacity-50"
+                      title="Delete deliverable"
+                      data-testid={`btn-delete-deliverable-${d.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="text-text-mute">

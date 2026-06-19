@@ -23,6 +23,7 @@
  */
 
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { computeNrrDeltaPct } from "../atelier-math.js";
 import {
   db,
   atelierAuditEvents,
@@ -161,6 +162,7 @@ defineCapability({
       kind: { type: "string", enum: ["risk", "assumption", "issue", "dependency"] },
       description: { type: "string", minLength: 3 },
       severity: { type: "string", enum: ["green", "amber", "red"] },
+      mitigation: { type: "string" },
       ownerId: { type: "string" },
       dueDate: { type: "string" },
     },
@@ -186,6 +188,7 @@ defineCapability({
       kind: String(input.kind),
       description: String(input.description),
       severity: String(input.severity ?? "amber"),
+      mitigation: input.mitigation ? String(input.mitigation) : null,
       ownerId: input.ownerId ? String(input.ownerId) : null,
       dueDate: input.dueDate ? String(input.dueDate) : null,
       status: "open",
@@ -1009,6 +1012,8 @@ defineCapability({
       return { ok: false, errorCode: "needs_confirm", errorMessage: "renewal_create requires confirm:true." };
     }
     const id = rid("rnw");
+    const cur = input.currentArrUsd !== undefined ? Number(input.currentArrUsd) : 0;
+    const proposed = input.proposedArrUsd !== undefined ? Number(input.proposedArrUsd) : cur;
     await db.insert(atelierRenewal).values({
       id,
       orgId: ctx.persona.orgId,
@@ -1016,8 +1021,9 @@ defineCapability({
       engagementId: input.engagementId ? String(input.engagementId) : null,
       contractId: input.contractId ? String(input.contractId) : null,
       renewalDueAt: input.renewalDueAt ? String(input.renewalDueAt) : null,
-      currentArrUsd: input.currentArrUsd !== undefined ? Number(input.currentArrUsd) : 0,
-      proposedArrUsd: input.proposedArrUsd !== undefined ? Number(input.proposedArrUsd) : 0,
+      currentArrUsd: cur,
+      proposedArrUsd: proposed,
+      nrrDeltaPct: computeNrrDeltaPct(cur, proposed),
       riskTier: input.riskTier ? String(input.riskTier) : "green",
       rationaleText: input.rationaleText ? String(input.rationaleText) : null,
       status: "open",
@@ -1116,8 +1122,18 @@ defineCapability({
     const patch: Partial<typeof atelierRenewal.$inferInsert> = { updatedAt: new Date() };
     if (input.status !== undefined) patch.status = String(input.status) as typeof patch.status;
     if (input.riskTier !== undefined) patch.riskTier = String(input.riskTier) as typeof patch.riskTier;
-    if (input.proposedArrUsd !== undefined) patch.proposedArrUsd = Number(input.proposedArrUsd);
     if (input.rationaleText !== undefined) patch.rationaleText = String(input.rationaleText);
+    if (input.proposedArrUsd !== undefined) {
+      const proposed = Number(input.proposedArrUsd);
+      patch.proposedArrUsd = proposed;
+      // Recompute NRR delta against the persisted current ARR baseline so
+      // the figure stays canonical regardless of edit surface.
+      const [existing] = await db
+        .select({ currentArrUsd: atelierRenewal.currentArrUsd })
+        .from(atelierRenewal)
+        .where(and(eq(atelierRenewal.id, id), eq(atelierRenewal.orgId, ctx.persona.orgId), isNull(atelierRenewal.deletedAt)));
+      if (existing) patch.nrrDeltaPct = computeNrrDeltaPct(existing.currentArrUsd, proposed);
+    }
     await db.update(atelierRenewal).set(patch)
       .where(and(eq(atelierRenewal.id, id), eq(atelierRenewal.orgId, ctx.persona.orgId), isNull(atelierRenewal.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "renewal", id, "update", input);
