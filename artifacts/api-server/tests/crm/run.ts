@@ -75,8 +75,13 @@ function group(title: string): void {
 
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
-    console.log("\u26a0 DATABASE_URL not set \u2014 skipping CRM harness.");
-    return;
+    // Fail fast rather than skip: this is a regression gate, and a silent
+    // skip would let the validation check pass without running any assertion.
+    console.error(
+      "\u2717 DATABASE_URL is not set \u2014 the CRM harness requires a database connection. " +
+        "Set TEST_DATABASE_URL (preferred, isolated) or DATABASE_URL.",
+    );
+    process.exit(1);
   }
   if (!process.env.TEST_DATABASE_URL) {
     console.warn(
@@ -209,26 +214,76 @@ async function main(): Promise<void> {
 
       const forbidden = await api("POST", "/accounts", PERSONA.consultant, { ...validBody, name: uniq("Forbidden") });
       check("POST /accounts (consultant) \u2192 403 partner-only", forbidden.status === 403 && forbidden.body?.error === "partner-only", `status=${forbidden.status}`);
+
+      // read (R of CRUD)
+      if (acctRow?.id) {
+        const read = await api("GET", `/accounts/${acctRow.id}`, PERSONA.fp);
+        check(
+          "GET /accounts/:id (founding_partner) \u2192 200 + workspace",
+          read.status === 200 && !!read.body && typeof read.body === "object",
+          `status=${read.status}`,
+        );
+        const readRestricted = await api("GET", `/accounts/${acctRow.id}`, PERSONA.restricted);
+        check(
+          "GET /accounts/:id (restricted persona) \u2192 403",
+          readRestricted.status === 403,
+          `status=${readRestricted.status}`,
+        );
+      }
     }
 
     // =====================================================================
-    group("REST \u00b7 Contact disposition");
+    group("Contacts \u00b7 create / read / update");
+    // (No contact-delete surface exists in the current codebase, so D is N/A.)
     // =====================================================================
     let contactId = "";
     {
-      contactId = `c_t542_${STAMP}`;
-      await db.insert(atelierContacts).values({
-        id: contactId,
-        orgId: ORG,
-        accountId: ACC,
-        fullName: uniq("Contact"),
-        disposition: "unknown",
-        createdByUserId: PERSONA.fp,
-      });
-      created.contacts.add(contactId);
+      const ctx = makeCtx(PERSONA.fp, "founding_partner", "Mounir Ariss");
 
-      const disp = await api("POST", `/contacts/${contactId}/disposition`, PERSONA.fp, { disposition: "champion" });
-      check("POST /contacts/:id/disposition \u2192 200 + updated", disp.status === 200 && disp.body?.disposition === "champion", `status=${disp.status}`);
+      // create (C of CRUD) via the contact_create capability
+      const contactCap = catalog.findByToolName("contact_create");
+      check("capability contact_create registered", !!contactCap);
+      if (contactCap) {
+        const noConfirm = await contactCap.run({ accountId: ACC, fullName: uniq("Contact") }, ctx);
+        check(
+          "contact_create without confirm \u2192 needs_confirm",
+          noConfirm.ok === false && (noConfirm as any).errorCode === "needs_confirm",
+          JSON.stringify(noConfirm).slice(0, 120),
+        );
+        const made = await contactCap.run(
+          { accountId: ACC, fullName: uniq("Contact"), title: "VP Operations", seniority: "vp", confirm: true },
+          ctx,
+        );
+        contactId = (made.data as any)?.id ?? "";
+        check("contact_create (confirm) \u2192 ok + id", made.ok === true && !!contactId, JSON.stringify(made).slice(0, 120));
+        if (contactId) created.contacts.add(contactId);
+        const [crow] = await db
+          .select({ acc: atelierContacts.accountId })
+          .from(atelierContacts)
+          .where(eq(atelierContacts.id, contactId || "__none__"));
+        check("contact_create persisted under the account", crow?.acc === ACC, `accountId=${crow?.acc}`);
+      }
+
+      // read (R of CRUD) via the account-contacts list endpoint
+      const list = await api("GET", `/accounts/${ACC}/contacts`, PERSONA.fp);
+      const listed = Array.isArray(list.body?.contacts)
+        ? (list.body.contacts as Array<{ id?: string }>).find((c) => c?.id === contactId)
+        : undefined;
+      check(
+        "GET /accounts/:id/contacts \u2192 200 listing the new contact",
+        list.status === 200 && !!contactId && !!listed,
+        `status=${list.status} found=${!!listed}`,
+      );
+
+      // update (U of CRUD) via the disposition REST endpoint
+      if (contactId) {
+        const disp = await api("POST", `/contacts/${contactId}/disposition`, PERSONA.fp, { disposition: "champion" });
+        check(
+          "POST /contacts/:id/disposition \u2192 200 + updated",
+          disp.status === 200 && disp.body?.disposition === "champion",
+          `status=${disp.status}`,
+        );
+      }
 
       const missing = await api("POST", `/contacts/c_does_not_exist_${STAMP}/disposition`, PERSONA.fp, { disposition: "champion" });
       check("POST disposition on missing contact \u2192 404", missing.status === 404, `status=${missing.status}`);
@@ -401,6 +456,39 @@ async function main(): Promise<void> {
           makeCtx(PERSONA.consultant, "consultant", "Omar Najjar"),
         );
         check("account_create (consultant) \u2192 ok:false forbidden", denied.ok === false, JSON.stringify(denied).slice(0, 120));
+      }
+
+      // account_update + account_delete: the U and D of account CRUD via capabilities.
+      const acctUpdateCap = catalog.findByToolName("account_update");
+      const acctDeleteCap = catalog.findByToolName("account_delete");
+      check("capability account_update registered", !!acctUpdateCap);
+      check("capability account_delete registered", !!acctDeleteCap);
+      if (acctCap && acctUpdateCap && acctDeleteCap) {
+        // Seed a throwaway account to mutate then soft-delete (isolated from
+        // the rows other groups assert against).
+        const seed = await acctCap.run({ name: uniq("CrudAcct"), country: "AE", sector: "Technology", confirm: true }, ctx);
+        const targetId = (seed.data as any)?.id as string | undefined;
+        check("account CRUD: seed account created", seed.ok === true && !!targetId, JSON.stringify(seed).slice(0, 120));
+        if (targetId) {
+          created.accounts.add(targetId);
+
+          // update
+          const updNo = await acctUpdateCap.run({ id: targetId, status: "dormant" }, ctx);
+          check("account_update without confirm \u2192 needs_confirm", updNo.ok === false && (updNo as any).errorCode === "needs_confirm", JSON.stringify(updNo).slice(0, 120));
+          const upd = await acctUpdateCap.run({ id: targetId, status: "dormant", notes: uniq("note"), confirm: true }, ctx);
+          check("account_update (confirm) \u2192 ok", upd.ok === true, JSON.stringify(upd).slice(0, 120));
+          const [au] = await db.select({ s: atelierAccounts.status }).from(atelierAccounts).where(eq(atelierAccounts.id, targetId));
+          check("account_update persisted status 'dormant'", au?.s === "dormant", `got ${au?.s}`);
+
+          // delete (two-phase: typed-name re-confirm)
+          const delPhase1 = await acctDeleteCap.run({ accountId: targetId }, ctx);
+          const typed = (delPhase1.confirmation as any)?.diff?.typedNameRequired as string | undefined;
+          check("account_delete phase1 \u2192 confirmation w/ typed-name", delPhase1.ok === true && !!delPhase1.confirmation && !!typed, JSON.stringify(delPhase1).slice(0, 140));
+          const delPhase2 = await acctDeleteCap.run({ accountId: targetId, confirm: true }, ctx);
+          check("account_delete phase2 (confirm) \u2192 ok", delPhase2.ok === true, JSON.stringify(delPhase2).slice(0, 120));
+          const [ad] = await db.select({ d: atelierAccounts.deletedAt }).from(atelierAccounts).where(eq(atelierAccounts.id, targetId));
+          check("account_delete soft-deleted (deletedAt set)", !!ad?.d, `deletedAt=${ad?.d}`);
+        }
       }
 
       // contact_update_disposition: two-phase + persistence.
