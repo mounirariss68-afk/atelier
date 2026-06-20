@@ -1479,12 +1479,19 @@ defineCapability({
     }
     await db.update(atelierRaidItems).set(closePatch).where(eq(atelierRaidItems.id, raidId));
     await recordAudit(ctx, "raid_item", raidId, "raid.close.cli", { raidId, mitigation: input.mitigation ?? null }, `${ctx.persona.name} closed RAID item ${raidId}.`);
+    // Task #549 — surface the effective mitigation (the new value if the
+    // close supplied one, else whatever was already on the item) so the
+    // chat result card shows it like the REST Workplan UI does.
+    const effectiveMitigation =
+      closePatch.mitigation !== undefined ? closePatch.mitigation : r.mitigation;
     // Task #499 — closing a RAID lands on its engagement workspace.
     return {
       ok: true,
       data: {
         raidId,
         status: "closed",
+        kind: r.kind,
+        mitigation: effectiveMitigation ?? null,
         navigateTo: {
           path: `/clients/deliver/engagements/${r.engagementId}`,
           when: "on_commit" as const,

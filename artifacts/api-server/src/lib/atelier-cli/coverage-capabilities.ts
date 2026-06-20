@@ -195,7 +195,17 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "raid_item", id, "create", input);
-    return { ok: true, data: { id, kind: "raid_item", navigateTo: null } };
+    return {
+      ok: true,
+      data: {
+        id,
+        kind: "raid_item",
+        // Task #549 — surface the persisted mitigation so the chat
+        // result card matches what the REST Workplan UI shows.
+        mitigation: input.mitigation ? String(input.mitigation) : null,
+        navigateTo: null,
+      },
+    };
   },
 });
 

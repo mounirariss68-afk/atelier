@@ -332,6 +332,42 @@ function FieldGrid({
   );
 }
 
+/* ───────────── Task #549 — long-form note blocks ───────────── */
+
+// Free-text fields that read poorly in the truncating two-column grid
+// (RAID mitigation, deliverable re-draft notes). They get a full-width
+// wrapped block instead so the whole text is visible on the card.
+const NOTE_KEYS = new Set(["mitigation", "notes"]);
+
+const NOTE_LABELS: Record<string, { en: string; ar: string }> = {
+  mitigation: { en: "Mitigation", ar: "خطة التخفيف" },
+  notes: { en: "Notes", ar: "ملاحظات" },
+};
+
+function NoteBlock({
+  noteKey,
+  text,
+  locale,
+}: {
+  noteKey: string;
+  text: string;
+  locale: CliLocale;
+}) {
+  const key = noteKey.toLowerCase();
+  const lbl = NOTE_LABELS[key];
+  const label = lbl ? (locale === "ar" ? lbl.ar : lbl.en) : humanLabel(noteKey);
+  return (
+    <div className="mt-2" data-testid="cli-note-block" data-note-key={key}>
+      <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-0.5">
+        {label}
+      </div>
+      <div className="text-[12px] text-text leading-relaxed whitespace-pre-wrap break-words">
+        {text}
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────────────── dispatcher ─────────────────────────── */
 
 export function ToolResultCardList({
@@ -638,6 +674,9 @@ function CrmEntityCard({
   const toStage = asStr(data.toStage) || asStr(data.to);
 
   const rows: Array<{ label: string; value: React.ReactNode }> = [];
+  // Task #549 — collect free-text note fields (mitigation / notes) for a
+  // full-width wrapped block instead of a truncated grid cell.
+  const noteRows: Array<{ key: string; text: string }> = [];
   if (fromStage && toStage) {
     rows.push({
       label: ar ? "المرحلة" : "Stage",
@@ -654,12 +693,17 @@ function CrmEntityCard({
     if (k === "fromStage" || k === "toStage" || k === "from" || k === "to") continue;
     if (v == null || v === "") continue;
     if (typeof v === "object") continue; // arrays/objects handled elsewhere
+    if (NOTE_KEYS.has(k.toLowerCase()) && typeof v === "string" && v.trim() !== "") {
+      noteRows.push({ key: k, text: v });
+      continue;
+    }
     rows.push({ label: humanLabel(k), value: crmFormatField(k, v, currency, locale) });
   }
 
   // Money summary for single-expense cards (amount + currency).
   const amount = asNum(data.amount);
-  const hasBody = title || id || rows.length > 0 || status || count != null || amount != null;
+  const hasBody =
+    title || id || rows.length > 0 || noteRows.length > 0 || status || count != null || amount != null;
 
   if (!hasBody) {
     return (
@@ -719,6 +763,10 @@ function CrmEntityCard({
           <FieldGrid rows={rows} locale={locale} />
         </div>
       )}
+
+      {noteRows.map((n) => (
+        <NoteBlock key={n.key} noteKey={n.key} text={n.text} locale={locale} />
+      ))}
     </div>
   );
 }
@@ -1841,9 +1889,15 @@ function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
     "currency",
   ]);
   const kind = asStr(data.kind);
-  const rows = Object.entries(data).filter(
+  const allRows = Object.entries(data).filter(
     ([k, v]) => !skip.has(k) && k !== "kind" && v != null && v !== "",
   );
+  // Task #549 — pull free-text note fields (mitigation / notes) out of the
+  // grid so they render as full-width wrapped blocks instead of truncating.
+  const noteRows = allRows.filter(
+    ([k, v]) => NOTE_KEYS.has(k.toLowerCase()) && typeof v === "string" && v.trim() !== "",
+  );
+  const rows = allRows.filter(([k]) => !NOTE_KEYS.has(k.toLowerCase()));
   // utilization.person ships a `weeks` array — render a tiny sparkline.
   const weeks = asArr(data.weeks) as Json[];
   const flags = asArr(data.flags) as unknown[];
@@ -1896,6 +1950,9 @@ function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
           />
         </div>
       )}
+      {noteRows.map(([k, v]) => (
+        <NoteBlock key={k} noteKey={k} text={asStr(v)} locale={locale} />
+      ))}
       {weeks.length > 0 && (
         <div className="mt-2">
           <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
