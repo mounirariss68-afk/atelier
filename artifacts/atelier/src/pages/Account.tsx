@@ -27,7 +27,10 @@ import {
   TabNavItem,
   Eyebrow,
   SectionLabel,
+  PillButton,
 } from "@/components/ui/primitives";
+import { CreateContactDialog } from "@/components/CreateContactDialog";
+import { EditContactDialog } from "@/components/EditContactDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Globe,
@@ -437,16 +440,45 @@ function DecisionMakersTab({
   const updateDisp = useAtelierUpdateContactDisposition();
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = editingId ? contacts.find((c) => c.id === editingId) ?? null : null;
   if (contacts.length === 0) {
     return (
-      <Card className="p-8 text-center text-text-mute font-mono text-sm">
-        No contacts mapped yet for this account.
+      <Card className="p-8 text-center text-text-mute font-mono text-sm space-y-4">
+        <div>No contacts mapped yet for this account.</div>
+        <CreateContactDialog
+          accountId={accountId}
+          trigger={
+            <PillButton variant="primary" data-testid="button-add-contact-empty">
+              + Add contact
+            </PillButton>
+          }
+        />
       </Card>
     );
   }
   const selected = selectedId ? contacts.find((c) => c.id === selectedId) ?? null : null;
   return (
     <div className="space-y-6">
+      {editing && (
+        <EditContactDialog
+          contact={editing}
+          accountId={accountId}
+          open={!!editingId}
+          onOpenChange={(o) => !o && setEditingId(null)}
+        />
+      )}
+      <div className="flex items-center justify-between">
+        <SectionLabel>Decision-makers</SectionLabel>
+        <CreateContactDialog
+          accountId={accountId}
+          trigger={
+            <PillButton variant="primary" data-testid="button-add-contact">
+              + Add contact
+            </PillButton>
+          }
+        />
+      </div>
       <DecisionMakersGraph
         contacts={contacts}
         relationships={relationships}
@@ -464,13 +496,22 @@ function DecisionMakersTab({
                 {selected.seniority && ` · ${selected.seniority}`}
               </div>
             </div>
-            <button
-              onClick={() => setSelectedId(null)}
-              className="text-xs font-mono text-text-mute hover:text-text"
-              data-testid="button-close-contact-panel"
-            >
-              close ✕
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setEditingId(selected.id)}
+                className="text-xs font-mono text-gold hover:underline"
+                data-testid={`button-edit-contact-${selected.id}`}
+              >
+                edit
+              </button>
+              <button
+                onClick={() => setSelectedId(null)}
+                className="text-xs font-mono text-text-mute hover:text-text"
+                data-testid="button-close-contact-panel"
+              >
+                close ✕
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
             <MonoChip tone={DISPOSITION_TONE[selected.disposition]}>{selected.disposition}</MonoChip>
@@ -609,6 +650,13 @@ function DecisionMakersTab({
                 {d}
               </button>
             ))}
+            <button
+              onClick={() => setEditingId(c.id)}
+              className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border border-gold/50 text-gold hover:bg-gold/10 transition-colors ml-auto"
+              data-testid={`button-edit-contact-card-${c.id}`}
+            >
+              edit
+            </button>
           </div>
         </Card>
       ))}

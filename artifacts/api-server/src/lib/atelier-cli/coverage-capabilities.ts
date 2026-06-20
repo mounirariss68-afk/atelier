@@ -1396,6 +1396,11 @@ defineCapability({
       seniority: { type: "string", enum: ["c_suite", "vp", "director", "manager", "ic"] },
       email: { type: "string" },
       phone: { type: "string" },
+      linkedinUrl: { type: "string" },
+      buyerPersona: { type: "string" },
+      influenceScore: { type: "number", minimum: 1, maximum: 5 },
+      disposition: { type: "string", enum: ["champion", "supporter", "neutral", "skeptic", "blocker", "unknown"] },
+      notes: { type: "string" },
     },
     required: ["accountId", "fullName"],
     additionalProperties: false,
@@ -1421,9 +1426,128 @@ defineCapability({
       seniority: input.seniority ? String(input.seniority) : null,
       email: input.email ? String(input.email) : null,
       phone: input.phone ? String(input.phone) : null,
+      linkedinUrl: input.linkedinUrl ? String(input.linkedinUrl) : null,
+      buyerPersona: input.buyerPersona ? String(input.buyerPersona) : null,
+      influenceScore: input.influenceScore !== undefined ? Number(input.influenceScore) : 3,
+      disposition: input.disposition ? String(input.disposition) : "unknown",
+      notes: input.notes ? String(input.notes) : null,
+      confidence: "verified",
+      contactOwnerId: ctx.persona.id,
+      createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "contact", id, "create", input);
     try { await mirrorEntityEmbedding(ctx.persona.orgId, "contact", id, String(input.fullName)); } catch {}
+    return { ok: true, data: { id, kind: "contact", navigateTo: null } };
+  },
+});
+
+defineCapability({
+  id: "coverage.contact_update",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "contact_update",
+  description: "Update a contact's profile fields (name, title, seniority, email, phone, LinkedIn, buyer persona, influence, disposition, notes).",
+  slashAliases: { en: ["/contact-update"] },
+  representativePrompts: { en: ["Update Jane Doe's title to SVP and bump her influence to 5."] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      ...COMMON_INPUT_PROPS,
+      id: { type: "string", minLength: 4 },
+      fullName: { type: "string", minLength: 2 },
+      title: { type: "string" },
+      seniority: { type: "string", enum: ["c_suite", "vp", "director", "manager", "ic"] },
+      email: { type: "string" },
+      phone: { type: "string" },
+      linkedinUrl: { type: "string" },
+      buyerPersona: { type: "string" },
+      influenceScore: { type: "number", minimum: 1, maximum: 5 },
+      disposition: { type: "string", enum: ["champion", "supporter", "neutral", "skeptic", "blocker", "unknown"] },
+      notes: { type: "string" },
+    },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  irreversible: false,
+  surfaceOn: ["global"],
+  source: "cli-only",
+  async run(input, ctx) {
+    if (input.confirm !== true) {
+      return { ok: false, errorCode: "needs_confirm", errorMessage: "contact_update requires confirm:true." };
+    }
+    const id = String(input.id);
+    const [existing] = await db
+      .select()
+      .from(atelierContacts)
+      .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, ctx.persona.orgId), isNull(atelierContacts.deletedAt)));
+    if (!existing) {
+      return { ok: false, errorCode: "not_found", errorMessage: `contact ${id} not found` };
+    }
+    const patch: Partial<typeof atelierContacts.$inferInsert> = { updatedAt: new Date() };
+    if (input.fullName !== undefined) patch.fullName = String(input.fullName);
+    if (input.title !== undefined) patch.title = input.title ? String(input.title) : null;
+    if (input.seniority !== undefined) patch.seniority = input.seniority ? String(input.seniority) : null;
+    if (input.email !== undefined) patch.email = input.email ? String(input.email) : null;
+    if (input.phone !== undefined) patch.phone = input.phone ? String(input.phone) : null;
+    if (input.linkedinUrl !== undefined) patch.linkedinUrl = input.linkedinUrl ? String(input.linkedinUrl) : null;
+    if (input.buyerPersona !== undefined) patch.buyerPersona = input.buyerPersona ? String(input.buyerPersona) : null;
+    if (input.influenceScore !== undefined) patch.influenceScore = Number(input.influenceScore);
+    if (input.disposition !== undefined) patch.disposition = String(input.disposition);
+    if (input.notes !== undefined) patch.notes = input.notes ? String(input.notes) : null;
+    await db
+      .update(atelierContacts)
+      .set(patch)
+      .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, ctx.persona.orgId), isNull(atelierContacts.deletedAt)));
+    await audit(ctx.persona.orgId, ctx.persona.id, "contact", id, "update", input);
+    return { ok: true, data: { id, kind: "contact", navigateTo: null } };
+  },
+});
+
+defineCapability({
+  id: "coverage.contact_delete",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "contact_delete",
+  description: "Remove (soft-delete) a contact from an account.",
+  slashAliases: { en: ["/contact-remove", "/contact-delete"] },
+  representativePrompts: { en: ["Remove Jane Doe from the Acme account."] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      ...COMMON_INPUT_PROPS,
+      id: { type: "string", minLength: 4 },
+    },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  irreversible: true,
+  surfaceOn: ["global"],
+  source: "cli-only",
+  async run(input, ctx) {
+    if (input.confirm !== true) {
+      return { ok: false, errorCode: "needs_confirm", errorMessage: "contact_delete requires confirm:true." };
+    }
+    const id = String(input.id);
+    const [existing] = await db
+      .select()
+      .from(atelierContacts)
+      .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, ctx.persona.orgId), isNull(atelierContacts.deletedAt)));
+    if (!existing) {
+      return { ok: false, errorCode: "not_found", errorMessage: `contact ${id} not found` };
+    }
+    await db
+      .update(atelierContacts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, ctx.persona.orgId)));
+    await audit(ctx.persona.orgId, ctx.persona.id, "contact", id, "delete", { id });
     return { ok: true, data: { id, kind: "contact", navigateTo: null } };
   },
 });

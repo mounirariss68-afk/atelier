@@ -67,7 +67,8 @@ export const DISPATCH_TABLE: Record<string, Partial<Record<DispatchVerb, string>
   },
   contact: {
     create: "contact_create",
-    update: "contact_update_disposition",
+    update: "contact_update",
+    delete: "contact_delete",
   },
   deliverable: {
     create: "engagement_create_deliverable",

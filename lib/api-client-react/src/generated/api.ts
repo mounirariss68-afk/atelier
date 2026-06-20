@@ -49,6 +49,7 @@ import type {
   AtelierContactGraph,
   AtelierCountersignPricing200,
   AtelierCreateAccountInput,
+  AtelierCreateContactInput,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
   AtelierCreateStageTransition200,
@@ -115,6 +116,7 @@ import type {
   AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierUpdateContactInput,
   AtelierUpdateOpportunityInput,
   AtelierWhitespaceCanvas,
   AuditEvent,
@@ -5116,6 +5118,266 @@ export function useAtelierListAccountContacts<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Add a decision-maker contact to an account
+ */
+export const getAtelierCreateContactUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/contacts`;
+};
+
+export const atelierCreateContact = async (
+  accountId: string,
+  atelierCreateContactInput: AtelierCreateContactInput,
+  options?: RequestInit,
+): Promise<AtelierContact> => {
+  return customFetch<AtelierContact>(getAtelierCreateContactUrl(accountId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierCreateContactInput),
+  });
+};
+
+export const getAtelierCreateContactMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateContact>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateContact>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateContactInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateContact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateContact>>,
+    { accountId: string; data: BodyType<AtelierCreateContactInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierCreateContact(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateContactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateContact>>
+>;
+export type AtelierCreateContactMutationBody =
+  BodyType<AtelierCreateContactInput>;
+export type AtelierCreateContactMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Add a decision-maker contact to an account
+ */
+export const useAtelierCreateContact = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateContact>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateContact>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateContactInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateContactMutationOptions(options));
+};
+
+/**
+ * @summary Edit a contact's profile fields (audited)
+ */
+export const getAtelierUpdateContactUrl = (contactId: string) => {
+  return `/api/atelier/contacts/${contactId}`;
+};
+
+export const atelierUpdateContact = async (
+  contactId: string,
+  atelierUpdateContactInput: AtelierUpdateContactInput,
+  options?: RequestInit,
+): Promise<AtelierContact> => {
+  return customFetch<AtelierContact>(getAtelierUpdateContactUrl(contactId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierUpdateContactInput),
+  });
+};
+
+export const getAtelierUpdateContactMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContact>>,
+    TError,
+    { contactId: string; data: BodyType<AtelierUpdateContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateContact>>,
+  TError,
+  { contactId: string; data: BodyType<AtelierUpdateContactInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateContact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateContact>>,
+    { contactId: string; data: BodyType<AtelierUpdateContactInput> }
+  > = (props) => {
+    const { contactId, data } = props ?? {};
+
+    return atelierUpdateContact(contactId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateContactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateContact>>
+>;
+export type AtelierUpdateContactMutationBody =
+  BodyType<AtelierUpdateContactInput>;
+export type AtelierUpdateContactMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Edit a contact's profile fields (audited)
+ */
+export const useAtelierUpdateContact = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContact>>,
+    TError,
+    { contactId: string; data: BodyType<AtelierUpdateContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateContact>>,
+  TError,
+  { contactId: string; data: BodyType<AtelierUpdateContactInput> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateContactMutationOptions(options));
+};
+
+/**
+ * @summary Soft-delete (remove) a contact
+ */
+export const getAtelierDeleteContactUrl = (contactId: string) => {
+  return `/api/atelier/contacts/${contactId}`;
+};
+
+export const atelierDeleteContact = async (
+  contactId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAtelierDeleteContactUrl(contactId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteContactMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteContact>>,
+    TError,
+    { contactId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteContact>>,
+  TError,
+  { contactId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteContact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteContact>>,
+    { contactId: string }
+  > = (props) => {
+    const { contactId } = props ?? {};
+
+    return atelierDeleteContact(contactId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteContactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteContact>>
+>;
+
+export type AtelierDeleteContactMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Soft-delete (remove) a contact
+ */
+export const useAtelierDeleteContact = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteContact>>,
+    TError,
+    { contactId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteContact>>,
+  TError,
+  { contactId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteContactMutationOptions(options));
+};
 
 export const getAtelierGetAccountWhitespaceUrl = (accountId: string) => {
   return `/api/atelier/accounts/${accountId}/whitespace`;

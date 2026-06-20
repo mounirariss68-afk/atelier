@@ -1177,6 +1177,89 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierContactGraph" }
+    post:
+      operationId: atelierCreateContact
+      tags: [atelier]
+      summary: Add a decision-maker contact to an account
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCreateContactInput" }
+      responses:
+        "201":
+          description: Created contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierContact" }
+        "403":
+          description: Account not visible to this persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "404":
+          description: Account not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/contacts/{contactId}:
+    patch:
+      operationId: atelierUpdateContact
+      tags: [atelier]
+      summary: Edit a contact's profile fields (audited)
+      parameters:
+        - in: path
+          name: contactId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierUpdateContactInput" }
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierContact" }
+        "403":
+          description: Account not visible to this persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+    delete:
+      operationId: atelierDeleteContact
+      tags: [atelier]
+      summary: Soft-delete (remove) a contact
+      parameters:
+        - in: path
+          name: contactId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Account not visible to this persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "404":
+          description: Contact not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/accounts/{accountId}/whitespace:
     get:
       operationId: atelierGetAccountWhitespace
@@ -2314,6 +2397,35 @@ components:
       properties:
         disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
         note: { type: ["string", "null"] }
+
+    AtelierCreateContactInput:
+      type: object
+      required: [fullName]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 160 }
+        title: { type: ["string", "null"] }
+        seniority: { type: ["string", "null"], enum: [c_suite, vp, director, manager, ic, unknown, null] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        buyerPersona: { type: ["string", "null"] }
+        influenceScore: { type: ["integer", "null"], minimum: 1, maximum: 5 }
+        disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
+        notes: { type: ["string", "null"] }
+
+    AtelierUpdateContactInput:
+      type: object
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 160 }
+        title: { type: ["string", "null"] }
+        seniority: { type: ["string", "null"], enum: [c_suite, vp, director, manager, ic, unknown, null] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        linkedinUrl: { type: ["string", "null"] }
+        buyerPersona: { type: ["string", "null"] }
+        influenceScore: { type: ["integer", "null"], minimum: 1, maximum: 5 }
+        disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
+        notes: { type: ["string", "null"] }
 
     AtelierAccountOpportunityRef:
       type: object

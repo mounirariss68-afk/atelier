@@ -242,8 +242,7 @@ async function main(): Promise<void> {
     }
 
     // =====================================================================
-    group("Contacts \u00b7 create / read / update");
-    // (No contact-delete surface exists in the current codebase, so D is N/A.)
+    group("Contacts \u00b7 create / read / update / delete");
     // =====================================================================
     let contactId = "";
     {
@@ -296,6 +295,68 @@ async function main(): Promise<void> {
 
       const missing = await api("POST", `/contacts/c_does_not_exist_${STAMP}/disposition`, PERSONA.fp, { disposition: "champion" });
       check("POST disposition on missing contact \u2192 404", missing.status === 404, `status=${missing.status}`);
+
+      // update (U of CRUD) via PATCH /contacts/:contactId
+      if (contactId) {
+        const edit = await api("PATCH", `/contacts/${contactId}`, PERSONA.fp, {
+          title: "SVP Operations",
+          influenceScore: 5,
+          buyerPersona: uniq("Persona"),
+          disposition: "supporter",
+        });
+        check(
+          "PATCH /contacts/:id (edit fields) \u2192 200 + updated",
+          edit.status === 200 && edit.body?.title === "SVP Operations" && Number(edit.body?.influenceScore) === 5 && edit.body?.disposition === "supporter",
+          `status=${edit.status} body=${JSON.stringify(edit.body)?.slice(0, 160)}`,
+        );
+        const [erow] = await db
+          .select({ title: atelierContacts.title, inf: atelierContacts.influenceScore })
+          .from(atelierContacts)
+          .where(eq(atelierContacts.id, contactId));
+        check("contact edit persisted (title + influenceScore)", erow?.title === "SVP Operations" && Number(erow?.inf) === 5, `title=${erow?.title} inf=${erow?.inf}`);
+
+        const editBlank = await api("PATCH", `/contacts/${contactId}`, PERSONA.fp, { fullName: "   " });
+        check("PATCH /contacts/:id blank name \u2192 400 name-required", editBlank.status === 400 && editBlank.body?.error === "name-required", `status=${editBlank.status}`);
+      }
+
+      const editMissing = await api("PATCH", `/contacts/c_missing_${STAMP}`, PERSONA.fp, { title: "x" });
+      check("PATCH /contacts/:id missing \u2192 404 contact-not-found", editMissing.status === 404 && editMissing.body?.error === "contact-not-found", `status=${editMissing.status}`);
+
+      // delete (D of CRUD) via DELETE /contacts/:contactId (soft-delete).
+      // Seed a throwaway contact through the REST POST route (also exercising
+      // create-via-REST) so the shared `contactId` stays live for the
+      // downstream contact_update_disposition capability checks.
+      {
+        const seed = await api("POST", `/accounts/${ACC}/contacts`, PERSONA.fp, {
+          fullName: uniq("DelContact"),
+          title: "Throwaway",
+        });
+        const delId = seed.body?.id as string | undefined;
+        check(
+          "POST /accounts/:id/contacts (REST create) \u2192 201 + id",
+          (seed.status === 201 || seed.status === 200) && !!delId,
+          `status=${seed.status} body=${JSON.stringify(seed.body)?.slice(0, 160)}`,
+        );
+        if (delId) {
+          created.contacts.add(delId);
+          const del = await api("DELETE", `/contacts/${delId}`, PERSONA.fp);
+          check("DELETE /contacts/:id \u2192 204", del.status === 204, `status=${del.status}`);
+          const [drow] = await db
+            .select({ deletedAt: atelierContacts.deletedAt })
+            .from(atelierContacts)
+            .where(eq(atelierContacts.id, delId));
+          check("contact soft-deleted (deletedAt set)", !!drow?.deletedAt, `deletedAt=${drow?.deletedAt}`);
+
+          const listAfter = await api("GET", `/accounts/${ACC}/contacts`, PERSONA.fp);
+          const stillListed = Array.isArray(listAfter.body?.contacts)
+            ? (listAfter.body.contacts as Array<{ id?: string }>).some((c) => c?.id === delId)
+            : false;
+          check("GET /accounts/:id/contacts \u2192 deleted contact no longer listed", listAfter.status === 200 && !stillListed, `stillListed=${stillListed}`);
+        }
+      }
+
+      const delMissing = await api("DELETE", `/contacts/c_missing_${STAMP}`, PERSONA.fp);
+      check("DELETE /contacts/:id missing \u2192 404 contact-not-found", delMissing.status === 404 && delMissing.body?.error === "contact-not-found", `status=${delMissing.status}`);
     }
 
     // =====================================================================

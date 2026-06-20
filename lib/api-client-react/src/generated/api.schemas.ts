@@ -462,6 +462,96 @@ export interface AtelierContactDispositionInput {
   note?: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type AtelierCreateContactInputSeniority =
+  | (typeof AtelierCreateContactInputSeniority)[keyof typeof AtelierCreateContactInputSeniority]
+  | null;
+
+export const AtelierCreateContactInputSeniority = {
+  c_suite: "c_suite",
+  vp: "vp",
+  director: "director",
+  manager: "manager",
+  ic: "ic",
+  unknown: "unknown",
+} as const;
+
+export interface AtelierCreateContactInput {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  fullName: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  seniority?: AtelierCreateContactInputSeniority;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  /** @nullable */
+  buyerPersona?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   * @nullable
+   */
+  influenceScore?: number | null;
+  disposition?: AtelierContactDisposition;
+  /** @nullable */
+  notes?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierUpdateContactInputSeniority =
+  | (typeof AtelierUpdateContactInputSeniority)[keyof typeof AtelierUpdateContactInputSeniority]
+  | null;
+
+export const AtelierUpdateContactInputSeniority = {
+  c_suite: "c_suite",
+  vp: "vp",
+  director: "director",
+  manager: "manager",
+  ic: "ic",
+  unknown: "unknown",
+} as const;
+
+export interface AtelierUpdateContactInput {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  fullName?: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  seniority?: AtelierUpdateContactInputSeniority;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  /** @nullable */
+  buyerPersona?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   * @nullable
+   */
+  influenceScore?: number | null;
+  disposition?: AtelierContactDisposition;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
 
 export const PlmStage = {

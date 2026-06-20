@@ -70,6 +70,8 @@ import {
   AtelierRefreshAccountCartographerBody as AtelierCartographerRefreshInput,
   AtelierCreateCredentialBody as AtelierCredentialInput,
   AtelierCreateAccountBody as AtelierCreateAccountInput,
+  AtelierCreateContactBody as AtelierCreateContactInput,
+  AtelierUpdateContactBody as AtelierUpdateContactInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -1028,6 +1030,252 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
     contactOwnerId: updated.contactOwnerId ?? null,
     notes: updated.notes ?? null,
   });
+});
+
+// ---------- contact CRUD (Task #554) ----------
+function toContactWire(c: typeof atelierContacts.$inferSelect) {
+  return {
+    id: c.id,
+    accountId: c.accountId,
+    fullName: c.fullName,
+    title: c.title ?? null,
+    seniority: (c.seniority ?? null) as
+      | "c_suite"
+      | "vp"
+      | "director"
+      | "manager"
+      | "ic"
+      | "unknown"
+      | null,
+    email: c.email ?? null,
+    phone: c.phone ?? null,
+    linkedinUrl: c.linkedinUrl ?? null,
+    buyerPersona: c.buyerPersona ?? null,
+    influenceScore: c.influenceScore ?? 3,
+    disposition: c.disposition as
+      | "champion"
+      | "supporter"
+      | "neutral"
+      | "skeptic"
+      | "blocker"
+      | "unknown",
+    lastContactAt: c.lastContactAt ? new Date(c.lastContactAt).toISOString() : null,
+    contactOwnerId: c.contactOwnerId ?? null,
+    notes: c.notes ?? null,
+    sourceUrl: c.sourceUrl ?? null,
+    confidence: (c.confidence ?? "inferred") as "verified" | "inferred",
+  };
+}
+
+// Create a decision-maker contact on an account.
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/accounts/:accountId/contacts", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const parsed = AtelierCreateContactInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const input = parsed.data;
+  const fullName = input.fullName.trim();
+  if (!fullName) {
+    res.status(400).json({ error: "name-required" });
+    return;
+  }
+  const contactId = rid("ct");
+  const now = new Date();
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(atelierContacts)
+      .values({
+        id: contactId,
+        orgId: account.orgId,
+        accountId: account.id,
+        fullName,
+        title: input.title?.trim() || null,
+        seniority: input.seniority ?? null,
+        email: input.email?.trim() || null,
+        phone: input.phone?.trim() || null,
+        linkedinUrl: input.linkedinUrl?.trim() || null,
+        buyerPersona: input.buyerPersona?.trim() || null,
+        influenceScore: input.influenceScore ?? 3,
+        disposition: input.disposition ?? "unknown",
+        notes: input.notes?.trim() || null,
+        // Manually-entered contacts are confirmed by the human creating them.
+        confidence: "verified",
+        contactOwnerId: me.id,
+        createdByUserId: me.id,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "contact.created",
+      payload: {
+        contactId: row.id,
+        fullName: row.fullName,
+        title: row.title,
+        seniority: row.seniority,
+        disposition: row.disposition,
+      },
+      payloadSummary: `${me.name} added contact "${row.fullName}" to ${account.brandName ?? account.name}.`,
+    });
+    return row;
+  });
+  res.status(201).json(toContactWire(created));
+});
+
+// Edit a contact's profile fields.
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/contacts/:contactId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [c] = await db
+    .select()
+    .from(atelierContacts)
+    .where(and(eq(atelierContacts.id, req.params.contactId), isNull(atelierContacts.deletedAt)));
+  if (!c) {
+    res.status(404).json({ error: "contact-not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, c.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const parsed = AtelierUpdateContactInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const input = parsed.data;
+  const patch: Partial<typeof atelierContacts.$inferInsert> = {};
+  const changed: string[] = [];
+  if (input.fullName !== undefined) {
+    const name = input.fullName.trim();
+    if (!name) {
+      res.status(400).json({ error: "name-required" });
+      return;
+    }
+    patch.fullName = name;
+    changed.push("fullName");
+  }
+  if (input.title !== undefined) {
+    patch.title = input.title?.trim() || null;
+    changed.push("title");
+  }
+  if (input.seniority !== undefined) {
+    patch.seniority = input.seniority ?? null;
+    changed.push("seniority");
+  }
+  if (input.email !== undefined) {
+    patch.email = input.email?.trim() || null;
+    changed.push("email");
+  }
+  if (input.phone !== undefined) {
+    patch.phone = input.phone?.trim() || null;
+    changed.push("phone");
+  }
+  if (input.linkedinUrl !== undefined) {
+    patch.linkedinUrl = input.linkedinUrl?.trim() || null;
+    changed.push("linkedinUrl");
+  }
+  if (input.buyerPersona !== undefined) {
+    patch.buyerPersona = input.buyerPersona?.trim() || null;
+    changed.push("buyerPersona");
+  }
+  if (input.influenceScore !== undefined && input.influenceScore !== null) {
+    patch.influenceScore = input.influenceScore;
+    changed.push("influenceScore");
+  }
+  if (input.disposition !== undefined) {
+    patch.disposition = input.disposition;
+    changed.push("disposition");
+  }
+  if (input.notes !== undefined) {
+    patch.notes = input.notes?.trim() || null;
+    changed.push("notes");
+  }
+  if (changed.length === 0) {
+    res.json(toContactWire(c));
+    return;
+  }
+  patch.updatedAt = new Date();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(atelierContacts)
+      .set(patch)
+      .where(eq(atelierContacts.id, c.id))
+      .returning();
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: c.accountId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "contact.updated",
+      payload: { contactId: c.id, changed },
+      payloadSummary: `${me.name} edited ${changed.join(", ")} on contact "${row.fullName}".`,
+    });
+    return row;
+  });
+  res.json(toContactWire(updated));
+});
+
+// Soft-delete (remove) a contact.
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/contacts/:contactId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [c] = await db
+    .select()
+    .from(atelierContacts)
+    .where(and(eq(atelierContacts.id, req.params.contactId), isNull(atelierContacts.deletedAt)));
+  if (!c) {
+    res.status(404).json({ error: "contact-not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, c.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierContacts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(atelierContacts.id, c.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: c.accountId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "contact.archived",
+      payload: { contactId: c.id, fullName: c.fullName },
+      payloadSummary: `${me.name} removed contact "${c.fullName}".`,
+    });
+  });
+  res.status(204).end();
 });
 
 // ---------- credentials ----------

@@ -2865,6 +2865,142 @@ export const AtelierListAccountContactsResponse = zod.object({
   ),
 });
 
+/**
+ * @summary Add a decision-maker contact to an account
+ */
+export const AtelierCreateContactParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const atelierCreateContactBodyFullNameMax = 160;
+
+export const atelierCreateContactBodyInfluenceScoreMax = 5;
+
+export const AtelierCreateContactBody = zod.object({
+  fullName: zod.string().min(1).max(atelierCreateContactBodyFullNameMax),
+  title: zod.string().nullish(),
+  seniority: zod
+    .union([
+      zod.literal("c_suite"),
+      zod.literal("vp"),
+      zod.literal("director"),
+      zod.literal("manager"),
+      zod.literal("ic"),
+      zod.literal("unknown"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  linkedinUrl: zod.string().nullish(),
+  buyerPersona: zod.string().nullish(),
+  influenceScore: zod
+    .number()
+    .min(1)
+    .max(atelierCreateContactBodyInfluenceScoreMax)
+    .nullish(),
+  disposition: zod
+    .enum(["champion", "supporter", "neutral", "skeptic", "blocker", "unknown"])
+    .optional(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Edit a contact's profile fields (audited)
+ */
+export const AtelierUpdateContactParams = zod.object({
+  contactId: zod.coerce.string(),
+});
+
+export const atelierUpdateContactBodyFullNameMax = 160;
+
+export const atelierUpdateContactBodyInfluenceScoreMax = 5;
+
+export const AtelierUpdateContactBody = zod.object({
+  fullName: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateContactBodyFullNameMax)
+    .optional(),
+  title: zod.string().nullish(),
+  seniority: zod
+    .union([
+      zod.literal("c_suite"),
+      zod.literal("vp"),
+      zod.literal("director"),
+      zod.literal("manager"),
+      zod.literal("ic"),
+      zod.literal("unknown"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  linkedinUrl: zod.string().nullish(),
+  buyerPersona: zod.string().nullish(),
+  influenceScore: zod
+    .number()
+    .min(1)
+    .max(atelierUpdateContactBodyInfluenceScoreMax)
+    .nullish(),
+  disposition: zod
+    .enum(["champion", "supporter", "neutral", "skeptic", "blocker", "unknown"])
+    .optional(),
+  notes: zod.string().nullish(),
+});
+
+export const atelierUpdateContactResponseInfluenceScoreMax = 5;
+
+export const AtelierUpdateContactResponse = zod.object({
+  id: zod.string(),
+  accountId: zod.string(),
+  fullName: zod.string(),
+  title: zod.string().nullish(),
+  seniority: zod
+    .union([
+      zod.literal("c_suite"),
+      zod.literal("vp"),
+      zod.literal("director"),
+      zod.literal("manager"),
+      zod.literal("ic"),
+      zod.literal("unknown"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  linkedinUrl: zod.string().nullish(),
+  buyerPersona: zod.string().nullish(),
+  influenceScore: zod
+    .number()
+    .min(1)
+    .max(atelierUpdateContactResponseInfluenceScoreMax),
+  disposition: zod.enum([
+    "champion",
+    "supporter",
+    "neutral",
+    "skeptic",
+    "blocker",
+    "unknown",
+  ]),
+  lastContactAt: zod.string().nullish(),
+  contactOwnerId: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  sourceUrl: zod.string().nullish(),
+  confidence: zod
+    .enum(["verified", "inferred"])
+    .describe(
+      '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+    ),
+});
+
+/**
+ * @summary Soft-delete (remove) a contact
+ */
+export const AtelierDeleteContactParams = zod.object({
+  contactId: zod.coerce.string(),
+});
+
 export const AtelierGetAccountWhitespaceParams = zod.object({
   accountId: zod.coerce.string(),
 });
