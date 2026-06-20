@@ -48,6 +48,14 @@ import { sql, eq, and, gte, inArray } from "drizzle-orm";
 const ORG = "aico";
 const ENG = "eng_tasama_bpo_phase1";
 const ACC = "acc_tasama";
+// Task #555 — an account OUTSIDE the restricted persona's scope. The
+// restricted persona (u_yara_bgts) holds an active engagement grant on
+// ENG (eng_tasama_bpo_phase1, which lives on ACC=acc_tasama), so acc_tasama
+// is actually IN scope for it. acc_dge (engagement eng_dge_effortless_v1)
+// has no grant for either the restricted persona or the no-access employee,
+// and neither is its partner_owner, so it is the genuine out-of-scope
+// fixture for cross-scope mutation-denial assertions.
+const ACC_OOS = "acc_dge";
 const PERSONA = {
   fp: "p_mounir_ariss", // founding_partner — firm-wide visibility
   sm: "p_layla_haddad", // senior_manager
@@ -357,6 +365,97 @@ async function main(): Promise<void> {
 
       const delMissing = await api("DELETE", `/contacts/c_missing_${STAMP}`, PERSONA.fp);
       check("DELETE /contacts/:id missing \u2192 404 contact-not-found", delMissing.status === 404 && delMissing.body?.error === "contact-not-found", `status=${delMissing.status}`);
+    }
+
+    // =====================================================================
+    group("Contacts \u00b7 cross-scope mutation guard (Task #555)");
+    // Regression gate: a contact on an OUT-OF-SCOPE account (acc_dge) must
+    // not be editable/removable by users who cannot see that account —
+    // neither over REST (PATCH/DELETE /contacts/:id) nor via the chat
+    // contact_update / contact_delete capabilities.
+    // =====================================================================
+    {
+      // Seed an out-of-scope contact via the founding_partner (firm-wide
+      // visibility), so the only thing under test below is the *caller's*
+      // scope, not the contact's existence.
+      const fpCtx = makeCtx(PERSONA.fp, "founding_partner", "Mounir Ariss");
+      let oosContactId = "";
+      const contactCap = catalog.findByToolName("contact_create");
+      if (contactCap) {
+        const made = await contactCap.run(
+          { accountId: ACC_OOS, fullName: uniq("OOSContact"), title: "Director", seniority: "director", confirm: true },
+          fpCtx,
+        );
+        oosContactId = (made.data as any)?.id ?? "";
+        check("seed out-of-scope contact on acc_dge \u2192 ok + id", made.ok === true && !!oosContactId, JSON.stringify(made).slice(0, 120));
+        if (oosContactId) created.contacts.add(oosContactId);
+      }
+
+      if (oosContactId) {
+        // -------------------------------------------------------------
+        // REST · restricted persona (partner_firm_resource).
+        // The centralized non-employee boundary (index.ts) blocks ALL
+        // /contacts/* routes for partner_firm_resource before the route's
+        // canSeeAccount check runs, so the observable outcome is a 403
+        // (non-employee-persona-not-allowed-here). canSeeAccount remains
+        // as defense-in-depth behind the boundary. Either way: DENIED.
+        // -------------------------------------------------------------
+        const rPatch = await api("PATCH", `/contacts/${oosContactId}`, PERSONA.restricted, { title: "Hacked" });
+        check("PATCH /contacts/:id (restricted persona, out-of-scope) \u2192 403 denied", rPatch.status === 403, `status=${rPatch.status} body=${JSON.stringify(rPatch.body)?.slice(0, 120)}`);
+        const rDel = await api("DELETE", `/contacts/${oosContactId}`, PERSONA.restricted);
+        check("DELETE /contacts/:id (restricted persona, out-of-scope) \u2192 403 denied", rDel.status === 403, `status=${rDel.status} body=${JSON.stringify(rDel.body)?.slice(0, 120)}`);
+
+        // -------------------------------------------------------------
+        // REST · employee WITHOUT an engagement grant (p_khaled_aziz).
+        // This persona is an employee, so it passes the non-employee
+        // boundary and actually reaches the route-level canSeeAccount
+        // check, which must reject with 403 account-forbidden.
+        // -------------------------------------------------------------
+        const nPatch = await api("PATCH", `/contacts/${oosContactId}`, PERSONA.noAccess, { title: "Hacked" });
+        check("PATCH /contacts/:id (no-access employee, out-of-scope) \u2192 403 account-forbidden", nPatch.status === 403 && nPatch.body?.error === "account-forbidden", `status=${nPatch.status} body=${JSON.stringify(nPatch.body)?.slice(0, 120)}`);
+        const nDel = await api("DELETE", `/contacts/${oosContactId}`, PERSONA.noAccess);
+        check("DELETE /contacts/:id (no-access employee, out-of-scope) \u2192 403 account-forbidden", nDel.status === 403 && nDel.body?.error === "account-forbidden", `status=${nDel.status} body=${JSON.stringify(nDel.body)?.slice(0, 120)}`);
+
+        // -------------------------------------------------------------
+        // Chat · contact_update / contact_delete under a RESTRICTED ctx.
+        // Capabilities are dispatched in-process (they bypass the HTTP
+        // non-employee boundary), so this is exactly where the capability's
+        // own account-visibility guard must reject the cross-scope write.
+        // -------------------------------------------------------------
+        const rCtx = makeCtx(PERSONA.restricted, "partner_firm_resource", "Yara Al-Suwaidi");
+        const updateCap = catalog.findByToolName("contact_update");
+        const deleteCap = catalog.findByToolName("contact_delete");
+        check("capability contact_update registered", !!updateCap);
+        check("capability contact_delete registered", !!deleteCap);
+
+        if (updateCap) {
+          const denied = await updateCap.run({ id: oosContactId, title: "Hacked", confirm: true }, rCtx);
+          check(
+            "contact_update (restricted ctx, out-of-scope) \u2192 ok:false forbidden",
+            denied.ok === false && (denied as any).errorCode === "forbidden",
+            JSON.stringify(denied).slice(0, 140),
+          );
+          const [row] = await db
+            .select({ title: atelierContacts.title })
+            .from(atelierContacts)
+            .where(eq(atelierContacts.id, oosContactId));
+          check("contact_update denial left the row unchanged", row?.title !== "Hacked", `title=${row?.title}`);
+        }
+
+        if (deleteCap) {
+          const denied = await deleteCap.run({ id: oosContactId, confirm: true }, rCtx);
+          check(
+            "contact_delete (restricted ctx, out-of-scope) \u2192 ok:false forbidden",
+            denied.ok === false && (denied as any).errorCode === "forbidden",
+            JSON.stringify(denied).slice(0, 140),
+          );
+          const [row] = await db
+            .select({ deletedAt: atelierContacts.deletedAt })
+            .from(atelierContacts)
+            .where(eq(atelierContacts.id, oosContactId));
+          check("contact_delete denial did NOT soft-delete the row", !row?.deletedAt, `deletedAt=${row?.deletedAt}`);
+        }
+      }
     }
 
     // =====================================================================

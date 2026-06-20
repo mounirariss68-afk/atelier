@@ -26,3 +26,18 @@ Assert the exact 403.
 **Why:** these two facts repeatedly cause false greens (expecting RLS narrowing that
 never happens) or wrong-mode assertions (expecting filtered rows where the real
 contract is a hard 403).
+
+**Gotchas when writing cross-scope CRM denial tests:**
+- The "restricted" partner_firm_resource fixture actually HOLDS an active engagement
+  grant on the Tasama engagement, so acc_tasama is IN scope for it. For a genuine
+  out-of-scope account use acc_dge (its engagement has no grant for the restricted
+  persona nor the no-access employee, and neither is its partner_owner).
+- Chat capabilities are dispatched in-process and BYPASS the HTTP non-employee
+  boundary, so each write capability needs its OWN account-visibility guard — the
+  boundary only protects REST. Contact create/update/delete capabilities historically
+  filtered on org + soft-delete only; cross-scope writes via chat were possible until
+  a can-see-account guard was added.
+- REST contact PATCH/DELETE for a partner_firm_resource returns 403
+  `non-employee-persona-not-allowed-here` (boundary), NOT `account-forbidden` — the
+  route's canSeeAccount is defense-in-depth behind the boundary. To exercise
+  `account-forbidden` you need an EMPLOYEE persona without the engagement grant.

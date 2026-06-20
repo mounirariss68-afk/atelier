@@ -47,6 +47,8 @@ import {
   atelierOpportunities,
   atelierDeliverables,
   atelierExpenses,
+  atelierEngagements,
+  atelierEngagementAccess,
 } from "@workspace/db";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
@@ -79,6 +81,57 @@ async function audit(
   } catch {
     // Audit must never break the write itself.
   }
+}
+
+/**
+ * Account-visibility guard for chat capabilities (Task #555).
+ *
+ * Mirrors the REST `canSeeAccount` + `accessibleEngagementIds` logic
+ * (accountRoutes.ts / engagementRoutes.ts) so that contact mutation via
+ * chat is scoped to the same boundary the REST PATCH/DELETE routes enforce.
+ * Without this, a restricted persona (e.g. partner_firm_resource) could
+ * edit or remove decision-makers on accounts outside their engagement
+ * scope, since the capability handlers otherwise filter only on org +
+ * soft-delete.
+ *
+ * Visibility rule (same as REST):
+ *   - partner / founding_partner → firm-wide (all accounts)
+ *   - otherwise → an active, non-revoked engagement grant on any engagement
+ *     spawned from the account, OR being the account's partner_owner.
+ */
+async function personaCanSeeAccount(
+  persona: { id: string; role?: string },
+  accountId: string,
+): Promise<boolean> {
+  if (persona.role === "partner" || persona.role === "founding_partner") {
+    return true;
+  }
+  const grants = await db
+    .select({ engagementId: atelierEngagementAccess.engagementId })
+    .from(atelierEngagementAccess)
+    .where(
+      and(
+        eq(atelierEngagementAccess.userId, persona.id),
+        eq(atelierEngagementAccess.status, "active"),
+        isNull(atelierEngagementAccess.deletedAt),
+      ),
+    );
+  const grantedIds = new Set(grants.map((g) => g.engagementId));
+  const engs = await db
+    .select({ id: atelierEngagements.id })
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.accountId, accountId),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
+  if (engs.some((e) => grantedIds.has(e.id))) return true;
+  const [a] = await db
+    .select({ partnerOwnerId: atelierAccounts.partnerOwnerId })
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, accountId));
+  return a?.partnerOwnerId === persona.id;
 }
 
 const COMMON_INPUT_PROPS = {
@@ -1487,6 +1540,12 @@ defineCapability({
     if (!existing) {
       return { ok: false, errorCode: "not_found", errorMessage: `contact ${id} not found` };
     }
+    // Task #555 — account-visibility guard. Mirrors the REST PATCH route's
+    // canSeeAccount check so a restricted persona cannot edit a contact on
+    // an account outside their engagement/account scope via chat.
+    if (!(await personaCanSeeAccount(ctx.persona, existing.accountId))) {
+      return { ok: false, errorCode: "forbidden", errorMessage: `not authorized to edit contact ${id}` };
+    }
     const patch: Partial<typeof atelierContacts.$inferInsert> = { updatedAt: new Date() };
     if (input.fullName !== undefined) patch.fullName = String(input.fullName);
     if (input.title !== undefined) patch.title = input.title ? String(input.title) : null;
@@ -1542,6 +1601,12 @@ defineCapability({
       .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, ctx.persona.orgId), isNull(atelierContacts.deletedAt)));
     if (!existing) {
       return { ok: false, errorCode: "not_found", errorMessage: `contact ${id} not found` };
+    }
+    // Task #555 — account-visibility guard. Mirrors the REST DELETE route's
+    // canSeeAccount check so a restricted persona cannot remove a contact on
+    // an account outside their engagement/account scope via chat.
+    if (!(await personaCanSeeAccount(ctx.persona, existing.accountId))) {
+      return { ok: false, errorCode: "forbidden", errorMessage: `not authorized to remove contact ${id}` };
     }
     await db
       .update(atelierContacts)
