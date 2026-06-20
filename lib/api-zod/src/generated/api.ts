@@ -2385,6 +2385,12 @@ export const atelierGetAccountWorkspaceResponseAccountTwoCompetitorsItemDisplace
 
 export const atelierGetAccountWorkspaceResponseContactsItemInfluenceScoreMax = 5;
 
+export const atelierGetAccountWorkspaceResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierGetAccountWorkspaceResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierGetAccountWorkspaceResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierGetAccountWorkspaceResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
 export const AtelierGetAccountWorkspaceResponse = zod.object({
   account: zod
     .object({
@@ -2661,6 +2667,34 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       ]),
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierGetAccountWorkspaceResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierGetAccountWorkspaceResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierGetAccountWorkspaceResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierGetAccountWorkspaceResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       notes: zod.string().nullish(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
@@ -2906,6 +2940,12 @@ export const atelierUpdateAccountResponseAccountTwoCompetitorsItemHoldsMax = 600
 export const atelierUpdateAccountResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
 export const atelierUpdateAccountResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierUpdateAccountResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierUpdateAccountResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierUpdateAccountResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierUpdateAccountResponseContactsItemRelationshipTrendItemStrengthMax = 100;
 
 export const AtelierUpdateAccountResponse = zod.object({
   account: zod
@@ -3183,6 +3223,30 @@ export const AtelierUpdateAccountResponse = zod.object({
       ]),
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(atelierUpdateAccountResponseContactsItemRelationshipStrengthMin)
+        .max(atelierUpdateAccountResponseContactsItemRelationshipStrengthMax)
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierUpdateAccountResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierUpdateAccountResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       notes: zod.string().nullish(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
@@ -3315,6 +3379,12 @@ export const atelierRefreshAccountCartographerResponseAccountTwoCompetitorsItemH
 export const atelierRefreshAccountCartographerResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
 export const atelierRefreshAccountCartographerResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierRefreshAccountCartographerResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierRefreshAccountCartographerResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierRefreshAccountCartographerResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierRefreshAccountCartographerResponseContactsItemRelationshipTrendItemStrengthMax = 100;
 
 export const AtelierRefreshAccountCartographerResponse = zod.object({
   account: zod
@@ -3594,6 +3664,34 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       ]),
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierRefreshAccountCartographerResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierRefreshAccountCartographerResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierRefreshAccountCartographerResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierRefreshAccountCartographerResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       notes: zod.string().nullish(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
@@ -3696,6 +3794,12 @@ export const AtelierListAccountContactsParams = zod.object({
 
 export const atelierListAccountContactsResponseContactsItemInfluenceScoreMax = 5;
 
+export const atelierListAccountContactsResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierListAccountContactsResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierListAccountContactsResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierListAccountContactsResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
 export const AtelierListAccountContactsResponse = zod.object({
   contacts: zod.array(
     zod.object({
@@ -3732,6 +3836,34 @@ export const AtelierListAccountContactsResponse = zod.object({
       ]),
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierListAccountContactsResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierListAccountContactsResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierListAccountContactsResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierListAccountContactsResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       notes: zod.string().nullish(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
@@ -3764,6 +3896,9 @@ export const atelierCreateContactBodyFullNameMax = 160;
 
 export const atelierCreateContactBodyInfluenceScoreMax = 5;
 
+export const atelierCreateContactBodyRelationshipStrengthMin = 0;
+export const atelierCreateContactBodyRelationshipStrengthMax = 100;
+
 export const AtelierCreateContactBody = zod.object({
   fullName: zod.string().min(1).max(atelierCreateContactBodyFullNameMax),
   title: zod.string().nullish(),
@@ -3790,6 +3925,14 @@ export const AtelierCreateContactBody = zod.object({
   disposition: zod
     .enum(["champion", "supporter", "neutral", "skeptic", "blocker", "unknown"])
     .optional(),
+  relationshipStrength: zod
+    .number()
+    .min(atelierCreateContactBodyRelationshipStrengthMin)
+    .max(atelierCreateContactBodyRelationshipStrengthMax)
+    .nullish(),
+  contactOwnerId: zod.string().nullish(),
+  lastContactAt: zod.string().nullish(),
+  nextTouchAt: zod.string().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -3803,6 +3946,9 @@ export const AtelierUpdateContactParams = zod.object({
 export const atelierUpdateContactBodyFullNameMax = 160;
 
 export const atelierUpdateContactBodyInfluenceScoreMax = 5;
+
+export const atelierUpdateContactBodyRelationshipStrengthMin = 0;
+export const atelierUpdateContactBodyRelationshipStrengthMax = 100;
 
 export const AtelierUpdateContactBody = zod.object({
   fullName: zod
@@ -3834,10 +3980,24 @@ export const AtelierUpdateContactBody = zod.object({
   disposition: zod
     .enum(["champion", "supporter", "neutral", "skeptic", "blocker", "unknown"])
     .optional(),
+  relationshipStrength: zod
+    .number()
+    .min(atelierUpdateContactBodyRelationshipStrengthMin)
+    .max(atelierUpdateContactBodyRelationshipStrengthMax)
+    .nullish(),
+  contactOwnerId: zod.string().nullish(),
+  lastContactAt: zod.string().nullish(),
+  nextTouchAt: zod.string().nullish(),
   notes: zod.string().nullish(),
 });
 
 export const atelierUpdateContactResponseInfluenceScoreMax = 5;
+
+export const atelierUpdateContactResponseRelationshipStrengthMin = 0;
+export const atelierUpdateContactResponseRelationshipStrengthMax = 100;
+
+export const atelierUpdateContactResponseRelationshipTrendItemStrengthMin = 0;
+export const atelierUpdateContactResponseRelationshipTrendItemStrengthMax = 100;
 
 export const AtelierUpdateContactResponse = zod.object({
   id: zod.string(),
@@ -3873,6 +4033,26 @@ export const AtelierUpdateContactResponse = zod.object({
   ]),
   lastContactAt: zod.string().nullish(),
   contactOwnerId: zod.string().nullish(),
+  contactOwnerName: zod.string().nullish(),
+  relationshipStrength: zod
+    .number()
+    .min(atelierUpdateContactResponseRelationshipStrengthMin)
+    .max(atelierUpdateContactResponseRelationshipStrengthMax)
+    .optional(),
+  nextTouchAt: zod.string().nullish(),
+  relationshipTrend: zod
+    .array(
+      zod.object({
+        at: zod.string().describe("ISO timestamp of the snapshot."),
+        strength: zod
+          .number()
+          .min(atelierUpdateContactResponseRelationshipTrendItemStrengthMin)
+          .max(atelierUpdateContactResponseRelationshipTrendItemStrengthMax),
+        disposition: zod.string().nullish(),
+        note: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   notes: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   confidence: zod
@@ -3887,6 +4067,27 @@ export const AtelierUpdateContactResponse = zod.object({
  */
 export const AtelierDeleteContactParams = zod.object({
   contactId: zod.coerce.string(),
+});
+
+/**
+ * @summary Create a relationship edge between two contacts (audited)
+ */
+export const AtelierCreateContactRelationshipParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierCreateContactRelationshipBody = zod.object({
+  fromContactId: zod.string().min(1),
+  toContactId: zod.string().min(1),
+  type: zod.enum(["reports_to", "partners_with", "blocks"]),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Remove a relationship edge between two contacts (audited)
+ */
+export const AtelierDeleteContactRelationshipParams = zod.object({
+  relationshipId: zod.coerce.string(),
 });
 
 export const AtelierGetAccountWhitespaceParams = zod.object({
@@ -3967,6 +4168,12 @@ export const atelierDecideProfileUpdateResponseAccountTwoCompetitorsItemHoldsMax
 export const atelierDecideProfileUpdateResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
 export const atelierDecideProfileUpdateResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierDecideProfileUpdateResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierDecideProfileUpdateResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierDecideProfileUpdateResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierDecideProfileUpdateResponseContactsItemRelationshipTrendItemStrengthMax = 100;
 
 export const AtelierDecideProfileUpdateResponse = zod.object({
   account: zod
@@ -4244,6 +4451,34 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       ]),
       lastContactAt: zod.string().nullish(),
       contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierDecideProfileUpdateResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierDecideProfileUpdateResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierDecideProfileUpdateResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierDecideProfileUpdateResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       notes: zod.string().nullish(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
@@ -4361,6 +4596,12 @@ export const AtelierUpdateContactDispositionBody = zod.object({
 
 export const atelierUpdateContactDispositionResponseInfluenceScoreMax = 5;
 
+export const atelierUpdateContactDispositionResponseRelationshipStrengthMin = 0;
+export const atelierUpdateContactDispositionResponseRelationshipStrengthMax = 100;
+
+export const atelierUpdateContactDispositionResponseRelationshipTrendItemStrengthMin = 0;
+export const atelierUpdateContactDispositionResponseRelationshipTrendItemStrengthMax = 100;
+
 export const AtelierUpdateContactDispositionResponse = zod.object({
   id: zod.string(),
   accountId: zod.string(),
@@ -4395,6 +4636,30 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
   ]),
   lastContactAt: zod.string().nullish(),
   contactOwnerId: zod.string().nullish(),
+  contactOwnerName: zod.string().nullish(),
+  relationshipStrength: zod
+    .number()
+    .min(atelierUpdateContactDispositionResponseRelationshipStrengthMin)
+    .max(atelierUpdateContactDispositionResponseRelationshipStrengthMax)
+    .optional(),
+  nextTouchAt: zod.string().nullish(),
+  relationshipTrend: zod
+    .array(
+      zod.object({
+        at: zod.string().describe("ISO timestamp of the snapshot."),
+        strength: zod
+          .number()
+          .min(
+            atelierUpdateContactDispositionResponseRelationshipTrendItemStrengthMin,
+          )
+          .max(
+            atelierUpdateContactDispositionResponseRelationshipTrendItemStrengthMax,
+          ),
+        disposition: zod.string().nullish(),
+        note: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   notes: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   confidence: zod

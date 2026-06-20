@@ -510,6 +510,20 @@ export const AtelierContactConfidence = {
   inferred: "inferred",
 } as const;
 
+export interface AtelierContactTrendPoint {
+  /** ISO timestamp of the snapshot. */
+  at: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  strength: number;
+  /** @nullable */
+  disposition?: string | null;
+  /** @nullable */
+  note?: string | null;
+}
+
 export interface AtelierContact {
   id: string;
   accountId: string;
@@ -536,6 +550,16 @@ export interface AtelierContact {
   lastContactAt?: string | null;
   /** @nullable */
   contactOwnerId?: string | null;
+  /** @nullable */
+  contactOwnerName?: string | null;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  relationshipStrength?: number;
+  /** @nullable */
+  nextTouchAt?: string | null;
+  relationshipTrend?: AtelierContactTrendPoint[];
   /** @nullable */
   notes?: string | null;
   /** @nullable */
@@ -618,6 +642,18 @@ export interface AtelierCreateContactInput {
    */
   influenceScore?: number | null;
   disposition?: AtelierContactDisposition;
+  /**
+   * @minimum 0
+   * @maximum 100
+   * @nullable
+   */
+  relationshipStrength?: number | null;
+  /** @nullable */
+  contactOwnerId?: string | null;
+  /** @nullable */
+  lastContactAt?: string | null;
+  /** @nullable */
+  nextTouchAt?: string | null;
   /** @nullable */
   notes?: string | null;
 }
@@ -663,6 +699,37 @@ export interface AtelierUpdateContactInput {
    */
   influenceScore?: number | null;
   disposition?: AtelierContactDisposition;
+  /**
+   * @minimum 0
+   * @maximum 100
+   * @nullable
+   */
+  relationshipStrength?: number | null;
+  /** @nullable */
+  contactOwnerId?: string | null;
+  /** @nullable */
+  lastContactAt?: string | null;
+  /** @nullable */
+  nextTouchAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type AtelierCreateContactRelationshipInputType =
+  (typeof AtelierCreateContactRelationshipInputType)[keyof typeof AtelierCreateContactRelationshipInputType];
+
+export const AtelierCreateContactRelationshipInputType = {
+  reports_to: "reports_to",
+  partners_with: "partners_with",
+  blocks: "blocks",
+} as const;
+
+export interface AtelierCreateContactRelationshipInput {
+  /** @minLength 1 */
+  fromContactId: string;
+  /** @minLength 1 */
+  toContactId: string;
+  type: AtelierCreateContactRelationshipInputType;
   /** @nullable */
   notes?: string | null;
 }

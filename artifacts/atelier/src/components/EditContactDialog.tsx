@@ -24,11 +24,24 @@ import { useToast } from "@/hooks/use-toast";
 import {
   useAtelierUpdateContact,
   useAtelierDeleteContact,
+  useAtelierListUsers,
   getAtelierGetAccountWorkspaceQueryKey,
   type AtelierContact,
   type AtelierContactDisposition,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+
+// input[type=date] needs yyyy-mm-dd; API stores ISO datetimes.
+function toDateInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+function fromDateInput(v: string): string | null {
+  if (!v.trim()) return null;
+  const d = new Date(v + "T00:00:00.000Z");
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 const SENIORITIES = ["c_suite", "vp", "director", "manager", "ic"] as const;
 const DISPOSITIONS: AtelierContactDisposition[] = [
@@ -57,6 +70,7 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
   const { toast } = useToast();
   const update = useAtelierUpdateContact();
   const remove = useAtelierDeleteContact();
+  const { data: users } = useAtelierListUsers();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   const [fullName, setFullName] = React.useState(contact.fullName);
@@ -71,6 +85,12 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
     contact.disposition,
   );
   const [notes, setNotes] = React.useState(contact.notes ?? "");
+  const [relationshipStrength, setRelationshipStrength] = React.useState(
+    String(contact.relationshipStrength ?? 0),
+  );
+  const [contactOwnerId, setContactOwnerId] = React.useState(contact.contactOwnerId ?? "");
+  const [lastContactAt, setLastContactAt] = React.useState(toDateInput(contact.lastContactAt));
+  const [nextTouchAt, setNextTouchAt] = React.useState(toDateInput(contact.nextTouchAt));
 
   React.useEffect(() => {
     if (!open) return;
@@ -84,6 +104,10 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
     setInfluenceScore(String(contact.influenceScore));
     setDisposition(contact.disposition);
     setNotes(contact.notes ?? "");
+    setRelationshipStrength(String(contact.relationshipStrength ?? 0));
+    setContactOwnerId(contact.contactOwnerId ?? "");
+    setLastContactAt(toDateInput(contact.lastContactAt));
+    setNextTouchAt(toDateInput(contact.nextTouchAt));
   }, [open, contact]);
 
   async function save(e: React.FormEvent) {
@@ -93,6 +117,10 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
       return;
     }
     const inf = Number(influenceScore);
+    const strengthNum = Number(relationshipStrength);
+    const clampedStrength = Number.isFinite(strengthNum)
+      ? Math.max(0, Math.min(100, Math.round(strengthNum)))
+      : 0;
     try {
       await update.mutateAsync({
         contactId: contact.id,
@@ -113,6 +141,10 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
           influenceScore: Number.isFinite(inf) ? inf : 3,
           disposition,
           notes: notes.trim() || null,
+          relationshipStrength: clampedStrength,
+          contactOwnerId: contactOwnerId || null,
+          lastContactAt: fromDateInput(lastContactAt),
+          nextTouchAt: fromDateInput(nextTouchAt),
         },
       });
       qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
@@ -255,6 +287,63 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ec-strength" className={labelCls}>
+                Relationship strength · {Math.max(0, Math.min(100, Number(relationshipStrength) || 0))}
+              </Label>
+              <input
+                id="ec-strength"
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={relationshipStrength}
+                onChange={(e) => setRelationshipStrength(e.target.value)}
+                className="w-full accent-gold"
+                data-testid="input-edit-contact-strength"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ec-owner" className={labelCls}>Relationship owner</Label>
+              <select
+                id="ec-owner"
+                value={contactOwnerId}
+                onChange={(e) => setContactOwnerId(e.target.value)}
+                className={selectCls}
+                data-testid="select-edit-contact-owner"
+              >
+                <option value="">Unassigned</option>
+                {(users ?? []).map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="ec-last-contact" className={labelCls}>Last contact</Label>
+                <Input
+                  id="ec-last-contact"
+                  type="date"
+                  value={lastContactAt}
+                  onChange={(e) => setLastContactAt(e.target.value)}
+                  className={fieldCls}
+                  data-testid="input-edit-contact-last-contact"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ec-next-touch" className={labelCls}>Next touch</Label>
+                <Input
+                  id="ec-next-touch"
+                  type="date"
+                  value={nextTouchAt}
+                  onChange={(e) => setNextTouchAt(e.target.value)}
+                  className={fieldCls}
+                  data-testid="input-edit-contact-next-touch"
+                />
               </div>
             </div>
             <div className="grid gap-2">

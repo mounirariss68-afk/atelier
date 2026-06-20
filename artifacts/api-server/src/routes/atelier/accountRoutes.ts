@@ -73,6 +73,7 @@ import {
   AtelierUpdateAccountBody as AtelierUpdateAccountInput,
   AtelierCreateContactBody as AtelierCreateContactInput,
   AtelierUpdateContactBody as AtelierUpdateContactInput,
+  AtelierCreateContactRelationshipBody as AtelierCreateContactRelationshipInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -455,6 +456,18 @@ async function buildWorkspace(accountId: string, access: EngAccess, me: { id: st
       and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)),
     );
   const contactIds = contacts.map((c) => c.id);
+  // Task #567 — resolve Cognirise-side relationship owner display names.
+  const contactOwnerIds = Array.from(
+    new Set(contacts.map((c) => c.contactOwnerId).filter((x): x is string => !!x)),
+  );
+  const contactOwners = contactOwnerIds.length
+    ? await db
+        .select()
+        .from(atelierUsers)
+        .where(and(inArray(atelierUsers.id, contactOwnerIds), eq(atelierUsers.orgId, a.orgId)))
+    : [];
+  const ownerName = (id: string | null | undefined) =>
+    id ? contactOwners.find((u) => u.id === id)?.name ?? null : null;
   const rels =
     contactIds.length === 0
       ? []
@@ -588,37 +601,7 @@ async function buildWorkspace(accountId: string, access: EngAccess, me: { id: st
       sourceSignals: a.sourceSignals ?? [],
       pendingProfileUpdates: a.pendingProfileUpdates ?? [],
     },
-    contacts: contacts.map((c) => ({
-      id: c.id,
-      accountId: c.accountId,
-      fullName: c.fullName,
-      title: c.title ?? null,
-      seniority: (c.seniority ?? null) as
-        | "c_suite"
-        | "vp"
-        | "director"
-        | "manager"
-        | "ic"
-        | "unknown"
-        | null,
-      email: c.email ?? null,
-      phone: c.phone ?? null,
-      linkedinUrl: c.linkedinUrl ?? null,
-      buyerPersona: c.buyerPersona ?? null,
-      influenceScore: c.influenceScore ?? 3,
-      disposition: (c.disposition ?? "unknown") as
-        | "champion"
-        | "supporter"
-        | "neutral"
-        | "skeptic"
-        | "blocker"
-        | "unknown",
-      lastContactAt: c.lastContactAt ? new Date(c.lastContactAt).toISOString() : null,
-      contactOwnerId: c.contactOwnerId ?? null,
-      notes: c.notes ?? null,
-      sourceUrl: c.sourceUrl ?? null,
-      confidence: ((c.confidence ?? "inferred") as "verified" | "inferred"),
-    })),
+    contacts: contacts.map((c) => toContactWire(c, ownerName(c.contactOwnerId))),
     relationships: rels.map((r) => ({
       id: r.id,
       accountId: r.accountId,
@@ -1186,10 +1169,15 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
     return;
   }
   const before = c.disposition;
+  // Task #567 — append a trend snapshot capturing the new disposition.
+  const dispoTrend = [
+    ...(c.relationshipTrend ?? []),
+    makeTrendPoint(c.relationshipStrength ?? 0, parsed.data.disposition, parsed.data.note ?? null),
+  ];
   await db.transaction(async (tx) => {
     await tx
       .update(atelierContacts)
-      .set({ disposition: parsed.data.disposition, updatedAt: new Date() })
+      .set({ disposition: parsed.data.disposition, relationshipTrend: dispoTrend, updatedAt: new Date() })
       .where(eq(atelierContacts.id, c.id));
     await tx.insert(atelierAuditEvents).values({
       id: rid("aud"),
@@ -1204,39 +1192,14 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
     });
   });
   const [updated] = await db.select().from(atelierContacts).where(eq(atelierContacts.id, c.id));
-  res.json({
-    id: updated.id,
-    accountId: updated.accountId,
-    fullName: updated.fullName,
-    title: updated.title ?? null,
-    seniority: (updated.seniority ?? null) as
-      | "c_suite"
-      | "vp"
-      | "director"
-      | "manager"
-      | "ic"
-      | "unknown"
-      | null,
-    email: updated.email ?? null,
-    phone: updated.phone ?? null,
-    linkedinUrl: updated.linkedinUrl ?? null,
-    buyerPersona: updated.buyerPersona ?? null,
-    influenceScore: updated.influenceScore ?? 3,
-    disposition: updated.disposition as
-      | "champion"
-      | "supporter"
-      | "neutral"
-      | "skeptic"
-      | "blocker"
-      | "unknown",
-    lastContactAt: updated.lastContactAt ? new Date(updated.lastContactAt).toISOString() : null,
-    contactOwnerId: updated.contactOwnerId ?? null,
-    notes: updated.notes ?? null,
-  });
+  res.json(toContactWire(updated, await resolveOwnerName(updated.contactOwnerId, updated.orgId)));
 });
 
 // ---------- contact CRUD (Task #554) ----------
-function toContactWire(c: typeof atelierContacts.$inferSelect) {
+function toContactWire(
+  c: typeof atelierContacts.$inferSelect,
+  ownerName?: string | null,
+) {
   return {
     id: c.id,
     accountId: c.accountId,
@@ -1264,10 +1227,54 @@ function toContactWire(c: typeof atelierContacts.$inferSelect) {
       | "unknown",
     lastContactAt: c.lastContactAt ? new Date(c.lastContactAt).toISOString() : null,
     contactOwnerId: c.contactOwnerId ?? null,
+    // Task #567 — relationship depth.
+    contactOwnerName: ownerName ?? null,
+    relationshipStrength: c.relationshipStrength ?? 0,
+    nextTouchAt: c.nextTouchAt ? new Date(c.nextTouchAt).toISOString() : null,
+    relationshipTrend: (c.relationshipTrend ?? []).map((p) => ({
+      at: p.at,
+      strength: p.strength,
+      disposition: p.disposition ?? null,
+      note: p.note ?? null,
+    })),
     notes: c.notes ?? null,
     sourceUrl: c.sourceUrl ?? null,
     confidence: (c.confidence ?? "inferred") as "verified" | "inferred",
   };
+}
+
+// Task #567 — resolve a contact owner's display name for wire responses.
+// Scoped by orgId so a stray cross-org owner id can never disclose a foreign
+// user's name.
+async function resolveOwnerName(
+  ownerId: string | null | undefined,
+  orgId: string,
+): Promise<string | null> {
+  if (!ownerId) return null;
+  const [u] = await db
+    .select()
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, ownerId), eq(atelierUsers.orgId, orgId)));
+  return u?.name ?? null;
+}
+
+// Task #567 — validate that a supplied contact owner belongs to the same org
+// before it is persisted, preventing dangling/cross-org owner references.
+async function ownerIdValidForOrg(ownerId: string, orgId: string): Promise<boolean> {
+  const [u] = await db
+    .select({ id: atelierUsers.id })
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, ownerId), eq(atelierUsers.orgId, orgId)));
+  return !!u;
+}
+
+// Task #567 — build an append-only relationship trend snapshot.
+function makeTrendPoint(
+  strength: number,
+  disposition: string | null,
+  note: string | null,
+): { at: string; strength: number; disposition: string | null; note: string | null } {
+  return { at: new Date().toISOString(), strength, disposition, note };
 }
 
 // Create a decision-maker contact on an account.
@@ -1298,6 +1305,16 @@ router.post("/accounts/:accountId/contacts", async (req, res) => {
   }
   const contactId = rid("ct");
   const now = new Date();
+  // Task #567 — relationship depth on create. Default owner to the creating
+  // persona unless an explicit owner was supplied. Seed the trend history
+  // with the initial strength/disposition snapshot.
+  const initialStrength = input.relationshipStrength ?? 0;
+  const initialDisposition = input.disposition ?? "unknown";
+  const ownerId = input.contactOwnerId?.trim() || me.id;
+  if (ownerId !== me.id && !(await ownerIdValidForOrg(ownerId, account.orgId))) {
+    res.status(400).json({ error: "invalid-owner" });
+    return;
+  }
   const created = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(atelierContacts)
@@ -1313,11 +1330,15 @@ router.post("/accounts/:accountId/contacts", async (req, res) => {
         linkedinUrl: input.linkedinUrl?.trim() || null,
         buyerPersona: input.buyerPersona?.trim() || null,
         influenceScore: input.influenceScore ?? 3,
-        disposition: input.disposition ?? "unknown",
+        disposition: initialDisposition,
+        relationshipStrength: initialStrength,
+        lastContactAt: input.lastContactAt ? new Date(input.lastContactAt) : null,
+        nextTouchAt: input.nextTouchAt ? new Date(input.nextTouchAt) : null,
+        relationshipTrend: [makeTrendPoint(initialStrength, initialDisposition, "created")],
         notes: input.notes?.trim() || null,
         // Manually-entered contacts are confirmed by the human creating them.
         confidence: "verified",
-        contactOwnerId: me.id,
+        contactOwnerId: ownerId,
         createdByUserId: me.id,
         createdAt: now,
         updatedAt: now,
@@ -1342,7 +1363,7 @@ router.post("/accounts/:accountId/contacts", async (req, res) => {
     });
     return row;
   });
-  res.status(201).json(toContactWire(created));
+  res.status(201).json(toContactWire(created, await resolveOwnerName(created.contactOwnerId, created.orgId)));
 });
 
 // Edit a contact's profile fields.
@@ -1412,13 +1433,46 @@ router.patch("/contacts/:contactId", async (req, res) => {
     patch.disposition = input.disposition;
     changed.push("disposition");
   }
+  // Task #567 — relationship depth fields.
+  if (input.relationshipStrength !== undefined && input.relationshipStrength !== null) {
+    patch.relationshipStrength = input.relationshipStrength;
+    changed.push("relationshipStrength");
+  }
+  if (input.contactOwnerId !== undefined) {
+    const newOwnerId = input.contactOwnerId?.trim() || null;
+    if (newOwnerId && !(await ownerIdValidForOrg(newOwnerId, c.orgId))) {
+      res.status(400).json({ error: "invalid-owner" });
+      return;
+    }
+    patch.contactOwnerId = newOwnerId;
+    changed.push("contactOwnerId");
+  }
+  if (input.lastContactAt !== undefined) {
+    patch.lastContactAt = input.lastContactAt ? new Date(input.lastContactAt) : null;
+    changed.push("lastContactAt");
+  }
+  if (input.nextTouchAt !== undefined) {
+    patch.nextTouchAt = input.nextTouchAt ? new Date(input.nextTouchAt) : null;
+    changed.push("nextTouchAt");
+  }
   if (input.notes !== undefined) {
     patch.notes = input.notes?.trim() || null;
     changed.push("notes");
   }
   if (changed.length === 0) {
-    res.json(toContactWire(c));
+    res.json(toContactWire(c, await resolveOwnerName(c.contactOwnerId, c.orgId)));
     return;
+  }
+  // Task #567 — append a trend snapshot whenever strength or disposition moves.
+  if (changed.includes("relationshipStrength") || changed.includes("disposition")) {
+    const nextStrength =
+      patch.relationshipStrength !== undefined ? patch.relationshipStrength : c.relationshipStrength ?? 0;
+    const nextDisposition =
+      patch.disposition !== undefined ? (patch.disposition as string) : c.disposition;
+    patch.relationshipTrend = [
+      ...(c.relationshipTrend ?? []),
+      makeTrendPoint(nextStrength, nextDisposition, null),
+    ];
   }
   patch.updatedAt = new Date();
   const updated = await db.transaction(async (tx) => {
@@ -1440,7 +1494,7 @@ router.patch("/contacts/:contactId", async (req, res) => {
     });
     return row;
   });
-  res.json(toContactWire(updated));
+  res.json(toContactWire(updated, await resolveOwnerName(updated.contactOwnerId, updated.orgId)));
 });
 
 // Soft-delete (remove) a contact.
@@ -1476,6 +1530,197 @@ router.delete("/contacts/:contactId", async (req, res) => {
       action: "contact.archived",
       payload: { contactId: c.id, fullName: c.fullName },
       payloadSummary: `${me.name} removed contact "${c.fullName}".`,
+    });
+  });
+  res.status(204).end();
+});
+
+// ---------- contact relationships (Task #567) ----------
+// Detect whether adding `from reports_to to` would create a reporting cycle by
+// walking the existing reports_to chain upward from `to`.
+async function wouldCreateReportsCycle(
+  accountId: string,
+  fromContactId: string,
+  toContactId: string,
+): Promise<boolean> {
+  if (fromContactId === toContactId) return true;
+  const edges = await db
+    .select()
+    .from(atelierContactRelationships)
+    .where(
+      and(
+        eq(atelierContactRelationships.accountId, accountId),
+        eq(atelierContactRelationships.type, "reports_to"),
+        isNull(atelierContactRelationships.deletedAt),
+      ),
+    );
+  // A contact may have multiple live reports_to edges (no DB uniqueness), so
+  // traverse EVERY reachable manager from toContact — not just the first edge
+  // found — before concluding the new (from -> to) edge is cycle-free.
+  const managersOf = new Map<string, string[]>();
+  for (const e of edges) {
+    const list = managersOf.get(e.fromContactId);
+    if (list) list.push(e.toContactId);
+    else managersOf.set(e.fromContactId, [e.toContactId]);
+  }
+  const seen = new Set<string>();
+  const stack: string[] = [toContactId];
+  while (stack.length) {
+    const cursor = stack.pop()!;
+    if (cursor === fromContactId) return true;
+    if (seen.has(cursor)) continue;
+    seen.add(cursor);
+    const next = managersOf.get(cursor);
+    if (next) stack.push(...next);
+  }
+  return false;
+}
+
+// Create a relationship edge between two contacts.
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/accounts/:accountId/contact-relationships", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const parsed = AtelierCreateContactRelationshipInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const { fromContactId, toContactId, type } = parsed.data;
+  if (fromContactId === toContactId) {
+    res.status(400).json({ error: "self-relationship" });
+    return;
+  }
+  // Both endpoints must be live contacts on this account.
+  const endpoints = await db
+    .select()
+    .from(atelierContacts)
+    .where(
+      and(
+        eq(atelierContacts.accountId, account.id),
+        inArray(atelierContacts.id, [fromContactId, toContactId]),
+        isNull(atelierContacts.deletedAt),
+      ),
+    );
+  if (endpoints.length !== 2) {
+    res.status(404).json({ error: "contact-not-found" });
+    return;
+  }
+  if (type === "reports_to" && (await wouldCreateReportsCycle(account.id, fromContactId, toContactId))) {
+    res.status(400).json({ error: "reporting-cycle" });
+    return;
+  }
+  // Dedupe: ignore an identical live edge.
+  const [existing] = await db
+    .select()
+    .from(atelierContactRelationships)
+    .where(
+      and(
+        eq(atelierContactRelationships.accountId, account.id),
+        eq(atelierContactRelationships.fromContactId, fromContactId),
+        eq(atelierContactRelationships.toContactId, toContactId),
+        eq(atelierContactRelationships.type, type),
+        isNull(atelierContactRelationships.deletedAt),
+      ),
+    );
+  if (existing) {
+    res.status(201).json({
+      id: existing.id,
+      accountId: existing.accountId,
+      fromContactId: existing.fromContactId,
+      toContactId: existing.toContactId,
+      type: existing.type as "reports_to" | "partners_with" | "blocks",
+      notes: existing.notes ?? null,
+    });
+    return;
+  }
+  const relId = rid("rel");
+  const created = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(atelierContactRelationships)
+      .values({
+        id: relId,
+        orgId: account.orgId,
+        accountId: account.id,
+        fromContactId,
+        toContactId,
+        type,
+        notes: parsed.data.notes?.trim() || null,
+      })
+      .returning();
+    const fromName = endpoints.find((c) => c.id === fromContactId)?.fullName ?? fromContactId;
+    const toName = endpoints.find((c) => c.id === toContactId)?.fullName ?? toContactId;
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "contact.relationship.created",
+      payload: { relationshipId: row.id, fromContactId, toContactId, type },
+      payloadSummary: `${me.name} linked "${fromName}" ${type.replace(/_/g, " ")} "${toName}".`,
+    });
+    return row;
+  });
+  res.status(201).json({
+    id: created.id,
+    accountId: created.accountId,
+    fromContactId: created.fromContactId,
+    toContactId: created.toContactId,
+    type: created.type as "reports_to" | "partners_with" | "blocks",
+    notes: created.notes ?? null,
+  });
+});
+
+// Soft-delete a relationship edge.
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/contact-relationships/:relationshipId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [rel] = await db
+    .select()
+    .from(atelierContactRelationships)
+    .where(
+      and(
+        eq(atelierContactRelationships.id, req.params.relationshipId),
+        isNull(atelierContactRelationships.deletedAt),
+      ),
+    );
+  if (!rel) {
+    res.status(404).json({ error: "relationship-not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, rel.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierContactRelationships)
+      .set({ deletedAt: new Date() })
+      .where(eq(atelierContactRelationships.id, rel.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: rel.accountId,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "contact.relationship.removed",
+      payload: { relationshipId: rel.id, fromContactId: rel.fromContactId, toContactId: rel.toContactId, type: rel.type },
+      payloadSummary: `${me.name} removed a ${rel.type.replace(/_/g, " ")} link.`,
     });
   });
   res.status(204).end();

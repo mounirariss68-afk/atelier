@@ -33,6 +33,18 @@ export interface AtelierUpdateContactInput {
    */
   influenceScore?: number | null;
   disposition?: AtelierContactDisposition;
+  /**
+   * @minimum 0
+   * @maximum 100
+   * @nullable
+   */
+  relationshipStrength?: number | null;
+  /** @nullable */
+  contactOwnerId?: string | null;
+  /** @nullable */
+  lastContactAt?: string | null;
+  /** @nullable */
+  nextTouchAt?: string | null;
   /** @nullable */
   notes?: string | null;
 }

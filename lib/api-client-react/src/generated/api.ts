@@ -47,9 +47,11 @@ import type {
   AtelierContact,
   AtelierContactDispositionInput,
   AtelierContactGraph,
+  AtelierContactRelationship,
   AtelierCountersignPricing200,
   AtelierCreateAccountInput,
   AtelierCreateContactInput,
+  AtelierCreateContactRelationshipInput,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
   AtelierCreateStageTransition200,
@@ -5474,6 +5476,198 @@ export const useAtelierDeleteContact = <
   TContext
 > => {
   return useMutation(getAtelierDeleteContactMutationOptions(options));
+};
+
+/**
+ * @summary Create a relationship edge between two contacts (audited)
+ */
+export const getAtelierCreateContactRelationshipUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/contact-relationships`;
+};
+
+export const atelierCreateContactRelationship = async (
+  accountId: string,
+  atelierCreateContactRelationshipInput: AtelierCreateContactRelationshipInput,
+  options?: RequestInit,
+): Promise<AtelierContactRelationship> => {
+  return customFetch<AtelierContactRelationship>(
+    getAtelierCreateContactRelationshipUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCreateContactRelationshipInput),
+    },
+  );
+};
+
+export const getAtelierCreateContactRelationshipMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateContactRelationship>>,
+    TError,
+    {
+      accountId: string;
+      data: BodyType<AtelierCreateContactRelationshipInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateContactRelationship>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateContactRelationshipInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateContactRelationship"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateContactRelationship>>,
+    { accountId: string; data: BodyType<AtelierCreateContactRelationshipInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierCreateContactRelationship(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateContactRelationshipMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateContactRelationship>>
+>;
+export type AtelierCreateContactRelationshipMutationBody =
+  BodyType<AtelierCreateContactRelationshipInput>;
+export type AtelierCreateContactRelationshipMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Create a relationship edge between two contacts (audited)
+ */
+export const useAtelierCreateContactRelationship = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateContactRelationship>>,
+    TError,
+    {
+      accountId: string;
+      data: BodyType<AtelierCreateContactRelationshipInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateContactRelationship>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateContactRelationshipInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierCreateContactRelationshipMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Remove a relationship edge between two contacts (audited)
+ */
+export const getAtelierDeleteContactRelationshipUrl = (
+  relationshipId: string,
+) => {
+  return `/api/atelier/contact-relationships/${relationshipId}`;
+};
+
+export const atelierDeleteContactRelationship = async (
+  relationshipId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(
+    getAtelierDeleteContactRelationshipUrl(relationshipId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteContactRelationshipMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteContactRelationship>>,
+    TError,
+    { relationshipId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteContactRelationship>>,
+  TError,
+  { relationshipId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteContactRelationship"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteContactRelationship>>,
+    { relationshipId: string }
+  > = (props) => {
+    const { relationshipId } = props ?? {};
+
+    return atelierDeleteContactRelationship(relationshipId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteContactRelationshipMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteContactRelationship>>
+>;
+
+export type AtelierDeleteContactRelationshipMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Remove a relationship edge between two contacts (audited)
+ */
+export const useAtelierDeleteContactRelationship = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteContactRelationship>>,
+    TError,
+    { relationshipId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteContactRelationship>>,
+  TError,
+  { relationshipId: string },
+  TContext
+> => {
+  return useMutation(
+    getAtelierDeleteContactRelationshipMutationOptions(options),
+  );
 };
 
 export const getAtelierGetAccountWhitespaceUrl = (accountId: string) => {

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/primitives";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
+import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
 import { EditAccountStrategyDialog } from "@/components/EditAccountStrategyDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -92,6 +93,24 @@ const DISPOSITION_TONE: Record<AtelierContactDisposition, "default" | "gold" | "
   blocker: "red",
   unknown: "default",
 };
+
+// Relationship-strength meter colour: green (strong) → amber → red (weak).
+function strengthFill(s: number): string {
+  const v = Math.max(0, Math.min(100, s));
+  if (v >= 70) return "#3BA776";
+  if (v >= 40) return "#C9A24B";
+  return "#a83232";
+}
+
+// PRD §4.3 — the buying committee personas Cognirise expects to map on a
+// public-sector account. Surfaced as a coverage gap when not yet present.
+const EXPECTED_PERSONAS = [
+  "economic_buyer",
+  "technical_evaluator",
+  "champion",
+  "procurement",
+  "executive_sponsor",
+] as const;
 
 export default function Account() {
   const [, params] = useRoute("/accounts/:accountId");
@@ -818,7 +837,9 @@ function DecisionMakersTab({
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [insightsId, setInsightsId] = useState<string | null>(null);
   const editing = editingId ? contacts.find((c) => c.id === editingId) ?? null : null;
+  const insights = insightsId ? contacts.find((c) => c.id === insightsId) ?? null : null;
   if (contacts.length === 0) {
     return (
       <Card className="p-8 text-center text-text-mute font-mono text-sm space-y-4">
@@ -845,6 +866,20 @@ function DecisionMakersTab({
           onOpenChange={(o) => !o && setEditingId(null)}
         />
       )}
+      {insights && (
+        <ContactInsightsDialog
+          contact={insights}
+          accountId={accountId}
+          contacts={contacts}
+          relationships={relationships}
+          open={!!insightsId}
+          onOpenChange={(o) => !o && setInsightsId(null)}
+          onEdit={() => {
+            setEditingId(insights.id);
+            setInsightsId(null);
+          }}
+        />
+      )}
       <div className="flex items-center justify-between">
         <SectionLabel>Decision-makers</SectionLabel>
         <CreateContactDialog
@@ -856,11 +891,15 @@ function DecisionMakersTab({
           }
         />
       </div>
+      <CoverageGapCard contacts={contacts} />
       <DecisionMakersGraph
         contacts={contacts}
         relationships={relationships}
         selectedId={selectedId}
-        onSelect={setSelectedId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setInsightsId(id);
+        }}
       />
       {selected && (
         <Card className="p-5 border-gold/40" data-testid={`panel-contact-${selected.id}`}>
@@ -1042,6 +1081,56 @@ function DecisionMakersTab({
   );
 }
 
+function CoverageGapCard({ contacts }: { contacts: AtelierContact[] }) {
+  const mapped = new Set(
+    contacts
+      .map((c) => (c.buyerPersona ?? "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const norm = (p: string) => p.replace(/[\s-]+/g, "_").toLowerCase();
+  const missing = EXPECTED_PERSONAS.filter(
+    (p) => ![...mapped].some((m) => norm(m) === p),
+  );
+  const covered = EXPECTED_PERSONAS.length - missing.length;
+  return (
+    <Card className="p-4" data-testid="card-coverage-gap">
+      <div className="flex items-center justify-between">
+        <Eyebrow>Buying-committee coverage</Eyebrow>
+        <span
+          className={`text-xs font-mono ${missing.length === 0 ? "text-green-400" : "text-amber-400"}`}
+        >
+          {covered}/{EXPECTED_PERSONAS.length} mapped
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-3">
+        {EXPECTED_PERSONAS.map((p) => {
+          const isMissing = missing.includes(p);
+          const label = p.replace(/_/g, " ");
+          return (
+            <span
+              key={p}
+              className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${
+                isMissing
+                  ? "border-amber-500/50 text-amber-400"
+                  : "border-green-600/40 text-green-400"
+              }`}
+              data-testid={`coverage-persona-${p}`}
+            >
+              {isMissing ? "○" : "●"} {label}
+            </span>
+          );
+        })}
+      </div>
+      {missing.length > 0 && (
+        <p className="text-xs text-text-mute font-mono mt-3 leading-snug">
+          Gap: no contact mapped to {missing.map((m) => m.replace(/_/g, " ")).join(", ")}.
+          Map these personas to de-risk the deal.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 function DecisionMakersGraph({
   contacts,
   relationships,
@@ -1141,15 +1230,25 @@ function DecisionMakersGraph({
                 stroke={isSel ? "#C45BB8" : "#2c3a5c"}
                 strokeWidth={isSel ? 2 : 1}
               />
-              <text x={NODE_W / 2} y={22} textAnchor="middle" fontSize={11} fontWeight={600} fill="#EEF1FA">
+              <text x={NODE_W / 2} y={18} textAnchor="middle" fontSize={11} fontWeight={600} fill="#EEF1FA">
                 {c.fullName.length > 22 ? c.fullName.slice(0, 20) + "…" : c.fullName}
               </text>
-              <text x={NODE_W / 2} y={38} textAnchor="middle" fontSize={9} fill="#9BA8C9" fontFamily="monospace">
+              <text x={NODE_W / 2} y={31} textAnchor="middle" fontSize={9} fill="#9BA8C9" fontFamily="monospace">
                 {(c.title ?? "—").slice(0, 24)}
               </text>
-              <text x={NODE_W / 2} y={50} textAnchor="middle" fontSize={9} fill="#C45BB8" fontFamily="monospace">
+              <text x={8} y={43} fontSize={8} fill="#C45BB8" fontFamily="monospace">
                 infl {c.influenceScore}/5
               </text>
+              {/* Strength meter — fill width = relationship strength 0–100 */}
+              <rect x={8} y={46} width={NODE_W - 16} height={5} rx={2.5} fill="#0E1530" />
+              <rect
+                x={8}
+                y={46}
+                width={Math.max(0, Math.min(100, c.relationshipStrength ?? 0)) / 100 * (NODE_W - 16)}
+                height={5}
+                rx={2.5}
+                fill={strengthFill(c.relationshipStrength ?? 0)}
+              />
             </g>
           );
         })}

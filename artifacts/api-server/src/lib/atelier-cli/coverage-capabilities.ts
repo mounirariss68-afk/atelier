@@ -22,7 +22,7 @@
  * for the heavy business logic.
  */
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { computeNrrDeltaPct } from "../atelier-math.js";
 import {
   db,
@@ -44,6 +44,7 @@ import {
   atelierContract,
   atelierAccounts,
   atelierContacts,
+  atelierContactRelationships,
   atelierOpportunities,
   atelierDeliverables,
   atelierExpenses,
@@ -1614,6 +1615,185 @@ defineCapability({
       .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, ctx.persona.orgId)));
     await audit(ctx.persona.orgId, ctx.persona.id, "contact", id, "delete", { id });
     return { ok: true, data: { id, kind: "contact", navigateTo: null } };
+  },
+});
+
+// Task #567 — relationship edge create/delete via chat. Mirrors the REST
+// /accounts/:id/contact-relationships routes (same canSeeAccount guard,
+// reporting-cycle guard, and audit trail).
+defineCapability({
+  id: "coverage.contact_relationship_create",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "contact_relationship_create",
+  description:
+    "Create a relationship edge between two contacts on the same account (reports_to, partners_with, or blocks).",
+  slashAliases: { en: ["/relationship-add", "/org-link"] },
+  representativePrompts: { en: ["Make Jane report to the CIO on the Acme org chart."] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      ...COMMON_INPUT_PROPS,
+      fromContactId: { type: "string", minLength: 4 },
+      toContactId: { type: "string", minLength: 4 },
+      type: { type: "string", enum: ["reports_to", "partners_with", "blocks"] },
+      notes: { type: "string" },
+    },
+    required: ["fromContactId", "toContactId", "type"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  irreversible: false,
+  surfaceOn: ["global"],
+  source: "cli-only",
+  async run(input, ctx) {
+    if (input.confirm !== true) {
+      return { ok: false, errorCode: "needs_confirm", errorMessage: "contact_relationship_create requires confirm:true." };
+    }
+    const fromContactId = String(input.fromContactId);
+    const toContactId = String(input.toContactId);
+    const type = String(input.type);
+    if (fromContactId === toContactId) {
+      return { ok: false, errorCode: "invalid", errorMessage: "a contact cannot relate to itself" };
+    }
+    const endpoints = await db
+      .select()
+      .from(atelierContacts)
+      .where(
+        and(
+          eq(atelierContacts.orgId, ctx.persona.orgId),
+          inArray(atelierContacts.id, [fromContactId, toContactId]),
+          isNull(atelierContacts.deletedAt),
+        ),
+      );
+    if (endpoints.length !== 2) {
+      return { ok: false, errorCode: "not_found", errorMessage: "both contacts must exist on the account" };
+    }
+    const accountId = endpoints[0].accountId;
+    if (endpoints[0].accountId !== endpoints[1].accountId) {
+      return { ok: false, errorCode: "invalid", errorMessage: "contacts must belong to the same account" };
+    }
+    if (!(await personaCanSeeAccount(ctx.persona, accountId))) {
+      return { ok: false, errorCode: "forbidden", errorMessage: `not authorized to edit account ${accountId}` };
+    }
+    // Reporting-cycle guard for reports_to edges.
+    if (type === "reports_to") {
+      const edges = await db
+        .select()
+        .from(atelierContactRelationships)
+        .where(
+          and(
+            eq(atelierContactRelationships.accountId, accountId),
+            eq(atelierContactRelationships.type, "reports_to"),
+            isNull(atelierContactRelationships.deletedAt),
+          ),
+        );
+      // A contact may have multiple live reports_to edges, so traverse EVERY
+      // reachable manager from toContact — not just the first edge found.
+      const managersOf = new Map<string, string[]>();
+      for (const e of edges) {
+        const list = managersOf.get(e.fromContactId);
+        if (list) list.push(e.toContactId);
+        else managersOf.set(e.fromContactId, [e.toContactId]);
+      }
+      const seen = new Set<string>();
+      const stack: string[] = [toContactId];
+      while (stack.length) {
+        const cursor = stack.pop()!;
+        if (cursor === fromContactId) {
+          return { ok: false, errorCode: "invalid", errorMessage: "that link would create a reporting cycle" };
+        }
+        if (seen.has(cursor)) continue;
+        seen.add(cursor);
+        const next = managersOf.get(cursor);
+        if (next) stack.push(...next);
+      }
+    }
+    // Dedupe identical live edge.
+    const [existing] = await db
+      .select()
+      .from(atelierContactRelationships)
+      .where(
+        and(
+          eq(atelierContactRelationships.accountId, accountId),
+          eq(atelierContactRelationships.fromContactId, fromContactId),
+          eq(atelierContactRelationships.toContactId, toContactId),
+          eq(atelierContactRelationships.type, type),
+          isNull(atelierContactRelationships.deletedAt),
+        ),
+      );
+    if (existing) {
+      return { ok: true, data: { id: existing.id, kind: "contact_relationship", navigateTo: null } };
+    }
+    const id = rid("rel");
+    await db.insert(atelierContactRelationships).values({
+      id,
+      orgId: ctx.persona.orgId,
+      accountId,
+      fromContactId,
+      toContactId,
+      type,
+      notes: input.notes ? String(input.notes) : null,
+    });
+    await audit(ctx.persona.orgId, ctx.persona.id, "contact", id, "relationship.create", { fromContactId, toContactId, type });
+    return { ok: true, data: { id, kind: "contact_relationship", navigateTo: null } };
+  },
+});
+
+defineCapability({
+  id: "coverage.contact_relationship_delete",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "contact_relationship_delete",
+  description: "Remove (soft-delete) a relationship edge between two contacts.",
+  slashAliases: { en: ["/relationship-remove", "/org-unlink"] },
+  representativePrompts: { en: ["Remove the reporting line between Jane and the CIO."] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      ...COMMON_INPUT_PROPS,
+      id: { type: "string", minLength: 4 },
+    },
+    required: ["id"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  irreversible: true,
+  surfaceOn: ["global"],
+  source: "cli-only",
+  async run(input, ctx) {
+    if (input.confirm !== true) {
+      return { ok: false, errorCode: "needs_confirm", errorMessage: "contact_relationship_delete requires confirm:true." };
+    }
+    const id = String(input.id);
+    const [rel] = await db
+      .select()
+      .from(atelierContactRelationships)
+      .where(
+        and(
+          eq(atelierContactRelationships.id, id),
+          eq(atelierContactRelationships.orgId, ctx.persona.orgId),
+          isNull(atelierContactRelationships.deletedAt),
+        ),
+      );
+    if (!rel) {
+      return { ok: false, errorCode: "not_found", errorMessage: `relationship ${id} not found` };
+    }
+    if (!(await personaCanSeeAccount(ctx.persona, rel.accountId))) {
+      return { ok: false, errorCode: "forbidden", errorMessage: `not authorized to edit account ${rel.accountId}` };
+    }
+    await db
+      .update(atelierContactRelationships)
+      .set({ deletedAt: new Date() })
+      .where(eq(atelierContactRelationships.id, id));
+    await audit(ctx.persona.orgId, ctx.persona.id, "contact", id, "relationship.delete", { id });
+    return { ok: true, data: { id, kind: "contact_relationship", navigateTo: null } };
   },
 });
 

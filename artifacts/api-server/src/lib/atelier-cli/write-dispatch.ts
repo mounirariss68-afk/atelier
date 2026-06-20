@@ -70,6 +70,12 @@ export const DISPATCH_TABLE: Record<string, Partial<Record<DispatchVerb, string>
     update: "contact_update",
     delete: "contact_delete",
   },
+  // Task #567 — contact relationship edges (org-chart structure).
+  contact_relationship: {
+    create: "contact_relationship_create",
+    link: "contact_relationship_create",
+    delete: "contact_relationship_delete",
+  },
   deliverable: {
     create: "engagement_create_deliverable",
     update: "deliverable_update",

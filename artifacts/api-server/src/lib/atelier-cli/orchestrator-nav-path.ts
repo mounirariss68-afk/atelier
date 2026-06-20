@@ -13,13 +13,15 @@
  * and refusals leave this null and the chat does not auto-navigate.
  */
 
-export type NavWriteVerb = "create" | "update" | "link" | "transition";
+export type NavWriteVerb = "create" | "update" | "link" | "transition" | "delete";
 
 export type NavWriteKind =
   | "account"
   | "opportunity"
   | "engagement"
   | "contact"
+  // Task #567 — contact relationship edges (org-chart structure).
+  | "contact_relationship"
   | "deliverable"
   | "expense"
   | "partner_link"

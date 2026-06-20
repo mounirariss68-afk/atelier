@@ -8,6 +8,7 @@
 import type { AtelierContactConfidence } from "./atelierContactConfidence";
 import type { AtelierContactDisposition } from "./atelierContactDisposition";
 import type { AtelierContactSeniorityProperty } from "./atelierContactSeniorityProperty";
+import type { AtelierContactTrendPoint } from "./atelierContactTrendPoint";
 
 export interface AtelierContact {
   id: string;
@@ -35,6 +36,16 @@ export interface AtelierContact {
   lastContactAt?: string | null;
   /** @nullable */
   contactOwnerId?: string | null;
+  /** @nullable */
+  contactOwnerName?: string | null;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  relationshipStrength?: number;
+  /** @nullable */
+  nextTouchAt?: string | null;
+  relationshipTrend?: AtelierContactTrendPoint[];
   /** @nullable */
   notes?: string | null;
   /** @nullable */

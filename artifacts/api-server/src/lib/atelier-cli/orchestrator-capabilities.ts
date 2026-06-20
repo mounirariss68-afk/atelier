@@ -73,10 +73,12 @@ type ResolvableKind =
   | "deliverable"
   | "expense";
 
-type WriteVerb = "create" | "update" | "link" | "transition";
+type WriteVerb = "create" | "update" | "link" | "transition" | "delete";
 type WriteKind =
   | ResolvableKind
   | "partner_link"
+  // Task #567 — relationship edges between contacts (org-chart structure).
+  | "contact_relationship"
   // Task #411 — 15 new chat-owned write entities.
   | "meeting"
   | "raid_item"
@@ -117,6 +119,12 @@ const ROUTE_HINTS: Record<WriteKind, Partial<Record<WriteVerb, string>>> = {
   partner_link: {
     create: "POST /atelier/partner-links",
     link: "POST /atelier/partner-links",
+  },
+  // Task #567 — contact relationship edges (org-chart structure).
+  contact_relationship: {
+    create: "POST /atelier/accounts/:id/contact-relationships",
+    link: "POST /atelier/accounts/:id/contact-relationships",
+    delete: "DELETE /atelier/contact-relationships/:id",
   },
   deliverable: {
     create: "POST /atelier/deliverables",
@@ -1224,7 +1232,7 @@ defineCapability({
   inputSchema: {
     type: "object",
     properties: {
-      verb: { type: "string", enum: ["create", "update", "link", "transition"] },
+      verb: { type: "string", enum: ["create", "update", "link", "transition", "delete"] },
       kind: {
         type: "string",
         enum: [
@@ -1233,6 +1241,8 @@ defineCapability({
           "contact",
           "engagement",
           "partner_link",
+          // Task #567 — contact relationship edges.
+          "contact_relationship",
           "deliverable",
           "expense",
           // Task #411 — 15 new chat-owned write entities.

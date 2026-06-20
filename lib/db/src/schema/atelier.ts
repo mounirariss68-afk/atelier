@@ -226,6 +226,25 @@ export const atelierContacts = pgTable(
     // 'champion' | 'supporter' | 'neutral' | 'skeptic' | 'blocker' | 'unknown'
     lastContactAt: timestamp("last_contact_at"),
     contactOwnerId: text("contact_owner_id"), // FK to atelier_users
+    // Task #567 — stakeholder relationship depth. `relationshipStrength`
+    // is *our* relationship strength with this person (0–100), distinct
+    // from `influenceScore` (their internal clout, 1–5). `nextTouchAt`
+    // drives the contact-cadence prompt alongside `lastContactAt`.
+    // `relationshipTrend` is a lightweight append-only history so the
+    // org chart can show how sentiment/strength moved over time.
+    relationshipStrength: integer("relationship_strength").notNull().default(0), // 0–100
+    nextTouchAt: timestamp("next_touch_at"),
+    relationshipTrend: jsonb("relationship_trend")
+      .$type<
+        Array<{
+          at: string; // ISO timestamp
+          strength: number; // 0–100 snapshot
+          disposition?: string | null;
+          note?: string | null;
+        }>
+      >()
+      .notNull()
+      .default([]),
     notes: text("notes"),
     // Task #275 — provenance for cartographer-sourced contacts.
     // sourceUrl is the canonical citation (e.g. LinkedIn profile, press

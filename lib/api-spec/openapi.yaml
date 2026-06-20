@@ -1296,6 +1296,65 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/accounts/{accountId}/contact-relationships:
+    post:
+      operationId: atelierCreateContactRelationship
+      tags: [atelier]
+      summary: Create a relationship edge between two contacts (audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCreateContactRelationshipInput" }
+      responses:
+        "201":
+          description: Created relationship
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierContactRelationship" }
+        "400":
+          description: Invalid body or would create a reporting cycle
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "403":
+          description: Account not visible to this persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "404":
+          description: Account or contact not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/contact-relationships/{relationshipId}:
+    delete:
+      operationId: atelierDeleteContactRelationship
+      tags: [atelier]
+      summary: Remove a relationship edge between two contacts (audited)
+      parameters:
+        - in: path
+          name: relationshipId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Account not visible to this persona
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "404":
+          description: Relationship not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/accounts/{accountId}/whitespace:
     get:
       operationId: atelierGetAccountWhitespace
@@ -2527,6 +2586,18 @@ components:
         disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
         lastContactAt: { type: ["string", "null"] }
         contactOwnerId: { type: ["string", "null"] }
+        # Task #567 — resolved display name of the Cognirise-side
+        # relationship owner (atelier_users.name for contactOwnerId).
+        contactOwnerName: { type: ["string", "null"] }
+        # Task #567 — our relationship strength with this person (0–100),
+        # distinct from influenceScore (their internal clout, 1–5).
+        relationshipStrength: { type: integer, minimum: 0, maximum: 100 }
+        # Task #567 — next-touch prompt for contact cadence.
+        nextTouchAt: { type: ["string", "null"] }
+        # Task #567 — lightweight relationship/sentiment trend history.
+        relationshipTrend:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContactTrendPoint" }
         notes: { type: ["string", "null"] }
         # Task #275 — cartographer provenance.
         sourceUrl: { type: ["string", "null"] }
@@ -2537,6 +2608,15 @@ components:
             "verified" when at least one citation directly names the
             person; "inferred" when the contact came from a heuristic
             (title pattern, org chart inference) without a direct cite.
+
+    AtelierContactTrendPoint:
+      type: object
+      required: [at, strength]
+      properties:
+        at: { type: string, description: ISO timestamp of the snapshot. }
+        strength: { type: integer, minimum: 0, maximum: 100 }
+        disposition: { type: ["string", "null"] }
+        note: { type: ["string", "null"] }
 
     AtelierContactRelationship:
       type: object
@@ -2580,6 +2660,11 @@ components:
         buyerPersona: { type: ["string", "null"] }
         influenceScore: { type: ["integer", "null"], minimum: 1, maximum: 5 }
         disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
+        # Task #567 — relationship depth fields.
+        relationshipStrength: { type: ["integer", "null"], minimum: 0, maximum: 100 }
+        contactOwnerId: { type: ["string", "null"] }
+        lastContactAt: { type: ["string", "null"] }
+        nextTouchAt: { type: ["string", "null"] }
         notes: { type: ["string", "null"] }
 
     AtelierUpdateContactInput:
@@ -2594,6 +2679,20 @@ components:
         buyerPersona: { type: ["string", "null"] }
         influenceScore: { type: ["integer", "null"], minimum: 1, maximum: 5 }
         disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
+        # Task #567 — relationship depth fields.
+        relationshipStrength: { type: ["integer", "null"], minimum: 0, maximum: 100 }
+        contactOwnerId: { type: ["string", "null"] }
+        lastContactAt: { type: ["string", "null"] }
+        nextTouchAt: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+
+    AtelierCreateContactRelationshipInput:
+      type: object
+      required: [fromContactId, toContactId, type]
+      properties:
+        fromContactId: { type: string, minLength: 1 }
+        toContactId: { type: string, minLength: 1 }
+        type: { type: string, enum: [reports_to, partners_with, blocks] }
         notes: { type: ["string", "null"] }
 
     AtelierAccountOpportunityRef:
