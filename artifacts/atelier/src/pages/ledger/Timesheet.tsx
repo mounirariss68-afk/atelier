@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams } from "wouter";
-import { Check, HelpCircle, StickyNote, Plus, X } from "lucide-react";
+import { Check, HelpCircle, StickyNote, Plus, X, ChevronsRight } from "lucide-react";
 import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 
 interface Entry {
@@ -287,6 +287,9 @@ export default function Timesheet() {
   };
 
   // --- Keyboard navigation across cells --------------------------------
+  // Holds the last value copied via ⌘/Ctrl+C so it can be pasted into another
+  // cell. A raw string so paste reuses the same normalize/validate path.
+  const copyBufferRef = React.useRef<string | null>(null);
   const cellRefs = React.useRef(new Map<string, HTMLInputElement | null>());
   const setCellRef = React.useCallback(
     (r: number, c: number) => (el: HTMLInputElement | null) => {
@@ -364,6 +367,45 @@ export default function Timesheet() {
     cellRefs.current.get(`${nr}:${nc}`)?.focus();
   };
 
+  // Fill a value across the row's weekdays (Mon–Fri, cols 0–4). Each target
+  // cell goes through the same normalize/consolidate/upsert path as a single
+  // typed cell, so validation (0.25 step, max 14) is identical.
+  const fillRowWeekdays = async (row: RowModel, raw: string) => {
+    if (!data) return;
+    const next = normalizeHours(raw);
+    if (next === null) return; // nothing meaningful to fill
+    const weekId = data.week.id;
+    try {
+      for (let c = 0; c < 5; c++) {
+        const cell = row.cells[c];
+        if (next === cell.hours && cell.entries.length <= 1) continue; // unchanged
+        for (const e of cell.entries.slice(1)) {
+          const r = await fetch(`/api/atelier/ledger/timesheets/entries/${e.id}`, {
+            method: "DELETE", credentials: "include",
+          });
+          if (!r.ok) return apiErr(r);
+        }
+        const body = {
+          id: cell.primaryId ?? undefined,
+          workDate: dates[c],
+          hours: next,
+          engagementId: row.engagementId,
+          narrative: cell.narrative || null,
+        };
+        const r = await fetch(`/api/atelier/ledger/timesheets/${weekId}/entries`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) return apiErr(r);
+      }
+      await load(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   // Add-row dropdown options: engagements + internal not already shown.
   const addOptions: Array<{ value: string; label: string }> = [];
   if (!rowKeys.has(INTERNAL_KEY)) addOptions.push({ value: INTERNAL_KEY, label: INTERNAL_LABEL });
@@ -409,7 +451,7 @@ export default function Timesheet() {
         </PillButton>
         {editable && (
           <span className="text-xs text-text-mute">
-            Type hours straight into a cell · arrows / Tab / Enter move around · edits save on blur
+            Type hours into a cell · arrows / Tab / Enter to move · ⌘/Ctrl+C then ⌘/Ctrl+V to copy a value · the » button fills it across Mon–Fri · edits save on blur
           </span>
         )}
       </div>
@@ -482,6 +524,9 @@ export default function Timesheet() {
                   onConfirm={() => confirmCell(cell)}
                   onWhy={() => setDrawerSignalIds(cell.signalIds)}
                   onNote={() => setNarrativeCell({ rowKey: row.key, date: dates[c] })}
+                  onFill={(raw) => fillRowWeekdays(row, raw)}
+                  onCopy={(raw) => { copyBufferRef.current = raw; }}
+                  onPaste={() => copyBufferRef.current}
                 />
               ))}
               <div className="flex items-center justify-center px-2 py-2 text-sm tabular-nums text-text">
@@ -582,6 +627,9 @@ function HourCell({
   onConfirm,
   onWhy,
   onNote,
+  onFill,
+  onCopy,
+  onPaste,
 }: {
   cell: CellModel;
   editable: boolean;
@@ -591,6 +639,9 @@ function HourCell({
   onConfirm: () => void;
   onWhy: () => void;
   onNote: () => void;
+  onFill: (raw: string) => void;
+  onCopy: (raw: string) => void;
+  onPaste: () => string | null;
 }) {
   const valueStr = fmtHours(cell.hours);
   const [val, setVal] = React.useState(valueStr);
@@ -602,6 +653,7 @@ function HourCell({
 
   const hasSignals = cell.signalIds.length > 0;
   const hasNarrative = !!cell.narrative;
+  const hasValue = val.trim() !== "";
 
   if (!editable) {
     return (
@@ -639,6 +691,13 @@ function HourCell({
             if (el.selectionStart === el.value.length && el.selectionEnd === el.value.length) {
               e.preventDefault(); onNavigate("right");
             }
+          } else if ((e.metaKey || e.ctrlKey) && (e.key === "c" || e.key === "C")) {
+            onCopy(val); // remember value; OS still copies any selected text
+          } else if ((e.metaKey || e.ctrlKey) && (e.key === "v" || e.key === "V")) {
+            // Only intercept when we have an in-grid copied value; otherwise
+            // let the browser paste clipboard text into the input normally.
+            const pasted = onPaste();
+            if (pasted != null) { e.preventDefault(); setVal(pasted); }
           } else if (e.key === "Escape") { setVal(valueStr); el.blur(); }
         }}
         className={`h-11 w-full bg-transparent px-2 text-center text-sm tabular-nums text-text outline-none focus:bg-surface/60 focus:ring-1 focus:ring-gold/60 ${cell.isDraft ? "bg-gold/10" : ""}`}
@@ -654,6 +713,18 @@ function HourCell({
       )}
       {/* Per-cell affordances — surface on hover / focus to keep the grid clean */}
       <div className="absolute bottom-0.5 right-0.5 hidden items-center gap-0.5 rounded bg-bg/80 px-0.5 group-hover:flex group-focus-within:flex">
+        {hasValue && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onFill(val)}
+            className="rounded p-0.5 text-text-mute hover:bg-surface hover:text-gold"
+            title="Fill this value across weekdays (Mon–Fri)"
+            aria-label="Fill this value across weekdays"
+          >
+            <ChevronsRight className="h-3.5 w-3.5" />
+          </button>
+        )}
         {cell.isDraft && (
           <button
             type="button"
