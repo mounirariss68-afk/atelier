@@ -37,6 +37,7 @@ import type {
   AtelierArtifactInput,
   AtelierAsset,
   AtelierBriefEnvelope,
+  AtelierBulkDecideProfileUpdatesInput,
   AtelierCartographerRefreshInput,
   AtelierCharterApproveInput,
   AtelierCharterRedraftInput,
@@ -5841,7 +5842,7 @@ export function useAtelierGetAccountQbr<
 }
 
 /**
- * @summary Approve or reject a Pursuit Scout-proposed profile delta
+ * @summary Approve (optionally with an edited value) or reject an AI-proposed profile delta
  */
 export const getAtelierDecideProfileUpdateUrl = (
   accountId: string,
@@ -5930,7 +5931,7 @@ export type AtelierDecideProfileUpdateMutationBody =
 export type AtelierDecideProfileUpdateMutationError = ErrorType<unknown>;
 
 /**
- * @summary Approve or reject a Pursuit Scout-proposed profile delta
+ * @summary Approve (optionally with an edited value) or reject an AI-proposed profile delta
  */
 export const useAtelierDecideProfileUpdate = <
   TError = ErrorType<unknown>,
@@ -5958,6 +5959,99 @@ export const useAtelierDecideProfileUpdate = <
   TContext
 > => {
   return useMutation(getAtelierDecideProfileUpdateMutationOptions(options));
+};
+
+/**
+ * @summary Approve or reject many AI-proposed profile deltas at once
+ */
+export const getAtelierBulkDecideProfileUpdatesUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/profile-updates/bulk-decision`;
+};
+
+export const atelierBulkDecideProfileUpdates = async (
+  accountId: string,
+  atelierBulkDecideProfileUpdatesInput: AtelierBulkDecideProfileUpdatesInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierBulkDecideProfileUpdatesUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierBulkDecideProfileUpdatesInput),
+    },
+  );
+};
+
+export const getAtelierBulkDecideProfileUpdatesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierBulkDecideProfileUpdates>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierBulkDecideProfileUpdatesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierBulkDecideProfileUpdates>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierBulkDecideProfileUpdatesInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierBulkDecideProfileUpdates"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierBulkDecideProfileUpdates>>,
+    { accountId: string; data: BodyType<AtelierBulkDecideProfileUpdatesInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierBulkDecideProfileUpdates(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierBulkDecideProfileUpdatesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierBulkDecideProfileUpdates>>
+>;
+export type AtelierBulkDecideProfileUpdatesMutationBody =
+  BodyType<AtelierBulkDecideProfileUpdatesInput>;
+export type AtelierBulkDecideProfileUpdatesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve or reject many AI-proposed profile deltas at once
+ */
+export const useAtelierBulkDecideProfileUpdates = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierBulkDecideProfileUpdates>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierBulkDecideProfileUpdatesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierBulkDecideProfileUpdates>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierBulkDecideProfileUpdatesInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierBulkDecideProfileUpdatesMutationOptions(options),
+  );
 };
 
 /**

@@ -251,8 +251,11 @@ export default function Account() {
           <ProfileTab
             ws={ws}
             pending={pending}
-            onDecide={(updateId, decision) => {
-              decideProfileMut(qc, accountId, updateId, decision);
+            onDecide={(updateId, decision, editedValue) => {
+              decideProfileMut(qc, accountId, updateId, decision, editedValue);
+            }}
+            onBulkDecide={(decision, updateIds) => {
+              bulkDecideProfileMut(qc, accountId, decision, updateIds);
             }}
           />
         )}
@@ -286,15 +289,39 @@ function decideProfileMut(
   accountId: string,
   updateId: string,
   decision: "approve" | "reject",
+  editedValue?: unknown,
 ) {
-  // imperative call so we don't need to thread the hook through every prop
+  // imperative call so we don't need to thread the hook through every prop.
+  // When `editedValue` is provided the partner approved an inline-edited
+  // value (Task #568); the backend applies it instead of the AI's proposal.
+  const body: { decision: "approve" | "reject"; editedValue?: unknown } = { decision };
+  if (decision === "approve" && editedValue !== undefined) body.editedValue = editedValue;
   fetch(
     `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/profile-updates/${updateId}/decision`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify(body),
+    },
+  ).then(() => qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) }));
+}
+
+function bulkDecideProfileMut(
+  qc: ReturnType<typeof useQueryClient>,
+  accountId: string,
+  decision: "approve" | "reject",
+  updateIds?: string[],
+) {
+  const body: { decision: "approve" | "reject"; updateIds?: string[] } = { decision };
+  if (updateIds && updateIds.length > 0) body.updateIds = updateIds;
+  fetch(
+    `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/profile-updates/bulk-decision`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
     },
   ).then(() => qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) }));
 }
@@ -375,10 +402,12 @@ function ProfileTab({
   ws,
   pending,
   onDecide,
+  onBulkDecide,
 }: {
   ws: AtelierAccountWorkspace;
   pending: AtelierProfileUpdateProposal[];
-  onDecide: (id: string, d: "approve" | "reject") => void;
+  onDecide: (id: string, d: "approve" | "reject", editedValue?: unknown) => void;
+  onBulkDecide: (d: "approve" | "reject", updateIds?: string[]) => void;
 }) {
   const a = ws.account;
   const [editStrategy, setEditStrategy] = useState(false);
@@ -774,44 +803,243 @@ function ProfileTab({
             </dl>
           </Card>
 
-          {/* Pending Cartographer updates */}
+          {/* AI proposals — partner review queue */}
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <SectionLabel>Pending Cartographer updates</SectionLabel>
+              <SectionLabel>AI proposals for review</SectionLabel>
               {pending.length > 0 && <MonoChip tone="amber">{pending.length}</MonoChip>}
             </div>
+            <p className="text-text-mute text-xs leading-relaxed">
+              When you refresh from the web, the Account Cartographer{" "}
+              <span className="text-text">proposes</span> changes here rather than
+              writing them live. Review, edit if needed, then approve to apply.
+            </p>
             {pending.length === 0 ? (
               <p className="text-text-mute italic text-sm">No pending proposals.</p>
             ) : (
-              <div className="space-y-3">
-                {pending.map((p) => (
-                  <div key={p.id} className="border border-amber/30 rounded p-3 bg-amber/5">
-                    <Eyebrow>{p.field}</Eyebrow>
-                    <p className="text-text text-sm mt-1">{p.rationale}</p>
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => onDecide(p.id, "approve")}
-                        className="pill-btn pill-btn-primary text-xs"
-                        data-testid={`button-approve-${p.id}`}
-                      >
-                        <Check className="w-3 h-3" /> Approve
-                      </button>
-                      <button
-                        onClick={() => onDecide(p.id, "reject")}
-                        className="pill-btn pill-btn-ghost text-xs"
-                        data-testid={`button-reject-${p.id}`}
-                      >
-                        <X className="w-3 h-3" /> Reject
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onBulkDecide("approve")}
+                    className="pill-btn pill-btn-primary text-xs"
+                    data-testid="button-approve-all"
+                  >
+                    <Check className="w-3 h-3" /> Approve all
+                  </button>
+                  <button
+                    onClick={() => onBulkDecide("reject")}
+                    className="pill-btn pill-btn-ghost text-xs"
+                    data-testid="button-reject-all"
+                  >
+                    <X className="w-3 h-3" /> Reject all
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {pending.map((p) => (
+                    <PendingProposalCard key={p.id} proposal={p} onDecide={onDecide} />
+                  ))}
+                </div>
+              </>
             )}
           </Card>
         </div>
       </div>
     </>
+  );
+}
+
+// Task #568 — a single AI proposal with inline edit-before-approve. Scalar,
+// string-array and contact proposals are editable; complex blobs
+// (researchBrief, sourceSignals) are approve/reject as-is (still governed).
+const PROPOSAL_FIELD_LABELS: Record<string, string> = {
+  cogniriseHypothesis: "Cognirise win hypothesis",
+  strategicPriorities: "Strategic priorities",
+  researchBrief: "Research brief",
+  sourceSignals: "Source signals",
+  contact: "Decision-maker",
+  sector: "Sector",
+  hqCity: "HQ city",
+  size: "Company size",
+};
+
+function PendingProposalCard({
+  proposal,
+  onDecide,
+}: {
+  proposal: AtelierProfileUpdateProposal;
+  onDecide: (id: string, d: "approve" | "reject", editedValue?: unknown) => void;
+}) {
+  const p = proposal;
+  const isScalar =
+    p.field === "cogniriseHypothesis" ||
+    p.field === "sector" ||
+    p.field === "hqCity" ||
+    p.field === "size";
+  const isArray = p.field === "strategicPriorities";
+  const isContact = p.field === "contact";
+  const editable = isScalar || isArray || isContact;
+  const label = PROPOSAL_FIELD_LABELS[p.field] ?? p.field;
+
+  const [editing, setEditing] = useState(false);
+  const [scalarVal, setScalarVal] = useState(
+    typeof p.toValue === "string" ? p.toValue : "",
+  );
+  const [arrayVal, setArrayVal] = useState(
+    Array.isArray(p.toValue) ? (p.toValue as string[]).join("\n") : "",
+  );
+  const contactObj = (p.toValue ?? {}) as {
+    fullName?: string;
+    title?: string | null;
+    seniority?: string | null;
+    buyerPersona?: string | null;
+  };
+  const [contactName, setContactName] = useState(contactObj.fullName ?? "");
+  const [contactTitle, setContactTitle] = useState(contactObj.title ?? "");
+  const [contactSeniority, setContactSeniority] = useState(contactObj.seniority ?? "");
+  const [contactPersona, setContactPersona] = useState(contactObj.buyerPersona ?? "");
+
+  const approve = () => {
+    if (!editing) {
+      onDecide(p.id, "approve");
+      return;
+    }
+    let edited: unknown;
+    if (isScalar) edited = scalarVal.trim();
+    else if (isArray)
+      edited = arrayVal
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    else if (isContact)
+      edited = {
+        ...contactObj,
+        fullName: contactName.trim(),
+        title: contactTitle.trim() || null,
+        seniority: contactSeniority.trim() || null,
+        buyerPersona: contactPersona.trim() || null,
+      };
+    onDecide(p.id, "approve", edited);
+  };
+
+  return (
+    <div className="border border-amber/30 rounded p-3 bg-amber/5">
+      <div className="flex items-center justify-between gap-2">
+        <Eyebrow>{label}</Eyebrow>
+        {editable && (
+          <button
+            onClick={() => setEditing((v) => !v)}
+            className="text-[10px] font-mono uppercase tracking-wider text-text-faint hover:text-gold inline-flex items-center gap-1"
+            data-testid={`button-edit-${p.id}`}
+          >
+            <Pencil className="w-3 h-3" /> {editing ? "Cancel" : "Edit"}
+          </button>
+        )}
+      </div>
+      <p className="text-text-mute text-xs mt-1">{p.rationale}</p>
+
+      {/* Proposed value */}
+      {!editing ? (
+        <div className="mt-2 text-sm text-text">
+          {isArray && Array.isArray(p.toValue) ? (
+            <ul className="list-disc list-inside space-y-0.5">
+              {(p.toValue as string[]).map((t, i) => (
+                <li key={i}>{t}</li>
+              ))}
+            </ul>
+          ) : isContact ? (
+            <div className="space-y-0.5">
+              <div className="font-medium">{contactObj.fullName}</div>
+              {contactObj.title && <div className="text-text-mute text-xs">{contactObj.title}</div>}
+            </div>
+          ) : isScalar ? (
+            <p className="leading-relaxed">{String(p.toValue ?? "")}</p>
+          ) : (
+            <p className="text-text-mute text-xs italic">
+              {p.field === "sourceSignals" && Array.isArray(p.toValue)
+                ? `${(p.toValue as unknown[]).length} signal(s) proposed`
+                : "Structured content — approve to apply, or reject."}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-2 space-y-2">
+          {isScalar && (
+            <textarea
+              value={scalarVal}
+              onChange={(e) => setScalarVal(e.target.value)}
+              rows={p.field === "cogniriseHypothesis" ? 4 : 2}
+              className="w-full text-sm bg-surface border border-line rounded p-2 text-text"
+              data-testid={`input-edit-${p.id}`}
+            />
+          )}
+          {isArray && (
+            <textarea
+              value={arrayVal}
+              onChange={(e) => setArrayVal(e.target.value)}
+              rows={5}
+              placeholder="One priority per line"
+              className="w-full text-sm bg-surface border border-line rounded p-2 text-text"
+              data-testid={`input-edit-${p.id}`}
+            />
+          )}
+          {isContact && (
+            <div className="space-y-2">
+              <input
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="Full name"
+                className="w-full text-sm bg-surface border border-line rounded p-2 text-text"
+                data-testid={`input-edit-name-${p.id}`}
+              />
+              <input
+                value={contactTitle}
+                onChange={(e) => setContactTitle(e.target.value)}
+                placeholder="Title"
+                className="w-full text-sm bg-surface border border-line rounded p-2 text-text"
+                data-testid={`input-edit-title-${p.id}`}
+              />
+              <select
+                value={contactSeniority}
+                onChange={(e) => setContactSeniority(e.target.value)}
+                className="w-full text-sm bg-surface border border-line rounded p-2 text-text"
+                data-testid={`select-edit-seniority-${p.id}`}
+              >
+                <option value="">Seniority —</option>
+                {["c_suite", "vp", "director", "manager", "ic"].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={contactPersona}
+                onChange={(e) => setContactPersona(e.target.value)}
+                placeholder="Buyer persona"
+                className="w-full text-sm bg-surface border border-line rounded p-2 text-text"
+                data-testid={`input-edit-persona-${p.id}`}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-3">
+        <button
+          onClick={approve}
+          className="pill-btn pill-btn-primary text-xs"
+          data-testid={`button-approve-${p.id}`}
+        >
+          <Check className="w-3 h-3" /> {editing ? "Save & approve" : "Approve"}
+        </button>
+        <button
+          onClick={() => onDecide(p.id, "reject")}
+          className="pill-btn pill-btn-ghost text-xs"
+          data-testid={`button-reject-${p.id}`}
+        >
+          <X className="w-3 h-3" /> Reject
+        </button>
+      </div>
+    </div>
   );
 }
 

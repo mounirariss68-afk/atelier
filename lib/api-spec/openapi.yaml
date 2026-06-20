@@ -1389,7 +1389,7 @@ paths:
     post:
       operationId: atelierDecideProfileUpdate
       tags: [atelier]
-      summary: Approve or reject a Pursuit Scout-proposed profile delta
+      summary: Approve (optionally with an edited value) or reject an AI-proposed profile delta
       parameters:
         - in: path
           name: accountId
@@ -1404,6 +1404,28 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/AtelierProfileUpdateDecisionInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/profile-updates/bulk-decision:
+    post:
+      operationId: atelierBulkDecideProfileUpdates
+      tags: [atelier]
+      summary: Approve or reject many AI-proposed profile deltas at once
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierBulkDecideProfileUpdatesInput" }
       responses:
         "200":
           description: Updated workspace
@@ -2340,6 +2362,15 @@ components:
         rationale: { type: string }
         oppId: { type: ["string", "null"] }
         status: { type: string, enum: [pending, approved, rejected] }
+        # Task #568 — side-channel data the applier needs (e.g. strategic
+        # priority citation refs, contact reportsToName) + partner inline-edit
+        # provenance. All optional.
+        meta: { type: ["object", "null"], additionalProperties: true }
+        editedAt: { type: ["string", "null"] }
+        editedBy: { type: ["string", "null"] }
+        originalToValue: {}
+        decidedAt: { type: ["string", "null"] }
+        decidedBy: { type: ["string", "null"] }
 
     AtelierProfileUpdateDecisionInput:
       type: object
@@ -2347,6 +2378,20 @@ components:
       properties:
         decision: { type: string, enum: [approve, reject] }
         note: { type: ["string", "null"] }
+        # Task #568 — partner-edited value to apply instead of the AI's
+        # proposed toValue (approve-with-edit). Ignored on reject.
+        editedValue: {}
+
+    AtelierBulkDecideProfileUpdatesInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        # When omitted, the decision applies to every currently-pending
+        # proposal on the account.
+        updateIds:
+          type: array
+          items: { type: string }
 
     AtelierCreateAccountInput:
       type: object

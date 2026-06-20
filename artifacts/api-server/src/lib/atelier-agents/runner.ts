@@ -599,6 +599,206 @@ async function proposeProfileUpdatesFromScout(args: {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Task #568 — governed AI population. The Account Cartographer no longer
+// direct-writes hypothesis / priorities / research brief / signals / contacts
+// on a manual refresh. Instead it PROPOSES, and a partner approves / edits /
+// rejects. This builder turns a CartographerOutput into pending-proposal
+// candidates, applying two filters so the queue stays clean:
+//   1. no-op skip — drop candidates whose value already matches the live one;
+//   2. resurface guard — drop candidates that match an existing pending OR a
+//      previously-rejected proposal (so rejected items don't keep coming back
+//      unless the AI materially changes its mind).
+// ---------------------------------------------------------------------------
+export interface PendingProfileUpdate {
+  id: string;
+  proposedBy: string;
+  proposedAt: string;
+  field: string;
+  fromValue: unknown;
+  toValue: unknown;
+  rationale: string;
+  oppId?: string;
+  status: "pending" | "approved" | "rejected";
+  meta?: Record<string, unknown>;
+  editedAt?: string;
+  editedBy?: string;
+  originalToValue?: unknown;
+  decidedAt?: string;
+  decidedBy?: string;
+}
+
+/** Deterministic JSON: object keys sorted recursively. */
+export function stableStringify(value: unknown): string {
+  const seen = new WeakSet();
+  const norm = (v: unknown): unknown => {
+    if (v === null || typeof v !== "object") return v;
+    if (seen.has(v as object)) return null;
+    seen.add(v as object);
+    if (Array.isArray(v)) return v.map(norm);
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+      out[k] = norm((v as Record<string, unknown>)[k]);
+    }
+    return out;
+  };
+  return JSON.stringify(norm(value));
+}
+
+/** True when two values are semantically equal (order-insensitive on keys). */
+export function materiallyEqual(a: unknown, b: unknown): boolean {
+  return stableStringify(a) === stableStringify(b);
+}
+
+/** Dedupe key for a proposal — field-level uses field+value; contacts use
+ * name+title so a renamed title is treated as a fresh candidate. */
+function proposalKey(p: { field: string; toValue: unknown }): string {
+  if (p.field === "contact") {
+    const c = (p.toValue ?? {}) as { fullName?: string; title?: string | null };
+    return `contact:${(c.fullName ?? "").toLowerCase()}:${(c.title ?? "").toLowerCase()}`;
+  }
+  return `${p.field}:${stableStringify(p.toValue)}`;
+}
+
+export function buildCartographerProposals(args: {
+  proposedBy: string;
+  output: CartographerOutput;
+  account: typeof atelierAccounts.$inferSelect;
+  existingContacts: Array<{ fullName: string }>;
+}): PendingProfileUpdate[] {
+  const { output, account } = args;
+  const now = new Date().toISOString();
+
+  // Keys already represented in the queue (pending or rejected). A candidate
+  // matching one of these is dropped so we neither duplicate a live proposal
+  // nor resurface a rejected one.
+  const blockedKeys = new Set<string>();
+  for (const u of (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[]) {
+    if (u.status === "pending" || u.status === "rejected") {
+      blockedKeys.add(proposalKey(u));
+    }
+  }
+
+  const candidates: PendingProfileUpdate[] = [];
+  const push = (
+    field: string,
+    fromValue: unknown,
+    toValue: unknown,
+    rationale: string,
+    meta?: Record<string, unknown>,
+  ) => {
+    // no-op skip: value already live
+    if (materiallyEqual(toValue, fromValue)) return;
+    const key = proposalKey({ field, toValue });
+    if (blockedKeys.has(key)) return;
+    blockedKeys.add(key);
+    candidates.push({
+      id: `pp_${rid("x").slice(2)}`,
+      proposedBy: args.proposedBy,
+      proposedAt: now,
+      field,
+      fromValue,
+      toValue,
+      rationale,
+      status: "pending",
+      ...(meta ? { meta } : {}),
+    });
+  };
+
+  // 1) cogniriseHypothesis
+  const hypo = output.account.cogniriseHypothesis?.trim();
+  if (hypo) {
+    push(
+      "cogniriseHypothesis",
+      account.cogniriseHypothesis ?? null,
+      hypo,
+      "Account Cartographer refreshed the Cognirise win hypothesis from public sources.",
+    );
+  }
+
+  // 2) strategicPriorities (+ citation refs carried in meta)
+  const priorities = output.account.strategicPriorities ?? [];
+  const priorityTexts = priorities.map((p) => p.text).filter((t) => t && t.trim().length > 0);
+  if (priorityTexts.length > 0) {
+    const refs = priorities
+      .filter((p) => p.text && p.text.trim().length > 0)
+      .map((p) => ({
+        text: p.text,
+        sourceUrls: Array.isArray(p.sourceUrls)
+          ? p.sourceUrls.filter((u) => typeof u === "string")
+          : [],
+      }));
+    push(
+      "strategicPriorities",
+      (account.strategicPriorities as string[] | null) ?? [],
+      priorityTexts,
+      `Account Cartographer sourced ${priorityTexts.length} strategic priorit${priorityTexts.length === 1 ? "y" : "ies"}.`,
+      { refs },
+    );
+  }
+
+  // 3) researchBrief (complex blob — approve/reject as-is, no inline edit)
+  const brief = output.researchBrief;
+  const briefHasContent =
+    brief &&
+    ((brief.whatsChanging?.length ?? 0) > 0 ||
+      (brief.executiveTensions?.length ?? 0) > 0 ||
+      (brief.serviceLineFit?.length ?? 0) > 0 ||
+      (brief.partnerEcosystem?.length ?? 0) > 0 ||
+      (brief.mandateAngles?.length ?? 0) > 0 ||
+      (brief.whyNowHypothesis?.trim().length ?? 0) > 0 ||
+      (brief.openQuestions?.length ?? 0) > 0);
+  if (briefHasContent) {
+    push(
+      "researchBrief",
+      account.researchBrief ?? null,
+      brief,
+      "Account Cartographer refreshed the structured research brief (what's changing, tensions, service-line fit, ecosystem, mandate angles).",
+    );
+  }
+
+  // 4) sourceSignals — propose existing + newly-discovered (dedupe on url)
+  const incomingSignals = output.sourceSignals ?? [];
+  const existingSignals =
+    (account.sourceSignals as Array<{ url: string }> | null) ?? [];
+  const seenUrls = new Set(existingSignals.map((s) => s.url));
+  const newSignals = incomingSignals.filter((s) => s.url && !seenUrls.has(s.url));
+  if (newSignals.length > 0) {
+    push(
+      "sourceSignals",
+      existingSignals,
+      [...existingSignals, ...newSignals].slice(-50),
+      `Account Cartographer surfaced ${newSignals.length} new signal(s) for review.`,
+    );
+  }
+
+  // 5) contacts (decision-makers) — one proposal per discovered person. The
+  //    applier upserts the contact and (on approval) the reports_to edge.
+  const knownNames = new Set(args.existingContacts.map((c) => c.fullName.toLowerCase()));
+  for (const dm of output.decisionMakers ?? []) {
+    if (!dm.fullName || !dm.fullName.trim()) continue;
+    const isNew = !knownNames.has(dm.fullName.toLowerCase());
+    push(
+      "contact",
+      null,
+      {
+        fullName: dm.fullName,
+        title: dm.title ?? null,
+        seniority: dm.seniority ?? null,
+        buyerPersona: dm.buyerPersona ?? null,
+        sourceUrl: dm.sourceUrl ?? null,
+        confidence: dm.confidence,
+        reportsToName: dm.reportsToName ?? null,
+        rationale: dm.rationale ?? null,
+      },
+      `Account Cartographer ${isNew ? "discovered" : "re-confirmed"} decision-maker ${dm.fullName}${dm.title ? ` (${dm.title})` : ""}.`,
+      { reportsToName: dm.reportsToName ?? null },
+    );
+  }
+
+  return candidates;
+}
+
 export async function runPursuitScout(args: {
   opportunityId: string;
   accountName: string;

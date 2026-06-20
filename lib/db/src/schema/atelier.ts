@@ -183,12 +183,23 @@ export const atelierAccounts = pgTable(
           id: string;
           proposedBy: string; // agent id, e.g. ag_pursuit_scout
           proposedAt: string;
-          field: string; // dotted path: 'sector', 'hqCity', 'strategicPriorities'
+          field: string; // dotted path: 'sector', 'hqCity', 'strategicPriorities', 'researchBrief', 'contact'
           fromValue: unknown;
           toValue: unknown;
           rationale: string;
           oppId?: string;
           status: "pending" | "approved" | "rejected";
+          // Task #568 — governed AI population. Optional, jsonb-only (no
+          // migration). `meta` carries side-channel data the applier needs
+          // (e.g. strategicPriority citation refs, contact reportsToName).
+          // The `edited*`/`originalToValue` fields record a partner inline
+          // edit before approval; `decided*` record who acted and when.
+          meta?: Record<string, unknown>;
+          editedAt?: string;
+          editedBy?: string;
+          originalToValue?: unknown;
+          decidedAt?: string;
+          decidedBy?: string;
         }>
       >()
       .notNull()

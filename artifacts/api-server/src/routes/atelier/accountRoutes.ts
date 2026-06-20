@@ -67,6 +67,7 @@ async function canSeeAccount(
 import {
   AtelierUpdateContactDispositionBody as AtelierContactDispositionInput,
   AtelierDecideProfileUpdateBody as AtelierProfileUpdateDecisionInput,
+  AtelierBulkDecideProfileUpdatesBody as AtelierBulkDecideProfileUpdatesInput,
   AtelierRefreshAccountCartographerBody as AtelierCartographerRefreshInput,
   AtelierCreateCredentialBody as AtelierCredentialInput,
   AtelierCreateAccountBody as AtelierCreateAccountInput,
@@ -79,6 +80,8 @@ import {
   runAccountCartographer,
   runWhitespaceMapper,
   runQbrComposer,
+  buildCartographerProposals,
+  type PendingProfileUpdate,
   type WhitespaceOutput,
   type QbrOutput,
 } from "../../lib/atelier-agents/runner.js";
@@ -804,138 +807,36 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   });
   void runId;
 
-  // Task #275 — DIRECT WRITE. Cartographer is now grounded by Anthropic
-  // web_search and produces citation URLs for every priority + contact,
-  // so we apply the result straight to the account workspace instead of
-  // queuing pending proposals. Refresh-from-web is idempotent: signals
-  // dedupe on URL, contacts dedupe on lower-cased fullName.
-  const incomingSignals = output.sourceSignals ?? [];
-  const existingSignals = a.sourceSignals ?? [];
-  const seenSignalUrls = new Set(existingSignals.map((s) => s.url));
-  const mergedSignals = [
-    ...existingSignals,
-    ...incomingSignals.filter((s) => !seenSignalUrls.has(s.url)),
-  ].slice(-20);
+  // Task #568 — GOVERNED AI POPULATION. A manual refresh no longer
+  // direct-writes the account. The Cartographer PROPOSES; a partner then
+  // edits / approves / rejects each delta (see the decision + bulk-decision
+  // endpoints). This keeps AI population uniformly governed and prevents the
+  // agent from clobbering partner-curated fields (notes, hypothesis, etc.).
+  // Auto-seeding still happens on CREATE for empty new accounts; only the
+  // manual Refresh-from-web is queue-gated.
+  const existingContacts = await db
+    .select({ fullName: atelierContacts.fullName })
+    .from(atelierContacts)
+    .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
 
-  const priorities = output.account.strategicPriorities ?? [];
-  const priorityTexts = priorities.map((p) => p.text);
-  const priorityRefs = priorities.map((p) => ({
-    text: p.text,
-    sourceUrls: Array.isArray(p.sourceUrls) ? p.sourceUrls.filter((u) => typeof u === "string") : [],
-  }));
+  const proposals = buildCartographerProposals({
+    proposedBy: "ag_account_cartographer",
+    output,
+    account: a,
+    existingContacts,
+  });
+
+  const queue = ((a.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []).concat(
+    proposals,
+  );
 
   await db.transaction(async (tx) => {
-    // ---- Account: direct-write profile fields ----
-    const accountUpdate: Partial<typeof atelierAccounts.$inferInsert> = {
-      sourceSignals: mergedSignals,
-      enrichedAt: new Date(),
-      updatedAt: new Date(),
-    };
-    if (priorityTexts.length > 0) {
-      accountUpdate.strategicPriorities = priorityTexts;
-      accountUpdate.strategicPriorityRefs = priorityRefs;
-    }
-    if (output.account.cogniriseHypothesis && output.account.cogniriseHypothesis.trim().length > 0) {
-      accountUpdate.cogniriseHypothesis = output.account.cogniriseHypothesis;
-    }
-    if (output.account.refreshedSummary && output.account.refreshedSummary.trim().length > 0) {
-      accountUpdate.notes = output.account.refreshedSummary;
-    }
-    await tx.update(atelierAccounts).set(accountUpdate).where(eq(atelierAccounts.id, a.id));
-
-    // ---- Contacts: upsert by fullName (case-insensitive) ----
-    const existingContacts = await tx
-      .select()
-      .from(atelierContacts)
-      .where(
-        and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)),
-      );
-    const byName = new Map<string, (typeof existingContacts)[number]>();
-    for (const c of existingContacts) byName.set(c.fullName.toLowerCase(), c);
-    const fullNameToId = new Map<string, string>();
-    for (const c of existingContacts) fullNameToId.set(c.fullName.toLowerCase(), c.id);
-
-    let inserted = 0;
-    let updated = 0;
-    for (const dm of output.decisionMakers ?? []) {
-      const key = dm.fullName.toLowerCase();
-      const existing = byName.get(key);
-      if (existing) {
-        await tx
-          .update(atelierContacts)
-          .set({
-            title: dm.title ?? existing.title,
-            seniority: dm.seniority ?? existing.seniority,
-            buyerPersona: dm.buyerPersona ?? existing.buyerPersona,
-            sourceUrl: dm.sourceUrl ?? existing.sourceUrl,
-            confidence: dm.confidence ?? existing.confidence,
-            updatedAt: new Date(),
-          })
-          .where(eq(atelierContacts.id, existing.id));
-        updated += 1;
-      } else {
-        const newId = rid("ct");
-        await tx.insert(atelierContacts).values({
-          id: newId,
-          accountId: a.id,
-          fullName: dm.fullName,
-          title: dm.title ?? null,
-          seniority: dm.seniority ?? null,
-          buyerPersona: dm.buyerPersona ?? null,
-          influenceScore: dm.seniority === "c_suite" ? 5 : dm.seniority === "vp" ? 4 : 3,
-          disposition: "unknown",
-          notes: dm.rationale ?? null,
-          sourceUrl: dm.sourceUrl ?? null,
-          confidence: dm.confidence,
-          createdByUserId: me.id,
-        });
-        fullNameToId.set(key, newId);
-        inserted += 1;
-      }
-    }
-
-    // ---- Relationships: rebuild reports_to edges from reportsToName ----
-    const reportsEdges: Array<{
-      fromId: string;
-      toId: string;
-    }> = [];
-    for (const dm of output.decisionMakers ?? []) {
-      if (!dm.reportsToName) continue;
-      const fromId = fullNameToId.get(dm.fullName.toLowerCase());
-      const toId = fullNameToId.get(dm.reportsToName.toLowerCase());
-      if (fromId && toId && fromId !== toId) {
-        reportsEdges.push({ fromId, toId });
-      }
-    }
-    if (reportsEdges.length > 0) {
-      // Clear cartographer-managed reports_to edges for this account, then
-      // rewrite. We only touch reports_to (not partners_with/blocks, which
-      // are partner-curated relationships).
-      const existingEdges = await tx
-        .select()
-        .from(atelierContactRelationships)
-        .where(
-          and(
-            eq(atelierContactRelationships.accountId, a.id),
-            eq(atelierContactRelationships.type, "reports_to"),
-            isNull(atelierContactRelationships.deletedAt),
-          ),
-        );
-      const haveEdge = new Set(existingEdges.map((e) => `${e.fromContactId}->${e.toContactId}`));
-      for (const e of reportsEdges) {
-        const k = `${e.fromId}->${e.toId}`;
-        if (haveEdge.has(k)) continue;
-        await tx.insert(atelierContactRelationships).values({
-          id: rid("cr"),
-          accountId: a.id,
-          fromContactId: e.fromId,
-          toContactId: e.toId,
-          type: "reports_to",
-        });
-        haveEdge.add(k);
-      }
-    }
-
+    // enrichedAt records that a refresh ran; the actual field writes wait for
+    // partner approval. We never touch notes/hypothesis/priorities here.
+    await tx
+      .update(atelierAccounts)
+      .set({ pendingProfileUpdates: queue, enrichedAt: new Date(), updatedAt: new Date() })
+      .where(eq(atelierAccounts.id, a.id));
     await tx.insert(atelierAuditEvents).values({
       id: rid("aud"),
       entityType: "account",
@@ -943,14 +844,15 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
       actorType: "agent",
       actorId: "ag_account_cartographer",
       actorLabel: "Account Cartographer",
-      action: "cartographer.refresh",
+      action: "account.profile.proposeUpdate",
       payload: {
-        signalCount: incomingSignals.length,
-        priorityCount: priorityTexts.length,
-        contactsInserted: inserted,
-        contactsUpdated: updated,
+        count: proposals.length,
+        fields: proposals.map((p) => p.field),
       },
-      payloadSummary: `Cartographer wrote ${priorityTexts.length} priorities, ${incomingSignals.length} signals, ${inserted}+${updated} contacts for ${a.name}.`,
+      payloadSummary:
+        proposals.length > 0
+          ? `Account Cartographer proposed ${proposals.length} profile update(s) for ${a.name} (awaiting partner review).`
+          : `Account Cartographer refresh found no new changes to propose for ${a.name}.`,
     });
   });
 
@@ -1056,11 +958,212 @@ function toQbrWire(accountId: string, o: QbrOutput) {
 
 // ---------- profile-update decision ----------
 // @cli-skip: pending Task #340 read-parity migration
+// Task #568 — shared decision core used by both the single and bulk
+// profile-update endpoints. Applies each approved delta to the live account
+// (honouring a partner inline edit), upserts discovered contacts + reports_to
+// edges, records edit/decide provenance on the queue item, and writes one
+// audit event per decision. Runs in a single transaction.
+async function applyProfileUpdateDecisions(args: {
+  account: typeof atelierAccounts.$inferSelect;
+  me: { id: string; name: string };
+  decisions: Array<{
+    target: PendingProfileUpdate;
+    decision: "approve" | "reject";
+    hasEdit: boolean;
+    editedValue?: unknown;
+  }>;
+}): Promise<void> {
+  const { account: a, me, decisions } = args;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const decidedIds = new Set(decisions.map((d) => d.target.id));
+
+  const accountUpdate: Partial<typeof atelierAccounts.$inferInsert> = {
+    updatedAt: now,
+  };
+  // Working copy so multiple sourceSignals approvals chain correctly.
+  let workingSignals =
+    (a.sourceSignals as Array<{ url?: string }> | null) ?? [];
+
+  await db.transaction(async (tx) => {
+    // Lazy contact map — only loaded if a contact proposal is approved.
+    let nameToId: Map<string, string> | null = null;
+    const loadContacts = async () => {
+      if (nameToId) return nameToId;
+      const rows = await tx
+        .select({ id: atelierContacts.id, fullName: atelierContacts.fullName })
+        .from(atelierContacts)
+        .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
+      nameToId = new Map(rows.map((c) => [c.fullName.toLowerCase(), c.id]));
+      return nameToId;
+    };
+
+    for (const { target, decision, hasEdit, editedValue } of decisions) {
+      if (decision === "approve") {
+        const effectiveValue = hasEdit ? editedValue : target.toValue;
+        const f = target.field;
+        if (f === "strategicPriorities" && Array.isArray(effectiveValue)) {
+          accountUpdate.strategicPriorities = effectiveValue as string[];
+          // Preserve the citation refs the agent carried in meta, but only for
+          // priorities that survived an edit.
+          const refs = (target.meta?.refs as Array<{ text: string; sourceUrls: string[] }> | undefined) ?? [];
+          const kept = (effectiveValue as string[]).map(
+            (text) => refs.find((r) => r.text === text) ?? { text, sourceUrls: [] },
+          );
+          accountUpdate.strategicPriorityRefs =
+            kept as typeof atelierAccounts.$inferInsert.strategicPriorityRefs;
+        } else if (f === "cogniriseHypothesis" && typeof effectiveValue === "string") {
+          accountUpdate.cogniriseHypothesis = effectiveValue;
+        } else if (f === "sector" && typeof effectiveValue === "string") {
+          accountUpdate.sector = effectiveValue;
+        } else if (f === "hqCity" && typeof effectiveValue === "string") {
+          accountUpdate.hqCity = effectiveValue;
+        } else if (f === "size" && typeof effectiveValue === "string") {
+          accountUpdate.size = effectiveValue;
+        } else if (f === "researchBrief" && effectiveValue && typeof effectiveValue === "object") {
+          accountUpdate.researchBrief =
+            effectiveValue as typeof atelierAccounts.$inferInsert.researchBrief;
+        } else if (f === "sourceSignals" && Array.isArray(effectiveValue)) {
+          const incoming = effectiveValue as Array<{ url?: string }>;
+          const seen = new Set(workingSignals.map((s) => s.url).filter(Boolean));
+          const merged = [...workingSignals];
+          for (const sig of incoming) {
+            if (sig?.url && !seen.has(sig.url)) {
+              merged.push(sig);
+              seen.add(sig.url);
+            }
+          }
+          workingSignals = merged.slice(-50);
+          accountUpdate.sourceSignals = workingSignals as typeof a.sourceSignals;
+        } else if (f === "contact" && effectiveValue && typeof effectiveValue === "object") {
+          const dm = effectiveValue as {
+            fullName?: string;
+            title?: string | null;
+            seniority?: string | null;
+            buyerPersona?: string | null;
+            sourceUrl?: string | null;
+            confidence?: string | null;
+            reportsToName?: string | null;
+            rationale?: string | null;
+          };
+          if (dm.fullName && dm.fullName.trim()) {
+            const map = await loadContacts();
+            const key = dm.fullName.toLowerCase();
+            const existingId = map.get(key);
+            const seniority = (dm.seniority ?? null) as
+              | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
+            if (existingId) {
+              await tx
+                .update(atelierContacts)
+                .set({
+                  title: dm.title ?? null,
+                  seniority,
+                  buyerPersona: dm.buyerPersona ?? null,
+                  sourceUrl: dm.sourceUrl ?? null,
+                  confidence: (dm.confidence ?? "inferred") as "verified" | "inferred",
+                  updatedAt: now,
+                })
+                .where(eq(atelierContacts.id, existingId));
+            } else {
+              const newId = rid("ct");
+              await tx.insert(atelierContacts).values({
+                id: newId,
+                accountId: a.id,
+                fullName: dm.fullName,
+                title: dm.title ?? null,
+                seniority,
+                buyerPersona: dm.buyerPersona ?? null,
+                influenceScore: seniority === "c_suite" ? 5 : seniority === "vp" ? 4 : 3,
+                disposition: "unknown",
+                notes: dm.rationale ?? null,
+                sourceUrl: dm.sourceUrl ?? null,
+                confidence: (dm.confidence ?? "inferred") as "verified" | "inferred",
+                createdByUserId: me.id,
+              });
+              map.set(key, newId);
+            }
+            // reports_to edge — only when the manager already exists.
+            const reportsToName = (dm.reportsToName ??
+              (target.meta?.reportsToName as string | null | undefined)) ?? null;
+            if (reportsToName) {
+              const fromId = map.get(dm.fullName.toLowerCase());
+              const toId = map.get(reportsToName.toLowerCase());
+              if (fromId && toId && fromId !== toId) {
+                const [edge] = await tx
+                  .select({ id: atelierContactRelationships.id })
+                  .from(atelierContactRelationships)
+                  .where(
+                    and(
+                      eq(atelierContactRelationships.accountId, a.id),
+                      eq(atelierContactRelationships.fromContactId, fromId),
+                      eq(atelierContactRelationships.toContactId, toId),
+                      eq(atelierContactRelationships.type, "reports_to"),
+                      isNull(atelierContactRelationships.deletedAt),
+                    ),
+                  );
+                if (!edge) {
+                  await tx.insert(atelierContactRelationships).values({
+                    id: rid("cr"),
+                    accountId: a.id,
+                    fromContactId: fromId,
+                    toContactId: toId,
+                    type: "reports_to",
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      await tx.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "account",
+        entityId: a.id,
+        actorType: "human",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: `profile_update.${decision}`,
+        payload: {
+          updateId: target.id,
+          field: target.field,
+          edited: hasEdit,
+          toValue: hasEdit ? editedValue : target.toValue,
+        },
+        payloadSummary: `${me.name} ${decision}d${hasEdit ? " (with edits)" : ""} the AI proposal on field "${target.field}".`,
+      });
+    }
+
+    // Stamp queue items with their new status + provenance.
+    const list = (a.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
+    const decisionById = new Map(decisions.map((d) => [d.target.id, d]));
+    accountUpdate.pendingProfileUpdates = list.map((u) => {
+      if (!decidedIds.has(u.id)) return u;
+      const d = decisionById.get(u.id)!;
+      const stamped: PendingProfileUpdate = {
+        ...u,
+        status: d.decision === "approve" ? "approved" : "rejected",
+        decidedAt: nowIso,
+        decidedBy: me.id,
+      };
+      if (d.hasEdit) {
+        stamped.originalToValue = u.toValue;
+        stamped.toValue = d.editedValue;
+        stamped.editedAt = nowIso;
+        stamped.editedBy = me.id;
+      }
+      return stamped;
+    });
+
+    await tx.update(atelierAccounts).set(accountUpdate).where(eq(atelierAccounts.id, a.id));
+  });
+}
+
 router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   if ((me.role !== "partner" && me.role !== "founding_partner")) {
-    res.status(403).json({ error: "partner-only", reason: "Only a partner persona can approve or reject Cartographer profile-update proposals." });
+    res.status(403).json({ error: "partner-only", reason: "Only a partner persona can approve or reject AI profile-update proposals." });
     return;
   }
   const a = await loadAccount(req.params.accountId);
@@ -1074,70 +1177,67 @@ router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (re
     return;
   }
   const decision = parsed.data.decision;
-  const list = a.pendingProfileUpdates ?? [];
+  const list = (a.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
   const target = list.find((u) => u.id === req.params.updateId);
   if (!target) {
     res.status(404).json({ error: "proposal-not-found" });
     return;
   }
-  // Apply if approved; mark status either way.
-  const updates: Partial<typeof atelierAccounts.$inferInsert> = {
-    updatedAt: new Date(),
-  };
-  if (decision === "approve") {
-    const f = target.field;
-    if (f === "strategicPriorities" && Array.isArray(target.toValue)) {
-      updates.strategicPriorities = target.toValue as string[];
-    } else if (f === "cogniriseHypothesis" && typeof target.toValue === "string") {
-      updates.cogniriseHypothesis = target.toValue;
-    } else if (f === "sector" && typeof target.toValue === "string") {
-      updates.sector = target.toValue;
-    } else if (f === "hqCity" && typeof target.toValue === "string") {
-      updates.hqCity = target.toValue;
-    } else if (f === "size" && typeof target.toValue === "string") {
-      updates.size = target.toValue;
-    } else if (f === "sourceSignals" && Array.isArray(target.toValue)) {
-      const incoming = target.toValue as Array<{ url?: string }>;
-      const existing = (a.sourceSignals as Array<{ url?: string }> | null) ?? [];
-      const seen = new Set(existing.map((s) => s.url).filter(Boolean));
-      const merged = [...existing];
-      for (const sig of incoming) {
-        if (sig?.url && !seen.has(sig.url)) {
-          merged.push(sig);
-          seen.add(sig.url);
-        }
-      }
-      updates.sourceSignals = merged.slice(-50) as typeof a.sourceSignals;
-    }
+  if (target.status !== "pending") {
+    res.status(409).json({ error: "already-decided" });
+    return;
   }
-  const newList = list.map((u) =>
-    u.id === target.id
-      ? { ...u, status: decision === "approve" ? ("approved" as const) : ("rejected" as const) }
-      : u,
-  );
-  updates.pendingProfileUpdates = newList;
+  const hasEdit =
+    decision === "approve" && Object.prototype.hasOwnProperty.call(parsed.data, "editedValue");
 
-  await db.transaction(async (tx) => {
-    await tx.update(atelierAccounts).set(updates).where(eq(atelierAccounts.id, a.id));
-    await tx.insert(atelierAuditEvents).values({
-      id: rid("aud"),
-      entityType: "account",
-      entityId: a.id,
-      actorType: "human",
-      actorId: me.id,
-      actorLabel: me.name,
-      action: `profile_update.${decision}`,
-      payload: {
-        updateId: target.id,
-        field: target.field,
-        toValue: target.toValue,
-        appliedSignalCount:
-          decision === "approve" && target.field === "sourceSignals" && Array.isArray(target.toValue)
-            ? (target.toValue as unknown[]).length
-            : undefined,
-      },
-      payloadSummary: `${me.name} ${decision}d Cartographer proposal on field "${target.field}".`,
-    });
+  await applyProfileUpdateDecisions({
+    account: a,
+    me,
+    decisions: [
+      { target, decision, hasEdit, editedValue: (parsed.data as { editedValue?: unknown }).editedValue },
+    ],
+  });
+
+  const access = await accessibleEngagementIds(me);
+  const ws = await buildWorkspace(a.id, access, me);
+  res.json(ws);
+});
+
+// Task #568 — bulk approve/reject. Omitting updateIds targets every pending
+// proposal on the account. Bulk does not support per-item inline edits.
+// @cli-skip: governed AI-population endpoint, not part of the read-parity matrix
+router.post("/accounts/:accountId/profile-updates/bulk-decision", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if ((me.role !== "partner" && me.role !== "founding_partner")) {
+    res.status(403).json({ error: "partner-only", reason: "Only a partner persona can approve or reject AI profile-update proposals." });
+    return;
+  }
+  const a = await loadAccount(req.params.accountId);
+  if (!a) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const parsed = AtelierBulkDecideProfileUpdatesInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const decision = parsed.data.decision;
+  const requestedIds = parsed.data.updateIds ?? null;
+  const list = (a.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
+  const targets = list.filter(
+    (u) => u.status === "pending" && (requestedIds === null || requestedIds.includes(u.id)),
+  );
+  if (targets.length === 0) {
+    res.status(404).json({ error: "no-pending-proposals" });
+    return;
+  }
+
+  await applyProfileUpdateDecisions({
+    account: a,
+    me,
+    decisions: targets.map((target) => ({ target, decision, hasEdit: false })),
   });
 
   const access = await accessibleEngagementIds(me);

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierProfileUpdateProposalMeta } from "./atelierProfileUpdateProposalMeta";
 import type { AtelierProfileUpdateProposalStatus } from "./atelierProfileUpdateProposalStatus";
 
 export interface AtelierProfileUpdateProposal {
@@ -18,4 +19,15 @@ export interface AtelierProfileUpdateProposal {
   /** @nullable */
   oppId?: string | null;
   status: AtelierProfileUpdateProposalStatus;
+  /** @nullable */
+  meta?: AtelierProfileUpdateProposalMeta;
+  /** @nullable */
+  editedAt?: string | null;
+  /** @nullable */
+  editedBy?: string | null;
+  originalToValue?: unknown;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  decidedBy?: string | null;
 }

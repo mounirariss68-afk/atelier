@@ -11,4 +11,5 @@ export interface AtelierProfileUpdateDecisionInput {
   decision: AtelierProfileUpdateDecisionInputDecision;
   /** @nullable */
   note?: string | null;
+  editedValue?: unknown;
 }

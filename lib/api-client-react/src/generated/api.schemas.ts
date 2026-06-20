@@ -192,6 +192,13 @@ export const AtelierProfileUpdateProposalStatus = {
   rejected: "rejected",
 } as const;
 
+/**
+ * @nullable
+ */
+export type AtelierProfileUpdateProposalMeta = {
+  [key: string]: unknown;
+} | null;
+
 export interface AtelierProfileUpdateProposal {
   id: string;
   proposedBy: string;
@@ -203,6 +210,17 @@ export interface AtelierProfileUpdateProposal {
   /** @nullable */
   oppId?: string | null;
   status: AtelierProfileUpdateProposalStatus;
+  /** @nullable */
+  meta?: AtelierProfileUpdateProposalMeta;
+  /** @nullable */
+  editedAt?: string | null;
+  /** @nullable */
+  editedBy?: string | null;
+  originalToValue?: unknown;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  decidedBy?: string | null;
 }
 
 export type AtelierProfileUpdateDecisionInputDecision =
@@ -217,6 +235,20 @@ export interface AtelierProfileUpdateDecisionInput {
   decision: AtelierProfileUpdateDecisionInputDecision;
   /** @nullable */
   note?: string | null;
+  editedValue?: unknown;
+}
+
+export type AtelierBulkDecideProfileUpdatesInputDecision =
+  (typeof AtelierBulkDecideProfileUpdatesInputDecision)[keyof typeof AtelierBulkDecideProfileUpdatesInputDecision];
+
+export const AtelierBulkDecideProfileUpdatesInputDecision = {
+  approve: "approve",
+  reject: "reject",
+} as const;
+
+export interface AtelierBulkDecideProfileUpdatesInput {
+  decision: AtelierBulkDecideProfileUpdatesInputDecision;
+  updateIds?: string[];
 }
 
 /**
