@@ -163,19 +163,22 @@ export function ContactInsightsDialog({
     }
   }
 
-  // Reparent = swap the reports_to edge: delete the old one (if any), create the new.
+  // Reparent = swap the reports_to edge. Create the NEW edge first; only once it
+  // is persisted do we remove the old one. If the create fails (cycle, perms,
+  // network) the original reporting line is left untouched — never deleted first,
+  // which would otherwise lose the hierarchy on a failed reparent.
   async function applyReparent() {
     const target = reparentId;
     if (target === (currentManagerRel?.toContactId ?? "")) return;
     try {
-      if (currentManagerRel) {
-        await deleteRel.mutateAsync({ relationshipId: currentManagerRel.id });
-      }
       if (target) {
         await createRel.mutateAsync({
           accountId,
           data: { fromContactId: contact.id, toContactId: target, type: "reports_to" },
         });
+      }
+      if (currentManagerRel) {
+        await deleteRel.mutateAsync({ relationshipId: currentManagerRel.id });
       }
       invalidate();
       toast({
