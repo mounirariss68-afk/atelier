@@ -72,7 +72,7 @@ outputSchema: z.object({
                   "champion_activation", "exec_brief"]),
     when: z.enum(["this_week", "next_week", "in_2_weeks"]),
     durationMin: z.number().int().positive().nullable(),
-    owner: z.enum(["client_change_lead", "aico_lead", "aico_consultant"]),
+    owner: z.enum(["client_change_lead", "cognirise_lead", "cognirise_consultant"]),
     talkingPoints: z.array(z.string()).min(1),
     materialsToSend: z.array(z.object({
       title: z.string(),

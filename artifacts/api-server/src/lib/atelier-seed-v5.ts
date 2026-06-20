@@ -77,7 +77,7 @@ const PRESS_EDITORIAL = [
   {
     id: "ec_002",
     workingTitle: "Why responsible-AI playbooks fail in family offices",
-    publication: "AICo Field Notes",
+    publication: "Cognirise Field Notes",
     byline: "Mounir",
     publishOn: "2026-06-19",
     status: "drafting",
@@ -99,7 +99,7 @@ const PRESS_EDITORIAL = [
   {
     id: "ec_004",
     workingTitle: "Pricing AI work when the unit isn't a person-week",
-    publication: "AICo Field Notes",
+    publication: "Cognirise Field Notes",
     byline: "Gökhan",
     publishOn: "2026-07-17",
     status: "candidate",
@@ -278,7 +278,7 @@ const PRESS_SPEAKING = [
 const PRESS_MENTIONS = [
   {
     id: "pm_001",
-    headline: "AICo's Mounir on why GCC AI policy is being mis-read",
+    headline: "Cognirise's Mounir on why GCC AI policy is being mis-read",
     publication: "MEED",
     date: "2026-05-12",
     about: "Mounir, partner_quote",
@@ -293,7 +293,7 @@ const PRESS_MENTIONS = [
     date: "2026-05-09",
     about: "competitor",
     summary:
-      "Bain launched a 50-page responsible-AI playbook aimed at the GCC; reception muted. Implication for AICo: differentiate on engagement-tested rather than framework-first.",
+      "Bain launched a 50-page responsible-AI playbook aimed at the GCC; reception muted. Implication for Cognirise: differentiate on engagement-tested rather than framework-first.",
     sentiment: "neutral",
   },
   {
@@ -301,9 +301,9 @@ const PRESS_MENTIONS = [
     headline: "The boutique consultancies eating tier-1 AI work",
     publication: "Sifted",
     date: "2026-04-29",
-    about: "AICo, named",
+    about: "Cognirise, named",
     summary:
-      "Feature naming AICo among five firms displacing tier-1 incumbents on AI mandates. Tone: positive.",
+      "Feature naming Cognirise among five firms displacing tier-1 incumbents on AI mandates. Tone: positive.",
     sentiment: "positive",
   },
   {
@@ -313,7 +313,7 @@ const PRESS_MENTIONS = [
     date: "2026-04-22",
     about: "industry",
     summary:
-      "Industry-wide spend analysis. AICo not named but cited indirectly in 'boutique cohort'. Sentiment toward boutiques: neutral-positive.",
+      "Industry-wide spend analysis. Cognirise not named but cited indirectly in 'boutique cohort'. Sentiment toward boutiques: neutral-positive.",
     sentiment: "neutral",
   },
 ];
@@ -326,7 +326,7 @@ const ALLIANCE_FIRMS = [
     country: "UAE",
     speciality: "Cloud landing zones, data platforms",
     relationshipStrength: 4,
-    anchorAico: "Gökhan",
+    anchorCognirise: "Gökhan",
     anchorPartner: "Reem Al-Suwaidi",
     lastTouchAt: "2026-05-08",
     openJointOpps: 3,
@@ -343,12 +343,12 @@ const ALLIANCE_FIRMS = [
     country: "KSA",
     speciality: "AI governance, KSA PDPL",
     relationshipStrength: 5,
-    anchorAico: "Mounir",
+    anchorCognirise: "Mounir",
     anchorPartner: "Khalid Al-Ghamdi",
     lastTouchAt: "2026-05-13",
     openJointOpps: 2,
     lifetimeJointRevenueMm: 1.4,
-    recentMoves: ["Published joint POV with AICo on PDPL (2026-Q1)"],
+    recentMoves: ["Published joint POV with Cognirise on PDPL (2026-Q1)"],
   },
   {
     id: "pf_003",
@@ -357,12 +357,12 @@ const ALLIANCE_FIRMS = [
     country: "UK",
     speciality: "Operating model, post-merger integration",
     relationshipStrength: 3,
-    anchorAico: "Mounir",
+    anchorCognirise: "Mounir",
     anchorPartner: "Helena Park",
     lastTouchAt: "2026-04-19",
     openJointOpps: 1,
     lifetimeJointRevenueMm: 0.8,
-    recentMoves: ["Hired two ex-AICo associates (flag — informational)"],
+    recentMoves: ["Hired two ex-Cognirise associates (flag — informational)"],
   },
   {
     id: "pf_004",
@@ -371,7 +371,7 @@ const ALLIANCE_FIRMS = [
     country: "Türkiye",
     speciality: "Azure delivery, FSI workloads",
     relationshipStrength: 3,
-    anchorAico: "Gökhan",
+    anchorCognirise: "Gökhan",
     anchorPartner: "Cem Aydın",
     lastTouchAt: "2026-04-30",
     openJointOpps: 2,
@@ -386,13 +386,13 @@ const ALLIANCE_PIPELINE = [
     opportunityName: "Sovereign data fabric — Phase 1",
     client: "GCC sovereign fund (named in CRM)",
     partnerFirm: "Quanta Systems",
-    leadParty: "AICo",
+    leadParty: "Cognirise",
     stage: "Proposal",
     acvUsdK: 1400,
-    aicoPct: 65,
+    cognirisePct: 65,
     partnerPct: 35,
     splitRationale:
-      "AICo leads strategy + governance; Quanta executes landing zone build.",
+      "Cognirise leads strategy + governance; Quanta executes landing zone build.",
     allianceLetterStatus: "signed",
   },
   {
@@ -403,10 +403,10 @@ const ALLIANCE_PIPELINE = [
     leadParty: "Lumen",
     stage: "Discovery",
     acvUsdK: 620,
-    aicoPct: 40,
+    cognirisePct: 40,
     partnerPct: 60,
     splitRationale:
-      "Lumen leads regulatory interface + KSA-resident delivery; AICo delivers controls library + agent build.",
+      "Lumen leads regulatory interface + KSA-resident delivery; Cognirise delivers controls library + agent build.",
     allianceLetterStatus: "draft",
   },
   {
@@ -414,13 +414,13 @@ const ALLIANCE_PIPELINE = [
     opportunityName: "Operating-model redesign + AI overlay",
     client: "UK FSI (named in CRM)",
     partnerFirm: "Anchorline Advisors",
-    leadParty: "AICo",
+    leadParty: "Cognirise",
     stage: "Discovery",
     acvUsdK: 880,
-    aicoPct: 55,
+    cognirisePct: 55,
     partnerPct: 45,
     splitRationale:
-      "AICo leads AI overlay; Anchorline leads org redesign and PMI playbook.",
+      "Cognirise leads AI overlay; Anchorline leads org redesign and PMI playbook.",
     allianceLetterStatus: "draft",
   },
   {
@@ -431,10 +431,10 @@ const ALLIANCE_PIPELINE = [
     leadParty: "Northstar",
     stage: "Proposal",
     acvUsdK: 410,
-    aicoPct: 35,
+    cognirisePct: 35,
     partnerPct: 65,
     splitRationale:
-      "Northstar holds prime; AICo delivers control-tower design + agent integration.",
+      "Northstar holds prime; Cognirise delivers control-tower design + agent integration.",
     allianceLetterStatus: "signed",
   },
 ];
@@ -464,12 +464,12 @@ const ALLIANCE_CONFLICTS = [
   },
   {
     id: "co_002",
-    headline: "Anchorline hired two ex-AICo associates — informational",
+    headline: "Anchorline hired two ex-Cognirise associates — informational",
     partnerFirm: "Anchorline Advisors",
     detectedAt: "2026-04-22",
     severity: "inform",
     detail:
-      "Anchorline's UK office hired two associates from AICo's London delivery pod over the last 6 months. No client-conflict signal yet; flagged for awareness only.",
+      "Anchorline's UK office hired two associates from Cognirise's London delivery pod over the last 6 months. No client-conflict signal yet; flagged for awareness only.",
     recommendation: "Note in next quarterly Alliance review. No action.",
   },
 ];
@@ -736,11 +736,11 @@ const GH_BACKUPS = [
 ];
 
 const IP_CODE = [
-  { id: "ipca_001", name: "atelier-agents (runner + lifecycle helper)", repoUrl: "github.com/aico/atelier-agents", owner: "Hamza R.", license: "AICo Internal", summary: "Shared lifecycle runner that every Atelier agent composes against.", usedInEngagements: ["eng_alpha", "eng_beta", "eng_arcelik"], freshness: "fresh" },
-  { id: "ipca_002", name: "comms-indexer", repoUrl: "github.com/aico/comms-indexer", owner: "Yusuf Ç.", license: "AICo Internal", summary: "Mail / IM corpus indexer used by Pursuit Scout, DSAR Concierge, and Theme Curator.", usedInEngagements: ["eng_alpha", "eng_gamma"], freshness: "fresh" },
-  { id: "ipca_003", name: "pricing-sandbox (margin + bundle simulator)", repoUrl: "github.com/aico/pricing-sandbox", owner: "Aisha M.", license: "AICo Internal", summary: "Standalone simulator the Pricing Strategist composes against. Reused on Arçelik demo.", usedInEngagements: ["eng_arcelik", "eng_delta"], freshness: "stale" },
-  { id: "ipca_004", name: "audit-pdf", repoUrl: "github.com/aico/audit-pdf", owner: "Yusuf Ç.", license: "MIT (open-sourced)", summary: "PDF generator for engagement audit packs. Open-sourced 2025-Q4.", usedInEngagements: ["eng_alpha", "eng_beta", "eng_gamma", "eng_delta"], freshness: "fresh" },
-  { id: "ipca_005", name: "winloss-clusterer", repoUrl: "github.com/aico/winloss-clusterer", owner: "Mounir", license: "AICo Internal", summary: "Theme Curator's clustering primitive over win/loss debriefs.", usedInEngagements: [], freshness: "stale" },
+  { id: "ipca_001", name: "atelier-agents (runner + lifecycle helper)", repoUrl: "github.com/cognirise/atelier-agents", owner: "Hamza R.", license: "Cognirise Internal", summary: "Shared lifecycle runner that every Atelier agent composes against.", usedInEngagements: ["eng_alpha", "eng_beta", "eng_arcelik"], freshness: "fresh" },
+  { id: "ipca_002", name: "comms-indexer", repoUrl: "github.com/cognirise/comms-indexer", owner: "Yusuf Ç.", license: "Cognirise Internal", summary: "Mail / IM corpus indexer used by Pursuit Scout, DSAR Concierge, and Theme Curator.", usedInEngagements: ["eng_alpha", "eng_gamma"], freshness: "fresh" },
+  { id: "ipca_003", name: "pricing-sandbox (margin + bundle simulator)", repoUrl: "github.com/cognirise/pricing-sandbox", owner: "Aisha M.", license: "Cognirise Internal", summary: "Standalone simulator the Pricing Strategist composes against. Reused on Arçelik demo.", usedInEngagements: ["eng_arcelik", "eng_delta"], freshness: "stale" },
+  { id: "ipca_004", name: "audit-pdf", repoUrl: "github.com/cognirise/audit-pdf", owner: "Yusuf Ç.", license: "MIT (open-sourced)", summary: "PDF generator for engagement audit packs. Open-sourced 2025-Q4.", usedInEngagements: ["eng_alpha", "eng_beta", "eng_gamma", "eng_delta"], freshness: "fresh" },
+  { id: "ipca_005", name: "winloss-clusterer", repoUrl: "github.com/cognirise/winloss-clusterer", owner: "Mounir", license: "Cognirise Internal", summary: "Theme Curator's clustering primitive over win/loss debriefs.", usedInEngagements: [], freshness: "stale" },
 ];
 
 const IP_OSS = [
@@ -754,11 +754,11 @@ const IP_OSS = [
 ];
 
 const IP_DEMOS = [
-  { id: "de_001", name: "Arçelik · Pricing Intelligence", url: "demo.aico.com/arcelik", owner: "Aisha M.", lastDeployAt: "2026-05-10", shows: "Margin simulator, bundle optimiser, dealer portal — full demo path.", uptime30d: 0.998, scriptDrift: 0, freshness: "fresh" },
-  { id: "de_002", name: "Atelier · Employee Portal", url: "demo.aico.com/atelier", owner: "Hamza R.", lastDeployAt: "2026-05-13", shows: "Full-firm Atelier walkthrough including v4 Comms Indexer.", uptime30d: 0.991, scriptDrift: 1, freshness: "fresh" },
+  { id: "de_001", name: "Arçelik · Pricing Intelligence", url: "demo.cognirise.com/arcelik", owner: "Aisha M.", lastDeployAt: "2026-05-10", shows: "Margin simulator, bundle optimiser, dealer portal — full demo path.", uptime30d: 0.998, scriptDrift: 0, freshness: "fresh" },
+  { id: "de_002", name: "Atelier · Employee Portal", url: "demo.cognirise.com/atelier", owner: "Hamza R.", lastDeployAt: "2026-05-13", shows: "Full-firm Atelier walkthrough including v4 Comms Indexer.", uptime30d: 0.991, scriptDrift: 1, freshness: "fresh" },
   { id: "de_003", name: "Cognirise · public marketing", url: "cognirise.com", owner: "Mounir", lastDeployAt: "2026-04-22", shows: "Public-facing brand site with case index.", uptime30d: 1.0, scriptDrift: 0, freshness: "fresh" },
-  { id: "de_004", name: "Pricing Strategist · standalone POV", url: "demo.aico.com/pricing-pov", owner: "Aisha M.", lastDeployAt: "2026-02-18", shows: "Pricing Strategist agent in isolation with sample mandate.", uptime30d: 0.967, scriptDrift: 3, freshness: "stale" },
-  { id: "de_005", name: "Win-Loss Library · sample", url: "demo.aico.com/winloss-sample", owner: "Mounir", lastDeployAt: "2025-11-04", shows: "Win-Loss debrief flow with 6 sample debriefs.", uptime30d: 0.882, scriptDrift: 5, freshness: "broken" },
+  { id: "de_004", name: "Pricing Strategist · standalone POV", url: "demo.cognirise.com/pricing-pov", owner: "Aisha M.", lastDeployAt: "2026-02-18", shows: "Pricing Strategist agent in isolation with sample mandate.", uptime30d: 0.967, scriptDrift: 3, freshness: "stale" },
+  { id: "de_005", name: "Win-Loss Library · sample", url: "demo.cognirise.com/winloss-sample", owner: "Mounir", lastDeployAt: "2025-11-04", shows: "Win-Loss debrief flow with 6 sample debriefs.", uptime30d: 0.882, scriptDrift: 5, freshness: "broken" },
 ];
 
 const IP_GRANTS = [

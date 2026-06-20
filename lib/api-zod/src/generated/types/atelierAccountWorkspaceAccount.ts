@@ -16,7 +16,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   strategicPriorities?: string[];
   strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
   /** @nullable */
-  aicoHypothesis?: string | null;
+  cogniriseHypothesis?: string | null;
   sourceSignals?: AtelierSourceSignal[];
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
 };

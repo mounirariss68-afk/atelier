@@ -290,7 +290,7 @@ export interface AtelierCreateAccountInput {
    * @maxLength 600
    * @nullable
    */
-  aicoHypothesis?: string | null;
+  cogniriseHypothesis?: string | null;
   /**
    * @maxLength 2000
    * @nullable
@@ -658,7 +658,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   strategicPriorities?: string[];
   strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
   /** @nullable */
-  aicoHypothesis?: string | null;
+  cogniriseHypothesis?: string | null;
   sourceSignals?: AtelierSourceSignal[];
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
 };

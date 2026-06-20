@@ -112,7 +112,7 @@ router.post("/firm-profile/run-writer", async (req, res) => {
   // not sufficient; this route is the source of truth.
   if (!ensurePublisher(me, res)) return;
   const body = req.body as { firmName?: string; userBrief?: string | null };
-  const firmName = (body.firmName ?? "AICo").trim() || "AICo";
+  const firmName = (body.firmName ?? "Cognirise").trim() || "Cognirise";
   // Seed the writer with this org's published version (if any).
   const [published] = await db
     .select({ payload: atelierFirmProfile.payload })

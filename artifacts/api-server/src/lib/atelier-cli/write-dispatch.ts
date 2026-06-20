@@ -165,7 +165,7 @@ const PAYLOAD_TRANSLATORS: Record<string, Partial<Record<DispatchVerb, Translato
   },
   // Task #492 — chat-create-account prefill returns a rich payload
   // (strategicPriorities as {text, sourceUrls} objects, plus
-  // sourceSignals / decisionMakers / aicoHypothesis / refreshedSummary)
+  // sourceSignals / decisionMakers / cogniriseHypothesis / refreshedSummary)
   // so the propose_write confirm card can SHOW the research. The
   // backing `account_create` tool only accepts the writable
   // firmographic subset, so strip the display-only fields here. The

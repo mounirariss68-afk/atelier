@@ -45,12 +45,12 @@ const html = renderProposalHtml({
     { rfpReqId: "R-1", requirement: "ISO27001", status: "green", evidence: "Annex C" },
   ],
   firmProfile: {
-    firmName: "AICo",
+    firmName: "Cognirise",
     tagline: "Senior-overseen agentic operations",
     boilerplateShort: "Test boilerplate.",
     differentiators: ["Senior-overseen"],
     proofPoints: [{ label: "Demo", metric: "+10pts" }],
-    legalEntities: [{ name: "AICo DIFC Ltd", jurisdiction: "DIFC" }],
+    legalEntities: [{ name: "Cognirise DIFC Ltd", jurisdiction: "DIFC" }],
     contactBlock: "Test contact",
   },
   recipient: { recipientName: "Acme Procurement", recipientOrg: "Acme Bank" },
@@ -59,7 +59,7 @@ for (const needle of [
   "<!doctype html>", "Demo Proposal", "Acme Procurement", "Acme Bank",
   "watermark", "Confidential", "scroll-snap-type",
   "@media print", "id=\"sec-pricing\"", "id=\"sec-compliance\"",
-  "AICo DIFC Ltd", "R-1",
+  "Cognirise DIFC Ltd", "R-1",
 ]) {
   assert.ok(html.includes(needle), `expected HTML to contain ${JSON.stringify(needle)}`);
 }
@@ -111,11 +111,11 @@ const parityInput: RenderProposalHtmlInput = {
   pricingModel: { totalRevenueUsd: 200000, totalCostUsd: 110000, marginPct: 45, verdict: "green" },
   complianceMatrix: [{ rfpReqId: "R-1", requirement: "ISO27001", status: "green", evidence: "Annex C" }],
   firmProfile: {
-    firmName: "AICo",
+    firmName: "Cognirise",
     differentiators: ["Senior-overseen"],
     proofPoints: [{ label: "Demo", metric: "+10pts" }],
-    legalEntities: [{ name: "AICo DIFC Ltd", jurisdiction: "DIFC" }],
-    contactBlock: "contact@aico",
+    legalEntities: [{ name: "Cognirise DIFC Ltd", jurisdiction: "DIFC" }],
+    contactBlock: "contact@cognirise",
   },
   recipient: { recipientName: "Acme", recipientOrg: "Acme Bank" },
   version: 2,
@@ -123,7 +123,7 @@ const parityInput: RenderProposalHtmlInput = {
 const blocks = buildProposalBlocks(parityInput);
 const blockText = JSON.stringify(blocks);
 for (const needle of [
-  "AICo DIFC Ltd",          // Company Profile entity
+  "Cognirise DIFC Ltd",          // Company Profile entity
   "Senior-overseen",         // Differentiator
   "$200,000",                // Pricing kv block
   "R-1",                     // Compliance table row id
@@ -132,7 +132,7 @@ for (const needle of [
   assert.ok(blockText.includes(needle), `block model must contain ${JSON.stringify(needle)}`);
 }
 const html2 = renderProposalHtml(parityInput);
-for (const needle of ["AICo DIFC Ltd", "Senior-overseen", "$200,000", "R-1", "ISO27001"]) {
+for (const needle of ["Cognirise DIFC Ltd", "Senior-overseen", "$200,000", "R-1", "ISO27001"]) {
   assert.ok(html2.includes(needle), `HTML must contain ${JSON.stringify(needle)} (parity with blocks)`);
 }
 

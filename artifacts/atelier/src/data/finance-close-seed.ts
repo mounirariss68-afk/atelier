@@ -217,10 +217,10 @@ function buildTasks(period: ClosePeriod): CloseTask[] {
 // ────────────────────────── Seed periods ──────────────────────────
 // Three entities, three different close states (per task spec).
 //
-//   AICo KSA (fe_aico_ksa): May 2026 — mid-close, several tasks open,
+//   Cognirise KSA (fe_aico_ksa): May 2026 — mid-close, several tasks open,
 //     two reconciliations unsigned.
-//   AICo Group UK (fe_aico_uk): Apr 2026 — fully closed and signed.
-//   AICo UAE DIFC (fe_aico_uae): May 2026 — not yet started.
+//   Cognirise Group UK (fe_aico_uk): Apr 2026 — fully closed and signed.
+//   Cognirise UAE DIFC (fe_aico_uae): May 2026 — not yet started.
 //
 // Other entities (Abu Dhabi branch, NEOM JV) don't have an open close
 // period in this seed; they'll show "no period open" on the dashboard.
@@ -327,7 +327,7 @@ function recs(): Reconciliation[] {
     },
     {
       id: "rec_ksa_ic", periodId: "cp_ksa_2026_05", controlAccount: "ic",
-      label: "IC with AICo UK + UAE", currency: "SAR",
+      label: "IC with Cognirise UK + UAE", currency: "SAR",
       ledgerBalance: 612_500.00, sourceBalance: 605_900.00, sourceLabel: "IC matching ledger",
       items: [
         { id: "ri_ic_1", description: "FX timing diff on May IC service fee invoice", amount: 6_600.00 },

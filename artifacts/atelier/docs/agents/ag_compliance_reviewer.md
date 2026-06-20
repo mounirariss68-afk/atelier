@@ -71,7 +71,7 @@ outputSchema: z.object({
     ruleId: z.string(),
     requirement: z.string(),
     source: z.enum(["rfp", "firm_policy", "regulation", "kb"]),
-    sourceCitation: z.string(),               // "RFP §4.2" / "AICo Policy DR-04" / "PDPL Art. 12"
+    sourceCitation: z.string(),               // "RFP §4.2" / "Cognirise Policy DR-04" / "PDPL Art. 12"
     severity: z.enum(["must", "should", "informational"]),
     status: z.enum(["green", "red"]),
     evidence: z.array(z.object({

@@ -286,7 +286,7 @@ router.post("/accounts", async (req, res) => {
         relationshipStrength: 0,
         sourceSignals: [],
         strategicPriorities: (input.strategicPriorities ?? []).map((s) => s.trim()).filter(Boolean),
-        aicoHypothesis: input.aicoHypothesis?.trim() || null,
+        cogniriseHypothesis: input.cogniriseHypothesis?.trim() || null,
         pendingProfileUpdates: [],
         createdAt: now,
         updatedAt: now,
@@ -515,7 +515,7 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
         text: string;
         sourceUrls: string[];
       }>,
-      aicoHypothesis: a.aicoHypothesis ?? null,
+      cogniriseHypothesis: a.cogniriseHypothesis ?? null,
       sourceSignals: a.sourceSignals ?? [],
       pendingProfileUpdates: a.pendingProfileUpdates ?? [],
     },
@@ -649,8 +649,8 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
       accountUpdate.strategicPriorities = priorityTexts;
       accountUpdate.strategicPriorityRefs = priorityRefs;
     }
-    if (output.account.aicoHypothesis && output.account.aicoHypothesis.trim().length > 0) {
-      accountUpdate.aicoHypothesis = output.account.aicoHypothesis;
+    if (output.account.cogniriseHypothesis && output.account.cogniriseHypothesis.trim().length > 0) {
+      accountUpdate.cogniriseHypothesis = output.account.cogniriseHypothesis;
     }
     if (output.account.refreshedSummary && output.account.refreshedSummary.trim().length > 0) {
       accountUpdate.notes = output.account.refreshedSummary;
@@ -902,8 +902,8 @@ router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (re
     const f = target.field;
     if (f === "strategicPriorities" && Array.isArray(target.toValue)) {
       updates.strategicPriorities = target.toValue as string[];
-    } else if (f === "aicoHypothesis" && typeof target.toValue === "string") {
-      updates.aicoHypothesis = target.toValue;
+    } else if (f === "cogniriseHypothesis" && typeof target.toValue === "string") {
+      updates.cogniriseHypothesis = target.toValue;
     } else if (f === "sector" && typeof target.toValue === "string") {
       updates.sector = target.toValue;
     } else if (f === "hqCity" && typeof target.toValue === "string") {

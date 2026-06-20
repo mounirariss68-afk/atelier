@@ -283,9 +283,9 @@ function ProfileTab({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
         <Card className="p-6 space-y-4">
-          <SectionLabel>AICo hypothesis</SectionLabel>
+          <SectionLabel>Cognirise hypothesis</SectionLabel>
           <p className="text-text leading-relaxed">
-            {a.aicoHypothesis ?? (
+            {a.cogniriseHypothesis ?? (
               <span className="italic text-text-mute">
                 No hypothesis yet — run Cartographer ★ to seed one.
               </span>

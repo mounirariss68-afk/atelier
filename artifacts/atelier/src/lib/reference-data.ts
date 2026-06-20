@@ -22,7 +22,7 @@ export interface CountryRow {
   dialCode?: string | null;
   vatDefaultPct?: number | null;
   isGcc: boolean;
-  isAicoTargetMarket: boolean;
+  isCogniriseTargetMarket: boolean;
   status: "active" | "deprecated";
   displayOrderOverride?: number | null;
 }
@@ -72,7 +72,7 @@ export function normalize(s: string): string {
 /**
  * Sort countries per the patch spec:
  *   1. GCC (in fixed display order — SA, AE, QA, KW, BH, OM via display_order_override)
- *   2. AICo target markets (TR by default)
+ *   2. Cognirise target markets (TR by default)
  *   3. MENA non-GCC
  *   4. Everything else alphabetically by EN name
  *   5. Deprecated entries last (excluded by default upstream)
@@ -81,7 +81,7 @@ export function sortCountries(rows: CountryRow[]): CountryRow[] {
   const bucket = (c: CountryRow): number => {
     if (c.status === "deprecated") return 9;
     if (c.isGcc) return 1;
-    if (c.isAicoTargetMarket) return 2;
+    if (c.isCogniriseTargetMarket) return 2;
     if (c.region === "MENA") return 3;
     return 4;
   };

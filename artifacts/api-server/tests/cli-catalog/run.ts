@@ -96,9 +96,9 @@ async function main() {
 
   console.log("\n[2] PII redactor");
   await test("redactText scrubs email + phone + PAN + IBAN", () => {
-    const s = "ping ali@aico.ma at +212 600-12-34-56 card 4111 1111 1111 1111 IBAN MA64011519000001205000534921";
+    const s = "ping ali@cognirise.ma at +212 600-12-34-56 card 4111 1111 1111 1111 IBAN MA64011519000001205000534921";
     const r = redactText(s);
-    assert.ok(!r.text.includes("ali@aico.ma"), "email leaked");
+    assert.ok(!r.text.includes("ali@cognirise.ma"), "email leaked");
     assert.ok(!r.text.includes("4111"), "PAN leaked");
     assert.ok(!r.text.includes("MA64011519000001205000534921"), "IBAN leaked");
     assert.ok(r.stats.emails >= 1 && r.stats.pans >= 1 && r.stats.ibans >= 1);

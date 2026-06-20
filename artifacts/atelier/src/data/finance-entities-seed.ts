@@ -96,8 +96,8 @@ export interface FinanceEntity {
 const ENTITIES: FinanceEntity[] = [
   {
     id: "fe_aico_uk",
-    legalName: "AICo Group Holdings Ltd",
-    shortName: "AICo Group (UK)",
+    legalName: "Cognirise Group Holdings Ltd",
+    shortName: "Cognirise Group (UK)",
     kind: "parent",
     parentId: null,
     status: "active",
@@ -145,8 +145,8 @@ const ENTITIES: FinanceEntity[] = [
   },
   {
     id: "fe_aico_ksa",
-    legalName: "AICo for Information Technology Co.",
-    shortName: "AICo KSA",
+    legalName: "Cognirise for Information Technology Co.",
+    shortName: "Cognirise KSA",
     kind: "subsidiary",
     parentId: "fe_aico_uk",
     status: "active",
@@ -221,8 +221,8 @@ const ENTITIES: FinanceEntity[] = [
   },
   {
     id: "fe_aico_uae",
-    legalName: "AICo Consulting (DIFC) Ltd",
-    shortName: "AICo UAE (DIFC)",
+    legalName: "Cognirise Consulting (DIFC) Ltd",
+    shortName: "Cognirise UAE (DIFC)",
     kind: "subsidiary",
     parentId: "fe_aico_uk",
     status: "active",
@@ -298,8 +298,8 @@ const ENTITIES: FinanceEntity[] = [
   },
   {
     id: "fe_aico_uae_branch",
-    legalName: "AICo Consulting (DIFC) — Abu Dhabi Branch",
-    shortName: "AICo AUH (Branch)",
+    legalName: "Cognirise Consulting (DIFC) — Abu Dhabi Branch",
+    shortName: "Cognirise AUH (Branch)",
     kind: "branch",
     parentId: "fe_aico_uae",
     status: "active",
@@ -354,8 +354,8 @@ const ENTITIES: FinanceEntity[] = [
   },
   {
     id: "fe_aico_jv_neom",
-    legalName: "AICo × NEOM Sector Lab JV",
-    shortName: "AICo-NEOM JV",
+    legalName: "Cognirise × NEOM Sector Lab JV",
+    shortName: "Cognirise-NEOM JV",
     kind: "jv",
     parentId: null,
     status: "active",
@@ -393,8 +393,8 @@ const ENTITIES: FinanceEntity[] = [
     ],
     signatories: [
       { id: "sig_neom_rep", name: "Khalid Al-Saud", role: "NEOM Authority Rep (JV Director)", authorityLevel: "A", resolutionRef: "JV-2025-001" },
-      { id: "sig_yara_n", name: "Yara Nasser", role: "AICo JV Director", authorityLevel: "A", resolutionRef: "JV-2025-001" },
-      { id: "sig_layla_m", name: "Layla Al-Mutairi", role: "AICo JV Director", authorityLevel: "B", resolutionRef: "JV-2025-001" },
+      { id: "sig_yara_n", name: "Yara Nasser", role: "Cognirise JV Director", authorityLevel: "A", resolutionRef: "JV-2025-001" },
+      { id: "sig_layla_m", name: "Layla Al-Mutairi", role: "Cognirise JV Director", authorityLevel: "B", resolutionRef: "JV-2025-001" },
     ],
     fiscal: {
       yearEnd: "Dec 31",
@@ -408,7 +408,7 @@ const ENTITIES: FinanceEntity[] = [
       { counterpartyId: "fe_aico_ksa", relationship: "shareholder", tpMethod: "ResalePrice", intercoServiceFeePct: null },
     ],
     staffCount: 9,
-    notes: "50/50 JV with NEOM Authority. ZATCA Phase-2 enrolment in flight (cutover Dec 2025). All disbursements require dual sign (1 AICo + 1 NEOM).",
+    notes: "50/50 JV with NEOM Authority. ZATCA Phase-2 enrolment in flight (cutover Dec 2025). All disbursements require dual sign (1 Cognirise + 1 NEOM).",
   },
 ];
 

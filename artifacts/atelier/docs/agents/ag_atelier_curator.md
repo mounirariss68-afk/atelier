@@ -48,7 +48,7 @@ z.object({
       "case_study", "pov", "playbook", "prompt", "win_theme",
     ]),
     title: z.string(),
-    summary: z.string(),                    // 2–3 sentences, AICo voice
+    summary: z.string(),                    // 2–3 sentences, Cognirise voice
     rationale: z.string(),                  // why this is reusable IP
     score: z.number().min(0).max(1),        // see scoring rubric below
     scoreBreakdown: z.object({

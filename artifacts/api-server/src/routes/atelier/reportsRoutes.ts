@@ -697,7 +697,7 @@ router.get("/reports/:id/export.pdf", async (req, res) => {
   const doc = new PDFDocument({ size: "A4", margin: 48 });
   doc.pipe(res);
   doc.rect(0, 0, doc.page.width, 64).fill("#0E1F3D");
-  doc.fillColor("#E89E2C").fontSize(20).text("AICo Atelier", 48, 22);
+  doc.fillColor("#E89E2C").fontSize(20).text("Cognirise Atelier", 48, 22);
   doc.fillColor("#FFFFFF").fontSize(10).text("Report export", 48, 46);
   doc.moveDown(3);
   doc.fillColor("#0E1F3D").fontSize(18).text(row.name);

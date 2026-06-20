@@ -97,7 +97,7 @@ END $$;
 -- 1. Sensitivity classes (column masks via SECURITY-INVOKER views):
 --      compensation         -> atelier_employees_v.base_compensation,
 --                              atelier_contractors_v.day_rate_internal_cost,
---                              atelier_partner_firm_resources_v.cost_to_aico_per_day,
+--                              atelier_partner_firm_resources_v.cost_to_cognirise_per_day,
 --                              atelier_partner_economics_v.* (revenue_share, base_amount, ...),
 --                              iban / swift / notice / payment_terms / day_rate_amount
 --                              Allow-list: founding_partner | partner | finance | hr.

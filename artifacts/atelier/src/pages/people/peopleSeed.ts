@@ -301,7 +301,7 @@ export interface OrgUnit {
   openRoles: number;
 }
 export const useOrgUnits = staticList<OrgUnit>([
-  { id: "ou-firm",     name: "AICo",            parentId: null,        headName: "Karim S.",  headcount: 38, openRoles: 6 },
+  { id: "ou-firm",     name: "Cognirise",            parentId: null,        headName: "Karim S.",  headcount: 38, openRoles: 6 },
   { id: "ou-pricing",  name: "Pricing practice", parentId: "ou-firm",   headName: "Hala K.",   headcount: 12, openRoles: 3 },
   { id: "ou-research", name: "Research",         parentId: "ou-firm",   headName: "Sara P.",   headcount: 6,  openRoles: 1 },
   { id: "ou-platform", name: "Platform & AI",    parentId: "ou-firm",   headName: "Marcus L.", headcount: 9,  openRoles: 2 },

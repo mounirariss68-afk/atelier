@@ -54,7 +54,7 @@ const PatchCountryBody = z
     dialCode: z.string().regex(/^\+\d{1,4}$/).nullable().optional(),
     vatDefaultPct: z.number().int().min(0).max(50).nullable().optional(),
     isGcc: z.boolean().optional(),
-    isAicoTargetMarket: z.boolean().optional(),
+    isCogniriseTargetMarket: z.boolean().optional(),
     status: STATUS.optional(),
     displayOrderOverride: z.number().int().min(0).max(9999).nullable().optional(),
   })

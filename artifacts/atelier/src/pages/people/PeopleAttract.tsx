@@ -73,7 +73,7 @@ function BrandView() {
     <div className="grid gap-3 md:grid-cols-2">
       <Card className="p-4">
         <div className="text-xs font-mono uppercase text-text-mute">Careers site</div>
-        <div className="mt-1 text-text">aico.work/careers — 1,284 visits / 30d</div>
+        <div className="mt-1 text-text">cognirise.work/careers — 1,284 visits / 30d</div>
         <div className="mt-2 text-sm text-text-mute">Last edited 2026-04-29 by Yara H.</div>
       </Card>
       <Card className="p-4">

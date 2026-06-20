@@ -104,7 +104,7 @@ starting point. Sections it already enforces:
    `atelier_win_themes` library.
 2. **Hard rules.** Never invent debrief evidence; `supportCount = len(unique
    debrief ids)`; positioningLine is a single ready-to-paste sentence in
-   AICo voice; cluster aggressively at the tag level (senior_delivery,
+   Cognirise voice; cluster aggressively at the tag level (senior_delivery,
    speed_to_value, pricing_wedge, partner_leverage, agentic_native,
    gcc_context); only surface emergent buckets when ≥ 2 distinct
    debriefs support them.

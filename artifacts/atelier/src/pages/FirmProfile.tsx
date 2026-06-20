@@ -101,7 +101,7 @@ export default function FirmProfile() {
     try {
       await api("/firm-profile/run-writer", {
         method: "POST",
-        body: JSON.stringify({ firmName: profile?.published?.payload.firmName ?? "AICo", userBrief: brief.trim() || null }),
+        body: JSON.stringify({ firmName: profile?.published?.payload.firmName ?? "Cognirise", userBrief: brief.trim() || null }),
       });
       setBrief("");
       await reload();

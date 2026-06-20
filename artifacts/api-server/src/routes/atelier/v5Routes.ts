@@ -253,9 +253,9 @@ const PARTNER_JOINT_MARKETING = [
 ];
 
 const PARTNER_SUBCONTRACTS = [
-  { id: "sc_001", engagement: "Sovereign data fabric — Phase 1", partnerFirm: "Quanta Systems", scope: "Landing zone build + data ingestion", sowStatus: "signed", rateCardLockedAt: "2026-03-10", monthlyBurnUsdK: 110, acceptanceGate: "Phase 1 acceptance memo signed by client and AICo lead" },
+  { id: "sc_001", engagement: "Sovereign data fabric — Phase 1", partnerFirm: "Quanta Systems", scope: "Landing zone build + data ingestion", sowStatus: "signed", rateCardLockedAt: "2026-03-10", monthlyBurnUsdK: 110, acceptanceGate: "Phase 1 acceptance memo signed by client and Cognirise lead" },
   { id: "sc_002", engagement: "PDPL readiness program", partnerFirm: "Lumen Strategic", scope: "Regulator interface + KSA-resident delivery staff", sowStatus: "in_redline", rateCardLockedAt: null, monthlyBurnUsdK: 65, acceptanceGate: "Pending — joint quality plan v0.4 in review" },
-  { id: "sc_003", engagement: "Azure FSI control-tower", partnerFirm: "Northstar Cloud", scope: "Prime delivery; AICo as named subcontractor", sowStatus: "signed", rateCardLockedAt: "2026-02-21", monthlyBurnUsdK: 38, acceptanceGate: "Joint quality plan v1.0 signed; weekly acceptance reviews" },
+  { id: "sc_003", engagement: "Azure FSI control-tower", partnerFirm: "Northstar Cloud", scope: "Prime delivery; Cognirise as named subcontractor", sowStatus: "signed", rateCardLockedAt: "2026-02-21", monthlyBurnUsdK: 38, acceptanceGate: "Joint quality plan v1.0 signed; weekly acceptance reviews" },
 ];
 
 const PARTNER_FRAMEWORKS = [
@@ -288,7 +288,7 @@ const PARTNER_RENEWALS = [
 
 const PARTNER_TIER_CHANGES = [
   { id: "tc_001", partnerFirm: "Northstar Cloud", platform: "Azure", fromTier: "Advanced", toTier: "Expert MSP", effectiveAt: "2026-06-01", driver: "Two new Solutions Architect Expert holders", action: "Update co-sell motion + refresh joint deck" },
-  { id: "tc_002", partnerFirm: "AICo (with AWS)", platform: "AWS", fromTier: "Advanced", toTier: "Premier", effectiveAt: "2026-08-15", driver: "ML Specialty + Sovereign Cloud spec defended", action: "Push joint Quanta GTM into AWS Premier track" },
+  { id: "tc_002", partnerFirm: "Cognirise (with AWS)", platform: "AWS", fromTier: "Advanced", toTier: "Premier", effectiveAt: "2026-08-15", driver: "ML Specialty + Sovereign Cloud spec defended", action: "Push joint Quanta GTM into AWS Premier track" },
   { id: "tc_003", partnerFirm: "Anchorline Advisors", platform: "Internal", fromTier: "Strategic", toTier: "Preferred", effectiveAt: "2026-07-01", driver: "Sustained scorecard slip; conflict on jo_003 detected", action: "Communicate downgrade in next QBR; gate joint deals to partner-led only" },
 ];
 

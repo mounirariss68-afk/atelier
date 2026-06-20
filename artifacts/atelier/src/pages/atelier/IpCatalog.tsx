@@ -130,7 +130,7 @@ function LicensingView() {
   const IP_LICENSE_GRANTS = useIpLicenseGrants();
   return (
     <div className="space-y-2">
-      <p className="text-sm text-text-mute flex items-center gap-2"><FileText className="w-4 h-4" />Every grant of AICo IP into a client engagement, scope-bounded and time-bounded.</p>
+      <p className="text-sm text-text-mute flex items-center gap-2"><FileText className="w-4 h-4" />Every grant of Cognirise IP into a client engagement, scope-bounded and time-bounded.</p>
       {IP_LICENSE_GRANTS.map((g) => (
         <Card key={g.id} className="p-4">
           <div className="flex items-start justify-between gap-4">

@@ -86,7 +86,7 @@ Incumbent vendor: Roland Berger (re-bid). Shortlist of 3 firms expected.
 Kick-off targeted for Q3 2026, 16 weeks delivery on-site in Riyadh KSA.`;
 
 const TRANSCRIPT_TEXT = `Workshop transcript — 14 May 2026
-Attendees: Eng. Faisal (client), Mounir (AICo), Lina (AICo)
+Attendees: Eng. Faisal (client), Mounir (Cognirise), Lina (Cognirise)
 
 10:05 AM - Mounir: walked through the operating model hypothesis.
 10:14 AM - Faisal: Risk: legal sign-off may slip beyond July.
@@ -94,7 +94,7 @@ Attendees: Eng. Faisal (client), Mounir (AICo), Lina (AICo)
 10:30 AM - Faisal: Decision: drop Wave 2 from scope.
 10:42 AM - Lina: Blocker: vendor contract still pending procurement.`;
 
-const BRAND_DECK_TEXT = `AICo — Brand Profile draft notes
+const BRAND_DECK_TEXT = `Cognirise — Brand Profile draft notes
 Tagline: Ateliers, not factories.
 Mission: build the consultancy of consultants for the GCC.
 Voice attributes: principled, plain-spoken, bilingual.
@@ -108,7 +108,7 @@ Four Seasons Riyadh,2026-05-12,2875.00,SAR,375.00,KSA
 Najd Village,2026-05-13,690.00,SAR,90.00,KSA`;
 
 const EML_TEXT = `From: faisal@tasama.example
-To: mounir@aico.example, lina@aico.example
+To: mounir@cognirise.example, lina@cognirise.example
 Subject: Workshop follow-up
 Date: Wed, 14 May 2026 12:00:00 +0300
 
@@ -182,8 +182,8 @@ async function main(): Promise<void> {
     assert.equal(x.kind, "eml");
     assert.equal(x.emailHeaders?.from, "faisal@tasama.example");
     assert.deepEqual(x.emailHeaders?.to, [
-      "mounir@aico.example",
-      "lina@aico.example",
+      "mounir@cognirise.example",
+      "lina@cognirise.example",
     ]);
     assert.equal(x.emailHeaders?.subject, "Workshop follow-up");
     assert.match(x.normalizedText, /RACI by Friday/);

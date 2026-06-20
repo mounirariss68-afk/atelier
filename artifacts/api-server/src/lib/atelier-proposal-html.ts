@@ -265,7 +265,7 @@ function buildCoverBlocks(input: RenderProposalHtmlInput, profile: FirmProfileLi
   const tagline = profile?.tagline ?? "Senior-overseen agentic operations";
   const date = new Date(input.generatedAt ?? new Date().toISOString()).toLocaleDateString();
   const out: ProposalBlock[] = [
-    { kind: "paragraph", text: profile?.firmName ?? "AICo" },
+    { kind: "paragraph", text: profile?.firmName ?? "Cognirise" },
     { kind: "paragraph", text: tagline },
     { kind: "heading", level: 3, text: input.title },
   ];
@@ -362,7 +362,7 @@ function renderCoverHtml(section: ProposalSectionBlock, profile: FirmProfileLite
     <section class="cover snap" id="sec-cover" aria-label="Cover">
       <div class="cover-inner">
         ${logoHtml}
-        <div class="brand">${escapeHtml(brand && brand.kind === "paragraph" ? brand.text : (profile?.firmName ?? "AICo"))}</div>
+        <div class="brand">${escapeHtml(brand && brand.kind === "paragraph" ? brand.text : (profile?.firmName ?? "Cognirise"))}</div>
         <div class="cover-tagline">${escapeHtml(tagline && tagline.kind === "paragraph" ? tagline.text : "")}</div>
         <h1 class="cover-title">${escapeHtml(title)}</h1>
         ${recipientPara && recipientPara.kind === "paragraph" ? `<div class="recipient-line">${escapeHtml(recipientPara.text)}</div>` : ""}
@@ -527,7 +527,7 @@ export function renderProposalHtml(input: RenderProposalHtmlInput): string {
 </header>
 <div class="layout">
   <nav class="toc" aria-label="Table of contents">
-    <div class="brand">${escapeHtml(profile?.firmName ?? "AICo")} · Proposal</div>
+    <div class="brand">${escapeHtml(profile?.firmName ?? "Cognirise")} · Proposal</div>
     <ol>${tocHtml}</ol>
   </nav>
   <main class="body" id="proposal-main">

@@ -12,10 +12,10 @@ import {
  * THE ATELIER — Reference data lookups (Task #290 / Patch: Reference Data).
  *
  * Canonical lookup tables for countries (ISO 3166-1 alpha-2), industries
- * (8 primary AICo taxonomy), and sub-industries (43 entries).
+ * (8 primary Cognirise taxonomy), and sub-industries (43 entries).
  *
  * Design notes:
- * - Text PKs use the canonical ISO/AICo code so cross-table references stay
+ * - Text PKs use the canonical ISO/Cognirise code so cross-table references stay
  *   readable (matches the pattern used elsewhere in atelier.ts).
  * - These are intentionally **firm-wide / global** lookups: there is exactly
  *   one row per code, seeded under `org_id='aico'` to satisfy the existing
@@ -52,7 +52,7 @@ export const atelierCountries = pgTable(
     dialCode: text("dial_code"),
     vatDefaultPct: integer("vat_default_pct"),
     isGcc: boolean("is_gcc").notNull().default(false),
-    isAicoTargetMarket: boolean("is_aico_target_market").notNull().default(false),
+    isCogniriseTargetMarket: boolean("is_cognirise_target_market").notNull().default(false),
     status: text("status").notNull().default("active"), // 'active' | 'deprecated'
     displayOrderOverride: integer("display_order_override"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -67,7 +67,7 @@ export const atelierCountries = pgTable(
 );
 
 // ============================================================
-// INDUSTRIES — 8 primary AICo taxonomy
+// INDUSTRIES — 8 primary Cognirise taxonomy
 // ============================================================
 export const atelierIndustries = pgTable(
   "atelier_industries",

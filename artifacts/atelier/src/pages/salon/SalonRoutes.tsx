@@ -442,16 +442,16 @@ function MeetingsTab({ slug }: { slug: string }) {
 
 function TeamTab({ slug }: { slug: string }) {
   const { data } = useApi<{
-    aico: Array<{ id: string; name: string; title: string; roleLabel: string; initials: string }>;
+    cognirise: Array<{ id: string; name: string; title: string; roleLabel: string; initials: string }>;
     client: Array<{ id: string; name: string; title: string; initials: string; role: string; canApprove: boolean }>;
   }>(`/engagements/${slug}/team`);
   return (
     <div className="space-y-4">
       <SectionTitle>Team</SectionTitle>
       <Card>
-        <div className="text-xs uppercase tracking-widest text-text-mute mb-2">AICo team</div>
+        <div className="text-xs uppercase tracking-widest text-text-mute mb-2">Cognirise team</div>
         <div className="space-y-2">
-          {(data?.aico ?? []).map((u) => (
+          {(data?.cognirise ?? []).map((u) => (
             <div key={u.id} className="text-sm">{u.name} <span className="text-text-mute">— {u.roleLabel}, {u.title}</span></div>
           ))}
         </div>

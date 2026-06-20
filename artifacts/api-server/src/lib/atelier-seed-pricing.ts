@@ -30,7 +30,7 @@ const SIX_BANDS: SeedRow[] = [
 ];
 
 /**
- * Idempotent bootstrap seed for the AICo 2026 KSA + UAE v1 rate card and
+ * Idempotent bootstrap seed for the Cognirise 2026 KSA + UAE v1 rate card and
  * the default margin policy. Safe to run on every cold start — every
  * insert is gated on existence so re-runs are no-ops.
  *
@@ -46,7 +46,7 @@ export async function ensureAtelierPricingSeed(): Promise<void> {
     if (!existingCard) {
       await db.insert(atelierRateCards).values({
         id: DEFAULT_CARD_ID,
-        name: "AICo 2026 KSA + UAE v1",
+        name: "Cognirise 2026 KSA + UAE v1",
         status: "active",
         geography: "KSA + UAE",
         currency: "USD",
@@ -80,7 +80,7 @@ export async function ensureAtelierPricingSeed(): Promise<void> {
     if (!existingPolicy) {
       await db.insert(atelierMarginPolicies).values({
         id: DEFAULT_POLICY_ID,
-        name: "AICo default margin policy",
+        name: "Cognirise default margin policy",
         targetMarginPct: 0.55,
         amberThresholdPct: 0.5,
         redThresholdPct: 0.45,

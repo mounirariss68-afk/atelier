@@ -22,7 +22,7 @@ export const ATELIER_PERSONA_COOKIE = "atelier_persona";
 
 /**
  * Realm guard for /api/salon/* — Task #242 mirror of rejectClientRealm.
- * If an internal aico_employee persona cookie is present we refuse the request
+ * If an internal cognirise_employee persona cookie is present we refuse the request
  * outright, even if a salon_persona cookie is also set. The two realms must
  * never share an active session.
  */
@@ -52,7 +52,7 @@ export function rejectInternalRealm(
   ) {
     res.status(403).json({
       error: "wrong-realm",
-      message: "Internal AICo personas must use /api/atelier/*",
+      message: "Internal Cognirise personas must use /api/atelier/*",
     });
     return;
   }

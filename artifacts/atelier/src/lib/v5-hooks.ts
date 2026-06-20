@@ -960,7 +960,7 @@ export interface AlliancePartnerFirmRow {
   country: string;
   speciality: string;
   relationshipStrength: number;
-  anchorAico: string;
+  anchorCognirise: string;
   anchorPartner: string;
   lastTouchAt: string | null;
   openJointOpps: number;
@@ -980,7 +980,7 @@ export interface JointPipelineRow {
   leadParty: string;
   stage: string;
   acvUsdK: number;
-  aicoPct: number;
+  cognirisePct: number;
   partnerPct: number;
   splitRationale: string;
   allianceLetterStatus: string;

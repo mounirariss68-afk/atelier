@@ -140,7 +140,7 @@ export interface SalonWorkspace {
   displayName: string;
   accentColor: string;
   clientLogoUrl: string | null;
-  aicoLogoUrl: string | null;
+  cogniriseLogoUrl: string | null;
   eyebrowText: string | null;
   defaultLocale: string;
   rtlEnabled: boolean;

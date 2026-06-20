@@ -2299,7 +2299,7 @@ export const atelierCreateAccountBodyStrategicPrioritiesItemMax = 200;
 
 export const atelierCreateAccountBodyStrategicPrioritiesMax = 5;
 
-export const atelierCreateAccountBodyAicoHypothesisMax = 600;
+export const atelierCreateAccountBodyCogniriseHypothesisMax = 600;
 
 export const atelierCreateAccountBodyNotesMax = 2000;
 
@@ -2345,9 +2345,9 @@ export const AtelierCreateAccountBody = zod.object({
     )
     .max(atelierCreateAccountBodyStrategicPrioritiesMax)
     .optional(),
-  aicoHypothesis: zod
+  cogniriseHypothesis: zod
     .string()
-    .max(atelierCreateAccountBodyAicoHypothesisMax)
+    .max(atelierCreateAccountBodyCogniriseHypothesisMax)
     .nullish(),
   notes: zod.string().max(atelierCreateAccountBodyNotesMax).nullish(),
 });
@@ -2406,7 +2406,7 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
             }),
           )
           .optional(),
-        aicoHypothesis: zod.string().nullish(),
+        cogniriseHypothesis: zod.string().nullish(),
         sourceSignals: zod
           .array(
             zod.object({
@@ -2632,7 +2632,7 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
             }),
           )
           .optional(),
-        aicoHypothesis: zod.string().nullish(),
+        cogniriseHypothesis: zod.string().nullish(),
         sourceSignals: zod
           .array(
             zod.object({
@@ -3101,7 +3101,7 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
             }),
           )
           .optional(),
-        aicoHypothesis: zod.string().nullish(),
+        cogniriseHypothesis: zod.string().nullish(),
         sourceSignals: zod
           .array(
             zod.object({

@@ -135,7 +135,7 @@ export const POVAuthor = defineAgent({
   guardrails: [
     "Pyramid structure enforced",
     "Every section bound to ≥1 evidence row",
-    "AICo brand chrome locked",
+    "Cognirise brand chrome locked",
   ],
   humanCheckpoints: [
     leadCheck("Engagement Lead approves outline"),
@@ -176,7 +176,7 @@ export const POVDraft = defineAgent({
   tools: ["knowledge.search", "html.generate"],
   guardrails: [
     "Citations rendered for every sourced statement",
-    "AICo brand chrome locked",
+    "Cognirise brand chrome locked",
   ],
   humanCheckpoints: [partnerCheck("Partner approves before client send")],
   evals: [
@@ -327,7 +327,7 @@ export const MeetingScribe = defineAgent({
   }),
   outputSchema: z.object({
     title: z.string(),
-    attendees: z.array(z.object({ name: z.string(), org: z.enum(["client", "aico", "unknown"]) })),
+    attendees: z.array(z.object({ name: z.string(), org: z.enum(["client", "cognirise", "unknown"]) })),
     summary: z.string(),
     decisions: z.array(
       z.object({
@@ -485,7 +485,7 @@ export const PrototypeForge = defineAgent({
   }).passthrough(),
   tools: ["knowledge.search", "replit.scaffold"],
   guardrails: [
-    "Generated prompts include AICo non-negotiables block",
+    "Generated prompts include Cognirise non-negotiables block",
     "No real client data without Partner approval",
   ],
   humanCheckpoints: [leadCheck("Lead approves brief"), partnerCheck("Partner approves the generated prompt")],
@@ -977,7 +977,7 @@ export const PressMonitor = defineAgent({
   name: "Press Monitor",
   group: "Front of House",
   stage: "Compound",
-  purpose: "Daily web scan for AICo, Partner, and competitor mentions; weekly digest to Partner inbox.",
+  purpose: "Daily web scan for Cognirise, Partner, and competitor mentions; weekly digest to Partner inbox.",
   model: "claude-sonnet-4-6",
   starred: false,
   status: "registered",
@@ -988,7 +988,7 @@ export const PressMonitor = defineAgent({
     watchlistCompetitors: z.array(z.string()).optional(),
   }).passthrough(),
   outputSchema: v5Output({
-    aicoMentions: z.array(z.unknown()),
+    cogniriseMentions: z.array(z.unknown()),
     competitorThemes: z.array(z.unknown()),
   }),
   tools: ["web_search"],
@@ -1038,7 +1038,7 @@ export const AllianceChoreographer = defineAgent({
   inputSchema: z.object({
     opportunityId: z.string(),
     partnerFirmId: z.string(),
-    leadParty: z.enum(["aico", "partner"]).optional(),
+    leadParty: z.enum(["cognirise", "partner"]).optional(),
     proposedSplitPct: z.number().min(0).max(100).optional(),
   }).passthrough(),
   outputSchema: v5Output({
@@ -1433,7 +1433,7 @@ export const ValueCaseTracker = stub("ag_value_case_tracker", "Value Case Tracke
 export const ComplianceReviewer = stub("ag_compliance_reviewer", "Compliance Reviewer", "Quality", "Cross-cutting", "Reviews proposals and deliverables for regulatory compliance.", "claude-sonnet-4-6");
 export const PricingAnalyst = stub("ag_pricing_analyst", "Pricing Analyst", "Front of House", "Pursue", "Models pricing scenarios and margin sensitivity.");
 export const BenchPlanner = stub("ag_bench_planner", "Bench Planner", "Personal", "Cross-cutting", "Plans staffing and bench utilisation across active engagements.");
-export const BrandTranslator = stub("ag_brand_translator", "Brand Translator", "Quality", "Cross-cutting", "Rewrites drafts into AICo brand voice across EN/AR/TR.");
+export const BrandTranslator = stub("ag_brand_translator", "Brand Translator", "Quality", "Cross-cutting", "Rewrites drafts into Cognirise brand voice across EN/AR/TR.");
 export const Storyboarder = stub("ag_storyboarder", "Storyboarder", "Front of House", "Shape", "Turns narratives into slide-ready storyboards.");
 
 // L2C Wave 4 (Task #363) — cash application + 13-week cash forecaster.

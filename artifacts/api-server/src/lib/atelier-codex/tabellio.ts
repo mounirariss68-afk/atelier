@@ -1,7 +1,7 @@
 /**
  * Tabellio adapter stub for The Atelier — Codex (CLM).
  *
- * Tabellio is the regional (GCC) e-sign provider AICo uses when a
+ * Tabellio is the regional (GCC) e-sign provider Cognirise uses when a
  * counterparty refuses DocuSign or when a deal mandates UAE-PASS
  * routing. Same shape as the DocuSign adapter so the E-Sign
  * Orchestrator can swap providers without branching.

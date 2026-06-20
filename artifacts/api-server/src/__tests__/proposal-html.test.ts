@@ -44,12 +44,12 @@ describe("Task #297 — proposal HTML renderer", () => {
         { rfpReqId: "R-1", requirement: "ISO27001", status: "green", evidence: "Annex C" },
       ],
       firmProfile: {
-        firmName: "AICo",
+        firmName: "Cognirise",
         tagline: "Senior-overseen agentic operations",
         boilerplateShort: "Test boilerplate.",
         differentiators: ["Senior-overseen"],
         proofPoints: [{ label: "Demo", metric: "+10pts" }],
-        legalEntities: [{ name: "AICo DIFC Ltd", jurisdiction: "DIFC" }],
+        legalEntities: [{ name: "Cognirise DIFC Ltd", jurisdiction: "DIFC" }],
         contactBlock: "Test contact",
       },
       recipient: { recipientName: "Acme Procurement", recipientOrg: "Acme Bank" },
@@ -64,7 +64,7 @@ describe("Task #297 — proposal HTML renderer", () => {
     expect(html).toContain("@media print");
     expect(html).toContain('id="sec-pricing"');
     expect(html).toContain('id="sec-compliance"');
-    expect(html).toContain("AICo DIFC Ltd");
+    expect(html).toContain("Cognirise DIFC Ltd");
     expect(html).toContain("R-1");
   });
 

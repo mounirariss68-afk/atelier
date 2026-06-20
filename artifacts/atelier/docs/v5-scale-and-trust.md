@@ -1,4 +1,4 @@
-# AICo Portal v5 — Scale & Trust
+# Cognirise Portal v5 — Scale & Trust
 
 This v5 PRD builds the firm's scaling capabilities on top of the v4 commercial
 loop: visibility (Press), partner leverage (Alliances), talent funnel (Studio),

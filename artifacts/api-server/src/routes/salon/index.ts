@@ -5,7 +5,7 @@
  *  - is gated by attachSalonPersona (cookie-based mock auth);
  *  - rejects requests if the active persona has no access grant;
  *  - writes a row to atelier_salon_audit_events for every read or write
- *    so AICo internals see the client's behavior in their own audit feed.
+ *    so Cognirise internals see the client's behavior in their own audit feed.
  */
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { eq, and, desc, isNull, inArray } from "drizzle-orm";
@@ -148,7 +148,7 @@ async function logAudit(input: {
 }
 
 // Mirror critical Salon-side audits into the internal atelier_audit_events
-// feed too so AICo's own audit explorer surfaces client activity.
+// feed too so Cognirise's own audit explorer surfaces client activity.
 async function mirrorInternalAudit(input: {
   engagementId: string;
   actorName: string;
@@ -366,7 +366,7 @@ router.get("/engagements/:slug", async (req, res, next) => {
         displayName: workspace.displayName,
         accentColor: workspace.accentColor,
         clientLogoUrl: workspace.clientLogoUrl,
-        aicoLogoUrl: workspace.aicoLogoUrl,
+        cogniriseLogoUrl: workspace.cogniriseLogoUrl,
         eyebrowText: workspace.eyebrowText,
         defaultLocale: workspace.defaultLocale,
         rtlEnabled: workspace.rtlEnabled,
@@ -883,7 +883,7 @@ router.get("/engagements/:slug/team", async (req, res, next) => {
           )
       : [];
     res.json({
-      aico: [partner, lead].filter(Boolean).map((u) => ({
+      cognirise: [partner, lead].filter(Boolean).map((u) => ({
         id: u!.id,
         name: u!.name,
         title: u!.title,
@@ -1113,7 +1113,7 @@ async function recordOpen(
       lastOpenedAt: new Date(),
     })
     .where(eq(atelierProposalRecipients.id, recipient.id));
-  // Mirror an internal audit row so AICo sees every recipient open.
+  // Mirror an internal audit row so Cognirise sees every recipient open.
   // Task #297 — stamp orgId from the recipient row so opens are
   // attributed to the correct tenant (the ORG default is "aico", which
   // would silently mis-route audit events for other firms).

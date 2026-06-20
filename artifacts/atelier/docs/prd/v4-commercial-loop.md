@@ -1,4 +1,4 @@
-# AICo Portal v4 — Commercial Loop
+# Cognirise Portal v4 — Commercial Loop
 
 > Product Requirements Document. Scope: close the firm's commercial loop
 > (sign → invoice → collect → renew), surface engagement risk before it

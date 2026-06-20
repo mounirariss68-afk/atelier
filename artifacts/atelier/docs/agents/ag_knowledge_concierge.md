@@ -12,7 +12,7 @@
   - event-driven follow-up: when a Drafter agent (POV Author, Proposal Composer,
     Charter Architect) emits a `knowledge.gap` audit event, a Knowledge Concierge
     run is queued automatically with that gap as the question
-- **persona:** any AICo employee. Primary surfaces are the Engagement Lead's
+- **persona:** any Cognirise employee. Primary surfaces are the Engagement Lead's
   Personal Pane A queue and the in-engagement context panel.
 
 ### Inputs

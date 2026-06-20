@@ -14,7 +14,7 @@
     ]
   },
   "expectedOutput": {
-    "title": "AICo proposal — Emirates Group AI productivity diagnostic",
+    "title": "Cognirise proposal — Emirates Group AI productivity diagnostic",
     "sections": [
       { "id": "sec_exec", "name": "Executive Summary", "ownerAgent": "ag_proposal_composer", "status": "draft", "content": "We propose a 12-week diagnostic that…", "citations": ["f1"] },
       { "id": "sec_team", "name": "Team", "status": "draft", "content": "Partner L. Haddad leads, supported by Director M. Yilmaz." }

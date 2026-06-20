@@ -105,7 +105,7 @@ const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 const PERSONAS = [
   {
     id: "p_mounir_ariss",
-    email: "mounir@aico.ai",
+    email: "mounir@cognirise.ai",
     name: "Mounir Ariss",
     initials: "MA",
     role: "founding_partner",
@@ -117,7 +117,7 @@ const PERSONAS = [
   },
   {
     id: "p_gokhan_guney",
-    email: "gokhan@aico.ai",
+    email: "gokhan@cognirise.ai",
     name: "Gökhan Güney",
     initials: "GG",
     role: "founding_partner",
@@ -129,7 +129,7 @@ const PERSONAS = [
   },
   {
     id: "p_layla_haddad",
-    email: "layla@aico.ai",
+    email: "layla@cognirise.ai",
     name: "Layla Haddad",
     initials: "LH",
     role: "senior_manager",
@@ -141,7 +141,7 @@ const PERSONAS = [
   },
   {
     id: "p_omar_najjar",
-    email: "omar@aico.ai",
+    email: "omar@cognirise.ai",
     name: "Omar Najjar",
     initials: "ON",
     role: "consultant",
@@ -153,7 +153,7 @@ const PERSONAS = [
   },
   {
     id: "p_sara_qureshi",
-    email: "sara@aico.ai",
+    email: "sara@cognirise.ai",
     name: "Sara Qureshi",
     initials: "SQ",
     role: "consultant",
@@ -165,7 +165,7 @@ const PERSONAS = [
   },
   {
     id: "p_khaled_aziz",
-    email: "khaled@aico.ai",
+    email: "khaled@cognirise.ai",
     name: "Khaled Aziz",
     initials: "KA",
     role: "consultant",
@@ -261,7 +261,7 @@ type AccountExt = {
     confidence?: "green" | "amber" | "red";
   }>;
   strategicPriorities?: string[];
-  aicoHypothesis?: string;
+  cogniriseHypothesis?: string;
   pendingProfileUpdates?: Array<{
     id: string;
     proposedBy: string;
@@ -277,7 +277,7 @@ type AccountExt = {
 
 // Task #275 — Cartographer is now grounded by Anthropic web_search and
 // direct-writes strategic priorities, source signals, decision-makers,
-// and the AICo hypothesis. The seed only carries account *base* fields
+// and the Cognirise hypothesis. The seed only carries account *base* fields
 // (tier, owner, currency, language, HQ); narrative content is filled in
 // by `scripts/src/cartographer-backfill.ts` after the seed completes.
 const ACCOUNT_EXT: Record<string, AccountExt> = {
@@ -398,7 +398,7 @@ const CREDENTIALS = [
     redactedAbstract:
       "Spun up the first Agentic BPO marketplace in MENA — 14 production agents, 38% utilization in 90 days, 3.2x cost-to-serve improvement.",
     attributedAbstract:
-      "Tasama × AICo: first Agentic BPO marketplace in MENA, 14 agents in production within 90 days.",
+      "Tasama × Cognirise: first Agentic BPO marketplace in MENA, 14 agents in production within 90 days.",
     anonymizationStatus: "attributed",
     outcomeMetrics: [
       { label: "Cost-to-serve", value: "−68%" },
@@ -421,7 +421,7 @@ const CREDENTIALS = [
     redactedAbstract:
       "Designed and shipped the first agentic citizen-services prototype for a UAE government enablement body in 8 weeks, mapping 22 service journeys to a single concierge agent.",
     attributedAbstract:
-      "DGE × AICo: agentic concierge POC across 22 citizen journeys in 8 weeks.",
+      "DGE × Cognirise: agentic concierge POC across 22 citizen journeys in 8 weeks.",
     anonymizationStatus: "attributed",
     outcomeMetrics: [
       { label: "Journeys covered", value: "22" },
@@ -444,7 +444,7 @@ const CREDENTIALS = [
     redactedAbstract:
       "60-touchpoint service-design transformation feeding a unified citizen concierge for a major GCC municipality — first phase delivered in 14 weeks.",
     attributedAbstract:
-      "Dubai Municipality × AICo: 60-touchpoint service-design transformation, phase one in 14 weeks.",
+      "Dubai Municipality × Cognirise: 60-touchpoint service-design transformation, phase one in 14 weeks.",
     anonymizationStatus: "attributed",
     outcomeMetrics: [
       { label: "Touchpoints redesigned", value: "60+" },
@@ -467,7 +467,7 @@ const CREDENTIALS = [
     redactedAbstract:
       "Digitised end-to-end Bills-of-Quantities and route-cost workflows for a top-3 KSA fuel-retail operator, replacing 14 spreadsheets with a single agentic control tower.",
     attributedAbstract:
-      "Aldrees × AICo: BOQ digitisation + logistics control tower across 320 service stations in 18 weeks.",
+      "Aldrees × Cognirise: BOQ digitisation + logistics control tower across 320 service stations in 18 weeks.",
     anonymizationStatus: "attributed",
     outcomeMetrics: [
       { label: "Spreadsheets retired", value: "14" },
@@ -535,7 +535,7 @@ const AGENTS: AgentSeed[] = [
     guardrails: [
       "Pyramid structure enforced",
       "Every section bound to ≥1 evidence row",
-      "AICo brand chrome locked",
+      "Cognirise brand chrome locked",
     ],
     humanCheckpoints: [
       "Engagement Lead approves prompt sheet",
@@ -638,7 +638,7 @@ const AGENTS: AgentSeed[] = [
     status: "mvp",
     tools: ["knowledge.search", "replit.scaffold"],
     guardrails: [
-      "Generated prompts include AICo non-negotiables block",
+      "Generated prompts include Cognirise non-negotiables block",
       "No real client data without Partner approval",
     ],
     humanCheckpoints: [
@@ -840,7 +840,7 @@ const AGENTS: AgentSeed[] = [
     name: "Brand Translator",
     group: "Deliver",
     stage: "Deliver",
-    purpose: "Inherits AICo brand defaults; supports per-engagement overrides.",
+    purpose: "Inherits Cognirise brand defaults; supports per-engagement overrides.",
     model: "claude-haiku-4-5",
     starred: false,
     status: "stub",
@@ -898,7 +898,7 @@ const AGENTS: AgentSeed[] = [
     group: "CRM",
     stage: "Shape",
     purpose:
-      "Cross-tabulate AICo offerings × buyer personas inside an account to surface the next 3 priority moves.",
+      "Cross-tabulate Cognirise offerings × buyer personas inside an account to surface the next 3 priority moves.",
     model: "claude-sonnet-4-6",
     starred: false,
     status: "stub",
@@ -1251,7 +1251,7 @@ const OPPORTUNITIES = [
     engagementLeadId: "p_layla_haddad",
     dealSizeHypothesis: 540_000,
     probabilityPct: 0,
-    nextMilestone: "Buyer requested deferral to FY27 — withdrawn by AICo",
+    nextMilestone: "Buyer requested deferral to FY27 — withdrawn by Cognirise",
     sourceLead: "Outbound",
     daysInStage: 12,
   },
@@ -1304,7 +1304,7 @@ const ENGAGEMENTS = [
         },
       ],
       governance:
-        "Weekly steering with COO sponsor; bi-weekly Partner readout; daily Lead/AICo standup.",
+        "Weekly steering with COO sponsor; bi-weekly Partner readout; daily Lead/Cognirise standup.",
       valueHypothesis:
         "If Tasama's top-volume services are handled by named agents with senior human oversight, mean handle time drops 40% and adoption compounds to >70% of inbound by day 90.",
     },
@@ -1395,7 +1395,7 @@ const ASSETS = [
   {
     id: "ast_tasama_pov",
     kind: "pov",
-    title: "Tasama AICo Business Case (POV)",
+    title: "Tasama Cognirise Business Case (POV)",
     abstract:
       "Citation-bound POV deliverable that anchored the Tasama Agentic BPO program. Sets the pyramid pattern for HTML POVs.",
     provenance: "Used in Tasama 2026 · authored by POV Author v3",
@@ -1863,7 +1863,7 @@ const PROMPTS = AGENTS.filter((a) => a.starred).map((a, i) => ({
   id: `pr_${a.id}_v1`,
   agentId: a.id,
   version: 1,
-  body: `# ${a.name} · v1\n\n## Purpose\n${a.purpose}\n\n## Tools\n${a.tools.map((t) => `- ${t}`).join("\n")}\n\n## Guardrails\n${a.guardrails.map((g) => `- ${g}`).join("\n")}\n\n## Human checkpoints\n${a.humanCheckpoints.map((h) => `- ${h}`).join("\n")}\n\n## Voice\nConfident, commercial, partner-grade. Mirror the AICo non-negotiables: human authority sovereign; show the work; audit trail; bilingual-aware; watermark synthetic data.\n`,
+  body: `# ${a.name} · v1\n\n## Purpose\n${a.purpose}\n\n## Tools\n${a.tools.map((t) => `- ${t}`).join("\n")}\n\n## Guardrails\n${a.guardrails.map((g) => `- ${g}`).join("\n")}\n\n## Human checkpoints\n${a.humanCheckpoints.map((h) => `- ${h}`).join("\n")}\n\n## Voice\nConfident, commercial, partner-grade. Mirror the Cognirise non-negotiables: human authority sovereign; show the work; audit trail; bilingual-aware; watermark synthetic data.\n`,
   status: "active" as const,
   evalScore: 0.85 + (i % 5) * 0.02,
   author: "p_sara_qureshi",
@@ -2221,7 +2221,7 @@ async function main() {
         enrichedAt: ext.enrichedAt ?? null,
         sourceSignals: ext.sourceSignals ?? [],
         strategicPriorities: ext.strategicPriorities ?? [],
-        aicoHypothesis: ext.aicoHypothesis ?? null,
+        cogniriseHypothesis: ext.cogniriseHypothesis ?? null,
         pendingProfileUpdates: ext.pendingProfileUpdates ?? [],
       };
     }),
@@ -2633,7 +2633,7 @@ async function main() {
       description: "Partner-on-the-pitch presence is the closer in the GCC.",
       polarity: "win",
       positioningLine:
-        "AICo partners stay on the engagement — not just the pitch.",
+        "Cognirise partners stay on the engagement — not just the pitch.",
     },
     {
       tag: "speed_to_value",
@@ -2656,7 +2656,7 @@ async function main() {
       description: "Co-sell with hyperscaler/SI partners removes incumbent objection.",
       polarity: "win",
       positioningLine:
-        "AICo brings the partner ecosystem; the incumbent brings the tower.",
+        "Cognirise brings the partner ecosystem; the incumbent brings the tower.",
     },
     {
       tag: "agentic_native",
@@ -2768,7 +2768,7 @@ async function main() {
       slug: "tasama-bpo-phase1",
       engagementId: TASAMA_ENG_ID,
       accountId: "acc_tasama",
-      displayName: "Tasama × AICo — Agentic BPO",
+      displayName: "Tasama × Cognirise — Agentic BPO",
       eyebrowText: "Tasama Agentic BPO · Phase 1",
       accentColor: "#0F4C5C",
       defaultLocale: "en",
@@ -2893,7 +2893,7 @@ async function main() {
       id: "emp_p_mounir_ariss",
       userId: "p_mounir_ariss",
       fullName: "Mounir Ariss",
-      email: "mounir@aico.example",
+      email: "mounir@cognirise.example",
       role: "partner",
       seniority: "founding_partner",
       title: "Founding Partner",
@@ -2901,7 +2901,7 @@ async function main() {
       employmentType: "FTE",
       homeOffice: "Dubai",
       payrollCountry: "AE",
-      employeeIdExternal: "AICO-0001",
+      employeeIdExternal: "COGNIRISE-0001",
       iban: "AE070331234567890123456",
       swift: "EBILAEAD",
       noticePeriodDays: 90,
@@ -2912,7 +2912,7 @@ async function main() {
       id: "emp_p_layla_haddad",
       userId: "p_layla_haddad",
       fullName: "Layla Haddad",
-      email: "layla@aico.example",
+      email: "layla@cognirise.example",
       role: "senior_manager",
       seniority: "principal",
       title: "Senior Manager (Engagement Lead)",
@@ -2920,7 +2920,7 @@ async function main() {
       employmentType: "FTE",
       homeOffice: "Riyadh",
       payrollCountry: "SA",
-      employeeIdExternal: "AICO-0002",
+      employeeIdExternal: "COGNIRISE-0002",
       iban: "SA0380000000608010167519",
       swift: "RJHISARI",
       noticePeriodDays: 60,
@@ -2931,7 +2931,7 @@ async function main() {
       id: "emp_p_omar_najjar",
       userId: "p_omar_najjar",
       fullName: "Omar Najjar",
-      email: "omar@aico.example",
+      email: "omar@cognirise.example",
       role: "consultant",
       seniority: "senior_consultant",
       title: "Subject-Matter Expert — Operations",
@@ -2939,7 +2939,7 @@ async function main() {
       employmentType: "FTE",
       homeOffice: "Dubai",
       payrollCountry: "AE",
-      employeeIdExternal: "AICO-0003",
+      employeeIdExternal: "COGNIRISE-0003",
       iban: "AE070331234567890999111",
       swift: "EBILAEAD",
       noticePeriodDays: 30,
@@ -2950,7 +2950,7 @@ async function main() {
       id: "emp_p_sara_qureshi",
       userId: "p_sara_qureshi",
       fullName: "Sara Qureshi",
-      email: "sara@aico.example",
+      email: "sara@cognirise.example",
       role: "consultant",
       seniority: "consultant",
       title: "AI Engineer",
@@ -2958,7 +2958,7 @@ async function main() {
       employmentType: "FTE",
       homeOffice: "Dubai",
       payrollCountry: "AE",
-      employeeIdExternal: "AICO-0004",
+      employeeIdExternal: "COGNIRISE-0004",
       iban: "AE070331234567899911234",
       swift: "EBILAEAD",
       noticePeriodDays: 30,
@@ -2969,7 +2969,7 @@ async function main() {
       id: "emp_p_youssef_idrissi",
       userId: "p_youssef_idrissi",
       fullName: "Youssef Idrissi",
-      email: "youssef@aico.example",
+      email: "youssef@cognirise.example",
       role: "consultant",
       seniority: "associate",
       title: "Business Developer",
@@ -2977,7 +2977,7 @@ async function main() {
       employmentType: "FTE",
       homeOffice: "Riyadh",
       payrollCountry: "SA",
-      employeeIdExternal: "AICO-0005",
+      employeeIdExternal: "COGNIRISE-0005",
       iban: "SA0380000000608010189999",
       swift: "RJHISARI",
       noticePeriodDays: 30,
@@ -3016,7 +3016,7 @@ async function main() {
     {
       id: "ct_hadeel_aljarrah",
       fullName: "Hadeel Al-Jarrah",
-      email: "hadeel.contract@aico.example",
+      email: "hadeel.contract@cognirise.example",
       vendorEntity: "Al-Jarrah Consulting LLC",
       country: "SA",
       dayRateAmount: 12500_00, // SAR cents
@@ -3030,7 +3030,7 @@ async function main() {
     {
       id: "ct_rami_haddad",
       fullName: "Rami Haddad",
-      email: "rami.contract@aico.example",
+      email: "rami.contract@cognirise.example",
       vendorEntity: "Levant Digital FZ-LLC",
       country: "AE",
       dayRateAmount: 9800_00, // AED cents
@@ -3269,7 +3269,7 @@ async function main() {
     .values({
       id: "emp_p_amal_haddad",
       fullName: "Amal Haddad",
-      email: "amal.candidate@aico.example",
+      email: "amal.candidate@cognirise.example",
       role: "senior_manager",
       seniority: "principal",
       title: "Principal — Senior Manager",
@@ -3279,7 +3279,7 @@ async function main() {
       homeOffice: "Dubai",
       payrollCountry: "AE",
       payrollCountryCode: "AE",
-      employeeIdExternal: "AICO-0011",
+      employeeIdExternal: "COGNIRISE-0011",
       noticePeriodDays: 60,
       startDate: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
       status: "onboarding",
@@ -3423,7 +3423,7 @@ async function main() {
         issuedDate: "2024-06-01",
         expiryDate: new Date(Date.now() + 25 * 86400_000).toISOString().slice(0, 10),
         status: "active",
-        metadata: { sponsorEntity: "AICo KSA" },
+        metadata: { sponsorEntity: "Cognirise KSA" },
         createdByUserId: "p_mounir_ariss",
       },
       {
@@ -3438,7 +3438,7 @@ async function main() {
         issuedDate: "2023-01-15",
         expiryDate: new Date(Date.now() + 70 * 86400_000).toISOString().slice(0, 10),
         status: "active",
-        metadata: { sponsorEntity: "AICo Holdings DIFC" },
+        metadata: { sponsorEntity: "Cognirise Holdings DIFC" },
         createdByUserId: "p_mounir_ariss",
       },
       {

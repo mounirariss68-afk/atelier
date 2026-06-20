@@ -57,7 +57,7 @@ type FormState = {
   parentAccountId: string;
   strategicPriorities: string[];
   prioritiesDraft: string;
-  aicoHypothesis: string;
+  cogniriseHypothesis: string;
   notes: string;
 };
 
@@ -77,7 +77,7 @@ function makeInitial(opts: { partnerOwnerId?: string }): FormState {
     parentAccountId: "",
     strategicPriorities: [],
     prioritiesDraft: "",
-    aicoHypothesis: "",
+    cogniriseHypothesis: "",
     notes: "",
   };
 }
@@ -164,7 +164,7 @@ export function CreateAccountDialog({ trigger }: Props) {
           partnerOwnerId: form.partnerOwnerId || null,
           parentAccountId: form.parentAccountId || null,
           strategicPriorities: form.strategicPriorities,
-          aicoHypothesis: form.aicoHypothesis.trim() || null,
+          cogniriseHypothesis: form.cogniriseHypothesis.trim() || null,
           notes: form.notes.trim() || null,
         },
       });
@@ -414,13 +414,13 @@ export function CreateAccountDialog({ trigger }: Props) {
             )}
           </Field>
 
-          <Field label="AICo hypothesis">
+          <Field label="Cognirise hypothesis">
             <Textarea
-              value={form.aicoHypothesis}
-              onChange={(e) => update("aicoHypothesis", e.target.value)}
+              value={form.cogniriseHypothesis}
+              onChange={(e) => update("cogniriseHypothesis", e.target.value)}
               maxLength={500}
               className="bg-bg-deep border-border text-text min-h-[80px] text-sm"
-              placeholder="Why is AICo well-positioned to help this firm?"
+              placeholder="Why is Cognirise well-positioned to help this firm?"
               data-testid="input-account-hypothesis"
             />
           </Field>

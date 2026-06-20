@@ -733,7 +733,7 @@ defineCapability({
   requiredRoles: ["founding_partner", "partner"],
   surfaceOn: ["global"],
   examplePhrases: {
-    en: ["seed brand profile from this deck", "/deck-to-brand AICo"],
+    en: ["seed brand profile from this deck", "/deck-to-brand Cognirise"],
   },
   twoPhaseConfirm: true,
   outboundChannel: null,

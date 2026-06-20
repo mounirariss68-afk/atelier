@@ -44,7 +44,7 @@ async function buildPdfWithLogo(buf: Buffer): Promise<Buffer> {
     doc.on("error", reject);
     // Mirrors the route: doc.image(BOARD_PACK_LOGO, { width: 120 }).
     doc.image(buf, { width: 120 });
-    doc.fontSize(20).text("AICo Group — Board Pack");
+    doc.fontSize(20).text("Cognirise Group — Board Pack");
     doc.end();
   });
 }

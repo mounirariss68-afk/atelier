@@ -82,7 +82,7 @@ export async function seedAtelierReference(): Promise<{
       dialCode: extras.dialCode ?? null,
       vatDefaultPct: extras.vatDefaultPct ?? null,
       isGcc: extras.isGcc ?? false,
-      isAicoTargetMarket: extras.isAicoTargetMarket ?? false,
+      isCogniriseTargetMarket: extras.isCogniriseTargetMarket ?? false,
       status: "active" as const,
       displayOrderOverride: extras.displayOrderOverride ?? null,
       createdByUserId: "system",

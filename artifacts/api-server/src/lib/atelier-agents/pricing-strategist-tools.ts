@@ -43,7 +43,7 @@ export interface RateCardSnapshot {
 
 /**
  * `knowledge.search` — qualitative deal precedent + playbook lookup.
- * Currently backed by a static corpus seeded from the AICo playbooks; the
+ * Currently backed by a static corpus seeded from the Cognirise playbooks; the
  * shape is stable so a vector backend can swap in without changing the
  * strategist runner.
  */
@@ -53,7 +53,7 @@ export function knowledgeSearch(query: string): KnowledgeHit[] {
       id: "kb_pricing_001",
       title: "Discount precedent compounds across renewals",
       snippet:
-        "Discounts above 10% on the first engagement reset the anchor for renewal pricing in 78% of accounts (AICo 2024-2026 win/loss).",
+        "Discounts above 10% on the first engagement reset the anchor for renewal pricing in 78% of accounts (Cognirise 2024-2026 win/loss).",
       source: "playbook",
     },
     {
@@ -77,7 +77,7 @@ export function knowledgeSearch(query: string): KnowledgeHit[] {
 
 /**
  * `pricing_rules.lookup` — structured pricing guardrails. Each rule is
- * the AICo Partner-board's policy text; the strategist may cite them
+ * the Cognirise Partner-board's policy text; the strategist may cite them
  * verbatim in talking points.
  */
 export function pricingRulesLookup(_context: { pricingModel: string; marginPct: number; status: string }): PricingRule[] {

@@ -22,7 +22,7 @@
       { "path": "app/page.tsx", "content": "export default function Page() { return <div/>; }" }
     ],
     "nonNegotiables": [
-      "AICo brand chrome required",
+      "Cognirise brand chrome required",
       "No real client data without Partner approval"
     ]
   },

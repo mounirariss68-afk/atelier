@@ -881,7 +881,7 @@ function AgentRunCard({ data, locale }: { data: Json; locale: CliLocale }) {
   const priorities = asArr(draft.strategicPriorities);
   const signals = asArr(draft.sourceSignals);
   const dms = asArr(draft.decisionMakers);
-  const hypothesis = asStr(draft.aicoHypothesis);
+  const hypothesis = asStr(draft.cogniriseHypothesis);
   const summary = asStr(draft.refreshedSummary);
 
   const firmoFields: Array<[string, string]> = [
@@ -1066,11 +1066,11 @@ function AgentRunCard({ data, locale }: { data: Json; locale: CliLocale }) {
             </div>
           )}
 
-          {/* AICo hypothesis */}
+          {/* Cognirise hypothesis */}
           {hypothesis && (
             <div className="border-t border-border-soft pt-2">
               <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-0.5">
-                {ar ? "فرضية AICo" : "AICo hypothesis"}
+                {ar ? "فرضية Cognirise" : "Cognirise hypothesis"}
               </div>
               <div className="text-xs text-text leading-relaxed italic">
                 {hypothesis}

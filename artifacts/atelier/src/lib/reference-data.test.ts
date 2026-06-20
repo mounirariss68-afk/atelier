@@ -36,7 +36,7 @@ const C = (
   aliases: flags.aliases ?? [],
   region,
   isGcc: flags.isGcc ?? false,
-  isAicoTargetMarket: flags.isTarget ?? false,
+  isCogniriseTargetMarket: flags.isTarget ?? false,
   status: flags.status ?? "active",
   displayOrderOverride: flags.order ?? null,
 });
@@ -81,7 +81,7 @@ ok(
   sorted[0].isoAlpha2 === "SA" && sorted[1].isoAlpha2 === "AE",
   sorted.map((s) => s.isoAlpha2),
 );
-ok("AICo target market (TR) third", sorted[2].isoAlpha2 === "TR");
+ok("Cognirise target market (TR) third", sorted[2].isoAlpha2 === "TR");
 ok("MENA non-GCC (EG) precedes Americas/Europe", sorted[3].isoAlpha2 === "EG");
 ok(
   "Deprecated entries float to the bottom",

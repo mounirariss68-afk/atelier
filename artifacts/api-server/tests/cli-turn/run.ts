@@ -209,7 +209,7 @@ async function test3_clientTurnKeyReplay(sessionId: string): Promise<void> {
   const key = `key_${Date.now().toString(36)}`;
   const a = await postSse("/cli/turn", {
     sessionId,
-    prompt: "find account aico",
+    prompt: "find account cognirise",
     clientTurnKey: key,
   });
   const finalA = await expectFinal(a.frames);
@@ -218,7 +218,7 @@ async function test3_clientTurnKeyReplay(sessionId: string): Promise<void> {
 
   const b = await postSse("/cli/turn", {
     sessionId,
-    prompt: "find account aico",
+    prompt: "find account cognirise",
     clientTurnKey: key,
   });
   const finalB = await expectFinal(b.frames);

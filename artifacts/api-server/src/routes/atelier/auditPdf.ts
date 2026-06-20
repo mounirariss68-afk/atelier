@@ -82,7 +82,7 @@ export async function auditPdfHandler(req: Request, res: Response): Promise<void
     .fillColor("#E89E2C")
     .font("Helvetica")
     .fontSize(10)
-    .text("AICo Employee Portal — Immutable Audit Trail", { align: "left" });
+    .text("Cognirise Employee Portal — Immutable Audit Trail", { align: "left" });
   doc.moveDown(0.8);
 
   doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(12);
@@ -121,7 +121,7 @@ export async function auditPdfHandler(req: Request, res: Response): Promise<void
       .font("Helvetica")
       .fontSize(8)
       .text(
-        `AICo · The Atelier · ${entityType}/${entityId} · page ${i + 1} of ${range.count}`,
+        `Cognirise · The Atelier · ${entityType}/${entityId} · page ${i + 1} of ${range.count}`,
         56,
         780,
         { width: 483, align: "center" },
@@ -253,7 +253,7 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
     .fillColor("#E89E2C")
     .font("Helvetica")
     .fontSize(10)
-    .text("AICo Employee Portal — Per-Person Audit Pack", { align: "left" });
+    .text("Cognirise Employee Portal — Per-Person Audit Pack", { align: "left" });
   doc.moveDown(0.8);
 
   doc.fillColor("#0E1F3D").font("Helvetica-Bold").fontSize(12);
@@ -296,7 +296,7 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
       .font("Helvetica")
       .fontSize(8)
       .text(
-        `AICo · The Atelier · person/${personId} · signed ${req.atelierPersona?.name ?? ""} · page ${i + 1} of ${range.count}`,
+        `Cognirise · The Atelier · person/${personId} · signed ${req.atelierPersona?.name ?? ""} · page ${i + 1} of ${range.count}`,
         56,
         780,
         { width: 483, align: "center" },

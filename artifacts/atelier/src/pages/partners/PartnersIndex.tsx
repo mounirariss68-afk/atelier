@@ -214,7 +214,7 @@ function IdentifyView() {
                 </MonoChip>
               </div>
               <div className="text-sm text-text-mute">
-                Anchor · AICo: <span className="text-text">{f.anchorAico}</span> ↔ {f.name}: <span className="text-text">{f.anchorPartner}</span>
+                Anchor · Cognirise: <span className="text-text">{f.anchorCognirise}</span> ↔ {f.name}: <span className="text-text">{f.anchorPartner}</span>
               </div>
               <div className="flex gap-1 flex-wrap text-xs">
                 <MonoChip>last touch {f.lastTouchAt}</MonoChip>
@@ -318,7 +318,7 @@ function CoSellView() {
   const mdf = usePartnerMdf();
   const events = usePartnerJointMarketing();
   const total = pipeline.reduce((s, o) => s + o.acvUsdK, 0);
-  const aicoShare = pipeline.reduce((s, o) => s + (o.acvUsdK * o.aicoPct) / 100, 0);
+  const cogniriseShare = pipeline.reduce((s, o) => s + (o.acvUsdK * o.cognirisePct) / 100, 0);
   const mdfAllocated = mdf.reduce((s, m) => s + m.allocatedUsdK, 0);
   const mdfSpent = mdf.reduce((s, m) => s + m.spentUsdK, 0);
 
@@ -337,8 +337,8 @@ function CoSellView() {
             <div className="text-2xl font-mono text-text mt-1">${(total / 1000).toFixed(2)}M</div>
           </Card>
           <Card className="p-4">
-            <div className="text-xs text-text-faint">AICo share</div>
-            <div className="text-2xl font-mono text-gold mt-1">${(aicoShare / 1000).toFixed(2)}M</div>
+            <div className="text-xs text-text-faint">Cognirise share</div>
+            <div className="text-2xl font-mono text-gold mt-1">${(cogniriseShare / 1000).toFixed(2)}M</div>
           </Card>
           <Card className="p-4">
             <div className="text-xs text-text-faint">Active joint opps</div>
@@ -358,7 +358,7 @@ function CoSellView() {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <span className="font-mono text-text">${o.acvUsdK}K</span>
-                  <MonoChip tone="gold">AICo {o.aicoPct}% · {o.partnerFirm.split(" ")[0]} {o.partnerPct}%</MonoChip>
+                  <MonoChip tone="gold">Cognirise {o.cognirisePct}% · {o.partnerFirm.split(" ")[0]} {o.partnerPct}%</MonoChip>
                   <span className="text-xs text-text-faint">{o.allianceLetterStatus}</span>
                 </div>
               </div>

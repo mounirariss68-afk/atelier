@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/atelier/"
-title = "The Atelier — AICo Employee Portal"
+title = "The Atelier — Cognirise Employee Portal"
 version = "1.0.0"
 id = "artifacts/atelier"
 router = "path"

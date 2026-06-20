@@ -90,8 +90,8 @@ async function backfillOne(accountId: string): Promise<void> {
       accountUpdate.strategicPriorities = priorityTexts;
       accountUpdate.strategicPriorityRefs = priorityRefs;
     }
-    if (output.account.aicoHypothesis && output.account.aicoHypothesis.trim().length > 0) {
-      accountUpdate.aicoHypothesis = output.account.aicoHypothesis;
+    if (output.account.cogniriseHypothesis && output.account.cogniriseHypothesis.trim().length > 0) {
+      accountUpdate.cogniriseHypothesis = output.account.cogniriseHypothesis;
     }
     if (output.account.refreshedSummary && output.account.refreshedSummary.trim().length > 0) {
       accountUpdate.notes = output.account.refreshedSummary;

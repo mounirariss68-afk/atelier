@@ -503,7 +503,7 @@ defineCapability({
           strategicPriorities: (out.account.strategicPriorities ?? [])
             .slice(0, 5)
             .map((p) => ({ text: p.text, sourceUrls: p.sourceUrls })),
-          aicoHypothesis: out.account.aicoHypothesis ?? "",
+          cogniriseHypothesis: out.account.cogniriseHypothesis ?? "",
           refreshedSummary: out.account.refreshedSummary ?? "",
           sourceSignals,
           decisionMakers,

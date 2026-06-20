@@ -1208,7 +1208,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     doc.image(BOARD_PACK_LOGO, { width: 120 });
     doc.moveDown(0.8);
   }
-  doc.fillColor("#000").fontSize(20).text("AICo Group — Board Pack", { align: "left" });
+  doc.fillColor("#000").fontSize(20).text("Cognirise Group — Board Pack", { align: "left" });
   doc.fontSize(12).fillColor("#666").text(`Period: ${period.label} · Presentation currency: GBP`);
   doc.moveDown(0.5);
   doc.fillColor("#000").fontSize(11).text(`Generated ${new Date().toISOString().slice(0, 10)} for ${me.name} (${me.role})`);
@@ -1318,7 +1318,7 @@ function drawTable(doc: PDFKit.PDFDocument, headers: string[], rows: string[][])
 // ----- Schedules (in-memory)
 interface Schedule { id: string; name: string; cron: string; nextRunOn: string; recipients: string[]; enabled: boolean; createdBy: string; createdAt: string }
 const SCHEDULES: Schedule[] = [
-  { id: "sch_board_monthly", name: "Monthly Board Pack", cron: "0 8 5 * *", nextRunOn: "2026-06-05", recipients: ["board@aico.example", "yara.nasser@aico.example"], enabled: true, createdBy: "system", createdAt: "2026-01-05T08:00:00Z" },
+  { id: "sch_board_monthly", name: "Monthly Board Pack", cron: "0 8 5 * *", nextRunOn: "2026-06-05", recipients: ["board@cognirise.example", "yara.nasser@cognirise.example"], enabled: true, createdBy: "system", createdAt: "2026-01-05T08:00:00Z" },
 ];
 router.get("/finance/reports/schedules", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;

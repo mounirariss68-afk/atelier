@@ -4,7 +4,7 @@
   "cases": [
     {
       "id": "ms_01_discovery_basic",
-      "input": { "kind": "discovery", "transcript": "Anchored discovery between AICo and Arçelik on pricing pilot, 30 minutes…" },
+      "input": { "kind": "discovery", "transcript": "Anchored discovery between Cognirise and Arçelik on pricing pilot, 30 minutes…" },
       "asserts": [
         { "kind": "summary_word_count_between", "min": 150, "max": 250 },
         { "kind": "decisions_min", "value": 0 },

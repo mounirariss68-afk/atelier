@@ -85,7 +85,7 @@ export async function attachPersona(
  * but never share users. A client_user persona cookie must NOT be able to
  * read internal atelier endpoints, even by accident (or by hand-pasted
  * cookie). Conversely the Salon router applies a mirror guard rejecting
- * internal aico_employee personas. See `salonCookie.ts`.
+ * internal cognirise_employee personas. See `salonCookie.ts`.
  */
 export function rejectClientRealm(
   req: Request,

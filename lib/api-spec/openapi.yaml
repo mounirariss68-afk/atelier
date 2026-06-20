@@ -13,7 +13,7 @@ tags:
   - name: chat
     description: Site-wide AI chat assistant
   - name: atelier
-    description: The Atelier — AICo Employee Portal
+    description: The Atelier — Cognirise Employee Portal
 paths:
   /healthz:
     get:
@@ -2295,7 +2295,7 @@ components:
           type: array
           maxItems: 5
           items: { type: string, minLength: 1, maxLength: 200 }
-        aicoHypothesis:
+        cogniriseHypothesis:
           type: ["string", "null"]
           maxLength: 600
         notes:
@@ -2540,7 +2540,7 @@ components:
                       sourceUrls:
                         type: array
                         items: { type: string }
-                aicoHypothesis: { type: ["string", "null"] }
+                cogniriseHypothesis: { type: ["string", "null"] }
                 sourceSignals:
                   type: array
                   items: { $ref: "#/components/schemas/AtelierSourceSignal" }

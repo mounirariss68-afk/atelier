@@ -117,7 +117,7 @@ export const atelierAccounts = pgTable(
       .$type<Array<{ text: string; sourceUrls: string[] }>>()
       .notNull()
       .default([]),
-    aicoHypothesis: text("aico_hypothesis"),
+    cogniriseHypothesis: text("cognirise_hypothesis"),
     pendingProfileUpdates: jsonb("pending_profile_updates")
       .$type<
         Array<{
@@ -1244,7 +1244,7 @@ export const atelierWinLossDebriefs = pgTable(
     outcome: text("outcome").notNull(), // signed | lost_no_decision | lost_to_competitor | withdrawn
     status: text("status").notNull().default("pending"),
     // pending | buyer_scheduled | buyer_done | seller_done | synthesized | closed
-    // --- Seller side: multiple AICo team members may submit responses ---
+    // --- Seller side: multiple Cognirise team members may submit responses ---
     sellerInputs: jsonb("seller_inputs").notNull().default([]).$type<Array<{
       userId: string;
       name: string;
@@ -1392,7 +1392,7 @@ export const atelierSalonWorkspaces = pgTable(
     displayName: text("display_name").notNull(),
     accentColor: text("accent_color").notNull().default("#0B5CFF"),
     clientLogoUrl: text("client_logo_url"),
-    aicoLogoUrl: text("aico_logo_url"),
+    cogniriseLogoUrl: text("cognirise_logo_url"),
     eyebrowText: text("eyebrow_text"),
     defaultLocale: text("default_locale").notNull().default("en"), // en | ar
     rtlEnabled: boolean("rtl_enabled").notNull().default(false),
@@ -1413,7 +1413,7 @@ export const atelierSalonWorkspaces = pgTable(
 );
 
 // Client-side users (role = client_user); kept separate from atelier_users
-// so internal AICo persona space and client persona space cannot collide.
+// so internal Cognirise persona space and client persona space cannot collide.
 export const atelierSalonUsers = pgTable(
   "atelier_salon_users",
   {
@@ -1543,7 +1543,7 @@ export const atelierSalonDecisions = pgTable(
   ],
 );
 
-// Salon-side requests: client asks AICo for something (copy of artifact,
+// Salon-side requests: client asks Cognirise for something (copy of artifact,
 // new meeting, additional analysis). Routed to engagement lead.
 export const atelierSalonRequests = pgTable(
   "atelier_salon_requests",
@@ -1729,7 +1729,7 @@ export const atelierContractors = pgTable(
       .$type<string[]>()
       .notNull()
       .default([]), // PRD §2.1 — default scope chips applied on grant
-    contractingEntity: text("contracting_entity"), // PRD §2.1 (which AICo entity contracts them)
+    contractingEntity: text("contracting_entity"), // PRD §2.1 (which Cognirise entity contracts them)
     conflictsDisclosedJson: jsonb("conflicts_disclosed_json")
       .$type<Array<{ party: string; nature: string }>>()
       .notNull()
@@ -1803,7 +1803,7 @@ export const atelierPartnerFirmResources = pgTable(
       .$type<string[]>()
       .notNull()
       .default([]), // PRD §2.1
-    costToAicoPerDay: doublePrecision("cost_to_aico_per_day"), // PRD §2.1 (policy-locked)
+    costToCognirisePerDay: doublePrecision("cost_to_cognirise_per_day"), // PRD §2.1 (policy-locked)
     visibleToClientInTeamTab: boolean("visible_to_client_in_team_tab").notNull().default(false), // PRD §2.1
     partnerFirmPmUserId: text("partner_firm_pm_user_id"), // PRD §2.1
     dayRateAmount: doublePrecision("day_rate_amount"),

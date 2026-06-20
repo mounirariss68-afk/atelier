@@ -222,7 +222,7 @@ function CountriesPanel() {
                 </div>
                 <span className="text-text-mute">{c.region}</span>
                 <span>{c.isGcc ? <MonoChip tone="gold">GCC</MonoChip> : null}</span>
-                <span>{c.isAicoTargetMarket ? <MonoChip tone="green">T1</MonoChip> : null}</span>
+                <span>{c.isCogniriseTargetMarket ? <MonoChip tone="green">T1</MonoChip> : null}</span>
                 <span className="flex items-center gap-3">
                   <MonoChip tone={c.status === "active" ? "green" : "amber"}>{c.status}</MonoChip>
                   <button
@@ -287,7 +287,7 @@ function CountryEditRow({
     region: country.region,
     flagEmoji: country.flagEmoji ?? "",
     isGcc: country.isGcc,
-    isAicoTargetMarket: country.isAicoTargetMarket,
+    isCogniriseTargetMarket: country.isCogniriseTargetMarket,
     aliases: (country.aliases ?? []).join(", "),
   });
   return (
@@ -334,10 +334,10 @@ function CountryEditRow({
       <label className="inline-flex items-center gap-2 cursor-pointer text-text-mute">
         <input
           type="checkbox"
-          checked={form.isAicoTargetMarket}
-          onChange={(e) => setForm({ ...form, isAicoTargetMarket: e.target.checked })}
+          checked={form.isCogniriseTargetMarket}
+          onChange={(e) => setForm({ ...form, isCogniriseTargetMarket: e.target.checked })}
         />
-        AICo target market
+        Cognirise target market
       </label>
       <div className="col-span-2 flex items-center gap-2">
         <PillButton
@@ -349,7 +349,7 @@ function CountryEditRow({
               region: form.region,
               flagEmoji: form.flagEmoji || undefined,
               isGcc: form.isGcc,
-              isAicoTargetMarket: form.isAicoTargetMarket,
+              isCogniriseTargetMarket: form.isCogniriseTargetMarket,
               aliases: form.aliases
                 .split(",")
                 .map((a) => a.trim())

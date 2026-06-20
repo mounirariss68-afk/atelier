@@ -108,7 +108,7 @@ export interface PovDraft {
 
 export interface MeetingScribeOutput {
   title: string;
-  attendees: { name: string; org: "client" | "aico" | "unknown" }[];
+  attendees: { name: string; org: "client" | "cognirise" | "unknown" }[];
   summary: string;
   decisions: {
     id: string;
@@ -1240,17 +1240,17 @@ function enforcePrototypeNonNegotiables(
     : "Use synthetic/watermarked data only — Partner has NOT approved real client data.";
   const canonical = [
     ``,
-    `## Data policy (AICo-enforced)`,
+    `## Data policy (Cognirise-enforced)`,
     `- ${dataLine}`,
     ``,
-    `## AICo non-negotiables (auto-injected)`,
+    `## Cognirise non-negotiables (auto-injected)`,
     `- Human authority is sovereign. Every irreversible action requires a human signoff.`,
     `- Show the work. Every agent output ships with rationale + sources.`,
     `- Audit trail. Every action is logged (who/what/when).`,
     `- Bilingual-aware (EN/AR) where the audience requires.`,
     `- Synthetic data is watermarked; never simulate a real customer outcome silently.`,
   ].join("\n");
-  const hasNonNeg = /##\s+AICo non-negotiables/i.test(md);
+  const hasNonNeg = /##\s+Cognirise non-negotiables/i.test(md);
   const hasDataPolicy = /##\s+Data policy/i.test(md);
   if (hasNonNeg && hasDataPolicy) return output;
   return { ...output, replitPromptMd: `${md.trimEnd()}\n${canonical}\n` };
@@ -1290,7 +1290,7 @@ export async function runPrototypeForge(args: {
         system,
         JSON.stringify(args.brief),
       );
-      // Post-validate: AICo non-negotiables block must always be present in
+      // Post-validate: Cognirise non-negotiables block must always be present in
       // the Replit prompt regardless of model drift. If the model omits the
       // section or the data-policy line, append the canonical block.
       const value = enforcePrototypeNonNegotiables(rawValue, args.brief);
@@ -1546,7 +1546,7 @@ export interface CartographerOutput {
     // Sourced strategic priorities. `text` mirrors the v1 string list,
     // `sourceUrls` contains the citation URLs the agent pulled (Task #275).
     strategicPriorities: Array<{ text: string; sourceUrls: string[] }>;
-    aicoHypothesis: string;
+    cogniriseHypothesis: string;
   };
   sourceSignals: Array<{
     kind: "news" | "linkedin" | "press" | "filing" | "manual";
@@ -1749,7 +1749,7 @@ export async function runAccountCartographer(args: {
               )
               .filter((p) => p.text.trim().length > 0)
           : [],
-        aicoHypothesis: value?.account?.aicoHypothesis ?? "",
+        cogniriseHypothesis: value?.account?.cogniriseHypothesis ?? "",
       },
       sourceSignals: Array.isArray(value?.sourceSignals)
         ? value.sourceSignals.filter((s) => typeof s?.url === "string" && /^https?:\/\//.test(s.url))
@@ -2237,7 +2237,7 @@ export async function runPricingStrategist(args: {
       systemPrompt = loadPrompt("pricing_strategist" as AtelierAgentId);
     } catch {
       systemPrompt =
-        "You are AICo's Pricing Strategist. Numbers are precomputed and authoritative — never invent or alter them. Author the Partner-facing narrative.";
+        "You are Cognirise's Pricing Strategist. Numbers are precomputed and authoritative — never invent or alter them. Author the Partner-facing narrative.";
     }
     const userPrompt = JSON.stringify({
       opportunity: { id: args.opportunity.id, name: args.opportunity.name, accountId: args.opportunity.accountId },
@@ -3791,7 +3791,7 @@ export async function runFieldNotesScheduler(
 }
 
 export async function runAllianceChoreographer(
-  input: { opportunityId: string; partnerFirmId: string; leadParty?: "aico" | "partner"; proposedSplitPct?: number } & V5RunCommonArgs,
+  input: { opportunityId: string; partnerFirmId: string; leadParty?: "cognirise" | "partner"; proposedSplitPct?: number } & V5RunCommonArgs,
 ): Promise<V5GenericResult> {
   return runV5GenericAgent({
     agentId: "ag_alliance_choreographer",
@@ -4238,7 +4238,7 @@ export interface ContractComposerOutput {
     summary: string;
   }>;
   partiesProposed: Array<{
-    side: "aico" | "counterparty";
+    side: "cognirise" | "counterparty";
     role: "signer" | "witness" | "notice_party" | "observer";
     signerName: string;
     signerEmail: string;
@@ -4437,7 +4437,7 @@ export interface EsignOrchestratorInput {
   };
   parties: Array<{
     id: string;
-    side: "aico" | "counterparty";
+    side: "cognirise" | "counterparty";
     role: "signer" | "witness" | "notice_party" | "observer";
     signerName: string;
     signerEmail: string;

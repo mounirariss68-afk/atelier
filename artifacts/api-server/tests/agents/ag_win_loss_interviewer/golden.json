@@ -5,11 +5,11 @@
     "opportunityName": "Group-wide AI productivity diagnostic",
     "outcome": "lost",
     "sellerPerceivedReasons": ["Price too high", "Slow follow-up"],
-    "buyerTranscript": "Buyer: Honestly, AICo's pitch was sharp but we trusted the incumbent's track record more."
+    "buyerTranscript": "Buyer: Honestly, Cognirise's pitch was sharp but we trusted the incumbent's track record more."
   },
   "expectedOutput": {
     "buyerAuthenticReasons": [
-      "Trust in incumbent's prior delivery weighed heavier than AICo's pitch quality.",
+      "Trust in incumbent's prior delivery weighed heavier than Cognirise's pitch quality.",
       "Procurement preferred a known-quantity vendor on the framework."
     ],
     "hiddenCompetitor": "direct",

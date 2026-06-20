@@ -61,7 +61,7 @@ function buildBaseDoc(input: EinvoiceSubmitInput) {
     invoiceNumber: invoice.invoiceNumber,
     issuedAt: invoice.issuedAt,
     currency: invoice.currency,
-    seller: { name: "AICo", country: "AE" },
+    seller: { name: "Cognirise", country: "AE" },
     buyer: invoice.billTo,
     totals: {
       subtotal: invoice.subtotal,

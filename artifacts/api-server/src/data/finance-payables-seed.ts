@@ -82,7 +82,7 @@ export interface Vendor {
   country: "SA" | "AE" | "GB" | "US" | "FR" | "IN" | "DE";
   registeredEntityId: string; // FK -> finance entity (legalName)
   taxIds: { vat: string | null; corporate: string | null; whtRegistered: boolean };
-  /** Default WHT rate the AICo entity withholds at payment, by jurisdiction. */
+  /** Default WHT rate the Cognirise entity withholds at payment, by jurisdiction. */
   defaultWhtPct: number;
   paymentTermsDays: number;
   beneficialOwners: BeneficialOwner[];
@@ -94,7 +94,7 @@ export interface Vendor {
   };
   bankAccounts: VendorBankAccount[];
   primaryContact: { name: string; email: string; phone: string };
-  /** Pay-against AICo entity (used for invoice-side & payment-run currency). */
+  /** Pay-against Cognirise entity (used for invoice-side & payment-run currency). */
   payAgainstEntityIds: string[];
   status: "active" | "on_hold" | "blocked";
   onboardedAt: string;
@@ -175,7 +175,7 @@ const VENDORS: Vendor[] = [
     payAgainstEntityIds: ["fe_aico_uk", "fe_aico_ksa", "fe_aico_uae"],
     status: "active",
     onboardedAt: "2023-06-01",
-    notes: "Consolidated billing across all three AICo entities; per-entity tax invoices.",
+    notes: "Consolidated billing across all three Cognirise entities; per-entity tax invoices.",
   },
   {
     id: "vnd_zenith_eng",
@@ -886,7 +886,7 @@ const PAYMENT_RUNS: PaymentRun[] = [
     ],
     totalUsd: 84_000,
     invoiceCount: 1,
-    bankFile: { filename: "PR-2026-W11_AICOUAE.xml", format: "SEPA-XML", lines: 1, previewBytes: "<Pmt><Amt Ccy=\"AED\">308,490.00</Amt><Cdtr>Oracle Systems Limited</Cdtr><...>" },
+    bankFile: { filename: "PR-2026-W11_COGNIRISEUAE.xml", format: "SEPA-XML", lines: 1, previewBytes: "<Pmt><Amt Ccy=\"AED\">308,490.00</Amt><Cdtr>Oracle Systems Limited</Cdtr><...>" },
     notes: "Cleared. Oracle subscription paid before quarter end.",
   },
   {

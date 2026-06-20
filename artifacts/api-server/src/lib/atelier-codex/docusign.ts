@@ -19,7 +19,7 @@ export interface DocusignRecipient {
   signerEmail: string;
   signerTitle: string;
   routingOrder: number;
-  side: "aico" | "counterparty";
+  side: "cognirise" | "counterparty";
   role: "signer" | "witness" | "notice_party" | "observer";
 }
 

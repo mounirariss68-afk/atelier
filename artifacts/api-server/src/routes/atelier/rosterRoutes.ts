@@ -78,7 +78,7 @@ interface PersonWire {
   // PRD §2.1 policy-locked fields (Partner / Operations only).
   baseCompensation?: number | null;
   dayRateInternalCost?: number | null;
-  costToAicoPerDay?: number | null;
+  costToCognirisePerDay?: number | null;
 }
 
 // Task #292 — Compensation visibility now spans leadership + finance + HR.
@@ -314,7 +314,7 @@ function partnerResourceToWire(
     base.dayRateAmount = r.dayRateAmount;
     base.dayRateCurrency = r.dayRateCurrency;
     // PRD §2.1 policy-locked field — Partner / Operations only.
-    base.costToAicoPerDay = r.costToAicoPerDay ?? null;
+    base.costToCognirisePerDay = r.costToCognirisePerDay ?? null;
   }
   return base;
 }
@@ -1308,7 +1308,7 @@ export async function revokeNonEmployeeAccessOnEngagementClose(args: {
         isNull(atelierEngagementAccess.deletedAt),
       ),
     );
-  // Internal AICo roles keep access (PRD §8.1); everyone else is auto-revoked.
+  // Internal Cognirise roles keep access (PRD §8.1); everyone else is auto-revoked.
   // Task #292 — 9-persona model. partner_firm_resource and contractor are
   // intentionally excluded so the Sentinel still revokes their grants on
   // close. board_observer is read-only at the policy layer.

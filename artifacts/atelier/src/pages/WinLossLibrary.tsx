@@ -53,7 +53,7 @@ export default function WinLossLibrary() {
     <div className="space-y-6">
       <LensPageHeader
         headline="Win Themes"
-        lede="Curated patterns from approved Win/Loss debriefs — what AICo wins on, and where we lose."
+        lede="Curated patterns from approved Win/Loss debriefs — what Cognirise wins on, and where we lose."
       />
 
       <div className="container-atelier py-6 space-y-6">

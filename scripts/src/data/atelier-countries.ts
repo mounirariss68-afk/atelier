@@ -30,7 +30,7 @@ export interface CountryExtras {
   dialCode?: string;
   vatDefaultPct?: number;
   isGcc?: boolean;
-  isAicoTargetMarket?: boolean;
+  isCogniriseTargetMarket?: boolean;
   displayOrderOverride?: number;
   displayNameTr?: string;
 }
@@ -107,7 +107,7 @@ export const COUNTRY_EXTRAS: Record<string, CountryExtras> = {
     dialCode: "+966",
     vatDefaultPct: 15,
     isGcc: true,
-    isAicoTargetMarket: true,
+    isCogniriseTargetMarket: true,
     displayOrderOverride: 1,
     displayNameTr: "Suudi Arabistan",
   },
@@ -121,7 +121,7 @@ export const COUNTRY_EXTRAS: Record<string, CountryExtras> = {
     dialCode: "+971",
     vatDefaultPct: 5,
     isGcc: true,
-    isAicoTargetMarket: true,
+    isCogniriseTargetMarket: true,
     displayOrderOverride: 2,
     displayNameTr: "Birleşik Arap Emirlikleri",
   },
@@ -177,7 +177,7 @@ export const COUNTRY_EXTRAS: Record<string, CountryExtras> = {
     displayOrderOverride: 6,
     displayNameTr: "Umman",
   },
-  // ===== Other AICo target markets =====
+  // ===== Other Cognirise target markets =====
   TR: {
     aliases: ["Türkiye", "Turkey", "Republic of Türkiye"],
     region: "Asia",
@@ -187,7 +187,7 @@ export const COUNTRY_EXTRAS: Record<string, CountryExtras> = {
     primaryLanguage: "tr",
     dialCode: "+90",
     vatDefaultPct: 20,
-    isAicoTargetMarket: true,
+    isCogniriseTargetMarket: true,
     displayOrderOverride: 7,
     displayNameTr: "Türkiye",
   },
@@ -346,12 +346,12 @@ export const INDUSTRIES = [
 ] as const;
 
 /**
- * Sub-industry catalogue (43 entries, AICo taxonomy).
+ * Sub-industry catalogue (43 entries, Cognirise taxonomy).
  *
  * Per patch §6.1, every sub-industry must canonicalize a `defaultOfferingAnchor`
- * (the offering family the AICo CSP defaults to when a deal lands in this
+ * (the offering family the Cognirise CSP defaults to when a deal lands in this
  * sub-industry) and a `shortDescription` (one-liner used in the combobox and
- * the admin page). Anchors map to AICo's four practice families:
+ * the admin page). Anchors map to Cognirise's four practice families:
  *   • agentic_ai           — AI agents, copilots, assistive workflows
  *   • legacy_modernization — replatforming, modernization, migration
  *   • data_foundations     — data platforms, lakes, warehousing, governance

@@ -182,7 +182,7 @@ export default function Pricing() {
             {showNewCard && (
               <div className="grid grid-cols-12 gap-2 p-3 bg-bg-elevate/40 border border-border-soft rounded-md">
                 <Input
-                  placeholder="Name (e.g. AICo 2027 KSA v1)"
+                  placeholder="Name (e.g. Cognirise 2027 KSA v1)"
                   value={newCard.name}
                   onChange={(e) => setNewCard({ ...newCard, name: e.target.value })}
                   className="col-span-5 bg-bg border-border text-text"

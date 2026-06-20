@@ -8,7 +8,7 @@
 - **id:** `ag_brand_translator`
 - **kind:** Drafter (produces a *proposed* rewrite that a human approves before it replaces the original draft)
 - **trigger:**
-  - Manual button on any draft in the Atelier ("Rewrite in AICo voice", with target-language picker).
+  - Manual button on any draft in the Atelier ("Rewrite in Cognirise voice", with target-language picker).
   - Auto-invoked by the **Send-to-client** flow when (a) the artifact's source language differs from the client's expected language, or (b) the brand-voice score on the artifact (computed cheaply on save) is below threshold. The proposed rewrite is offered to the Lead — never auto-applied.
 - **persona:** Consultant or Engagement Lead invokes; Partner approves only when the artifact is partner-signed.
 - **status target:** `registered` after the implementation task lands runner + prompt + fixture; `mvp` once eval thresholds pass on the golden set.
@@ -53,8 +53,8 @@ inputSchema: z.object({
   }),
   sourceLanguage: z.enum(["en", "ar", "tr", "auto"]).default("auto"),
   targetLanguage: z.enum(["en", "ar", "tr"]),
-  voiceProfile: z.enum(["aico_partner", "aico_consultant", "aico_executive_brief"])
-    .default("aico_consultant"),
+  voiceProfile: z.enum(["cognirise_partner", "cognirise_consultant", "cognirise_executive_brief"])
+    .default("cognirise_consultant"),
   audience: z.object({
     seniority: z.enum(["c_suite", "vp", "director", "ic", "mixed"]).default("mixed"),
     sector: z.string().optional(),
@@ -117,7 +117,7 @@ outputSchema: z.object({
 
 ### Data sources
 
-- **Brand voice corpus** — KB tag `brand:voice`. Contains the AICo voice guide, do/don't word lists, register examples per profile (`aico_partner`, `aico_consultant`, `aico_executive_brief`).
+- **Brand voice corpus** — KB tag `brand:voice`. Contains the Cognirise voice guide, do/don't word lists, register examples per profile (`cognirise_partner`, `cognirise_consultant`, `cognirise_executive_brief`).
 - **Glossary** — KB tag `brand:glossary`, multilingual (en/ar/tr). Names of products, frameworks, internal capitalization rules, transliteration of client and partner names. Authoritative — the prompt is told to use the glossary entry verbatim when the source term is present.
 - **Locale rules** — small static table loaded by the runner: AR is RTL, TR uses Turkish casing rules (dotted/dotless I), AR numerals stay Western (Arabic-Indic only on explicit voice profile request).
 - **Source-language detection** — fastText or equivalent heuristic in the runner *before* the LLM call when `sourceLanguage === "auto"`. Prevents wasting an LLM round-trip on a misroute and lets us refuse mixed-language input early with a clear error.
@@ -144,7 +144,7 @@ Both decisions are persisted via `recordDecision` to `atelier_agent_runs.humanDe
 
 ### Prompt outline (`prompts/brand_translator/v1.md`)
 
-1. **Role.** "You rewrite drafts into AICo voice in the requested language. You do not change meaning, evidence, numbers, or citations."
+1. **Role.** "You rewrite drafts into Cognirise voice in the requested language. You do not change meaning, evidence, numbers, or citations."
 2. **Voice profile.** Inject the chosen profile's do/don't list and three short exemplars from the corpus.
 3. **Glossary contract.** Inline the relevant glossary slice for the source/target pair. Rule: if a glossary entry exists for a term, use the target entry verbatim. If no entry exists for a proper noun, transliterate per the locale rule and add a `term_not_in_glossary` warning.
 4. **Per-section procedure.**

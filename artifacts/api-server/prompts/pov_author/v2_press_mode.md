@@ -4,7 +4,7 @@ mode: press
 extends: pov_author/v1
 version: 2
 status: production
-author: aico_atelier
+author: cognirise_atelier
 created: 2026-05-14
 purpose: |
   PRESS mode of POV Author (v5). Converts a Synthesis-Critic-cleared

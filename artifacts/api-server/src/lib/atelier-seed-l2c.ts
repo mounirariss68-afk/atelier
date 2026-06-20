@@ -166,8 +166,8 @@ const CLAUSES: ClauseRow[] = [
   {
     id: "cl_ip_v1",
     family: "ip_ownership",
-    title: "IP Ownership — Client owns Deliverables; AICo retains Tools",
-    body: "Client owns all custom Deliverables on full payment. AICo retains all rights in pre-existing Tools, methodologies, and reusable components, granting Client a perpetual, royalty-free license to use them embedded within the Deliverables.",
+    title: "IP Ownership — Client owns Deliverables; Cognirise retains Tools",
+    body: "Client owns all custom Deliverables on full payment. Cognirise retains all rights in pre-existing Tools, methodologies, and reusable components, granting Client a perpetual, royalty-free license to use them embedded within the Deliverables.",
     version: 1,
     instrumentTypes: ["msa", "sow"],
     jurisdictionTags: ["AE", "SA"],
@@ -240,7 +240,7 @@ const CLAUSES: ClauseRow[] = [
     id: "cl_dpa_v1",
     family: "data_processing",
     title: "Data Processing — controller/processor (GDPR-aligned)",
-    body: "AICo acts as Processor for Personal Data on documented instructions from Client (Controller). Sub-processors require 30-day prior written notice. Cross-border transfers under SCCs.",
+    body: "Cognirise acts as Processor for Personal Data on documented instructions from Client (Controller). Sub-processors require 30-day prior written notice. Cross-border transfers under SCCs.",
     version: 1,
     instrumentTypes: ["dpa"],
     jurisdictionTags: ["AE", "SA"],
@@ -252,7 +252,7 @@ const CLAUSES: ClauseRow[] = [
     id: "cl_dpa_v2",
     family: "data_processing",
     title: "Data Processing — controller/processor (GDPR + UAE PDPL)",
-    body: "AICo acts as Processor for Personal Data under both GDPR and UAE PDPL. Sub-processors require 30-day notice. Cross-border transfers limited to AE/SA/EEA. Annual audit right for Client.",
+    body: "Cognirise acts as Processor for Personal Data under both GDPR and UAE PDPL. Sub-processors require 30-day notice. Cross-border transfers limited to AE/SA/EEA. Annual audit right for Client.",
     version: 2,
     parentId: "cl_dpa_v1",
     instrumentTypes: ["dpa"],
@@ -294,7 +294,7 @@ const CONTRACTS: ContractRow[] = [
     counterpartyId: "cp_tasama",
     engagementId: null,
     opportunityId: null,
-    title: "MSA — AICo ↔ Tasama (2026)",
+    title: "MSA — Cognirise ↔ Tasama (2026)",
     status: "active",
     governingLaw: "SA",
     currency: "USD",
@@ -364,19 +364,19 @@ const CONTRACT_CLAUSES: ContractClauseRow[] = [
 ];
 
 const CONTRACT_PARTIES: ContractPartyRow[] = [
-  // MSA Tasama — AICo Founding Partner + Tasama CEO
+  // MSA Tasama — Cognirise Founding Partner + Tasama CEO
   {
     id: "cp_party_msa_tas_aico",
     contractId: "ct_msa_tasama",
     counterpartyId: null,
     roleOnContract: "signer",
     signerName: "Gökhan Yılmaz",
-    signerEmail: "gokhan@aico.studio",
+    signerEmail: "gokhan@cognirise.studio",
     signerTitle: "Founding Partner",
     signState: "signed",
     signMethod: "docusign",
     signedAt: new Date("2026-01-12T14:25:00Z"),
-    signEvidenceUrl: "https://docusign.example.com/envelope/msa-tas-2026-aico",
+    signEvidenceUrl: "https://docusign.example.com/envelope/msa-tas-2026-cognirise",
   },
   {
     id: "cp_party_msa_tas_client",
@@ -391,19 +391,19 @@ const CONTRACT_PARTIES: ContractPartyRow[] = [
     signedAt: new Date("2026-01-12T14:30:00Z"),
     signEvidenceUrl: "https://docusign.example.com/envelope/msa-tas-2026-client",
   },
-  // SOW DGE — AICo Senior Manager + DGE Director
+  // SOW DGE — Cognirise Senior Manager + DGE Director
   {
     id: "cp_party_sow_dge_aico",
     contractId: "ct_sow_dge_v1",
     counterpartyId: null,
     roleOnContract: "signer",
     signerName: "Lina Haddad",
-    signerEmail: "lina@aico.studio",
+    signerEmail: "lina@cognirise.studio",
     signerTitle: "Senior Manager — Public Sector",
     signState: "signed",
     signMethod: "docusign",
     signedAt: new Date("2026-02-22T09:40:00Z"),
-    signEvidenceUrl: "https://docusign.example.com/envelope/sow-dge-2026-aico",
+    signEvidenceUrl: "https://docusign.example.com/envelope/sow-dge-2026-cognirise",
   },
   {
     id: "cp_party_sow_dge_client",
@@ -428,7 +428,7 @@ const DPAS: DpaRow[] = [
     counterpartyId: "cp_dge",
     dataClasses: ["pii", "regulated_other"],
     processorChain: [
-      { name: "AICo", role: "processor", jurisdiction: "AE" },
+      { name: "Cognirise", role: "processor", jurisdiction: "AE" },
       { name: "Anthropic (Claude)", role: "subprocessor", jurisdiction: "US" },
       { name: "AWS Bahrain", role: "subprocessor", jurisdiction: "BH" },
     ],

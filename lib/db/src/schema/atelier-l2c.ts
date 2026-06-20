@@ -207,8 +207,8 @@ export const atelierContractParty = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     contractId: text("contract_id").notNull(),
-    counterpartyId: text("counterparty_id"), // null for internal AICo signers
-    internalUserId: text("internal_user_id"), // AICo signer
+    counterpartyId: text("counterparty_id"), // null for internal Cognirise signers
+    internalUserId: text("internal_user_id"), // Cognirise signer
     roleOnContract: text("role_on_contract").notNull(),
     signerName: text("signer_name").notNull(),
     signerEmail: text("signer_email").notNull(),

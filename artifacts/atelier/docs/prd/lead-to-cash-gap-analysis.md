@@ -1,6 +1,6 @@
 # Lead-to-Cash Gap Analysis & Roadmap
 
-> **Scope.** Atelier is the AICo employee portal for a professional-services
+> **Scope.** Atelier is the Cognirise employee portal for a professional-services
 > firm (consulting + delivery + advisory). This document audits the firm's
 > end-to-end **Lead-to-Cash (L2C)** loop against what the portal ships
 > today, anchors every gap to the v4 commercial-loop PRD that already

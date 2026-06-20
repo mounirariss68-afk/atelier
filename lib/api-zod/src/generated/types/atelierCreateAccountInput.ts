@@ -59,7 +59,7 @@ export interface AtelierCreateAccountInput {
    * @maxLength 600
    * @nullable
    */
-  aicoHypothesis?: string | null;
+  cogniriseHypothesis?: string | null;
   /**
    * @maxLength 2000
    * @nullable
