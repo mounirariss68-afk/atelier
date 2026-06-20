@@ -1,0 +1,313 @@
+---
+name: account-research
+description: >
+  Run a structured 3-step account intelligence workflow for Cognirise sales and business development.
+  Use this skill whenever a user wants to research a prospective client, prepare for an executive
+  conversation, build an account entry strategy, understand a company's AI or transformation
+  priorities, or develop a why-now hypothesis for outreach. Trigger on phrases like "research this
+  account", "help me prepare for a meeting with", "build a brief on", "account intelligence", "who
+  should I talk to at", "help me plan my approach to", "origination hypothesis", or any request to
+  understand a company's strategic agenda before a sales or BD conversation. This skill covers the
+  full arc from raw research to synthesized brief to sharpened hypothesis to stress-tested pitch
+  narrative, and grounds all findings in Cognirise's five service lines.
+---
+
+# Account Research & Origination Planning
+
+A structured outside-in intelligence workflow for Cognirise account work. Four steps designed to run in sequence: (1) build a fact-based Client Present Brief from public sources, (2) sharpen it into an origination hypothesis, (3) stress-test that hypothesis, (4) generate a self-contained HTML meeting prep card.
+
+The philosophy: understand the client's world before trying to sell into it. Your job is not to find a reason to pitch — it's to understand what is actually changing for this client, what their executives are being held accountable for, and where a Cognirise conversation could credibly begin.
+
+---
+
+## ⚡ Auto-Run Mode (default)
+
+**When a user says "research [company]" or any equivalent trigger, run all four steps automatically in sequence without stopping for confirmation between steps.**
+
+- Do not pause after Step 1 to ask "shall I continue to Step 2?"
+- Do not pause after Step 2 or Step 3
+- Run Steps 1 → 2 → 3 → 4 in a single uninterrupted flow
+- The only time to stop is if the company name, sector, or region is genuinely ambiguous and you cannot infer it from context
+- Present the HTML file at the very end using the present_files tool
+
+The user will see all four outputs in one response. This is the expected behavior.
+
+---
+
+## Cognirise Service Lines (reference throughout)
+
+All research and hypothesis work should be filtered through what Cognirise can actually deliver. Mandate-creation angles, buyer identification, and "why now" framing should all tie back to one or more of these five service lines:
+
+| # | Service Line | What it is | Typical deal size | Primary buyers |
+|---|---|---|---|---|
+| 01 | **Agentic Enterprise Transformation** | Helping organizations redesign how they operate in a human + agent future — from strategy through production deployment and adoption | $500K–$3M+ | CEO, COO, CXO |
+| 02 | **Data & AI Foundations** | Building the data platforms, governance frameworks, operating models and AI strategy that enable scalable transformation | $300K–$2M | CDO, CTO, CRO |
+| 03 | **Engineering with AI** | Modernizing technology and accelerating software delivery through AI-augmented engineering; on-prem capable for sovereign clients | $200K–$1.5M | CIO, CTO |
+| 04 | **Sovereign Agentic AI** | Helping governments and regulated sectors build secure, sovereign, compliant AI ecosystems aligned with national mandates | $500K–$5M+ | Government entities, regulated sector leaders |
+| 05 | **Platforms** | Providing AI-native platforms for market, customer management, and loyalty | $100K–$1M+ | CMO, CCO, COO |
+
+When identifying research signals, mandate-creation angles, and entry stakeholders, always ask: "Which of these five service lines does this map to?" Discard signals that don't connect to any of them.
+
+---
+
+## Step 1 — Client Present Brief (Deep Research Pack)
+
+**When to use:** Starting fresh on an account, or when existing knowledge needs a structured evidence refresh.
+
+### Gather inputs
+
+Collect these from the user before starting:
+
+```
+Client: [company name]
+Sector: [industry]
+Region: [geography]
+Any context I already know: [optional — prior conversations, intro context, existing relationships]
+```
+
+If the user hasn't provided these, ask. Client name and sector are minimum requirements.
+
+### Your role in this step
+
+Act as an outside-in account strategist working for Cognirise. Build a fast, evidence-based view of the client's *present* using only public information. You are not selling — you are helping the user understand this client's current agenda, executive pressures, and where a Cognirise conversation could credibly begin.
+
+Keep your research lens tightly focused on signals that indicate readiness or pressure in Cognirise's five service areas: **agentic operating model change, data and AI infrastructure, technology modernization, sovereign/regulated AI, and customer/market intelligence platforms.** Ignore signals outside these areas.
+
+### Research approach
+
+Search for and prioritize public sources from the **last 12–18 months** across these categories, filtering for Cognirise-relevant signal:
+
+- **Annual report / investor presentation** — look for AI investment commitments, digital transformation mentions, operating model language, platform strategy
+- **Earnings calls and transcripts** — executive language about efficiency, automation, AI bets, data strategy, competitive pressure
+- **Executive statements and interviews** — what are the CEO/COO/CXO/CDO/CTO saying publicly about transformation, AI, modernization?
+- **AI / transformation / modernization announcements** — any public commitments that map to service lines 01–04
+- **Job postings** — specifically for roles in: AI/ML engineering, data platform/governance, agentic systems, enterprise architecture, software modernization, AI product management. These are real-time investment signals.
+- **Partner announcements** — hyperscaler deals (AWS, Azure, GCP), SI engagements (Accenture, BCG, McKinsey, Deloitte, etc.), AI software vendors (Anthropic, OpenAI, Databricks, Snowflake). Signal: where are they already spending, and where are there gaps Cognirise could fill?
+- **Executive org changes** — new CDO/CAIO appointments, newly created AI or transformation offices, recent C-suite changes
+- **Regulatory / compliance signals** (especially for service line 04) — data sovereignty requirements, AI regulation exposure, sector-specific mandates
+- **Customer experience / loyalty / CRM signals** (especially for service line 05) — platform consolidation, loyalty program modernization, CMO-level investments
+- **News coverage** — M&A, strategy pivots, public failures or pressures that create urgency
+
+Prioritize signal quality over volume. A CEO earnings call comment about agentic AI beats a dozen press releases.
+
+### Output: Client Present Brief
+
+**A. What is changing for this client right now?**
+The 2–3 most significant shifts underway — strategic, operational, competitive, or regulatory. Anchored in evidence. What is driving urgency or tension?
+
+**B. Executive tensions and likely priorities**
+What are leadership's real pressures? What are they accountable for externally (investors, government, board) and internally (transformation programs, cost targets, talent)? Surface the underlying "job to be done" for key executives.
+
+**C. AI & transformation posture — mapped to Cognirise service lines**
+Where is this client on the AI journey? What have they announced or signaled? For each relevant signal, note which Cognirise service line it points to:
+- Operating model / agentic AI readiness → **SL01**
+- Data platform / AI governance / strategy → **SL02**
+- Tech modernization / engineering velocity → **SL03**
+- Sovereign/regulated AI needs → **SL04**
+- Customer platform / loyalty / market intelligence → **SL05**
+
+**D. Partner and ecosystem picture**
+Who are they already working with? Map existing partnerships to service lines to identify white space. Recent partner announcements are a strong signal of spending and preference.
+
+**E. Stakeholder map hypotheses**
+Map likely key stakeholders to Cognirise buyer personas:
+- CEO/COO/CXO → SL01 entry
+- CDO/CTO/CRO → SL02 entry
+- CIO/CTO → SL03 entry
+- Government/regulated sector leads → SL04 entry
+- CMO/CCO/COO → SL05 entry
+
+Note what is evidenced vs. inferred about each person's role and priorities.
+
+**F. 2–3 mandate-creation angles (with service line tags)**
+Where could a credible Cognirise conversation begin? Each angle should:
+- Be grounded in evidence from the research
+- Name the executive tension it addresses
+- Tag the relevant Cognirise service line(s)
+- State why the timing is right *now*
+
+Example format:
+> **Angle 1 [SL02]:** The new CDO appointment and recent Databricks partnership signal a data platform build-out in progress. There is likely an AI governance gap and a need for operating model design around data products. Entry: CDO conversation on AI strategy and governance framework.
+
+**G. Open questions / what I still need to learn**
+What would materially change this picture? What's the most important gap in your current understanding before a first conversation?
+
+### Evidence classification
+
+Label each claim throughout the brief:
+- ✓ **Evidenced** — directly supported by a specific source
+- ~ **Inferred** — logical conclusion from evidence, not explicitly stated
+- ? **Hypothesis** — plausible but not yet grounded
+
+### Source Pack
+
+End with a compact source table:
+
+| Source | Date | Why it matters | Cognirise signal |
+|--------|------|----------------|-----------------|
+| ...    | ...  | ...            | SL0X            |
+
+Rules:
+- Public evidence only — never invent facts
+- Fewer, higher-signal sources over many weak ones
+- Stay in the client's problem space, not Cognirise's solution space
+- Commercially useful and concise — readable in 10 minutes
+
+**Close with a single sentence:** *"The single most important thing to understand about this client right now is: ___."*
+
+---
+
+## Step 2 — Origination Hypothesis
+
+**When to use:** After Step 1, or if the user already has a research brief to share.
+
+### Your role
+
+Take the Client Present Brief and sharpen it into a working hypothesis for a first executive conversation. This is not a pitch. It is an issue-led, commercially grounded *point of view* that earns the right to a real conversation — grounded in one or more Cognirise service lines but never leading with them.
+
+### Output: Three things
+
+**1. The 1–2 executive issues to lean into first**
+From the brief, identify the pressure points most likely to create genuine urgency *and* that map to a Cognirise service line. For each:
+- What is the issue?
+- Why is it the right entry angle (not just a nice-to-have)?
+- Which Cognirise service line is best positioned to address it?
+
+**2. The first person to reach**
+Identify the one role or individual most worth reaching first. Use the Cognirise buyer persona map as a guide — match the primary tension to the buyer who owns it. Describe:
+- Who they are and why they're the right first call
+- What they likely care about (not what Cognirise offers — what *they* wake up thinking about)
+- How they're probably being measured
+
+**3. The "Why Now" hypothesis**
+Draft a 5-sentence hypothesis structured as:
+1. What is changing externally for this client (market, competitive, regulatory)
+2. What internal tension or pressure that creates
+3. Why the timing matters — what makes this *now* rather than later
+4. What the cost of inaction looks like
+5. The question this opens for conversation
+
+Keep it:
+- Issue-led, not solution-led — Cognirise service lines do not appear in this hypothesis
+- Specific enough to be credible (name the signal, the pressure, the person)
+- Grounded in the brief — no invented facts
+- Conversational — something that could be said in the first 2 minutes of a call
+
+---
+
+## Step 3 — Stress-Test the Hypothesis
+
+**When to use:** After Step 2, before taking the hypothesis into any real conversation or written outreach.
+
+### Your role
+
+Challenge the hypothesis rigorously. The goal is to make the user's thinking stronger before it meets a skeptical executive. Better to find the holes now than in the room.
+
+### Four stress-test lenses
+
+**1. What would make this irrelevant or wrong?**
+Name 2–3 scenarios in which the hypothesis collapses. What would have to be true about this client, their priorities, or their situation that would make the entire angle moot? (Examples: a competing initiative already underway, a budget freeze, a recent strategic pivot that changes the agenda.)
+
+**2. What assumptions are being made?**
+Surface the hidden assumptions in the hypothesis. Distinguish between:
+- Assumptions supported by evidence
+- Assumptions that are untested but likely
+- Assumptions that are genuinely uncertain and could be wrong
+
+**3. What objections would a skeptical executive raise?**
+Role-play the pushback from the likely first buyer (use the persona identified in Step 2). What are the 3 most likely objections — and which are hardest to answer?
+
+**4. What evidence would make this more credible?**
+Name the 2–3 pieces of information that would most strengthen the hypothesis if you had them. Where would you find them? (A specific conversation, a job posting search, an earnings call question, a referral into the org, a partner check.)
+
+### Close
+
+Produce a **revised one-sentence hypothesis** that incorporates the stress-test findings — tighter, more defensible, and ready to use in an intro email or first call.
+
+---
+
+## Step 4 — First Meeting Prep Card (HTML)
+
+**When to use:** After Step 3, immediately before the first executive conversation. Also useful to run standalone if the user already has a brief and hypothesis and just needs to prepare for a meeting.
+
+### Your role
+
+Synthesize everything from Steps 1–3 into a single, executive-ready HTML prep card. This is not a report — it is a cheat sheet. The person reading it should be able to walk into a first meeting fully oriented in under 3 minutes. Think: punchy, precise, no filler.
+
+### Output: a self-contained HTML file
+
+Generate a single `.html` file saved to the outputs folder. Name it `[client-name]-meeting-prep.html`.
+
+The file must be entirely self-contained — all CSS inline, no external dependencies. Use a clean, dark or light professional design (your choice, but consistent). Optimized for reading on a laptop screen just before a meeting.
+
+### Card structure — nine sections, keep each tight
+
+**1. Header with client logo**
+Display the client company logo. Fetch it from Brandfetch CDN using the pattern:
+`https://cdn.brandfetch.io/{domain}/w/600/h/200/theme/dark/logo.png`
+where `{domain}` is the client's primary web domain. Include an `onerror` fallback that renders the company name in large styled text if the logo URL fails. Place the Cognirise wordmark ("Cognirise · Intelligence that Elevates.") in the top-right corner.
+
+**2. Account snapshot** (compact, 4 data points max)
+Company name, sector, employee count / scale signal, geographic footprint. One line below on what makes them strategically interesting right now.
+
+**3. Group / business unit structure** (visual)
+Render the company's business divisions as a row of labeled cards — one card per major business unit. Under each card, list 2–3 key subsidiary or brand names in smaller text. This gives the meeting participant an instant picture of the group's shape. Use distinct accent colors per division for scannability.
+
+**4. What's changing right now** (3 bullets max)
+The most important shifts underway. Each bullet: one sentence. Lead with the most time-sensitive signal.
+
+**5. Their pressure** (2–3 bullets)
+What the person you're meeting is actually accountable for. Not their job title — their real job. What would a bad quarter look like for them?
+
+**6. Person profile — who you're meeting**
+A dedicated section for the first contact, drawing on LinkedIn and any public sources. Include:
+- Name, title, and how long they've been in role
+- Career history: previous 2–3 roles, companies, what they built or owned there
+- Education / notable programmes
+- What they're likely optimizing for in their current role (inferred from career pattern)
+- One sentence: how to show up for this person — what they respond to, what they don't
+
+**7. Our angle** (1–2 sentences)
+The single clearest articulation of why Cognirise belongs in this conversation. Issue-led. No service line names. Should feel like something you could say out loud in the first 60 seconds.
+
+**8. Priority project areas** (up to 5)
+The top 5 areas most likely to turn into real Cognirise projects with this client, based on the research and hypothesis. For each:
+- A sharp 3–5 word title
+- One sentence on why this is a live pressure point
+- The Cognirise service line it maps to (shown as a small tag)
+- The likely executive owner / sponsor inside the client
+
+**9. Watch-outs**
+2–3 things that could go wrong: likely objections, political sensitivities, or unconfirmed assumptions. Keep it honest — this section is for you, not for them.
+
+### Design principles
+
+- Maximum information density, minimum reading time
+- Use visual hierarchy (larger type for headers, smaller for body) to make scanning easy
+- Short labels in muted color, content in high-contrast text
+- No bullet point walls — each section should feel like a card, not a paragraph
+- If you know the client's brand colors from the research, use them as an accent (subtly — this is Cognirise's document, not theirs)
+- Include the Cognirise tagline "Intelligence that Elevates." in the footer
+
+### Example section format (for reference — adapt freely)
+
+```
+WHAT'S CHANGING
+→ New Group CEO (Feb 2025) hired for transformation credentials — 16 months in, delivery pressure is real
+→ Group-level AI function created; execution gap between ambition and production is the live problem
+→ Internal IT subsidiary capacity-constrained relative to the CEO's stated pace
+```
+
+After saving the file, present it to the user using the present_files tool so they can open it directly.
+
+---
+
+## General guidance
+
+- **Default behavior: run all 4 steps automatically in sequence.** Do not pause between steps to ask permission. The user will receive Client Present Brief → Origination Hypothesis → Stress-Test → HTML prep card in a single uninterrupted flow.
+- Only ask clarifying questions if the company name is genuinely ambiguous or the sector/region cannot be reasonably inferred. If you have enough to start, start.
+- Jump to the relevant step if the user has prior work and explicitly names a specific step to run.
+- Never invent information; if something is unknown, flag it as a gap.
+- Keep the focus on the *client's* world throughout — Cognirise service lines inform what you look for, not what you say.
+- Everything produced should be grounded enough that the user could say it confidently in a first executive conversation.
+- Present the HTML file at the very end using the present_files tool so the user can open it directly.
