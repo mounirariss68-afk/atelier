@@ -31,7 +31,13 @@ import {
 } from "@/components/ui/primitives";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
+import { EditAccountStrategyDialog } from "@/components/EditAccountStrategyDialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Globe,
   Sparkles,
@@ -46,6 +52,13 @@ import {
   Check,
   X,
   ExternalLink,
+  Target,
+  Swords,
+  Building2,
+  ChevronDown,
+  Pencil,
+  Lightbulb,
+  HelpCircle,
 } from "lucide-react";
 
 type TabKey =
@@ -269,6 +282,76 @@ function decideProfileMut(
 
 // --- tabs ---
 
+function SourceLinks({ urls, testid }: { urls: string[]; testid: string }) {
+  if (!urls || urls.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 mt-1">
+      {urls.slice(0, 4).map((u, j) => (
+        <a
+          key={j}
+          href={u}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] font-mono uppercase tracking-wider text-text-faint hover:text-gold inline-flex items-center gap-1"
+          data-testid={`${testid}-${j}`}
+        >
+          source {j + 1}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function BriefSection({
+  title,
+  count,
+  defaultOpen = false,
+  children,
+  testid,
+}: {
+  title: string;
+  count?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+  testid: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border border-border-soft rounded">
+      <CollapsibleTrigger
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-bg-deep/50 transition-colors"
+        data-testid={`trigger-brief-${testid}`}
+      >
+        <span className="font-mono uppercase tracking-wider text-xs text-text-mute flex items-center gap-2">
+          {title}
+          {typeof count === "number" && count > 0 && <MonoChip>{count}</MonoChip>}
+        </span>
+        <ChevronDown
+          className={`w-4 h-4 text-text-faint transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="px-3 pb-3 pt-1">{children}</div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function FactList({ facts, testid }: { facts: { text: string; evidence: string; sourceUrls: string[] }[]; testid: string }) {
+  return (
+    <ul className="space-y-3">
+      {facts.map((f, i) => (
+        <li key={i} className="text-sm text-text">
+          <div>{f.text}</div>
+          {f.evidence && <div className="text-text-mute text-xs mt-0.5 italic">{f.evidence}</div>}
+          <SourceLinks urls={f.sourceUrls} testid={`link-${testid}-${i}`} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ProfileTab({
   ws,
   pending,
@@ -279,143 +362,437 @@ function ProfileTab({
   onDecide: (id: string, d: "approve" | "reject") => void;
 }) {
   const a = ws.account;
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-6">
-        <Card className="p-6 space-y-4">
-          <SectionLabel>Cognirise hypothesis</SectionLabel>
-          <p className="text-text leading-relaxed">
-            {a.cogniriseHypothesis ?? (
-              <span className="italic text-text-mute">
-                No hypothesis yet — run Cartographer ★ to seed one.
-              </span>
-            )}
-          </p>
-        </Card>
+  const [editStrategy, setEditStrategy] = useState(false);
+  const brief = a.researchBrief ?? null;
+  const strat = a.accountStrategy ?? null;
+  const competitors = a.competitors ?? [];
+  const hasStrategy =
+    !!strat &&
+    ((strat.objectives ?? []).length > 0 ||
+      (strat.targetServiceLines ?? []).length > 0 ||
+      !!strat.winHypothesis ||
+      (strat.keyPlays ?? []).length > 0);
 
-        <Card className="p-6 space-y-4">
-          <SectionLabel>Strategic priorities</SectionLabel>
-          {(a.strategicPriorities ?? []).length === 0 ? (
-            <p className="text-text-mute italic text-sm">None recorded.</p>
-          ) : (
-            <ul className="space-y-3">
-              {(a.strategicPriorities ?? []).map((p, i) => {
-                const refs = (a.strategicPriorityRefs ?? []).find((r) => r.text === p);
-                const sourceUrls = refs?.sourceUrls ?? [];
-                return (
-                  <li key={i} className="flex gap-2 text-text">
-                    <span className="text-gold mt-1">·</span>
-                    <div className="flex-1">
-                      <div>{p}</div>
-                      {sourceUrls.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {sourceUrls.slice(0, 4).map((u, j) => (
-                            <a
-                              key={j}
-                              href={u}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] font-mono uppercase tracking-wider text-text-faint hover:text-gold inline-flex items-center gap-1"
-                              data-testid={`link-priority-source-${i}-${j}`}
-                            >
-                              source {j + 1}
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+  return (
+    <>
+      <EditAccountStrategyDialog
+        account={a}
+        accountId={a.id}
+        open={editStrategy}
+        onOpenChange={setEditStrategy}
+      />
+
+      {/* At-a-glance callout */}
+      {brief?.singleMostImportant && (
+        <Card className="p-5 mb-6 border-gold/40 bg-gold/5">
+          <div className="flex items-start gap-3">
+            <Lightbulb className="w-5 h-5 text-gold shrink-0 mt-0.5" />
+            <div>
+              <Eyebrow>The one thing that matters</Eyebrow>
+              <p className="text-text leading-relaxed mt-1">{brief.singleMostImportant}</p>
+              {brief.whyNowHypothesis && (
+                <p className="text-text-mute text-sm mt-2">
+                  <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
+                    Why now:{" "}
+                  </span>
+                  {brief.whyNowHypothesis}
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Cognirise Account Strategy */}
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <SectionLabel>
+                <span className="inline-flex items-center gap-2">
+                  <Target className="w-4 h-4 text-gold" /> Cognirise account strategy
+                </span>
+              </SectionLabel>
+              <PillButton
+                variant="ghost"
+                onClick={() => setEditStrategy(true)}
+                className="text-xs"
+                data-testid="button-edit-strategy"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </PillButton>
+            </div>
+            {!hasStrategy ? (
+              <p className="text-text-mute italic text-sm">
+                No strategy recorded yet — click Edit to define objectives, target service lines,
+                the win hypothesis, and key plays.
+              </p>
+            ) : (
+              <div className="space-y-5">
+                {(strat?.objectives ?? []).length > 0 && (
+                  <div>
+                    <Eyebrow>Objectives</Eyebrow>
+                    <ul className="space-y-2 mt-2">
+                      {(strat?.objectives ?? []).map((o) => (
+                        <li key={o.id} className="flex items-start gap-2 text-text text-sm">
+                          <span className="text-gold mt-1">·</span>
+                          <div className="flex-1">
+                            <span>{o.text}</span>
+                            {(o.targetValue || o.targetDate) && (
+                              <span className="ml-2 inline-flex gap-1.5">
+                                {o.targetValue && <MonoChip tone="green">{o.targetValue}</MonoChip>}
+                                {o.targetDate && <MonoChip tone="amber">{o.targetDate}</MonoChip>}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(strat?.targetServiceLines ?? []).length > 0 && (
+                  <div>
+                    <Eyebrow>Target service lines</Eyebrow>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(strat?.targetServiceLines ?? []).map((sl, i) => (
+                        <MonoChip key={i}>{sl}</MonoChip>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {strat?.winHypothesis && (
+                  <div>
+                    <Eyebrow>Win hypothesis</Eyebrow>
+                    <p className="text-text text-sm mt-1 leading-relaxed">{strat.winHypothesis}</p>
+                  </div>
+                )}
+                {(strat?.keyPlays ?? []).length > 0 && (
+                  <div>
+                    <Eyebrow>Key plays</Eyebrow>
+                    <ul className="space-y-1.5 mt-2">
+                      {(strat?.keyPlays ?? []).map((p, i) => (
+                        <li key={i} className="flex items-start gap-2 text-text text-sm">
+                          <span className="text-gold mt-1">·</span>
+                          <span>{p}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Competitive landscape */}
+          <Card className="p-6 space-y-4">
+            <SectionLabel>
+              <span className="inline-flex items-center gap-2">
+                <Swords className="w-4 h-4 text-gold" /> Competitive landscape
+              </span>
+            </SectionLabel>
+            {competitors.length === 0 ? (
+              <p className="text-text-mute italic text-sm">No competitors recorded.</p>
+            ) : (
+              <div className="space-y-3">
+                {competitors.map((c) => (
+                  <div key={c.id} className="border border-border-soft rounded p-3">
+                    <div className="font-semibold text-text text-sm">{c.name}</div>
+                    {c.holds && (
+                      <p className="text-text-mute text-sm mt-1">
+                        <span className="font-mono uppercase tracking-wider text-[10px] text-text-faint">
+                          Holds:{" "}
+                        </span>
+                        {c.holds}
+                      </p>
+                    )}
+                    {c.displacementAngle && (
+                      <p className="text-text text-sm mt-1">
+                        <span className="font-mono uppercase tracking-wider text-[10px] text-gold">
+                          Our angle:{" "}
+                        </span>
+                        {c.displacementAngle}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Research brief — progressive disclosure */}
+          {brief && (
+            <Card className="p-6 space-y-3">
+              <SectionLabel>
+                <span className="inline-flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-gold" /> Research brief
+                </span>
+              </SectionLabel>
+              <div className="space-y-2">
+                <BriefSection
+                  title="What's changing"
+                  count={brief.whatsChanging?.length}
+                  defaultOpen
+                  testid="whats-changing"
+                >
+                  <FactList facts={brief.whatsChanging ?? []} testid="whats-changing" />
+                </BriefSection>
+
+                <BriefSection
+                  title="Executive tensions"
+                  count={brief.executiveTensions?.length}
+                  testid="executive-tensions"
+                >
+                  <FactList facts={brief.executiveTensions ?? []} testid="executive-tensions" />
+                </BriefSection>
+
+                <BriefSection
+                  title="Service-line fit"
+                  count={brief.serviceLineFit?.length}
+                  testid="service-line-fit"
+                >
+                  <ul className="space-y-3">
+                    {(brief.serviceLineFit ?? []).map((s, i) => (
+                      <li key={i} className="text-sm text-text">
+                        <span className="font-semibold">{s.serviceLine}</span> — {s.signal}
+                        <SourceLinks urls={s.sourceUrls} testid={`link-slf-${i}`} />
+                      </li>
+                    ))}
+                  </ul>
+                </BriefSection>
+
+                <BriefSection
+                  title="Partner ecosystem"
+                  count={brief.partnerEcosystem?.length}
+                  testid="partner-ecosystem"
+                >
+                  <ul className="space-y-3">
+                    {(brief.partnerEcosystem ?? []).map((p, i) => (
+                      <li key={i} className="text-sm text-text">
+                        <span className="font-semibold">{p.partner}</span> — {p.relationship}
+                        {p.serviceLineGap && (
+                          <div className="text-text-mute text-xs mt-0.5">Gap: {p.serviceLineGap}</div>
+                        )}
+                        <SourceLinks urls={p.sourceUrls} testid={`link-pe-${i}`} />
+                      </li>
+                    ))}
+                  </ul>
+                </BriefSection>
+
+                <BriefSection
+                  title="Mandate angles"
+                  count={brief.mandateAngles?.length}
+                  testid="mandate-angles"
+                >
+                  <div className="space-y-3">
+                    {(brief.mandateAngles ?? []).map((m, i) => (
+                      <div key={i} className="border border-border-soft rounded p-3">
+                        <div className="font-semibold text-text text-sm">{m.title}</div>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {(m.serviceLines ?? []).map((sl, j) => (
+                            <MonoChip key={j}>{sl}</MonoChip>
                           ))}
                         </div>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="p-6 space-y-4">
-          <SectionLabel>Source signals</SectionLabel>
-          {(a.sourceSignals ?? []).length === 0 ? (
-            <p className="text-text-mute italic text-sm">No signals yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {(a.sourceSignals ?? []).slice(-8).reverse().map((s, i) => (
-                <a
-                  key={i}
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block border border-border-soft rounded p-3 hover:border-gold/50 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold text-text text-sm flex items-center gap-1.5">
-                      {s.title}
-                      <ExternalLink className="w-3 h-3 text-text-faint" />
-                    </div>
-                    <MonoChip tone={s.confidence === "green" ? "green" : s.confidence === "amber" ? "amber" : "default"}>
-                      {s.kind}
-                    </MonoChip>
+                        <p className="text-text-mute text-xs mt-2">
+                          <span className="text-text-faint">Tension:</span> {m.tension}
+                        </p>
+                        <p className="text-text-mute text-xs mt-1">
+                          <span className="text-text-faint">Why now:</span> {m.whyNow}
+                        </p>
+                        <p className="text-text-mute text-xs mt-1">
+                          <span className="text-text-faint">Entry:</span> {m.entryStakeholder}
+                        </p>
+                        <SourceLinks urls={m.sourceUrls} testid={`link-ma-${i}`} />
+                      </div>
+                    ))}
                   </div>
-                  {s.summary && (
-                    <p className="text-text-mute text-sm mt-1 leading-snug">{s.summary}</p>
-                  )}
-                </a>
-              ))}
-            </div>
+                </BriefSection>
+
+                {(brief.openQuestions ?? []).length > 0 && (
+                  <BriefSection
+                    title="Open questions"
+                    count={brief.openQuestions?.length}
+                    testid="open-questions"
+                  >
+                    <ul className="space-y-2">
+                      {(brief.openQuestions ?? []).map((q, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-text">
+                          <HelpCircle className="w-3.5 h-3.5 text-text-faint shrink-0 mt-0.5" />
+                          <span>{q}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </BriefSection>
+                )}
+              </div>
+            </Card>
           )}
-        </Card>
-      </div>
 
-      <div className="space-y-6">
-        <Card className="p-6 space-y-4">
-          <SectionLabel>Ownership</SectionLabel>
-          <dl className="space-y-2 text-sm">
-            <Row label="Partner" value={a.partnerOwnerName ?? "—"} />
-            <Row label="Tier" value={`Tier ${a.tier}`} />
-            <Row label="Status" value={a.status} />
-            <Row label="HQ" value={a.hqCity ?? a.country} />
-            <Row label="Currency" value={a.primaryCurrency} />
-            <Row label="Language" value={a.primaryLanguage} />
-            <Row label="Last touch" value={a.lastTouchAt ? new Date(a.lastTouchAt).toLocaleDateString() : "—"} />
-            <Row label="Last enriched" value={a.enrichedAt ? new Date(a.enrichedAt).toLocaleDateString() : "—"} />
-          </dl>
-        </Card>
+          {/* Cognirise hypothesis */}
+          <Card className="p-6 space-y-4">
+            <SectionLabel>Cognirise hypothesis</SectionLabel>
+            <p className="text-text leading-relaxed">
+              {a.cogniriseHypothesis ?? (
+                <span className="italic text-text-mute">
+                  No hypothesis yet — run Cartographer ★ to seed one.
+                </span>
+              )}
+            </p>
+          </Card>
 
-        <Card className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <SectionLabel>Pending Cartographer updates</SectionLabel>
-            {pending.length > 0 && <MonoChip tone="amber">{pending.length}</MonoChip>}
-          </div>
-          {pending.length === 0 ? (
-            <p className="text-text-mute italic text-sm">No pending proposals.</p>
-          ) : (
-            <div className="space-y-3">
-              {pending.map((p) => (
-                <div key={p.id} className="border border-amber/30 rounded p-3 bg-amber/5">
-                  <Eyebrow>{p.field}</Eyebrow>
-                  <p className="text-text text-sm mt-1">{p.rationale}</p>
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => onDecide(p.id, "approve")}
-                      className="pill-btn pill-btn-primary text-xs"
-                      data-testid={`button-approve-${p.id}`}
-                    >
-                      <Check className="w-3 h-3" /> Approve
-                    </button>
-                    <button
-                      onClick={() => onDecide(p.id, "reject")}
-                      className="pill-btn pill-btn-ghost text-xs"
-                      data-testid={`button-reject-${p.id}`}
-                    >
-                      <X className="w-3 h-3" /> Reject
-                    </button>
-                  </div>
+          {/* Strategic priorities */}
+          <Card className="p-6 space-y-4">
+            <SectionLabel>Strategic priorities</SectionLabel>
+            {(a.strategicPriorities ?? []).length === 0 ? (
+              <p className="text-text-mute italic text-sm">None recorded.</p>
+            ) : (
+              <ul className="space-y-3">
+                {(a.strategicPriorities ?? []).map((p, i) => {
+                  const refs = (a.strategicPriorityRefs ?? []).find((r) => r.text === p);
+                  const sourceUrls = refs?.sourceUrls ?? [];
+                  return (
+                    <li key={i} className="flex gap-2 text-text">
+                      <span className="text-gold mt-1">·</span>
+                      <div className="flex-1">
+                        <div>{p}</div>
+                        <SourceLinks urls={sourceUrls} testid={`link-priority-source-${i}`} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+
+          {/* Source signals */}
+          <Card className="p-6 space-y-4">
+            <SectionLabel>Source signals</SectionLabel>
+            {(a.sourceSignals ?? []).length === 0 ? (
+              <p className="text-text-mute italic text-sm">No signals yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {(a.sourceSignals ?? []).slice(-8).reverse().map((s, i) => (
+                  <a
+                    key={i}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block border border-border-soft rounded p-3 hover:border-gold/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold text-text text-sm flex items-center gap-1.5">
+                        {s.title}
+                        <ExternalLink className="w-3 h-3 text-text-faint" />
+                      </div>
+                      <MonoChip tone={s.confidence === "green" ? "green" : s.confidence === "amber" ? "amber" : "default"}>
+                        {s.kind}
+                      </MonoChip>
+                    </div>
+                    {s.summary && (
+                      <p className="text-text-mute text-sm mt-1 leading-snug">{s.summary}</p>
+                    )}
+                  </a>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          {/* Hierarchy */}
+          {(a.parent || (a.children ?? []).length > 0) && (
+            <Card className="p-6 space-y-4">
+              <SectionLabel>
+                <span className="inline-flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-gold" /> Account hierarchy
+                </span>
+              </SectionLabel>
+              {a.parent && (
+                <div>
+                  <Eyebrow>Parent</Eyebrow>
+                  <Link
+                    href={`/accounts/${a.parent.id}`}
+                    className="block mt-1 text-text hover:text-gold transition-colors text-sm font-semibold"
+                    data-testid={`link-parent-${a.parent.id}`}
+                  >
+                    {a.parent.brandName ?? a.parent.name}
+                  </Link>
                 </div>
-              ))}
-            </div>
+              )}
+              {(a.children ?? []).length > 0 && (
+                <div>
+                  <Eyebrow>Subsidiaries</Eyebrow>
+                  <ul className="space-y-1.5 mt-1">
+                    {(a.children ?? []).map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          href={`/accounts/${c.id}`}
+                          className="flex items-center justify-between text-text hover:text-gold transition-colors text-sm"
+                          data-testid={`link-child-${c.id}`}
+                        >
+                          <span>{c.brandName ?? c.name}</span>
+                          {typeof c.tier === "number" && <MonoChip>T{c.tier}</MonoChip>}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Card>
           )}
-        </Card>
+
+          {/* Ownership */}
+          <Card className="p-6 space-y-4">
+            <SectionLabel>Ownership</SectionLabel>
+            <dl className="space-y-2 text-sm">
+              <Row label="Partner" value={a.partnerOwnerName ?? "—"} />
+              <Row label="Tier" value={`Tier ${a.tier}`} />
+              <Row label="Status" value={a.status} />
+              <Row label="HQ" value={a.hqCity ?? a.country} />
+              <Row label="Currency" value={a.primaryCurrency} />
+              <Row label="Language" value={a.primaryLanguage} />
+              <Row label="Last touch" value={a.lastTouchAt ? new Date(a.lastTouchAt).toLocaleDateString() : "—"} />
+              <Row label="Last enriched" value={a.enrichedAt ? new Date(a.enrichedAt).toLocaleDateString() : "—"} />
+            </dl>
+          </Card>
+
+          {/* Pending Cartographer updates */}
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <SectionLabel>Pending Cartographer updates</SectionLabel>
+              {pending.length > 0 && <MonoChip tone="amber">{pending.length}</MonoChip>}
+            </div>
+            {pending.length === 0 ? (
+              <p className="text-text-mute italic text-sm">No pending proposals.</p>
+            ) : (
+              <div className="space-y-3">
+                {pending.map((p) => (
+                  <div key={p.id} className="border border-amber/30 rounded p-3 bg-amber/5">
+                    <Eyebrow>{p.field}</Eyebrow>
+                    <p className="text-text text-sm mt-1">{p.rationale}</p>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => onDecide(p.id, "approve")}
+                        className="pill-btn pill-btn-primary text-xs"
+                        data-testid={`button-approve-${p.id}`}
+                      >
+                        <Check className="w-3 h-3" /> Approve
+                      </button>
+                      <button
+                        onClick={() => onDecide(p.id, "reject")}
+                        className="pill-btn pill-btn-ghost text-xs"
+                        data-testid={`button-reject-${p.id}`}
+                      >
+                        <X className="w-3 h-3" /> Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

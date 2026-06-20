@@ -298,6 +298,121 @@ export interface AtelierCreateAccountInput {
   notes?: string | null;
 }
 
+export interface AtelierAccountObjective {
+  id: string;
+  /**
+   * @minLength 1
+   * @maxLength 400
+   */
+  text: string;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  targetValue?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  targetDate?: string | null;
+}
+
+export interface AtelierAccountStrategy {
+  /** @maxItems 12 */
+  objectives: AtelierAccountObjective[];
+  /** @maxItems 12 */
+  targetServiceLines: string[];
+  /** @maxLength 1200 */
+  winHypothesis: string;
+  /** @maxItems 12 */
+  keyPlays: string[];
+}
+
+export interface AtelierAccountCompetitor {
+  id: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /**
+   * @maxLength 600
+   * @nullable
+   */
+  holds?: string | null;
+  /**
+   * @maxLength 600
+   * @nullable
+   */
+  displacementAngle?: string | null;
+}
+
+export interface AtelierResearchBriefFact {
+  text: string;
+  evidence: string;
+  sourceUrls: string[];
+}
+
+export type AtelierResearchBriefServiceLineFitItem = {
+  serviceLine: string;
+  signal: string;
+  sourceUrls: string[];
+};
+
+export type AtelierResearchBriefPartnerEcosystemItem = {
+  partner: string;
+  relationship: string;
+  /** @nullable */
+  serviceLineGap?: string | null;
+  sourceUrls: string[];
+};
+
+export type AtelierResearchBriefMandateAnglesItem = {
+  title: string;
+  serviceLines: string[];
+  tension: string;
+  whyNow: string;
+  entryStakeholder: string;
+  sourceUrls: string[];
+};
+
+export interface AtelierResearchBrief {
+  whatsChanging: AtelierResearchBriefFact[];
+  executiveTensions: AtelierResearchBriefFact[];
+  serviceLineFit: AtelierResearchBriefServiceLineFitItem[];
+  partnerEcosystem: AtelierResearchBriefPartnerEcosystemItem[];
+  mandateAngles: AtelierResearchBriefMandateAnglesItem[];
+  whyNowHypothesis: string;
+  openQuestions: string[];
+  singleMostImportant: string;
+}
+
+export interface AtelierAccountHierarchyRef {
+  id: string;
+  name: string;
+  /** @nullable */
+  brandName?: string | null;
+  tier?: AtelierAccountTier;
+}
+
+/**
+ * Partner-editable account fields. Only the keys present are written
+(PATCH semantics). `parentAccountId: null` unlinks the parent.
+
+ */
+export interface AtelierUpdateAccountInput {
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+  /** @nullable */
+  parentAccountId?: string | null;
+  accountStrategy?: AtelierAccountStrategy | null;
+  /** @maxItems 25 */
+  competitors?: AtelierAccountCompetitor[];
+}
+
 export type AtelierAccountDuplicateErrorError =
   (typeof AtelierAccountDuplicateErrorError)[keyof typeof AtelierAccountDuplicateErrorError];
 
@@ -659,6 +774,13 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
   /** @nullable */
   cogniriseHypothesis?: string | null;
+  accountStrategy?: AtelierAccountStrategy | null;
+  competitors?: AtelierAccountCompetitor[];
+  researchBrief?: AtelierResearchBrief | null;
+  /** @nullable */
+  parentAccountId?: string | null;
+  parent?: AtelierAccountHierarchyRef | null;
+  children?: AtelierAccountHierarchyRef[];
   sourceSignals?: AtelierSourceSignal[];
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
 };

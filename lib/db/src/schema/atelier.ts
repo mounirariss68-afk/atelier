@@ -144,6 +144,39 @@ export const atelierAccounts = pgTable(
       openQuestions: string[];
       singleMostImportant: string;
     }>(),
+    // Task #566 — Cognirise-authored account strategy. Distinct from the
+    // AI-generated `cogniriseHypothesis`/`researchBrief`: this is the
+    // partner's deliberate plan of record. Nullable until a partner fills
+    // it in (or item-5 AI population proposes a draft).
+    accountStrategy: jsonb("account_strategy").$type<{
+      // Measurable objectives: each carries an optional target value and a
+      // timeline/target date so progress is trackable (Task #571).
+      objectives: Array<{
+        id: string;
+        text: string;
+        targetValue?: string | null;
+        targetDate?: string | null;
+      }>;
+      // Service lines Cognirise intends to lead with on this account.
+      targetServiceLines: string[];
+      // The single sentence that explains why Cognirise wins here.
+      winHypothesis: string;
+      // Concrete plays/moves the account team will run.
+      keyPlays: string[];
+    }>(),
+    // Task #566 — competitive landscape / incumbents. Who else holds work
+    // at the account and Cognirise's displacement angle for each.
+    competitors: jsonb("competitors")
+      .$type<
+        Array<{
+          id: string;
+          name: string;
+          holds?: string | null; // what footprint they currently hold
+          displacementAngle?: string | null; // how Cognirise wins against them
+        }>
+      >()
+      .notNull()
+      .default([]),
     pendingProfileUpdates: jsonb("pending_profile_updates")
       .$type<
         Array<{

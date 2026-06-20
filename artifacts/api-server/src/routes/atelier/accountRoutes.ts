@@ -70,6 +70,7 @@ import {
   AtelierRefreshAccountCartographerBody as AtelierCartographerRefreshInput,
   AtelierCreateCredentialBody as AtelierCredentialInput,
   AtelierCreateAccountBody as AtelierCreateAccountInput,
+  AtelierUpdateAccountBody as AtelierUpdateAccountInput,
   AtelierCreateContactBody as AtelierCreateContactInput,
   AtelierUpdateContactBody as AtelierUpdateContactInput,
 } from "@workspace/api-zod";
@@ -443,7 +444,7 @@ router.post("/accounts", async (req, res) => {
 });
 
 // ---------- workspace ----------
-async function buildWorkspace(accountId: string, access: EngAccess) {
+async function buildWorkspace(accountId: string, access: EngAccess, me: { id: string }) {
   const a = await loadAccount(accountId);
   if (!a) return null;
   const summary = await summariseAccount(a, access);
@@ -525,6 +526,49 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
     .orderBy(desc(atelierAuditEvents.createdAt))
     .limit(50);
 
+  // Task #566 — parent / subsidiary hierarchy.
+  const hierarchyRef = (r: {
+    id: string;
+    name: string;
+    brandName: string | null;
+    tier: string;
+  }) => ({
+    id: r.id,
+    name: r.name,
+    brandName: r.brandName ?? null,
+    tier: (r.tier ?? "C") as "A" | "B" | "C" | "D",
+  });
+  // Hierarchy refs are only disclosed for accounts the caller is actually
+  // authorized to view — otherwise the parent/child link would leak the
+  // identity (name/brand/tier) of an out-of-scope or cross-tenant account.
+  const [parentRowRaw] = a.parentAccountId
+    ? await db
+        .select({
+          id: atelierAccounts.id,
+          name: atelierAccounts.name,
+          brandName: atelierAccounts.brandName,
+          tier: atelierAccounts.tier,
+        })
+        .from(atelierAccounts)
+        .where(and(eq(atelierAccounts.id, a.parentAccountId), isNull(atelierAccounts.deletedAt)))
+    : [];
+  const parentRow =
+    parentRowRaw && (await canSeeAccount(access, me, parentRowRaw.id)) ? parentRowRaw : null;
+  const childRowsRaw = await db
+    .select({
+      id: atelierAccounts.id,
+      name: atelierAccounts.name,
+      brandName: atelierAccounts.brandName,
+      tier: atelierAccounts.tier,
+    })
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.parentAccountId, a.id), isNull(atelierAccounts.deletedAt)))
+    .orderBy(atelierAccounts.name);
+  const childVisibility = await Promise.all(
+    childRowsRaw.map((c) => canSeeAccount(access, me, c.id)),
+  );
+  const childRows = childRowsRaw.filter((_, i) => childVisibility[i]);
+
   return {
     account: {
       ...summary,
@@ -535,6 +579,12 @@ async function buildWorkspace(accountId: string, access: EngAccess) {
         sourceUrls: string[];
       }>,
       cogniriseHypothesis: a.cogniriseHypothesis ?? null,
+      accountStrategy: a.accountStrategy ?? null,
+      competitors: a.competitors ?? [],
+      researchBrief: a.researchBrief ?? null,
+      parentAccountId: a.parentAccountId ?? null,
+      parent: parentRow ? hierarchyRef(parentRow) : null,
+      children: childRows.map(hierarchyRef),
       sourceSignals: a.sourceSignals ?? [],
       pendingProfileUpdates: a.pendingProfileUpdates ?? [],
     },
@@ -599,11 +649,145 @@ router.get("/accounts/:accountId", async (req, res) => {
     res.status(403).json({ error: "account-forbidden" });
     return;
   }
-  const ws = await buildWorkspace(req.params.accountId, access);
+  const ws = await buildWorkspace(req.params.accountId, access, me);
   if (!ws) {
     res.status(404).json({ error: "not-found" });
     return;
   }
+  res.json(ws);
+});
+
+// ---------- update partner-editable account fields (Task #566) ----------
+// PATCH semantics: only the keys present in the body are written. Gated to
+// the same partner-tier + senior_manager personas that can create accounts.
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/accounts/:accountId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Senior Manager personas can edit account strategy.",
+    });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const a = await loadAccount(req.params.accountId);
+  if (!a) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const parsed = AtelierUpdateAccountInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", reason: parsed.error.message });
+    return;
+  }
+  const input = parsed.data;
+
+  const update: Partial<typeof atelierAccounts.$inferInsert> = { updatedAt: new Date() };
+  const changed: string[] = [];
+
+  if ("notes" in input) {
+    update.notes = input.notes ?? null;
+    changed.push("notes");
+  }
+  if ("parentAccountId" in input) {
+    const nextParent = input.parentAccountId ?? null;
+    // Guard: an account cannot be its own parent.
+    if (nextParent && nextParent === a.id) {
+      res.status(400).json({ error: "invalid-parent", reason: "An account cannot be its own parent." });
+      return;
+    }
+    if (nextParent) {
+      const parent = await loadAccount(nextParent);
+      if (!parent) {
+        res.status(400).json({ error: "invalid-parent", reason: "Parent account not found." });
+        return;
+      }
+      // Authz: the parent must live in the same org and be visible to the
+      // caller. Without this, an editor could link to (and then read back
+      // via the workspace `parent` ref) an out-of-scope or cross-tenant
+      // account they are not allowed to see.
+      if (parent.orgId !== a.orgId || !(await canSeeAccount(access, me, parent.id))) {
+        res
+          .status(403)
+          .json({ error: "invalid-parent", reason: "You cannot link to that parent account." });
+        return;
+      }
+      // Guard: prevent cycles of any length by walking the prospective
+      // parent's ancestor chain — if we reach `a.id`, linking would create a
+      // loop. (depth-bounded against any pre-existing corrupt data.)
+      let cursor: string | null = parent.id;
+      const seen = new Set<string>();
+      for (let i = 0; cursor && i < 64; i++) {
+        if (cursor === a.id) {
+          res.status(400).json({
+            error: "invalid-parent",
+            reason: "That would create a circular hierarchy.",
+          });
+          return;
+        }
+        if (seen.has(cursor)) break;
+        seen.add(cursor);
+        const ancestor = await loadAccount(cursor);
+        cursor = ancestor?.parentAccountId ?? null;
+      }
+    }
+    update.parentAccountId = nextParent;
+    changed.push("parentAccountId");
+  }
+  if ("accountStrategy" in input) {
+    // Stamp ids on any objective that arrived without one so the UI can key
+    // rows deterministically.
+    const strat = input.accountStrategy;
+    update.accountStrategy = strat
+      ? {
+          objectives: (strat.objectives ?? []).map((o) => ({
+            id: o.id || rid("obj"),
+            text: o.text,
+            targetValue: o.targetValue ?? null,
+            targetDate: o.targetDate ?? null,
+          })),
+          targetServiceLines: strat.targetServiceLines ?? [],
+          winHypothesis: strat.winHypothesis ?? "",
+          keyPlays: strat.keyPlays ?? [],
+        }
+      : null;
+    changed.push("accountStrategy");
+  }
+  if ("competitors" in input) {
+    update.competitors = (input.competitors ?? []).map((c) => ({
+      id: c.id || rid("cmp"),
+      name: c.name,
+      holds: c.holds ?? null,
+      displacementAngle: c.displacementAngle ?? null,
+    }));
+    changed.push("competitors");
+  }
+
+  if (changed.length === 0) {
+    res.status(400).json({ error: "empty-update", reason: "No editable fields supplied." });
+    return;
+  }
+
+  await db.update(atelierAccounts).set(update).where(eq(atelierAccounts.id, a.id));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "account",
+    entityId: a.id,
+    actorType: "user",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "account.update",
+    payload: { fields: changed },
+    payloadSummary: `${me.name} updated ${changed.join(", ")} on ${a.name}.`,
+  });
+
+  const ws = await buildWorkspace(a.id, access, me);
   res.json(ws);
 });
 
@@ -787,7 +971,7 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
     });
   });
 
-  const ws = await buildWorkspace(a.id, access);
+  const ws = await buildWorkspace(a.id, access, me);
   res.json(ws);
 });
 
@@ -801,7 +985,7 @@ router.get("/accounts/:accountId/contacts", async (req, res) => {
     res.status(403).json({ error: "account-forbidden" });
     return;
   }
-  const ws = await buildWorkspace(req.params.accountId, access);
+  const ws = await buildWorkspace(req.params.accountId, access, me);
   if (!ws) {
     res.status(404).json({ error: "not-found" });
     return;
@@ -974,7 +1158,7 @@ router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (re
   });
 
   const access = await accessibleEngagementIds(me);
-  const ws = await buildWorkspace(a.id, access);
+  const ws = await buildWorkspace(a.id, access, me);
   res.json(ws);
 });
 

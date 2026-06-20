@@ -5,9 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountCompetitor } from "./atelierAccountCompetitor";
+import type { AtelierAccountHierarchyRef } from "./atelierAccountHierarchyRef";
+import type { AtelierAccountStrategy } from "./atelierAccountStrategy";
 import type { AtelierAccountSummary } from "./atelierAccountSummary";
 import type { AtelierAccountWorkspaceAccountStrategicPriorityRefsItem } from "./atelierAccountWorkspaceAccountStrategicPriorityRefsItem";
 import type { AtelierProfileUpdateProposal } from "./atelierProfileUpdateProposal";
+import type { AtelierResearchBrief } from "./atelierResearchBrief";
 import type { AtelierSourceSignal } from "./atelierSourceSignal";
 
 export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
@@ -17,6 +21,13 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
   /** @nullable */
   cogniriseHypothesis?: string | null;
+  accountStrategy?: AtelierAccountStrategy | null;
+  competitors?: AtelierAccountCompetitor[];
+  researchBrief?: AtelierResearchBrief | null;
+  /** @nullable */
+  parentAccountId?: string | null;
+  parent?: AtelierAccountHierarchyRef | null;
+  children?: AtelierAccountHierarchyRef[];
   sourceSignals?: AtelierSourceSignal[];
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
 };

@@ -116,6 +116,7 @@ import type {
   AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierUpdateAccountInput,
   AtelierUpdateContactInput,
   AtelierUpdateOpportunityInput,
   AtelierWhitespaceCanvas,
@@ -4937,6 +4938,102 @@ export function useAtelierGetAccountWorkspace<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Partner / Engagement Lead / Senior Manager only. Patches the
+Cognirise account strategy, competitive landscape, parent-account
+hierarchy link, and notes. Only the keys present in the body are
+written. Returns the refreshed workspace payload.
+
+ * @summary Update partner-editable account fields (strategy, competitors, hierarchy, notes)
+ */
+export const getAtelierUpdateAccountUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}`;
+};
+
+export const atelierUpdateAccount = async (
+  accountId: string,
+  atelierUpdateAccountInput: AtelierUpdateAccountInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierUpdateAccountUrl(accountId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateAccountInput),
+    },
+  );
+};
+
+export const getAtelierUpdateAccountMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccount>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierUpdateAccountInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAccount>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierUpdateAccountInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAccount"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAccount>>,
+    { accountId: string; data: BodyType<AtelierUpdateAccountInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierUpdateAccount(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAccountMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAccount>>
+>;
+export type AtelierUpdateAccountMutationBody =
+  BodyType<AtelierUpdateAccountInput>;
+export type AtelierUpdateAccountMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Update partner-editable account fields (strategy, competitors, hierarchy, notes)
+ */
+export const useAtelierUpdateAccount = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccount>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierUpdateAccountInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAccount>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierUpdateAccountInput> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateAccountMutationOptions(options));
+};
 
 /**
  * @summary Trigger Account Cartographer for this account

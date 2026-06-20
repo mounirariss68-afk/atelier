@@ -1141,6 +1141,42 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+    patch:
+      operationId: atelierUpdateAccount
+      tags: [atelier]
+      summary: Update partner-editable account fields (strategy, competitors, hierarchy, notes)
+      description: |
+        Partner / Engagement Lead / Senior Manager only. Patches the
+        Cognirise account strategy, competitive landscape, parent-account
+        hierarchy link, and notes. Only the keys present in the body are
+        written. Returns the refreshed workspace payload.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierUpdateAccountInput"
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+        "403":
+          description: Not allowed (insufficient persona)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/accounts/{accountId}/cartographer/refresh:
     post:
       operationId: atelierRefreshAccountCartographer
@@ -2302,6 +2338,139 @@ components:
           type: ["string", "null"]
           maxLength: 2000
 
+    AtelierAccountObjective:
+      type: object
+      required: [id, text]
+      properties:
+        id: { type: string }
+        text: { type: string, minLength: 1, maxLength: 400 }
+        # Measurable target, free text so it fits revenue, headcount, NPS,
+        # etc. (e.g. "$4M ARR", "3 active engagements").
+        targetValue: { type: ["string", "null"], maxLength: 200 }
+        # Timeline / target date — free text or ISO date (e.g. "Q4 2026").
+        targetDate: { type: ["string", "null"], maxLength: 120 }
+
+    AtelierAccountStrategy:
+      type: object
+      required: [objectives, targetServiceLines, winHypothesis, keyPlays]
+      properties:
+        objectives:
+          type: array
+          maxItems: 12
+          items: { $ref: "#/components/schemas/AtelierAccountObjective" }
+        targetServiceLines:
+          type: array
+          maxItems: 12
+          items: { type: string, minLength: 1, maxLength: 160 }
+        winHypothesis: { type: string, maxLength: 1200 }
+        keyPlays:
+          type: array
+          maxItems: 12
+          items: { type: string, minLength: 1, maxLength: 400 }
+
+    AtelierAccountCompetitor:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        # What footprint the competitor/incumbent currently holds.
+        holds: { type: ["string", "null"], maxLength: 600 }
+        # Cognirise's angle to displace or differentiate against them.
+        displacementAngle: { type: ["string", "null"], maxLength: 600 }
+
+    AtelierResearchBriefFact:
+      type: object
+      required: [text, evidence, sourceUrls]
+      properties:
+        text: { type: string }
+        evidence: { type: string }
+        sourceUrls:
+          type: array
+          items: { type: string }
+
+    AtelierResearchBrief:
+      type: object
+      required:
+        [whatsChanging, executiveTensions, serviceLineFit, partnerEcosystem, mandateAngles, whyNowHypothesis, openQuestions, singleMostImportant]
+      properties:
+        whatsChanging:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierResearchBriefFact" }
+        executiveTensions:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierResearchBriefFact" }
+        serviceLineFit:
+          type: array
+          items:
+            type: object
+            required: [serviceLine, signal, sourceUrls]
+            properties:
+              serviceLine: { type: string }
+              signal: { type: string }
+              sourceUrls:
+                type: array
+                items: { type: string }
+        partnerEcosystem:
+          type: array
+          items:
+            type: object
+            required: [partner, relationship, sourceUrls]
+            properties:
+              partner: { type: string }
+              relationship: { type: string }
+              serviceLineGap: { type: ["string", "null"] }
+              sourceUrls:
+                type: array
+                items: { type: string }
+        mandateAngles:
+          type: array
+          items:
+            type: object
+            required: [title, serviceLines, tension, whyNow, entryStakeholder, sourceUrls]
+            properties:
+              title: { type: string }
+              serviceLines:
+                type: array
+                items: { type: string }
+              tension: { type: string }
+              whyNow: { type: string }
+              entryStakeholder: { type: string }
+              sourceUrls:
+                type: array
+                items: { type: string }
+        whyNowHypothesis: { type: string }
+        openQuestions:
+          type: array
+          items: { type: string }
+        singleMostImportant: { type: string }
+
+    AtelierAccountHierarchyRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        brandName: { type: ["string", "null"] }
+        tier: { $ref: "#/components/schemas/AtelierAccountTier" }
+
+    AtelierUpdateAccountInput:
+      type: object
+      description: |
+        Partner-editable account fields. Only the keys present are written
+        (PATCH semantics). `parentAccountId: null` unlinks the parent.
+      properties:
+        notes: { type: ["string", "null"], maxLength: 2000 }
+        parentAccountId: { type: ["string", "null"] }
+        accountStrategy:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountStrategy"
+            - type: "null"
+        competitors:
+          type: array
+          maxItems: 25
+          items: { $ref: "#/components/schemas/AtelierAccountCompetitor" }
+
     AtelierAccountDuplicateError:
       type: object
       required: [error, existingAccountId]
@@ -2541,6 +2710,30 @@ components:
                         type: array
                         items: { type: string }
                 cogniriseHypothesis: { type: ["string", "null"] }
+                # Task #566 — Cognirise-authored plan of record.
+                accountStrategy:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierAccountStrategy"
+                    - type: "null"
+                # Task #566 — competitive landscape / incumbents.
+                competitors:
+                  type: array
+                  items: { $ref: "#/components/schemas/AtelierAccountCompetitor" }
+                # Task #566 — full AI research brief (was persisted but not
+                # surfaced); rendered compactly with progressive disclosure.
+                researchBrief:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierResearchBrief"
+                    - type: "null"
+                # Task #566 — parent / subsidiary hierarchy.
+                parentAccountId: { type: ["string", "null"] }
+                parent:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierAccountHierarchyRef"
+                    - type: "null"
+                children:
+                  type: array
+                  items: { $ref: "#/components/schemas/AtelierAccountHierarchyRef" }
                 sourceSignals:
                   type: array
                   items: { $ref: "#/components/schemas/AtelierSourceSignal" }
