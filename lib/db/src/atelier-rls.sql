@@ -49,7 +49,10 @@ DECLARE
     'atelier_countries','atelier_industries','atelier_sub_industries',
     -- Task #331 — Atelier CLI sessions / turns / async jobs. Org-scoped
     -- only; per-engagement narrowing happens inside the tool layer.
-    'atelier_cli_sessions','atelier_cli_turns','atelier_cli_jobs'
+    'atelier_cli_sessions','atelier_cli_turns','atelier_cli_jobs',
+    -- Task #569 — human account insights + account-team membership.
+    -- Org-scoped; per-account visibility is enforced in route logic.
+    'atelier_account_insights','atelier_account_team_members'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

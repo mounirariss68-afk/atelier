@@ -884,6 +884,55 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
 };
 
+export type AtelierAccountInsightCategory =
+  (typeof AtelierAccountInsightCategory)[keyof typeof AtelierAccountInsightCategory];
+
+export const AtelierAccountInsightCategory = {
+  relationship: "relationship",
+  risk: "risk",
+  competitive: "competitive",
+  opportunity: "opportunity",
+  general: "general",
+} as const;
+
+export interface AtelierAccountInsight {
+  id: string;
+  accountId: string;
+  authorId: string;
+  authorName: string;
+  /** @nullable */
+  authorInitials?: string | null;
+  body: string;
+  category?: AtelierAccountInsightCategory | null;
+  createdAt: string;
+  updatedAt: string;
+  edited?: boolean;
+}
+
+export type AtelierAccountTeamRole =
+  (typeof AtelierAccountTeamRole)[keyof typeof AtelierAccountTeamRole];
+
+export const AtelierAccountTeamRole = {
+  account_manager: "account_manager",
+  delivery_lead: "delivery_lead",
+  partner: "partner",
+  contributor: "contributor",
+} as const;
+
+export interface AtelierAccountTeamMember {
+  id: string;
+  accountId: string;
+  userId: string;
+  userName: string;
+  /** @nullable */
+  userInitials?: string | null;
+  /** @nullable */
+  userTitle?: string | null;
+  roleOnAccount: AtelierAccountTeamRole;
+  isOwner: boolean;
+  createdAt?: string;
+}
+
 export interface AtelierAccountWorkspace {
   account: AtelierAccountWorkspaceAccount;
   contacts: AtelierContact[];
@@ -891,8 +940,29 @@ export interface AtelierAccountWorkspace {
   opportunities: AtelierAccountOpportunityRef[];
   engagements: AtelierAccountEngagementRef[];
   audit: AtelierAuditEventLite[];
+  insights?: AtelierAccountInsight[];
+  accountTeam?: AtelierAccountTeamMember[];
   whitespacePreview?: AtelierWhitespaceCanvas;
   qbrPreview?: AtelierQbrCanvas;
+}
+
+export interface AtelierCreateAccountInsightInput {
+  body: string;
+  category?: AtelierAccountInsightCategory | null;
+}
+
+export interface AtelierUpdateAccountInsightInput {
+  body?: string;
+  category?: AtelierAccountInsightCategory | null;
+}
+
+export interface AtelierAddAccountTeamMemberInput {
+  userId: string;
+  roleOnAccount: AtelierAccountTeamRole;
+}
+
+export interface AtelierUpdateAccountTeamMemberInput {
+  roleOnAccount: AtelierAccountTeamRole;
 }
 
 export interface AtelierCartographerRefreshInput {

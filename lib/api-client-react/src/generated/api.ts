@@ -22,6 +22,7 @@ import type {
   AtelierAccountDuplicateError,
   AtelierAccountSummary,
   AtelierAccountWorkspace,
+  AtelierAddAccountTeamMemberInput,
   AtelierAdminSettings,
   AtelierAdminSettingsUpdate,
   AtelierAgentDecisionInput,
@@ -51,6 +52,7 @@ import type {
   AtelierContactRelationship,
   AtelierCountersignPricing200,
   AtelierCreateAccountInput,
+  AtelierCreateAccountInsightInput,
   AtelierCreateContactInput,
   AtelierCreateContactRelationshipInput,
   AtelierCreateOpportunityInput,
@@ -120,6 +122,8 @@ import type {
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
   AtelierUpdateAccountInput,
+  AtelierUpdateAccountInsightInput,
+  AtelierUpdateAccountTeamMemberInput,
   AtelierUpdateContactInput,
   AtelierUpdateOpportunityInput,
   AtelierWhitespaceCanvas,
@@ -6052,6 +6056,610 @@ export const useAtelierBulkDecideProfileUpdates = <
   return useMutation(
     getAtelierBulkDecideProfileUpdatesMutationOptions(options),
   );
+};
+
+/**
+ * @summary Post a human insight on an account (audited)
+ */
+export const getAtelierCreateAccountInsightUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/insights`;
+};
+
+export const atelierCreateAccountInsight = async (
+  accountId: string,
+  atelierCreateAccountInsightInput: AtelierCreateAccountInsightInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierCreateAccountInsightUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCreateAccountInsightInput),
+    },
+  );
+};
+
+export const getAtelierCreateAccountInsightMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccountInsight>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateAccountInsightInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateAccountInsight>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateAccountInsightInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateAccountInsight"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateAccountInsight>>,
+    { accountId: string; data: BodyType<AtelierCreateAccountInsightInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierCreateAccountInsight(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateAccountInsightMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateAccountInsight>>
+>;
+export type AtelierCreateAccountInsightMutationBody =
+  BodyType<AtelierCreateAccountInsightInput>;
+export type AtelierCreateAccountInsightMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Post a human insight on an account (audited)
+ */
+export const useAtelierCreateAccountInsight = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccountInsight>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateAccountInsightInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateAccountInsight>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateAccountInsightInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateAccountInsightMutationOptions(options));
+};
+
+/**
+ * @summary Edit an account insight (author only, audited)
+ */
+export const getAtelierUpdateAccountInsightUrl = (
+  accountId: string,
+  insightId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/insights/${insightId}`;
+};
+
+export const atelierUpdateAccountInsight = async (
+  accountId: string,
+  insightId: string,
+  atelierUpdateAccountInsightInput: AtelierUpdateAccountInsightInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierUpdateAccountInsightUrl(accountId, insightId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateAccountInsightInput),
+    },
+  );
+};
+
+export const getAtelierUpdateAccountInsightMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountInsight>>,
+    TError,
+    {
+      accountId: string;
+      insightId: string;
+      data: BodyType<AtelierUpdateAccountInsightInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAccountInsight>>,
+  TError,
+  {
+    accountId: string;
+    insightId: string;
+    data: BodyType<AtelierUpdateAccountInsightInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAccountInsight"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAccountInsight>>,
+    {
+      accountId: string;
+      insightId: string;
+      data: BodyType<AtelierUpdateAccountInsightInput>;
+    }
+  > = (props) => {
+    const { accountId, insightId, data } = props ?? {};
+
+    return atelierUpdateAccountInsight(
+      accountId,
+      insightId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAccountInsightMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAccountInsight>>
+>;
+export type AtelierUpdateAccountInsightMutationBody =
+  BodyType<AtelierUpdateAccountInsightInput>;
+export type AtelierUpdateAccountInsightMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Edit an account insight (author only, audited)
+ */
+export const useAtelierUpdateAccountInsight = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountInsight>>,
+    TError,
+    {
+      accountId: string;
+      insightId: string;
+      data: BodyType<AtelierUpdateAccountInsightInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAccountInsight>>,
+  TError,
+  {
+    accountId: string;
+    insightId: string;
+    data: BodyType<AtelierUpdateAccountInsightInput>;
+  },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateAccountInsightMutationOptions(options));
+};
+
+/**
+ * @summary Delete an account insight (author only, audited)
+ */
+export const getAtelierDeleteAccountInsightUrl = (
+  accountId: string,
+  insightId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/insights/${insightId}`;
+};
+
+export const atelierDeleteAccountInsight = async (
+  accountId: string,
+  insightId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierDeleteAccountInsightUrl(accountId, insightId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteAccountInsightMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountInsight>>,
+    TError,
+    { accountId: string; insightId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteAccountInsight>>,
+  TError,
+  { accountId: string; insightId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteAccountInsight"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteAccountInsight>>,
+    { accountId: string; insightId: string }
+  > = (props) => {
+    const { accountId, insightId } = props ?? {};
+
+    return atelierDeleteAccountInsight(accountId, insightId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteAccountInsightMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteAccountInsight>>
+>;
+
+export type AtelierDeleteAccountInsightMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an account insight (author only, audited)
+ */
+export const useAtelierDeleteAccountInsight = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountInsight>>,
+    TError,
+    { accountId: string; insightId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteAccountInsight>>,
+  TError,
+  { accountId: string; insightId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteAccountInsightMutationOptions(options));
+};
+
+/**
+ * @summary Add a member to the account team (partner only, audited)
+ */
+export const getAtelierAddAccountTeamMemberUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/team`;
+};
+
+export const atelierAddAccountTeamMember = async (
+  accountId: string,
+  atelierAddAccountTeamMemberInput: AtelierAddAccountTeamMemberInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierAddAccountTeamMemberUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierAddAccountTeamMemberInput),
+    },
+  );
+};
+
+export const getAtelierAddAccountTeamMemberMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAddAccountTeamMember>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierAddAccountTeamMemberInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierAddAccountTeamMember>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierAddAccountTeamMemberInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierAddAccountTeamMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierAddAccountTeamMember>>,
+    { accountId: string; data: BodyType<AtelierAddAccountTeamMemberInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierAddAccountTeamMember(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierAddAccountTeamMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierAddAccountTeamMember>>
+>;
+export type AtelierAddAccountTeamMemberMutationBody =
+  BodyType<AtelierAddAccountTeamMemberInput>;
+export type AtelierAddAccountTeamMemberMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a member to the account team (partner only, audited)
+ */
+export const useAtelierAddAccountTeamMember = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAddAccountTeamMember>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierAddAccountTeamMemberInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierAddAccountTeamMember>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierAddAccountTeamMemberInput> },
+  TContext
+> => {
+  return useMutation(getAtelierAddAccountTeamMemberMutationOptions(options));
+};
+
+/**
+ * @summary Change a team member's role on the account (partner only, audited)
+ */
+export const getAtelierUpdateAccountTeamMemberUrl = (
+  accountId: string,
+  memberId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/team/${memberId}`;
+};
+
+export const atelierUpdateAccountTeamMember = async (
+  accountId: string,
+  memberId: string,
+  atelierUpdateAccountTeamMemberInput: AtelierUpdateAccountTeamMemberInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierUpdateAccountTeamMemberUrl(accountId, memberId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateAccountTeamMemberInput),
+    },
+  );
+};
+
+export const getAtelierUpdateAccountTeamMemberMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountTeamMember>>,
+    TError,
+    {
+      accountId: string;
+      memberId: string;
+      data: BodyType<AtelierUpdateAccountTeamMemberInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAccountTeamMember>>,
+  TError,
+  {
+    accountId: string;
+    memberId: string;
+    data: BodyType<AtelierUpdateAccountTeamMemberInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAccountTeamMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAccountTeamMember>>,
+    {
+      accountId: string;
+      memberId: string;
+      data: BodyType<AtelierUpdateAccountTeamMemberInput>;
+    }
+  > = (props) => {
+    const { accountId, memberId, data } = props ?? {};
+
+    return atelierUpdateAccountTeamMember(
+      accountId,
+      memberId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAccountTeamMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAccountTeamMember>>
+>;
+export type AtelierUpdateAccountTeamMemberMutationBody =
+  BodyType<AtelierUpdateAccountTeamMemberInput>;
+export type AtelierUpdateAccountTeamMemberMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Change a team member's role on the account (partner only, audited)
+ */
+export const useAtelierUpdateAccountTeamMember = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountTeamMember>>,
+    TError,
+    {
+      accountId: string;
+      memberId: string;
+      data: BodyType<AtelierUpdateAccountTeamMemberInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAccountTeamMember>>,
+  TError,
+  {
+    accountId: string;
+    memberId: string;
+    data: BodyType<AtelierUpdateAccountTeamMemberInput>;
+  },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateAccountTeamMemberMutationOptions(options));
+};
+
+/**
+ * @summary Remove a member from the account team (partner only, audited)
+ */
+export const getAtelierRemoveAccountTeamMemberUrl = (
+  accountId: string,
+  memberId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/team/${memberId}`;
+};
+
+export const atelierRemoveAccountTeamMember = async (
+  accountId: string,
+  memberId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierRemoveAccountTeamMemberUrl(accountId, memberId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierRemoveAccountTeamMemberMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRemoveAccountTeamMember>>,
+    TError,
+    { accountId: string; memberId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRemoveAccountTeamMember>>,
+  TError,
+  { accountId: string; memberId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierRemoveAccountTeamMember"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRemoveAccountTeamMember>>,
+    { accountId: string; memberId: string }
+  > = (props) => {
+    const { accountId, memberId } = props ?? {};
+
+    return atelierRemoveAccountTeamMember(accountId, memberId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRemoveAccountTeamMemberMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRemoveAccountTeamMember>>
+>;
+
+export type AtelierRemoveAccountTeamMemberMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a member from the account team (partner only, audited)
+ */
+export const useAtelierRemoveAccountTeamMember = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRemoveAccountTeamMember>>,
+    TError,
+    { accountId: string; memberId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRemoveAccountTeamMember>>,
+  TError,
+  { accountId: string; memberId: string },
+  TContext
+> => {
+  return useMutation(getAtelierRemoveAccountTeamMemberMutationOptions(options));
 };
 
 /**

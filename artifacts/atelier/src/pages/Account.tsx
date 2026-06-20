@@ -8,12 +8,24 @@ import {
   useAtelierGetAccountQbr,
   useAtelierDecideProfileUpdate,
   useAtelierUpdateContactDisposition,
+  useAtelierGetMe,
+  useAtelierListUsers,
+  useAtelierCreateAccountInsight,
+  useAtelierUpdateAccountInsight,
+  useAtelierDeleteAccountInsight,
+  useAtelierAddAccountTeamMember,
+  useAtelierUpdateAccountTeamMember,
+  useAtelierRemoveAccountTeamMember,
   getAtelierGetAccountWorkspaceQueryKey,
   type AtelierContact,
   type AtelierContactRelationship,
   type AtelierContactDisposition,
   type AtelierAccountWorkspace,
   type AtelierProfileUpdateProposal,
+  type AtelierAccountInsight,
+  type AtelierAccountInsightCategory,
+  type AtelierAccountTeamMember,
+  type AtelierAccountTeamRole,
 } from "@workspace/api-client-react";
 import {
   BackLink,
@@ -60,6 +72,11 @@ import {
   Pencil,
   Lightbulb,
   HelpCircle,
+  MessageSquare,
+  UserPlus,
+  Trash2,
+  Crown,
+  Send,
 } from "lucide-react";
 
 type TabKey =
@@ -68,6 +85,7 @@ type TabKey =
   | "opportunities"
   | "engagements"
   | "relationships"
+  | "insights"
   | "whitespace"
   | "qbr"
   | "audit";
@@ -78,9 +96,25 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "opportunities", label: "Opportunities", icon: <Briefcase className="w-3.5 h-3.5" /> },
   { key: "engagements", label: "Engagements", icon: <Layers className="w-3.5 h-3.5" /> },
   { key: "relationships", label: "Relationships", icon: <Network className="w-3.5 h-3.5" /> },
+  { key: "insights", label: "Insights", icon: <MessageSquare className="w-3.5 h-3.5" /> },
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   { key: "qbr", label: "QBR", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
+];
+
+const INSIGHT_CATEGORIES: Array<{ value: AtelierAccountInsightCategory; label: string; tone: string }> = [
+  { value: "relationship", label: "Relationship", tone: "text-sky-300 border-sky-400/30 bg-sky-400/10" },
+  { value: "risk", label: "Risk", tone: "text-red-300 border-red-400/30 bg-red-400/10" },
+  { value: "competitive", label: "Competitive", tone: "text-amber-300 border-amber-400/30 bg-amber-400/10" },
+  { value: "opportunity", label: "Opportunity", tone: "text-emerald-300 border-emerald-400/30 bg-emerald-400/10" },
+  { value: "general", label: "General", tone: "text-text-mute border-border-soft bg-bg-soft" },
+];
+
+const TEAM_ROLES: Array<{ value: AtelierAccountTeamRole; label: string }> = [
+  { value: "account_manager", label: "Account Manager" },
+  { value: "delivery_lead", label: "Delivery Lead" },
+  { value: "partner", label: "Partner" },
+  { value: "contributor", label: "Contributor" },
 ];
 
 // PRD §6.2: champion + supporter = gold; neutral = mute (default);
@@ -274,6 +308,7 @@ export default function Account() {
             relationships={ws.relationships}
           />
         )}
+        {tab === "insights" && <InsightsTab ws={ws} accountId={accountId} />}
         {tab === "whitespace" && <WhitespaceTab accountId={accountId} />}
         {tab === "qbr" && <QbrTab accountId={accountId} />}
         {tab === "audit" && <AuditTab accountId={ws.account.id} events={ws.audit} />}
@@ -1801,5 +1836,495 @@ function AuditTab({
         ))}
       </ul>
     </Card>
+  );
+}
+
+// ============================================================
+// INSIGHTS TAB (Task #569) — human, attributed insight feed +
+// account team. Visually distinct from AI research (Profile) and
+// the immutable audit trail: warm gold-tinted cards, author
+// avatars, category chips, author-scoped edit/delete.
+// ============================================================
+
+function InsightsTab({
+  ws,
+  accountId,
+}: {
+  ws: AtelierAccountWorkspace;
+  accountId: string;
+}) {
+  const qc = useQueryClient();
+  const { data: me } = useAtelierGetMe();
+  const wsKey = getAtelierGetAccountWorkspaceQueryKey(accountId);
+  const onSuccess = (data: AtelierAccountWorkspace) => {
+    qc.setQueryData(wsKey, data);
+  };
+  const insights = ws.insights ?? [];
+  const team = ws.accountTeam ?? [];
+  const canManageTeam = me
+    ? ["founding_partner", "partner", "senior_manager"].includes(me.role)
+    : false;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-5">
+        <InsightComposer accountId={accountId} onSuccess={onSuccess} />
+        {insights.length === 0 ? (
+          <Card className="p-8 text-center text-text-mute font-mono text-sm">
+            No insights yet — add relationship context, a risk, competitive
+            intel, or an opportunity to start the feed.
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {insights.map((ins) => (
+              <InsightCard
+                key={ins.id}
+                insight={ins}
+                accountId={accountId}
+                meId={me?.id ?? null}
+                onSuccess={onSuccess}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="lg:col-span-1">
+        <AccountTeamPanel
+          team={team}
+          accountId={accountId}
+          canManage={canManageTeam}
+          onSuccess={onSuccess}
+        />
+      </div>
+    </div>
+  );
+}
+
+function InsightComposer({
+  accountId,
+  onSuccess,
+}: {
+  accountId: string;
+  onSuccess: (d: AtelierAccountWorkspace) => void;
+}) {
+  const [body, setBody] = useState("");
+  const [category, setCategory] = useState<AtelierAccountInsightCategory | "">("");
+  const createMut = useAtelierCreateAccountInsight({
+    mutation: {
+      onSuccess: (d) => {
+        onSuccess(d);
+        setBody("");
+        setCategory("");
+      },
+    },
+  });
+  const submit = () => {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    createMut.mutate({
+      accountId,
+      data: { body: trimmed, category: category || null },
+    });
+  };
+  return (
+    <Card className="p-5 border-gold/20 bg-gold/[0.02]">
+      <Eyebrow className="mb-3 flex items-center gap-2">
+        <MessageSquare className="w-3.5 h-3.5" /> Add insight
+      </Eyebrow>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={3}
+        placeholder="Share relationship context, a risk, competitive intel, or an opportunity…"
+        className="w-full bg-bg-soft border border-border-soft rounded px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold/40 resize-y"
+        data-testid="insight-composer-body"
+      />
+      <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {INSIGHT_CATEGORIES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => setCategory(category === c.value ? "" : c.value)}
+              className={`px-2 py-1 rounded text-[11px] font-mono border transition ${
+                category === c.value
+                  ? c.tone
+                  : "text-text-faint border-border-soft hover:text-text-mute"
+              }`}
+              data-testid={`insight-category-${c.value}`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <PillButton
+          onClick={submit}
+          disabled={!body.trim() || createMut.isPending}
+          data-testid="insight-submit"
+        >
+          <Send className="w-3.5 h-3.5" /> Post
+        </PillButton>
+      </div>
+    </Card>
+  );
+}
+
+function InsightCard({
+  insight,
+  accountId,
+  meId,
+  onSuccess,
+}: {
+  insight: AtelierAccountInsight;
+  accountId: string;
+  meId: string | null;
+  onSuccess: (d: AtelierAccountWorkspace) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(insight.body);
+  const [draftCat, setDraftCat] = useState<AtelierAccountInsightCategory | "">(
+    insight.category ?? "",
+  );
+  const updateMut = useAtelierUpdateAccountInsight({
+    mutation: {
+      onSuccess: (d) => {
+        onSuccess(d);
+        setEditing(false);
+      },
+    },
+  });
+  const deleteMut = useAtelierDeleteAccountInsight({ mutation: { onSuccess } });
+  const isAuthor = meId != null && insight.authorId === meId;
+  const cat = INSIGHT_CATEGORIES.find((c) => c.value === insight.category);
+  const saveEdit = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    updateMut.mutate({
+      accountId,
+      insightId: insight.id,
+      data: { body: trimmed, category: draftCat || null },
+    });
+  };
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center text-[10px] font-mono text-gold shrink-0">
+            {insight.authorInitials ?? insight.authorName.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm text-text font-medium truncate">
+              {insight.authorName}
+            </div>
+            <div className="text-[11px] font-mono text-text-faint">
+              {new Date(insight.createdAt).toLocaleString()}
+              {insight.edited ? " · edited" : ""}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {cat && (
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${cat.tone}`}>
+              {cat.label}
+            </span>
+          )}
+          {isAuthor && !editing && (
+            <>
+              <button
+                onClick={() => {
+                  setDraft(insight.body);
+                  setDraftCat(insight.category ?? "");
+                  setEditing(true);
+                }}
+                className="text-text-faint hover:text-gold transition"
+                title="Edit"
+                data-testid={`insight-edit-${insight.id}`}
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() =>
+                  deleteMut.mutate({ accountId, insightId: insight.id })
+                }
+                disabled={deleteMut.isPending}
+                className="text-text-faint hover:text-red-400 transition"
+                title="Delete"
+                data-testid={`insight-delete-${insight.id}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <div className="mt-3 space-y-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            className="w-full bg-bg-soft border border-border-soft rounded px-3 py-2 text-sm text-text focus:outline-none focus:border-gold/40 resize-y"
+            data-testid={`insight-edit-body-${insight.id}`}
+          />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {INSIGHT_CATEGORIES.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() =>
+                    setDraftCat(draftCat === c.value ? "" : c.value)
+                  }
+                  className={`px-2 py-1 rounded text-[11px] font-mono border transition ${
+                    draftCat === c.value
+                      ? c.tone
+                      : "text-text-faint border-border-soft hover:text-text-mute"
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEditing(false)}
+                className="text-xs font-mono text-text-faint hover:text-text-mute px-2 py-1"
+              >
+                Cancel
+              </button>
+              <PillButton
+                onClick={saveEdit}
+                disabled={!draft.trim() || updateMut.isPending}
+                data-testid={`insight-save-${insight.id}`}
+              >
+                <Check className="w-3.5 h-3.5" /> Save
+              </PillButton>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2.5 text-sm text-text whitespace-pre-wrap leading-relaxed">
+          {insight.body}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function AccountTeamPanel({
+  team,
+  accountId,
+  canManage,
+  onSuccess,
+}: {
+  team: AtelierAccountTeamMember[];
+  accountId: string;
+  canManage: boolean;
+  onSuccess: (d: AtelierAccountWorkspace) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <Eyebrow className="flex items-center gap-2">
+          <UsersIcon className="w-3.5 h-3.5" /> Account Team
+        </Eyebrow>
+        {canManage && !adding && (
+          <button
+            onClick={() => setAdding(true)}
+            className="text-text-faint hover:text-gold transition flex items-center gap-1 text-xs font-mono"
+            data-testid="team-add-toggle"
+          >
+            <UserPlus className="w-3.5 h-3.5" /> Add
+          </button>
+        )}
+      </div>
+      {canManage && adding && (
+        <AddTeamMemberForm
+          accountId={accountId}
+          team={team}
+          onSuccess={onSuccess}
+          onClose={() => setAdding(false)}
+        />
+      )}
+      {team.length === 0 ? (
+        <div className="text-sm text-text-mute font-mono py-4 text-center">
+          No team members yet.
+        </div>
+      ) : (
+        <ul className="space-y-2.5">
+          {team.map((m) => (
+            <TeamMemberRow
+              key={m.id}
+              member={m}
+              accountId={accountId}
+              canManage={canManage}
+              onSuccess={onSuccess}
+            />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function TeamMemberRow({
+  member,
+  accountId,
+  canManage,
+  onSuccess,
+}: {
+  member: AtelierAccountTeamMember;
+  accountId: string;
+  canManage: boolean;
+  onSuccess: (d: AtelierAccountWorkspace) => void;
+}) {
+  const updateMut = useAtelierUpdateAccountTeamMember({ mutation: { onSuccess } });
+  const removeMut = useAtelierRemoveAccountTeamMember({ mutation: { onSuccess } });
+  const roleLabel =
+    TEAM_ROLES.find((r) => r.value === member.roleOnAccount)?.label ??
+    member.roleOnAccount;
+  return (
+    <li className="flex items-center justify-between gap-3 border-b border-border-soft pb-2.5 last:border-0 last:pb-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="w-7 h-7 rounded-full bg-bg-soft border border-border-soft flex items-center justify-center text-[10px] font-mono text-text-mute shrink-0">
+          {member.userInitials ?? member.userName.slice(0, 2).toUpperCase()}
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm text-text font-medium truncate flex items-center gap-1.5">
+            {member.userName}
+            {member.isOwner && (
+              <span title="Account owner">
+                <Crown className="w-3 h-3 text-gold" />
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] font-mono text-text-faint truncate">
+            {member.userTitle ?? roleLabel}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {canManage && !member.isOwner ? (
+          <>
+            <select
+              value={member.roleOnAccount}
+              onChange={(e) =>
+                updateMut.mutate({
+                  accountId,
+                  memberId: member.id,
+                  data: {
+                    roleOnAccount: e.target.value as AtelierAccountTeamRole,
+                  },
+                })
+              }
+              className="bg-bg-soft border border-border-soft rounded text-[11px] font-mono text-text-mute px-1.5 py-1 focus:outline-none focus:border-gold/40"
+              data-testid={`team-role-${member.id}`}
+            >
+              {TEAM_ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() =>
+                removeMut.mutate({ accountId, memberId: member.id })
+              }
+              disabled={removeMut.isPending}
+              className="text-text-faint hover:text-red-400 transition"
+              title="Remove"
+              data-testid={`team-remove-${member.id}`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </>
+        ) : (
+          <span
+            className={`px-2 py-0.5 rounded text-[10px] font-mono border ${
+              member.isOwner
+                ? "text-gold border-gold/30 bg-gold/10"
+                : "text-text-mute border-border-soft bg-bg-soft"
+            }`}
+          >
+            {member.isOwner ? "Owner" : roleLabel}
+          </span>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function AddTeamMemberForm({
+  accountId,
+  team,
+  onSuccess,
+  onClose,
+}: {
+  accountId: string;
+  team: AtelierAccountTeamMember[];
+  onSuccess: (d: AtelierAccountWorkspace) => void;
+  onClose: () => void;
+}) {
+  const { data: users } = useAtelierListUsers();
+  const [userId, setUserId] = useState("");
+  const [role, setRole] = useState<AtelierAccountTeamRole>("contributor");
+  const addMut = useAtelierAddAccountTeamMember({
+    mutation: {
+      onSuccess: (d) => {
+        onSuccess(d);
+        onClose();
+      },
+    },
+  });
+  const existingIds = new Set(team.map((m) => m.userId));
+  const available = (users ?? []).filter((u) => !existingIds.has(u.id));
+  const submit = () => {
+    if (!userId) return;
+    addMut.mutate({ accountId, data: { userId, roleOnAccount: role } });
+  };
+  return (
+    <div className="mb-4 p-3 rounded border border-gold/20 bg-gold/[0.02] space-y-2.5">
+      <select
+        value={userId}
+        onChange={(e) => setUserId(e.target.value)}
+        className="w-full bg-bg-soft border border-border-soft rounded text-sm text-text px-2 py-1.5 focus:outline-none focus:border-gold/40"
+        data-testid="team-add-user"
+      >
+        <option value="">Select a person…</option>
+        {available.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name} — {u.title}
+          </option>
+        ))}
+      </select>
+      <select
+        value={role}
+        onChange={(e) => setRole(e.target.value as AtelierAccountTeamRole)}
+        className="w-full bg-bg-soft border border-border-soft rounded text-sm text-text px-2 py-1.5 focus:outline-none focus:border-gold/40"
+        data-testid="team-add-role"
+      >
+        {TEAM_ROLES.map((r) => (
+          <option key={r.value} value={r.value}>
+            {r.label}
+          </option>
+        ))}
+      </select>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={onClose}
+          className="text-xs font-mono text-text-faint hover:text-text-mute px-2 py-1"
+        >
+          Cancel
+        </button>
+        <PillButton
+          onClick={submit}
+          disabled={!userId || addMut.isPending}
+          data-testid="team-add-submit"
+        >
+          <UserPlus className="w-3.5 h-3.5" /> Add
+        </PillButton>
+      </div>
+    </div>
   );
 }

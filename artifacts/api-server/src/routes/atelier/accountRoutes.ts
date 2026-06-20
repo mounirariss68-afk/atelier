@@ -27,6 +27,8 @@ import {
   atelierEngagements,
   atelierUsers,
   atelierAuditEvents,
+  atelierAccountInsights,
+  atelierAccountTeamMembers,
 } from "@workspace/db";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 
@@ -75,6 +77,10 @@ import {
   AtelierCreateContactBody as AtelierCreateContactInput,
   AtelierUpdateContactBody as AtelierUpdateContactInput,
   AtelierCreateContactRelationshipBody as AtelierCreateContactRelationshipInput,
+  AtelierCreateAccountInsightBody as AtelierCreateAccountInsightInput,
+  AtelierUpdateAccountInsightBody as AtelierUpdateAccountInsightInput,
+  AtelierAddAccountTeamMemberBody as AtelierAddAccountTeamMemberInput,
+  AtelierUpdateAccountTeamMemberBody as AtelierUpdateAccountTeamMemberInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -585,6 +591,49 @@ async function buildWorkspace(accountId: string, access: EngAccess, me: { id: st
   );
   const childRows = childRowsRaw.filter((_, i) => childVisibility[i]);
 
+  // ---- human insight feed (Task #569): newest-first, author-attributed ----
+  const insightRows = await db
+    .select()
+    .from(atelierAccountInsights)
+    .where(
+      and(
+        eq(atelierAccountInsights.accountId, a.id),
+        isNull(atelierAccountInsights.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierAccountInsights.createdAt));
+  const insightAuthorIds = Array.from(new Set(insightRows.map((r) => r.authorId)));
+  const insightAuthors = insightAuthorIds.length
+    ? await db
+        .select()
+        .from(atelierUsers)
+        .where(inArray(atelierUsers.id, insightAuthorIds))
+    : [];
+
+  // ---- account team (Task #569): partner owner + additional members ----
+  const teamRows = await db
+    .select()
+    .from(atelierAccountTeamMembers)
+    .where(
+      and(
+        eq(atelierAccountTeamMembers.accountId, a.id),
+        isNull(atelierAccountTeamMembers.deletedAt),
+      ),
+    )
+    .orderBy(atelierAccountTeamMembers.createdAt);
+  const teamUserIds = Array.from(
+    new Set([
+      ...teamRows.map((r) => r.userId),
+      ...(a.partnerOwnerId ? [a.partnerOwnerId] : []),
+    ]),
+  );
+  const teamUsers = teamUserIds.length
+    ? await db
+        .select()
+        .from(atelierUsers)
+        .where(inArray(atelierUsers.id, teamUserIds))
+    : [];
+
   return {
     account: {
       ...summary,
@@ -623,6 +672,66 @@ async function buildWorkspace(accountId: string, access: EngAccess, me: { id: st
       payloadSummary: e.payloadSummary ?? null,
       createdAt: new Date(e.createdAt).toISOString(),
     })),
+    insights: insightRows.map((r) => {
+      const author = insightAuthors.find((u) => u.id === r.authorId);
+      const created = new Date(r.createdAt);
+      const updated = new Date(r.updatedAt);
+      return {
+        id: r.id,
+        accountId: r.accountId,
+        authorId: r.authorId,
+        authorName: author?.name ?? "Unknown",
+        authorInitials: author?.initials ?? null,
+        body: r.body,
+        category: (r.category ?? null) as
+          | "relationship"
+          | "risk"
+          | "competitive"
+          | "opportunity"
+          | "general"
+          | null,
+        createdAt: created.toISOString(),
+        updatedAt: updated.toISOString(),
+        edited: updated.getTime() - created.getTime() > 1000,
+      };
+    }),
+    accountTeam: (() => {
+      const members = teamRows.map((r) => {
+        const u = teamUsers.find((x) => x.id === r.userId);
+        return {
+          id: r.id,
+          accountId: r.accountId,
+          userId: r.userId,
+          userName: u?.name ?? "Unknown",
+          userInitials: u?.initials ?? null,
+          userTitle: u?.title ?? null,
+          roleOnAccount: r.roleOnAccount as
+            | "account_manager"
+            | "delivery_lead"
+            | "partner"
+            | "contributor",
+          isOwner: r.userId === a.partnerOwnerId,
+          createdAt: new Date(r.createdAt).toISOString(),
+        };
+      });
+      // Always surface the account owner, even when they have no explicit
+      // team-members row (spec: account team is "owner + additional members").
+      if (a.partnerOwnerId && !members.some((m) => m.userId === a.partnerOwnerId)) {
+        const owner = teamUsers.find((x) => x.id === a.partnerOwnerId);
+        members.unshift({
+          id: `owner:${a.partnerOwnerId}`,
+          accountId: a.id,
+          userId: a.partnerOwnerId,
+          userName: owner?.name ?? "Unknown",
+          userInitials: owner?.initials ?? null,
+          userTitle: owner?.title ?? null,
+          roleOnAccount: "partner",
+          isOwner: true,
+          createdAt: new Date(a.createdAt).toISOString(),
+        });
+      }
+      return members;
+    })(),
   };
 }
 
@@ -640,6 +749,455 @@ router.get("/accounts/:accountId", async (req, res) => {
     res.status(404).json({ error: "not-found" });
     return;
   }
+  res.json(ws);
+});
+
+// ===================================================================
+// Account insights + account team (Task #569)
+// -------------------------------------------------------------------
+// INSIGHTS: a human, attributed, timestamped feed distinct from AI
+// research and the audit trail. Anyone who can see the account may post;
+// edit/delete is author-scoped. TEAM: the partner owner plus additional
+// members; managing the team is gated to partner-tier + senior_manager
+// (the same CREATE_ROLES that own account strategy). Every mutation is
+// written to the audit trail.
+// ===================================================================
+
+const INSIGHT_CATEGORY_LABEL: Record<string, string> = {
+  relationship: "Relationship",
+  risk: "Risk",
+  competitive: "Competitive",
+  opportunity: "Opportunity",
+  general: "General",
+};
+const TEAM_ROLE_LABEL: Record<string, string> = {
+  account_manager: "Account Manager",
+  delivery_lead: "Delivery Lead",
+  partner: "Partner",
+  contributor: "Contributor",
+};
+
+// ---------- create insight (any persona who can see the account) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/accounts/:accountId/insights", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const parsed = AtelierCreateAccountInsightInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const body = parsed.data.body.trim();
+  if (!body) {
+    res.status(400).json({ error: "body-required" });
+    return;
+  }
+  const category = parsed.data.category ?? null;
+  const id = rid("ins");
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx.insert(atelierAccountInsights).values({
+      id,
+      orgId: account.orgId,
+      accountId: account.id,
+      authorId: me.id,
+      body,
+      category,
+      createdByUserId: me.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "insight.created",
+      payload: { insightId: id, category },
+      payloadSummary: `${me.name} posted ${
+        category ? `a ${INSIGHT_CATEGORY_LABEL[category] ?? category}` : "an"
+      } insight on ${account.brandName ?? account.name}.`,
+    });
+  });
+  const ws = await buildWorkspace(account.id, access, me);
+  res.json(ws);
+});
+
+// ---------- edit insight (author only) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/accounts/:accountId/insights/:insightId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierAccountInsights)
+    .where(
+      and(
+        eq(atelierAccountInsights.id, req.params.insightId),
+        eq(atelierAccountInsights.accountId, account.id),
+        isNull(atelierAccountInsights.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "insight-not-found" });
+    return;
+  }
+  if (row.authorId !== me.id) {
+    res.status(403).json({
+      error: "not-author",
+      reason: "Only the author can edit this insight.",
+    });
+    return;
+  }
+  const parsed = AtelierUpdateAccountInsightInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const patch: Partial<typeof atelierAccountInsights.$inferInsert> = {};
+  if (parsed.data.body !== undefined) {
+    const b = parsed.data.body.trim();
+    if (!b) {
+      res.status(400).json({ error: "body-required" });
+      return;
+    }
+    patch.body = b;
+  }
+  if (parsed.data.category !== undefined) {
+    patch.category = parsed.data.category ?? null;
+  }
+  if (Object.keys(patch).length === 0) {
+    res.status(400).json({ error: "no-op", reason: "No editable fields supplied." });
+    return;
+  }
+  patch.updatedAt = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountInsights)
+      .set(patch)
+      .where(eq(atelierAccountInsights.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "insight.edited",
+      payload: { insightId: row.id, fields: Object.keys(patch) },
+      payloadSummary: `${me.name} edited an insight on ${
+        account.brandName ?? account.name
+      }.`,
+    });
+  });
+  const ws = await buildWorkspace(account.id, access, me);
+  res.json(ws);
+});
+
+// ---------- delete insight (author only, soft delete) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/accounts/:accountId/insights/:insightId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierAccountInsights)
+    .where(
+      and(
+        eq(atelierAccountInsights.id, req.params.insightId),
+        eq(atelierAccountInsights.accountId, account.id),
+        isNull(atelierAccountInsights.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "insight-not-found" });
+    return;
+  }
+  if (row.authorId !== me.id) {
+    res.status(403).json({
+      error: "not-author",
+      reason: "Only the author can delete this insight.",
+    });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountInsights)
+      .set({ deletedAt: new Date() })
+      .where(eq(atelierAccountInsights.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "insight.deleted",
+      payload: { insightId: row.id },
+      payloadSummary: `${me.name} deleted an insight on ${
+        account.brandName ?? account.name
+      }.`,
+    });
+  });
+  const ws = await buildWorkspace(account.id, access, me);
+  res.json(ws);
+});
+
+// ---------- add team member (partner-only) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/accounts/:accountId/team", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Senior Manager personas can manage the account team.",
+    });
+    return;
+  }
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const parsed = AtelierAddAccountTeamMemberInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const userId = parsed.data.userId.trim();
+  const role = parsed.data.roleOnAccount;
+  const [user] = await db
+    .select()
+    .from(atelierUsers)
+    .where(
+      and(
+        eq(atelierUsers.id, userId),
+        eq(atelierUsers.orgId, account.orgId),
+        isNull(atelierUsers.deletedAt),
+      ),
+    );
+  if (!user) {
+    res.status(400).json({ error: "invalid-user", reason: "Unknown user." });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(atelierAccountTeamMembers)
+    .where(
+      and(
+        eq(atelierAccountTeamMembers.accountId, account.id),
+        eq(atelierAccountTeamMembers.userId, userId),
+        isNull(atelierAccountTeamMembers.deletedAt),
+      ),
+    );
+  if (existing) {
+    res.status(409).json({ error: "already-member", reason: "Already on the team." });
+    return;
+  }
+  const id = rid("atm");
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx.insert(atelierAccountTeamMembers).values({
+      id,
+      orgId: account.orgId,
+      accountId: account.id,
+      userId,
+      roleOnAccount: role,
+      createdByUserId: me.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "team.memberAdded",
+      payload: { memberId: id, userId, roleOnAccount: role },
+      payloadSummary: `${me.name} added ${user.name} to the ${
+        account.brandName ?? account.name
+      } account team as ${TEAM_ROLE_LABEL[role] ?? role}.`,
+    });
+  });
+  const ws = await buildWorkspace(account.id, access, me);
+  res.json(ws);
+});
+
+// ---------- update team member role (partner-only) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/accounts/:accountId/team/:memberId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Senior Manager personas can manage the account team.",
+    });
+    return;
+  }
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierAccountTeamMembers)
+    .where(
+      and(
+        eq(atelierAccountTeamMembers.id, req.params.memberId),
+        eq(atelierAccountTeamMembers.accountId, account.id),
+        isNull(atelierAccountTeamMembers.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "member-not-found" });
+    return;
+  }
+  const parsed = AtelierUpdateAccountTeamMemberInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const role = parsed.data.roleOnAccount;
+  const [user] = await db
+    .select({ name: atelierUsers.name })
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, row.userId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountTeamMembers)
+      .set({ roleOnAccount: role, updatedAt: new Date() })
+      .where(eq(atelierAccountTeamMembers.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "team.roleChanged",
+      payload: { memberId: row.id, userId: row.userId, roleOnAccount: role },
+      payloadSummary: `${me.name} set ${user?.name ?? "a team member"}'s role to ${
+        TEAM_ROLE_LABEL[role] ?? role
+      } on ${account.brandName ?? account.name}.`,
+    });
+  });
+  const ws = await buildWorkspace(account.id, access, me);
+  res.json(ws);
+});
+
+// ---------- remove team member (partner-only, soft delete) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/accounts/:accountId/team/:memberId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Senior Manager personas can manage the account team.",
+    });
+    return;
+  }
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierAccountTeamMembers)
+    .where(
+      and(
+        eq(atelierAccountTeamMembers.id, req.params.memberId),
+        eq(atelierAccountTeamMembers.accountId, account.id),
+        isNull(atelierAccountTeamMembers.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "member-not-found" });
+    return;
+  }
+  const [user] = await db
+    .select({ name: atelierUsers.name })
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, row.userId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountTeamMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(atelierAccountTeamMembers.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "team.memberRemoved",
+      payload: { memberId: row.id, userId: row.userId },
+      payloadSummary: `${me.name} removed ${user?.name ?? "a team member"} from the ${
+        account.brandName ?? account.name
+      } account team.`,
+    });
+  });
+  const ws = await buildWorkspace(account.id, access, me);
   res.json(ws);
 });
 

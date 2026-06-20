@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierAccountEngagementRef } from "./atelierAccountEngagementRef";
+import type { AtelierAccountInsight } from "./atelierAccountInsight";
 import type { AtelierAccountOpportunityRef } from "./atelierAccountOpportunityRef";
+import type { AtelierAccountTeamMember } from "./atelierAccountTeamMember";
 import type { AtelierAccountWorkspaceAccount } from "./atelierAccountWorkspaceAccount";
 import type { AtelierAuditEventLite } from "./atelierAuditEventLite";
 import type { AtelierContact } from "./atelierContact";
@@ -21,6 +23,8 @@ export interface AtelierAccountWorkspace {
   opportunities: AtelierAccountOpportunityRef[];
   engagements: AtelierAccountEngagementRef[];
   audit: AtelierAuditEventLite[];
+  insights?: AtelierAccountInsight[];
+  accountTeam?: AtelierAccountTeamMember[];
   whitespacePreview?: AtelierWhitespaceCanvas;
   qbrPreview?: AtelierQbrCanvas;
 }

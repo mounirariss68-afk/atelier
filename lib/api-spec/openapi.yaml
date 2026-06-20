@@ -1433,6 +1433,140 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
 
+  /atelier/accounts/{accountId}/insights:
+    post:
+      operationId: atelierCreateAccountInsight
+      tags: [atelier]
+      summary: Post a human insight on an account (audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCreateAccountInsightInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/insights/{insightId}:
+    patch:
+      operationId: atelierUpdateAccountInsight
+      tags: [atelier]
+      summary: Edit an account insight (author only, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: insightId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierUpdateAccountInsightInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+    delete:
+      operationId: atelierDeleteAccountInsight
+      tags: [atelier]
+      summary: Delete an account insight (author only, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: insightId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/team:
+    post:
+      operationId: atelierAddAccountTeamMember
+      tags: [atelier]
+      summary: Add a member to the account team (partner only, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierAddAccountTeamMemberInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/team/{memberId}:
+    patch:
+      operationId: atelierUpdateAccountTeamMember
+      tags: [atelier]
+      summary: Change a team member's role on the account (partner only, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: memberId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierUpdateAccountTeamMemberInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+    delete:
+      operationId: atelierRemoveAccountTeamMember
+      tags: [atelier]
+      summary: Remove a member from the account team (partner only, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: memberId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
   /atelier/contacts/{contactId}/disposition:
     post:
       operationId: atelierUpdateContactDisposition
@@ -2900,10 +3034,93 @@ components:
         audit:
           type: array
           items: { $ref: "#/components/schemas/AtelierAuditEventLite" }
+        # Task #569 — multi-author human insight feed (newest-first).
+        insights:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountInsight" }
+        # Task #569 — account team (additional members beyond the owner).
+        accountTeam:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountTeamMember" }
         whitespacePreview:
           $ref: "#/components/schemas/AtelierWhitespaceCanvas"
         qbrPreview:
           $ref: "#/components/schemas/AtelierQbrCanvas"
+
+    # Task #569 — human account insight + account team.
+    AtelierAccountInsightCategory:
+      type: string
+      enum: [relationship, risk, competitive, opportunity, general]
+
+    AtelierAccountTeamRole:
+      type: string
+      enum: [account_manager, delivery_lead, partner, contributor]
+
+    AtelierAccountInsight:
+      type: object
+      required: [id, accountId, authorId, authorName, body, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        authorId: { type: string }
+        authorName: { type: string }
+        authorInitials: { type: ["string", "null"] }
+        body: { type: string }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountInsightCategory"
+            - type: "null"
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        edited: { type: boolean }
+
+    AtelierAccountTeamMember:
+      type: object
+      required: [id, accountId, userId, userName, roleOnAccount, isOwner]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        userId: { type: string }
+        userName: { type: string }
+        userInitials: { type: ["string", "null"] }
+        userTitle: { type: ["string", "null"] }
+        roleOnAccount: { $ref: "#/components/schemas/AtelierAccountTeamRole" }
+        # True when this member is the account's partnerOwnerId (the owner is
+        # surfaced in the team list but cannot be removed here).
+        isOwner: { type: boolean }
+        createdAt: { type: string }
+
+    AtelierCreateAccountInsightInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountInsightCategory"
+            - type: "null"
+
+    AtelierUpdateAccountInsightInput:
+      type: object
+      properties:
+        body: { type: string }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountInsightCategory"
+            - type: "null"
+
+    AtelierAddAccountTeamMemberInput:
+      type: object
+      required: [userId, roleOnAccount]
+      properties:
+        userId: { type: string }
+        roleOnAccount: { $ref: "#/components/schemas/AtelierAccountTeamRole" }
+
+    AtelierUpdateAccountTeamMemberInput:
+      type: object
+      required: [roleOnAccount]
+      properties:
+        roleOnAccount: { $ref: "#/components/schemas/AtelierAccountTeamRole" }
 
     AtelierCartographerRefreshInput:
       type: object

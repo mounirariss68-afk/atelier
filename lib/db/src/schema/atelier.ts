@@ -298,6 +298,71 @@ export const atelierContactRelationships = pgTable(
 );
 
 // ============================================================
+// ACCOUNT INSIGHTS (Task #569)
+// ============================================================
+// Multi-author, attributed, timestamped human insight log on an account.
+// Deliberately distinct from AI research (cogniriseHypothesis / researchBrief
+// on atelier_accounts) and from the immutable audit trail (atelier_audit_events):
+// this is the partners' / account managers' own running commentary. Entries are
+// editable/deletable by their author only (enforced in route logic); soft-delete
+// via deleted_at. `category` is an optional human tag.
+export const atelierAccountInsights = pgTable(
+  "atelier_account_insights",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    // The persona who authored the insight (FK → atelier_users). Used to scope
+    // edit/delete to the author and to attribute the entry in the feed.
+    authorId: text("author_id").notNull(),
+    body: text("body").notNull(),
+    // Optional human-chosen category. Free text at the DB layer; the API/UI
+    // constrain it to: relationship | risk | competitive | opportunity | general.
+    // Null = uncategorized.
+    category: text("category"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_account_insights_org").on(t.orgId),
+    index("idx_atelier_account_insights_account").on(t.accountId),
+    index("idx_atelier_account_insights_author").on(t.authorId),
+  ],
+);
+
+// ============================================================
+// ACCOUNT TEAM MEMBERS (Task #569)
+// ============================================================
+// Additional people on an account beyond the single `partnerOwnerId` on
+// atelier_accounts. Each row = one user with a role on the account. The owner
+// is still the account's partnerOwnerId; this table captures account managers,
+// delivery leads, and other contributors. Uniqueness of (accountId, userId)
+// among non-deleted rows is enforced in route logic (soft-delete friendly).
+export const atelierAccountTeamMembers = pgTable(
+  "atelier_account_team_members",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    userId: text("user_id").notNull(), // FK → atelier_users
+    // account_manager | delivery_lead | partner | contributor (free text at DB
+    // layer; API/UI constrain the set).
+    roleOnAccount: text("role_on_account").notNull().default("contributor"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_account_team_org").on(t.orgId),
+    index("idx_atelier_account_team_account").on(t.accountId),
+    index("idx_atelier_account_team_user").on(t.userId),
+  ],
+);
+
+// ============================================================
 // CREDENTIALS (v2 — PRD §1.1, first-class case-study workspace)
 // Extends the v1 Atelier asset with structured credential metadata.
 // ============================================================
