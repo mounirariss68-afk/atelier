@@ -321,7 +321,12 @@ router.post("/accounts", async (req, res) => {
   // response stays snappy; the Profile tab polls for completion.
   void (async () => {
     try {
-      await runAccountCartographer({
+      // Task #560 — use the Cartographer's returned v2 output directly
+      // (instead of re-reading the stale agent_runs row, which carried the
+      // dropped v1 `proposedProfileUpdates` shape). Persist the full
+      // research onto the account so nothing is lost on create, and seed
+      // contacts from the named decision-makers.
+      const { output: out } = await runAccountCartographer({
         accountId: inserted.id,
         accountName: inserted.brandName ?? inserted.name,
         accountSector: inserted.sector,
@@ -329,59 +334,72 @@ router.post("/accounts", async (req, res) => {
         triggeredByUserId: me.id,
         actorLabel: "Account Cartographer",
       });
-      // Persist proposals + signals into the account, mirroring the
-      // manual `/cartographer/refresh` path so the standard pending-
-      // update flow can review them.
       const fresh = await loadAccount(inserted.id);
       if (!fresh) return;
-      // Pull the latest run output from the agent_runs table.
-      const [latestRun] = await db
-        .select()
-        .from(atelierAgentRuns)
-        .where(
-          and(
-            eq(atelierAgentRuns.targetType, "account"),
-            eq(atelierAgentRuns.targetId, inserted.id),
-            eq(atelierAgentRuns.agentId, "account_cartographer"),
-          ),
-        )
-        .orderBy(desc(atelierAgentRuns.createdAt))
-        .limit(1);
-      const output = (latestRun?.output ?? null) as
-        | {
-            proposedProfileUpdates?: Array<{
-              field: string;
-              fromValue: unknown;
-              toValue: unknown;
-              rationale: string;
-            }>;
-            sourceSignals?: typeof fresh.sourceSignals;
-          }
-        | null;
-      const newProposals = (output?.proposedProfileUpdates ?? []).map((p) => ({
-        id: rid("ppu"),
-        proposedBy: "ag_account_cartographer",
-        proposedAt: new Date().toISOString(),
-        field: p.field,
-        fromValue: p.fromValue,
-        toValue: p.toValue,
-        rationale: p.rationale,
-        status: "pending" as const,
-      }));
       const mergedSignals = [
         ...(fresh.sourceSignals ?? []),
-        ...(output?.sourceSignals ?? []),
+        ...(out.sourceSignals ?? []),
       ].slice(-20);
+      const priorityRefs = (out.account.strategicPriorities ?? [])
+        .map((p) => ({ text: p.text, sourceUrls: p.sourceUrls ?? [] }))
+        .filter((p) => p.text.trim().length > 0);
+      // Respect any priorities/hypothesis the partner entered on the
+      // proposal/dialog; only fall back to the Cartographer's when the
+      // account has none yet.
+      const mergedPriorities =
+        (fresh.strategicPriorities ?? []).length > 0
+          ? fresh.strategicPriorities
+          : priorityRefs.map((p) => p.text);
+      const mergedHypothesis =
+        fresh.cogniriseHypothesis && fresh.cogniriseHypothesis.trim().length > 0
+          ? fresh.cogniriseHypothesis
+          : out.account.cogniriseHypothesis || null;
+      // Only seed contacts when the account has none, so re-runs never
+      // duplicate the decision-maker list.
+      const existingContacts = await db
+        .select({ id: atelierContacts.id })
+        .from(atelierContacts)
+        .where(
+          and(
+            eq(atelierContacts.accountId, inserted.id),
+            isNull(atelierContacts.deletedAt),
+          ),
+        )
+        .limit(1);
+      const seedContacts =
+        existingContacts.length === 0
+          ? (out.decisionMakers ?? [])
+              .filter((d) => d.fullName.trim().length > 0)
+              .slice(0, 7)
+          : [];
       await db.transaction(async (tx) => {
         await tx
           .update(atelierAccounts)
           .set({
             sourceSignals: mergedSignals,
-            pendingProfileUpdates: [...(fresh.pendingProfileUpdates ?? []), ...newProposals],
+            strategicPriorities: mergedPriorities,
+            strategicPriorityRefs: priorityRefs,
+            cogniriseHypothesis: mergedHypothesis,
+            researchBrief: out.researchBrief,
             enrichedAt: new Date(),
             updatedAt: new Date(),
           })
           .where(eq(atelierAccounts.id, inserted.id));
+        for (const d of seedContacts) {
+          await tx.insert(atelierContacts).values({
+            id: rid("con"),
+            orgId: inserted.orgId,
+            accountId: inserted.id,
+            fullName: d.fullName.trim(),
+            title: d.title ?? null,
+            seniority: d.seniority ?? null,
+            buyerPersona: d.buyerPersona ?? null,
+            sourceUrl: d.sourceUrl ?? null,
+            confidence: d.confidence === "verified" ? "verified" : "inferred",
+            notes: d.rationale ?? null,
+            createdByUserId: me.id,
+          });
+        }
         await tx.insert(atelierAuditEvents).values({
           id: rid("aud"),
           entityType: "account",
@@ -392,10 +410,11 @@ router.post("/accounts", async (req, res) => {
           action: "account.cartographer_run",
           payload: {
             trigger: "auto_on_create",
-            proposedCount: newProposals.length,
-            signalCount: output?.sourceSignals?.length ?? 0,
+            signalCount: out.sourceSignals?.length ?? 0,
+            contactsSeeded: seedContacts.length,
+            mandateAngles: out.researchBrief?.mandateAngles?.length ?? 0,
           },
-          payloadSummary: `Cartographer auto-ran on creation and queued ${newProposals.length} proposal(s) for ${inserted.brandName ?? inserted.name}.`,
+          payloadSummary: `Cartographer auto-ran on creation: persisted research and seeded ${seedContacts.length} contact(s) for ${inserted.brandName ?? inserted.name}.`,
         });
       });
     } catch (err) {

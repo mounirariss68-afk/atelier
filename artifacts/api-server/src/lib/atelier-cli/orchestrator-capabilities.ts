@@ -507,18 +507,28 @@ defineCapability({
           refreshedSummary: out.account.refreshedSummary ?? "",
           sourceSignals,
           decisionMakers,
+          // Task #560 — full structured research brief carried onto the
+          // proposal card (display-only) and persisted post-create.
+          researchBrief: out.researchBrief,
         };
         const required = ["sector", "country"];
         const missingRequiredFields = required.filter((k) => {
           const v = draft[k];
           return v == null || (typeof v === "string" && v.trim() === "");
         });
-        // partnerOwnerId is always missing pre-create — the partner picks
-        // themself or another partner on the confirm card.
-        missingRequiredFields.push("partnerOwnerId");
+        // Task #560 — partnerOwnerId is NO LONGER forced onto
+        // missingRequiredFields. The chat flow now ends here by emitting an
+        // `account_proposal` card; the partner reviews the draft and clicks
+        // "Review & Create", which opens the pre-populated CreateAccountDialog
+        // (partner-owner defaulted to the acting partner) and writes the row
+        // through the standard POST /accounts route. There is no in-chat
+        // confirm card, so there is nothing to leave unsatisfied.
         return {
           ok: true,
           data: {
+            // Drives the frontend ShapeBody renderer (overrides the
+            // capability default via the per-result shape hint).
+            shape: "account_proposal",
             specialist: {
               id: "ag_account_cartographer",
               name: "Account Cartographer",

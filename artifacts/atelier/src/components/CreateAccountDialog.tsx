@@ -25,8 +25,29 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
+/**
+ * Task #560 — prefill payload from the chat `account_proposal` card. Mirrors
+ * the Cartographer draft so "Review & Create" can hydrate the form verbatim.
+ */
+export interface AccountPrefill {
+  name?: string | null;
+  brandName?: string | null;
+  sector?: string | null;
+  country?: string | null;
+  hqCity?: string | null;
+  tier?: string | null;
+  strategicPriorities?: Array<{ text?: string; sourceUrls?: string[] } | string>;
+  cogniriseHypothesis?: string | null;
+}
+
 interface Props {
-  trigger: React.ReactNode;
+  /** Trigger-driven usage (e.g. the CRM "New account" button). */
+  trigger?: React.ReactNode;
+  /** Controlled usage (e.g. the chat proposal card). When `open` is
+   * provided the dialog is fully controlled and renders no trigger. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialData?: AccountPrefill | null;
 }
 
 const TIERS = ["A", "B", "C", "D"] as const;
@@ -61,29 +82,56 @@ type FormState = {
   notes: string;
 };
 
-function makeInitial(opts: { partnerOwnerId?: string }): FormState {
+function makeInitial(opts: {
+  partnerOwnerId?: string;
+  prefill?: AccountPrefill | null;
+}): FormState {
+  const p = opts.prefill ?? null;
+  const tierRaw = (p?.tier ?? "").toUpperCase();
+  const tier = (TIERS as readonly string[]).includes(tierRaw)
+    ? (tierRaw as (typeof TIERS)[number])
+    : "C";
+  const priorities = (p?.strategicPriorities ?? [])
+    .map((x) => (typeof x === "string" ? x : x?.text ?? ""))
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .slice(0, 5);
   return {
-    name: "",
-    brandName: "",
-    sector: "",
-    country: "United Arab Emirates",
-    hqCity: "",
+    name: p?.name ?? "",
+    brandName: p?.brandName ?? "",
+    sector: p?.sector ?? "",
+    country: p?.country || "United Arab Emirates",
+    hqCity: p?.hqCity ?? "",
     size: "",
-    tier: "C",
+    tier,
     status: "active",
     primaryCurrency: "USD",
     primaryLanguage: "en",
     partnerOwnerId: opts.partnerOwnerId ?? "",
     parentAccountId: "",
-    strategicPriorities: [],
+    strategicPriorities: priorities,
     prioritiesDraft: "",
-    cogniriseHypothesis: "",
+    cogniriseHypothesis: p?.cogniriseHypothesis ?? "",
     notes: "",
   };
 }
 
-export function CreateAccountDialog({ trigger }: Props) {
-  const [open, setOpen] = React.useState(false);
+export function CreateAccountDialog({
+  trigger,
+  open: controlledOpen,
+  onOpenChange,
+  initialData,
+}: Props) {
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = React.useCallback(
+    (v: boolean) => {
+      if (isControlled) onOpenChange?.(v);
+      else setInternalOpen(v);
+    },
+    [isControlled, onOpenChange],
+  );
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -105,10 +153,22 @@ export function CreateAccountDialog({ trigger }: Props) {
   );
   const [duplicate, setDuplicate] = React.useState<AtelierAccountDuplicateError | null>(null);
 
+  // Hydrate only on the closed→open transition so prefilled values and any
+  // edits the partner makes are never clobbered by an async re-render.
+  const wasOpen = React.useRef(false);
   React.useEffect(() => {
-    if (open) {
-      setForm(makeInitial({ partnerOwnerId: defaultPartnerId }));
+    if (open && !wasOpen.current) {
+      setForm(makeInitial({ partnerOwnerId: defaultPartnerId, prefill: initialData }));
       setDuplicate(null);
+    }
+    wasOpen.current = open;
+  }, [open, defaultPartnerId, initialData]);
+
+  // Backfill the partner owner once personas resolve, if still unset (covers
+  // the trigger path opened before `me`/personas loaded).
+  React.useEffect(() => {
+    if (open && defaultPartnerId) {
+      setForm((f) => (f.partnerOwnerId ? f : { ...f, partnerOwnerId: defaultPartnerId }));
     }
   }, [open, defaultPartnerId]);
 
@@ -191,7 +251,7 @@ export function CreateAccountDialog({ trigger }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent
         className="sm:max-w-[720px] bg-bg-elevate border-gold/40 text-text max-h-[90vh] overflow-y-auto"
         data-testid="dialog-new-account"

@@ -118,6 +118,32 @@ export const atelierAccounts = pgTable(
       .notNull()
       .default([]),
     cogniriseHypothesis: text("cognirise_hypothesis"),
+    // Task #560 — structured research brief from the Account Cartographer
+    // (Cognirise account-research method, Steps 1–3). Display-only blob that
+    // sits alongside the typed firmographic fields; nullable until the
+    // Cartographer enrichment hook runs.
+    researchBrief: jsonb("research_brief").$type<{
+      whatsChanging: Array<{ text: string; evidence: string; sourceUrls: string[] }>;
+      executiveTensions: Array<{ text: string; evidence: string; sourceUrls: string[] }>;
+      serviceLineFit: Array<{ serviceLine: string; signal: string; sourceUrls: string[] }>;
+      partnerEcosystem: Array<{
+        partner: string;
+        relationship: string;
+        serviceLineGap?: string | null;
+        sourceUrls: string[];
+      }>;
+      mandateAngles: Array<{
+        title: string;
+        serviceLines: string[];
+        tension: string;
+        whyNow: string;
+        entryStakeholder: string;
+        sourceUrls: string[];
+      }>;
+      whyNowHypothesis: string;
+      openQuestions: string[];
+      singleMostImportant: string;
+    }>(),
     pendingProfileUpdates: jsonb("pending_profile_updates")
       .$type<
         Array<{

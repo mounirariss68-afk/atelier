@@ -35,6 +35,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCreateAccount } from "@/components/CreateAccountContext";
 import type { CliCapability, CliLocale } from "./types";
 
 type Json = Record<string, unknown>;
@@ -524,6 +525,9 @@ function ShapeBody({
       return <RenewalCard data={data} locale={locale} />;
     case "agent_run":
       return <AgentRunCard data={data} locale={locale} />;
+    // Task #560 — chat account-creation proposal card.
+    case "account_proposal":
+      return <AccountProposalCard data={data} locale={locale} />;
     // Task #539 — CRM result cards (previously fell through to raw JSON).
     case "account_card":
     case "contact_card":
@@ -548,6 +552,157 @@ function ShapeBody({
     default:
       return <FallbackJson data={data} />;
   }
+}
+
+/* ─────────────── Task #560 — account-creation proposal ─────────────── */
+
+function AccountProposalCard({
+  data,
+  locale,
+}: {
+  data: Json;
+  locale: CliLocale;
+}) {
+  const { openWithPrefill } = useCreateAccount();
+  const ar = locale === "ar";
+  const draft = asObj(data.draft);
+  const brief = asObj(draft.researchBrief);
+
+  const name = asStr(draft.name) || (ar ? "حساب جديد" : "New account");
+  const summary = asStr(draft.refreshedSummary);
+  const sector = asStr(draft.sector);
+  const country = asStr(draft.country);
+  const hqCity = asStr(draft.hqCity);
+  const tier = asStr(draft.tier);
+
+  const priorities = asArr(draft.strategicPriorities)
+    .map((p) => (typeof p === "string" ? p : asStr(asObj(p).text)))
+    .filter((t) => t.trim().length > 0)
+    .slice(0, 5);
+
+  const whyNow =
+    asStr(brief.whyNowHypothesis) || asStr(brief.singleMostImportant);
+  const mandateAngles = asArr(brief.mandateAngles)
+    .map((m) => asObj(m))
+    .filter((m) => asStr(m.title).trim().length > 0)
+    .slice(0, 3);
+
+  const signalCount = asArr(draft.sourceSignals).length;
+  const dmCount = asArr(draft.decisionMakers).length;
+
+  const facts: Array<{ label: string; value: string }> = [
+    { label: ar ? "القطاع" : "Sector", value: sector },
+    { label: ar ? "الدولة" : "Country", value: country },
+    { label: ar ? "المقر" : "HQ", value: hqCity },
+    { label: ar ? "الفئة" : "Tier", value: tier },
+  ].filter((f) => f.value.trim().length > 0);
+
+  const onReview = () =>
+    openWithPrefill({
+      name: asStr(draft.name),
+      sector: sector || null,
+      country: country || null,
+      hqCity: hqCity || null,
+      tier: tier || null,
+      strategicPriorities: asArr(draft.strategicPriorities) as Array<
+        { text?: string; sourceUrls?: string[] } | string
+      >,
+      cogniriseHypothesis: asStr(draft.cogniriseHypothesis) || null,
+    });
+
+  return (
+    <div
+      className="rounded-xl border border-gold/40 bg-bg-elevate/60 p-4"
+      dir={ar ? "rtl" : "ltr"}
+      data-testid="card-account-proposal"
+    >
+      <div className="flex items-start gap-2">
+        <MapIcon className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] uppercase tracking-wide text-text-mute">
+            {ar ? "اقتراح حساب" : "Account proposal"}
+          </div>
+          <div className="truncate text-base font-semibold text-text">{name}</div>
+        </div>
+      </div>
+
+      {summary ? (
+        <p className="mt-2 text-sm leading-relaxed text-text-mute">{summary}</p>
+      ) : null}
+
+      {facts.length > 0 ? (
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+          {facts.map((f) => (
+            <div key={f.label} className="min-w-0">
+              <dt className="text-[10px] uppercase tracking-wide text-text-mute">
+                {f.label}
+              </dt>
+              <dd className="truncate text-sm text-text">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {priorities.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-[10px] uppercase tracking-wide text-text-mute">
+            {ar ? "الأولويات الاستراتيجية" : "Strategic priorities"}
+          </div>
+          <ul className="mt-1 space-y-1">
+            {priorities.map((p, i) => (
+              <li key={i} className="flex gap-2 text-sm text-text">
+                <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-gold" />
+                <span className="min-w-0">{p}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {whyNow ? (
+        <div className="mt-3 rounded-lg border border-gold/20 bg-gold/5 p-2.5">
+          <div className="text-[10px] uppercase tracking-wide text-gold">
+            {ar ? "لماذا الآن" : "Why now"}
+          </div>
+          <p className="mt-0.5 text-sm text-text">{whyNow}</p>
+        </div>
+      ) : null}
+
+      {mandateAngles.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-[10px] uppercase tracking-wide text-text-mute">
+            {ar ? "زوايا التكليف" : "Mandate angles"}
+          </div>
+          <ul className="mt-1 space-y-1.5">
+            {mandateAngles.map((m, i) => (
+              <li key={i} className="text-sm">
+                <span className="font-medium text-text">{asStr(m.title)}</span>
+                {asStr(m.whyNow) ? (
+                  <span className="text-text-mute"> — {asStr(m.whyNow)}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="text-[11px] text-text-mute">
+          {ar
+            ? `${signalCount} إشارة · ${dmCount} صانع قرار`
+            : `${signalCount} signal${signalCount === 1 ? "" : "s"} · ${dmCount} decision-maker${dmCount === 1 ? "" : "s"}`}
+        </div>
+        <button
+          type="button"
+          onClick={onReview}
+          data-testid="button-review-create-account"
+          className="rounded-lg bg-gold px-3 py-1.5 text-sm font-medium text-bg-base transition hover:bg-gold/90"
+        >
+          {ar ? "مراجعة وإنشاء" : "Review & Create"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /* ─────────────── Task #539 — CRM entity cards ─────────────── */

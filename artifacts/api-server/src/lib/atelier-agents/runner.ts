@@ -1530,6 +1530,127 @@ export async function runBrandProfileWriter(args: {
 // (Task #238). Mock-first. Output JSON shapes mirror OpenAPI.
 // =============================================================
 
+// Task #560 — evidence + service-line vocabulary used by the structured
+// research brief (Cognirise account-research method, Steps 1–3).
+export type EvidenceLabel = "evidenced" | "inferred" | "hypothesis";
+export type ServiceLine = "SL01" | "SL02" | "SL03" | "SL04" | "SL05";
+
+export interface ResearchClaim {
+  text: string;
+  evidence: EvidenceLabel;
+  sourceUrls: string[];
+}
+
+export interface CartographerResearchBrief {
+  // A — what is changing for this client right now.
+  whatsChanging: ResearchClaim[];
+  // B — executive tensions / likely priorities.
+  executiveTensions: ResearchClaim[];
+  // C — AI & transformation posture mapped to Cognirise service lines.
+  serviceLineFit: Array<{ serviceLine: ServiceLine; signal: string; sourceUrls: string[] }>;
+  // D — partner & ecosystem picture (white-space hints).
+  partnerEcosystem: Array<{
+    partner: string;
+    relationship: string;
+    serviceLineGap?: string | null;
+    sourceUrls: string[];
+  }>;
+  // F — mandate-creation angles with service-line tags + why-now.
+  mandateAngles: Array<{
+    title: string;
+    serviceLines: ServiceLine[];
+    tension: string;
+    whyNow: string;
+    entryStakeholder: string;
+    sourceUrls: string[];
+  }>;
+  // Step 2 — the 5-sentence "why now" origination hypothesis (issue-led).
+  whyNowHypothesis: string;
+  // G — open questions / what would change the picture.
+  openQuestions: string[];
+  // Closing line — "the single most important thing to understand …".
+  singleMostImportant: string;
+}
+
+const EVIDENCE_LABELS: EvidenceLabel[] = ["evidenced", "inferred", "hypothesis"];
+const SERVICE_LINES: ServiceLine[] = ["SL01", "SL02", "SL03", "SL04", "SL05"];
+
+function asRecord(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+}
+function asTrimmed(v: unknown): string {
+  return typeof v === "string" ? v.trim() : "";
+}
+function asStringList(v: unknown): string[] {
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim())
+    : [];
+}
+function asUrlList(v: unknown): string[] {
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string" && /^https?:\/\//.test(x))
+    : [];
+}
+function asEvidence(v: unknown): EvidenceLabel {
+  return EVIDENCE_LABELS.includes(v as EvidenceLabel) ? (v as EvidenceLabel) : "inferred";
+}
+function asServiceLine(v: unknown): ServiceLine | null {
+  return SERVICE_LINES.includes(v as ServiceLine) ? (v as ServiceLine) : null;
+}
+function asServiceLineList(v: unknown): ServiceLine[] {
+  return Array.isArray(v)
+    ? v.map(asServiceLine).filter((s): s is ServiceLine => s !== null)
+    : [];
+}
+function asClaims(v: unknown): ResearchClaim[] {
+  return (Array.isArray(v) ? v : [])
+    .map((raw) => {
+      const o = asRecord(raw);
+      return { text: asTrimmed(o.text), evidence: asEvidence(o.evidence), sourceUrls: asUrlList(o.sourceUrls) };
+    })
+    .filter((c) => c.text.length > 0);
+}
+
+// Task #560 — never throw on a missing/malformed brief; coerce to the
+// typed shape so callers (proposal card, persistence) can rely on it.
+function normaliseResearchBrief(v: unknown): CartographerResearchBrief {
+  const r = asRecord(v);
+  return {
+    whatsChanging: asClaims(r.whatsChanging),
+    executiveTensions: asClaims(r.executiveTensions),
+    serviceLineFit: (Array.isArray(r.serviceLineFit) ? r.serviceLineFit : [])
+      .map((raw) => {
+        const o = asRecord(raw);
+        return { serviceLine: asServiceLine(o.serviceLine), signal: asTrimmed(o.signal), sourceUrls: asUrlList(o.sourceUrls) };
+      })
+      .filter((s): s is { serviceLine: ServiceLine; signal: string; sourceUrls: string[] } =>
+        s.serviceLine !== null && s.signal.length > 0),
+    partnerEcosystem: (Array.isArray(r.partnerEcosystem) ? r.partnerEcosystem : [])
+      .map((raw) => {
+        const o = asRecord(raw);
+        const gap = asTrimmed(o.serviceLineGap);
+        return { partner: asTrimmed(o.partner), relationship: asTrimmed(o.relationship), serviceLineGap: gap.length > 0 ? gap : null, sourceUrls: asUrlList(o.sourceUrls) };
+      })
+      .filter((p) => p.partner.length > 0),
+    mandateAngles: (Array.isArray(r.mandateAngles) ? r.mandateAngles : [])
+      .map((raw) => {
+        const o = asRecord(raw);
+        return {
+          title: asTrimmed(o.title),
+          serviceLines: asServiceLineList(o.serviceLines),
+          tension: asTrimmed(o.tension),
+          whyNow: asTrimmed(o.whyNow),
+          entryStakeholder: asTrimmed(o.entryStakeholder),
+          sourceUrls: asUrlList(o.sourceUrls),
+        };
+      })
+      .filter((m) => m.title.length > 0),
+    whyNowHypothesis: asTrimmed(r.whyNowHypothesis),
+    openQuestions: asStringList(r.openQuestions),
+    singleMostImportant: asTrimmed(r.singleMostImportant),
+  };
+}
+
 export interface CartographerOutput {
   account: {
     refreshedSummary: string;
@@ -1568,6 +1689,10 @@ export interface CartographerOutput {
     reportsToName?: string | null;
     rationale?: string;
   }>;
+  // Task #560 — structured research brief (Cognirise account-research
+  // method, Steps 1–3). Always present after normalisation; empty arrays
+  // / strings when the model omitted a section.
+  researchBrief: CartographerResearchBrief;
 }
 
 
@@ -1768,6 +1893,9 @@ export async function runAccountCartographer(args: {
               rationale: d.rationale ?? undefined,
             }))
         : [],
+      researchBrief: normaliseResearchBrief(
+        (value as { researchBrief?: unknown } | null | undefined)?.researchBrief,
+      ),
     };
     // If the model produced fewer signals than the search returned,
     // backfill with raw citation URLs so the UI still surfaces evidence.
