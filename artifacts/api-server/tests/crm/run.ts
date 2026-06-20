@@ -53,7 +53,16 @@ const PERSONA = {
   sm: "p_layla_haddad", // senior_manager
   consultant: "p_omar_najjar", // consultant — cannot create accounts
   restricted: "u_yara_bgts", // partner_firm_resource — RESTRICTED, scoped
+  // consultant with NO engagement-access grant on ENG. An employee (so it
+  // passes the non-employee boundary middleware) but lacks the per-engagement
+  // grant, so engagement-scoped routes reject it via ensureEngAccess (403).
+  noAccess: "p_khaled_aziz",
 };
+
+// A second engagement (also visible to the founding_partner) used to assert
+// that a RAID delete is scoped to the engagement in the path: deleting a RAID
+// that lives on ENG via ENG2's URL must 404, never cross the boundary.
+const ENG2 = "eng_dge_effortless_v1";
 
 const TAG = "__t542";
 const STAMP = Date.now();
@@ -425,6 +434,139 @@ async function main(): Promise<void> {
       });
       check("POST /engagements/:id/deliverables \u2192 201 + id", deliverable.status === 201 && !!deliverable.body?.id, `status=${deliverable.status}`);
       if (deliverable.body?.id) created.deliverables.add(deliverable.body.id);
+
+      // ---- Task #541: RAID soft-delete (DELETE /engagements/:id/raid/:raidId) ----
+      {
+        // Seed a throwaway RAID item to delete, isolated from the one the
+        // list assertion above depends on.
+        const seed = await api("POST", `/engagements/${ENG}/raid`, PERSONA.fp, {
+          kind: "issue",
+          severity: "red",
+          description: uniq("to be deleted"),
+        });
+        const raidId = seed.body?.id as string | undefined;
+        check("RAID delete: seed item created", seed.status === 201 && !!raidId, `status=${seed.status}`);
+        if (raidId) {
+          created.raids.add(raidId);
+
+          const del = await api("DELETE", `/engagements/${ENG}/raid/${raidId}`, PERSONA.fp);
+          check("DELETE /engagements/:id/raid/:raidId \u2192 204", del.status === 204, `status=${del.status}`);
+          const [r] = await db
+            .select({ d: atelierRaidItems.deletedAt })
+            .from(atelierRaidItems)
+            .where(eq(atelierRaidItems.id, raidId));
+          check("RAID delete soft-deletes (deletedAt set)", !!r?.d, `deletedAt=${r?.d}`);
+
+          const after = await api("GET", `/engagements/${ENG}/raid`, PERSONA.fp);
+          const stillListed = Array.isArray(after.body) && after.body.some((x: any) => x.id === raidId);
+          check("RAID delete drops the item off the active list", after.status === 200 && !stillListed, `listed=${stillListed}`);
+
+          // Idempotency: a second delete of the now-soft-deleted item 404s
+          // (the active-row lookup excludes deletedAt rows).
+          const again = await api("DELETE", `/engagements/${ENG}/raid/${raidId}`, PERSONA.fp);
+          check("DELETE already-deleted RAID \u2192 404 raid-not-found", again.status === 404 && again.body?.error === "raid-not-found", `status=${again.status}`);
+        }
+
+        const missing = await api("DELETE", `/engagements/${ENG}/raid/raid_missing_${STAMP}`, PERSONA.fp);
+        check("DELETE missing RAID id \u2192 404 raid-not-found", missing.status === 404 && missing.body?.error === "raid-not-found", `status=${missing.status}`);
+
+        // Engagement scoping: a live RAID on ENG cannot be deleted through a
+        // different engagement's URL (existing.engagementId !== params.engId).
+        const scopeSeed = await api("POST", `/engagements/${ENG}/raid`, PERSONA.fp, {
+          kind: "risk",
+          severity: "amber",
+          description: uniq("wrong-engagement delete"),
+        });
+        const scopeId = scopeSeed.body?.id as string | undefined;
+        if (scopeId) created.raids.add(scopeId);
+        if (scopeId) {
+          const wrongEng = await api("DELETE", `/engagements/${ENG2}/raid/${scopeId}`, PERSONA.fp);
+          check("DELETE RAID via other engagement id \u2192 404 raid-not-found", wrongEng.status === 404 && wrongEng.body?.error === "raid-not-found", `status=${wrongEng.status}`);
+          const [stillThere] = await db
+            .select({ d: atelierRaidItems.deletedAt })
+            .from(atelierRaidItems)
+            .where(eq(atelierRaidItems.id, scopeId));
+          check("RAID survived the cross-engagement delete attempt", !stillThere?.d, `deletedAt=${stillThere?.d}`);
+
+          // No-access persona (employee, but no grant on ENG) is denied by the
+          // engagement ACL gate before the RAID is touched.
+          const denied = await api("DELETE", `/engagements/${ENG}/raid/${scopeId}`, PERSONA.noAccess);
+          check("DELETE RAID (no-access persona) \u2192 403 engagement-forbidden", denied.status === 403 && denied.body?.error === "engagement-forbidden", `status=${denied.status} body=${JSON.stringify(denied.body)?.slice(0, 120)}`);
+        }
+      }
+
+      // ---- Task #541: deliverable soft-delete (DELETE /deliverables/:delId) ----
+      {
+        // Draft deliverable: deletes cleanly and drops off the active list.
+        const draft = await api("POST", `/engagements/${ENG}/deliverables`, PERSONA.fp, {
+          type: "memo",
+          name: uniq("Draft to delete"),
+        });
+        const draftId = draft.body?.id as string | undefined;
+        check("deliverable delete: draft seed created", draft.status === 201 && !!draftId, `status=${draft.status}`);
+        if (draftId) {
+          created.deliverables.add(draftId);
+          const del = await api("DELETE", `/deliverables/${draftId}`, PERSONA.fp);
+          check("DELETE /deliverables/:id (draft) \u2192 204", del.status === 204, `status=${del.status}`);
+          const [d] = await db
+            .select({ d: atelierDeliverables.deletedAt })
+            .from(atelierDeliverables)
+            .where(eq(atelierDeliverables.id, draftId));
+          check("deliverable delete soft-deletes a draft (deletedAt set)", !!d?.d, `deletedAt=${d?.d}`);
+          const after = await api("GET", `/engagements/${ENG}/deliverables`, PERSONA.fp);
+          const stillListed = Array.isArray(after.body) && after.body.some((x: any) => x.id === draftId);
+          check("deliverable delete drops it off the active list", after.status === 200 && !stillListed, `listed=${stillListed}`);
+        }
+
+        // Sent deliverable: the audit-trail guard blocks deletion with 409.
+        const sentSeed = await api("POST", `/engagements/${ENG}/deliverables`, PERSONA.fp, {
+          type: "report",
+          name: uniq("Sent report"),
+        });
+        const sentId = sentSeed.body?.id as string | undefined;
+        check("deliverable delete: sent seed created", sentSeed.status === 201 && !!sentId, `status=${sentSeed.status}`);
+        if (sentId) {
+          created.deliverables.add(sentId);
+          // Send it through the real partner-authority send path (founding_partner
+          // is partner-tier; rationale >= 8 chars; override:true since the draft
+          // has no critic readiness yet) so sentAt is set the way production does.
+          const sent = await api("POST", `/deliverables/${sentId}/send`, PERSONA.fp, {
+            rationale: "Client approved for release",
+            override: true,
+          });
+          check("deliverable send \u2192 200 + sentAt", sent.status === 200 && !!sent.body?.sentAt, `status=${sent.status} body=${JSON.stringify(sent.body)?.slice(0, 140)}`);
+
+          const blocked = await api("DELETE", `/deliverables/${sentId}`, PERSONA.fp);
+          check("DELETE sent deliverable \u2192 409 deliverable-sent", blocked.status === 409 && blocked.body?.error === "deliverable-sent", `status=${blocked.status}`);
+          const [s] = await db
+            .select({ d: atelierDeliverables.deletedAt })
+            .from(atelierDeliverables)
+            .where(eq(atelierDeliverables.id, sentId));
+          check("sent deliverable was NOT soft-deleted", !s?.d, `deletedAt=${s?.d}`);
+        }
+
+        const missing = await api("DELETE", `/deliverables/del_missing_${STAMP}`, PERSONA.fp);
+        check("DELETE missing deliverable \u2192 404 deliverable-not-found", missing.status === 404 && missing.body?.error === "deliverable-not-found", `status=${missing.status}`);
+
+        // Restricted (partner-firm) persona: /deliverables is not an
+        // engagement-scoped path, so the non-employee boundary rejects it (403)
+        // before the delete is attempted.
+        const denyTarget = await api("POST", `/engagements/${ENG}/deliverables`, PERSONA.fp, {
+          type: "memo",
+          name: uniq("Restricted delete target"),
+        });
+        const denyId = denyTarget.body?.id as string | undefined;
+        if (denyId) {
+          created.deliverables.add(denyId);
+          const denied = await api("DELETE", `/deliverables/${denyId}`, PERSONA.restricted);
+          check("DELETE deliverable (restricted persona) \u2192 403 (non-employee boundary)", denied.status === 403, `status=${denied.status} body=${JSON.stringify(denied.body)?.slice(0, 120)}`);
+          const [t] = await db
+            .select({ d: atelierDeliverables.deletedAt })
+            .from(atelierDeliverables)
+            .where(eq(atelierDeliverables.id, denyId));
+          check("deliverable survived the restricted-persona delete attempt", !t?.d, `deletedAt=${t?.d}`);
+        }
+      }
     }
 
     // =====================================================================
