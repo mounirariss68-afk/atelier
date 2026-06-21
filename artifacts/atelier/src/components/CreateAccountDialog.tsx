@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PillButton } from "./ui/primitives";
 import { ReferenceCombobox } from "@/components/ReferenceCombobox";
+import { fieldControlCls } from "./ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAtelierCreateAccount,
@@ -58,6 +59,8 @@ const LANGS = [
   { value: "ar", label: "Arabic" },
 ] as const;
 const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "EGP", "TRY"];
+
+const selectCls = `${fieldControlCls} bg-bg-deep border border-border rounded text-sm text-text`;
 // Task #290 — the legacy hard-coded country list and free-text "Other…" /
 // "__custom__" sector branches were removed when this dialog was migrated
 // to <ReferenceCombobox/>. The reference-data API is now the single source
@@ -331,7 +334,7 @@ export function CreateAccountDialog({
               <select
                 value={form.size}
                 onChange={(e) => update("size", e.target.value as FormState["size"])}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+                className={selectCls}
                 data-testid="select-account-size"
               >
                 <option value="">—</option>
@@ -344,7 +347,7 @@ export function CreateAccountDialog({
               <select
                 value={form.tier}
                 onChange={(e) => update("tier", e.target.value as FormState["tier"])}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+                className={selectCls}
                 data-testid="select-account-tier"
               >
                 {TIERS.map((t) => (
@@ -359,7 +362,7 @@ export function CreateAccountDialog({
               <select
                 value={form.status}
                 onChange={(e) => update("status", e.target.value as FormState["status"])}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+                className={selectCls}
                 data-testid="select-account-status"
               >
                 {STATUSES.map((s) => (
@@ -371,7 +374,7 @@ export function CreateAccountDialog({
               <select
                 value={form.primaryCurrency}
                 onChange={(e) => update("primaryCurrency", e.target.value)}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text font-mono"
+                className={`${selectCls} font-mono`}
                 data-testid="select-account-currency"
               >
                 {CURRENCIES.map((c) => (
@@ -383,7 +386,7 @@ export function CreateAccountDialog({
               <select
                 value={form.primaryLanguage}
                 onChange={(e) => update("primaryLanguage", e.target.value as "en" | "ar")}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+                className={selectCls}
                 data-testid="select-account-language"
               >
                 {LANGS.map((l) => (
@@ -398,7 +401,7 @@ export function CreateAccountDialog({
               <select
                 value={form.partnerOwnerId}
                 onChange={(e) => update("partnerOwnerId", e.target.value)}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+                className={selectCls}
                 data-testid="select-account-partner-owner"
               >
                 <option value="">— Unassigned —</option>
@@ -411,7 +414,7 @@ export function CreateAccountDialog({
               <select
                 value={form.parentAccountId}
                 onChange={(e) => update("parentAccountId", e.target.value)}
-                className="bg-bg-deep border border-border rounded px-2 py-2 text-sm text-text"
+                className={selectCls}
                 data-testid="select-account-parent"
               >
                 <option value="">— None —</option>

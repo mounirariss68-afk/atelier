@@ -10,6 +10,7 @@ import {
   getAtelierGetDealPricingQueryKey,
 } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
+import { fieldControlCls } from "@/components/ui/fieldControls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -255,7 +256,7 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
             <select
               value={draftModel}
               onChange={(e) => setDraftModel(e.target.value)}
-              className="w-full mt-1 bg-bg-elevate border border-border rounded-md px-3 py-2 text-text text-sm"
+              className={`${fieldControlCls} mt-1 bg-bg-elevate border border-border rounded-md text-text text-sm`}
               data-testid="select-model"
             >
               <option value="time_and_materials">Time &amp; Materials</option>
@@ -277,7 +278,7 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
               <select
                 value={row.seniority}
                 onChange={(e) => editRow(i, { seniority: e.target.value })}
-                className="col-span-4 bg-bg-elevate border border-border rounded-md px-2 py-1.5 text-text text-sm"
+                className={`${fieldControlCls} col-span-4 bg-bg-elevate border border-border rounded-md text-text text-sm`}
                 data-testid={`select-seniority-${i}`}
               >
                 {SENIORITY_BANDS.map((b) => (

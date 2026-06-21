@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, PillButton } from "@/components/ui/primitives";
+import { fieldControlCls } from "@/components/ui/fieldControls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -131,7 +132,7 @@ export function MeetingsTab({ oppId, personaName }: { oppId: string; personaName
                 id="m-kind"
                 value={form.kind}
                 onChange={(e) => setForm({ ...form, kind: e.target.value as typeof form.kind })}
-                className="w-full bg-bg-deep border border-border rounded text-text px-3 py-2 text-sm"
+                className={`${fieldControlCls} bg-bg-deep border border-border rounded text-text text-sm`}
               >
                 <option value="discovery">Discovery</option>
                 <option value="workshop">Workshop</option>

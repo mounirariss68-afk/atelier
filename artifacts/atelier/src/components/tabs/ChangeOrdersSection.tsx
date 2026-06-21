@@ -23,6 +23,7 @@ import {
   getAtelierListAuditQueryKey,
 } from "@workspace/api-client-react";
 import { Card, MonoChip, PillButton, CopyLinkButton } from "@/components/ui/primitives";
+import { fieldControlCls } from "@/components/ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
@@ -267,7 +268,7 @@ function ProposeForm({
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as ChangeOrder["kind"])}
-            className="w-full bg-bg-elevate border border-border rounded-md px-2 py-1.5 text-sm text-text"
+            className={`${fieldControlCls} bg-bg-elevate border border-border rounded-md text-sm text-text`}
             data-testid="select-co-kind"
           >
             <option value="scope">scope</option>
@@ -284,7 +285,7 @@ function ProposeForm({
             type="number"
             value={delta}
             onChange={(e) => setDelta(e.target.value)}
-            className="w-full bg-bg-elevate border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+            className={`${fieldControlCls} bg-bg-elevate border border-border rounded-md text-sm text-text font-mono`}
             data-testid="input-co-delta"
           />
         </div>
@@ -297,7 +298,7 @@ function ProposeForm({
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
           placeholder="One-line scope/rate/term/team change…"
-          className="w-full bg-bg-elevate border border-border rounded-md px-2 py-1.5 text-sm text-text"
+          className={`${fieldControlCls} bg-bg-elevate border border-border rounded-md text-sm text-text`}
           data-testid="input-co-summary"
         />
       </div>
@@ -334,7 +335,7 @@ function ProposeForm({
                 type="number"
                 value={hoursDelta}
                 onChange={(e) => setHoursDelta(e.target.value)}
-                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                className={`${fieldControlCls} bg-bg-deep border border-border rounded-md text-sm text-text font-mono`}
                 data-testid="input-co-labour-hours-delta"
               />
             </div>
@@ -346,7 +347,7 @@ function ProposeForm({
                 type="number"
                 value={labourCostDelta}
                 onChange={(e) => setLabourCostDelta(e.target.value)}
-                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                className={`${fieldControlCls} bg-bg-deep border border-border rounded-md text-sm text-text font-mono`}
                 data-testid="input-co-labour-cost-delta"
               />
             </div>
@@ -358,7 +359,7 @@ function ProposeForm({
                 type="number"
                 value={expensesDelta}
                 onChange={(e) => setExpensesDelta(e.target.value)}
-                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                className={`${fieldControlCls} bg-bg-deep border border-border rounded-md text-sm text-text font-mono`}
                 data-testid="input-co-expenses-delta"
               />
             </div>
@@ -370,7 +371,7 @@ function ProposeForm({
                 type="number"
                 value={subsDelta}
                 onChange={(e) => setSubsDelta(e.target.value)}
-                className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+                className={`${fieldControlCls} bg-bg-deep border border-border rounded-md text-sm text-text font-mono`}
                 data-testid="input-co-subs-delta"
               />
             </div>
@@ -673,7 +674,7 @@ function DispatchForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Client signer name"
-        className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text"
+        className={`${fieldControlCls} bg-bg-deep border border-border rounded-md text-sm text-text`}
         data-testid="input-co-signer-name"
       />
       <input
@@ -681,7 +682,7 @@ function DispatchForm({
         onChange={(e) => setEmail(e.target.value)}
         type="email"
         placeholder="signer@client.com"
-        className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+        className={`${fieldControlCls} bg-bg-deep border border-border rounded-md text-sm text-text font-mono`}
         data-testid="input-co-signer-email"
       />
       <div className="flex justify-end gap-2">
@@ -736,7 +737,7 @@ function SingleFieldForm({
           value={v}
           onChange={(e) => setV(e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-bg-deep border border-border rounded-md px-2 py-1.5 text-sm text-text font-mono"
+          className={`${fieldControlCls} bg-bg-deep border border-border rounded-md text-sm text-text font-mono`}
           data-testid="input-co-field"
         />
       )}

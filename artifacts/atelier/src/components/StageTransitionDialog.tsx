@@ -12,6 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PillButton } from "./ui/primitives";
+import { fieldControlCls } from "./ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAtelierCreateStageTransition,
@@ -272,7 +273,7 @@ export function StageTransitionDialog({
                 id="t-substatus"
                 value={subStatus}
                 onChange={(e) => setSubStatus(e.target.value)}
-                className="bg-bg-deep border border-border-soft rounded px-2 py-2 text-sm text-text"
+                className={`${fieldControlCls} bg-bg-deep border border-border-soft rounded text-sm text-text`}
               >
                 <option value="">— none —</option>
                 {subStatusOptions.map((s) => (
@@ -437,7 +438,7 @@ export function StageTransitionDialog({
                 id="t-reason"
                 value={reasonCode}
                 onChange={(e) => setReasonCode(e.target.value)}
-                className="bg-bg-deep border border-border-soft rounded px-2 py-2 text-sm text-text"
+                className={`${fieldControlCls} bg-bg-deep border border-border-soft rounded text-sm text-text`}
               >
                 <option value="">— pick reason —</option>
                 {reasonOptions.map((r) => (

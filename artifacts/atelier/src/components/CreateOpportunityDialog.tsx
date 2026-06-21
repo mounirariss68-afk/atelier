@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PillButton } from "./ui/primitives";
+import { fieldControlCls } from "./ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAtelierCreateOpportunity,
@@ -78,9 +79,9 @@ const SOURCE_OPTIONS: { value: FormState["sourceLead"]; label: string }[] = [
 ];
 
 const inputCls =
-  "w-full bg-bg-deep border border-border rounded px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/40";
+  `${fieldControlCls} bg-bg-deep border border-border rounded py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/40`;
 const selectCls =
-  "w-full bg-bg-deep border border-border rounded px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/40";
+  `${fieldControlCls} bg-bg-deep border border-border rounded py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold/40`;
 const labelCls =
   "text-[11px] uppercase tracking-widest font-mono text-text-faint";
 

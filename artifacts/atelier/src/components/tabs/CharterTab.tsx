@@ -292,7 +292,7 @@ function CharterDiff({
           value={a.id}
           onChange={(e) => onPickA(e.target.value)}
           data-testid="select-diff-base"
-          className="bg-bg-elevate border border-border rounded-md px-2 py-1 text-text"
+          className="h-9 px-3 bg-bg-elevate border border-border rounded-md text-text"
         >
           {versions
             .filter((v) => v.id !== b.id)

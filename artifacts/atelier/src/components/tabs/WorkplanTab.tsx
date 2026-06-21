@@ -10,6 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { fieldControlCls } from "@/components/ui/fieldControls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
@@ -110,7 +111,7 @@ export function WorkplanTab({ engId }: { engId: string }) {
               <select
                 value={kind}
                 onChange={(e) => setKind(e.target.value as Kind)}
-                className="w-full mt-1 bg-bg-elevate border border-border rounded-md px-3 py-2 text-sm text-text"
+                className={`${fieldControlCls} mt-1 bg-bg-elevate border border-border rounded-md text-sm text-text`}
                 data-testid="select-raid-kind"
               >
                 {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
@@ -121,7 +122,7 @@ export function WorkplanTab({ engId }: { engId: string }) {
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value as Sev)}
-                className="w-full mt-1 bg-bg-elevate border border-border rounded-md px-3 py-2 text-sm text-text"
+                className={`${fieldControlCls} mt-1 bg-bg-elevate border border-border rounded-md text-sm text-text`}
                 data-testid="select-raid-severity"
               >
                 {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
