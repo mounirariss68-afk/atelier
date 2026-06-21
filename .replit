@@ -54,37 +54,5 @@ expertMode = true
 path = "scripts/post-merge.sh"
 timeoutMs = 90000
 
-[[ports]]
-localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 8081
-externalPort = 8081
-
-[[ports]]
-localPort = 8082
-externalPort = 3000
-
-[[ports]]
-localPort = 8083
-externalPort = 3003
-
-[[ports]]
-localPort = 8084
-externalPort = 4200
-
-[[ports]]
-localPort = 22132
-externalPort = 80
-
-[[ports]]
-localPort = 23742
-externalPort = 3002
-
-[[ports]]
-localPort = 24797
-externalPort = 3001
-
 [nix]
 channel = "stable-25_05"

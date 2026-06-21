@@ -42,6 +42,7 @@ process.env.ATELIER_MOCK_AGENTS = process.env.ATELIER_MOCK_AGENTS ?? "1";
 process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 
 import type { AddressInfo } from "node:net";
+import zlib from "node:zlib";
 import { sql, eq, and, gte, inArray } from "drizzle-orm";
 
 // ---- seed fixtures (live seed, org_id = "aico") ----
@@ -89,6 +90,77 @@ function check(name: string, cond: boolean, detail?: string): void {
 function group(title: string): void {
   console.log(`\n\u2500\u2500 ${title}`);
 }
+
+// ---------------------------------------------------------------------------
+// Lightweight PDF text extraction (no external dep). PDFKit flate-compresses
+// its content streams and writes glyphs as TJ arrays of hex strings with
+// kerning numbers, e.g. `[<436f6e7472> 10 <616374> ...] TJ`. We inflate every
+// `stream … endstream` block and pull the literal/hex string operands out of
+// the Tj / TJ text-showing operators. Enough to make content-level assertions
+// (a label is present / a financial figure is absent) without a PDF parser.
+function decodeStringToken(tok: string): string {
+  if (tok.startsWith("<")) {
+    const hex = tok.slice(1, -1).replace(/\s+/g, "");
+    let s = "";
+    for (let i = 0; i + 1 < hex.length; i += 2) {
+      s += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    }
+    return s;
+  }
+  // literal (...) string — unescape \( \) \\
+  return tok.slice(1, -1).replace(/\\([()\\])/g, "$1");
+}
+
+function extractPdfText(buf: Buffer): string {
+  const streams: string[] = [];
+  const needle = Buffer.from("stream");
+  const tail = Buffer.from("endstream");
+  let i = 0;
+  while (i < buf.length) {
+    const s = buf.indexOf(needle, i);
+    if (s === -1) break;
+    let p = s + needle.length;
+    if (buf[p] === 0x0d) p++; // CR
+    if (buf[p] === 0x0a) p++; // LF
+    const e = buf.indexOf(tail, p);
+    if (e === -1) break;
+    try {
+      streams.push(zlib.inflateSync(buf.subarray(p, e)).toString("latin1"));
+    } catch {
+      /* not a flate stream (e.g. font program) — skip */
+    }
+    i = e + tail.length;
+  }
+  const content = streams.join("\n");
+  const texts: string[] = [];
+  const strTok = /<[0-9A-Fa-f\s]*>|\((?:\\.|[^\\()])*\)/g;
+  // TJ arrays: [ <hex> num (lit) ... ] TJ
+  const tjArr = /\[((?:[^\][]|\\.)*)\]\s*TJ/g;
+  let m: RegExpExecArray | null;
+  while ((m = tjArr.exec(content)) !== null) {
+    let line = "";
+    let t: RegExpExecArray | null;
+    while ((t = strTok.exec(m[1])) !== null) line += decodeStringToken(t[0]);
+    strTok.lastIndex = 0;
+    texts.push(line);
+  }
+  // single-string Tj operator
+  const tjOne = /(<[0-9A-Fa-f\s]*>|\((?:\\.|[^\\()])*\))\s*Tj/g;
+  while ((m = tjOne.exec(content)) !== null) texts.push(decodeStringToken(m[1]));
+  return texts.join("\n");
+}
+
+// fmtUsd-style figures rendered in the financial block, e.g. "$0", "$1.2M",
+// "$420K", "$3,500". Used to assert money is present / absent in the doc.
+const USD_FIGURE_RE = /\$[\d][\d.,]*[KM]?/;
+const FINANCIAL_LABELS = [
+  "Contract value",
+  "Active engagement value",
+  "Recognised revenue",
+  "Gross margin",
+  "Open pipeline",
+];
+const FINANCIAL_PLACEHOLDER = "Financial detail is restricted for this persona.";
 
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
@@ -1224,6 +1296,20 @@ async function main(): Promise<void> {
         `status=${pdfRes.status} type=${pdfRes.headers.get("content-type")} size=${pdfBuf.length}`,
       );
 
+      // ---- content gate: a firm-wide partner's brief INCLUDES financials ----
+      // access.all is true for the founding partner, so canSeeFinancials passes
+      // and the financial summary block renders (labels + fmtUsd figures) and
+      // the restriction placeholder is absent.
+      const fpText = extractPdfText(pdfBuf);
+      check(
+        "plan.pdf (fp) renders financial summary (labels + figures, no placeholder)",
+        FINANCIAL_LABELS.every((l) => fpText.includes(l)) &&
+          USD_FIGURE_RE.test(fpText) &&
+          !fpText.includes(FINANCIAL_PLACEHOLDER),
+        `labels=${FINANCIAL_LABELS.filter((l) => fpText.includes(l)).length}/${FINANCIAL_LABELS.length} ` +
+          `usd=${USD_FIGURE_RE.test(fpText)} placeholder=${fpText.includes(FINANCIAL_PLACEHOLDER)}`,
+      );
+
       // ---- PDF read-gate parity with the workspace (canSeeAccount) ----
       // A scoped consultant holds an engagement grant on acc_dge, so canSeeAccount
       // passes and the brief renders (financial section is restricted inside the
@@ -1238,6 +1324,23 @@ async function main(): Promise<void> {
           (scopedPdf.headers.get("content-type") ?? "").includes("application/pdf") &&
           scopedPdfBuf.subarray(0, 5).toString("latin1") === "%PDF-",
         `status=${scopedPdf.status} type=${scopedPdf.headers.get("content-type")} size=${scopedPdfBuf.length}`,
+      );
+
+      // ---- content gate: the scoped reader's brief REDACTS financials ----
+      // The consultant reads acc_dge via an engagement grant (access.all is
+      // false and it is not the account owner), so canSeeFinancials is false:
+      // the financial summary block must collapse to the restriction
+      // placeholder, with no financial labels and no fmtUsd figures anywhere
+      // in the rendered document.
+      const scopedText = extractPdfText(scopedPdfBuf);
+      check(
+        "plan.pdf (scoped consultant) redacts financial summary (placeholder, no labels/figures)",
+        scopedText.includes(FINANCIAL_PLACEHOLDER) &&
+          FINANCIAL_LABELS.every((l) => !scopedText.includes(l)) &&
+          !USD_FIGURE_RE.test(scopedText),
+        `placeholder=${scopedText.includes(FINANCIAL_PLACEHOLDER)} ` +
+          `leakedLabels=${FINANCIAL_LABELS.filter((l) => scopedText.includes(l)).join("|") || "none"} ` +
+          `usd=${USD_FIGURE_RE.exec(scopedText)?.[0] ?? "none"}`,
       );
 
       // ---- truly out-of-scope persona \u2192 403 ----
