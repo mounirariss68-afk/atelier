@@ -43,6 +43,8 @@ import {
   Download,
   Sparkles,
   Check,
+  Pencil,
+  X,
 } from "lucide-react";
 const apiBase = `${import.meta.env.BASE_URL}api`;
 
@@ -358,6 +360,7 @@ function ActionRow({
   objectives: Array<{ id: string; text: string }>;
   onSuccess: (d: AtelierAccountWorkspace) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const updateMut = useAtelierUpdateAccountAction({ mutation: { onSuccess } });
   const deleteMut = useAtelierDeleteAccountAction({ mutation: { onSuccess } });
   const done = action.status === "done" || action.status === "cancelled";
@@ -365,6 +368,22 @@ function ActionRow({
     action.linkedObjectiveText ??
     objectives.find((o) => o.id === action.linkedObjectiveId)?.text ??
     null;
+
+  if (editing && canManage) {
+    return (
+      <ActionEditor
+        action={action}
+        accountId={accountId}
+        objectives={objectives}
+        onSuccess={(d) => {
+          onSuccess(d);
+          setEditing(false);
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
   return (
     <div className="rounded-lg border border-border-soft bg-bg-base p-3">
       <div className="flex items-start gap-3">
@@ -415,15 +434,126 @@ function ActionRow({
             </Pill>
           )}
           {canManage && (
-            <button
-              onClick={() => deleteMut.mutate({ accountId, actionId: action.id })}
-              className="text-text-faint hover:text-red-400 p-1"
-              title="Delete action"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-text-faint hover:text-gold p-1"
+                title="Edit action"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => deleteMut.mutate({ accountId, actionId: action.id })}
+                className="text-text-faint hover:text-red-400 p-1"
+                title="Delete action"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ActionEditor({
+  action,
+  accountId,
+  objectives,
+  onSuccess,
+  onCancel,
+}: {
+  action: AtelierAccountAction;
+  accountId: string;
+  objectives: Array<{ id: string; text: string }>;
+  onSuccess: (d: AtelierAccountWorkspace) => void;
+  onCancel: () => void;
+}) {
+  const { data: users } = useAtelierListUsers();
+  const [title, setTitle] = useState(action.title);
+  const [ownerId, setOwnerId] = useState(action.ownerId ?? "");
+  const [priority, setPriority] = useState<"high" | "medium" | "low">(
+    (action.priority as "high" | "medium" | "low") ?? "medium",
+  );
+  const [dueDate, setDueDate] = useState(action.dueDate ?? "");
+  const [objectiveId, setObjectiveId] = useState(action.linkedObjectiveId ?? "");
+  const updateMut = useAtelierUpdateAccountAction({ mutation: { onSuccess } });
+  const submit = () => {
+    const t = title.trim();
+    if (!t) return;
+    updateMut.mutate({
+      accountId,
+      actionId: action.id,
+      data: {
+        title: t,
+        ownerId: ownerId || null,
+        priority,
+        dueDate: dueDate || null,
+        linkedObjectiveId: objectiveId || null,
+      },
+    });
+  };
+  return (
+    <div className="rounded-lg border border-gold/30 bg-bg-soft p-3 space-y-2">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="What needs to happen?"
+        className="w-full bg-bg-base border border-border-soft rounded px-2 py-1.5 text-sm text-text"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={ownerId}
+          onChange={(e) => setOwnerId(e.target.value)}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        >
+          <option value="">Owner…</option>
+          {(users ?? []).map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={priority}
+          onChange={(e) => setPriority(e.target.value as "high" | "medium" | "low")}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        >
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        />
+        <select
+          value={objectiveId}
+          onChange={(e) => setObjectiveId(e.target.value)}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        >
+          <option value="">Link objective…</option>
+          {objectives.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.text.slice(0, 48)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex items-center gap-2 justify-end">
+        <button
+          onClick={onCancel}
+          className="text-xs text-text-mute hover:text-text font-mono flex items-center gap-1"
+        >
+          <X className="w-3 h-3" /> Cancel
+        </button>
+        <PillButton onClick={submit} disabled={!title.trim() || updateMut.isPending}>
+          {updateMut.isPending ? "Saving…" : "Save"}
+        </PillButton>
       </div>
     </div>
   );
@@ -571,9 +701,25 @@ function RiskRow({
   canManage: boolean;
   onSuccess: (d: AtelierAccountWorkspace) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const updateMut = useAtelierUpdateAccountRisk({ mutation: { onSuccess } });
   const deleteMut = useAtelierDeleteAccountRisk({ mutation: { onSuccess } });
   const closed = risk.status === "closed";
+
+  if (editing && canManage) {
+    return (
+      <RiskEditor
+        risk={risk}
+        accountId={accountId}
+        onSuccess={(d) => {
+          onSuccess(d);
+          setEditing(false);
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
   return (
     <div className="rounded-lg border border-border-soft bg-bg-base p-3">
       <div className="flex items-start gap-3">
@@ -620,15 +766,132 @@ function RiskRow({
             </Pill>
           )}
           {canManage && (
-            <button
-              onClick={() => deleteMut.mutate({ accountId, riskId: risk.id })}
-              className="text-text-faint hover:text-red-400 p-1"
-              title="Delete risk"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            <>
+              <button
+                onClick={() => setEditing(true)}
+                className="text-text-faint hover:text-gold p-1"
+                title="Edit risk"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => deleteMut.mutate({ accountId, riskId: risk.id })}
+                className="text-text-faint hover:text-red-400 p-1"
+                title="Delete risk"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RiskEditor({
+  risk,
+  accountId,
+  onSuccess,
+  onCancel,
+}: {
+  risk: AtelierAccountRisk;
+  accountId: string;
+  onSuccess: (d: AtelierAccountWorkspace) => void;
+  onCancel: () => void;
+}) {
+  const { data: users } = useAtelierListUsers();
+  const [description, setDescription] = useState(risk.description);
+  const [kind, setKind] = useState<"risk" | "assumption" | "issue" | "dependency">(
+    (risk.kind as "risk" | "assumption" | "issue" | "dependency") ?? "risk",
+  );
+  const [severity, setSeverity] = useState<"green" | "amber" | "red">(
+    (risk.severity as "green" | "amber" | "red") ?? "amber",
+  );
+  const [ownerId, setOwnerId] = useState(risk.ownerId ?? "");
+  const [dueDate, setDueDate] = useState(risk.dueDate ?? "");
+  const [mitigation, setMitigation] = useState(risk.mitigation ?? "");
+  const updateMut = useAtelierUpdateAccountRisk({ mutation: { onSuccess } });
+  const submit = () => {
+    const d = description.trim();
+    if (!d) return;
+    updateMut.mutate({
+      accountId,
+      riskId: risk.id,
+      data: {
+        description: d,
+        kind,
+        severity,
+        ownerId: ownerId || null,
+        dueDate: dueDate || null,
+        mitigation: mitigation.trim() || null,
+      },
+    });
+  };
+  return (
+    <div className="rounded-lg border border-gold/30 bg-bg-soft p-3 space-y-2">
+      <input
+        autoFocus
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Describe the risk / assumption / issue / dependency"
+        className="w-full bg-bg-base border border-border-soft rounded px-2 py-1.5 text-sm text-text"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value as typeof kind)}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        >
+          <option value="risk">Risk</option>
+          <option value="assumption">Assumption</option>
+          <option value="issue">Issue</option>
+          <option value="dependency">Dependency</option>
+        </select>
+        <select
+          value={severity}
+          onChange={(e) => setSeverity(e.target.value as typeof severity)}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        >
+          <option value="red">Red</option>
+          <option value="amber">Amber</option>
+          <option value="green">Green</option>
+        </select>
+        <select
+          value={ownerId}
+          onChange={(e) => setOwnerId(e.target.value)}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        >
+          <option value="">Owner…</option>
+          {(users ?? []).map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="bg-bg-base border border-border-soft rounded px-2 py-1.5 text-xs text-text"
+        />
+      </div>
+      <input
+        value={mitigation}
+        onChange={(e) => setMitigation(e.target.value)}
+        placeholder="Mitigation (optional)"
+        className="w-full bg-bg-base border border-border-soft rounded px-2 py-1.5 text-sm text-text"
+      />
+      <div className="flex items-center gap-2 justify-end">
+        <button
+          onClick={onCancel}
+          className="text-xs text-text-mute hover:text-text font-mono flex items-center gap-1"
+        >
+          <X className="w-3 h-3" /> Cancel
+        </button>
+        <PillButton onClick={submit} disabled={!description.trim() || updateMut.isPending}>
+          {updateMut.isPending ? "Saving…" : "Save"}
+        </PillButton>
       </div>
     </div>
   );

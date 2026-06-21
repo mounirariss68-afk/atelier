@@ -19,7 +19,8 @@ keep two distinct gates:
 account (and export its plan PDF) at parity with the workspace, but must NOT see
 account-wide financial totals for engagements they aren't authorized to view.
 Gating the whole route to account-wide authority is the wrong, over-restrictive
-default (it was the Task #571 PDF bug).
+default — it was the original account-plan PDF bug (the route hard-blocked
+non-account-wide readers who could already see the account in the workspace).
 
 **How to apply:** New account-scope read endpoints → gate the route with
 `canSeeAccount`; gate any financial section separately with the account-wide +
