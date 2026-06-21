@@ -67,6 +67,33 @@ export function resolveNavPath(args: ResolveNavPathArgs): string | null {
   const engagementId = pickStr("engagementId");
   const opportunityId = pickStr("opportunityId");
   const accountId = pickStr("accountId");
+  // Task #573 — delete is destructive: the entity's own detail page is
+  // gone after the commit, so navigating there yields a 404. Land the
+  // user on the parent/list surface instead. Returns null when no
+  // sensible parent exists (the chat simply does not auto-navigate).
+  if (verb === "delete") {
+    switch (kind) {
+      case "account":
+        return "/accounts";
+      case "opportunity":
+        return "/opportunities";
+      case "contact":
+      case "contact_relationship":
+        return accountId ? `/accounts/${accountId}` : "/accounts";
+      case "engagement":
+        return "/clients/deliver/engagements";
+      case "deliverable":
+        return engagementId ? `/clients/deliver/engagements/${engagementId}` : null;
+      case "expense":
+        return "/wallet/expenses";
+      case "invoice":
+        return "/wallet/invoices";
+      case "contract":
+        return "/codex";
+      default:
+        return null;
+    }
+  }
   switch (kind) {
     case "account":
       if (id) return `/accounts/${id}`;

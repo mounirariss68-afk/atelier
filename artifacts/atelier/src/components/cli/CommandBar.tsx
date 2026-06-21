@@ -1178,9 +1178,18 @@ function TurnBody({
   onExport: () => void;
   onSaveShortcut: () => void;
 }) {
+  // Task #573 — an "action turn" is any write flow (delete/update/create):
+  // it is awaiting confirmation, has a pending confirm box, or has already
+  // committed a propose_write. These turns are anchored by the single
+  // Confirm/Edit/Cancel box (and its success card), so the planning
+  // breadcrumb/narration trace and single-step plan are pure noise here.
+  const isActionTurn =
+    turn.status === "needs_confirmation" ||
+    !!turn.pending ||
+    (turn.toolResults?.some((t) => t.tool === "propose_write") ?? false);
   return (
     <div className="space-y-2.5">
-      {turn.trace.length > 0 && (() => {
+      {!isActionTurn && turn.trace.length > 0 && (() => {
         const recent = turn.trace.slice(-12);
         const breadcrumbs = recent.filter((l) => l.kind !== "narration");
         const narrations = recent.filter((l) => l.kind === "narration");
@@ -1347,7 +1356,10 @@ function TurnBody({
         </div>
       )}
 
-      {turn.proposedPlan && turn.proposedPlan.length > 0 && (
+      {/* Task #573 — a single-step plan is just a restatement of the one
+          action being confirmed below; only show the plan card for genuine
+          multi-step (bulk) plans. */}
+      {turn.proposedPlan && turn.proposedPlan.length > 1 && (
         <PlanCard
           plan={turn.proposedPlan}
           excluded={turn.excludedStepIndexes ?? []}
@@ -1369,6 +1381,58 @@ function TurnBody({
           data-testid="cli-confirm-card"
         >
           <div className="text-xs">{turn.pending.summary}</div>
+          {/* Task #573 — dependency-impact summary for destructive deletes.
+              `diff.impact` is only present on delete proposals; for non-empty
+              dependency lists we tell the user exactly what stays behind but
+              loses its link, so a delete is never a silent surprise. */}
+          {(() => {
+            const diff = turn.pending.diff as Record<string, unknown> | null | undefined;
+            const impact = diff?.impact as
+              | { dependencies?: Array<{ kind: string; count: number }>; total?: number }
+              | undefined;
+            if (!impact) return null;
+            const deps = (impact.dependencies ?? []).filter((d) => d.count > 0);
+            const impactLabel = (kind: string): string => {
+              switch (kind) {
+                case "opportunity":
+                  return s("impactOpportunity", locale);
+                case "engagement":
+                  return s("impactEngagement", locale);
+                case "contact":
+                  return s("impactContact", locale);
+                case "invoice":
+                  return s("impactInvoice", locale);
+                case "contact_relationship":
+                  return s("impactContactRelationship", locale);
+                default:
+                  return kind;
+              }
+            };
+            return (
+              <div
+                className="bg-bg-deep border border-gold/30 rounded p-2 space-y-1"
+                data-testid="cli-impact"
+              >
+                <div className="text-[10px] font-mono uppercase tracking-wider text-gold">
+                  {s("impactTitle", locale)}
+                </div>
+                {deps.length === 0 ? (
+                  <div className="text-[11px] text-text-mute">{s("impactNone", locale)}</div>
+                ) : (
+                  <>
+                    <div className="text-[11px] text-text-mute">{s("impactRetained", locale)}</div>
+                    <ul className="text-[11px] text-text space-y-0.5">
+                      {deps.map((d) => (
+                        <li key={d.kind} data-testid="cli-impact-row">
+                          · {d.count} {impactLabel(d.kind)}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            );
+          })()}
           {turn.pending.typedNameRequired && (
             <div className="space-y-1">
               <label
@@ -1408,7 +1472,16 @@ function TurnBody({
             </button>
             <button
               type="button"
-              onClick={() => setEditingPlanRow(0)}
+              // Task #573 — Edit cancels the pending write and drops the
+              // user's original prompt back into the composer so they can
+              // adjust and re-run it. Previously it opened a non-existent
+              // plan-row editor (no single-step plan card is rendered),
+              // making the button a dead end.
+              onClick={() => {
+                onCancelTurn();
+                onPickSuggestion(turn.prompt);
+              }}
+              title={s("editHint", locale)}
               className="text-xs text-text-mute hover:text-text px-3 py-1.5 rounded hover:bg-bg-elevate-2"
               data-testid="cli-edit"
             >

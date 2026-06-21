@@ -2951,17 +2951,28 @@ export async function runTurn(
         ),
       });
 
-      record({
-        type: "tool_result",
-        data: {
-          step,
-          tool: tc.name,
-          ok: toolResult.ok,
-          data: toolResult.data,
-          errorCode: toolResult.errorCode,
-          errorMessage: toolResult.errorMessage,
-        },
-      });
+      // Task #573 — the propose_write PREVIEW result is a debug echo of
+      // the staged mutation (stage/verb/payload/route). It is fully
+      // superseded by the confirm card emitted from `toolResult.confirmation`
+      // below, so suppress its tool_result frame to keep the action turn to
+      // a single Confirm/Edit/Cancel box. The committed result (a clean
+      // `write_success` card) is still recorded.
+      const isProposePreview =
+        tc.name === "propose_write" &&
+        (toolResult.data as { stage?: unknown } | null)?.stage === "preview";
+      if (!isProposePreview) {
+        record({
+          type: "tool_result",
+          data: {
+            step,
+            tool: tc.name,
+            ok: toolResult.ok,
+            data: toolResult.data,
+            errorCode: toolResult.errorCode,
+            errorMessage: toolResult.errorMessage,
+          },
+        });
+      }
 
       if (toolResult.ok) {
         ingestEntitiesFromToolResult(session.id, tc.name, toolResult.data);

@@ -142,6 +142,26 @@ export const STRINGS = {
     ar: "نقلك المساعد إلى هنا بناءً على طلبك الأخير.",
   },
   autoNavStayHere: { en: "Stay here", ar: "ابقَ هنا" },
+  // Task #573 — dependency-impact summary for destructive deletes.
+  impactTitle: { en: "What this affects", ar: "ما الذي سيتأثّر" },
+  impactNone: {
+    en: "Nothing else references this. Safe to remove.",
+    ar: "لا شيء آخر يشير إلى هذا. الإزالة آمنة.",
+  },
+  impactRetained: {
+    en: "These stay in place but lose their link to this record:",
+    ar: "تبقى هذه كما هي لكنها تفقد ارتباطها بهذا السجلّ:",
+  },
+  impactOpportunity: { en: "open opportunities", ar: "فرص مفتوحة" },
+  impactEngagement: { en: "engagements", ar: "ارتباطات" },
+  impactContact: { en: "contacts", ar: "جهات اتصال" },
+  impactInvoice: { en: "invoices", ar: "فواتير" },
+  impactContactRelationship: { en: "org-chart links", ar: "روابط الهيكل التنظيمي" },
+  // Task #573 — Edit affordance on the confirm card.
+  editHint: {
+    en: "Edit reopens your request so you can adjust it.",
+    ar: "يعيد التعديل فتح طلبك لتتمكّن من ضبطه.",
+  },
 } satisfies Record<string, Bilingual>;
 
 export function s(key: keyof typeof STRINGS, locale: CliLocale): string {

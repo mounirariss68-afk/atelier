@@ -30,6 +30,7 @@ import {
   Receipt,
   Clock,
   UserCheck,
+  CheckCircle2,
   Map as MapIcon,
   Inbox,
   type LucideIcon,
@@ -369,6 +370,30 @@ function NoteBlock({
   );
 }
 
+/* ───────────────────────── write_success ───────────────────────── */
+
+// Task #573 — committed write turns end with a single, calm success card
+// (green check + the same one-line summary the user confirmed + an
+// optional link to the destination). Replaces the raw entity_card debug
+// echo of {stage,verb,payload,…}.
+function WriteSuccess({ data, locale }: { data: Json; locale: CliLocale }) {
+  const ar = locale === "ar";
+  const summary = asStr(data.summary);
+  const nav = asObj(data.navigateTo);
+  const href = asStr(nav.path);
+  const label = summary || (ar ? "تم تنفيذ التغيير." : "Change applied.");
+  return (
+    <div
+      className="bg-success/10 border border-success/40 rounded-md p-3 flex items-start gap-2"
+      data-testid="cli-write-success"
+    >
+      <CheckCircle2 className="w-4 h-4 text-success mt-0.5 shrink-0" />
+      <div className="flex-1 text-xs text-text leading-relaxed">{label}</div>
+      {href && <OpenLink href={href} locale={locale} />}
+    </div>
+  );
+}
+
 /* ─────────────────────────── dispatcher ─────────────────────────── */
 
 export function ToolResultCardList({
@@ -394,10 +419,30 @@ export function ToolResultCardList({
         // evaluate_gate) emit shape-tagged payloads via the data
         // envelope itself. Prefer the per-result shape hint over the
         // capability default so a single tool can carry both flavours.
-        const dataShape = (tr.data && typeof tr.data === "object"
-          ? (tr.data as Record<string, unknown>).shape
-          : null) as string | null;
+        const dataObj =
+          tr.data && typeof tr.data === "object"
+            ? (tr.data as Record<string, unknown>)
+            : {};
+        const dataShape = (dataObj.shape ?? null) as string | null;
         const shape = dataShape ?? cap?.resultCard ?? null;
+
+        // Task #573 — a clean, unambiguous entity resolution is already
+        // implied by the confirm summary / result card. Only show the
+        // resolution card when the resolver needs the user to
+        // disambiguate (options present) or when it found nothing.
+        if (shape === "entity_resolution" && tr.ok) {
+          const opts = dataObj.options;
+          const hasOptions = Array.isArray(opts) && opts.length > 0;
+          const entity = dataObj.entity as Record<string, unknown> | undefined;
+          if (!hasOptions && entity && entity.id) return null;
+        }
+
+        // Task #573 — committed writes render as one clean success card,
+        // not the raw {stage,verb,payload,…} entity_card debug echo.
+        if (shape === "write_success" && tr.ok) {
+          return <WriteSuccess key={`${tr.tool}-${i}`} data={dataObj} locale={locale} />;
+        }
+
         return (
           <ToolResultCard
             key={`${tr.tool}-${i}`}
@@ -406,7 +451,6 @@ export function ToolResultCardList({
             data={tr.data}
             errorMessage={tr.errorMessage}
             shape={shape}
-            description={cap?.description ?? null}
             locale={locale}
             onPickDisambig={onPickDisambig}
             onRunSlash={onRunSlash}
@@ -423,7 +467,6 @@ function ToolResultCard({
   data,
   errorMessage,
   shape,
-  description,
   locale,
   onPickDisambig,
   onRunSlash,
@@ -433,12 +476,15 @@ function ToolResultCard({
   data: unknown;
   errorMessage?: string;
   shape: string | null;
-  description: string | null;
   locale: CliLocale;
   onPickDisambig?: (id: string, label: string) => void;
   onRunSlash?: (cmd: string) => void;
 }) {
-  const titleLabel = description ? description.split(".")[0] : humanLabel(tool);
+  // Task #573 — derive a concise, meaningful title from the tool name
+  // (e.g. `account_snapshot` → "Account snapshot"). The capability
+  // `description` was previously sliced at the first period, which
+  // produced long, sentence-fragment titles that read as debug noise.
+  const titleLabel = humanLabel(tool);
   return (
     <div
       className="bg-bg-elevate border border-border rounded-md overflow-hidden"

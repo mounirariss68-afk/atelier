@@ -40,15 +40,17 @@
  * about "the orchestrator" as a separate object.
  */
 
-import { and, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, count, eq, ilike, isNull, or } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
   atelierOpportunities,
   atelierEngagements,
   atelierContacts,
+  atelierContactRelationships,
   atelierDeliverables,
   atelierExpenses,
+  atelierInvoice,
 } from "@workspace/db";
 import { defineCapability, CATALOG_SCHEMA_VERSION } from "./capability-catalog.js";
 import { hybridResolveEntity, type ResolverKind } from "./entity-resolver.js";
@@ -1215,6 +1217,69 @@ defineCapability({
 // 4. propose_write
 // ---------------------------------------------------------------------
 
+// Task #573 — dependency-impact preview for destructive deletes. Before
+// a soft-delete confirm card is shown, count the live child rows that
+// reference the target so the user sees what they are about to orphan.
+// Soft-delete does NOT cascade here, so these rows are retained but lose
+// their parent — the confirm card spells that out.
+export interface DeleteDependency {
+  kind: string;
+  count: number;
+}
+export interface DeleteImpact {
+  dependencies: DeleteDependency[];
+  total: number;
+}
+
+async function computeDeleteImpact(
+  kind: WriteKind,
+  targetId: string | null,
+  orgId: string,
+): Promise<DeleteImpact | null> {
+  if (!targetId) return null;
+  const deps: DeleteDependency[] = [];
+  const countLive = async (
+    table: typeof atelierOpportunities | typeof atelierEngagements | typeof atelierContacts | typeof atelierInvoice,
+    accountCol: typeof atelierOpportunities.accountId,
+  ): Promise<number> => {
+    const [row] = await db
+      .select({ n: count() })
+      .from(table)
+      .where(and(eq(accountCol, targetId), eq(table.orgId, orgId), isNull(table.deletedAt)));
+    return Number(row?.n ?? 0);
+  };
+  if (kind === "account") {
+    const [opps, engs, contacts, invoices] = await Promise.all([
+      countLive(atelierOpportunities, atelierOpportunities.accountId),
+      countLive(atelierEngagements, atelierEngagements.accountId),
+      countLive(atelierContacts, atelierContacts.accountId),
+      countLive(atelierInvoice, atelierInvoice.accountId),
+    ]);
+    if (opps) deps.push({ kind: "opportunity", count: opps });
+    if (engs) deps.push({ kind: "engagement", count: engs });
+    if (contacts) deps.push({ kind: "contact", count: contacts });
+    if (invoices) deps.push({ kind: "invoice", count: invoices });
+  } else if (kind === "contact") {
+    const [row] = await db
+      .select({ n: count() })
+      .from(atelierContactRelationships)
+      .where(
+        and(
+          eq(atelierContactRelationships.orgId, orgId),
+          isNull(atelierContactRelationships.deletedAt),
+          or(
+            eq(atelierContactRelationships.fromContactId, targetId),
+            eq(atelierContactRelationships.toContactId, targetId),
+          ),
+        ),
+      );
+    const rels = Number(row?.n ?? 0);
+    if (rels) deps.push({ kind: "contact_relationship", count: rels });
+  }
+  const total = deps.reduce((sum, d) => sum + d.count, 0);
+  return { dependencies: deps, total };
+}
+
 defineCapability({
   id: "orchestrator.propose_write",
   schemaVersion: CATALOG_SCHEMA_VERSION,
@@ -1310,10 +1375,19 @@ defineCapability({
       // transition, or the timesheet edit screen when updating an
       // entry). Skipped for `create` when no targetId/payload hints
       // exist — there is no destination yet.
-      const proposeNavPath = resolveNavPath({ verb, kind, targetId, payload });
+      // Task #573 — deletes never auto-navigate on propose: the entity's
+      // own page disappears on commit, and pre-navigating there is just
+      // noise. Only non-delete verbs surface a review destination.
+      const proposeNavPath =
+        verb === "delete" ? null : resolveNavPath({ verb, kind, targetId, payload });
       const navigateTo = proposeNavPath
         ? { path: proposeNavPath, when: "on_propose" as const }
         : null;
+      // Task #573 — dependency-impact check for destructive deletes.
+      const impact =
+        verb === "delete"
+          ? await computeDeleteImpact(kind, targetId, ctx.persona.orgId)
+          : null;
       return {
         ok: true,
         data: {
@@ -1321,9 +1395,6 @@ defineCapability({
           verb,
           kind,
           targetId,
-          payload,
-          route,
-          dispatchTool: dispatchToolName ?? null,
           navigateTo,
         },
         confirmation: {
@@ -1333,12 +1404,8 @@ defineCapability({
             kind,
             targetId,
             payload,
-            route,
-            dispatchTool: dispatchToolName ?? null,
-            navigateTo,
-            note: dispatchToolName
-              ? `On commit, the orchestrator runs ${dispatchToolName} in-process with the payload.`
-              : "On commit, the client posts to the route above with the payload — no in-process dispatch is registered for this (verb, kind).",
+            ...(navigateTo ? { navigateTo } : {}),
+            ...(impact ? { impact } : {}),
           },
           pending: {
             tool: "propose_write",
@@ -1396,9 +1463,12 @@ defineCapability({
         data: out.ok
           ? {
               stage: "committed",
+              // Task #573 — drives the clean single-line success card on
+              // the client instead of the raw debug entity_card echo.
+              shape: "write_success",
               verb,
               kind,
-              dispatchTool: dispatchToolName,
+              summary,
               result: out.data ?? null,
               // Task #511 — inline the literal so the navigateTo
               // contract test (which scans `run` source for the
