@@ -187,10 +187,15 @@ export async function computeAccountFinancials(args: {
   let arOutstandingUsd = 0;
   let arOverdueUsd = 0;
   let overdueInvoiceCount = 0;
+  // Count only invoices that contribute to outstanding AR (non-draft/void with
+  // a positive balance) so the "N invoices" sublabel reconciles with the
+  // Outstanding AR figure it sits under, rather than all persisted invoices.
+  let openInvoiceCount = 0;
   for (const i of invoices) {
     if (i.status === "void" || i.status === "draft") continue;
     const outstanding = Math.max(0, (i.total ?? 0) - (i.amountPaid ?? 0));
     if (outstanding <= 0) continue;
+    openInvoiceCount += 1;
     arOutstandingUsd += outstanding;
     const days = i.dueDate
       ? Math.floor(
@@ -227,7 +232,7 @@ export async function computeAccountFinancials(args: {
       d90: round(aging.d90),
       d90plus: round(aging.d90plus),
     },
-    invoiceCount: invoices.length,
+    invoiceCount: openInvoiceCount,
     overdueInvoiceCount,
     engagementCount: engagements.length,
     activeEngagementCount: activeEngIds.size,
