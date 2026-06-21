@@ -8,3 +8,5 @@
 - [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
 - [CLI action-turn UX](cli-action-turn-ux.md) — write turns render via `shape:"write_success"`; deletes carry `diff.impact` + parent nav; one useCli nav test is stale-failing (not yours).
 - [Account strategy objectives not seeded](atelier-account-strategy-objectives.md) — accountStrategy.objectives is agent-generated, empty on cold/test DB; goal-progress upsert 404s unless obj ids are backfilled.
+- [Atelier RAG scope/lifecycle](atelier-rag-scope-lifecycle.md) — chunk account/engagement scope stamped at ingest-LINK time (not upload); engagements only close (purge rides on account delete); retrieval fail-loud; model sees chunk text only via inert safeBlocks.
+- [Drizzle sql array IN](drizzle-sql-array-in.md) — JS array in sql`` expands to `($1,$2,$3)` WITH parens; use `col IN ${arr}` (no parens, not ANY), guard empty.

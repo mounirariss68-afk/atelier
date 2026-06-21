@@ -1,21 +1,32 @@
 /**
- * Task #334 — Per-MIME extractors.
+ * Task #575 — Per-MIME extractors (production parsers).
  *
  * Each extractor consumes the raw attachment Buffer + filename and
  * returns a normalised `ExtractedDoc` payload (matching the
  * `atelier_extracted_documents` shape minus the chunks/digest, which
  * are computed by `chunking.ts`).
  *
- * Coverage: TXT/MD/CSV/JSON/EML are parsed natively. PDF/DOCX/PPTX/
- * XLSX use a best-effort text-strip (regex over the printable byte
- * stream) which works for narrative documents authored in modern
- * office suites; binary-only inputs surface a `low-extraction-yield`
- * warning. Images are routed through the deterministic OCR fixture
- * map (same convention walletRoutes uses for receipts) — the
- * filename's stem is treated as a fixture key, with a friendly
- * fallback when no fixture is registered.
+ * Coverage:
+ *   - TXT/MD/CSV/JSON/EML — parsed natively.
+ *   - PDF  — `unpdf` (serverless pdf.js build), page text merged.
+ *   - DOCX — `mammoth` raw-text extraction.
+ *   - XLSX — `exceljs`, per-sheet cell text + a table summary.
+ *   - PPTX — JSZip + `<a:t>` slide-text extraction.
+ *   - images — deterministic OCR fixture map (OCR is out of scope).
+ *
+ * Office parsers fall back to a printable-byte strip only when the
+ * container cannot be opened (malformed / not really a zip). When a
+ * text-bearing document yields no recoverable text at all the extractor
+ * flags `unreadable:no-text`; the ingest pipeline rejects on that flag
+ * rather than persisting an empty blob.
+ *
+ * `extractAttachment` is async because the real parsers are async.
  */
 
+import JSZip from "jszip";
+import mammoth from "mammoth";
+import ExcelJS from "exceljs";
+import { extractText as unpdfExtractText, getDocumentProxy } from "unpdf";
 import { RECEIPT_FIXTURES } from "../../atelier-receipt-fixtures.js";
 
 export type DocKind =
@@ -43,18 +54,13 @@ export interface ExtractedDoc {
 }
 
 const PRINTABLE = /[\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]+/g;
-const MAX_TEXT = 200_000;
+const MAX_TEXT = 1_000_000;
 
-/** Strip non-printable bytes and collapse whitespace runs. */
+/** Strip non-printable bytes and collapse whitespace runs. Used only as
+ * a fallback when a real parser cannot open the container. */
 function stripPrintable(buf: Buffer): string {
-  // For PDF/DOCX/PPTX/XLSX the bytes include the file's binary
-  // wrapper; runs of printable characters are the human content
-  // (page text, slide text, cell text). This is intentionally
-  // crude: a real implementation would call into pdf-parse /
-  // mammoth / xlsx; that's out of scope for this task. Result is
-  // truncated so we never spill tens of MBs into the model window.
   const raw = buf.toString("utf8");
-  const matches = raw.match(PRINTABLE) ?? [];
+  const matches: string[] = raw.match(PRINTABLE) ?? [];
   return matches
     .filter((s) => s.trim().length >= 4)
     .join("\n")
@@ -64,19 +70,27 @@ function stripPrintable(buf: Buffer): string {
     .trim();
 }
 
+const UNREADABLE = "unreadable:no-text";
+/** Kinds where an empty extraction is an error (vs. images, which are
+ * legitimately text-free without an OCR fixture). */
+const TEXT_BEARING: ReadonlySet<DocKind> = new Set(["pdf", "docx", "xlsx", "pptx", "text", "unknown"]);
+
+/** Append the unreadable flag when a text-bearing doc has no content. */
+function flagUnreadable(doc: ExtractedDoc): ExtractedDoc {
+  if (!TEXT_BEARING.has(doc.kind)) return doc;
+  const hasText = doc.normalizedText.trim().length > 0;
+  const hasTable = !!doc.tableSummary && doc.tableSummary.rowCount > 0;
+  const hasSlides = !!doc.slideTexts && doc.slideTexts.length > 0;
+  if (!hasText && !hasTable && !hasSlides && !doc.warnings.includes(UNREADABLE)) {
+    doc.warnings.push(UNREADABLE);
+  }
+  return doc;
+}
+
 /**
  * Intake-hardening guard. Returns a rejection reason when the upload
- * looks dangerous (executable / macro-bearing / MIME-extension mismatch),
- * otherwise null. This runs before extraction so we never even read
- * dangerous payloads into the chunker.
- *
- * Rules:
- *   - Disallow legacy macro-bearing office formats (.doc/.xls/.ppt) and
- *     explicit macro-enabled variants (.docm/.xlsm/.pptm).
- *   - Disallow executable / script extensions outright.
- *   - Require the declared MIME and the filename extension to belong
- *     to the same family (PDF↔.pdf, DOCX↔.docx, image/*↔.png/.jpg/...).
- *     Mismatches are a classic content-type spoofing vector.
+ * looks dangerous, otherwise null. Runs before extraction so we never
+ * read dangerous payloads into the parser.
  */
 const MACRO_OR_EXEC_EXT_RE =
   /\.(docm|dotm|xlsm|xltm|xlsb|pptm|potm|doc|xls|ppt|exe|dll|bat|cmd|sh|ps1|js|vbs|jar|msi|app)$/i;
@@ -101,10 +115,7 @@ const MIME_EXT_FAMILIES: Array<{ ext: RegExp; mimes: RegExp }> = [
   { ext: /\.(txt|md|json)$/i, mimes: /^(text\/|application\/json)/i },
 ];
 
-export function intakeRejection(args: {
-  fileName: string;
-  mime: string;
-}): string | null {
+export function intakeRejection(args: { fileName: string; mime: string }): string | null {
   if (MACRO_OR_EXEC_EXT_RE.test(args.fileName)) {
     return `executable-or-macro-extension:${args.fileName.split(".").pop()}`;
   }
@@ -120,21 +131,18 @@ function detectKind(fileName: string, mime: string): DocKind {
   const lower = fileName.toLowerCase();
   if (mime === "application/pdf" || lower.endsWith(".pdf")) return "pdf";
   if (
-    mime ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     lower.endsWith(".docx")
   )
     return "docx";
   if (
-    mime ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
     lower.endsWith(".xlsx")
   )
     return "xlsx";
   if (mime === "text/csv" || lower.endsWith(".csv")) return "csv";
   if (
-    mime ===
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    mime === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
     lower.endsWith(".pptx")
   )
     return "pptx";
@@ -150,10 +158,12 @@ function detectKind(fileName: string, mime: string): DocKind {
   return "unknown";
 }
 
+// ---------------------------------------------------------------------------
+// CSV
+// ---------------------------------------------------------------------------
+
 function extractCsv(buf: Buffer): ExtractedDoc {
   const text = buf.toString("utf8").slice(0, MAX_TEXT);
-  // Naïve CSV reader — splits on commas; quotes preserved verbatim
-  // because we only need the column shape + a sample.
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) {
     return {
@@ -166,17 +176,15 @@ function extractCsv(buf: Buffer): ExtractedDoc {
     };
   }
   const header = splitCsvLine(lines[0]);
-  const sample = lines
-    .slice(1, 6)
-    .map((l) => {
-      const cells = splitCsvLine(l);
-      const row: Record<string, unknown> = {};
-      for (let i = 0; i < header.length; i++) row[header[i] ?? `col_${i}`] = cells[i] ?? null;
-      return row;
-    });
+  const sample = lines.slice(1, 6).map((l) => {
+    const cells = splitCsvLine(l);
+    const row: Record<string, unknown> = {};
+    for (let i = 0; i < header.length; i++) row[header[i] ?? `col_${i}`] = cells[i] ?? null;
+    return row;
+  });
   return {
     kind: "csv",
-    normalizedText: lines.slice(0, 200).join("\n"),
+    normalizedText: lines.slice(0, 2000).join("\n"),
     tableSummary: { columns: header, rowCount: lines.length - 1, sample },
     slideTexts: null,
     emailHeaders: null,
@@ -185,7 +193,6 @@ function extractCsv(buf: Buffer): ExtractedDoc {
 }
 
 function splitCsvLine(line: string): string[] {
-  // Minimal RFC-4180-ish split with quoted-cell support.
   const out: string[] = [];
   let cur = "";
   let inQuotes = false;
@@ -207,13 +214,10 @@ function splitCsvLine(line: string): string[] {
   return out.map((c) => c.trim());
 }
 
-/**
- * .eml extractor — also returns base64-decoded nested attachments so
- * the ingest pipeline can recursively re-ingest each part. The minimal
- * MIME parser handles the common case: a multipart message with each
- * part separated by `boundary=...` and per-part headers including
- * Content-Type + Content-Disposition + Content-Transfer-Encoding.
- */
+// ---------------------------------------------------------------------------
+// EML
+// ---------------------------------------------------------------------------
+
 export interface NestedEmlPart {
   fileName: string;
   mime: string;
@@ -271,7 +275,6 @@ function parseEml(raw: string): {
           encoding = v.toLowerCase();
         }
       }
-      // Skip the inline text body; only recurse into named attachments.
       if (partMime.startsWith("text/") && !/filename=/i.test(segHeaderBlock)) continue;
       try {
         const bytes =
@@ -282,8 +285,7 @@ function parseEml(raw: string): {
           parts.push({ fileName: partName, mime: partMime, bytes });
         }
       } catch {
-        // Malformed parts are skipped — they surface as warnings on the
-        // parent attachment audit, not as a hard ingest failure.
+        // Malformed parts surface as warnings, not a hard failure.
       }
     }
   }
@@ -303,16 +305,15 @@ function extractEml(buf: Buffer): ExtractedDoc {
   };
 }
 
-/** Public helper used by the ingest pipeline to recurse on .eml parts. */
 export function extractEmlNestedParts(buf: Buffer): NestedEmlPart[] {
   return parseEml(buf.toString("utf8").slice(0, MAX_TEXT * 4)).parts;
 }
 
+// ---------------------------------------------------------------------------
+// Images (deterministic OCR fixture map)
+// ---------------------------------------------------------------------------
+
 function extractImage(fileName: string, buf: Buffer): ExtractedDoc {
-  // Deterministic OCR: filename stem (minus ext) is looked up in the
-  // shared receipt-fixture map. This is the same convention the wallet
-  // pipeline uses; it lets the CLI ingest receipts without a live OCR
-  // provider.
   const stem = fileName.replace(/\.[^.]+$/, "").toLowerCase();
   const fx = RECEIPT_FIXTURES[stem];
   if (fx) {
@@ -344,58 +345,196 @@ function extractImage(fileName: string, buf: Buffer): ExtractedDoc {
   };
 }
 
-function extractPptx(buf: Buffer): ExtractedDoc {
-  // Best-effort text strip. The XML inside the .pptx ZIP carries
-  // slide text in <a:t> nodes; the stripPrintable pass keeps those
-  // strings (4+ printable runs) and drops the binary preamble.
-  const text = stripPrintable(buf);
-  // Heuristic split into "slides" by long printable gaps so the
-  // model can be pointed at slide N when forming a brand profile.
-  const blocks = text
-    .split(/\n{2,}/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  const slideTexts = blocks
-    .slice(0, 100)
-    .map((t, i) => ({ index: i + 1, text: t.slice(0, 4000) }));
-  return {
-    kind: "pptx",
-    normalizedText: text,
-    tableSummary: null,
-    slideTexts: slideTexts.length > 0 ? slideTexts : null,
-    emailHeaders: null,
-    warnings: text.length < 64 ? ["low-extraction-yield"] : [],
-  };
-}
+// ---------------------------------------------------------------------------
+// PDF / DOCX / XLSX / PPTX — real parsers
+// ---------------------------------------------------------------------------
 
-function extractGenericBinary(kind: DocKind, buf: Buffer): ExtractedDoc {
-  const text = stripPrintable(buf);
-  return {
-    kind,
-    normalizedText: text,
+async function extractPdf(buf: Buffer): Promise<ExtractedDoc> {
+  const warnings: string[] = [];
+  let text = "";
+  try {
+    const pdf = await getDocumentProxy(new Uint8Array(buf));
+    const res = await unpdfExtractText(pdf, { mergePages: true });
+    text = (Array.isArray(res.text) ? res.text.join("\n\n") : res.text).trim();
+  } catch (err) {
+    warnings.push(`pdf-parse-failed:${err instanceof Error ? err.message.slice(0, 80) : "error"}`);
+    text = stripPrintable(buf);
+  }
+  return flagUnreadable({
+    kind: "pdf",
+    normalizedText: text.slice(0, MAX_TEXT),
     tableSummary: null,
     slideTexts: null,
     emailHeaders: null,
-    warnings: text.length < 64 ? ["low-extraction-yield"] : [],
-  };
+    warnings,
+  });
+}
+
+async function extractDocx(buf: Buffer): Promise<ExtractedDoc> {
+  const warnings: string[] = [];
+  let text = "";
+  try {
+    const res = await mammoth.extractRawText({ buffer: buf });
+    text = (res.value ?? "").trim();
+  } catch (err) {
+    warnings.push(`docx-parse-failed:${err instanceof Error ? err.message.slice(0, 80) : "error"}`);
+    text = stripPrintable(buf);
+  }
+  return flagUnreadable({
+    kind: "docx",
+    normalizedText: text.slice(0, MAX_TEXT),
+    tableSummary: null,
+    slideTexts: null,
+    emailHeaders: null,
+    warnings,
+  });
+}
+
+async function extractXlsx(buf: Buffer): Promise<ExtractedDoc> {
+  const warnings: string[] = [];
+  try {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as never);
+    const lines: string[] = [];
+    let firstTable: ExtractedDoc["tableSummary"] = null;
+    wb.eachSheet((sheet) => {
+      lines.push(`# Sheet: ${sheet.name}`);
+      const rows: string[][] = [];
+      sheet.eachRow({ includeEmpty: false }, (row) => {
+        const cells: string[] = [];
+        row.eachCell({ includeEmpty: true }, (cell) => {
+          cells.push(cellToText(cell.value));
+        });
+        rows.push(cells);
+        lines.push(cells.join("\t"));
+      });
+      if (!firstTable && rows.length > 0) {
+        const header = rows[0];
+        const sample = rows.slice(1, 6).map((r) => {
+          const obj: Record<string, unknown> = {};
+          for (let i = 0; i < header.length; i++) obj[header[i] || `col_${i}`] = r[i] ?? null;
+          return obj;
+        });
+        firstTable = { columns: header, rowCount: Math.max(rows.length - 1, 0), sample };
+      }
+    });
+    const text = lines.join("\n").slice(0, MAX_TEXT).trim();
+    return flagUnreadable({
+      kind: "xlsx",
+      normalizedText: text,
+      tableSummary: firstTable,
+      slideTexts: null,
+      emailHeaders: null,
+      warnings,
+    });
+  } catch (err) {
+    warnings.push(`xlsx-parse-failed:${err instanceof Error ? err.message.slice(0, 80) : "error"}`);
+    const text = stripPrintable(buf);
+    return flagUnreadable({
+      kind: "xlsx",
+      normalizedText: text,
+      tableSummary: null,
+      slideTexts: null,
+      emailHeaders: null,
+      warnings,
+    });
+  }
+}
+
+function cellToText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "object") {
+    const v = value as Record<string, unknown>;
+    if (typeof v.text === "string") return v.text;
+    if (typeof v.result !== "undefined") return String(v.result);
+    if (v.richText && Array.isArray(v.richText)) {
+      return (v.richText as Array<{ text?: string }>).map((r) => r.text ?? "").join("");
+    }
+    if (v.hyperlink) return String(v.text ?? v.hyperlink);
+    if (value instanceof Date) return value.toISOString();
+  }
+  return String(value);
+}
+
+async function extractPptx(buf: Buffer): Promise<ExtractedDoc> {
+  const warnings: string[] = [];
+  try {
+    const zip = await JSZip.loadAsync(buf);
+    const slideFiles = Object.keys(zip.files)
+      .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+      .sort((a, b) => {
+        const na = Number(a.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+        const nb = Number(b.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+        return na - nb;
+      });
+    if (slideFiles.length === 0) throw new Error("no-slides");
+    const slideTexts: Array<{ index: number; text: string }> = [];
+    for (let i = 0; i < slideFiles.length; i++) {
+      const xml = await zip.files[slideFiles[i]].async("string");
+      const runs = [...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map((m) =>
+        decodeXmlEntities(m[1]),
+      );
+      const text = runs.join(" ").replace(/\s+/g, " ").trim();
+      if (text) slideTexts.push({ index: i + 1, text: text.slice(0, 8000) });
+    }
+    const normalizedText = slideTexts
+      .map((s) => `# Slide ${s.index}\n${s.text}`)
+      .join("\n\n")
+      .slice(0, MAX_TEXT);
+    return flagUnreadable({
+      kind: "pptx",
+      normalizedText,
+      tableSummary: null,
+      slideTexts: slideTexts.length > 0 ? slideTexts : null,
+      emailHeaders: null,
+      warnings,
+    });
+  } catch (err) {
+    // Not a valid OOXML zip (or empty) — fall back to a printable strip
+    // so oddly-encoded decks still yield text instead of being dropped.
+    warnings.push(`pptx-parse-fallback:${err instanceof Error ? err.message.slice(0, 60) : "error"}`);
+    const text = stripPrintable(buf);
+    const blocks = text
+      .split(/\n{2,}/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const slideTexts = blocks.slice(0, 100).map((t, i) => ({ index: i + 1, text: t.slice(0, 8000) }));
+    return flagUnreadable({
+      kind: "pptx",
+      normalizedText: text,
+      tableSummary: null,
+      slideTexts: slideTexts.length > 0 ? slideTexts : null,
+      emailHeaders: null,
+      warnings,
+    });
+  }
+}
+
+function decodeXmlEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
 }
 
 function extractText(buf: Buffer): ExtractedDoc {
-  return {
+  return flagUnreadable({
     kind: "text",
     normalizedText: buf.toString("utf8").slice(0, MAX_TEXT),
     tableSummary: null,
     slideTexts: null,
     emailHeaders: null,
     warnings: [],
-  };
+  });
 }
 
-export function extractAttachment(args: {
+export async function extractAttachment(args: {
   fileName: string;
   mime: string;
   bytes: Buffer;
-}): ExtractedDoc {
+}): Promise<ExtractedDoc> {
   const kind = detectKind(args.fileName, args.mime);
   switch (kind) {
     case "csv":
@@ -407,20 +546,22 @@ export function extractAttachment(args: {
     case "pptx":
       return extractPptx(args.bytes);
     case "pdf":
+      return extractPdf(args.bytes);
     case "docx":
+      return extractDocx(args.bytes);
     case "xlsx":
-      return extractGenericBinary(kind, args.bytes);
+      return extractXlsx(args.bytes);
     case "text":
       return extractText(args.bytes);
     default:
-      return {
+      return flagUnreadable({
         kind: "unknown",
         normalizedText: stripPrintable(args.bytes),
         tableSummary: null,
         slideTexts: null,
         emailHeaders: null,
         warnings: ["unknown-mime"],
-      };
+      });
   }
 }
 

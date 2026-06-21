@@ -24,7 +24,7 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 import { createHash } from "node:crypto";
-import { storeAttachmentBytes, loadAttachmentBytes } from "./storage.js";
+import { storeAttachmentBytes, loadAttachmentBytes, dropAttachmentBytes } from "./storage.js";
 
 function createSha(buf: Buffer): string {
   return createHash("sha256").update(buf).digest("hex");
@@ -40,6 +40,11 @@ import { sanitizeMetadata } from "./sanitize.js";
 import { chunkDocument, findChunkById, type DocChunk, type DocDigest } from "./chunking.js";
 import { detectIntent, topIntent, type DocIntent } from "./intent-detect.js";
 import { wrapAttachment } from "../prompt-guard.js";
+import {
+  persistChunkEmbeddings,
+  purgeChunkEmbeddings,
+  attachmentIdsByScope,
+} from "./retrieval.js";
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const WHITELIST = new Set([
@@ -193,13 +198,18 @@ export async function ingestAttachment(
     }
   }
 
-  // Store + extract -------------------------------------------------------
-  const stored = storeAttachmentBytes(cleanBytes);
-  const extracted: ExtractedDoc = extractAttachment({
+  // Extract first so we can reject unreadable docs before storing a blob.
+  const extracted: ExtractedDoc = await extractAttachment({
     fileName: args.fileName,
     mime: args.mime,
     bytes: cleanBytes,
   });
+  // Reject encrypted/corrupt/zero-text uploads instead of persisting an
+  // empty blob that retrieval can never use.
+  if (extracted.warnings.includes("unreadable:no-text")) {
+    await persistRejection(args, id, "unreadable-document");
+    return { ok: false, attachmentId: id, reason: "unreadable-document" };
+  }
   if (sanitized.strippedBytes > 0) {
     extracted.warnings.push(
       `metadata-stripped:${sanitized.strippedBytes}B`,
@@ -207,9 +217,10 @@ export async function ingestAttachment(
   } else if (sanitized.warning) {
     extracted.warnings.push(sanitized.warning);
   }
+  const stored = await storeAttachmentBytes(cleanBytes);
   const intents = detectIntent(extracted);
   const intent = intents[0]?.intent ?? "unknown";
-  const { chunks, digest } = chunkDocument({
+  const { chunks, digest } = await chunkDocument({
     attachmentId: id,
     text: extracted.normalizedText,
   });
@@ -282,6 +293,26 @@ export async function ingestAttachment(
       payloadSummary: `Extracted ${extracted.kind} (${chunks.length} chunks, intent=${intent})`,
     },
   ]);
+
+  // Embed-on-ingest: persist chunk vectors for semantic retrieval. The
+  // doc itself is already stored/extracted, so an embedding failure is
+  // recoverable (the boot backfill re-runs it); never fail ingest on it.
+  if (chunks.length > 0) {
+    try {
+      await persistChunkEmbeddings({
+        orgId: args.orgId,
+        attachmentId: id,
+        fileName: args.fileName,
+        kind: extracted.kind,
+        uploaderUserId: args.userId,
+        chunks,
+      });
+    } catch (err) {
+      extracted.warnings.push(
+        `embed-deferred:${err instanceof Error ? err.message.slice(0, 80) : "error"}`,
+      );
+    }
+  }
 
   // .eml recursion — nested attachments are re-ingested under their
   // own ids and pinned back through the audit payload so the timeline
@@ -430,6 +461,92 @@ export async function wrapAttachmentForModel(
     .filter(Boolean)
     .join("\n");
   return wrapAttachment(loaded.attachment.fileName, body);
+}
+
+/**
+ * Deletion lifecycle (Task #575). Purges every durable trace of an
+ * attachment: the object-storage blob, the chunk embeddings (jsonb +
+ * pgvector), and soft-deletes the attachment row. Idempotent — a second
+ * call on an already-deleted attachment is a no-op. Org-scoped so a
+ * persona can never delete across tenants.
+ */
+export async function purgeAttachment(args: {
+  attachmentId: string;
+  orgId: string;
+  actorId: string;
+  actorLabel: string;
+}): Promise<{ ok: boolean; purgedChunks: number; reason?: string }> {
+  const loaded = await loadAttachment(args.attachmentId, args.orgId);
+  if (!loaded) return { ok: false, purgedChunks: 0, reason: "not_found" };
+
+  // Drop the blob first; tolerate a missing object.
+  if (loaded.attachment.encryptedRef) {
+    await dropAttachmentBytes(loaded.attachment.encryptedRef);
+  }
+  const purgedChunks = await purgeChunkEmbeddings(args.attachmentId);
+
+  await db
+    .update(atelierCliAttachments)
+    .set({ deletedAt: new Date(), status: "deleted", encryptedRef: "" })
+    .where(
+      and(
+        eq(atelierCliAttachments.id, args.attachmentId),
+        eq(atelierCliAttachments.orgId, args.orgId),
+      ),
+    );
+
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "atelier_cli_attachment",
+    entityId: args.attachmentId,
+    actorType: "human",
+    actorId: args.actorId,
+    actorLabel: args.actorLabel,
+    action: "cli_attachment.delete",
+    payload: { purgedChunks, fileName: loaded.attachment.fileName },
+    payloadSummary: `Deleted ${loaded.attachment.fileName} (purged ${purgedChunks} chunk vectors)`,
+  });
+
+  return { ok: true, purgedChunks };
+}
+
+/**
+ * Parent-entity deletion lifecycle (Task #575). When an account or
+ * engagement is deleted, fully purge every document scoped to it — blob,
+ * chunk vectors, and attachment row — so retrieval can never surface a
+ * document whose parent no longer exists. Org-scoped; refuses to run
+ * without a scope predicate so it can never match the whole table.
+ */
+export async function purgeAttachmentsByScope(args: {
+  orgId: string;
+  accountId?: string;
+  engagementId?: string;
+  actorId: string;
+  actorLabel: string;
+}): Promise<{ attachments: number; purgedChunks: number }> {
+  if (!args.accountId && !args.engagementId) {
+    return { attachments: 0, purgedChunks: 0 };
+  }
+  const ids = await attachmentIdsByScope({
+    orgId: args.orgId,
+    accountId: args.accountId,
+    engagementId: args.engagementId,
+  });
+  let purgedChunks = 0;
+  let attachments = 0;
+  for (const attachmentId of ids) {
+    const res = await purgeAttachment({
+      attachmentId,
+      orgId: args.orgId,
+      actorId: args.actorId,
+      actorLabel: args.actorLabel,
+    });
+    if (res.ok) {
+      attachments += 1;
+      purgedChunks += res.purgedChunks;
+    }
+  }
+  return { attachments, purgedChunks };
 }
 
 export { detectIntent, topIntent, loadAttachmentBytes };

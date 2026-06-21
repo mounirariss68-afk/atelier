@@ -37,6 +37,58 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+/**
+ * Task #575 — Document-chunk embeddings (production RAG).
+ *
+ * One row per chunk of an ingested CLI attachment. Populated on ingest
+ * (embed-on-ingest) and by a boot backfill. Drives authorized
+ * semantic + hybrid (pg_trgm) document retrieval. The ACL columns
+ * (orgId / accountId / engagementId / uploaderUserId / kind) are
+ * denormalised onto the row so retrieval can filter by persona scope in
+ * SQL before any vector ever leaves the database.
+ *
+ * Vector storage mirrors the capability/entity tables: `vec` is the
+ * jsonb source of truth; atelier-cli-rag.sql adds a real pgvector
+ * column + HNSW index when the extension is present (it is, 0.8.0).
+ */
+export const atelierDocumentChunkEmbeddings = pgTable(
+  "atelier_document_chunk_embeddings",
+  {
+    /** `<attachmentId>#cNNN` — stable, immutable chunk id. */
+    chunkId: text("chunk_id").primaryKey(),
+    orgId: text("org_id").notNull().default("aico"),
+    attachmentId: text("attachment_id").notNull(),
+    fileName: text("file_name").notNull(),
+    /** DocKind: pdf | docx | xlsx | csv | pptx | image | eml | text | unknown */
+    kind: text("kind").notNull(),
+    /** ACL scope (nullable when the attachment is not account/engagement bound). */
+    accountId: text("account_id"),
+    engagementId: text("engagement_id"),
+    /** Persona who uploaded the source attachment (ownership ACL). */
+    uploaderUserId: text("uploader_user_id"),
+    /** Char offsets into the extracted document text. */
+    charStart: integer("char_start").notNull(),
+    charEnd: integer("char_end").notNull(),
+    /** Short human summary (first sentence) for citations / digests. */
+    summary: text("summary").notNull(),
+    /** The chunk text that was embedded (redaction happens at read time). */
+    text: text("text").notNull(),
+    provider: text("provider").notNull(),
+    dim: integer("dim").notNull(),
+    vec: jsonb("vec").$type<number[]>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_chunk_emb_attachment").on(t.attachmentId),
+    index("idx_atelier_chunk_emb_org").on(t.orgId),
+    index("idx_atelier_chunk_emb_account").on(t.orgId, t.accountId),
+    index("idx_atelier_chunk_emb_engagement").on(t.orgId, t.engagementId),
+    index("idx_atelier_chunk_emb_uploader").on(t.orgId, t.uploaderUserId),
+    index("idx_atelier_chunk_emb_provider").on(t.provider),
+  ],
+);
+
 export const atelierCapabilityEmbeddings = pgTable(
   "atelier_capability_embeddings",
   {

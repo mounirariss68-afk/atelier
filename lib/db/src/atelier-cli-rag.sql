@@ -36,3 +36,39 @@ CREATE INDEX IF NOT EXISTS idx_atelier_contacts_name_trgm
 
 CREATE INDEX IF NOT EXISTS idx_atelier_deliverables_name_trgm
   ON atelier_deliverables USING gin (name gin_trgm_ops);
+
+-- ============================================================
+-- Task #575 — Document-chunk embeddings: pgvector column + HNSW
+-- ============================================================
+-- The Drizzle table atelier_document_chunk_embeddings stores the
+-- vector in `vec` (jsonb). When pgvector is present we add a real
+-- `embedding vector(384)` column + HNSW index for fast ANN. The model
+-- is all-MiniLM-L6-v2 (384 dims). pg_trgm GIN on the chunk text powers
+-- the lexical half of hybrid retrieval.
+DO $$
+BEGIN
+  PERFORM 1 FROM pg_extension WHERE extname = 'vector';
+  IF FOUND THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'atelier_document_chunk_embeddings'
+        AND column_name = 'embedding'
+    ) THEN
+      ALTER TABLE atelier_document_chunk_embeddings
+        ADD COLUMN embedding vector(384);
+    END IF;
+
+    -- HNSW index for cosine ANN. Built IF NOT EXISTS so boot is idempotent.
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_class WHERE relname = 'idx_atelier_chunk_emb_hnsw'
+    ) THEN
+      CREATE INDEX idx_atelier_chunk_emb_hnsw
+        ON atelier_document_chunk_embeddings
+        USING hnsw (embedding vector_cosine_ops);
+    END IF;
+  END IF;
+END $$;
+
+-- Lexical half of hybrid retrieval over chunk text.
+CREATE INDEX IF NOT EXISTS idx_atelier_chunk_emb_text_trgm
+  ON atelier_document_chunk_embeddings USING gin (text gin_trgm_ops);

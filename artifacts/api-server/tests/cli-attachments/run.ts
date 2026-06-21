@@ -28,7 +28,7 @@ import {
 } from "@workspace/db";
 
 // Side-effect imports — register the catalog entries.
-import "../../src/lib/atelier-cli/capability-seed.js";
+import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 import "../../src/lib/atelier-cli/attachment-capabilities.js";
 
 import {
@@ -44,6 +44,10 @@ import {
   loadAttachment,
   loadChunk,
 } from "../../src/lib/atelier-cli/attachments/index.js";
+import {
+  searchDocumentChunks,
+  purgeChunkEmbeddings,
+} from "../../src/lib/atelier-cli/attachments/retrieval.js";
 import {
   scoreRubric,
   RUBRIC_WEIGHTS,
@@ -118,6 +122,7 @@ Risk: legal sign-off may slip.`;
 async function cleanup(): Promise<void> {
   if (created.attachmentIds.size === 0) return;
   const ids = [...created.attachmentIds];
+  for (const id of ids) await purgeChunkEmbeddings(id).catch(() => {});
   await db.delete(atelierExtractedDocuments).where(inArray(atelierExtractedDocuments.attachmentId, ids));
   await db.delete(atelierCliAttachments).where(inArray(atelierCliAttachments.id, ids));
   await db
@@ -130,21 +135,21 @@ async function main(): Promise<void> {
   const me = await loadPersona();
 
   // 1. Storage round-trip ------------------------------------------------
-  await test("storage: store + load round-trip with sha integrity", () => {
+  await test("storage: store + load round-trip with sha integrity", async () => {
     __resetAttachmentStorage();
     const buf = Buffer.from("hello atelier");
-    const stored = storeAttachmentBytes(buf);
+    const stored = await storeAttachmentBytes(buf);
     assert.ok(stored.encryptedRef.startsWith("enc:cli:"));
     assert.equal(stored.sizeBytes, buf.byteLength);
     assert.equal(stored.sha256.length, 64);
-    const loaded = loadAttachmentBytes(stored.encryptedRef);
+    const loaded = await loadAttachmentBytes(stored.encryptedRef);
     assert.ok(loaded);
     assert.equal(loaded!.toString("utf8"), "hello atelier");
   });
 
   // 2. Extractors --------------------------------------------------------
-  await test("extractor: txt", () => {
-    const x = extractAttachment({
+  await test("extractor: txt", async () => {
+    const x = await extractAttachment({
       fileName: "notes.txt",
       mime: "text/plain",
       bytes: Buffer.from("hello"),
@@ -153,8 +158,8 @@ async function main(): Promise<void> {
     assert.equal(x.normalizedText, "hello");
   });
 
-  await test("extractor: csv parses columns + sample rows", () => {
-    const x = extractAttachment({
+  await test("extractor: csv parses columns + sample rows", async () => {
+    const x = await extractAttachment({
       fileName: "expenses.csv",
       mime: "text/csv",
       bytes: Buffer.from(CSV_TEXT),
@@ -173,8 +178,8 @@ async function main(): Promise<void> {
     assert.equal(x.tableSummary?.sample[0].merchant, "Careem KSA");
   });
 
-  await test("extractor: eml parses headers + body", () => {
-    const x = extractAttachment({
+  await test("extractor: eml parses headers + body", async () => {
+    const x = await extractAttachment({
       fileName: "thread.eml",
       mime: "message/rfc822",
       bytes: Buffer.from(EML_TEXT),
@@ -189,8 +194,8 @@ async function main(): Promise<void> {
     assert.match(x.normalizedText, /RACI by Friday/);
   });
 
-  await test("extractor: image with fixture key produces OCR text", () => {
-    const x = extractAttachment({
+  await test("extractor: image with fixture key produces OCR text", async () => {
+    const x = await extractAttachment({
       fileName: "riyadh_taxi_01.jpg",
       mime: "image/jpeg",
       bytes: Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
@@ -201,8 +206,8 @@ async function main(): Promise<void> {
     assert.equal(x.warnings.length, 0);
   });
 
-  await test("extractor: image without fixture surfaces a warning", () => {
-    const x = extractAttachment({
+  await test("extractor: image without fixture surfaces a warning", async () => {
+    const x = await extractAttachment({
       fileName: "mystery.png",
       mime: "image/png",
       bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
@@ -211,7 +216,7 @@ async function main(): Promise<void> {
     assert.ok(x.warnings.some((w) => w.startsWith("no-ocr-fixture:")));
   });
 
-  await test("extractor: pptx best-effort yields slide-text blocks", () => {
+  await test("extractor: pptx best-effort yields slide-text blocks", async () => {
     // Minimal "binary" payload with a printable run that mimics slide text.
     const buf = Buffer.concat([
       Buffer.from([0x50, 0x4b, 0x03, 0x04]),
@@ -219,7 +224,7 @@ async function main(): Promise<void> {
       Buffer.from([0x00, 0x00, 0x00]),
       Buffer.from("\n\nSlide 2: Differentiators include audit-first AI.\n\n"),
     ]);
-    const x = extractAttachment({
+    const x = await extractAttachment({
       fileName: "deck.pptx",
       mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       bytes: buf,
@@ -230,8 +235,8 @@ async function main(): Promise<void> {
   });
 
   // 3. Chunking ----------------------------------------------------------
-  await test("chunking: short text → 1 chunk with stable id", () => {
-    const { chunks, digest } = chunkDocument({
+  await test("chunking: short text → 1 chunk with stable id", async () => {
+    const { chunks, digest } = await chunkDocument({
       attachmentId: "att_test_1",
       text: RFP_TEXT,
     });
@@ -242,16 +247,16 @@ async function main(): Promise<void> {
     assert.equal(findChunkById(chunks, "att_test_1#c999"), null);
   });
 
-  await test("chunking: large text → multiple chunks with overlap + monotonic offsets", () => {
+  await test("chunking: large text → multiple chunks with overlap + monotonic offsets", async () => {
     const big = RFP_TEXT + "\n\n" + RFP_TEXT.repeat(20);
-    const { chunks } = chunkDocument({ attachmentId: "att_test_2", text: big });
+    const { chunks } = await chunkDocument({ attachmentId: "att_test_2", text: big });
     assert.ok(chunks.length >= 2);
     for (let i = 1; i < chunks.length; i++) {
       assert.ok(chunks[i].charStart < chunks[i].charEnd);
       assert.ok(chunks[i].charStart <= chunks[i - 1].charEnd);
     }
     // Stable across re-runs.
-    const again = chunkDocument({ attachmentId: "att_test_2", text: big });
+    const again = await chunkDocument({ attachmentId: "att_test_2", text: big });
     assert.deepEqual(
       chunks.map((c) => c.chunkId),
       again.chunks.map((c) => c.chunkId),
@@ -259,32 +264,32 @@ async function main(): Promise<void> {
   });
 
   // 4. Intent detection --------------------------------------------------
-  await test("intent: RFP text → rfp top intent", () => {
-    const x = extractAttachment({
+  await test("intent: RFP text → rfp top intent", async () => {
+    const x = await extractAttachment({
       fileName: "rfp.txt",
       mime: "text/plain",
       bytes: Buffer.from(RFP_TEXT),
     });
     assert.equal(detectIntent(x)[0].intent, "rfp");
   });
-  await test("intent: transcript text → transcript top intent", () => {
-    const x = extractAttachment({
+  await test("intent: transcript text → transcript top intent", async () => {
+    const x = await extractAttachment({
       fileName: "tx.txt",
       mime: "text/plain",
       bytes: Buffer.from(TRANSCRIPT_TEXT),
     });
     assert.equal(detectIntent(x)[0].intent, "transcript");
   });
-  await test("intent: brand notes → brand_deck top intent", () => {
-    const x = extractAttachment({
+  await test("intent: brand notes → brand_deck top intent", async () => {
+    const x = await extractAttachment({
       fileName: "brand.txt",
       mime: "text/plain",
       bytes: Buffer.from(BRAND_DECK_TEXT),
     });
     assert.equal(detectIntent(x)[0].intent, "brand_deck");
   });
-  await test("intent: csv with merchant cols → spreadsheet + receipt_batch candidates", () => {
-    const x = extractAttachment({
+  await test("intent: csv with merchant cols → spreadsheet + receipt_batch candidates", async () => {
+    const x = await extractAttachment({
       fileName: "exp.csv",
       mime: "text/csv",
       bytes: Buffer.from(CSV_TEXT),
@@ -570,7 +575,7 @@ async function main(): Promise<void> {
     // Stored bytes must no longer contain the EXIF marker.
     const loaded = await loadAttachment(r.attachmentId, me.orgId);
     assert.ok(loaded);
-    const storedBytes = loadAttachmentBytes(loaded!.attachment.encryptedRef);
+    const storedBytes = await loadAttachmentBytes(loaded!.attachment.encryptedRef);
     assert.ok(storedBytes);
     assert.equal(
       storedBytes!.includes("GPS:lat=12.34"),
@@ -590,8 +595,8 @@ async function main(): Promise<void> {
     assert.equal(sum, 100);
   });
 
-  await test("rubric: strong RFP scores in pursue band", () => {
-    const { chunks } = chunkDocument({ attachmentId: "att_rfp", text: RFP_TEXT });
+  await test("rubric: strong RFP scores in pursue band", async () => {
+    const { chunks } = await chunkDocument({ attachmentId: "att_rfp", text: RFP_TEXT });
     const r = scoreRubric({
       attachmentIds: ["att_rfp"],
       chunks: chunks.map((c) => ({ chunkId: c.chunkId, text: c.text })),
@@ -623,8 +628,8 @@ async function main(): Promise<void> {
     assert.equal(r.band, "decline");
   });
 
-  await test("rubric: deterministic across runs", () => {
-    const { chunks } = chunkDocument({ attachmentId: "att_rfp_d", text: RFP_TEXT });
+  await test("rubric: deterministic across runs", async () => {
+    const { chunks } = await chunkDocument({ attachmentId: "att_rfp_d", text: RFP_TEXT });
     const a = scoreRubric({
       attachmentIds: ["att_rfp_d"],
       chunks: chunks.map((c) => ({ chunkId: c.chunkId, text: c.text })),
@@ -673,6 +678,99 @@ async function main(): Promise<void> {
     assert.ok(cap);
     assert.equal(cap!.isWrite, true);
     assert.equal(cap!.twoPhaseConfirm, true);
+  });
+
+  // ---------------------------------------------------------------------
+  // 8. Retrieval golden eval — semantic + hybrid search quality.
+  //
+  // Ingest a small corpus of topically-distinct documents, then assert
+  // that each query retrieves the document that actually answers it as
+  // the top hit. This guards the real embedding model + pgvector ANN +
+  // trgm lexical fusion end-to-end: a regression in any layer (model
+  // swap, dim mismatch, RRF weighting, ACL leak) drops recall@1 below
+  // the bar and fails CI. Recall is measured over the golden set.
+  // ---------------------------------------------------------------------
+  const GOLDEN_CORPUS: Record<string, string> = {
+    "pto-policy.txt":
+      "Paid time off policy. Full-time employees accrue 20 vacation days per " +
+      "year. Unused leave rolls over up to a maximum of 5 days. Requests must " +
+      "be submitted two weeks in advance and approved by your line manager. " +
+      "Sick leave is separate and does not count against the vacation balance.",
+    "expense-policy.txt":
+      "Travel and expense reimbursement guidelines. Submit receipts within 30 " +
+      "days of travel. Meals are capped at 75 dollars per day. Economy airfare " +
+      "and standard hotel rooms are reimbursable. Personal entertainment and " +
+      "minibar charges are not eligible for reimbursement.",
+    "security-policy.txt":
+      "Information security standards. All laptops must use full-disk " +
+      "encryption. Passwords require a minimum of 14 characters and multi-factor " +
+      "authentication is mandatory for VPN access. Report any phishing email to " +
+      "the security team immediately and never share credentials.",
+  };
+
+  const goldenIds: Record<string, string> = {};
+  for (const [fileName, text] of Object.entries(GOLDEN_CORPUS)) {
+    const r = await ingestAttachment({
+      orgId: me.orgId,
+      userId: me.id,
+      userLabel: me.name,
+      sessionId: null,
+      turnId: null,
+      fileName,
+      mime: "text/plain",
+      bytes: Buffer.from(text),
+    });
+    assert.ok(r.ok, `golden ingest failed for ${fileName}`);
+    if (!r.ok) continue;
+    created.attachmentIds.add(r.attachmentId);
+    goldenIds[fileName] = r.attachmentId;
+  }
+
+  // query → the file that should rank #1
+  const GOLDEN_QUERIES: Array<{ q: string; want: string }> = [
+    { q: "how many vacation days do I get and can they roll over?", want: "pto-policy.txt" },
+    { q: "what is the daily meal limit when I travel for work?", want: "expense-policy.txt" },
+    { q: "do I need two-factor authentication to connect to the VPN?", want: "security-policy.txt" },
+    { q: "is the hotel minibar covered when I expense a trip?", want: "expense-policy.txt" },
+    { q: "what are the password length requirements?", want: "security-policy.txt" },
+  ];
+
+  await test("eval: golden retrieval recall@1 over the corpus", async () => {
+    const goldenAttIds = new Set(Object.values(goldenIds));
+    let hits = 0;
+    for (const { q, want } of GOLDEN_QUERIES) {
+      const results = await searchDocumentChunks({
+        persona: { id: me.id, role: me.role, orgId: me.orgId },
+        query: q,
+        // narrow to the golden corpus so unrelated seed docs can't
+        // displace the expected top hit — we're scoring ranking within
+        // the known set, not the whole org.
+        attachmentIds: [...goldenAttIds],
+        limit: 5,
+      });
+      assert.ok(results.length > 0, `no results for query: ${q}`);
+      const topFile = results[0]!.fileName;
+      // every hit must carry a citation + stay inside the golden set (no ACL leak)
+      for (const hit of results) {
+        assert.ok(hit.citation.includes("#"), "missing citation on hit");
+        assert.ok(goldenAttIds.has(hit.attachmentId), "ACL leak: hit outside golden corpus");
+      }
+      if (topFile === want) hits += 1;
+    }
+    const recall = hits / GOLDEN_QUERIES.length;
+    assert.ok(
+      recall >= 0.8,
+      `golden recall@1 ${recall.toFixed(2)} below 0.80 (${hits}/${GOLDEN_QUERIES.length})`,
+    );
+  });
+
+  await test("eval: empty query returns no results", async () => {
+    const results = await searchDocumentChunks({
+      persona: { id: me.id, role: me.role, orgId: me.orgId },
+      query: "   ",
+      limit: 5,
+    });
+    assert.equal(results.length, 0);
   });
 
   // ---------------------------------------------------------------------

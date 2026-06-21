@@ -108,6 +108,7 @@ export type ResultCard =
   | "contact_card"
   | "deliverable_card"
   | "document_chunk"
+  | "document_search"
   | "email_sent"
   | "entity_card"
   | "expense_batch"

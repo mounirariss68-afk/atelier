@@ -25,11 +25,13 @@ import { and, eq, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
+  atelierEngagements,
   atelierRaidItems,
   atelierAuditEvents,
   atelierCliSessions,
   atelierCliTurns,
 } from "@workspace/db";
+import { purgeAttachmentsByScope } from "./attachments/index.js";
 import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
@@ -343,6 +345,35 @@ defineCapability({
       payload: { accountId: acc.id, accountName: acc.name, viaCli: true, turnId: ctx.turnId },
       payloadSummary: `CLI deleted account ${acc.name}`,
     });
+    // Task #575 — parent-entity deletion lifecycle. Deleting the account
+    // purges every document scoped to it, plus documents scoped to the
+    // account's engagements (engagements are only ever *closed*, never
+    // hard-deleted, so their docs are reclaimed via the owning account's
+    // deletion). Removes blob + chunk vectors so retrieval can never
+    // surface a document whose parent no longer exists.
+    const engRows = await db
+      .select({ id: atelierEngagements.id })
+      .from(atelierEngagements)
+      .where(
+        and(
+          eq(atelierEngagements.accountId, acc.id),
+          eq(atelierEngagements.orgId, ctx.persona.orgId),
+        ),
+      );
+    await purgeAttachmentsByScope({
+      orgId: ctx.persona.orgId,
+      accountId: acc.id,
+      actorId: ctx.persona.id,
+      actorLabel: ctx.persona.name,
+    });
+    for (const eng of engRows) {
+      await purgeAttachmentsByScope({
+        orgId: ctx.persona.orgId,
+        engagementId: eng.id,
+        actorId: ctx.persona.id,
+        actorLabel: ctx.persona.name,
+      });
+    }
     // Task #499 — after a delete the entity page no longer exists;
     // land the user on the accounts index so they see their list.
     return {

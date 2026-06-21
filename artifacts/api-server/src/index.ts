@@ -8,6 +8,10 @@ import { ensureAtelierL2cSeed } from "./lib/atelier-seed-l2c";
 import { ensureAtelierAccountPlanSeed } from "./lib/atelier-seed-account-plan";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
+import { warmEmbedder } from "./lib/atelier-cli/embeddings";
+import { backfillChunkEmbeddings } from "./lib/atelier-cli/attachments/retrieval";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
 
@@ -62,10 +66,45 @@ app.listen(port, (err) => {
   startLedgerNudgeJob();
   // Task #411 — install pg_trgm + pgvector (when available) and the
   // GIN trgm indexes the hybrid resolver hits. Idempotent.
-  void applyAtelierCliRagSql().catch((err) => {
-    logger.warn(
-      { err },
-      "Atelier Chat RAG SQL bootstrap failed — chat will degrade to brute-force resolution",
-    );
-  });
+  void applyAtelierCliRagSql()
+    .then(async () => {
+      // Task #575 — warm the local embedding model and backfill any
+      // documents that lack current-provider chunk vectors (re-embed
+      // migration). Guarded by a pg advisory lock so only one instance
+      // runs the backfill across a multi-process deploy. Fail loudly if
+      // the model can't load: RAG retrieval has no silent lexical-only
+      // fallback, so a broken model must crash boot rather than degrade
+      // search invisibly.
+      try {
+        await warmEmbedder();
+      } catch (err) {
+        logger.fatal(
+          { err },
+          "Embedding model failed to load — Atelier RAG cannot serve; exiting",
+        );
+        process.exit(1);
+      }
+      const LOCK_KEY = 575_000_001;
+      const got = await db.execute<{ locked: boolean }>(
+        sql`SELECT pg_try_advisory_lock(${LOCK_KEY}) AS locked`,
+      );
+      if (!got.rows[0]?.locked) return;
+      try {
+        const res = await backfillChunkEmbeddings();
+        if (res.attachments > 0) {
+          logger.info(
+            { ...res },
+            "Atelier RAG chunk-embedding backfill complete",
+          );
+        }
+      } finally {
+        await db.execute(sql`SELECT pg_advisory_unlock(${LOCK_KEY})`);
+      }
+    })
+    .catch((err) => {
+      logger.warn(
+        { err },
+        "Atelier Chat RAG SQL bootstrap failed — chat will degrade to brute-force resolution",
+      );
+    });
 });
